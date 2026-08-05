@@ -101,9 +101,7 @@ def _find_project_root() -> Path:
             return parent
 
     # Fallback to runtime location (env var or /opt/autobot)
-    return Path(
-        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-    )  # ssot-config-exempt: bootstrap self-reference
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
 
 
 PROJECT_ROOT = _find_project_root()
@@ -133,32 +131,24 @@ _TRUE_VALUES = {"1", "true", "yes"}
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
-PLAN_BEST_OF_N_ENABLED: bool = (
-    os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in _TRUE_VALUES
-)
+PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in _TRUE_VALUES
 # Reuse the shared env_int_clamped helper (safe-parse — no import-time crash on
 # bad input — + clamp); do NOT reimplement it locally (#11022 audit follow-up).
 PLAN_BEST_OF_N_COUNT: int = env_int_clamped("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3, 2, 5)
 
 # #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
 # Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.
-CLAIM_VERIFICATION_ENABLED: bool = (
-    os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
-)
+CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
 
 # #10602: Self-improvement write path — pure plumbing, no extra LLM calls until outcomes exist.
 # Default ON.  Set AUTOBOT_SELF_IMPROVEMENT_ENABLED=false to disable.
-SELF_IMPROVEMENT_ENABLED: bool = (
-    os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
-)
+SELF_IMPROVEMENT_ENABLED: bool = os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
 
 # #11015: Planning context (learned-strategy + similar-trajectory retrieval) at plan time.
 # Kill-switch for the always-on ChromaDB/Redis I/O added by #10580/#10581 — set
 # AUTOBOT_PLANNING_CONTEXT_ENABLED=false to disable the retrieval entirely (e.g. when
 # the vector store is cold/slow). Default ON to preserve the shipped behaviour.
-PLANNING_CONTEXT_ENABLED: bool = (
-    os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLED", "true").lower() in _TRUE_VALUES
-)
+PLANNING_CONTEXT_ENABLED: bool = os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLED", "true").lower() in _TRUE_VALUES
 
 # #10602: Subagent reflection pass — adds LLM score + optional revision per task.
 # Default OFF; set AUTOBOT_SUBAGENT_REFLECTION_ENABLED=true to opt in.
@@ -252,23 +242,15 @@ class PortConfig(RedactedSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
-    browser: int = Field(
-        default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT"
-    )  # Issue #4052: 9001; 3000 is Grafana
+    browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
-    chromadb: int = Field(
-        default=8100, alias="AUTOBOT_CHROMADB_PORT"
-    )  # Issue #3094: 8100 matches Ansible deploy
+    chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
-    tts: int = Field(
-        default=8083, alias="AUTOBOT_TTS_WORKER_PORT"
-    )  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
+    tts: int = Field(default=8083, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
-    chrome_cdp: int = Field(
-        default=9222, alias="AUTOBOT_CHROME_CDP_PORT"
-    )  # Issue #3829: Chrome DevTools Protocol
+    chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
 class LLMConfig(RedactedSettings):
@@ -295,17 +277,13 @@ class LLMConfig(RedactedSettings):
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
     trivial_model: str = Field(default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL")  # GH#9050
-    classification_model: str = Field(
-        default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
-    )
+    classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
     coding_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_CODING_MODEL")
 
     # 6-tier model fields (#2553)
-    light_processing_model: str = Field(
-        default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL"
-    )
+    light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
     instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
 
@@ -340,9 +318,7 @@ class LLMConfig(RedactedSettings):
     # ``feature.cross_vendor_review_enabled`` (default off).
     # Comma-separated provider names in preference order (e.g. "anthropic,openai");
     # empty means "use registry registration order" (no forced preference).
-    cross_vendor_verifier_providers: str = Field(
-        default="", alias="AUTOBOT_LLC_CROSS_VENDOR_VERIFIER_PROVIDERS"
-    )
+    cross_vendor_verifier_providers: str = Field(default="", alias="AUTOBOT_LLC_CROSS_VENDOR_VERIFIER_PROVIDERS")
     # Below this confidence, an agreeing cross-vendor verdict still escalates to
     # human review rather than auto-resolving (design's "both low-confidence" row).
     cross_vendor_low_confidence_threshold: float = Field(
@@ -366,31 +342,21 @@ class LLMConfig(RedactedSettings):
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
-    chat_inline_judge_threshold: float = Field(
-        default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD"
-    )
+    chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
 
     # Knowledge-ingestion cognifier batching (#10598). When True, extraction
     # cognifiers pack multiple chunks into ONE structured LLM call (index-keyed)
     # instead of one call per chunk — a pure token/round-trip win, with an
     # automatic per-chunk fallback that keeps correctness. Default on.
-    cognifier_multichunk_batching: bool = Field(
-        default=True, alias="AUTOBOT_COGNIFIER_MULTICHUNK_BATCHING"
-    )
+    cognifier_multichunk_batching: bool = Field(default=True, alias="AUTOBOT_COGNIFIER_MULTICHUNK_BATCHING")
     # Per-chunk character cap when packing chunks into a batched cognifier prompt,
     # so one oversized chunk can't blow the context window (0 = no truncation).
-    cognifier_batch_max_chunk_chars: int = Field(
-        default=2000, alias="AUTOBOT_COGNIFIER_BATCH_MAX_CHUNK_CHARS"
-    )
+    cognifier_batch_max_chunk_chars: int = Field(default=2000, alias="AUTOBOT_COGNIFIER_BATCH_MAX_CHUNK_CHARS")
 
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
-    openai_endpoint: str = Field(
-        default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT"
-    )
-    anthropic_endpoint: str = Field(
-        default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
-    )
+    openai_endpoint: str = Field(default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT")
+    anthropic_endpoint: str = Field(default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT")
     custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
     lmstudio_host: str = Field(default="http://127.0.0.1:1234", alias="LMSTUDIO_HOST")
 
@@ -418,25 +384,15 @@ class LLMConfig(RedactedSettings):
 
     # Claude escalation feature flag (#8171): disabled by default so local LLM
     # path is unchanged unless AUTOBOT_CLAUDE_ESCALATION_ENABLED=true is set.
-    claude_escalation_enabled: bool = Field(
-        default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED"
-    )
-    claude_escalation_threshold: float = Field(
-        default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD"
-    )
+    claude_escalation_enabled: bool = Field(default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED")
+    claude_escalation_threshold: float = Field(default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD")
 
     # LlamaIndex-specific configuration for RAG/vectorization
     # These are explicit settings - no fallbacks. Must be configured correctly.
     llamaindex_llm_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER")
-    llamaindex_llm_endpoint: str = Field(
-        default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT"
-    )
-    llamaindex_llm_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL"
-    )
-    llamaindex_embedding_provider: str = Field(
-        default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER"
-    )
+    llamaindex_llm_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT")
+    llamaindex_llm_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL")
+    llamaindex_embedding_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER")
     llamaindex_embedding_endpoint: str = Field(
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
@@ -931,9 +887,7 @@ class CacheL1Config(RedactedSettings):
         alias="AUTOBOT_CACHE_L1_LLM_RESPONSE",
         description="Max items in LLM response cache",
     )
-    ast: int = Field(
-        default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache"
-    )
+    ast: int = Field(default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache")
     file_content: int = Field(
         default=500,
         alias="AUTOBOT_CACHE_L1_FILE_CONTENT",
@@ -1320,12 +1274,7 @@ class TLSConfig(RedactedSettings):
     @property
     def any_service_tls_enabled(self) -> bool:
         """Check if any service has TLS enabled."""
-        return (
-            self.redis_tls_enabled
-            or self.backend_tls_enabled
-            or self.frontend_tls_enabled
-            or self.slm_tls_enabled
-        )
+        return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
 class DatabasePoolConfig(RedactedSettings):
@@ -1415,9 +1364,7 @@ class PathConfig(RedactedSettings):
 
     # VNC password file — absolute path, not relative to base_dir.
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
-    vnc_passwd_file: str = Field(
-        default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE"
-    )
+    vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
@@ -1512,46 +1459,28 @@ class MiscConfig(RedactedSettings):
     # lifespan but DEFAULT-OFF: mesh_pruner DELETES data on a 7-day cadence and
     # node_promoter/edge_discoverer mutate state, so ENABLING it is a
     # data-retention decision rather than a wiring change.
-    mesh_brain_scheduler_enabled: bool = Field(
-        default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED"
-    )
+    mesh_brain_scheduler_enabled: bool = Field(default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED")
 
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(
-        default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE"
-    )
+    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
     autoresearch_docker_cpus: float = Field(default=2.0, alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
     autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
     autoresearch_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DIR")
-    autoresearch_docker_enabled: bool = Field(
-        default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED"
-    )
+    autoresearch_docker_enabled: bool = Field(default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED")
     autoresearch_docker_image: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_IMAGE")
-    autoresearch_docker_memory: str = Field(
-        default="4g", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY"
-    )
-    autoresearch_docker_timeout: int = Field(
-        default=300, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT"
-    )
-    autoresearch_improvement_threshold: float = Field(
-        default=0.01, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD"
-    )
+    autoresearch_docker_memory: str = Field(default="4g", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY")
+    autoresearch_docker_timeout: int = Field(default=300, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT")
+    autoresearch_improvement_threshold: float = Field(default=0.01, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD")
     autoresearch_max_steps: int = Field(default=5000, alias="AUTOBOT_AUTORESEARCH_MAX_STEPS")
-    autoresearch_significant_threshold: float = Field(
-        default=0.05, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD"
-    )
-    autoresearch_staged_eval_fraction: float = Field(
-        default=0.3, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION"
-    )
-    autoresearch_staged_eval_threshold: float = Field(
-        default=0.5, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD"
-    )
+    autoresearch_significant_threshold: float = Field(default=0.05, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD")
+    autoresearch_staged_eval_fraction: float = Field(default=0.3, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
+    autoresearch_staged_eval_threshold: float = Field(default=0.5, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=600, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
     allow_unapproved_sudo: bool = Field(
@@ -1721,12 +1650,8 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_JWT_KID",
         description="Key ID (kid) embedded in RS256 JWT headers and published in the JWKS (#10196).",
     )
-    llm_key_rotation_grace_secs: str = Field(
-        default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS"
-    )
-    llm_key_rotation_interval_minutes: str = Field(
-        default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES"
-    )
+    llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
+    llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
@@ -1748,9 +1673,7 @@ class MiscConfig(RedactedSettings):
     # #13268: ceiling across ALL client IPs in one window. X-Forwarded-For is
     # attacker-controlled behind an appending proxy, so a per-IP counter alone
     # is defeated by rotating the header; this bound is not.
-    mcp_auth_global_max_failures: int = Field(
-        default=100, alias="AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES"
-    )
+    mcp_auth_global_max_failures: int = Field(default=100, alias="AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES")
     # #13268: bounds the tracker dict so spoofed source IPs cannot exhaust memory.
     mcp_auth_max_tracked_ips: int = Field(default=4096, alias="AUTOBOT_MCP_AUTH_MAX_TRACKED_IPS")
     # #13266: scopes the stdio transport grants itself. AUTOBOT_MCP_TOKEN is the
@@ -1759,9 +1682,7 @@ class MiscConfig(RedactedSettings):
     mcp_stdio_scopes: str = Field(default="kb,memory,agents", alias="AUTOBOT_MCP_STDIO_SCOPES")
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
-    voice_realtime_model: str = Field(
-        default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL"
-    )
+    voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
     voice_realtime_provider: str = Field(
         default="openai",
         alias="AUTOBOT_VOICE_REALTIME_PROVIDER",
@@ -1790,13 +1711,9 @@ class MiscConfig(RedactedSettings):
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
     # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
     # llm_model default stays "" — backend falls back to its model constant.
-    meta_agent_approval_threshold: float = Field(
-        default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD"
-    )
+    meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
-    meta_agent_max_module_lines: int = Field(
-        default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES"
-    )
+    meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
     postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
@@ -1806,12 +1723,8 @@ class MiscConfig(RedactedSettings):
     postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
-    prompt_compression_enabled: bool = Field(
-        default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED"
-    )
-    prompt_compression_min_length: str = Field(
-        default="", alias="AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH"
-    )
+    prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
+    prompt_compression_min_length: str = Field(default="", alias="AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH")
     prompt_compression_ratio: float = Field(default=0.0, alias="AUTOBOT_PROMPT_COMPRESSION_RATIO")
     quantization_type: str = Field(default="", alias="AUTOBOT_QUANTIZATION_TYPE")
     redis_memory_db: str = Field(default="", alias="AUTOBOT_REDIS_MEMORY_DB")
@@ -1819,34 +1732,22 @@ class MiscConfig(RedactedSettings):
     redis_url: str = Field(default="", alias="AUTOBOT_REDIS_URL")
     # #11834: restore pre-#7437 defaults — checkpoints were enabled by default
     # ("true") with a 300s timeout; False/0 silently disabled HITL checkpoints.
-    research_checkpoints_enabled: bool = Field(
-        default=True, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED"
-    )
-    research_checkpoint_timeout: int = Field(
-        default=300, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT"
-    )
+    research_checkpoints_enabled: bool = Field(default=True, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
+    research_checkpoint_timeout: int = Field(default=300, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
     # #12622: ResearchOrchestrator (/research) budget bounds — hard caps so a
     # single request can never cascade into an unbounded fetch/LLM-call chain.
     research_max_sources: int = Field(default=5, alias="AUTOBOT_RESEARCH_MAX_SOURCES")
-    research_max_content_chars: int = Field(
-        default=8000, alias="AUTOBOT_RESEARCH_MAX_CONTENT_CHARS"
-    )
-    research_fetch_timeout_seconds: float = Field(
-        default=15.0, alias="AUTOBOT_RESEARCH_FETCH_TIMEOUT_SECONDS"
-    )
+    research_max_content_chars: int = Field(default=8000, alias="AUTOBOT_RESEARCH_MAX_CONTENT_CHARS")
+    research_fetch_timeout_seconds: float = Field(default=15.0, alias="AUTOBOT_RESEARCH_FETCH_TIMEOUT_SECONDS")
     # Quarantine collection name (design doc §5/§9): web-research facts land
     # here, invisible to general chat/RAG, until Phase 1's promotion gate.
-    research_quarantine_collection: str = Field(
-        default="research", alias="AUTOBOT_RESEARCH_QUARANTINE_COLLECTION"
-    )
+    research_quarantine_collection: str = Field(default="research", alias="AUTOBOT_RESEARCH_QUARANTINE_COLLECTION")
     # #12623: N-source corroboration + promotion gate. Every tunable number is
     # a config field (never a literal in services/claim_verifier.py or
     # services/research/orchestrator.py). K = minimum independent agreeing
     # sources before a claim can ever be marked verified — single-source
     # claims are never promoted regardless of confidence (design §9 Phase 1).
-    research_corroboration_min_sources: int = Field(
-        default=2, alias="AUTOBOT_RESEARCH_CORROBORATION_MIN_SOURCES"
-    )
+    research_corroboration_min_sources: int = Field(default=2, alias="AUTOBOT_RESEARCH_CORROBORATION_MIN_SOURCES")
     # Confidence assigned when exactly K independent sources agree.
     research_corroboration_confidence_base: float = Field(
         default=0.75, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_BASE"
@@ -1865,13 +1766,9 @@ class MiscConfig(RedactedSettings):
     )
     # Collection metadata value written on promoted facts (must differ from
     # ``research_quarantine_collection`` so the chat-RAG ``$ne`` filter admits it).
-    research_promoted_collection: str = Field(
-        default="general", alias="AUTOBOT_RESEARCH_PROMOTED_COLLECTION"
-    )
+    research_promoted_collection: str = Field(default="general", alias="AUTOBOT_RESEARCH_PROMOTED_COLLECTION")
     # How many candidate corroborating facts to retrieve per material claim.
-    research_corroboration_search_top_k: int = Field(
-        default=5, alias="AUTOBOT_RESEARCH_CORROBORATION_SEARCH_TOP_K"
-    )
+    research_corroboration_search_top_k: int = Field(default=5, alias="AUTOBOT_RESEARCH_CORROBORATION_SEARCH_TOP_K")
     # Timeout for the adversarial agreement-classification LLM call.
     research_corroboration_classify_timeout_seconds: float = Field(
         default=20.0, alias="AUTOBOT_RESEARCH_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS"
@@ -1891,9 +1788,7 @@ class MiscConfig(RedactedSettings):
     )
     # Expected-value threshold below which a decomposed sub-question is pruned
     # before spending a search on it (design §4.3).
-    research_planner_prune_threshold: float = Field(
-        default=0.3, alias="AUTOBOT_RESEARCH_PLANNER_PRUNE_THRESHOLD"
-    )
+    research_planner_prune_threshold: float = Field(default=0.3, alias="AUTOBOT_RESEARCH_PLANNER_PRUNE_THRESHOLD")
     # Skip-known confidence threshold: a sub-question is skipped only when an
     # existing KB fact answers it at >= this confidence. Kept as its own
     # tunable (distinct from the #12623 promotion threshold) because skipping
@@ -1903,14 +1798,10 @@ class MiscConfig(RedactedSettings):
         default=0.75, alias="AUTOBOT_RESEARCH_PLANNER_SKIP_KNOWN_CONFIDENCE_THRESHOLD"
     )
     # Saturation/plateau: consecutive no-new-fact rounds required to stop early.
-    research_planner_plateau_window: int = Field(
-        default=2, alias="AUTOBOT_RESEARCH_PLANNER_PLATEAU_WINDOW"
-    )
+    research_planner_plateau_window: int = Field(default=2, alias="AUTOBOT_RESEARCH_PLANNER_PLATEAU_WINDOW")
     # Total search/fetch budget for one /research run across ALL rounds — the
     # hard ceiling that bounds real spend regardless of round/branch counts.
-    research_planner_max_total_sources: int = Field(
-        default=15, alias="AUTOBOT_RESEARCH_PLANNER_MAX_TOTAL_SOURCES"
-    )
+    research_planner_max_total_sources: int = Field(default=15, alias="AUTOBOT_RESEARCH_PLANNER_MAX_TOTAL_SOURCES")
     # Timeout for the decomposition LLM call.
     research_planner_decompose_timeout_seconds: float = Field(
         default=20.0, alias="AUTOBOT_RESEARCH_PLANNER_DECOMPOSE_TIMEOUT_SECONDS"
@@ -1967,21 +1858,15 @@ class MiscConfig(RedactedSettings):
     # size (streamed/enforced during read, not post-hoc) — distinct from the
     # generic web_fetch_max_bytes cap above since this pipeline's fallback is
     # a smaller, dedicated 1 MB HTML-download bound.
-    link_pipeline_max_content_bytes: int = Field(
-        default=1_000_000, alias="AUTOBOT_LINK_PIPELINE_MAX_CONTENT_BYTES"
-    )
+    link_pipeline_max_content_bytes: int = Field(default=1_000_000, alias="AUTOBOT_LINK_PIPELINE_MAX_CONTENT_BYTES")
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: str = Field(
-        default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE"
-    )
+    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
     codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
-    codebase_index_parallel_batches: str = Field(
-        default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES"
-    )
+    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
     codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
@@ -2010,9 +1895,7 @@ class MiscConfig(RedactedSettings):
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
     gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
-    gateway_message_retention_hours: str = Field(
-        default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS"
-    )
+    gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
     gateway_rate_limit_channel: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL")
     gateway_rate_limit_user: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_USER")
     gateway_session_timeout: int = Field(default=0, alias="GATEWAY_SESSION_TIMEOUT")
@@ -2147,9 +2030,7 @@ class MiscConfig(RedactedSettings):
     username: str = Field(default="", alias="USERNAME")
     virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
     virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
-    vertex_ai_default_model: str = Field(
-        default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL"
-    )
+    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
     vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
@@ -2204,9 +2085,7 @@ class FeatureConfig(RedactedSettings):
     # Disabled by default — no credentials are configured out of the box and
     # these connectors make outbound calls to third-party SaaS APIs. Set
     # AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true once credentials exist.
-    kb_enterprise_connectors: bool = Field(
-        default=False, alias="AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS"
-    )
+    kb_enterprise_connectors: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS")
 
     # Issue #10538: Offline mock/replay KB connector for dev/CI testing.
     # Disabled by default — it makes zero network calls, but the flag keeps a
@@ -2220,9 +2099,7 @@ class FeatureConfig(RedactedSettings):
     # second, independent gate: BOTH must be true for a second provider call to
     # ever run, so a company enabling the policy on an install where this is off
     # still costs nothing extra.
-    cross_vendor_review_enabled: bool = Field(
-        default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED"
-    )
+    cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
 
 class CostModelConfig(RedactedSettings):
@@ -3291,9 +3168,7 @@ def database_pool_settings() -> dict:
         # Module-local logger: ssot_config has no module-level `logger`, and the
         # fallback path is exactly when SSOT config is already failing — a
         # NameError here would mask the real problem.
-        logging.getLogger(__name__).warning(
-            "Could not load SSOT database pool config, using defaults"
-        )
+        logging.getLogger(__name__).warning("Could not load SSOT database pool config, using defaults")
         return {
             "pool_size": 10,
             "max_overflow": 10,
