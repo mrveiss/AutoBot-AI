@@ -500,3 +500,70 @@ class TestEnvIntSafeParse:
             with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": raw}):
                 importlib.reload(c)
                 assert c.PLAN_BEST_OF_N_COUNT == expected
+
+
+class TestCheckoutRootDetection:
+    """The checkout-root fallback that keeps PROJECT_ROOT real (#13572, #13149).
+
+    ``.env`` is git-ignored, so a fresh clone, a container build and every CI job
+    fall past the ``.env`` walk. Before this step they landed on the packaged
+    install location, which does not exist there — failing
+    ``TestProjectRoot::test_project_root_exists`` and pointing the module's
+    ``env_file=str(PROJECT_ROOT / ".env")`` declarations at production config
+    from a source tree.
+    """
+
+    def test_recognises_a_normal_clone(self, tmp_path) -> None:
+        """A clone has .git as a directory."""
+        from autobot_shared.ssot_config import _is_checkout_root
+
+        root = tmp_path / "clone"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").mkdir()
+
+        assert _is_checkout_root(root) is True
+
+    def test_recognises_a_git_worktree(self, tmp_path) -> None:
+        """In a worktree .git is a FILE, not a directory.
+
+        Tested explicitly because this repository's whole workflow runs from
+        worktrees, and an ``is_dir()`` check would have excluded every one.
+        """
+        from autobot_shared.ssot_config import _is_checkout_root
+
+        root = tmp_path / "worktree"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+
+        assert _is_checkout_root(root) is True
+
+    def test_requires_both_markers(self, tmp_path) -> None:
+        """Either marker alone is not enough.
+
+        ``.git`` alone would match an unrelated repository this package had been
+        vendored into; ``autobot_shared`` alone matches ordinary parent
+        directories in some layouts.
+        """
+        from autobot_shared.ssot_config import _is_checkout_root
+
+        git_only = tmp_path / "other-repo"
+        (git_only / ".git").mkdir(parents=True)
+        pkg_only = tmp_path / "vendored"
+        (pkg_only / "autobot_shared").mkdir(parents=True)
+
+        assert _is_checkout_root(git_only) is False
+        assert _is_checkout_root(pkg_only) is False
+
+    def test_a_configured_env_still_wins(self, tmp_path) -> None:
+        """The .env walk keeps priority — a configured deployment is authoritative."""
+        from autobot_shared import ssot_config
+
+        # Both markers AND a .env: the .env branch is checked first, so a
+        # deployment that has been configured is never overridden by detection.
+        root = tmp_path / "deployed"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").mkdir()
+        (root / ".env").write_text("X=1\n", encoding="utf-8")
+
+        assert ssot_config._is_checkout_root(root) is True
+        assert (root / ".env").exists()
