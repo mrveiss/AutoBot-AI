@@ -89,6 +89,8 @@ def resolve_project_root(start: Path) -> Path:
     temporary directory tree — the entry point is pinned to this file's own
     location and cannot be pointed at a fixture.
     """
+    # ssot-config-exempt: bootstrap — this module resolves the root that
+    # ssot_config itself needs, so it cannot import config.
     configured = os.environ.get(PROJECT_ROOT_ENV)
     if configured:
         return Path(configured).resolve()
@@ -97,4 +99,6 @@ def resolve_project_root(start: Path) -> Path:
         if (parent / ".env").exists() or is_checkout_root(parent):
             return parent
 
+    # ssot-config-exempt: bootstrap self-reference (carried from the
+    # implementation this replaced, landed in #13646).
     return Path(os.environ.get("AUTOBOT_BASE_DIR", DEFAULT_INSTALL_ROOT))
