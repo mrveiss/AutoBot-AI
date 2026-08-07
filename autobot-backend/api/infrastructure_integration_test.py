@@ -20,6 +20,7 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.paths import project_root
 from constants.network_constants import ServiceURLs
 
 pytestmark = pytest.mark.integration
@@ -135,7 +136,7 @@ def test_celery_worker_status():
     # Check if Celery worker is running by checking logs
     try:
         with open(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/celery-worker.log",
+            str(project_root() / "logs" / "celery-worker.log"),
             "r",
             encoding="utf-8",
         ) as f:

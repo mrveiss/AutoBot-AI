@@ -3,7 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Quick import smoke check for the MCP metrics implementation.
 
-Standalone diagnostic: run ``python3 test_imports.py`` to confirm the MCP
+#13653: renamed from ``test_imports.py``. It defines no test functions — pytest
+collects 0 items from it — but the ``test_`` prefix made it look like a suite
+sitting uncollected at the repository root, which is exactly the confusion the
+collection guard exists to remove.
+
+Standalone diagnostic: run ``python3 check_mcp_imports.py`` to confirm the MCP
 metrics/runtime modules import cleanly without spinning up pytest.
 
 Package roots are resolved from ``__file__`` (#13409) — this script previously

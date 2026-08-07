@@ -7,6 +7,12 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lib/ssot-config.sh" 2>/dev/null || true
 
@@ -159,7 +165,7 @@ test_no_vulnerable_scripts() {
 
     local vulnerable_count
     vulnerable_count=$(grep -r "StrictHostKeyChecking=accept-new" \
-        ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/ 2>/dev/null | wc -l)
+        ${PROJECT_ROOT}/scripts/ 2>/dev/null | wc -l)
 
     if [ "$vulnerable_count" -eq 0 ]; then
         log_success "No vulnerable SSH usage found in scripts"

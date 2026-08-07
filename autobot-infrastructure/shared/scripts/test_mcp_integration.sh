@@ -4,6 +4,12 @@
 # Test MCP Integration for AutoBot
 # This script verifies all MCP servers are properly configured
 
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
 echo "🚀 Testing MCP Server Integration for AutoBot"
 echo "============================================"
 
@@ -37,7 +43,7 @@ test_mcp "Project Analysis" "node autobot-mcp-server.js" \
 
 # 2. Test Filesystem MCP Server
 echo -e "\n${YELLOW}2. Filesystem MCP Server${NC}"
-test_mcp "File Operations" "mcp-server-filesystem ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}" \
+test_mcp "File Operations" "mcp-server-filesystem ${PROJECT_ROOT}" \
     '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
 # 3. Test SQLite MCP Server
