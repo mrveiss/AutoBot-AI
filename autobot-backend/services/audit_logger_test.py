@@ -296,7 +296,16 @@ class TestAuditLoggerQuery:
         )
         pipe = _make_pipeline_mock()
         redis = _make_redis_mock(pipe)
-        redis.zrange = AsyncMock(return_value=[entry.to_json().encode()])
+        # #13680: answer only for the key matching this entry's own date.
+        # ``query`` walks one ``audit:log:<date>`` key per UTC day in the window,
+        # so a date-agnostic mock returned the entry twice whenever ``now +- 1h``
+        # straddled UTC midnight — reddening this test for an hour every day.
+        # Keying the mock also makes the per-date lookup an actual assertion
+        # rather than something the test silently ignores.
+        async def _zrange_by_date(key, *_args, **_kwargs):
+            return [entry.to_json().encode()] if key == f"audit:log:{entry.date}" else []
+
+        redis.zrange = AsyncMock(side_effect=_zrange_by_date)
 
         with patch(
             "services.audit_logger.get_async_redis_client",
