@@ -109,13 +109,17 @@ def _reinstall_module_stubs(request):
 
     for name in unloaded:
         previous = displaced[name]
-        if previous is _MISSING:
-            sys.modules.pop(name, None)
-        else:
+        # Put back only a *genuine* module. Restoring a stub this fixture happened
+        # to displace would re-leak it to everything collected afterwards, which is
+        # the failure the unconditional pop was there to prevent in the first place.
+        genuine = previous is not _MISSING and getattr(previous, "__spec__", None) is not None
+        if genuine:
             sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
         parent_name, _, leaf = name.rpartition(".")
         parent = sys.modules.get(parent_name) if parent_name else None
-        if previous is not _MISSING and parent is not None:
+        if genuine and parent is not None:
             setattr(parent, leaf, previous)
         elif restored_parent_attr and parent is not None and hasattr(parent, leaf):
             delattr(parent, leaf)

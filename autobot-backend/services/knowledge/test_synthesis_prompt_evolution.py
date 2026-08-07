@@ -20,13 +20,6 @@ import pytest
 # ---------------------------------------------------------------------------
 # Minimal stubs for optional heavy deps so the module can be imported.
 # ---------------------------------------------------------------------------
-# #13651: only unload what this module actually installed. ``setdefault``
-# is a no-op when the genuine module is already imported, and popping
-# regardless destroyed it — the next importer built a second module object,
-# breaking identity for anything holding the first.
-_OWNED_STUBS = {
-    _n for _n in ("utils.chromadb_client", "autobot_shared", "autobot_shared.redis_client") if _n not in sys.modules
-}
 sys.modules.setdefault("utils.chromadb_client", MagicMock())
 sys.modules.setdefault("autobot_shared", MagicMock())
 sys.modules.setdefault("autobot_shared.redis_client", MagicMock())
@@ -38,8 +31,18 @@ from services.knowledge.kb_synthesizer import KBSynthesizer  # noqa: E402
 # utils/chromadb_client_cache_key_test.py, which pass alone and failed in CI.
 # ``_reinstall_module_stubs`` in this package's conftest puts it back around this
 # module's own tests and removes it afterwards.
+# #13651: unload the name only when a *stub* occupies it. ``setdefault`` is a
+# no-op once the genuine module is imported, and the old unconditional pop
+# then destroyed that genuine module — the next importer built a second
+# object, breaking identity for everything holding the first. Keying on the
+# occupant rather than on "did I install it" also keeps the original
+# behaviour of clearing a stub another module in this directory left behind.
+def _is_stub(name: str) -> bool:
+    return name in sys.modules and getattr(sys.modules[name], "__spec__", None) is None
+
+
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in _OWNED_STUBS
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if _is_stub(name)
 }
 
 # ---------------------------------------------------------------------------
