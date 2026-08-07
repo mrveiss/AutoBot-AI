@@ -73,22 +73,22 @@ _INTERPRETED = re.compile(r"(?:^|[\s`\"'|(&;])(?:bash|sh|zsh|source|\.)\s+(?:\./
 _DIRECTIVE = re.compile(r"shellcheck\s+source=")
 
 
-def _tracked_files(patterns: Iterable[str]) -> list[Path]:
+def _tracked_files(patterns: Iterable[str], root: Path = REPO_ROOT) -> list[Path]:
     out: list[Path] = []
     for pattern in patterns:
         # Fixed argv, no shell, and `pattern` is a module constant — not input.
         result = subprocess.run(  # nosec B603 B607
-            ["git", "ls-files", pattern], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+            ["git", "ls-files", pattern], cwd=root, capture_output=True, text=True, check=False
         )
-        out.extend(REPO_ROOT / line for line in result.stdout.splitlines() if line)
+        out.extend(root / line for line in result.stdout.splitlines() if line)
     return out
 
 
-def _is_executable(path: Path) -> bool:
+def _is_executable(path: Path, root: Path = REPO_ROOT) -> bool:
     # Fixed argv, no shell; the path comes from git ls-files output, not a caller.
     result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "-s", str(path.relative_to(REPO_ROOT))],
-        cwd=REPO_ROOT,
+        ["git", "ls-files", "-s", str(path.relative_to(root))],
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
@@ -98,11 +98,11 @@ def _is_executable(path: Path) -> bool:
     return result.stdout.startswith("100755")
 
 
-def find_disagreements() -> list[str]:
+def find_disagreements(root: Path = REPO_ROOT) -> list[str]:
     """Return one message per documented direct invocation of a non-executable script."""
     problems: list[str] = []
-    for doc in _tracked_files(DOC_GLOBS):
-        rel_doc = str(doc.relative_to(REPO_ROOT))
+    for doc in _tracked_files(DOC_GLOBS, root):
+        rel_doc = str(doc.relative_to(root))
         if any(rel_doc.startswith(prefix) or rel_doc == prefix for prefix in _ARCHIVAL):
             continue
         try:
@@ -117,11 +117,11 @@ def find_disagreements() -> list[str]:
             if alone:
                 hits.add(alone.group(1))
             for rel in sorted(hits):
-                script = REPO_ROOT / rel
-                if not script.is_file() or _is_executable(script):
+                script = root / rel
+                if not script.is_file() or _is_executable(script, root):
                     continue
                 problems.append(
-                    f"{doc.relative_to(REPO_ROOT)}:{lineno}: runs {rel} directly, "
+                    f"{doc.relative_to(root)}:{lineno}: runs {rel} directly, "
                     f"but it is mode 644 — either 'git update-index --chmod=+x {rel}' "
                     f"or document it as 'bash {rel}'"
                 )

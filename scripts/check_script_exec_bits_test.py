@@ -19,6 +19,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import subprocess
+
 import pytest
 
 _MODULE_PATH = Path(__file__).resolve().parent / "check_script_exec_bits.py"
@@ -92,8 +94,72 @@ def test_ignores_interpreter_prefixed_and_directives(line):
 # ------------------------------------------------------------- end to end
 
 
+def _init_repo(root: Path) -> None:
+    """A throwaway git repo — the checker reads modes from the index, not the FS."""
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.invalid"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+
+
+def _commit_all(root: Path) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
+
+
+def test_a_documented_invocation_of_a_non_executable_script_is_reported(tmp_path):
+    """The defect the checker exists to catch, against a fixture (#13668).
+
+    Built as its own git repo rather than asserting on this one: the live-tree
+    form could not distinguish "the checker is broken" from "someone edited an
+    unrelated doc", so it failed for reasons that had nothing to do with it.
+    """
+    _init_repo(tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "deploy.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("Run it with ./scripts/deploy.sh now\n", encoding="utf-8")
+    _commit_all(tmp_path)
+
+    problems = checker.find_disagreements(tmp_path)
+
+    assert len(problems) == 1, problems
+    assert "scripts/deploy.sh" in problems[0]
+
+
+def test_an_executable_script_is_not_reported(tmp_path):
+    """Same documented invocation, exec bit set — must be silent."""
+    _init_repo(tmp_path)
+    (tmp_path / "scripts").mkdir()
+    script = tmp_path / "scripts" / "deploy.sh"
+    script.write_text("#!/bin/bash\n", encoding="utf-8")
+    script.chmod(0o755)
+    (tmp_path / "README.md").write_text("Run it with ./scripts/deploy.sh now\n", encoding="utf-8")
+    _commit_all(tmp_path)
+
+    assert checker.find_disagreements(tmp_path) == []
+
+
+def test_an_interpreter_prefixed_invocation_is_not_reported(tmp_path):
+    """`bash scripts/x.sh` needs no exec bit — 644 is correct there."""
+    _init_repo(tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "deploy.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("Run: bash scripts/deploy.sh\n", encoding="utf-8")
+    _commit_all(tmp_path)
+
+    assert checker.find_disagreements(tmp_path) == []
+
+
+@pytest.mark.integration
 def test_repository_is_currently_clean():
-    """The tree must satisfy its own invariant."""
+    """Audit of THIS tree, deselected by ci.yml's marker filter (#13668).
+
+    Kept because it is genuinely useful to run deliberately, but it asserts on
+    live repository state: any PR adding a documented invocation of a script
+    without its exec bit fails it, while the checker itself is correct and
+    untouched. As a per-PR gate that is a red check nobody caused, which is how
+    people learn to ignore red checks. The three fixture tests above are what
+    actually guard the checker.
+    """
     problems = checker.find_disagreements()
     assert problems == [], "\n".join(problems[:10])
 
