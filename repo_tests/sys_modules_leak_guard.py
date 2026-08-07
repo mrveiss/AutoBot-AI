@@ -176,6 +176,7 @@ class _Mutation:
     owner_dir: Path
     owner_dir_display: str
     obj_id: int
+    prev_kind: str  # what the key held before, for the leak report (#13651)
     # ``owner_dir.parents`` as a set, built once here rather than on every
     # comparison.  ``Path.parents`` is a lazy sequence with no ``__contains__``,
     # so ``x in path.parents`` walks it and constructs a fresh ``Path`` per
@@ -257,13 +258,41 @@ class _Leak:
             "owner": self.mutation.owner,
             "owner_dir_display": self.mutation.owner_dir_display,
             "observed_at": self.observed_at,
-            "occupant": _occupant(self.mutation.key, self.mutation.obj_id),
+            "occupant": (
+                f"{self.mutation.prev_kind} -> "
+                f"{_occupant(self.mutation.key, self.mutation.obj_id)}"
+            ),
         }
 
 
 def _is_synthetic(module: object) -> bool:
     """True for hand-built module stubs and mocks, false for real imports."""
     return getattr(module, "__spec__", None) is None
+
+
+def _previous_kind(previous: object) -> str:
+    """Describe what a key held before the mutation, for the report (#13651)."""
+    if previous is _MISSING:
+        return "was-absent"
+    if _is_synthetic(previous):
+        return "was-synthetic"
+    return "was-genuine"
+
+
+def _has_real_file(module: object) -> bool:
+    """True when *module* was loaded from a file that exists on disk (#13651).
+
+    ``__spec__`` alone is not enough: a package may register a spec-carrying
+    compatibility shim for a submodule it deleted, and those have no file. The
+    exemption above must not fire for one of those.
+    """
+    origin = getattr(module, "__file__", None)
+    if not origin:
+        return False
+    try:
+        return Path(origin).is_file()
+    except (OSError, ValueError):
+        return False
 
 
 def _is_self_rebind(name: str, module: object, previous: object) -> bool:
@@ -448,6 +477,7 @@ class _LeakGuard:
                 owner_dir=owner_dir,
                 owner_dir_display=owner_dir_display,
                 obj_id=id(module),
+                prev_kind=_previous_kind(previous),
                 owner_ancestors=owner_ancestors,
             )
 
@@ -517,6 +547,20 @@ class _LeakGuard:
         if not self._shadows_real_code(name):
             return None
         if previous is not _MISSING:
+            # #13651: a *stub* giving way to the genuine module is a repair, not
+            # a leak. `sys.modules.setdefault(name, MagicMock())` is a no-op when
+            # the real module is already imported, so on a shard where something
+            # imported it first, the knowledge suite installs no stub at all —
+            # the teardown pops the real module and it is imported again. The
+            # guard then saw a "replacement" whose end state is exactly what
+            # Python should hold, and failed the run for it.
+            #
+            # Narrow on purpose: real-over-real stays reported, because repo code
+            # displacing a genuine module is the case #13633 kept. Only
+            # synthetic -> genuine is exempt, and only when the newcomer really
+            # is genuine (a __spec__ AND a file, so a spec-less shim cannot pass).
+            if _is_synthetic(previous) and not _is_synthetic(module) and _has_real_file(module):
+                return None
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
 
