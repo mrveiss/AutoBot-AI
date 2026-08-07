@@ -296,6 +296,7 @@ class TestAuditLoggerQuery:
         )
         pipe = _make_pipeline_mock()
         redis = _make_redis_mock(pipe)
+
         # #13680: answer only for the key matching this entry's own date.
         # ``query`` walks one ``audit:log:<date>`` key per UTC day in the window,
         # so a date-agnostic mock returned the entry twice whenever ``now +- 1h``
