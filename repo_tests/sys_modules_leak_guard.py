@@ -279,6 +279,22 @@ def _previous_kind(previous: object) -> str:
     return "was-genuine"
 
 
+def _has_real_file(module: object) -> bool:
+    """True when *module* was loaded from a file that exists on disk (#13651).
+
+    ``__spec__`` alone is not enough: a package may register a spec-carrying
+    compatibility shim for a submodule it deleted, and those have no file. The
+    exemption below must not fire for one of those.
+    """
+    origin = getattr(module, "__file__", None)
+    if not origin:
+        return False
+    try:
+        return Path(origin).is_file()
+    except (OSError, ValueError):
+        return False
+
+
 def _is_self_rebind(name: str, module: object, previous: object) -> bool:
     """True when *module* is a real package re-registering itself under its own name.
 
@@ -531,6 +547,13 @@ class _LeakGuard:
         if not self._shadows_real_code(name):
             return None
         if previous is not _MISSING:
+            # #13651: a stub giving way to the genuine module is a repair, not a
+            # leak — the key ends up holding exactly what Python should hold.
+            # Narrow on purpose: genuine-over-genuine stays reported (#13633), and
+            # the newcomer must have a real file so a spec-carrying shim for a
+            # deleted submodule cannot pass as genuine (#13599).
+            if _is_synthetic(previous) and not _is_synthetic(module) and _has_real_file(module):
+                return None
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
 
