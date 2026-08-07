@@ -30,6 +30,7 @@ import pytest
 
 _STUBS: dict = {}
 
+
 def _make_stub(name: str) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__path__ = []
@@ -79,6 +80,7 @@ from services.knowledge.kb_synthesizer import (  # noqa: E402
     get_kb_synthesizer,
 )
 
+
 # #13435: see the matching note in test_analyzer_service.py. The stubs were
 # needed to import kb_synthesizer and are needed again while this module's tests
 # run, but not in between — and "in between" is when pytest imports every other
@@ -96,9 +98,7 @@ def _is_stub(name: str) -> bool:
 
 
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name)
-    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
-    if _is_stub(name)
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client", "utils.async_chromadb_client") if _is_stub(name)
 }
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class

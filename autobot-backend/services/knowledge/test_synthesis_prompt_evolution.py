@@ -26,6 +26,7 @@ sys.modules.setdefault("autobot_shared.redis_client", MagicMock())
 
 from services.knowledge.kb_synthesizer import KBSynthesizer  # noqa: E402
 
+
 # #13435: see the matching note in test_analyzer_service.py. ``utils.chromadb_client``
 # escapes this directory and poisoned utils/chromadb_auth_test.py and
 # utils/chromadb_client_cache_key_test.py, which pass alone and failed in CI.
@@ -41,9 +42,7 @@ def _is_stub(name: str) -> bool:
     return name in sys.modules and getattr(sys.modules[name], "__spec__", None) is None
 
 
-_STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if _is_stub(name)
-}
+_STUBS_UNLOADED_AFTER_IMPORT = {name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if _is_stub(name)}
 
 # ---------------------------------------------------------------------------
 # _score_synthesis_output

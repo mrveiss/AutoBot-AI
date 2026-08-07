@@ -30,6 +30,7 @@ import pytest
 
 _STUBS: dict = {}
 
+
 def _make_stub(name: str) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__path__ = []
@@ -79,6 +80,7 @@ from services.knowledge.analyzer_service import (  # noqa: E402
     get_analyzer_service,
 )
 
+
 # #13435: the stubs above were needed to import analyzer_service, and they are
 # needed again while this module's tests run, because those tests patch through
 # dotted paths such as ``utils.async_chromadb_client.get_async_chromadb_client``
@@ -102,9 +104,7 @@ def _is_stub(name: str) -> bool:
 
 
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name)
-    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
-    if _is_stub(name)
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client", "utils.async_chromadb_client") if _is_stub(name)
 }
 
 # ---------------------------------------------------------------------------
