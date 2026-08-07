@@ -18,7 +18,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
     # Fallback if lib not found
-    PROJECT_ROOT="${PROJECT_ROOT:-${PROJECT_ROOT}}"
+    # PROJECT_ROOT is exported by scripts/lib/project_root.sh, sourced above,
+    # so the pre-#13149 fallback assignment here is redundant (#13149).
     [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
 }
 
@@ -80,7 +81,7 @@ echo "  Browser VM (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): Playwright Auto
 
 echo ""
 echo "Testing Distributed Redis Connection:"
-cd "${PROJECT_ROOT:-${PROJECT_ROOT}}"
+cd "${PROJECT_ROOT}"
 if python src/utils/distributed_redis_client.py 2>/dev/null | grep -q "connection working correctly"; then
     echo "  Redis Connection: OK"
 else

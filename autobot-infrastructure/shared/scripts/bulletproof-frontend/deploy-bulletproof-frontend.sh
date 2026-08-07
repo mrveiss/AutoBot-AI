@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-${PROJECT_ROOT}}/autobot-slm-frontend"
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT}/autobot-slm-frontend"
 
 # Remote Configuration
 FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-localhost}"
