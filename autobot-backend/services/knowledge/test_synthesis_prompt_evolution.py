@@ -20,6 +20,15 @@ import pytest
 # ---------------------------------------------------------------------------
 # Minimal stubs for optional heavy deps so the module can be imported.
 # ---------------------------------------------------------------------------
+# #13651: only unload what this module actually installed. ``setdefault``
+# is a no-op when the genuine module is already imported, and popping
+# regardless destroyed it — the next importer built a second module object,
+# breaking identity for anything holding the first.
+_OWNED_STUBS = {
+    _n
+    for _n in ("utils.chromadb_client", "autobot_shared", "autobot_shared.redis_client")
+    if _n not in sys.modules
+}
 sys.modules.setdefault("utils.chromadb_client", MagicMock())
 sys.modules.setdefault("autobot_shared", MagicMock())
 sys.modules.setdefault("autobot_shared.redis_client", MagicMock())
@@ -32,7 +41,7 @@ from services.knowledge.kb_synthesizer import KBSynthesizer  # noqa: E402
 # ``_reinstall_module_stubs`` in this package's conftest puts it back around this
 # module's own tests and removes it afterwards.
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in sys.modules
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in _OWNED_STUBS
 }
 
 # ---------------------------------------------------------------------------

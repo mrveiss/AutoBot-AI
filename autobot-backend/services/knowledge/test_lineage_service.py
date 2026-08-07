@@ -22,6 +22,10 @@ import pytest
 # Stub heavy dependencies before importing lineage_service
 # ---------------------------------------------------------------------------
 
+# #13651: only unload what this module actually installed — popping a genuine
+# module it never installed destroyed it for every later importer.
+_OWNED_STUBS: set = set()
+
 for _mod in (
     "autobot_shared",
     "autobot_shared.redis_client",
@@ -34,6 +38,7 @@ for _mod in (
         stub.__path__ = []  # type: ignore[attr-defined]
         stub.__package__ = _mod
         sys.modules[_mod] = stub
+        _OWNED_STUBS.add(_mod)
 
 from services.knowledge.lineage_service import (  # noqa: E402
     LineageService,
@@ -48,7 +53,7 @@ from services.knowledge.lineage_service import (  # noqa: E402
 # ``_reinstall_module_stubs`` in this package's conftest puts it back around this
 # module's own tests and removes it afterwards.
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in sys.modules
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in _OWNED_STUBS
 }
 
 # ---------------------------------------------------------------------------
