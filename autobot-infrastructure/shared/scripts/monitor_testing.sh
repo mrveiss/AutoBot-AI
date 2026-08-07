@@ -2,6 +2,12 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
 # Real-time monitoring script for PTY collaboration testing
 # This script monitors backend logs for PTY execution, approvals, and errors
 
@@ -20,7 +26,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Follow logs with color-coded output
-tail -f ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/backend.log | grep --line-buffered -E "(PTY_EXEC|agent_terminal|approval|Session|ERROR|WARNING)" | while read line; do
+tail -f ${PROJECT_ROOT}/logs/backend.log | grep --line-buffered -E "(PTY_EXEC|agent_terminal|approval|Session|ERROR|WARNING)" | while read line; do
     if echo "$line" | grep -q "ERROR"; then
         echo -e "\033[0;31m[ERROR]\033[0m $line"
     elif echo "$line" | grep -q "WARNING"; then

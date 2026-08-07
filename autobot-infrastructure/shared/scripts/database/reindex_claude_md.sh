@@ -3,9 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # CLAUDE.md Vector Database Re-indexing Script
 # Deletes outdated CLAUDE.md chunks and re-indexes current version
-# Location: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/database/reindex_claude_md.sh
+# Location: autobot-infrastructure/shared/scripts/database/reindex_claude_md.sh
 
 set -e  # Exit on error
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,8 +23,8 @@ echo ""
 
 # Step 1: Create backup directory
 echo "Step 1: Creating backup directory..."
-mkdir -p ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backups/database/
-mkdir -p ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/database/
+mkdir -p ${PROJECT_ROOT}/backups/database/
+mkdir -p ${PROJECT_ROOT}/logs/database/
 
 # Step 2: Find and backup CLAUDE.md chunks
 echo "Step 2: Finding CLAUDE.md chunks..."
@@ -41,7 +47,7 @@ echo ""
 # Step 3: Backup chunks
 echo "Step 3: Creating backup..."
 timestamp=$(date +%Y%m%d_%H%M%S)
-backup_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backups/database/claude_chunks_backup_$timestamp.json"
+backup_file="${PROJECT_ROOT}/backups/database/claude_chunks_backup_$timestamp.json"
 
 echo "[" > "$backup_file"
 first=true
@@ -94,7 +100,7 @@ echo ""
 
 # Step 6: Re-index CLAUDE.md via Python
 echo "Step 6: Re-indexing current CLAUDE.md..."
-cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
+cd ${PROJECT_ROOT}
 
 python3 << 'PYTHON_SCRIPT'
 import asyncio
@@ -103,7 +109,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Add project to path
-sys.path.insert(0, '${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}')
+sys.path.insert(0, '${PROJECT_ROOT}')
 
 from src.knowledge_base import KnowledgeBase
 from llama_index.core import Document
@@ -113,7 +119,7 @@ async def reindex_claude_md():
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
-        claude_path = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/CLAUDE.md")
+        claude_path = Path("${PROJECT_ROOT}/CLAUDE.md")
         if not claude_path.exists():
             print("ERROR: CLAUDE.md not found!")
             return

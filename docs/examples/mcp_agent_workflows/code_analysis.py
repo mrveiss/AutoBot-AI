@@ -315,7 +315,10 @@ async def main():
     """Main entry point for code analysis workflow example"""
 
     # Example: Analyze backend API directory
-    directory = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backend/api"
+    # A path relative to your checkout. The previous value pasted the shell
+    # placeholder into a Python string, which never expands (#13149), and
+    # pointed at "backend/api" — a directory this repository does not have.
+    directory = "autobot-backend/api"
     file_pattern = "*.py"
 
     # Run code analysis workflow
