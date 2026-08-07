@@ -1832,7 +1832,13 @@ class MiscConfig(RedactedSettings):
     content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
     context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
     context_model: str = Field(default="", alias="CONTEXT_MODEL")
-    context_summary_ttl_days: str = Field(default="", alias="CONTEXT_SUMMARY_TTL_DAYS")
+    # #13386: was ``str`` defaulting to "", and its only consumer does
+    # ``int(config.context_summary_ttl_days)`` — so with the variable unset the
+    # cognifier raised ``ValueError: invalid literal for int() with base 10: ''``
+    # on construction. That is every environment without a .env: a fresh clone, a
+    # container build, a git worktree, and CI. 30 is the value .env.example has
+    # documented all along.
+    context_summary_ttl_days: int = Field(default=30, alias="CONTEXT_SUMMARY_TTL_DAYS")
     cuda_cache_disable: bool = Field(default=False, alias="CUDA_CACHE_DISABLE")
     cuda_launch_blocking: str = Field(default="", alias="CUDA_LAUNCH_BLOCKING")
     custom_openai_api_key: str = Field(default="", alias="CUSTOM_OPENAI_API_KEY")
