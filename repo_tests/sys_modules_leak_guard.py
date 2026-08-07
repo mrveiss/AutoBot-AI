@@ -358,6 +358,38 @@ _MISSING = object()
 _DISK_CACHE: dict[str, bool] = {}
 
 
+def _provided_by_multiple_roots(top_level: str) -> bool:
+    """True when more than one ``sys.path`` entry provides *top_level* (#13651).
+
+    ``autobot-backend`` and ``autobot-slm-backend`` both ship a ``services``
+    package, so the bare name is ambiguous. A genuine module under such a name
+    is not "what Python should hold" — it is whichever backend won the race, and
+    leaving it installed for the other backend's tests is the shadow this guard
+    exists to catch. The synthetic -> genuine exemption must not fire for these.
+    """
+    # Deliberately uncached: ``sys.path`` grows during a session as conftests
+    # insert their roots, so an answer cached before the second backend's root
+    # appeared would be wrong for the rest of the run. Only the rare exemption
+    # path consults this.
+    # Resolve before counting: sys.path routinely holds the same directory twice
+    # (absolute and relative forms, or a rootdir re-inserted by a conftest), and
+    # counting those as separate roots would refuse the exemption for names that
+    # only one source root actually provides.
+    providers: set[str] = set()
+    for entry in sys.path:
+        base = Path(entry or ".")
+        target = base / f"{top_level}.py"
+        if not target.is_file():
+            target = base / top_level
+            if not target.is_dir():
+                continue
+        try:
+            providers.add(str(target.resolve()))
+        except OSError:
+            continue
+    return len(providers) > 1
+
+
 def _resolves_on_disk(top_level: str) -> bool:
     """True when *top_level* names a real module or package somewhere on sys.path.
 
@@ -541,7 +573,7 @@ class _LeakGuard:
         if _is_conftest_module(module):
             return None  # pytest's own bookkeeping, not a stub
         if _is_self_rebind(name, module, previous) and self._is_third_party(module):
-            return None  # a third-party package re-registering itself mid-import  # a package re-registering itself during its own import
+            return None  # a third-party package re-registering itself during its own import
         if previous is _MISSING and self._parent_is_genuine(name):
             return None  # a real package's own shim, not a test's leftover
         if not self._shadows_real_code(name):
@@ -552,7 +584,12 @@ class _LeakGuard:
             # Narrow on purpose: genuine-over-genuine stays reported (#13633), and
             # the newcomer must have a real file so a spec-carrying shim for a
             # deleted submodule cannot pass as genuine (#13599).
-            if _is_synthetic(previous) and not _is_synthetic(module) and _has_real_file(module):
+            if (
+                _is_synthetic(previous)
+                and not _is_synthetic(module)
+                and _has_real_file(module)
+                and not _provided_by_multiple_roots(name.partition(".")[0])
+            ):
                 return None
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None

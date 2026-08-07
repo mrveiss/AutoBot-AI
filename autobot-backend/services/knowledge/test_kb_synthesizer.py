@@ -84,7 +84,19 @@ _spec = importlib.util.spec_from_file_location("services.knowledge.kb_synthesize
 assert _spec and _spec.loader, "Could not load kb_synthesizer spec"
 _kb_synth_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.kb_synthesizer"] = _kb_synth_mod
-_spec.loader.exec_module(_kb_synth_mod)  # type: ignore[union-attr]
+try:
+    _spec.loader.exec_module(_kb_synth_mod)  # type: ignore[union-attr]
+except BaseException:  # noqa: BLE001 - re-raised below
+    # #13651: a failed import must not leave our stub installed for the rest of
+    # the session. The guard's own advice is to install and remove in the same
+    # try/finally; without this, an ImportError here is strictly worse than the
+    # old behaviour, which left the genuine module untouched.
+    for _n, _prev in _DISPLACED_BY_STUB.items():
+        if _prev is not _STUB_MISSING:
+            sys.modules[_n] = _prev
+        else:
+            sys.modules.pop(_n, None)
+    raise
 
 # Expose the module as an attribute on the package stub so patch() can resolve it
 if "services.knowledge" in sys.modules:
@@ -109,9 +121,20 @@ _STUBS_UNLOADED_AFTER_IMPORT = {
 
 # Put back whatever those stubs displaced (#13651): a genuine module imported
 # before this one must survive it as the same, unmutated object.
+#
+# The parent attribute is restored alongside the ``sys.modules`` entry. They are
+# two separate channels -- ``mock.patch("utils.async_chromadb_client.X")``
+# resolves via ``getattr(sys.modules["utils"], ...)`` (#11532, #12463), while
+# ``import utils.async_chromadb_client`` reads the key -- and letting them
+# disagree would mean patching a stub while the code under test holds the real
+# module.
 for _n, _prev in _DISPLACED_BY_STUB.items():
     if _prev is not _STUB_MISSING:
         sys.modules[_n] = _prev
+        _parent_name, _, _leaf = _n.rpartition(".")
+        _parent = sys.modules.get(_parent_name) if _parent_name else None
+        if _parent is not None:
+            setattr(_parent, _leaf, _prev)
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
 _cluster_id = KBSynthesizer._cluster_id  # type: ignore[attr-defined]

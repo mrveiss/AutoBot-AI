@@ -64,12 +64,15 @@ autobot-backend/tests/test_vnc_mcp_async.py run-phase
 autobot-backend/tests/test_vnc_screenshot_temp_leak.py run-phase
 autobot-backend/worker_node_test.py run-phase
 autobot-slm-backend/api/monitoring_applogs_test.py
+autobot-slm-backend/services/a2a_card_fetcher_test.py
 autobot-slm-backend/services/reconciler_check_node_health_test.py
 autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py
 autobot-slm-backend/tests/api/test_fleet_health.py
+autobot-slm-backend/tests/api/test_node_update_availability_11964.py
 autobot-slm-backend/tests/api/test_nodes_list_timeout_10913.py run-phase
 autobot-slm-backend/tests/api/test_slm_endpoints_12515.py
 autobot-slm-backend/tests/services/conftest.py
+autobot-slm-backend/tests/services/test_deploy_artifacts_lockstep.py
 autobot-slm-backend/tests/services/test_llm_secrets.py
 autobot-slm-backend/tests/services/test_sso_vault_client.py
 autobot-slm-backend/tests/test_api_request_counter.py

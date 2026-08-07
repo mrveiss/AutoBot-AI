@@ -23,9 +23,14 @@ import pytest
 # tests/orchestration/test_causal_error_recovery.py): the parent conftest stubs
 # ``orchestration.causal_error_analyzer`` (#7431) as a MagicMock package, so the
 # TestCausalErrorAnalyzer suite below was exercising a mock (``CausalErrorAnalyzer()``
-# returned MagicMocks).  Displace exactly that stub, import the real module, and
-# restore the displaced stub after this module's tests so sibling type-only tests
-# that patch it by name are unaffected.  Its import chain only needs
+# returned MagicMocks).  Displace exactly that stub and import the real module.
+#
+# #13651: the displaced entry is put back only if it was a real module. The
+# original text here said the mock was restored "so sibling type-only tests that
+# patch it by name are unaffected" — no test under tests/agents/ references
+# ``causal_error_analyzer`` at all, and reinstalling the mock left it installed
+# for everything collected afterwards, which the leak guard reported. Its import
+# chain only needs
 # agent_loop.think_tool / agent_loop.types, which the conftest already real-loads.
 # ---------------------------------------------------------------------------
 _CONFTEST_STUB_NAMES: tuple = ("orchestration.causal_error_analyzer",)
