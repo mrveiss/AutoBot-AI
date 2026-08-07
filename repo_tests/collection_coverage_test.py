@@ -36,19 +36,29 @@ import pytest
 
 
 def project_root() -> Path:
-    """Repository root via git.
+    """Repository root via git, or a skip when this is not a git checkout.
 
     Deliberately not `autobot_shared.paths.project_root()` (#13652): that helper
     is not on this branch yet, and this module already shells out to git, so the
-    same call answers both questions without a second root derivation.
+    same call answers both questions without a second root derivation. Once the
+    #13659 stack lands, switching to the canonical resolver removes this
+    dependency entirely.
+
+    The whole module is git-driven — every check enumerates *tracked* files — so
+    without git there is nothing to assert rather than something failing. This
+    repository ships a `.dockerignore` that strips `.git` from build contexts,
+    so a git-less checkout is a real configuration here, not a hypothetical, and
+    it must skip rather than raise `CalledProcessError` out of ten tests.
     """
     out = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
         cwd=str(Path(__file__).resolve().parent),
-        check=True,
+        check=False,
     )
+    if out.returncode != 0:
+        pytest.skip("not a git checkout — these checks enumerate tracked files")
     return Path(out.stdout.strip())
 
 #: Directories collected by ci.yml's backend pytest invocation.
