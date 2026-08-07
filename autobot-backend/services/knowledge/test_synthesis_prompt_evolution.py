@@ -25,9 +25,7 @@ import pytest
 # regardless destroyed it — the next importer built a second module object,
 # breaking identity for anything holding the first.
 _OWNED_STUBS = {
-    _n
-    for _n in ("utils.chromadb_client", "autobot_shared", "autobot_shared.redis_client")
-    if _n not in sys.modules
+    _n for _n in ("utils.chromadb_client", "autobot_shared", "autobot_shared.redis_client") if _n not in sys.modules
 }
 sys.modules.setdefault("utils.chromadb_client", MagicMock())
 sys.modules.setdefault("autobot_shared", MagicMock())
