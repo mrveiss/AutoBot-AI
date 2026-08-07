@@ -211,6 +211,28 @@ class _Mutation:
         return _outside_owner_dir(path, path_parents, self.owner_dir, self.owner_ancestors)
 
 
+def _occupant(key: str, expected_obj_id: int) -> str:
+    """Describe whatever currently sits at *key*, for the leak report (#13651).
+
+    The report names the file blamed for a key and the test that witnessed it,
+    but not *what object* is parked there — so a reader cannot tell an
+    unremoved stub from a real module someone re-imported over the top, and
+    every diagnosis of #13651 so far has been an inference about exactly that.
+
+    Cheap and total: this runs only when a leak is already being printed.
+    """
+    module = sys.modules.get(key)
+    if module is None:
+        return "absent-at-report-time"
+
+    same = "same-object" if id(module) == expected_obj_id else "REPLACED-since"
+    kind = type(module).__name__
+    origin = getattr(module, "__file__", None)
+    spec = "spec" if getattr(module, "__spec__", None) is not None else "no-spec"
+    where = origin if origin else "no-__file__"
+    return f"{same}, {kind}, {spec}, {where}"
+
+
 @dataclass(frozen=True)
 class _Leak:
     """A live mutation observed while pytest worked outside its owner."""
@@ -235,6 +257,7 @@ class _Leak:
             "owner": self.mutation.owner,
             "owner_dir_display": self.mutation.owner_dir_display,
             "observed_at": self.observed_at,
+            "occupant": _occupant(self.mutation.key, self.mutation.obj_id),
         }
 
 
@@ -1050,6 +1073,10 @@ def _write_owner_report(terminalreporter: object, owner: str, records: list[dict
         f"{first['owner_dir_display']}/ — first seen at {first['observed_at']}",
         red=True,
     )
+    for record in records[:_KEYS_PER_OWNER]:
+        occupant = record.get("occupant")
+        if occupant:
+            terminalreporter.write_line(f"      {record['key']}: {occupant}", red=True)
     keys = [record["key"] for record in records]
     shown = ", ".join(keys[:_KEYS_PER_OWNER])
     overflow = len(keys) - _KEYS_PER_OWNER
