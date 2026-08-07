@@ -43,10 +43,20 @@ from orchestration.causal_error_analyzer import (  # noqa: E402
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():
-    """Restore the displaced parent-conftest stub after this module's tests."""
+    """Restore the displaced parent-conftest stub after this module's tests.
+
+    #13651: only if it was a real module. The parent conftest installs a
+    ``MagicMock`` here purely so the lightweight types-only tests can collect
+    without the heavy import chain (#7431); putting that mock back once this
+    module has successfully imported the genuine module leaves a mock installed
+    for everything collected afterwards, which is the leak the guard reports.
+    Keeping the real module is both correct and cheaper — the import has already
+    happened, so nothing downstream pays for it.
+    """
     yield
     for _sname, _smod in _SAVED_STUBS.items():
-        sys.modules[_sname] = _smod  # type: ignore[assignment]
+        if getattr(_smod, "__spec__", None) is not None:
+            sys.modules[_sname] = _smod  # type: ignore[assignment]
 
 
 from reasoning.causal_reasoning import (
