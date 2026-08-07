@@ -30,6 +30,7 @@ import pytest
 
 _STUBS: dict = {}
 
+
 def _make_stub(name: str) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__path__ = []
@@ -91,20 +92,10 @@ from services.knowledge.analyzer_service import (  # noqa: E402
 # these exact objects back for the duration of this module's tests and removes
 # them afterwards. The same objects, not fresh ones — analyzer_service captured
 # references at import and a different stub would not be the module it holds.
-# #13651: unload the name only when a *stub* occupies it. ``setdefault`` is a
-# no-op once the genuine module is imported, and the old unconditional pop
-# then destroyed that genuine module — the next importer built a second
-# object, breaking identity for everything holding the first. Keying on the
-# occupant rather than on "did I install it" also keeps the original
-# behaviour of clearing a stub another module in this directory left behind.
-def _is_stub(name: str) -> bool:
-    return name in sys.modules and getattr(sys.modules[name], "__spec__", None) is None
-
-
 _STUBS_UNLOADED_AFTER_IMPORT = {
     name: sys.modules.pop(name)
     for name in ("utils.chromadb_client", "utils.async_chromadb_client")
-    if _is_stub(name)
+    if name in sys.modules
 }
 
 # ---------------------------------------------------------------------------

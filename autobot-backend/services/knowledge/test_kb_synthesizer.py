@@ -30,6 +30,7 @@ import pytest
 
 _STUBS: dict = {}
 
+
 def _make_stub(name: str) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__path__ = []
@@ -85,20 +86,10 @@ from services.knowledge.kb_synthesizer import (  # noqa: E402
 # module in the worker, which is how ``utils`` and its children escaped this
 # directory. ``_reinstall_module_stubs`` in this package's conftest puts these
 # exact objects back around this module's tests and removes them afterwards.
-# #13651: unload the name only when a *stub* occupies it. ``setdefault`` is a
-# no-op once the genuine module is imported, and the old unconditional pop
-# then destroyed that genuine module — the next importer built a second
-# object, breaking identity for everything holding the first. Keying on the
-# occupant rather than on "did I install it" also keeps the original
-# behaviour of clearing a stub another module in this directory left behind.
-def _is_stub(name: str) -> bool:
-    return name in sys.modules and getattr(sys.modules[name], "__spec__", None) is None
-
-
 _STUBS_UNLOADED_AFTER_IMPORT = {
     name: sys.modules.pop(name)
     for name in ("utils.chromadb_client", "utils.async_chromadb_client")
-    if _is_stub(name)
+    if name in sys.modules
 }
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
