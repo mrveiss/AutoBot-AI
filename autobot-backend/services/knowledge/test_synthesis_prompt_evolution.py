@@ -20,7 +20,14 @@ import pytest
 # ---------------------------------------------------------------------------
 # Minimal stubs for optional heavy deps so the module can be imported.
 # ---------------------------------------------------------------------------
-sys.modules.setdefault("utils.chromadb_client", MagicMock())
+# #13651: remember the stub only if this module actually installed it.
+# ``setdefault`` is a no-op once the genuine module is imported, and the unload
+# below used to pop the name regardless — deleting a real module it never
+# installed, so the next importer built a second object.
+_OWN_CHROMADB_STUB = None
+if "utils.chromadb_client" not in sys.modules:
+    _OWN_CHROMADB_STUB = MagicMock()
+    sys.modules["utils.chromadb_client"] = _OWN_CHROMADB_STUB
 sys.modules.setdefault("autobot_shared", MagicMock())
 sys.modules.setdefault("autobot_shared.redis_client", MagicMock())
 
@@ -32,7 +39,9 @@ from services.knowledge.kb_synthesizer import KBSynthesizer  # noqa: E402
 # ``_reinstall_module_stubs`` in this package's conftest puts it back around this
 # module's own tests and removes it afterwards.
 _STUBS_UNLOADED_AFTER_IMPORT = {
-    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in sys.modules
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client",)
+    if _OWN_CHROMADB_STUB is not None and sys.modules.get(name) is _OWN_CHROMADB_STUB
 }
 
 # ---------------------------------------------------------------------------

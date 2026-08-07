@@ -29,6 +29,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _STUBS: dict = {}
+_STUB_MISSING = object()
 
 
 def _make_stub(name: str) -> types.ModuleType:
@@ -52,6 +53,20 @@ _chromadb_stub = _make_stub("utils.chromadb_client")
 # when a sibling test module registered this name first the returned stub is a
 # dangling copy that production code never sees. Read the registered module back.
 _make_stub("utils.async_chromadb_client")
+
+# #13651: force *our* stub in for the two chromadb names, remembering what it
+# displaced. ``setdefault`` is a no-op once the genuine module is imported, and
+# the lines just below write AsyncMocks onto whatever is registered -- which was
+# the genuine module. Installing our own object means the mutations land on the
+# stub; the restore after the import puts the real module back untouched.
+_DISPLACED_BY_STUB = {}
+for _n in ("utils.chromadb_client", "utils.async_chromadb_client"):
+    _registered = sys.modules.get(_n, _STUB_MISSING)
+    if _registered is not _STUBS[_n]:
+        # Only when something else holds the name — rewriting our own stub back
+        # over itself is a no-op the leak guard would still record as a mutation.
+        _DISPLACED_BY_STUB[_n] = _registered
+        sys.modules[_n] = _STUBS[_n]
 _async_chromadb_stub = sys.modules["utils.async_chromadb_client"]
 # Injecting a submodule straight into sys.modules does not bind it on the
 # parent package, so mock.patch("utils.async_chromadb_client....") — used by
@@ -91,6 +106,12 @@ _STUBS_UNLOADED_AFTER_IMPORT = {
     for name in ("utils.chromadb_client", "utils.async_chromadb_client")
     if name in sys.modules
 }
+
+# Put back whatever those stubs displaced (#13651): a genuine module imported
+# before this one must survive it as the same, unmutated object.
+for _n, _prev in _DISPLACED_BY_STUB.items():
+    if _prev is not _STUB_MISSING:
+        sys.modules[_n] = _prev
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
 _cluster_id = KBSynthesizer._cluster_id  # type: ignore[attr-defined]
