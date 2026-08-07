@@ -515,13 +515,13 @@ class TestCheckoutRootDetection:
 
     def test_recognises_a_normal_clone(self, tmp_path) -> None:
         """A clone has .git as a directory."""
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         root = tmp_path / "clone"
         (root / "autobot_shared").mkdir(parents=True)
         (root / ".git").mkdir()
 
-        assert _is_checkout_root(root) is True
+        assert is_checkout_root(root) is True
 
     def test_recognises_a_git_worktree(self, tmp_path) -> None:
         """In a worktree .git is a FILE, not a directory.
@@ -529,13 +529,13 @@ class TestCheckoutRootDetection:
         Tested explicitly because this repository's whole workflow runs from
         worktrees, and an ``is_dir()`` check would have excluded every one.
         """
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         root = tmp_path / "worktree"
         (root / "autobot_shared").mkdir(parents=True)
         (root / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
 
-        assert _is_checkout_root(root) is True
+        assert is_checkout_root(root) is True
 
     def test_requires_both_markers(self, tmp_path) -> None:
         """Either marker alone is not enough.
@@ -544,26 +544,56 @@ class TestCheckoutRootDetection:
         vendored into; ``autobot_shared`` alone matches ordinary parent
         directories in some layouts.
         """
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         git_only = tmp_path / "other-repo"
         (git_only / ".git").mkdir(parents=True)
         pkg_only = tmp_path / "vendored"
         (pkg_only / "autobot_shared").mkdir(parents=True)
 
-        assert _is_checkout_root(git_only) is False
-        assert _is_checkout_root(pkg_only) is False
+        assert is_checkout_root(git_only) is False
+        assert is_checkout_root(pkg_only) is False
 
-    def test_a_configured_env_still_wins(self, tmp_path) -> None:
-        """The .env walk keeps priority — a configured deployment is authoritative."""
-        from autobot_shared import ssot_config
+    def test_a_configured_checkout_resolves_to_itself(self, tmp_path) -> None:
+        """A directory holding both a .env and the markers resolves to itself.
 
-        # Both markers AND a .env: the .env branch is checked first, so a
-        # deployment that has been configured is never overridden by detection.
+        Note the rule is **nearest ancestor wins**, not ".env is searched before
+        the markers". The resolver makes a single pass and returns the first
+        ancestor satisfying *either* condition (#13149); the two-pass form it
+        replaced is what let a worktree escape to the main tree's ``.env``.
+        Where both signals sit in the same directory — an ordinary configured
+        checkout — the two orderings agree, which is what this pins.
+        """
+        from autobot_shared.paths import is_checkout_root, resolve_project_root
+
         root = tmp_path / "deployed"
         (root / "autobot_shared").mkdir(parents=True)
         (root / ".git").mkdir()
         (root / ".env").write_text("X=1\n", encoding="utf-8")
 
-        assert ssot_config._is_checkout_root(root) is True
-        assert (root / ".env").exists()
+        assert is_checkout_root(root) is True
+        assert resolve_project_root(root / "autobot_shared" / "mod.py") == root
+
+    def test_a_nearer_checkout_beats_a_farther_env(self, tmp_path, monkeypatch) -> None:
+        """The case the old two-pass walk got wrong, asserted on resolution.
+
+        An outer directory carries the ``.env``; an inner one carries only the
+        markers. Walking every ancestor for ``.env`` first would return the
+        outer directory — which is exactly how every worktree resolved to the
+        main checkout before #13149.
+        """
+        from autobot_shared.paths import PROJECT_ROOT_ENV, resolve_project_root
+
+        monkeypatch.delenv(PROJECT_ROOT_ENV, raising=False)
+
+        outer = tmp_path / "main"
+        (outer / "autobot_shared").mkdir(parents=True)
+        (outer / ".git").mkdir()
+        (outer / ".env").write_text("X=1\n", encoding="utf-8")
+
+        inner = outer / ".worktrees" / "issue-1"
+        (inner / "autobot_shared").mkdir(parents=True)
+        (inner / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+        assert not (inner / ".env").exists()
+
+        assert resolve_project_root(inner / "autobot_shared" / "mod.py") == inner

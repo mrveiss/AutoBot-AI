@@ -198,8 +198,14 @@ jobs:
         # makes whichever backend's file collects first bind that dotted name
         # in sys.modules for the rest of the session, breaking the other
         # backend's own tests.
+        # #13653: `scripts` was absent from this list, so the seven test files
+        # guarding the pre-commit checkers (nosec format, exec bits, token
+        # contrast, websockets cap, api wiring) ran in no workflow at all.
+        # They pass — measured at 118 passed — so this is a wiring fix, not a
+        # quarantine. scripts/lib/*_test.sh are bash and are covered separately
+        # by repo_tests/shell_lib_test.py.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts \
           -n auto --dist loadscope \
           --splits 12 --group ${{ matrix.shard }} \
           --durations-path .test_durations \
