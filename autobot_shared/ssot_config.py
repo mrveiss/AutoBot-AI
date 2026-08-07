@@ -50,61 +50,17 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 
-# Determine project root for .env file location
-#: Markers that identify a source checkout root and nothing below it. Both must
-#: be present: ``autobot_shared`` alone also matches the package directory's own
-#: parent in some layouts, and ``.git`` alone would match an unrelated repo if
-#: this package were ever vendored into one.
-#:
-#: ``.git`` is tested with ``exists()`` rather than ``is_dir()`` on purpose — in
-#: a ``git worktree`` it is a *file* pointing at the real git directory, and
-#: this repository's whole workflow runs from worktrees.
-_CHECKOUT_MARKERS = (".git", "autobot_shared")
-
-
-def _is_checkout_root(path: Path) -> bool:
-    """True when *path* looks like the root of a source checkout."""
-    return all((path / marker).exists() for marker in _CHECKOUT_MARKERS)
-
-
-def _find_project_root() -> Path:
-    """Resolve the project root: configured deployment, then checkout, then install.
-
-    The ``.env`` walk comes first and is unchanged — a deployment that has been
-    configured should always win.
-
-    The checkout step is new (#13572 step 2, #13149). ``.env`` is git-ignored, so
-    *every* fresh clone, container build and CI job fell straight through to the
-    install-location fallback and set ``PROJECT_ROOT`` to a directory that does
-    not exist there. That produced two failures at once: it failed
-    ``ssot_config_test.py::TestProjectRoot::test_project_root_exists`` on the
-    base branch, and it pointed the ~20 ``env_file=str(PROJECT_ROOT / ".env")``
-    declarations in this module at production configuration from a source tree.
-
-    This could not land before #13572. Nineteen JSON-Schema defaults were derived
-    from ``PROJECT_ROOT``, so correcting the resolver made the published OpenAPI
-    contract carry the runner's checkout path and turned ``verify-generated-types``
-    red. Those defaults are now factories and absent from the schema, so moving
-    ``PROJECT_ROOT`` no longer moves the contract.
-    """
-    current = Path(__file__).resolve()
-    candidates = [current] + list(current.parents)
-
-    for parent in candidates:
-        if (parent / ".env").exists():
-            return parent
-
-    for parent in candidates:
-        if _is_checkout_root(parent):
-            return parent
-
-    # Fallback to runtime location (env var or /opt/autobot)
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
-
-
-PROJECT_ROOT = _find_project_root()
+# Determine project root for .env file location.
+#
+# The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
+# 50-odd standalone tooling scripts that also need the project root can ask for
+# it without importing this module, which builds every pydantic settings model.
+# Keeping one implementation is the point: the same defect was fixed in
+# isolation twice (#4945, #13092) and both times failed to propagate.
+PROJECT_ROOT = project_root()
 
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
