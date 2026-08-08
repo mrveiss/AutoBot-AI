@@ -13,7 +13,6 @@ an in-memory AsyncMock that delegates to a simple dict/set store.
 
 import sys
 import types
-from typing import Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -56,129 +55,12 @@ for name, mod in [
 ]:
     sys.modules.setdefault(name, mod)
 
-from autobot_memory_graph.property_graph import (  # noqa: E402
-    PropertyGraph,
-    _adj_in_all_key,
-    _adj_in_key,
-    _adj_out_all_key,
-    _adj_out_key,
-    _edge_key,
-    _node_key,
-    _prop_index_key,
+# The in-memory graph doubles are shared with the #13474 wiring test rather than
+# duplicated — see graph_test_doubles.py.
+from tests.memory_graph.graph_test_doubles import (  # noqa: E402
+    make_graph,
+    make_harness,
 )
-
-# ---------------------------------------------------------------------------
-# Fake Redis store
-# ---------------------------------------------------------------------------
-
-
-class FakeRedis:
-    """Minimal in-memory async Redis mock with the operations used by PropertyGraph."""
-
-    def __init__(self) -> None:
-        self._hashes: Dict[str, Dict[bytes, bytes]] = {}
-        self._sets: Dict[str, set] = {}
-        self._zsets: Dict[str, Dict[str, float]] = {}
-
-    # ---- hash ----
-
-    async def hset(self, key: str, mapping: Dict | None = None, **kwargs) -> int:
-        if key not in self._hashes:
-            self._hashes[key] = {}
-        if mapping:
-            for k, v in mapping.items():
-                bk = k.encode("utf-8") if isinstance(k, str) else k
-                bv = v.encode("utf-8") if isinstance(v, str) else str(v).encode("utf-8")
-                self._hashes[key][bk] = bv
-        return 1
-
-    async def hgetall(self, key: str) -> Dict[bytes, bytes]:
-        return dict(self._hashes.get(key, {}))
-
-    async def hdel(self, key: str, *fields) -> int:
-        h = self._hashes.get(key, {})
-        removed = 0
-        for f in fields:
-            bk = f.encode("utf-8") if isinstance(f, str) else f
-            if bk in h:
-                del h[bk]
-                removed += 1
-        return removed
-
-    # ---- set ----
-
-    async def sadd(self, key: str, *members) -> int:
-        if key not in self._sets:
-            self._sets[key] = set()
-        count = 0
-        for m in members:
-            s = m.encode("utf-8") if isinstance(m, str) else m
-            if s not in self._sets[key]:
-                self._sets[key].add(s)
-                count += 1
-        return count
-
-    async def srem(self, key: str, *members) -> int:
-        s = self._sets.get(key, set())
-        removed = 0
-        for m in members:
-            bm = m.encode("utf-8") if isinstance(m, str) else m
-            if bm in s:
-                s.discard(bm)
-                removed += 1
-        return removed
-
-    async def smembers(self, key: str) -> set:
-        return set(self._sets.get(key, set()))
-
-    # ---- sorted set ----
-
-    async def zadd(self, key: str, mapping: Dict[str, float]) -> int:
-        if key not in self._zsets:
-            self._zsets[key] = {}
-        for member, score in mapping.items():
-            self._zsets[key][member] = score
-        return len(mapping)
-
-    async def zrem(self, key: str, *members) -> int:
-        z = self._zsets.get(key, {})
-        removed = 0
-        for m in members:
-            if m in z:
-                del z[m]
-                removed += 1
-        return removed
-
-    async def zrange(self, key: str, start: int, stop: int) -> List[bytes]:
-        z = self._zsets.get(key, {})
-        sorted_members = sorted(z.keys(), key=lambda k: z[k])
-        if stop == -1:
-            stop = len(sorted_members)
-        else:
-            stop += 1
-        return [m.encode("utf-8") if isinstance(m, str) else m for m in sorted_members[start:stop]]
-
-    # ---- generic ----
-
-    async def exists(self, key: str) -> int:
-        return 1 if (key in self._hashes or key in self._sets or key in self._zsets) else 0
-
-    async def delete(self, *keys) -> int:
-        removed = 0
-        for key in keys:
-            for store in (self._hashes, self._sets, self._zsets):
-                if key in store:
-                    del store[key]
-                    removed += 1
-        return removed
-
-
-def make_graph() -> PropertyGraph:
-    """Return a PropertyGraph wired to FakeRedis."""
-    g = PropertyGraph(database="knowledge")
-    g._redis = FakeRedis()
-    return g
-
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -546,3 +428,199 @@ class TestShortestPath:
         path = await g.shortest_path("a", "d")
         assert path is not None
         assert len(path) == 1  # direct hop wins
+
+    @pytest.mark.asyncio
+    async def test_shortest_path_default_stays_outgoing_only(self):
+        """#13474: the direction parameter must not change the existing default.
+
+        b -> a exists, a -> b does not. Asking a..b with the default must still
+        fail, or every caller written against #8198 silently changes meaning.
+        """
+        g = make_graph()
+        for n in ("a", "b"):
+            await g.add_node(n, {"id": n})
+        await g.add_edge("b", "a", "LEADS_TO")
+
+        assert await g.shortest_path("a", "b") is None
+
+    @pytest.mark.asyncio
+    async def test_shortest_path_both_crosses_edge_backwards(self):
+        """#13474: direction='both' reaches a node only linked by an incoming edge."""
+        g = make_graph()
+        for n in ("a", "b"):
+            await g.add_node(n, {"id": n})
+        await g.add_edge("b", "a", "LEADS_TO")
+
+        path = await g.shortest_path("a", "b", direction="both")
+        assert path is not None
+        assert len(path) == 1
+        assert path[0]["node"]["id"] == "b"
+        # The edge was crossed against its stored orientation.
+        assert path[0]["direction"] == "incoming"
+        assert path[0]["edge"]["from"] == "b"
+        assert path[0]["edge"]["to"] == "a"
+
+    @pytest.mark.asyncio
+    async def test_shortest_path_tags_each_hop_direction(self):
+        """#13474: a mixed path records how every individual edge was crossed."""
+        g = make_graph()
+        for n in ("a", "b", "c"):
+            await g.add_node(n, {"id": n})
+        await g.add_edge("a", "b", "LEADS_TO")  # forward
+        await g.add_edge("c", "b", "LEADS_TO")  # backward from b's point of view
+
+        path = await g.shortest_path("a", "c", direction="both")
+        assert path is not None
+        assert [step["node"]["id"] for step in path] == ["b", "c"]
+        assert [step["direction"] for step in path] == ["outgoing", "incoming"]
+
+    @pytest.mark.asyncio
+    async def test_shortest_path_incoming_only(self):
+        """#13474: direction='incoming' walks the graph in reverse."""
+        g = make_graph()
+        for n in ("a", "b", "c"):
+            await g.add_node(n, {"id": n})
+        await g.add_edge("c", "b", "LEADS_TO")
+        await g.add_edge("b", "a", "LEADS_TO")
+
+        path = await g.shortest_path("a", "c", direction="incoming")
+        assert path is not None
+        assert [step["node"]["id"] for step in path] == ["b", "c"]
+        assert {step["direction"] for step in path} == {"incoming"}
+
+    @pytest.mark.asyncio
+    async def test_shortest_path_respects_max_depth(self):
+        """#13474 wiring exposes max_depth to callers — it must actually bound BFS."""
+        g = make_graph()
+        for n in ("a", "b", "c", "d"):
+            await g.add_node(n, {"id": n})
+        await g.add_edge("a", "b", "LEADS_TO")
+        await g.add_edge("b", "c", "LEADS_TO")
+        await g.add_edge("c", "d", "LEADS_TO")
+
+        assert await g.shortest_path("a", "d", max_depth=2) is None
+        assert len(await g.shortest_path("a", "d", max_depth=3)) == 3
+
+
+# ---------------------------------------------------------------------------
+# PropertyGraphMixin.find_path — name-addressed wiring (#13474)
+# ---------------------------------------------------------------------------
+
+
+class TestFindPath:
+    @pytest.mark.asyncio
+    async def test_resolves_names_and_returns_path(self):
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Incident 7")
+
+        assert result["found"] is True
+        assert result["reason"] is None
+        assert result["hops"] == 1
+        assert result["from_entity"] == {"id": "e1", "name": "Redis Config", "type": "decision"}
+        assert result["to_entity"] == {"id": "e2", "name": "Incident 7", "type": "incident"}
+        step = result["path"][0]
+        assert step["relation"] == "CAUSED"
+        assert step["direction"] == "outgoing"
+        assert step["node"] == {"id": "e2", "name": "Incident 7", "type": "incident"}
+
+    @pytest.mark.asyncio
+    async def test_default_direction_is_undirected(self):
+        """Only e1 -> e2 is stored; the reverse question must still be answered."""
+        h = await make_harness()
+
+        result = await h.find_path("Incident 7", "Redis Config")
+
+        assert result["found"] is True
+        assert result["hops"] == 1
+        assert result["path"][0]["direction"] == "incoming"
+
+    @pytest.mark.asyncio
+    async def test_direction_override_is_passed_through(self):
+        h = await make_harness()
+
+        result = await h.find_path("Incident 7", "Redis Config", direction="outgoing")
+
+        assert result["found"] is False
+        assert result["reason"] == "no_path"
+        assert result["query"]["direction"] == "outgoing"
+
+    @pytest.mark.asyncio
+    async def test_unconnected_entities_report_no_path(self):
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Orphan")
+
+        assert result["found"] is False
+        assert result["reason"] == "no_path"
+        assert result["hops"] == 0
+        assert result["path"] == []
+        assert result["missing_entities"] == []
+
+    @pytest.mark.asyncio
+    async def test_unknown_name_is_reported_separately_from_no_path(self):
+        """A typo must not read as "these are unrelated" — different reason, named."""
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Does Not Exist")
+
+        assert result["found"] is False
+        assert result["reason"] == "entity_not_found"
+        assert result["missing_entities"] == ["Does Not Exist"]
+        assert result["to_entity"] is None
+
+    @pytest.mark.asyncio
+    async def test_both_names_unknown_are_both_listed(self):
+        h = await make_harness()
+
+        result = await h.find_path("Nope", "Also Nope")
+
+        assert result["reason"] == "entity_not_found"
+        assert result["missing_entities"] == ["Nope", "Also Nope"]
+
+    @pytest.mark.asyncio
+    async def test_same_entity_is_a_found_zero_hop_path(self):
+        """shortest_path returns [] here, not None — a truthiness check would
+        report the entity as unreachable from itself."""
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Redis Config")
+
+        assert result["found"] is True
+        assert result["reason"] is None
+        assert result["hops"] == 0
+        assert result["path"] == []
+
+    @pytest.mark.asyncio
+    async def test_relation_filter_is_applied(self):
+        h = await make_harness()
+
+        assert (await h.find_path("Redis Config", "Incident 7", relation="CAUSED"))["found"] is True
+        assert (await h.find_path("Redis Config", "Incident 7", relation="BLOCKS"))["reason"] == "no_path"
+
+    @pytest.mark.asyncio
+    async def test_query_echoes_traversal_parameters(self):
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Incident 7", relation="CAUSED", max_depth=3)
+
+        assert result["query"] == {
+            "from_entity": "Redis Config",
+            "to_entity": "Incident 7",
+            "relation": "CAUSED",
+            "max_depth": 3,
+            "direction": "both",
+        }
+
+    @pytest.mark.asyncio
+    async def test_traversal_failure_propagates(self):
+        """A Redis failure must not be flattened into "no path" (silent failure)."""
+        h = await make_harness()
+
+        async def _boom(*args, **kwargs):
+            raise ConnectionError("redis down")
+
+        h.graph.shortest_path = _boom
+
+        with pytest.raises(ConnectionError):
+            await h.find_path("Redis Config", "Incident 7")

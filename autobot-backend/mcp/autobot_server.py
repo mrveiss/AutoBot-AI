@@ -239,6 +239,35 @@ _TOOLS: Dict[str, Dict[str, Any]] = {
             "required": ["entity"],
         },
     },
+    "memory.path": {
+        "description": (
+            "Find the shortest relationship path between two memory-graph entities — "
+            "answers how two things are connected, not just what is near one of them."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_entity": {"type": "string", "description": "Source entity name"},
+                "to_entity": {"type": "string", "description": "Target entity name"},
+                "relation": {
+                    "type": "string",
+                    "description": "Optional relation type to restrict the traversal to",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "default": 6,
+                    "description": "Maximum path length in hops (1-10)",
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["outgoing", "incoming", "both"],
+                    "default": "both",
+                    "description": "Edge direction to follow; 'both' treats relations as undirected",
+                },
+            },
+            "required": ["from_entity", "to_entity"],
+        },
+    },
     "memory.verbatim_search": {
         "description": "Search verbatim conversation chunks stored in the VerbatimStore.",
         "inputSchema": {
@@ -740,6 +769,38 @@ class AutoBotMCPServer:
             "related": list(visited.values()),
             "count": len(visited),
         }
+
+    async def _memory_path(
+        self,
+        from_entity: str,
+        to_entity: str,
+        relation: str | None = None,
+        max_depth: int = 6,
+        direction: str = "both",
+    ) -> Any:
+        """Shortest relationship path between two entities (#13474).
+
+        Delegates to AutoBotMemoryGraph.find_path so name resolution and path
+        serialisation are not duplicated against the Graph-RAG ``/path``
+        endpoint. ``max_depth`` is clamped the way ``memory.related`` clamps
+        depth — an untrusted caller must not be able to request an unbounded
+        traversal.
+        """
+        from autobot_memory_graph import AutoBotMemoryGraph
+
+        allowed_directions = ("outgoing", "incoming", "both")
+        if direction not in allowed_directions:
+            return {"error": "Invalid direction", "direction": direction, "allowed": list(allowed_directions)}
+
+        graph = AutoBotMemoryGraph()
+        await graph.initialize()
+        return await graph.find_path(
+            from_entity=from_entity,
+            to_entity=to_entity,
+            relation=relation,
+            max_depth=max(1, min(max_depth, 10)),
+            direction=direction,
+        )
 
     async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
         from memory.verbatim_store import VerbatimStore

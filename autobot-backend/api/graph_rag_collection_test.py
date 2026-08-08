@@ -191,3 +191,150 @@ async def test_graph_rag_health_returns_degraded_not_500_when_subsystem_down():
     assert body["status"] == "degraded"
     assert "status" in body  # monitoring always gets a status field
     assert body["components"]["memory_graph"] == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Graph-RAG /path endpoint — #13474
+#
+# Gives PropertyGraph.shortest_path a production caller. /search expands a
+# neighbourhood ("what relates to X"); /path answers "how does X reach Y".
+# ---------------------------------------------------------------------------
+
+from fastapi import HTTPException  # noqa: E402
+
+from api.graph_rag import graph_rag_path  # noqa: E402
+from api.schemas_knowledge import GraphRAGPathRequest  # noqa: E402
+
+
+def _path_service(result: dict) -> MagicMock:
+    service = MagicMock()
+    service.find_connection_path = AsyncMock(return_value=result)
+    return service
+
+
+async def test_path_endpoint_returns_the_traversal():
+    service = _path_service(
+        {
+            "found": True,
+            "reason": None,
+            "missing_entities": [],
+            "from_entity": {"id": "e1", "name": "Redis Config", "type": "decision"},
+            "to_entity": {"id": "e2", "name": "Incident 7", "type": "incident"},
+            "hops": 1,
+            "path": [{"relation": "CAUSED", "direction": "outgoing", "node": {"id": "e2"}}],
+            "query": {"direction": "both"},
+            "traversal_time": 0.004,
+        }
+    )
+
+    response = await graph_rag_path(
+        path_request=GraphRAGPathRequest(from_entity="Redis Config", to_entity="Incident 7"),
+        service=service,
+        current_user={"id": "u1"},
+    )
+
+    body = json.loads(bytes(response.body).decode("utf-8"))
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["found"] is True
+    assert body["hops"] == 1
+    assert body["path"][0]["relation"] == "CAUSED"
+    assert body["request_id"]
+
+
+async def test_path_endpoint_forwards_every_query_parameter():
+    """A parameter the router drops is a parameter the caller cannot use."""
+    service = _path_service({"found": False, "reason": "no_path", "hops": 0, "path": []})
+
+    await graph_rag_path(
+        path_request=GraphRAGPathRequest(
+            from_entity="A",
+            to_entity="B",
+            relation="CAUSED",
+            max_depth=3,
+            direction="incoming",
+        ),
+        service=service,
+        current_user={"id": "u1"},
+    )
+
+    service.find_connection_path.assert_awaited_once_with(
+        from_entity="A",
+        to_entity="B",
+        relation="CAUSED",
+        max_depth=3,
+        direction="incoming",
+    )
+
+
+async def test_path_endpoint_returns_200_when_unconnected():
+    """"They exist but are not connected" is a valid answer, not an error."""
+    service = _path_service(
+        {
+            "found": False,
+            "reason": "no_path",
+            "missing_entities": [],
+            "from_entity": {"id": "e1"},
+            "to_entity": {"id": "e3"},
+            "hops": 0,
+            "path": [],
+            "query": {},
+            "traversal_time": 0.001,
+        }
+    )
+
+    response = await graph_rag_path(
+        path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
+        service=service,
+        current_user={"id": "u1"},
+    )
+
+    body = json.loads(bytes(response.body).decode("utf-8"))
+    assert response.status_code == 200
+    assert body["found"] is False
+    assert body["reason"] == "no_path"
+
+
+async def test_path_endpoint_404s_on_unresolvable_entity():
+    """A name that does not exist is a bad reference, distinct from "no path"."""
+    service = _path_service(
+        {
+            "found": False,
+            "reason": "entity_not_found",
+            "missing_entities": ["Does Not Exist"],
+            "from_entity": {"id": "e1"},
+            "to_entity": None,
+            "hops": 0,
+            "path": [],
+            "query": {},
+            "traversal_time": 0.001,
+        }
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await graph_rag_path(
+            path_request=GraphRAGPathRequest(from_entity="A", to_entity="Does Not Exist"),
+            service=service,
+            current_user={"id": "u1"},
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail["missing_entities"] == ["Does Not Exist"]
+
+
+def test_path_request_rejects_whitespace_entity_names():
+    with pytest.raises(ValueError):
+        GraphRAGPathRequest(from_entity="   ", to_entity="B")
+
+
+def test_path_request_rejects_out_of_range_depth_and_direction():
+    with pytest.raises(ValueError):
+        GraphRAGPathRequest(from_entity="A", to_entity="B", max_depth=99)
+    with pytest.raises(ValueError):
+        GraphRAGPathRequest(from_entity="A", to_entity="B", direction="sideways")
+
+
+def test_path_request_trims_entity_names():
+    req = GraphRAGPathRequest(from_entity="  Redis Config  ", to_entity=" Incident 7 ")
+    assert req.from_entity == "Redis Config"
+    assert req.to_entity == "Incident 7"

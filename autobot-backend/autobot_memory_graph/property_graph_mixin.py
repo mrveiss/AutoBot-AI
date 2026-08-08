@@ -17,10 +17,16 @@ callers can use graph-style queries directly on AutoBotMemoryGraph:
     memory.graph.subgraph("entity-id")
     memory.graph.shortest_path("entity-id-a", "entity-id-b")
 
+Path queries by entity *name* go through the mixin itself rather than the
+PropertyGraph, since only AutoBotMemoryGraph can resolve a name to an id:
+
+    memory.find_path("Redis Config", "Incident 7")   # #13474
+
 When ``create_entity`` or ``create_relation`` are called the mixin also
 mirrors the data into the PropertyGraph so the two stores stay in sync.
 """
 
+import asyncio
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -29,6 +35,52 @@ from .core import AutoBotMemoryGraphCore
 from .property_graph import PropertyGraph
 
 logger = get_logger(__name__)
+
+
+def _endpoint_summary(entity: Dict[str, Any]) -> Dict[str, Any]:
+    """Reduce an entity to the fields a path response needs. #13474."""
+    return {"id": entity.get("id"), "name": entity.get("name"), "type": entity.get("type")}
+
+
+def _serialize_hop(hop: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten one ``{node, edge, direction}`` traversal step. #13474."""
+    node = hop.get("node") or {}
+    edge = hop.get("edge") or {}
+    return {
+        "relation": edge.get("relation"),
+        "direction": hop.get("direction"),
+        "edge_id": edge.get("id"),
+        "from": edge.get("from"),
+        "to": edge.get("to"),
+        "node": _endpoint_summary(node),
+    }
+
+
+def _path_result(
+    from_node: Dict[str, Any] | None,
+    to_node: Dict[str, Any] | None,
+    raw_path: List[Dict[str, Any]] | None,
+    missing: List[str],
+    query: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build the ``find_path`` response dict. #13474.
+
+    ``raw_path`` distinguishes three outcomes that a truthiness check would
+    collapse: ``None`` means no path exists, ``[]`` means the two names resolved
+    to the same entity (a zero-hop path, which IS found), and a non-empty list is
+    a real path.
+    """
+    reason = "entity_not_found" if missing else ("no_path" if raw_path is None else None)
+    return {
+        "found": reason is None,
+        "reason": reason,
+        "missing_entities": missing,
+        "from_entity": _endpoint_summary(from_node) if from_node else None,
+        "to_entity": _endpoint_summary(to_node) if to_node else None,
+        "hops": len(raw_path) if raw_path is not None else 0,
+        "path": [_serialize_hop(hop) for hop in raw_path] if raw_path is not None else [],
+        "query": query,
+    }
 
 
 class PropertyGraphMixin:
@@ -152,3 +204,63 @@ class PropertyGraphMixin:
                     type(exc).__name__,
                 )
         return relation
+
+    # ------------------------------------------------------------------
+    # Path queries: name-addressed shortest path (#13474)
+    # ------------------------------------------------------------------
+
+    async def find_path(
+        self: AutoBotMemoryGraphCore,
+        from_entity: str,
+        to_entity: str,
+        relation: str | None = None,
+        max_depth: int = 6,
+        direction: str = "both",
+    ) -> Dict[str, Any]:
+        """Return the shortest relationship path between two named entities.
+
+        This is the name-addressed entry point to ``PropertyGraph.shortest_path``
+        — callers hold entity *names*, the property graph is keyed by entity
+        *ids*, and #13474 wired the two together so the traversal has a
+        production caller (the Graph-RAG ``/path`` endpoint and the
+        ``memory.path`` MCP tool both land here, so the resolution and
+        serialisation live in exactly one place).
+
+        Args:
+            from_entity: Source entity name.
+            to_entity: Target entity name.
+            relation: Restrict traversal to this relation type; None = all.
+            max_depth: Maximum path length to search.
+            direction: ``"outgoing"``, ``"incoming"``, or ``"both"`` (default —
+                connection questions are usually undirected).
+
+        Returns:
+            Dict with ``found``, ``reason``, ``missing_entities``,
+            ``from_entity``, ``to_entity``, ``hops``, ``path`` and ``query``.
+            Redis failures propagate: a traversal that could not run must not be
+            reported as "no path".
+        """
+        from_node, to_node = await asyncio.gather(
+            self.get_entity(entity_name=from_entity),  # type: ignore[attr-defined]
+            self.get_entity(entity_name=to_entity),  # type: ignore[attr-defined]
+        )
+        query = {
+            "from_entity": from_entity,
+            "to_entity": to_entity,
+            "relation": relation,
+            "max_depth": max_depth,
+            "direction": direction,
+        }
+        missing = [name for name, node in ((from_entity, from_node), (to_entity, to_node)) if node is None]
+        if missing:
+            logger.info("find_path: unresolved entity names %s", missing)
+            return _path_result(from_node, to_node, None, missing, query)
+
+        raw_path = await self.graph.shortest_path(
+            from_node["id"],
+            to_node["id"],
+            relation=relation,
+            max_depth=max_depth,
+            direction=direction,
+        )
+        return _path_result(from_node, to_node, raw_path, [], query)
