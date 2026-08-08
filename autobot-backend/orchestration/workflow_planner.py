@@ -109,8 +109,10 @@ class WorkflowPlanner:
         # GH#7357: consult trajectory store for similar solved tasks
         await self._annotate_context_with_trajectories(user_request, context)
 
-        # Get base workflow steps from original orchestrator
-        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
+        # Get base workflow steps from original orchestrator.
+        # #13730: coroutine function — without await the loop below iterated a
+        # coroutine object rather than the plan.
+        base_steps = await self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         steps_with_agents = []
 
@@ -124,13 +126,16 @@ class WorkflowPlanner:
                 required_capabilities=required_capabilities,
             )
 
+            # #13730: dict keys are this module's own contract (consumed by
+            # create_plan_summary_for_approval) and stay as they are; only the
+            # attribute reads move to the canonical WorkflowTask names.
             assigned_step = {
-                "id": step.id,
+                "id": step.task_id,
                 "agent_type": step.agent_type,
                 "assigned_agent": assigned_agent,
                 "action": step.action,
                 "inputs": step.inputs,
-                "user_approval_required": step.user_approval_required,
+                "user_approval_required": step.requires_approval,
                 "dependencies": step.dependencies or [],
                 "required_capabilities": list(required_capabilities),
                 "estimated_duration": self.estimate_step_duration(step.action, assigned_agent),
@@ -196,13 +201,19 @@ class WorkflowPlanner:
 
         return estimated_duration
 
-    def get_plan_summary(
+    async def get_plan_summary(
         self,
         user_request: str,
         context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Get workflow plan summary without executing.
+
+        #13730: was ``def``, calling the orchestrator's coroutine planning API
+        without awaiting it — ``complexity.value`` and ``len(base_steps)`` both
+        operated on coroutine objects. Now ``async def`` so the awaits are legal.
+        This method currently has no callers; it is corrected rather than
+        removed, and the wiring gap is tracked separately.
 
         Args:
             user_request: The user's request to plan
@@ -214,10 +225,10 @@ class WorkflowPlanner:
         context = context or {}
 
         # Classify complexity
-        complexity = self.base_orchestrator.classify_request_complexity(user_request)
+        complexity = await self.base_orchestrator.classify_request_complexity(user_request)
 
-        # Get base steps synchronously (no agent assignment yet)
-        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
+        # Get base steps (no agent assignment yet)
+        base_steps = await self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         return {
             "request": user_request,
@@ -225,10 +236,10 @@ class WorkflowPlanner:
             "total_steps": len(base_steps),
             "steps": [
                 {
-                    "id": step.id,
+                    "id": step.task_id,
                     "action": step.action,
                     "agent_type": step.agent_type,
-                    "requires_approval": step.user_approval_required,
+                    "requires_approval": step.requires_approval,
                     "dependencies": step.dependencies or [],
                 }
                 for step in base_steps
