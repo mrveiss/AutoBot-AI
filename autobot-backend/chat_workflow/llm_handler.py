@@ -807,11 +807,17 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
                 if TIERED_CONTEXT_ENABLED:
+                    # Issue #13686: the memory graph was read off an object that
+                    # never had it, so L2 returned "" on every turn. It now comes
+                    # from the manager that owns it, and degrades to None rather
+                    # than failing the turn.
+                    from chat_workflow.tiered_context_sources import resolve_memory_graph
+
                     tiered_ctx = await TieredContextBuilder().build(
                         user_message=message,
                         model_name=selected_model,
                         session_id=session.session_id,
-                        memory_graph=getattr(self, "memory_graph", None),
+                        memory_graph=await resolve_memory_graph(),
                         knowledge_service=self.knowledge_service if use_knowledge else None,
                     )
                     if tiered_ctx:
