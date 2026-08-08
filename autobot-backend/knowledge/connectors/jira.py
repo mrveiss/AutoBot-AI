@@ -37,10 +37,9 @@ import aiohttp
 
 from autobot_shared.auth import BasicAuth
 from autobot_shared.http_client import get_http_client
-from knowledge.connectors.base import instance_host_egress
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.base import AbstractConnector, RetryableError, instance_host_egress
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
