@@ -4,9 +4,8 @@
 # Author: mrveiss
 """Endpoint tests for connector OAuth authorize + callback (ADR-007 / GH#9019)."""
 
-from urllib.parse import parse_qs, urlparse
-
 import json
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import FastAPI
