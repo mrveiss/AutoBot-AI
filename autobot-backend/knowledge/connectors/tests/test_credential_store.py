@@ -482,6 +482,41 @@ async def test_legacy_bundle_without_stored_lifetime_self_heals(monkeypatch):
     assert healed["access_token_expires_at"] is not None
 
 
+@pytest.mark.parametrize("bad_expires_in", ["", "n/a", "3600s", [], {}])
+@pytest.mark.asyncio
+async def test_malformed_expires_in_falls_back_and_keeps_the_stored_lifetime(bad_expires_in, monkeypatch):
+    """#13626: an unusable ``expires_in`` must behave exactly like an absent one.
+
+    Guarding on the raw value let these through the "provider reported one" test
+    while still deriving None, which cleared the expiry — recreating the bug —
+    and overwrote the stored lifetime, so even a later well-formed refresh had
+    nothing left to fall back to. Strictly worse than the omitting case.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13626f", "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
+        "cid", "csec", "https://token", ["s"],
+    )
+    bundle = json.loads(store[secret_id]["value"])
+    bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
+    store[secret_id]["value"] = json.dumps(bundle)
+
+    from knowledge.connectors import oauth_flow
+
+    async def _refresh_malformed(token_url, client_id, client_secret, refresh_token):
+        return {"access_token": "new", "expires_in": bad_expires_in}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_malformed)
+    assert await cs.get_access_token(secret_id, "u1") == "new"
+
+    refreshed = json.loads(store[secret_id]["value"])
+    assert refreshed["access_token_lifetime_seconds"] == 3600, "stored lifetime destroyed by a malformed value"
+    assert refreshed["access_token_expires_at"] is not None, "expiry cleared — refresh disabled forever"
+    assert parse_utc_iso(refreshed["access_token_expires_at"]) > now_utc() + timedelta(seconds=3000)
+
+
 @pytest.mark.asyncio
 async def test_get_access_token_owner_mismatch_raises():
     svc, store = _make_svc()

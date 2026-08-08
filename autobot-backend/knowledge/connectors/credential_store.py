@@ -280,13 +280,25 @@ class ConnectorCredentialStore:
         # ``access_token_expires_at`` forward instead would not work: a refresh
         # only runs once that timestamp is already past, so the credential would
         # look expired immediately and re-refresh on every single call.
-        reported_expires_in = token_response.get("expires_in")
+        # Parse first, then branch on the parsed value. Guarding on the raw one
+        # let a malformed ``expires_in`` ("", "n/a", "3600s", []) pass the
+        # "reported?" test while still deriving None — which cleared the expiry
+        # (recreating this very bug) *and* overwrote the stored lifetime, so even
+        # a later well-formed refresh had nothing to fall back to.
+        reported_expires_in = self._lifetime_seconds(token_response.get("expires_in"))
         effective_expires_in = (
             reported_expires_in if reported_expires_in is not None else creds.get("access_token_lifetime_seconds")
         )
+        if reported_expires_in is None and effective_expires_in is not None:
+            logger.warning(
+                "OAuth provider omitted a usable expires_in on refresh for secret %s — "
+                "reusing the last reported lifetime of %ss",
+                secret_id,
+                effective_expires_in,
+            )
         creds["access_token_expires_at"] = self._expiry_iso(effective_expires_in)
         if reported_expires_in is not None:
-            creds["access_token_lifetime_seconds"] = self._lifetime_seconds(reported_expires_in)
+            creds["access_token_lifetime_seconds"] = reported_expires_in
         if token_response.get("refresh_token"):
             # Providers like GitLab rotate the refresh token on each use.
             creds["refresh_token"] = token_response["refresh_token"]
