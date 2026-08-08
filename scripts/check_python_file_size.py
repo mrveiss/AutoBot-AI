@@ -38,6 +38,7 @@ def main() -> int:
             continue
         if line_count > MAX_LINES:
             violations.append(f"{arg}: {line_count} lines (max {MAX_LINES})")
+            return 1
 
     if violations:
         print("\n".join(violations))
