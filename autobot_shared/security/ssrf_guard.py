@@ -129,6 +129,103 @@ async def pinned_connector(url: str) -> aiohttp.TCPConnector:
     return aiohttp.TCPConnector(resolver=resolver, use_dns_cache=False)
 
 
+# Headers that authenticate the caller. Dropped when a redirect crosses to a
+# different origin, so a 302 to an attacker-controlled *public* host cannot
+# harvest them (#13624). Per-hop IP pinning already blocks redirects to private
+# addresses; it does nothing about this case.
+#
+# An explicit list, deliberately not a pattern: ``*-token``/``*-key`` would also
+# strip ``idempotency-key`` and ``x-correlation-id``, which are not credentials.
+_CREDENTIAL_HEADERS = frozenset(
+    {
+        # fetch-spec set
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "cookie2",
+        # widely used provider auth headers
+        "x-api-key",
+        "api-key",
+        "apikey",
+        "x-auth-token",
+        "auth-token",
+        "x-auth-key",
+        "x-access-token",
+        "access-token",
+        "x-session-token",
+        "x-csrf-token",
+        "x-xsrf-token",
+        "private-token",
+        "x-private-token",
+        "job-token",
+        "x-goog-api-key",
+        "x-amz-security-token",
+        "x-ms-client-request-id",
+        "x-functions-key",
+        "x-shopify-access-token",
+        "x-figma-token",
+        "x-airtable-api-key",
+        "x-sentry-auth",
+        "x-vault-token",
+        "x-subscription-token",
+        "x-registry-auth",
+        "dd-api-key",
+        "circle-token",
+    }
+)
+
+# Describe a request body; meaningless once a redirect rewrites the method to
+# GET, and dropped then, mirroring the fetch spec.
+_BODY_HEADERS = frozenset(
+    {
+        "content-encoding",
+        "content-language",
+        "content-length",
+        "content-location",
+        "content-type",
+        "transfer-encoding",
+    }
+)
+
+_DEFAULT_PORTS = {"http": 80, "https": 443, "ws": 80, "wss": 443}
+
+
+def _origin(url: str) -> tuple:
+    """Scheme/host/port triple, with the scheme's default port made explicit."""
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower()
+    return scheme, host, parsed.port or _DEFAULT_PORTS.get(scheme)
+
+
+def _headers_for_hop(headers: dict | None, from_url: str, to_url: str, *, drop_body: bool) -> dict | None:
+    """Headers to send on the next hop, minus anything it must not receive (#13624)."""
+    if not headers:
+        return headers
+    cross_origin = _origin(from_url) != _origin(to_url)
+    if not cross_origin and not drop_body:
+        return headers
+    kept = {}
+    for name, value in headers.items():
+        lowered = name.lower()
+        if cross_origin and lowered in _CREDENTIAL_HEADERS:
+            continue
+        if drop_body and lowered in _BODY_HEADERS:
+            continue
+        kept[name] = value
+    return kept
+
+
+def _method_for_hop(method: str, status: int) -> str:
+    """The method the next hop uses, following the fetch spec's rewrite rules."""
+    upper = method.upper()
+    if status == 303 and upper != "HEAD":
+        return "GET"
+    if status in (301, 302) and upper == "POST":
+        return "GET"
+    return method
+
+
 @asynccontextmanager
 async def pinned_request_with_redirects(
     method: str,
@@ -163,11 +260,15 @@ async def pinned_request_with_redirects(
     their own sessions immediately after reading the ``Location`` header.
     """
     current_url = url
+    current_method = method
+    current_headers = headers
     for _ in range(max_redirects + 1):
         connector = await pinned_connector(current_url)
         session = aiohttp.ClientSession(connector=connector, timeout=timeout)
         try:
-            resp = await session.request(method, current_url, headers=headers, allow_redirects=False, ssl=ssl)
+            resp = await session.request(
+                current_method, current_url, headers=current_headers, allow_redirects=False, ssl=ssl
+            )
         except Exception:
             await session.close()
             raise
@@ -180,9 +281,16 @@ async def pinned_request_with_redirects(
                 await session.close()
             return
 
+        status = resp.status
         await resp.release()
         await session.close()
-        current_url = urljoin(current_url, location)
+        next_url = urljoin(current_url, location)
+        next_method = _method_for_hop(current_method, status)
+        current_headers = _headers_for_hop(
+            current_headers, current_url, next_url, drop_body=next_method != current_method
+        )
+        current_method = next_method
+        current_url = next_url
 
     raise SSRFError(f"exceeded max_redirects={max_redirects} while fetching {url!r}")
 
