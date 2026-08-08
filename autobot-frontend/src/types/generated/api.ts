@@ -56846,7 +56846,7 @@ export interface components {
             /** Name */
             name: string;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
