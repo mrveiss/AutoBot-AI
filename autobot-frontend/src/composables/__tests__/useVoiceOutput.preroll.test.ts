@@ -108,13 +108,23 @@ class FakeWebSocket {
   onerror: ((e: unknown) => void) | null = null
   onclose: (() => void) | null = null
   onmessage: ((e: { data: string }) => void) | null = null
-  constructor(_url: string) {
-    lastSocket = this
+  constructor() {
     setTimeout(() => this.onopen?.(), 0)
   }
   send() {}
   close() {}
 }
+
+// Constructed through a factory rather than recording `this` inside the
+// constructor, which trips oxlint's no-this-alias. `new` on a function that
+// returns an object yields that object, so the composable's `new WebSocket(url)`
+// still gets a FakeWebSocket.
+function FakeWebSocketFactory(): FakeWebSocket {
+  const socket = new FakeWebSocket()
+  lastSocket = socket
+  return socket
+}
+FakeWebSocketFactory.OPEN = 1
 
 const B64 = btoa('fake-audio-bytes')
 
@@ -163,7 +173,7 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
     originalAudioContext = (globalThis as Record<string, unknown>).AudioContext
     originalWebSocket = (globalThis as Record<string, unknown>).WebSocket
     ;(globalThis as Record<string, unknown>).AudioContext = FakeAudioContext
-    ;(globalThis as Record<string, unknown>).WebSocket = FakeWebSocket
+    ;(globalThis as Record<string, unknown>).WebSocket = FakeWebSocketFactory
 
     // Fresh module instance per test: the measured production rate is carried in
     // module state by design, so tests must not inherit each other's.
