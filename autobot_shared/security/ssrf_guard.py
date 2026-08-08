@@ -266,6 +266,11 @@ async def pinned_request_with_redirects(
         connector = await pinned_connector(current_url)
         session = aiohttp.ClientSession(connector=connector, timeout=timeout)
         try:
+            # SSRF mitigated: pinned_connector(current_url) above runs the real
+            # resolve_safe_ip guard on THIS hop's URL and pins the resolved public
+            # IP (defeats DNS-rebind); redirects are disabled so every hop is
+            # re-validated here rather than followed by aiohttp.
+            # codeql[py/full-ssrf] (#13624, pattern from #12278)
             resp = await session.request(
                 current_method, current_url, headers=current_headers, allow_redirects=False, ssl=ssl
             )
