@@ -59,8 +59,10 @@ class StepGenerator:
                 TaskComplexity.SIMPLE,
             )
 
-            # Issue #321: Use delegation method to reduce message chains
-            base_steps = self.enhanced_orchestrator.plan_workflow_steps(user_request, complexity)
+            # Issue #321: Use delegation method to reduce message chains.
+            # #13730: plan_workflow_steps is a coroutine function; without await
+            # the enumerate() below iterated a coroutine and raised TypeError.
+            base_steps = await self.enhanced_orchestrator.plan_workflow_steps(user_request, complexity)
 
             # Convert to smart steps with AI enhancements
             smart_steps = []

@@ -254,6 +254,63 @@ class GeneralStorage:
             logger.error("Failed to search memory entries: %s", e)
             raise RuntimeError(f"Failed to search memory entries: {e}")
 
+    async def list_by_owner(self, user_id: str, limit: int | None = None) -> List[MemoryEntry]:
+        """Return every entry belonging to *user_id*, across all categories (#13705).
+
+        The transparency engine needs a user's whole footprint, which neither
+        :meth:`retrieve` (category-scoped) nor :meth:`search` (LIKE-scoped) can
+        give. Owner-scoped like every other read here — there is no unscoped
+        variant to reach for.
+
+        ``limit=None`` (the default) returns everything. A cap here would make
+        general the only store in the transparency fan-out that silently
+        truncates — the exact under-reporting #13705 exists to fix. Chroma and
+        the Redis scans are uncapped, so this matches them.
+        """
+        owner = _require_user_id(user_id)
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    """
+                    SELECT * FROM memory_entries
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """,
+                    (owner, limit if limit is not None else -1),  # SQLite: -1 means no limit
+                )
+                rows = await cursor.fetchall()
+                return [self._row_to_entry(row) for row in rows]
+        except aiosqlite.Error as e:
+            logger.error("Failed to list entries for owner: %s", e)
+            raise RuntimeError(f"Failed to list entries for owner: {e}")
+
+    async def delete_for_owner(self, user_id: str, entry_id: int) -> bool:
+        """Delete one entry, but only if *user_id* owns it (#13705).
+
+        The owner is part of the WHERE clause rather than checked beforehand, so
+        there is no window between the check and the delete and no way to call
+        this with an id alone. Returns False when the row does not exist *or*
+        belongs to someone else — the caller cannot tell the two apart.
+
+        ``for_write=True`` rejects LEGACY_UNSCOPED_OWNER: reads accept it so
+        parked pre-migration rows stay retrievable by an operator, but deletion
+        through the transparency engine must not be able to erase a row that
+        cannot be attributed to the requester (#13705).
+        """
+        owner = _require_user_id(user_id, for_write=True)
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "DELETE FROM memory_entries WHERE id = ? AND user_id = ?", (entry_id, owner)
+                )
+                await conn.commit()
+                return cursor.rowcount > 0
+        except aiosqlite.Error as e:
+            logger.error("Failed to delete entry for owner: %s", e)
+            raise RuntimeError(f"Failed to delete entry for owner: {e}")
+
     async def cleanup_old(self, retention_days: int) -> int:
         """Remove entries older than retention period, across all owners.
 

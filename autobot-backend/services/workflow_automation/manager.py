@@ -71,9 +71,12 @@ class WorkflowAutomationManager:
     async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> str | None:
         """Create automated workflow from natural language chat request"""
         try:
-            # Use orchestrator to analyze request and create workflow steps
-            complexity = self.orchestrator.classify_request_complexity(user_request)
-            base_steps = self.orchestrator.plan_workflow_steps(user_request, complexity)
+            # Use orchestrator to analyze request and create workflow steps.
+            # #13730: both are coroutine functions — without await this bound
+            # coroutine objects, the enumerate() below raised TypeError, and the
+            # handler turned every chat request into a silent `return None`.
+            complexity = await self.orchestrator.classify_request_complexity(user_request)
+            base_steps = await self.orchestrator.plan_workflow_steps(user_request, complexity)
 
             # Convert orchestrator steps to workflow steps
             workflow_steps = []
@@ -83,8 +86,13 @@ class WorkflowAutomationManager:
                     command=self._extract_command_from_step(step),
                     description=step.action,
                     explanation=f"This step is part of: {user_request}",
-                    requires_confirmation=step.user_approval_required,
-                    dependencies=[f"step_{j+1}" for j in range(i) if base_steps[j].id in (step.dependencies or [])],
+                    # #13730: canonical WorkflowTask names — `requires_approval`
+                    # and `task_id`; the retired `user_approval_required` / `id`
+                    # would have raised AttributeError once the await landed.
+                    requires_confirmation=step.requires_approval,
+                    dependencies=[
+                        f"step_{j+1}" for j in range(i) if base_steps[j].task_id in (step.dependencies or [])
+                    ],
                 )
                 workflow_steps.append(workflow_step)
 
@@ -101,7 +109,11 @@ class WorkflowAutomationManager:
             return None
 
         except Exception as e:
-            logger.error("Failed to create workflow from chat request: %s", e)
+            # #13730: this handler is what made the un-awaited planning calls
+            # invisible — a TypeError became a plain `return None`, so both HTTP
+            # routes reported "no workflow" instead of an error. Contract keeps
+            # returning None, but the cause is now in the log.
+            logger.error("Failed to create workflow from chat request: %s", e, exc_info=True)
             return None
 
     def _extract_command_from_step(self, step) -> str:

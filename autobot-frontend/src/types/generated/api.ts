@@ -1271,6 +1271,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/work-item": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Work Item
+         * @description Return the session's bound work item, or ``None`` (#13704).
+         */
+        get: operations["get_session_work_item_api_chat_sessions__session_id__work_item_get"];
+        /**
+         * Set Session Work Item
+         * @description Bind a chat session to an LLC work item so L4 can render its goal chain (#13704).
+         *
+         *     Two checks, both required: the caller must own the *session*, and the work
+         *     item must belong to the caller's *company*. Only then is the binding stored
+         *     server-side, where it overrides any client-supplied ``work_item_id``.
+         *
+         *     This endpoint is the reason L4 can be wired at all (#13687). Reading the
+         *     work item from the chat request body instead would let any authenticated
+         *     caller name another company's work item and have its goal titles rendered
+         *     into their own prompt.
+         */
+        put: operations["set_session_work_item_api_chat_sessions__session_id__work_item_put"];
+        post?: never;
+        /**
+         * Clear Session Work Item
+         * @description Remove the session's work-item binding (#13704).
+         */
+        delete: operations["clear_session_work_item_api_chat_sessions__session_id__work_item_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/sessions/{session_id}/approval-categories": {
         parameters: {
             query?: never;
@@ -52182,7 +52219,7 @@ export interface paths {
          * @description List all memory items stored for the authenticated user.
          *
          *     Returns items from every store (verbatim, trajectory, working_memory,
-         *     graph, retrieval_learner) with provenance and timestamps.
+         *     graph, retrieval_learner, general) with provenance and timestamps.
          */
         get: operations["list_memories_api_memory_privacy_list_get"];
         put?: never;
@@ -58582,6 +58619,13 @@ export interface components {
         Body_set_session_role_api_chat_sessions__session_id__role_put: {
             /** Role */
             role: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_set_session_work_item_api_chat_sessions__session_id__work_item_put */
+        Body_set_session_work_item_api_chat_sessions__session_id__work_item_put: {
+            /** Work Item Id */
+            work_item_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -103540,6 +103584,103 @@ export interface operations {
         };
     };
     clear_session_role_api_chat_sessions__session_id__role_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_work_item_api_chat_sessions__session_id__work_item_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_work_item_api_chat_sessions__session_id__work_item_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_work_item_api_chat_sessions__session_id__work_item_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_work_item_api_chat_sessions__session_id__work_item_delete: {
         parameters: {
             query?: never;
             header?: never;

@@ -50,6 +50,7 @@ from .metrics import (
     ServiceHealthMetricsRecorder,
     SystemMetricsRecorder,
     TaskMetricsRecorder,
+    TTSMetricsRecorder,
     VoiceRealtimeMetricsRecorder,
     WebSocketMetricsRecorder,
     WorkflowMetricsRecorder,
@@ -131,6 +132,8 @@ class PrometheusMetricsManager:
         self._mobile_device = MobileDeviceMetricsRecorder(self.registry)
         # Issue #10778: Initialize HTTP API request counter recorder
         self._api_requests = ApiRequestsMetricsRecorder(self.registry)
+        # Issue #12460: Initialize TTS synthesis throughput recorder
+        self._tts = TTSMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -850,6 +853,29 @@ class PrometheusMetricsManager:
             count: Number of active devices
         """
         self._mobile_device.set_active_device_count(platform, count)
+
+    # =========================================================================
+    # TTS Synthesis Throughput Metrics (Issue #12460)
+    # =========================================================================
+
+    def record_tts_synthesis(self, route: str, audio_seconds: float, wall_seconds: float) -> None:
+        """Record a completed TTS synthesis and its real-time factor.
+
+        Args:
+            route: Worker route used - "stream" or "blob"
+            audio_seconds: Duration of the speech that was produced
+            wall_seconds: Wall-clock time the worker took to produce it
+        """
+        self._tts.record_synthesis(route, audio_seconds, wall_seconds)
+
+    def record_tts_first_chunk(self, route: str, seconds: float) -> None:
+        """Record the wait for the first audio chunk of a synthesis.
+
+        Args:
+            route: Worker route used - "stream" or "blob"
+            seconds: Wall-clock seconds from request to first chunk
+        """
+        self._tts.record_first_chunk_latency(route, seconds)
 
     # =========================================================================
     # Metrics Export

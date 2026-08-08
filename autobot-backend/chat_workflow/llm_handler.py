@@ -838,6 +838,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
         Issue #11585: session.metadata["model_override"] (per-request/per-conversation
         choice) takes priority over the global config default.
+        #13687/#13704: L4's goal ancestry is resolved from the server-side
+        session binding, not from any parameter threaded through here — the
+        request context and session metadata are both client-influenced.
         """
         selected_model = self._get_selected_model(
             session.metadata.get("model_override") if session and session.metadata else None
@@ -862,7 +865,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             language=language,
             company_id=(session.metadata.get("company_id") if session and session.metadata else None),
         )
-        # Issue #5066: Tiered L0-L3 context wake-up (A/B against legacy path).
+        # Issue #5066: Tiered L0-L4 context wake-up.
+        # #13689: the A/B RAN (2026-08-08) — it is no longer an open intention.
+        # All five layers render; costs are +14..45 tokens and +6..8ms assembly.
+        # Result: ON. It stayed off until #13742 fixed L3 duplicating the
+        # retrieval performed below, which is why L3 is no longer handed a
+        # knowledge_service. Full record: docs/research/tiered-context-ab-13689.md
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
         # When false the pre-existing unconditional EssentialStory path is used.
@@ -872,18 +880,35 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
                 if TIERED_CONTEXT_ENABLED:
-                    # Issue #13686: the memory graph was read off an object that
-                    # never had it, so L2 returned "" on every turn. It now comes
-                    # from the manager that owns it, and degrades to None rather
-                    # than failing the turn.
-                    from chat_workflow.tiered_context_sources import resolve_memory_graph
+                    # #13686: the memory graph was read off an object that never
+                    # had it, so L2 returned "" on every turn. #13687/#13704: the
+                    # goal ancestry comes from the *server-side* session binding,
+                    # never the request body, and both hops are company-scoped.
+                    # Both resolvers degrade to None rather than failing the turn.
+                    from chat_workflow.tiered_context_sources import (
+                        resolve_goal_ancestry,
+                        resolve_memory_graph,
+                    )
 
                     tiered_ctx = await TieredContextBuilder().build(
                         user_message=message,
                         model_name=selected_model,
                         session_id=session.session_id,
                         memory_graph=await resolve_memory_graph(),
-                        knowledge_service=self.knowledge_service if use_knowledge else None,
+                        # #13742: deliberately NOT self.knowledge_service. The RAG
+                        # path below (:914) retrieves for every use_knowledge turn
+                        # via the same conversation_aware_retrieve L3 would call,
+                        # then applies budget_grounded_context for trimming and
+                        # citation rebinding (#3770/#10837). Handing L3 the service
+                        # here bought a second identical vector search and the same
+                        # chunks twice in the prompt — with the copy inside the
+                        # tiered block escaping that budgeting entirely.
+                        #
+                        # L3 keeps its retrieval path for callers that have no
+                        # separate RAG stage; at this call site the main path owns
+                        # retrieval, so L3 correctly stays silent.
+                        knowledge_service=None,
+                        goal_ancestry=await resolve_goal_ancestry(session.session_id),
                     )
                     if tiered_ctx:
                         system_prompt = tiered_ctx + "\n\n" + system_prompt

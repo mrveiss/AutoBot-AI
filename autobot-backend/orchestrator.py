@@ -229,6 +229,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
         # Step planner — capability-to-agent mapping for single-workflow steps (GH #6820).
         # Populated after _initialize_default_agents so agent_registry is non-empty.
+        #
+        # #13751: constructed but never called — no method on this object is
+        # invoked anywhere. WorkflowPlanner is DEPRECATED (the planner half of
+        # the engine run_workflow left behind at #5058); the live equivalents are
+        # create_workflow_plan for planning and get_agent_recommendations_scored
+        # for capability-to-agent selection. The attribute is retained rather
+        # than dropped, per the never-delete policy; see
+        # orchestration/workflow_planner.py for the per-capability mapping.
         self._step_planner = WorkflowPlanner(
             base_orchestrator=self,
             agent_registry=self.agent_registry,
@@ -557,50 +565,57 @@ class Orchestrator(_DeprecatedRequestMixin):
             if complexity == TaskComplexity.SIMPLE:
                 return [
                     WorkflowStep(
-                        id="step_1",
+                        task_id="step_1",
                         agent_type="llm",
                         action="generate_response",
                         description="Generate direct response to user query",
                         requires_approval=False,
                         dependencies=[],
                         inputs={"query": user_request},
-                        expected_duration_ms=2000,
+                        estimated_duration_seconds=2.0,
                     )
                 ]
             return [
                 WorkflowStep(
-                    id="step_1",
+                    task_id="step_1",
                     agent_type="analyzer",
                     action="analyze_request",
                     description="Analyze user request",
                     requires_approval=False,
                     dependencies=[],
                     inputs={"query": user_request},
-                    expected_duration_ms=3000,
+                    estimated_duration_seconds=3.0,
                 ),
                 WorkflowStep(
-                    id="step_2",
+                    task_id="step_2",
                     agent_type="executor",
                     action="execute_plan",
                     description="Execute the planned actions",
                     requires_approval=True,
                     dependencies=["step_1"],
                     inputs={"query": user_request},
-                    expected_duration_ms=10000,
+                    estimated_duration_seconds=10.0,
                 ),
                 WorkflowStep(
-                    id="step_3",
+                    task_id="step_3",
                     agent_type="synthesizer",
                     action="synthesize_results",
                     description="Synthesize results",
                     requires_approval=False,
                     dependencies=["step_2"],
                     inputs={"query": user_request},
-                    expected_duration_ms=2000,
+                    estimated_duration_seconds=2.0,
                 ),
             ]
         except Exception as e:
-            logger.error("Failed to plan workflow steps: %s", e)
+            # #13699: this handler turned a constructor mismatch into a silent
+            # empty plan for every caller — `WorkflowStep` has aliased the
+            # canonical `WorkflowTask` since #6951 Phase 2A (`task_id` /
+            # `estimated_duration_seconds`), but the calls above still passed
+            # the retired `id` / `expected_duration_ms`, so every invocation
+            # raised TypeError and was logged as a one-line mystery. Keep the
+            # guard, but make the next such breakage diagnosable.
+            logger.error("Failed to plan workflow steps: %s", e, exc_info=True)
             return []
 
     # ------------------------------------------ workflow planning (canonical path)
