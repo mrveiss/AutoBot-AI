@@ -353,18 +353,28 @@ async def test_refresh_without_expires_in_reuses_the_reported_lifetime(monkeypat
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13626", "u1", "gitlab",
+        "c-13626",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 0},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     # The initial exchange reported a lifetime, so it is on the bundle.
     assert json.loads(store[secret_id]["value"])["access_token_lifetime_seconds"] == 0
 
     # Re-store with a real lifetime, then expire it, to model a live credential.
     secret_id = await cs.store_oauth(
-        "c-13626b", "u1", "gitlab",
+        "c-13626b",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     bundle = json.loads(store[secret_id]["value"])
     assert bundle["access_token_lifetime_seconds"] == 3600
@@ -397,9 +407,14 @@ async def test_refresh_without_expires_in_does_not_refresh_again_next_call(monke
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13626c", "u1", "gitlab",
+        "c-13626c",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     bundle = json.loads(store[secret_id]["value"])
     bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
@@ -431,9 +446,14 @@ async def test_provider_that_never_reports_expiry_stays_non_expiring(monkeypatch
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13626d", "u1", "gitlab",
+        "c-13626d",
+        "u1",
+        "gitlab",
         {"access_token": "tok", "refresh_token": "rt"},  # no expires_in, ever
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     bundle = json.loads(store[secret_id]["value"])
     assert bundle["access_token_expires_at"] is None
@@ -459,9 +479,14 @@ async def test_legacy_bundle_without_stored_lifetime_self_heals(monkeypatch):
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13626e", "u1", "gitlab",
+        "c-13626e",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     # Model a pre-existing bundle: expiry present, lifetime key absent entirely.
     bundle = json.loads(store[secret_id]["value"])
