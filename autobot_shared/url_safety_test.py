@@ -13,9 +13,8 @@ import-isolation contract that motivated the extraction.
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import ipaddress
+from unittest.mock import patch
 
 import pytest
 
