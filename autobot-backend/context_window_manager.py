@@ -10,10 +10,18 @@ and do not face the quadratic attention cost that justifies the 4K/8K
 compression trigger.  For those families the model's declared
 ``context_window_tokens`` is used directly as the compression threshold
 instead of hard-capping at 8192.
+
+Issue #13640: multi-section allocation.  Sizing the window is not the same as
+dividing it.  ``allocate_sections`` allocates one budget across named,
+prioritised sections so an overflowing prompt sheds its least valuable content
+first — and reports what it shed — instead of dropping whatever the calling
+code happened to cut last.
 """
 
+from dataclasses import dataclass, field, replace
+from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 _CONTEXT_HEADROOM: float = 0.85
 _CONTEXT_HARD_MAX: int = 200_000
@@ -43,6 +51,64 @@ def _get_compression_service():
 
         _compression_service = ContextCompressionService()
     return _compression_service
+
+
+def _head_trim(content: str, max_chars: int) -> str:
+    """Default section shrink: keep the head, drop the tail.
+
+    Deliberately dumb. Sections with a better strategy pass their own ``trim``
+    — e.g. ``prompt_manager._truncate_large_file``, which keeps head+tail and
+    snaps to JSON/XML boundaries. #13640 decides *how much* a section gets; it
+    does not decide *how* a section shrinks.
+    """
+    return content[:max_chars]
+
+
+@dataclass
+class ContextSection:
+    """One named, prioritised piece of a prompt competing for the budget.
+
+    Attributes:
+        name: Stable identifier reported back when the section is trimmed.
+        content: The section text.
+        priority: Higher is pruned last. Ties break on ``name`` for determinism.
+        max_share: Ceiling as a fraction of the budget, applied *before*
+                   priority. A high-priority section still cannot crowd out
+                   the rest of the prompt.
+        trim: Optional shrink strategy ``(content, max_chars) -> str``.
+    """
+
+    name: str
+    content: str
+    priority: int = 0
+    max_share: float = 1.0
+    trim: Callable[[str, int], str] = _head_trim
+
+
+@dataclass
+class ContextAllocation:
+    """Outcome of an allocation, including what was lost.
+
+    ``trimmed`` and ``dropped`` are what make prompt degradation traceable:
+    without them an overflowing prompt ships silently degraded and neither a
+    quality regression nor a cost spike can be attributed to a cause.
+    """
+
+    sections: List[ContextSection]
+    tokens_before: int
+    tokens_after: int
+    budget: int
+    trimmed: List[str] = field(default_factory=list)
+    dropped: List[str] = field(default_factory=list)
+
+    @property
+    def fits(self) -> bool:
+        """True when the allocated sections are within budget."""
+        return self.tokens_after <= self.budget
+
+    def render(self, separator: str = "\n\n") -> str:
+        """Join the allocated sections, skipping any reduced to empty."""
+        return separator.join(s.content for s in self.sections if s.content)
 
 
 class ContextWindowManager:
@@ -187,8 +253,135 @@ class ContextWindowManager:
         Returns:
             Estimated token count
         """
-        chars_per_token = self.config["token_estimation"]["chars_per_token"]
-        return len(text) // chars_per_token
+        return len(text) // self._chars_per_token()
+
+    def _chars_per_token(self) -> int:
+        """Runtime chars-per-token ratio backing :meth:`estimate_tokens`."""
+        return max(1, int(self.config["token_estimation"]["chars_per_token"]))
+
+    def _shrink(self, section: ContextSection, max_tokens: int) -> ContextSection:
+        """Return a copy of *section* reduced to at most *max_tokens*.
+
+        A section's own ``trim`` is free to overshoot — ``_truncate_large_file``
+        adds a marker, so at small allocations head+tail+marker exceeds the
+        limit. The allocation is a ceiling, not a suggestion, so the result is
+        re-clamped. Without this a single overshooting strategy silently puts
+        the whole prompt back over budget.
+        """
+        if max_tokens <= 0:
+            return replace(section, content="")
+        max_chars = max_tokens * self._chars_per_token()
+        shrunk = section.trim(section.content, max_chars)
+        if not isinstance(shrunk, str):
+            shrunk = _head_trim(section.content, max_chars)
+        return replace(section, content=shrunk[:max_chars])
+
+    def allocate_sections(
+        self,
+        sections: List[ContextSection],
+        budget_tokens: int,
+    ) -> ContextAllocation:
+        """Allocate one token budget across competing sections by priority.
+
+        Pure function — no I/O, no config reload, no mutation of the inputs.
+
+        Two phases, in this order:
+
+        1. **Cap.** Each section is limited to ``budget_tokens * max_share``.
+           This runs before priority so a single oversized section cannot
+           crowd out everything else merely by being important.
+        2. **Trim.** If the total still exceeds the budget, sections are
+           reduced lowest-priority-first until it fits.
+
+        Args:
+            sections: Competing sections. Input order is preserved in the result.
+            budget_tokens: Total token budget for all sections combined.
+
+        Returns:
+            ContextAllocation with before/after totals and the names of
+            sections that were trimmed or reduced to nothing.
+        """
+        allocated = list(sections)
+        tokens = [self.estimate_tokens(s.content) for s in allocated]
+        tokens_before = sum(tokens)
+
+        # Pass-through when the total already fits. ``max_share`` is a
+        # *contention* ceiling — with headroom to spare there is nothing to
+        # crowd out, and enforcing it would throw away content while the window
+        # sits idle, which is strictly worse than the concatenation this
+        # replaces.
+        if tokens_before <= budget_tokens:
+            return ContextAllocation(
+                sections=allocated,
+                tokens_before=tokens_before,
+                tokens_after=tokens_before,
+                budget=budget_tokens,
+            )
+
+        trimmed_idx: set = set()
+        allocated, tokens = self._apply_share_caps(allocated, tokens, budget_tokens, trimmed_idx)
+        allocated, tokens = self._trim_by_priority(allocated, tokens, budget_tokens, trimmed_idx)
+
+        # Indices, not names: duplicate section names would otherwise double-count
+        # in `trimmed` and cross-attribute in `dropped`.
+        trimmed = [allocated[i].name for i in sorted(trimmed_idx)]
+        dropped = [allocated[i].name for i in sorted(trimmed_idx) if tokens[i] <= 0]
+        return ContextAllocation(
+            sections=allocated,
+            tokens_before=tokens_before,
+            tokens_after=sum(tokens),
+            budget=budget_tokens,
+            trimmed=trimmed,
+            dropped=dropped,
+        )
+
+    def _apply_share_caps(
+        self, allocated: List[ContextSection], tokens: List[int], budget: int, trimmed: set
+    ) -> "tuple[List[ContextSection], List[int]]":
+        """Phase 1: cap each section at ``budget * max_share``."""
+        for i, section in enumerate(allocated):
+            cap = int(budget * section.max_share)
+            if tokens[i] <= cap:
+                continue
+            allocated[i] = self._shrink(section, cap)
+            tokens[i] = self.estimate_tokens(allocated[i].content)
+            trimmed.add(i)
+        return allocated, tokens
+
+    def _trim_by_priority(
+        self, allocated: List[ContextSection], tokens: List[int], budget: int, trimmed: set
+    ) -> "tuple[List[ContextSection], List[int]]":
+        """Phase 2: reduce lowest-priority sections until the total fits."""
+        # Ascending priority = pruned first; name breaks ties deterministically.
+        order = sorted(range(len(allocated)), key=lambda i: (allocated[i].priority, allocated[i].name))
+        for i in order:
+            overflow = sum(tokens) - budget
+            if overflow <= 0:
+                break
+            if tokens[i] <= 0:
+                continue
+            keep = max(0, tokens[i] - overflow)
+            allocated[i] = self._shrink(allocated[i], keep)
+            tokens[i] = self.estimate_tokens(allocated[i].content)
+            trimmed.add(i)
+        return allocated, tokens
+
+    def get_prompt_budget(self, model_name: str | None = None) -> int:
+        """Tokens available to the *prompt*, after reserving room to answer (#13640).
+
+        ``get_adaptive_context_length`` returns the whole declared window. A
+        prompt that fills it leaves the model nowhere to generate, and the
+        system prompt is sent separately (Ollama ``system`` field) so it
+        consumes window while being invisible to the allocator. Both are
+        subtracted here.
+        """
+        window = self.get_adaptive_context_length(model_name)
+        info = self.get_model_info(model_name)
+        reserved = int(info.get("max_output_tokens", 0) or 0)
+        reserved += int((info.get("message_budget") or {}).get("system_prompt", 0) or 0)
+        # Never reserve the window away entirely: a pathological config must
+        # still leave a usable prompt budget rather than zero.
+        return max(window // 4, window - reserved)
 
     def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.
@@ -379,3 +572,15 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
 
         return self.config["models"][model]
+
+
+@lru_cache(maxsize=4)
+def get_context_window_manager(config_path: str = "config/context_windows.yaml") -> ContextWindowManager:
+    """Return a shared ContextWindowManager (#13640).
+
+    ``__init__`` reads and parses a 13 KB YAML file. Constructing one per chat
+    turn put ~45 ms of synchronous parsing on the event loop, blocking every
+    concurrent request, and logged a config line per turn. The config is static
+    for the process lifetime, so it is parsed once.
+    """
+    return ContextWindowManager(config_path=config_path)
