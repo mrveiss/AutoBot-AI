@@ -850,6 +850,7 @@ async def test_double_checked_read_skips_a_refresh_another_holder_already_did(mo
     assert await cs.get_access_token(secret_id, "u1") == "written-by-the-other-holder"
     assert not called, "refreshed despite another holder having just written a valid token"
 
+
 # #13630: app client secret resolved at use time, not from the stored snapshot
 # ---------------------------------------------------------------------------
 
