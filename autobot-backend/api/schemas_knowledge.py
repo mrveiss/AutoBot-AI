@@ -4661,9 +4661,7 @@ class GraphRAGPathResponse(BaseModel):
     reason: str | None = Field(None, description="Why no path was returned ('no_path'); null when found")
     from_entity: Metadata | None = Field(None, description="Resolved source entity (id, name, type)")
     to_entity: Metadata | None = Field(None, description="Resolved target entity (id, name, type)")
-    missing_entities: List[str] = Field(
-        default_factory=list, description="Entity names that could not be resolved"
-    )
+    missing_entities: List[str] = Field(default_factory=list, description="Entity names that could not be resolved")
     hops: int = Field(..., description="Path length in edges; 0 when both names resolve to the same entity")
     path: List[Metadata] = Field(..., description="Ordered traversal steps, excluding the start entity")
     query: Metadata = Field(..., description="Echo of the traversal parameters actually used")

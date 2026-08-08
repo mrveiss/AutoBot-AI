@@ -851,7 +851,7 @@ async def test_find_connection_path_records_traversal_time(graph_rag_service, mo
 
 @pytest.mark.asyncio
 async def test_find_connection_path_defaults_to_undirected(graph_rag_service, mock_memory_graph) -> None:
-    """"How are these connected" is undirected by default (#13474)."""
+    """ "How are these connected" is undirected by default (#13474)."""
     mock_memory_graph.find_path = AsyncMock(return_value={"found": True, "hops": 0, "path": []})
 
     await graph_rag_service.find_connection_path("A", "B")

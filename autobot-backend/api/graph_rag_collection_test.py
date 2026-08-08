@@ -268,7 +268,7 @@ async def test_path_endpoint_forwards_every_query_parameter():
 
 
 async def test_path_endpoint_returns_200_when_unconnected():
-    """"They exist but are not connected" is a valid answer, not an error."""
+    """ "They exist but are not connected" is a valid answer, not an error."""
     service = _path_service(
         {
             "found": False,
