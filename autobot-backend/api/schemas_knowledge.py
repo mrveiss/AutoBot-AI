@@ -4682,6 +4682,69 @@ class GraphRAGPathResponse(BaseModel):
     request_id: str = Field(..., description="Unique request identifier")
 
 
+# #13762: the MCP ``memory.*`` tools reach the same graph as the routes above,
+# but a JSON-RPC caller supplies raw kwargs with no Pydantic in the path. These
+# models give those tools the request contract the REST surface already has —
+# one validation seam, rather than bounds re-implemented per tool. Constraints
+# match GraphRAGPathRequest/GraphRAGSearchRequest deliberately: the same field
+# means the same thing on both surfaces.
+
+
+class MemoryEntityLookupRequest(BaseModel):
+    """Arguments for the ``memory.entity_lookup`` tool. #13762."""
+
+    name: str = Field(..., min_length=1, max_length=200, description="Entity name to look up")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryTimelineRequest(BaseModel):
+    """Arguments for the ``memory.timeline`` tool. #13762."""
+
+    entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
+    range: str | None = Field(None, max_length=100, description="ISO-8601 range as 'start/end'")
+
+    @field_validator("entity")
+    @classmethod
+    def validate_entity(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryRelatedRequest(BaseModel):
+    """Arguments for the ``memory.related`` tool. #13762."""
+
+    entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
+    depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
+
+    @field_validator("entity")
+    @classmethod
+    def validate_entity(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryVerbatimSearchRequest(BaseModel):
+    """Arguments for the ``memory.verbatim_search`` tool. #13762."""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
+    session_filter: str | None = Field(None, max_length=200, description="Restrict results to this session_id")
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v):
+        if not v.strip():
+            raise ValueError("Query cannot be empty or whitespace")
+        return v.strip()
+
+
 class GraphRAGHealthResponse(BaseModel):
     """Response model for health check."""
 
