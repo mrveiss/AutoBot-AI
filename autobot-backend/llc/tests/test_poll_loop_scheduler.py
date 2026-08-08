@@ -2,14 +2,37 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for PollLoopScheduler base class (GH#9842)."""
+"""Unit tests for PollLoopScheduler base class (GH#9842).
+
+Interpreter dependency (#13727): every test that lets ``_loop`` complete an
+iteration needs ``asyncio.Task.cancelling()``, which exists only on Python 3.11+.
+``honour_pending_cancellation()`` runs once per iteration and has no fallback
+below that, so on a sub-floor interpreter it raises ``AttributeError``, that
+error escapes ``_loop``, and the loop dies after exactly one tick.  The five
+tests marked below then fail with assertions about tick counts and cancelled
+tasks — they read like a regression in the cancellation contract when the only
+thing wrong is the interpreter.  They are skipped there rather than left red,
+because a permanently-red module stops carrying information: a genuine
+regression would look identical and be dismissed for the same reason.
+
+The skip is not coverage loss where it counts.  CI runs 3.14 and the platform
+floor is 3.14 (``startup_validator._validate_system_requirements``), so nothing
+is skipped on any supported interpreter.  The gate is the capability itself, not
+a version number, so it stays correct without tracking release history.  The
+other tests in this module do not depend on it and keep running everywhere.
+"""
 
 import asyncio
 import logging
 
 import pytest
 
-from llc.scheduler.base import PollLoopScheduler
+from llc.scheduler.base import PENDING_CANCELLATION_REQUIREMENT, SUPPORTS_PENDING_CANCELLATION, PollLoopScheduler
+
+requires_pending_cancellation = pytest.mark.skipif(
+    not SUPPORTS_PENDING_CANCELLATION,
+    reason=PENDING_CANCELLATION_REQUIREMENT,
+)
 
 # ---------------------------------------------------------------------------
 # Test double — concrete subclass with a controllable tick
@@ -216,9 +239,14 @@ def test_task_name_falls_back_to_class_name_when_empty() -> None:
 # ---------------------------------------------------------------------------
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_tick_exception_does_not_kill_loop(caplog: pytest.LogCaptureFixture) -> None:
-    """When _tick() raises, the loop continues (exception is caught and logged)."""
+    """When _tick() raises, the loop continues (exception is caught and logged).
+
+    Needs a second iteration, so it depends on the per-iteration guard being
+    callable — see the module docstring (#13727).
+    """
     sched = _ErrorScheduler(poll_interval=0.0)
     with caplog.at_level(logging.ERROR, logger=_ErrorScheduler.__module__):
         sched.start()
@@ -254,6 +282,7 @@ async def test_tick_exception_logs_class_name(caplog: pytest.LogCaptureFixture) 
 # ---------------------------------------------------------------------------
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_cancellation_breaks_loop_cleanly() -> None:
     """A bare cancel ends the loop and leaves the scheduler restartable (#13203).
@@ -287,6 +316,7 @@ async def test_cancellation_breaks_loop_cleanly() -> None:
     await sched.aclose()
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_cancellation_marks_the_task_cancelled() -> None:
     """_loop re-raises CancelledError so the task ends in the cancelled state.
@@ -348,6 +378,7 @@ async def test_masked_cancellation_does_not_start_another_interval() -> None:
     assert sched.tick_count == 1, "the loop must not have started a second tick"
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_swallowed_cancellation_does_not_start_another_interval() -> None:
     """A tick that *swallows* the masked cancel must not buy a fresh interval.
@@ -464,9 +495,22 @@ async def test_aclose_is_bounded_when_the_task_cannot_be_drained(
     await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=1.0)
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
-async def test_restart_after_aclose_clears_the_stop_event() -> None:
-    """start() re-arms the stop event so a restarted loop is not born stopped."""
+async def test_restart_after_aclose_keeps_ticking() -> None:
+    """A scheduler restarted after aclose() resumes running its tick.
+
+    Scope note (#13727): this proves the restart works end to end, and nothing
+    more.  It was named ``..._clears_the_stop_event`` and documented as covering
+    that contract, but it cannot: at ``poll_interval=0.0`` the inter-poll wait
+    returns immediately whether or not the stop event is still set, so the tick
+    count is identical either way.  Deleting ``start()``'s ``_stop_event.clear()``
+    leaves this test green.  ``test_start_rearms_the_stop_event`` below covers
+    the contract this one was believed to cover.
+
+    Needs a second iteration after the restart, so it depends on the
+    per-iteration guard being callable — see the module docstring.
+    """
     sched = _CountingScheduler(poll_interval=0.0)
     sched.start()
     await sched.aclose()
@@ -477,6 +521,39 @@ async def test_restart_after_aclose_clears_the_stop_event() -> None:
     await sched.aclose()
 
     assert ticks_after_restart >= 2, "restarted loop must keep ticking"
+
+
+@pytest.mark.asyncio
+async def test_start_rearms_the_stop_event() -> None:
+    """start() must clear the stop event, or the restarted loop starves the event loop.
+
+    The corrected contract (#13727).  A stale set event does not make the loop
+    "born stopped" — ``start()`` sets ``_running=True``, so the loop runs.  It
+    makes every inter-poll wait return *without suspending*: awaiting an
+    already-set ``asyncio.Event`` completes synchronously, and on Python 3.12+
+    ``wait_for`` adds no yield of its own (measured: 100 such waits give other
+    tasks zero steps; on 3.10 they got 300).  ``_loop`` would then spin without
+    ever handing control back, starving every other task on the loop — a hung
+    backend, not a pacing nit.
+
+    Asserted on the event itself rather than on tick counts, and before the
+    freshly created task takes its first step, so a regression fails here
+    instead of wedging the suite in the starvation it describes.
+    """
+    sched = _CountingScheduler(poll_interval=9999.0)
+    sched.start()
+    await sched.aclose()
+    assert sched._stop_event.is_set(), "aclose() must leave the stop event signalled"
+
+    sched.start()
+    try:
+        # No await between start() and this assert: the task is scheduled but has
+        # not run, so an unfixed start() cannot starve the loop before we look.
+        assert not sched._stop_event.is_set(), "start() must re-arm the stop event"
+    finally:
+        # Safe even when the assert above fails: the task is cancelled before it
+        # takes its first step, so it never enters _loop and cannot spin.
+        await sched.aclose()
 
 
 # ---------------------------------------------------------------------------

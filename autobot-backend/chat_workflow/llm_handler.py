@@ -890,7 +890,19 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                         model_name=selected_model,
                         session_id=session.session_id,
                         memory_graph=await resolve_memory_graph(),
-                        knowledge_service=self.knowledge_service if use_knowledge else None,
+                        # #13742: deliberately NOT self.knowledge_service. The RAG
+                        # path below (:914) retrieves for every use_knowledge turn
+                        # via the same conversation_aware_retrieve L3 would call,
+                        # then applies budget_grounded_context for trimming and
+                        # citation rebinding (#3770/#10837). Handing L3 the service
+                        # here bought a second identical vector search and the same
+                        # chunks twice in the prompt — with the copy inside the
+                        # tiered block escaping that budgeting entirely.
+                        #
+                        # L3 keeps its retrieval path for callers that have no
+                        # separate RAG stage; at this call site the main path owns
+                        # retrieval, so L3 correctly stays silent.
+                        knowledge_service=None,
                         goal_ancestry=await resolve_goal_ancestry(session.session_id),
                     )
                     if tiered_ctx:

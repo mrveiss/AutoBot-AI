@@ -9,11 +9,20 @@ Issue #381: Extracted from enhanced_multi_agent_orchestrator.py god class refact
 Contains workflow planning, building, and utility functions.
 
 Note: The class in this module is named ``StrategyPlanner`` — not ``WorkflowPlanner`` —
-to distinguish it from the canonical (but currently unwired) ``orchestration.WorkflowPlanner``
-in ``autobot-backend/orchestration/workflow_planner.py``.  Both classes were historically
+to distinguish it from ``orchestration.WorkflowPlanner`` in
+``autobot-backend/orchestration/workflow_planner.py``.  Both classes were historically
 called ``WorkflowPlanner`` and every import site aliased this one ``as StrategyPlanner``;
-the rename removes that aliasing smell (#6817).  The orphan status of the canonical class
-is tracked separately in #6820.
+the rename removes that aliasing smell (#6817).
+
+#13751 corrects this note: it previously called that class "the canonical (but
+currently unwired)" planner, which inverted the actual relationship.  It is not
+canonical — it is DEPRECATED with zero callers on every public method, superseded
+by ``orchestrator.create_workflow_plan`` plus
+``AgentRouter.get_agent_recommendations_scored``.  ``StrategyPlanner`` here *is*
+wired (held as ``orchestrator._strategy_planner`` and used as the plan fallback in
+``create_workflow_plan``).  The orphan status was previously tracked under #6820,
+which closed 2026-05-17 having wired three of its four modules and left this one;
+#13751 resolves it as deprecated-in-place rather than leaving it open-ended.
 
 Moved from enhanced_orchestration.workflow_planning to orchestration.workflow_planning
 (issue #10666 B3).
