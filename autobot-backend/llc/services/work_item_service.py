@@ -302,8 +302,20 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
         return item
 
-    async def get(self, session: AsyncSession, work_item_id: str) -> Optional[LLCWorkItem]:
-        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
+    async def get(
+        self, session: AsyncSession, work_item_id: str, *, company_id: Optional[str] = None
+    ) -> Optional[LLCWorkItem]:
+        """Fetch a work item, optionally scoped to a company (#13704).
+
+        ``company_id`` is keyword-only and optional so the many internal callers
+        whose scope is already established stay unchanged; the chat prompt path,
+        which is the one place an untrusted id arrives, always passes it. A
+        mismatch returns ``None`` — indistinguishable from "no such item".
+        """
+        stmt = select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id))
+        if company_id is not None:
+            stmt = stmt.where(LLCWorkItem.company_id == uuid.UUID(str(company_id)))
+        result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def update(

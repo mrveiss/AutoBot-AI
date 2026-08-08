@@ -3635,9 +3635,15 @@ before summarizing.
         pre-execution stage. Backend decides; the frontend only calls the endpoints.
         """
         from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService, apply_role
+        from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
         svc = SessionRoleService()
         context = apply_role(context, await svc.get_role(session_id))
+        # #13704: same trust model for the work-item binding. A server-set value
+        # overrides any client-supplied work_item_id, and an unbound session has
+        # the client's value stripped — otherwise a caller could select whose
+        # goal chain L4 reads on their behalf (#13687).
+        context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
         if CHAT_APPROVAL_GATE_ENABLED:
             categories = await svc.get_approval_categories(session_id)
             if categories:
