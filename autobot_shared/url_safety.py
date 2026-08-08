@@ -175,7 +175,12 @@ def is_public_url(url: str, *, allow_private: bool = False) -> bool:
 async def is_public_url_async(url: str, *, allow_private: bool = False) -> bool:
     """Async wrapper: run the blocking DNS check in the default executor."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, functools.partial(is_public_url, url, allow_private=allow_private))
+    if not allow_private:
+        # Call shape preserved exactly (#13625): callers and tests substitute
+        # ``is_public_url`` with a one-argument callable, and forwarding a
+        # keyword unconditionally broke every such seam.
+        return await loop.run_in_executor(None, is_public_url, url)
+    return await loop.run_in_executor(None, functools.partial(is_public_url, url, allow_private=True))
 
 
 async def resolve_safe_ip_async(

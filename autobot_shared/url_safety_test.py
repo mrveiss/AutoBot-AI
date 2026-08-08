@@ -368,3 +368,37 @@ def test_private_ip_literal_url_honours_the_opt_in():
     assert url_safety.is_public_url("https://10.0.0.5/api", allow_private=True) is True
     # ...but the metadata endpoint stays refused either way.
     assert url_safety.is_public_url("http://169.254.169.254/latest/meta-data/", allow_private=True) is False
+
+
+@pytest.mark.asyncio
+async def test_async_wrapper_keeps_the_one_argument_call_shape(monkeypatch):
+    """#13625: the default path must call ``is_public_url`` with url only.
+
+    Callers and tests substitute ``is_public_url`` with a one-argument callable
+    (see skills/external_importer_test.py). Forwarding ``allow_private`` to it
+    unconditionally raised ``TypeError: got an unexpected keyword argument`` in
+    every such seam — two tests in a file this change never touched.
+    """
+    seen = {}
+
+    def _one_arg_only(url):
+        seen["url"] = url
+        return True
+
+    monkeypatch.setattr(url_safety, "is_public_url", _one_arg_only)
+    assert await url_safety.is_public_url_async("https://example.com/x") is True
+    assert seen["url"] == "https://example.com/x"
+
+
+@pytest.mark.asyncio
+async def test_async_wrapper_forwards_the_opt_in_when_requested(monkeypatch):
+    """#13625: ...but the opt-in must still reach the underlying check."""
+    seen = {}
+
+    def _accepts_kwarg(url, *, allow_private=False):
+        seen["allow_private"] = allow_private
+        return True
+
+    monkeypatch.setattr(url_safety, "is_public_url", _accepts_kwarg)
+    await url_safety.is_public_url_async("https://example.com/x", allow_private=True)
+    assert seen["allow_private"] is True
