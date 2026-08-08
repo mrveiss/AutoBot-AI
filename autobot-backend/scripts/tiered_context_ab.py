@@ -73,7 +73,9 @@ CASES = [
 
 ESSENTIAL_STORY = "## Essential Story\n- the deploy ran at 09:00\n- the owner is mrveiss"
 ENTITY_FACTS = [{"name": "Redis", "description": "in-memory store backing session state"}]
-KB_CHUNKS = ["Deploy runbook: run code-sync from the maintenance page, then verify Play-2."]
+# L3 returns whatever the knowledge service hands back — it adds no heading of
+# its own — so the double emits a recognisable grounded-context block.
+KB_CONTEXT = "## Knowledge Base\nDeploy runbook: run code-sync from the maintenance page."
 
 
 def _memory_graph() -> Any:
@@ -83,8 +85,15 @@ def _memory_graph() -> Any:
 
 
 def _knowledge_service() -> Any:
+    """Double for the L3 retrieval seam.
+
+    `Layer3DeepSearch.render` calls `conversation_aware_retrieve` and unpacks a
+    4-tuple — not `search`. Getting this wrong is silent: the layer catches the
+    resulting TypeError and renders an empty string, which reads exactly like
+    "L3 did not fire".
+    """
     svc = MagicMock()
-    svc.search = AsyncMock(return_value=KB_CHUNKS)
+    svc.conversation_aware_retrieve = AsyncMock(return_value=(KB_CONTEXT, ["runbook.md"], None, None))
     return svc
 
 

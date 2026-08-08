@@ -1982,6 +1982,13 @@ class MiscConfig(RedactedSettings):
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
     tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
+    # #13689: OFF is a recorded decision, not an unexplained default. The #5066
+    # A/B ran with all five layers live on 2026-08-08; all render, and the token
+    # and latency costs are acceptable. It stays off for one specific blocker —
+    # L3 duplicates the KB retrieval the chat path already performs (#13742), so
+    # enabling it today means two vector searches and the same chunks twice in
+    # the prompt. Flip once #13742 lands.
+    # Evidence: docs/research/tiered-context-ab-13689.md
     tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")
     tokenizers_parallelism: str = Field(default="", alias="TOKENIZERS_PARALLELISM")
     transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
