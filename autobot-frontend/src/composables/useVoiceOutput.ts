@@ -97,6 +97,11 @@ const _PREROLL_STALL_MS = 10_000
 const _SEC_PER_CHAR = 0.06
 // Weight of the newest per-utterance sample in the carried real-time factor.
 const _RTF_SMOOTHING = 0.3
+// Shortest window a production rate may be derived from. Two chunks that
+// arrive coalesced a few ms apart otherwise compute as ~100x, drive the
+// target to zero and release the pre-roll for good — the mirror image of the
+// transient gap already handled below.
+const _RTF_MIN_WINDOW_SEC = 0.5
 
 // Carried production rate in audio-seconds per wall-second; null until measured.
 let _measuredRtf: number | null = null
@@ -112,11 +117,19 @@ let _utteranceRtf = 0
 // Bumped per utterance so a chunk that finishes decoding after its own
 // utterance ended is not folded into the next one's buffer or rate.
 let _utteranceSeq = 0
+// Bumped by every explicit stop, so a chunk decoded after a barge-in is
+// dropped rather than spoken as a fragment of the superseded reply.
+let _stopSeq = 0
 let _prerollTimer: ReturnType<typeof setTimeout> | null = null
 // Arrival wall-clock of this utterance's FIRST chunk. Time-to-first-chunk is
 // model warm-up, not production rate, so the rate is measured from chunk 2 on.
 let _rtfFirstChunkAt = 0
 let _rtfProducedSec = 0
+// Arrival of the LAST observed chunk. The carried rate is measured to here, not
+// to tts_end: the final chunk is often still decoding when the utterance ends,
+// so measuring to "now" left its arrival interval in the window with its audio
+// missing and biased the worker slow.
+let _rtfLastChunkAt = 0
 
 // Single shared WebSocket to /api/voice/stream (#6788).
 // Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
@@ -278,7 +291,10 @@ function _stopCurrentAudio(): void {
   _speakQueue.length = 0
   _speakController?.abort()
   // #12460: audio still inside the pre-roll buffer belongs to the superseded
-  // reply — dropping it here is what makes barge-in immediate.
+  // reply — dropping it here is what makes barge-in immediate. Bumping the stop
+  // sequence also discards chunks still being decoded, which no flag could
+  // otherwise reach.
+  _stopSeq++
   _resetPreroll()
   if (_currentSource) {
     try { _currentSource.stop() } catch { /* already stopped */ }
@@ -344,6 +360,7 @@ function _resetPreroll(): void {
   _utteranceRtf = 0
   _rtfFirstChunkAt = 0
   _rtfProducedSec = 0
+  _rtfLastChunkAt = 0
 }
 
 /**
@@ -382,7 +399,10 @@ function _scheduleBuffer(ctx: AudioContext, audioBuffer: AudioBuffer): void {
     _activeChunkCount--
     if (_activeChunkCount <= 0) {
       _activeChunkCount = 0
-      isSpeaking.value = false
+      // Not idle if the NEXT sentence is already buffering: clearing here fires
+      // watch(isSpeaking) in useVoiceConversation, which reopens the mic in the
+      // gap between sentences (#12460).
+      if (!_utteranceHolding) isSpeaking.value = false
     }
   }
 
@@ -411,8 +431,14 @@ function _releasePending(): void {
   if (ctx.state === 'suspended') {
     // The context was running when these chunks were held but the tab has been
     // backgrounded since. Starting sources on a frozen timeline never fires
-    // onended, which is exactly how the indicator used to stick (#12503) — take
-    // the same exit every other playback path takes instead.
+    // onended, which is exactly how the indicator used to stick (#12503).
+    // Put them back rather than discarding them: this can be up to the whole
+    // lead-in, i.e. the opening of the reply. The next chunk, the end of the
+    // utterance, or an explicit stop retries or clears them — no timer is
+    // re-armed here, so a still-suspended context cannot spin.
+    _pendingBuffers = buffers
+    _pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
+    _utteranceHolding = true
     _armGestureUnlock()
     _notifyTapToEnableAudio()
     if (_activeChunkCount <= 0) isSpeaking.value = false
@@ -437,13 +463,14 @@ function _armStallTimer(): void {
  */
 function _observeChunkRate(durationSec: number): number | null {
   const now = Date.now()
+  _rtfLastChunkAt = now
   if (_rtfFirstChunkAt === 0) {
     _rtfFirstChunkAt = now
     return null
   }
   _rtfProducedSec += durationSec
   const elapsedSec = (now - _rtfFirstChunkAt) / 1000
-  if (elapsedSec <= 0) return null
+  if (elapsedSec < _RTF_MIN_WINDOW_SEC) return null
   return _rtfProducedSec / elapsedSec
 }
 
@@ -490,12 +517,16 @@ function _beginUtterance(text: string): void {
  */
 function _endUtterance(): void {
   _releasePending()
-  const elapsedSec = _rtfFirstChunkAt > 0 ? (Date.now() - _rtfFirstChunkAt) / 1000 : 0
+  const elapsedSec =
+    _rtfFirstChunkAt > 0 && _rtfLastChunkAt > _rtfFirstChunkAt
+      ? (_rtfLastChunkAt - _rtfFirstChunkAt) / 1000
+      : 0
   if (elapsedSec > 0 && _rtfProducedSec > 0) {
     _recordRtfSample(_rtfProducedSec / elapsedSec)
   }
   _rtfFirstChunkAt = 0
   _rtfProducedSec = 0
+  _rtfLastChunkAt = 0
   _utterancePrerollSec = 0
   _utteranceEstimateSec = 0
   _utteranceRtf = 0
@@ -512,6 +543,7 @@ function _endUtterance(): void {
  */
 async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   const seq = _utteranceSeq
+  const stopSeq = _stopSeq
   const ctx = _getOrCreateContext()
   if (ctx.state === 'suspended') {
     // A resume() from the WS onmessage handler is not a user gesture; try once,
@@ -528,6 +560,13 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   }
 
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+
+  if (stopSeq !== _stopSeq) {
+    // A stop / barge-in landed while this chunk was decoding. It belongs to a
+    // reply the user has already dismissed, so it is dropped outright — playing
+    // it would speak a fragment and flip isSpeaking back on after stopSpeaking().
+    return
+  }
 
   if (seq !== _utteranceSeq) {
     // Decoding is genuinely async, so the previous utterance's last chunk often

@@ -424,6 +424,76 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
     expect(mockShowToast).toHaveBeenCalledWith(expect.any(String), 'info')
   })
 
+  it('keeps isSpeaking true when the previous sentence drains while the next pre-rolls', async () => {
+    await calibrate(0.25)
+    ctxTime = 1000
+    const { isSpeaking } = useVoiceOutput()
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+    expect(isSpeaking.value).toBe(true)
+
+    // The previous sentence's audio finishes while this one is still buffering.
+    // Clearing isSpeaking here fires watch(isSpeaking) in useVoiceConversation,
+    // which reopens the mic in the gap between sentences.
+    endAllScheduled()
+    expect(isSpeaking.value).toBe(true)
+  })
+
+  it('ignores a nonsense rate from two chunks arriving coalesced', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+    // 2ms apart: a cumulative rate of ~125x. Trusting it drops the target to 0
+    // and releases the pre-roll for the rest of the utterance.
+    await sendChunk(2)
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+  })
+
+  it('drops chunks still decoding when a stop lands, so no fragment is spoken', async () => {
+    await calibrate(2.0)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+    const { isSpeaking, stopSpeaking } = useVoiceOutput()
+
+    // Chunk dispatched, then barge-in before its decode resolves.
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    clockMs += 100
+    serverSend({ type: 'tts_audio', data: B64, chunk: 1 })
+    stopSpeaking()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+    expect(isSpeaking.value).toBe(false)
+  })
+
+  it('retains held audio across a suspend instead of losing the reply opening', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+    await sendChunk(1000)
+
+    // Backgrounded mid-hold: the release cannot schedule, but the audio is the
+    // opening of the reply and must survive until the context is unlocked.
+    ctxState = 'suspended'
+    serverSend({ type: 'tts_end' })
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+
+    // Once unlocked, the retained audio still plays.
+    ctxState = 'running'
+    await sendChunk(1000)
+    expect(scheduledStarts).toBeGreaterThan(scheduledAfterCalibration)
+  })
+
   it('a superseded reply mid-hold is dropped by speak(), not spoken first', async () => {
     await calibrate(0.25)
     const scheduledAfterCalibration = scheduledStarts
