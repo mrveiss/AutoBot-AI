@@ -131,9 +131,7 @@ class ConnectorCredentialStore:
         if secret is None:
             raise LookupError(f"Credential secret {secret_id!r} not found or expired")
 
-        stored_owner = secret.get("created_by") or ""
-        if stored_owner and stored_owner != owner_id:
-            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
+        self._require_owner(secret, secret_id, owner_id)
 
         creds = json.loads(secret["value"])
         return {**sanitized_config, **creds}
@@ -147,13 +145,13 @@ class ConnectorCredentialStore:
         """Replace the stored secret value with new_credentials in-place."""
         existing = await asyncio.get_running_loop().run_in_executor(
             None,
-            lambda: self._svc.get_secret(secret_id=secret_id, include_value=True),
+            # accessed_by drives the access audit (#13628): rotation decrypts the
+            # full plaintext bundle and was the one read path leaving no attribution.
+            lambda: self._svc.get_secret(secret_id=secret_id, include_value=True, accessed_by=owner_id),
         )
         if existing is None:
             raise LookupError(f"Credential secret {secret_id!r} not found or expired")
-        stored_owner = existing.get("created_by") or ""
-        if stored_owner and stored_owner != owner_id:
-            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
+        self._require_owner(existing, secret_id, owner_id)
 
         current_creds = json.loads(existing["value"])
         current_creds.update(new_credentials)
@@ -248,9 +246,7 @@ class ConnectorCredentialStore:
             )
         if secret is None:
             raise LookupError(f"OAuth secret {secret_id!r} not found or expired")
-        stored_owner = secret.get("created_by") or ""
-        if stored_owner and stored_owner != owner_id:
-            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
+        self._require_owner(secret, secret_id, owner_id)
 
         creds = json.loads(secret["value"])
         access_token = creds.get("access_token")
@@ -347,6 +343,27 @@ class ConnectorCredentialStore:
             "client_secret": client_secret,
             "token_url": token_url,
         }
+
+    @staticmethod
+    def _require_owner(secret: dict, secret_id: str, owner_id: str) -> None:
+        """Refuse to release a credential that is not provably *owner_id*'s (#13628).
+
+        A missing ``created_by`` is a **denial**, not a skip. The previous form
+        was ``if stored_owner and stored_owner != owner_id``, so a secret with an
+        empty owner — static credentials, or rows migrated by
+        ``scripts/migrate_connector_credentials.py`` — was readable, rotatable and
+        refreshable by *any* caller. This guard is the only per-user boundary on a
+        decrypted connector secret, so an unattributable credential must fail
+        closed rather than open.
+        """
+        stored_owner = secret.get("created_by") or ""
+        if not stored_owner:
+            raise PermissionError(
+                f"Credential secret {secret_id!r} has no recorded owner — refusing to release it. "
+                "Re-create the credential so it carries an owner."
+            )
+        if stored_owner != owner_id:
+            raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
 
     @staticmethod
     def _lifetime_seconds(expires_in) -> int | None:

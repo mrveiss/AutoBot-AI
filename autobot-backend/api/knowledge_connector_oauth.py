@@ -96,6 +96,14 @@ async def start_oauth(
 
     _validate_redirect_uri(request.redirect_uri)
 
+    # #13628: no silent ``or "system"`` fallback. This endpoint is behind
+    # Depends(get_current_user), so an absent user_id is a broken auth contract,
+    # not an anonymous flow — and minting a shared literal owner made every
+    # credential created that way mutually readable by the others.
+    owner_id = str(user.get("user_id") or "")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Authenticated user has no user_id; cannot own a credential")
+
     state = oauth_flow.generate_state()
     verifier, challenge = oauth_flow.generate_pkce()
     connector_id = str(uuid.uuid4())
@@ -103,7 +111,7 @@ async def start_oauth(
 
     payload = {
         "provider": provider,
-        "owner_id": str(user.get("user_id") or "system"),
+        "owner_id": owner_id,
         "connector_id": connector_id,
         "code_verifier": verifier,
         "redirect_uri": request.redirect_uri,
