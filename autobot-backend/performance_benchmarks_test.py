@@ -15,11 +15,13 @@ import tempfile
 import threading
 import time
 from typing import Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import psutil
 import pytest
 
+from autobot_types import TaskComplexity
+from config import ConfigManager
 from knowledge import KnowledgeBase
 from memory import MemoryManager
 from memory.enums import MemoryCategory
@@ -312,9 +314,28 @@ class TestOrchestratorPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        with patch("orchestrator.config_manager") as mock_config:
-            mock_config.get_llm_config.return_value = {"orchestrator_llm": "llama3.2:1b"}
-            self.orchestrator = Orchestrator()
+        # #13699: the `orchestrator` module has no `config_manager` attribute to
+        # patch — it imports `get_config_manager` and `Orchestrator.__init__`
+        # takes an injectable `config_manager` (#13162). Patching the absent
+        # name raised AttributeError in setup, so both benchmarks below have
+        # been erroring at collection rather than running. Inject the config
+        # double instead, the same way dependency_injection_test.py does.
+        mock_config = Mock(spec=ConfigManager)
+        mock_config.get_llm_config.return_value = {"orchestrator_llm": "llama3.2:1b"}
+        mock_config.get.side_effect = lambda key, default=None: default
+        self.orchestrator = Orchestrator(config_manager=mock_config)
+
+        # #13699: `GemmaClassificationAgent()` raises AgentConfigurationError
+        # unless AUTOBOT_CLASSIFICATION_PROVIDER is configured, and
+        # `_init_classification_agent` swallows that into
+        # `classification_agent = None`. `classify_request_complexity` then
+        # short-circuits on the None branch, so the benchmark would time an
+        # early return rather than the classification seam — and would time a
+        # different path depending on the environment. Bind a double so the
+        # measured path is the same everywhere and never reaches a provider.
+        self.orchestrator.classification_agent = MagicMock(
+            classify_user_request=AsyncMock(return_value=MagicMock(complexity=TaskComplexity.COMPLEX))
+        )
 
     async def test_orchestrator_task_planning_performance(self):
         """Benchmark orchestrator task planning operations"""
@@ -324,9 +345,12 @@ class TestOrchestratorPerformance:
             "Research network security tools, evaluate them, and provide installation recommendations with approval workflow",
         ]
 
+        # #13699: neither benchmarked entry point routes through
+        # `llm_service` today — classification goes via `classification_agent`
+        # and `plan_workflow_steps` is pure step construction. The double stays
+        # as a guard so no iteration can reach a real provider if that changes,
+        # and `chat` is an AsyncMock because it is awaited when it is called.
         with patch.object(self.orchestrator, "llm_service") as mock_llm:
-            # #13162: llm_service.chat is awaited by the orchestrator, so the
-            # double must be an AsyncMock.
             mock_llm.chat = AsyncMock(return_value=MagicMock(content="Mock orchestrator response", error=None))
 
             for request in test_requests:
@@ -343,9 +367,14 @@ class TestOrchestratorPerformance:
 
                     self.benchmark.end_measurement()
 
-                    # Verify planning results
-                    assert complexity is not None
+                    # Verify planning results. #13699: `isinstance(steps, list)`
+                    # alone passes on the empty list every unavailable-types
+                    # branch returns, which is how this body could have looked
+                    # meaningful while measuring nothing. Assert the plan is
+                    # real and that classification produced a TaskComplexity.
+                    assert isinstance(complexity, TaskComplexity)
                     assert isinstance(steps, list)
+                    assert steps, f"Planning produced no steps for: {request[:50]}..."
 
                 stats = self.benchmark.get_statistics()
 
@@ -380,9 +409,11 @@ class TestOrchestratorPerformance:
             results = await asyncio.gather(*tasks)
             total_time = time.perf_counter() - start_time
 
-            # Verify all workflows completed
+            # Verify all workflows completed. #13699: a step count of 0 is not a
+            # completed workflow, so assert the plans were non-empty rather than
+            # merely integer-shaped.
             assert len(results) == count
-            assert all(isinstance(r, int) for r in results)
+            assert all(isinstance(r, int) and r > 0 for r in results)
 
             self.benchmark.get_statistics()
 
