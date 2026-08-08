@@ -27,6 +27,12 @@ already-hardened base instead of re-implementing them a second time; these
 tests exercise that inheritance through the concrete subclass so a future
 change that breaks the wiring (e.g. reintroducing a local except-arm-only
 guard) is caught here.
+
+The inherited guard needs ``asyncio.Task.cancelling()`` (Python 3.11+), so the
+test that exercises it is gated on that capability the same way the base class's
+own tests are — see ``llc/tests/test_poll_loop_scheduler.py`` (#13727).  Nothing
+is skipped on a supported interpreter: the platform floor is 3.12 and CI runs
+3.14.
 """
 
 import asyncio
@@ -36,7 +42,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from llc.scheduler.base import PENDING_CANCELLATION_REQUIREMENT, SUPPORTS_PENDING_CANCELLATION
 from llc.scheduler.community_cluster_scheduler import CommunityClusteringScheduler
+
+requires_pending_cancellation = pytest.mark.skipif(
+    not SUPPORTS_PENDING_CANCELLATION,
+    reason=PENDING_CANCELLATION_REQUIREMENT,
+)
 
 
 class _FakeMeshDB:
@@ -86,6 +98,7 @@ class _SwallowingClusterer:
             return []  # driver consumed it; run() reports success
 
 
+@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_swallowed_cancel_does_not_rearm_a_full_interval() -> None:
     """A masked-and-swallowed cancel must not buy the loop a fresh 6h sleep.
