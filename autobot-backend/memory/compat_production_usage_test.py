@@ -77,3 +77,40 @@ class TestDataPlaneWrappersStayTenanted:
         assert "user_id" in params, f"{method} lost its owner scope"
         assert params["user_id"].kind is inspect.Parameter.KEYWORD_ONLY
         assert params["user_id"].default is inspect.Parameter.empty, "scope must be required"
+
+
+class TestCanonicalFactoryLocation:
+    """#13722: the canonical factory is defined beside what it constructs.
+
+    Its previous home in `compat.py` is why #13690 was filed on a false premise
+    — nobody looks for the canonical factory in a module called "backward
+    compatibility wrappers".
+    """
+
+    def test_it_is_defined_in_manager_not_compat(self):
+        from memory.manager import get_memory_manager
+
+        assert get_memory_manager.__module__ == "memory.manager"
+
+    def test_both_import_paths_still_resolve_to_it(self):
+        """No caller breaks: `compat` re-exports, the package re-exports."""
+        import memory
+        from memory.compat import get_memory_manager as via_compat
+        from memory.manager import get_memory_manager as via_manager
+
+        assert via_compat is via_manager
+        assert memory.get_memory_manager is via_manager
+
+    def test_it_still_returns_the_same_singleton(self):
+        from memory.manager import MemoryManager, get_memory_manager
+
+        first, second = get_memory_manager(), get_memory_manager()
+
+        assert first is second
+        assert isinstance(first, MemoryManager)
+
+    def test_compat_no_longer_claims_to_define_it(self):
+        """The docstring was the thing that misled the #13690 audit."""
+        import memory.compat as compat
+
+        assert "DEFINED in" in (compat.__doc__ or "")

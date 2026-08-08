@@ -19,7 +19,7 @@ core → SLM → modules picture, then follow the quick start below.
 
 - Linux or WSL2 (Ubuntu 22.04 LTS recommended)
 - 16 GB+ RAM recommended
-- **Installer path:** `install.sh` installs Python 3.12, Node.js 20, and all dependencies for you
+- **Installer path:** `install.sh` installs Python 3.14, Node.js 20, and all dependencies for you
 - **Docker path:** Docker and Docker Compose
 
 ### Install — choose one

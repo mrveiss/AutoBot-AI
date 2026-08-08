@@ -42,7 +42,6 @@ from .cache import LRUCacheManager
 from .compat import (
     LongTermMemoryManager,
     get_long_term_memory_manager,
-    get_memory_manager,
 )
 
 # Enums
@@ -50,7 +49,8 @@ from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
 from .essential_story import EssentialStoryGenerator
 
 # Canonical Manager (composes all subsystems above)
-from .manager import MemoryManager
+# #13722: get_memory_manager is canonical and lives beside the class it builds.
+from .manager import MemoryManager, get_memory_manager
 
 # Data Models
 from .models import MemoryEntry, TaskExecutionRecord
