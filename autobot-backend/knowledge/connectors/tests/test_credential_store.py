@@ -560,9 +560,14 @@ async def test_credential_without_recorded_owner_is_denied_everywhere():
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13628", "u1", "gitlab",
+        "c-13628",
+        "u1",
+        "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     # Model an unattributable credential.
     store[secret_id]["created_by"] = ""
@@ -592,9 +597,14 @@ async def test_rotate_attributes_the_decrypt_to_the_caller():
     svc, _ = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13628b", "u1", "gitlab",
+        "c-13628b",
+        "u1",
+        "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     svc.get_secret.reset_mock()
 
@@ -613,9 +623,14 @@ async def test_owner_with_recorded_id_still_works():
     svc, _ = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13628c", "u1", "gitlab",
+        "c-13628c",
+        "u1",
+        "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     assert await cs.get_access_token(secret_id, "u1") == "tok"
     await cs.rotate(secret_id, {"access_token": "tok2"}, "u1")
