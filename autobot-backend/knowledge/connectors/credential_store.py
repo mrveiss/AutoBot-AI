@@ -12,8 +12,10 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 import asyncio
 import json
 import os
+import time
 from datetime import timedelta
 
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
@@ -49,6 +51,14 @@ _AUTH_TYPE_TO_SECRET_TYPE: dict = {
 # Refresh an OAuth access token this many seconds before its stated expiry, so
 # in-flight requests never race a hard expiry. Not a cache TTL — a safety skew.
 ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 60
+
+# #13627: per-credential refresh serialization. TTL bounds how long a crashed
+# holder can block others; the wait bounds how long a loser blocks before failing
+# loudly. Env-tunable rather than hardcoded, per the project's TTL rule.
+_REFRESH_LOCK_PREFIX = "connector:oauth:refresh:"
+_REFRESH_LOCK_TTL_MS = int(os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "30000"))
+_REFRESH_WAIT_S = float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "20"))
+_REFRESH_POLL_S = float(os.getenv("AUTOBOT_OAUTH_REFRESH_POLL_S", "0.2"))
 
 
 class ConnectorCredentialStore:
@@ -237,6 +247,56 @@ class ConnectorCredentialStore:
             )
         return result["id"]
 
+    async def _read_oauth_creds(self, secret_id: str, owner_id: str) -> dict:
+        """Read + authorize the OAuth bundle. Used for both the first read and the
+        double-check inside the lease (#13627)."""
+        secret = None
+        if _vault_read_enabled():
+            secret = await load_imported_credential(secret_id, owner_id)
+        if secret is None:
+            secret = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: self._svc.get_secret(secret_id=secret_id, include_value=True, accessed_by=owner_id),
+            )
+        if secret is None:
+            raise LookupError(f"OAuth secret {secret_id!r} not found or expired")
+        self._require_owner(secret, secret_id, owner_id)
+        return json.loads(secret["value"])
+
+    @staticmethod
+    async def _refresh_lock_available() -> bool:
+        """Whether the refresh lease can be taken at all (#13627).
+
+        Distinguishes "another worker holds the lease" from "there is no Redis to
+        hold it in" — ``LeaderLease`` reports both as a failed acquisition.
+        """
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            return await get_async_redis_client(database="knowledge") is not None
+        except Exception:
+            return False
+
+    async def _await_refreshed_token(self, secret_id: str, owner_id: str) -> str:
+        """Wait for the lease holder's refresh to land, then return its token (#13627).
+
+        The loser of the race must not call the token endpoint — that is the whole
+        point of serializing. Polls the stored credential until the holder's write
+        appears, then fails loudly rather than falling through to an
+        unsynchronized refresh, which would reintroduce the bug.
+        """
+        deadline = time.monotonic() + _REFRESH_WAIT_S
+        while time.monotonic() < deadline:
+            await asyncio.sleep(_REFRESH_POLL_S)
+            creds = await self._read_oauth_creds(secret_id, owner_id)
+            token = creds.get("access_token")
+            if token and not self._access_token_expired(creds.get("access_token_expires_at")):
+                return token
+        raise TimeoutError(
+            f"Timed out after {_REFRESH_WAIT_S}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
+            "Refusing to refresh unsynchronized — a second refresh can invalidate the rotated token."
+        )
+
     async def get_access_token(self, secret_id: str, owner_id: str) -> str:
         """Return a valid access token, refreshing + rotating the secret in place.
 
@@ -265,6 +325,50 @@ class ConnectorCredentialStore:
         if access_token and not self._access_token_expired(creds.get("access_token_expires_at")):
             return access_token
 
+        # #13627: serialize the refresh per credential. A scheduled sync overlapping
+        # a user-triggered one is ordinary operation, and both would otherwise
+        # refresh with the same token. Providers that rotate on each use (GitLab,
+        # see below) then issue two successors, the second write wins, and the
+        # stored token may not be the provider's valid one — the next refresh fails
+        # permanently and the user must re-authorize. Some providers treat reuse of
+        # a rotated token as a breach signal and revoke the whole grant family
+        # (OAuth 2.0 Security BCP 4.14.2), turning the race into a full disconnect.
+        lease = LeaderLease(
+            key=f"{_REFRESH_LOCK_PREFIX}{secret_id}",
+            database="knowledge",
+            ttl_ms=_REFRESH_LOCK_TTL_MS,
+            label=f"OAuth refresh {secret_id}",
+        )
+        if not await lease.update_leadership():
+            # LeaderLease returns False both when another holder has the lease and
+            # when Redis is simply unavailable, and the two need opposite handling.
+            # Treating "no Redis" as "someone else is refreshing" would make every
+            # refresh wait and then fail — a total outage of connector auth wherever
+            # Redis is not running, which is far worse than the race being fixed.
+            if await self._refresh_lock_available():
+                # Someone else holds it. Wait for their write instead of issuing a
+                # second refresh — the loser must not touch the token endpoint.
+                return await self._await_refreshed_token(secret_id, owner_id)
+            logger.warning(
+                "OAuth refresh could not be serialized (no Redis) — proceeding unsynchronized. "
+                "A concurrent refresh may invalidate a rotated refresh token (#13627)."
+            )
+            return await self._refresh_and_store(secret_id, owner_id, creds)
+
+        try:
+            # Double-checked read: the holder may have finished between our first
+            # read and our acquiring the lease.
+            recheck = await self._read_oauth_creds(secret_id, owner_id)
+            token = recheck.get("access_token")
+            if token and not self._access_token_expired(recheck.get("access_token_expires_at")):
+                return token
+            creds = recheck
+            return await self._refresh_and_store(secret_id, owner_id, creds)
+        finally:
+            await lease.release()
+
+    async def _refresh_and_store(self, secret_id: str, owner_id: str, creds: dict) -> str:
+        """Refresh at the provider and persist. Caller MUST hold the lease (#13627)."""
         refresh_token = creds.get("refresh_token")
         if not refresh_token:
             raise LookupError(

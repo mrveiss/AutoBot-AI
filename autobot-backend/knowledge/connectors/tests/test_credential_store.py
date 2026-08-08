@@ -4,9 +4,10 @@
 # Author: mrveiss
 """Unit and integration tests for ConnectorCredentialStore (ADR-007 / GH#9019)."""
 
+import asyncio
 import json
 from datetime import timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,7 +17,9 @@ from autobot_shared.auth.connector_auth import (
     BearerAuth,
     OAuthRefreshAuth,
 )
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+import knowledge.connectors.credential_store as mod
 from knowledge.connectors.credential_store import ConnectorCredentialStore
 
 # ---------------------------------------------------------------------------
@@ -679,3 +682,119 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
     )
     with pytest.raises(LookupError, match="re-auth required"):
         await cs.get_access_token(secret_id, "u1")
+
+# ---------------------------------------------------------------------------
+# #13627: refresh serialization
+# ---------------------------------------------------------------------------
+
+
+async def _expired_oauth_secret(cs, store, name):
+    secret_id = await cs.store_oauth(
+        name, "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
+        "cid", "csec", "https://token", ["s"],
+    )
+    bundle = json.loads(store[secret_id]["value"])
+    bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
+    store[secret_id]["value"] = json.dumps(bundle)
+    return secret_id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_refresh_calls_the_token_endpoint_once(monkeypatch):
+    """#13627: two concurrent callers must produce exactly ONE refresh.
+
+    With a rotating-refresh-token provider, two refreshes issue two successors;
+    the second write wins and the stored token may not be the provider's valid
+    one, so the next refresh fails permanently and the user must re-authorize.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await _expired_oauth_secret(cs, store, "c-13627")
+
+    from knowledge.connectors import oauth_flow
+
+    calls = []
+
+    async def _slow_refresh(token_url, client_id, client_secret, refresh_token):
+        calls.append(refresh_token)
+        await asyncio.sleep(0.05)  # hold the lease long enough for the loser to queue
+        return {"access_token": "new", "refresh_token": "rt-new", "expires_in": 3600}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _slow_refresh)
+
+    # Simulate an available lock: first acquisition wins, later ones lose.
+    holders = {"taken": False}
+
+    async def _fake_leadership(self, *a, **kw):
+        if holders["taken"]:
+            return False
+        holders["taken"] = True
+        self._is_leader = True
+        return True
+
+    async def _fake_release(self):
+        holders["taken"] = False
+        self._is_leader = False
+
+    monkeypatch.setattr(LeaderLease, "update_leadership", _fake_leadership)
+    monkeypatch.setattr(LeaderLease, "release", _fake_release)
+    monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=True)))
+
+    a, b = await asyncio.gather(
+        cs.get_access_token(secret_id, "u1"),
+        cs.get_access_token(secret_id, "u1"),
+    )
+
+    assert len(calls) == 1, f"token endpoint called {len(calls)} times — refresh not serialized"
+    assert a == b == "new", f"callers disagreed: {a!r} vs {b!r}"
+
+
+@pytest.mark.asyncio
+async def test_lock_wait_timeout_raises_instead_of_refreshing_unsynchronized(monkeypatch):
+    """#13627: the loser must fail loudly, never fall through to its own refresh."""
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await _expired_oauth_secret(cs, store, "c-13627b")
+
+    from knowledge.connectors import oauth_flow
+
+    called = []
+
+    async def _must_not_run(*a, **kw):
+        called.append(1)
+        return {"access_token": "should-never-happen"}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _must_not_run)
+    monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
+    monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=True)))
+    monkeypatch.setattr(mod, "_REFRESH_WAIT_S", 0.3)
+    monkeypatch.setattr(mod, "_REFRESH_POLL_S", 0.05)
+
+    with pytest.raises(TimeoutError, match="concurrent OAuth refresh"):
+        await cs.get_access_token(secret_id, "u1")
+    assert not called, "loser called the token endpoint — the race is still open"
+
+
+@pytest.mark.asyncio
+async def test_without_redis_refresh_proceeds_rather_than_failing(monkeypatch):
+    """#13627: no Redis must not mean no connector auth.
+
+    LeaderLease reports "another holder" and "no Redis" identically. Treating the
+    latter as the former made every refresh wait then fail — a total outage
+    wherever Redis is absent, which is far worse than the race being fixed.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await _expired_oauth_secret(cs, store, "c-13627c")
+
+    from knowledge.connectors import oauth_flow
+
+    monkeypatch.setattr(
+        oauth_flow, "refresh_access_token",
+        AsyncMock(return_value={"access_token": "new", "expires_in": 3600}),
+    )
+    monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
+    monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=False)))
+
+    assert await cs.get_access_token(secret_id, "u1") == "new"
