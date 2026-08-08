@@ -5,6 +5,42 @@
 """
 Workflow Planner
 
+DEPRECATED — NOT A PRODUCTION PLANNING PATH (#13751). Every public method on
+``WorkflowPlanner`` has **zero callers**. It is the planner half of the
+orchestration engine that ``orchestrator.run_workflow`` stopped using at #5058;
+#12373/#12579 deprecated the executor half
+(``orchestration/workflow_executor.py``) in place and did not reach this
+sibling. ``Orchestrator`` still constructs it as ``self._step_planner``
+(orchestrator.py) but never calls a method on it.
+
+Unlike the executor, this module holds **no capability the canonical path
+lacks**, so there is nothing here staged for future consolidation. Each
+capability maps to wired code today:
+
+- Base plan + capability-to-agent assignment
+  (``plan_workflow_steps_with_agents``) -> ``orchestrator.create_workflow_plan``
+  builds the plan and ``AgentRouter.get_agent_recommendations_scored`` does the
+  scored capability-to-agent selection, reached via
+  ``WorkflowRunner``/``Orchestrator.get_agent_recommendations_scored``.
+- Similar-trajectory priors (``_annotate_context_with_trajectories``, GH#7357)
+  -> ``orchestrator._fetch_planning_context`` (#10580/#10581), tenant-scoped by
+  #11015/#11089.
+- Plan without executing (``get_plan_summary``) ->
+  ``orchestrator.create_workflow_plan``, which builds and stores a
+  ``WorkflowPlan`` without running it.
+- Approval presentation (``create_plan_summary_for_approval``) ->
+  ``services.workflow_automation.executor.WorkflowExecutor
+  .present_plan_for_approval``, reached through
+  ``WorkflowAutomationManager.present_plan_for_approval`` (#390) and the
+  ``/api/workflow-automation/*`` surface.
+
+Kept **in place with all code intact** — per repo policy code is never deleted,
+only wired in or superseded. Do not wire these methods into a request path:
+doing so would create a second planning path alongside
+``create_workflow_plan`` for the two to drift against, which is the outcome
+#13751 was filed to avoid. ``repo_tests/workflow_planner_deprecation_test.py``
+holds this invariant so the statement above cannot silently go stale.
+
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow planning, step estimation, and capability determination.
 """
@@ -24,6 +60,10 @@ logger = get_logger(__name__)
 class WorkflowPlanner:
     """
     Plans workflow steps with intelligent agent assignment.
+
+    DEPRECATED — no callers on any public method; see the module docstring for
+    the per-capability mapping to the canonical code that supersedes each one.
+    Retained in full for reference — no code removed (#13751).
 
     Handles:
     - Enhanced workflow step planning
