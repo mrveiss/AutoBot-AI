@@ -33,6 +33,7 @@ import defusedxml.ElementTree as ET
 
 from autobot_shared.auth import BasicAuth
 from autobot_shared.http_client import get_http_client
+from knowledge.connectors.base import instance_host_egress
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -122,7 +123,12 @@ class NextcloudConnector(AbstractConnector):
             auth = aiohttp.BasicAuth(self._username, self._password)
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with get_http_client().tracked_request(
-                "OPTIONS", self._webdav_base, auth=auth, timeout=timeout, suppress_error_log=True
+                "OPTIONS",
+                self._webdav_base,
+                auth=auth,
+                timeout=timeout,
+                suppress_error_log=True,
+                guard_egress=instance_host_egress(),
             ) as resp:
                 if resp.status in (200, 204):
                     self.logger.info("Nextcloud connection test successful: %s", self._webdav_base)
@@ -162,7 +168,11 @@ class NextcloudConnector(AbstractConnector):
         try:
             auth = aiohttp.BasicAuth(self._username, self._password)
             timeout = aiohttp.ClientTimeout(total=300.0)
-            async with get_http_client().tracked_request("GET", file_url, auth=auth, timeout=timeout) as resp:
+            # file_url = urljoin(self._webdav_base, ...) — instance host, not a
+            # user-supplied content URL, despite the name (#13625).
+            async with get_http_client().tracked_request(
+                "GET", file_url, auth=auth, timeout=timeout, guard_egress=instance_host_egress()
+            ) as resp:
                 if resp.status == 200:
                     content_bytes = await resp.read()
                     content_type = resp.headers.get("Content-Type", "application/octet-stream")
@@ -263,6 +273,7 @@ class NextcloudConnector(AbstractConnector):
             async with get_http_client().tracked_request(
                 "PROPFIND",
                 folder_url,
+                guard_egress=instance_host_egress(),
                 auth=auth,
                 headers=headers,
                 data=propfind_body,
