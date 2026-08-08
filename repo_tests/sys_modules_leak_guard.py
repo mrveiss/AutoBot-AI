@@ -358,46 +358,35 @@ _MISSING = object()
 _DISK_CACHE: dict[str, bool] = {}
 
 
-def _provided_by_multiple_roots(top_level: str) -> bool:
-    """True when more than one ``sys.path`` entry provides *top_level* (#13651).
+def _defined_in_multiple_source_roots(top_level: str, repo_root: Path) -> bool:
+    """True when more than one *source root* defines *top_level*.
 
-    ``autobot-backend`` and ``autobot-slm-backend`` both ship a ``services``
-    package, so the bare name is ambiguous. A genuine module under such a name
-    is not "what Python should hold" — it is whichever backend won the race, and
-    leaving it installed for the other backend's tests is the shadow this guard
-    exists to catch. The synthetic -> genuine exemption must not fire for these.
+    ``autobot-backend`` and ``autobot-slm-backend`` both ship ``services`` and
+    ``api``, so a genuine module under such a bare name is whichever backend won
+    the race — leaving it installed for the other backend's tests is exactly the
+    shadow this guard exists to catch, and the synthetic -> genuine exemption
+    must not fire for it.
+
+    Counted per source root rather than per directory: ``autobot-backend/utils``
+    and ``autobot-backend/tests/utils`` are two definitions of ``utils`` inside
+    the *same* backend, which is not a shadow. Counting directories refused the
+    exemption for ``utils`` on CI while allowing it locally, because only CI had
+    both on ``sys.path`` (#13651). Entries outside the repo are dependencies,
+    not our roots, and are ignored.
     """
-    # Deliberately uncached: ``sys.path`` grows during a session as conftests
-    # insert their roots, so an answer cached before the second backend's root
-    # appeared would be wrong for the rest of the run. Only the rare exemption
-    # path consults this.
-    # Resolve before counting: sys.path routinely holds the same directory twice
-    # (absolute and relative forms, or a rootdir re-inserted by a conftest), and
-    # counting those as separate roots would refuse the exemption for names that
-    # only one source root actually provides.
-    # Only this repo's own source roots count. A dependency shipping a top-level
-    # ``utils`` in site-packages is not the shadow this guards against — CI has
-    # such packages and a dev checkout may not, which would otherwise make the
-    # exemption fire locally and refuse on CI for the very same name.
-    repo_root = Path(__file__).resolve().parents[1]
-    providers: set[str] = set()
+    roots: set[str] = set()
     for entry in sys.path:
         base = Path(entry or ".")
+        if not ((base / f"{top_level}.py").is_file() or (base / top_level).is_dir()):
+            continue
         try:
-            if not base.resolve().is_relative_to(repo_root):
-                continue
+            rel = base.resolve().relative_to(repo_root)
         except (OSError, ValueError):
             continue
-        target = base / f"{top_level}.py"
-        if not target.is_file():
-            target = base / top_level
-            if not target.is_dir():
-                continue
-        try:
-            providers.add(str(target.resolve()))
-        except OSError:
-            continue
-    return len(providers) > 1
+        roots.add(rel.parts[0] if rel.parts else ".")
+        if len(roots) > 1:
+            return True
+    return False
 
 
 def _resolves_on_disk(top_level: str) -> bool:
@@ -603,8 +592,8 @@ class _LeakGuard:
                 # reporting this says why instead of leaving it to be inferred.
                 if not _has_real_file(module):
                     self._exempt_blocked[name] = "no-real-file"
-                elif _provided_by_multiple_roots(name.partition(".")[0]):
-                    self._exempt_blocked[name] = "multi-root"
+                elif _defined_in_multiple_source_roots(name.partition(".")[0], self._rootdir):
+                    self._exempt_blocked[name] = "multi-source-root"
                 else:
                     return None
             return "replaced"
