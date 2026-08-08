@@ -31,9 +31,24 @@ jobs:
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
           pattern='^[[:space:]]*Co-authored-by:|Generated with \[?Claude|noreply@paperclip'
+          # Bot-authored commits are exempt (#13654). The policy is that mrveiss is
+          # the sole *human* author; dependabot stamps "Co-authored-by: dependabot[bot]"
+          # on its own security bumps, which is machine bookkeeping, not a false
+          # attribution claim. Without this, a main -> Dev_new_gui sync carrying those
+          # bumps can never pass, so security fixes strand on main — which is exactly
+          # what happened to #13655 (open since 2026-08-05) and, through it, #13667.
+          #
+          # Scoped to the commit AUTHOR, not the trailer text: a human commit that
+          # merely mentions dependabot is still caught.
+          bot_authors='\[bot\]$|^dependabot|^github-actions'
           bad=()
           while IFS= read -r sha; do
             [ -z "${sha}" ] && continue
+            author="$(git log -1 --format='%an' "${sha}")"
+            if printf '%s' "${author}" | grep -qE "${bot_authors}"; then
+              echo "Skipping bot-authored commit ${sha} (${author})"
+              continue
+            fi
             if git log -1 --format='%B' "${sha}" | grep -iqE "${pattern}"; then
               bad+=("${sha} $(git log -1 --format='%s' "${sha}")")
             fi
