@@ -520,9 +520,14 @@ async def test_malformed_expires_in_falls_back_and_keeps_the_stored_lifetime(bad
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c-13626f", "u1", "gitlab",
+        "c-13626f",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     bundle = json.loads(store[secret_id]["value"])
     bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
