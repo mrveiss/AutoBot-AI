@@ -406,6 +406,142 @@ async def test_pinned_request_with_redirects_no_redirect_returns_response() -> N
     assert resolver_result[0]["hostname"] == "real.example.com"
 
 
+def _two_hop(location, hop2_host="real2.example.com"):
+    """Canned 302 -> 200 pair plus per-hop DNS answers."""
+    return (
+        [
+            [(2, 1, 6, "", ("93.184.216.34", 0))],
+            [(2, 1, 6, "", ("8.8.4.4", 0))],
+        ],
+        _make_fake_session_class(
+            [
+                _make_fake_response(302, {"Location": location}),
+                _make_fake_response(200, {"Content-Type": "text/html"}),
+            ]
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_redirect_drops_credential_headers() -> None:
+    """#13624: a 302 to a foreign origin must not carry the caller's credentials.
+
+    Per-hop IP pinning already refuses redirects to *private* addresses; it does
+    nothing about a redirect to an attacker-controlled *public* host, which is
+    the credential-exfiltration case.
+    """
+    per_hop_infos, (fake_cls, calls) = _two_hop("https://evil.example.net/collect")
+    sent = {
+        "Authorization": "Bearer super-secret",
+        "Cookie": "session=abc",
+        "X-Api-Key": "k-123",
+        "Accept": "text/html",
+    }
+
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=per_hop_infos),
+        patch("aiohttp.ClientSession", fake_cls),
+    ):
+        async with pinned_request_with_redirects("GET", "https://real.example.com/start", headers=sent) as resp:
+            assert resp.status == 200
+
+    hop2 = calls[1]["kwargs"]["headers"]
+    assert "Authorization" not in hop2, "credential replayed to a foreign origin"
+    assert "Cookie" not in hop2
+    assert "X-Api-Key" not in hop2
+    # Non-credential headers still travel.
+    assert hop2["Accept"] == "text/html"
+    # The caller's own dict must not be mutated.
+    assert sent["Authorization"] == "Bearer super-secret"
+
+
+@pytest.mark.asyncio
+async def test_same_origin_redirect_keeps_credential_headers() -> None:
+    """#13624: stripping must be scoped to origin changes, or same-host redirects break."""
+    per_hop_infos, (fake_cls, calls) = _two_hop("https://real.example.com/final")
+
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=per_hop_infos),
+        patch("aiohttp.ClientSession", fake_cls),
+    ):
+        async with pinned_request_with_redirects(
+            "GET", "https://real.example.com/start", headers={"Authorization": "Bearer keep-me"}
+        ) as resp:
+            assert resp.status == 200
+
+    assert calls[1]["kwargs"]["headers"]["Authorization"] == "Bearer keep-me"
+
+
+@pytest.mark.asyncio
+async def test_credential_looking_header_that_is_not_a_credential_survives() -> None:
+    """#13624: the list is explicit for a reason.
+
+    A ``*-token``/``*-key`` pattern would also strip ``idempotency-key`` and
+    ``x-correlation-id``, which are not credentials and whose loss silently
+    changes request semantics.
+    """
+    per_hop_infos, (fake_cls, calls) = _two_hop("https://evil.example.net/collect")
+    sent = {"Idempotency-Key": "abc-123", "X-Correlation-Id": "cid-9", "Authorization": "Bearer s"}
+
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=per_hop_infos),
+        patch("aiohttp.ClientSession", fake_cls),
+    ):
+        async with pinned_request_with_redirects("GET", "https://real.example.com/start", headers=sent) as resp:
+            assert resp.status == 200
+
+    hop2 = calls[1]["kwargs"]["headers"]
+    assert hop2["Idempotency-Key"] == "abc-123"
+    assert hop2["X-Correlation-Id"] == "cid-9"
+    assert "Authorization" not in hop2
+
+
+@pytest.mark.asyncio
+async def test_cross_port_and_cross_scheme_count_as_cross_origin() -> None:
+    """#13624: origin is scheme+host+port, not host alone."""
+    for location in ("https://real.example.com:8443/x", "http://real.example.com/x"):
+        per_hop_infos, (fake_cls, calls) = _two_hop(location)
+        with (
+            patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=per_hop_infos),
+            patch("aiohttp.ClientSession", fake_cls),
+        ):
+            async with pinned_request_with_redirects(
+                "GET", "https://real.example.com/start", headers={"Authorization": "Bearer s"}
+            ) as resp:
+                assert resp.status == 200
+        assert "Authorization" not in calls[1]["kwargs"]["headers"], location
+
+
+@pytest.mark.asyncio
+async def test_303_rewrites_method_to_get_and_drops_body_headers() -> None:
+    """#13624: a method rewrite makes the body headers meaningless (fetch spec)."""
+    per_hop_infos = [
+        [(2, 1, 6, "", ("93.184.216.34", 0))],
+        [(2, 1, 6, "", ("8.8.4.4", 0))],
+    ]
+    fake_cls, calls = _make_fake_session_class(
+        [
+            _make_fake_response(303, {"Location": "https://real.example.com/result"}),
+            _make_fake_response(200, {}),
+        ]
+    )
+    sent = {"Content-Type": "application/json", "Content-Length": "17", "Accept": "*/*"}
+
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=per_hop_infos),
+        patch("aiohttp.ClientSession", fake_cls),
+    ):
+        async with pinned_request_with_redirects("POST", "https://real.example.com/start", headers=sent) as resp:
+            assert resp.status == 200
+
+    assert calls[0]["method"] == "POST"
+    assert calls[1]["method"] == "GET", "303 must rewrite the method"
+    hop2 = calls[1]["kwargs"]["headers"]
+    assert "Content-Type" not in hop2
+    assert "Content-Length" not in hop2
+    assert hop2["Accept"] == "*/*"
+
+
 @pytest.mark.asyncio
 async def test_pinned_request_with_redirects_follows_redirect_with_per_hop_pin() -> None:
     """A same-origin 302 is followed; the second hop is independently resolved + pinned."""
