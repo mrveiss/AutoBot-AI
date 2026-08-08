@@ -87,8 +87,15 @@ def _reinstall_module_stubs(request):
         yield
         return
 
+    # What each name held before this fixture overwrote it (#13651). Popping
+    # blindly on teardown destroyed a *genuine* module whenever an earlier test
+    # in the session had already imported it for real: the key went absent, the
+    # next importer built a second module object, and the leak guard reported
+    # the swap as "replaced" — genuine displaced by genuine.
+    displaced: Dict[str, Any] = {}
     restored_parent_attr = False
     for name, module in unloaded.items():
+        displaced[name] = sys.modules.get(name, _MISSING)
         sys.modules[name] = module
         # Re-bind on the parent package too — patch() resolves "utils.x.Y" as
         # getattr(sys.modules["utils"], "x") (#11532, #12463).
@@ -101,10 +108,20 @@ def _reinstall_module_stubs(request):
     yield
 
     for name in unloaded:
-        sys.modules.pop(name, None)
+        previous = displaced[name]
+        # Put back only a *genuine* module. Restoring a stub this fixture happened
+        # to displace would re-leak it to everything collected afterwards, which is
+        # the failure the unconditional pop was there to prevent in the first place.
+        genuine = previous is not _MISSING and getattr(previous, "__spec__", None) is not None
+        if genuine:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
         parent_name, _, leaf = name.rpartition(".")
         parent = sys.modules.get(parent_name) if parent_name else None
-        if restored_parent_attr and parent is not None and hasattr(parent, leaf):
+        if genuine and parent is not None:
+            setattr(parent, leaf, previous)
+        elif restored_parent_attr and parent is not None and hasattr(parent, leaf):
             delattr(parent, leaf)
 
 
