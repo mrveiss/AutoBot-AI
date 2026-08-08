@@ -176,6 +176,7 @@ class _Mutation:
     owner_dir: Path
     owner_dir_display: str
     obj_id: int
+    prev_kind: str  # what the key held before, for the leak report (#13651)
     # ``owner_dir.parents`` as a set, built once here rather than on every
     # comparison.  ``Path.parents`` is a lazy sequence with no ``__contains__``,
     # so ``x in path.parents`` walks it and constructs a fresh ``Path`` per
@@ -257,13 +258,41 @@ class _Leak:
             "owner": self.mutation.owner,
             "owner_dir_display": self.mutation.owner_dir_display,
             "observed_at": self.observed_at,
-            "occupant": _occupant(self.mutation.key, self.mutation.obj_id),
+            "occupant": (
+                f"{self.mutation.prev_kind} -> "
+                f"{_occupant(self.mutation.key, self.mutation.obj_id)}"
+            ),
         }
 
 
 def _is_synthetic(module: object) -> bool:
     """True for hand-built module stubs and mocks, false for real imports."""
     return getattr(module, "__spec__", None) is None
+
+
+def _previous_kind(previous: object) -> str:
+    """Describe what a key held before the mutation, for the report (#13651)."""
+    if previous is _MISSING:
+        return "was-absent"
+    if _is_synthetic(previous):
+        return "was-synthetic"
+    return "was-genuine"
+
+
+def _has_real_file(module: object) -> bool:
+    """True when *module* was loaded from a file that exists on disk (#13651).
+
+    ``__spec__`` alone is not enough: a package may register a spec-carrying
+    compatibility shim for a submodule it deleted, and those have no file. The
+    exemption below must not fire for one of those.
+    """
+    origin = getattr(module, "__file__", None)
+    if not origin:
+        return False
+    try:
+        return Path(origin).is_file()
+    except (OSError, ValueError):
+        return False
 
 
 def _is_self_rebind(name: str, module: object, previous: object) -> bool:
@@ -329,6 +358,37 @@ _MISSING = object()
 _DISK_CACHE: dict[str, bool] = {}
 
 
+def _defined_in_multiple_source_roots(top_level: str, repo_root: Path) -> bool:
+    """True when more than one *source root* defines *top_level*.
+
+    ``autobot-backend`` and ``autobot-slm-backend`` both ship ``services`` and
+    ``api``, so a genuine module under such a bare name is whichever backend won
+    the race — leaving it installed for the other backend's tests is exactly the
+    shadow this guard exists to catch, and the synthetic -> genuine exemption
+    must not fire for it.
+
+    Counted per source root rather than per directory: ``autobot-backend/utils``
+    and ``autobot-backend/tests/utils`` are two definitions of ``utils`` inside
+    the *same* backend, which is not a shadow. Counting directories refused the
+    exemption for ``utils`` on CI while allowing it locally, because only CI had
+    both on ``sys.path`` (#13651). Entries outside the repo are dependencies,
+    not our roots, and are ignored.
+    """
+    roots: set[str] = set()
+    for entry in sys.path:
+        base = Path(entry or ".")
+        if not ((base / f"{top_level}.py").is_file() or (base / top_level).is_dir()):
+            continue
+        try:
+            rel = base.resolve().relative_to(repo_root)
+        except (OSError, ValueError):
+            continue
+        roots.add(rel.parts[0] if rel.parts else ".")
+        if len(roots) > 1:
+            return True
+    return False
+
+
 def _resolves_on_disk(top_level: str) -> bool:
     """True when *top_level* names a real module or package somewhere on sys.path.
 
@@ -381,6 +441,8 @@ class _LeakGuard:
         # each of the thousands of collectors a session brackets.
         self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
+        # name -> why the synthetic->genuine exemption was refused (#13651)
+        self._exempt_blocked: dict[str, str] = {}
         self._reported: set[tuple[str, str]] = set()
         self._warned_owners: set[str] = set()
         # Baselined owners this session has loaded but not yet taken anywhere
@@ -438,6 +500,7 @@ class _LeakGuard:
         owner_dir_display = _display(owner_dir, self._rootdir)
         owner_ancestors = frozenset(owner_dir.parents)
         for name, module, previous in changed:
+            self._exempt_blocked.pop(name, None)
             kind = self._classify(name, module, previous)
             if kind is None:
                 continue
@@ -448,6 +511,8 @@ class _LeakGuard:
                 owner_dir=owner_dir,
                 owner_dir_display=owner_dir_display,
                 obj_id=id(module),
+                prev_kind=_previous_kind(previous)
+                + (f" [exempt-refused: {self._exempt_blocked[name]}]" if name in self._exempt_blocked else ""),
                 owner_ancestors=owner_ancestors,
             )
 
@@ -511,12 +576,26 @@ class _LeakGuard:
         if _is_conftest_module(module):
             return None  # pytest's own bookkeeping, not a stub
         if _is_self_rebind(name, module, previous) and self._is_third_party(module):
-            return None  # a third-party package re-registering itself mid-import  # a package re-registering itself during its own import
+            return None  # a third-party package re-registering itself during its own import
         if previous is _MISSING and self._parent_is_genuine(name):
             return None  # a real package's own shim, not a test's leftover
         if not self._shadows_real_code(name):
             return None
         if previous is not _MISSING:
+            # #13651: a stub giving way to the genuine module is a repair, not a
+            # leak — the key ends up holding exactly what Python should hold.
+            # Narrow on purpose: genuine-over-genuine stays reported (#13633), and
+            # the newcomer must have a real file so a spec-carrying shim for a
+            # deleted submodule cannot pass as genuine (#13599).
+            if _is_synthetic(previous) and not _is_synthetic(module):
+                # Record which condition refused, so a CI run that keeps
+                # reporting this says why instead of leaving it to be inferred.
+                if not _has_real_file(module):
+                    self._exempt_blocked[name] = "no-real-file"
+                elif _defined_in_multiple_source_roots(name.partition(".")[0], self._rootdir):
+                    self._exempt_blocked[name] = "multi-source-root"
+                else:
+                    return None
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
 
