@@ -26,6 +26,8 @@ from autobot_shared.ssot_config import config
 # Reads env at import time (process restart required to change).
 _CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
 
+import uuid
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -1163,18 +1165,26 @@ async def set_session_work_item(
     caller name another company's work item and have its goal titles rendered
     into their own prompt.
     """
-    from llc.deps import get_session as _llc_session
     from llc.services.work_item_service import WorkItemService
+    from user_management.database import get_async_session_factory
 
     await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
 
-    async for db in _llc_session():
+    try:
+        uuid.UUID(str(work_item_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="work_item_id must be a UUID")
+
+    # `async with`, not `async for ... break`: breaking out of an async generator
+    # does not run its __aexit__, so the DB session would only return to the pool
+    # at GC time.
+    factory = get_async_session_factory()
+    async with factory() as db:
         # SECURITY: company-scoped fetch — a work item owned by another company
         # is indistinguishable from one that does not exist.
         item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
         if item is None:
             raise HTTPException(status_code=404, detail="Work item not found")
-        break
 
     await SessionWorkItemService().set_work_item(session_id, work_item_id, str(ctx.org_id))
     return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})

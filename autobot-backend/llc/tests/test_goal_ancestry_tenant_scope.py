@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.goal import LLCGoal  # noqa: E402
 from llc.services.goal import GoalService  # noqa: E402
-from llc.services.work_item_service import WorkItemService  # noqa: E402
 from llc.tests import _e2e_harness  # noqa: E402,F401  (registers the SQLite JSONB/UUID compile shims)
 from user_management.models.base import Base  # noqa: E402
 
@@ -111,3 +110,66 @@ class TestGoalAncestryIsScoped:
         chain = await GoalService().get_goal_ancestry_for_work_item(session, goal.id)
 
         assert len(chain) == 1
+
+
+class TestCrossCompanyParentEdgeCannotLeakTheChain:
+    """The leak review found: scoping the *leaf* is not enough (#13704).
+
+    `get_ancestors` climbed `parent_goal_id` with no company predicate, so a goal
+    of company A rooted under a goal of company B rendered B's titles into A's
+    prompt. Both halves are fixed: the edge can no longer be created, and the
+    walk stops at a foreign ancestor even if one exists from before.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_walk_stops_at_a_foreign_ancestor(self, session):
+        bob_vision = LLCGoal(
+            id=uuid.uuid4(),
+            company_id=str(BOB_CO),
+            title="BOB SECRET VISION",
+            level="vision",
+            status="active",
+        )
+        session.add(bob_vision)
+        await session.flush()
+        alice_child = LLCGoal(
+            id=uuid.uuid4(),
+            company_id=str(ALICE_CO),
+            title="alice objective",
+            level="objective",
+            status="active",
+            parent_goal_id=bob_vision.id,
+        )
+        session.add(alice_child)
+        await session.flush()
+
+        chain = await GoalService().get_goal_ancestry_for_work_item(session, alice_child.id, company_id=str(ALICE_CO))
+
+        titles = [node["title"] for node in chain]
+        assert "BOB SECRET VISION" not in titles, f"cross-tenant titles leaked: {titles}"
+        assert titles == ["alice objective"]
+
+    @pytest.mark.asyncio
+    async def test_creating_a_cross_company_parent_edge_is_rejected(self, session):
+        """The other half — `update` guarded this; `create` did not."""
+        from fastapi import HTTPException
+
+        from llc.models.goal import GoalLevel
+
+        bob_vision = LLCGoal(
+            id=uuid.uuid4(), company_id=str(BOB_CO), title="bob vision", level="vision", status="active"
+        )
+        session.add(bob_vision)
+        await session.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await GoalService().create(
+                session,
+                company_id=str(ALICE_CO),
+                title="alice mission",
+                level=GoalLevel.MISSION,
+                parent_goal_id=bob_vision.id,
+            )
+
+        assert exc.value.status_code == 400
+        assert "different company" in str(exc.value.detail)

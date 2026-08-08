@@ -67,6 +67,7 @@ async def resolve_goal_ancestry(session_id: str) -> list | None:
     any failure so a goal-lookup error leaves L4 silent rather than failing the
     turn.
     """
+    work_item_id = None
     try:
         from chat_workflow.session_work_item import SessionWorkItemService
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""End-to-end prompt capture for the reconnected L2 layer (#13686).
+"""End-to-end prompt capture for the reconnected L2 and L4 layers (#13686, #13687).
 
 ``tiered_context_sources_test.py`` proves the resolver returns the graph the
 manager owns. These prove the *prompt the model actually receives* now contains
@@ -113,3 +113,58 @@ class TestL2RendersInPrompt:
 
         assert "## Related Context" not in prompt
         assert "SYSTEM" in prompt
+
+
+class TestL4RendersInPromptViaTheBinding:
+    """AC #13704-3: the goal block reaches a real prompt through the production path.
+
+    Not by injecting a chain into the builder — that only proves
+    `Layer4GoalAncestry` renders, which was never in doubt. This starts from the
+    *server-side binding*, which is the only thing that can produce the state.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_bound_session_renders_the_goal_ancestry_block(self):
+        chain = [
+            {"id": "1", "title": "Ship the platform", "level": "vision", "status": "active"},
+            {"id": "2", "title": "Wake the context stack", "level": "objective", "status": "active"},
+        ]
+        handler = _handler_with_tiered_context_on()
+
+        with patch(
+            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
+            return_value=None,
+        ):
+            # The binding is what the bind endpoint writes; everything downstream
+            # is the real path.
+            with patch(
+                "chat_workflow.session_work_item.SessionWorkItemService.get_binding",
+                new_callable=AsyncMock,
+                return_value=("wi-1", "company-a"),
+            ):
+                with patch(
+                    "chat_workflow.tiered_context_sources._query_goal_ancestry",
+                    new_callable=AsyncMock,
+                    return_value=chain,
+                ):
+                    prompt = await _capture_system_prompt(handler, _session(), "what is the status")
+
+        assert "## Goal Ancestry" in prompt
+        assert "Wake the context stack" in prompt
+
+    @pytest.mark.asyncio
+    async def test_an_unbound_session_renders_no_goal_block(self):
+        handler = _handler_with_tiered_context_on()
+
+        with patch(
+            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
+            return_value=None,
+        ):
+            with patch(
+                "chat_workflow.session_work_item.SessionWorkItemService.get_binding",
+                new_callable=AsyncMock,
+                return_value=(None, None),
+            ):
+                prompt = await _capture_system_prompt(handler, _session(), "what is the status")
+
+        assert "## Goal Ancestry" not in prompt
