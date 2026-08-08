@@ -13,6 +13,21 @@ directly.
 
 #10666 B2: UnifiedMemoryManager renamed to MemoryManager.
 get_memory_manager() is the canonical factory.
+
+#13690: this module is NOT caller-less, despite a grep for ``memory.compat``
+finding nothing — both production consumers import through the package
+re-export in ``memory/__init__.py``:
+
+* ``orchestrator.py:142`` constructs ``LongTermMemoryManager`` and calls
+  ``initialize()``/``cleanup()`` on it. Its data-plane methods have no
+  production callers, but they remain tenanted (#13688) so a future caller
+  inherits the scoping rather than re-opening that gap.
+* ``task_execution_tracker.py:52`` uses ``get_memory_manager()``, which is the
+  canonical factory and not a compatibility shim at all — only its location in
+  this module is legacy.
+
+Do not treat this file as dead. ``memory/compat_production_usage_test.py``
+pins the coupling.
 """
 
 from typing import Dict, List
