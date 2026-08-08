@@ -33,9 +33,9 @@ _GUARDED = {
 def test_connector_outbound_calls_declare_an_egress_policy(filename, expected):
     """Every outbound call in these modules passes guard_egress explicitly."""
     src = (_CONNECTORS / filename).read_text(encoding="utf-8")
-    assert src.count("guard_egress=") == expected, (
-        f"{filename}: expected {expected} guarded call(s), found {src.count('guard_egress=')}"
-    )
+    assert (
+        src.count("guard_egress=") == expected
+    ), f"{filename}: expected {expected} guarded call(s), found {src.count('guard_egress=')}"
 
 
 def test_content_urls_never_use_the_instance_host_opt_in():
