@@ -123,6 +123,32 @@ class ToolRegistry:
             "status": result.get("status", "success"),
         }
 
+    async def read_spilled_output(
+        self, anchor: str, task_id: str, offset: int = 0, limit: int | None = None
+    ) -> Dict[str, Any]:
+        """Read a window of a tool output that was spilled out of context (#13754).
+
+        #13692 step 1 writes oversized tool results aside and leaves a bounded
+        excerpt plus an anchor in context. The excerpt's note tells the model to
+        call this tool — so until it existed, the instruction named a capability
+        the agent could not invoke, which is worse than saying nothing.
+
+        Scoped to *task_id*: an anchor is a bearer token, so one leaked into a
+        different run must not read that run's observations.
+
+        Returns a window rather than the whole artifact — handing back the full
+        output would undo the offload. Page with *offset* while ``has_more``.
+        """
+        from agent_loop.tool_output_spill import read_spilled_window
+
+        window = read_spilled_window(anchor, task_id, offset=offset, limit=limit)
+        return {
+            "tool_name": "read_spilled_output",
+            "tool_args": {"anchor": anchor, "offset": offset, "limit": limit},
+            "result": window,
+            "status": "success" if window.get("found") else "not_found",
+        }
+
     async def query_system_information(self) -> Dict[str, Any]:
         """Query system information."""
         task = self._create_base_task("system_query_info")

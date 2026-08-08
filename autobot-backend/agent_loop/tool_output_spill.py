@@ -129,11 +129,16 @@ def _excerpt_payload(anchor: str, tool_name: str, payload: str) -> Dict[str, Any
     }
 
 
-def read_spilled(anchor: str) -> str | None:
+def read_spilled(anchor: str, task_id: str | None = None) -> str | None:
     """Return the full spilled output for *anchor*, or None.
 
-    This is what makes the anchor a reference rather than a deletion — the AC
-    requires the agent to be able to retrieve the full output within the run.
+    This is what makes the anchor a reference rather than a deletion.
+
+    ``task_id`` scopes the read to one run (#13754). It is optional so
+    in-process callers that already hold the artifact can omit it, but the
+    agent-facing tool always passes it: without the check, an anchor leaked
+    into one run could read another run's observations, since the anchor alone
+    is a bearer token.
     """
     if not isinstance(anchor, str) or not anchor.startswith(_ANCHOR_PREFIX):
         return None
@@ -141,10 +146,39 @@ def read_spilled(anchor: str) -> str | None:
         path = _artifact_path(anchor)
         if not path.exists():
             return None
-        return json.loads(path.read_text(encoding="utf-8")).get("output")
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if task_id is not None and record.get("task_id") != task_id:
+            logger.warning("Refusing cross-run spilled read for anchor %s (#13754)", anchor)
+            return None
+        return record.get("output")
     except Exception as exc:
         logger.warning("Failed to read spilled output for %s: %s", anchor, exc)
         return None
+
+
+def read_spilled_window(anchor: str, task_id: str, offset: int = 0, limit: int | None = None) -> Dict[str, Any]:
+    """Return a bounded window of a spilled output (#13754).
+
+    A window, not the whole artifact: handing back the full 78,000 chars would
+    undo the offload that put it aside in the first place. Re-reading is a
+    seek, not an undo.
+    """
+    full = read_spilled(anchor, task_id=task_id)
+    if full is None:
+        return {"found": False, "anchor": anchor}
+
+    limit = SPILL_EXCERPT_CHARS if limit is None else max(1, int(limit))
+    offset = max(0, int(offset))
+    window = full[offset : offset + limit]
+    return {
+        "found": True,
+        "anchor": anchor,
+        "offset": offset,
+        "limit": limit,
+        "total_chars": len(full),
+        "content": window,
+        "has_more": offset + limit < len(full),
+    }
 
 
 def spill_results(task_id: str, tool_results: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
@@ -170,6 +204,7 @@ __all__ = [
     "SPILL_EXCERPT_CHARS",
     "SPILL_THRESHOLD_CHARS",
     "read_spilled",
+    "read_spilled_window",
     "spill_if_oversized",
     "spill_results",
 ]
