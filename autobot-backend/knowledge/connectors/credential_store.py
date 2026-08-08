@@ -290,10 +290,12 @@ class ConnectorCredentialStore:
             reported_expires_in if reported_expires_in is not None else creds.get("access_token_lifetime_seconds")
         )
         if reported_expires_in is None and effective_expires_in is not None:
+            # Provider, not secret id: the actionable fact is *which provider*
+            # omits a usable expires_in, and the id is a credential reference we
+            # keep out of logs.
             logger.warning(
-                "OAuth provider omitted a usable expires_in on refresh for secret %s — "
-                "reusing the last reported lifetime of %ss",
-                secret_id,
+                "OAuth provider %s omitted a usable expires_in on refresh — reusing the last reported lifetime of %ss",
+                creds.get("provider", "unknown"),
                 effective_expires_in,
             )
         creds["access_token_expires_at"] = self._expiry_iso(effective_expires_in)
