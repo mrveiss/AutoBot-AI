@@ -30,27 +30,57 @@ jobs:
         run: |
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
-          pattern='^[[:space:]]*Co-authored-by:|Generated with \[?Claude|noreply@paperclip'
-          # Bot-authored commits are exempt (#13654). The policy is that mrveiss is
-          # the sole *human* author; dependabot stamps "Co-authored-by: dependabot[bot]"
-          # on its own security bumps, which is machine bookkeeping, not a false
-          # attribution claim. Without this, a main -> Dev_new_gui sync carrying those
-          # bumps can never pass, so security fixes strand on main — which is exactly
-          # what happened to #13655 (open since 2026-08-05) and, through it, #13667.
+          # Agent/tooling trailers are never allowed, for any author (#13654).
+          agent_re='Generated with \[?Claude|noreply@paperclip'
+          # A Co-authored-by trailer is allowed only when the identity it names is
+          # the commit's OWN author, the repository owner, or a bot. That lets
+          # dependabot's self-attribution on its security bumps through — which is
+          # bookkeeping, not an attribution claim — while still rejecting a genuine
+          # third-party human co-author.
           #
-          # Scoped to the commit AUTHOR, not the trailer text: a human commit that
-          # merely mentions dependabot is still caught.
-          bot_authors='\[bot\]$|^dependabot|^github-actions'
+          # Matched on the identity in the TRAILER, not on the commit author's name:
+          # "%an" is client-set, so a bot-name pattern there would be bypassed by
+          # `git config user.name 'x[bot]'`.
+          owner_re='martins\.veiss@gmail\.com|Martins Veiss'
+          # GitHub's squash merge stamps "Co-authored-by: github-actions[bot]" onto
+          # the owner's own commit whenever the auto-fix workflow pushed to the
+          # branch. 22 of the last 60 commits on Dev_new_gui carry exactly that, so
+          # a rule without this arm would reject a third of normal work.
+          bot_ident_re='\[bot\]@users\.noreply\.github\.com|\[bot\]>'
+          coauthor_re='^[[:space:]]*Co-authored-by:'
           bad=()
           while IFS= read -r sha; do
             [ -z "${sha}" ] && continue
-            author="$(git log -1 --format='%an' "${sha}")"
-            if printf '%s' "${author}" | grep -qE "${bot_authors}"; then
-              echo "Skipping bot-authored commit ${sha} (${author})"
+            body="$(git log -1 --format='%B' "${sha}")"
+            subject="$(git log -1 --format='%s' "${sha}")"
+
+            if printf '%s\n' "${body}" | grep -iqE "${agent_re}"; then
+              bad+=("${sha} ${subject}")
               continue
             fi
-            if git log -1 --format='%B' "${sha}" | grep -iqE "${pattern}"; then
-              bad+=("${sha} $(git log -1 --format='%s' "${sha}")")
+
+            an="$(git log -1 --format='%an' "${sha}")"
+            ae="$(git log -1 --format='%ae' "${sha}")"
+            offending=0
+            while IFS= read -r line; do
+              [ -z "${line}" ] && continue
+              ident="${line#*:}"
+              # Compare the trailer's email EXACTLY. A substring test is wrong here:
+              # grep -F "me@example.com" matches inside "some@example.com", so an
+              # unrelated third party would have been accepted as the author.
+              ident_email="$(printf '%s' "${ident}" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
+              if printf '%s' "${ident}" | grep -qiE "${owner_re}"; then continue; fi
+              if printf '%s' "${ident}" | grep -qiE "${bot_ident_re}"; then continue; fi
+              if [ -n "${ident_email}" ] && [ "${ident_email}" = "${ae}" ]; then continue; fi
+              if [ -z "${ident_email}" ] && [ -n "${an}" ] && [ "$(printf '%s' "${ident}" | xargs)" = "${an}" ]; then
+                continue
+              fi
+              echo "Third-party co-author on ${sha}: ${ident}"
+              offending=1
+            done < <(printf '%s\n' "${body}" | grep -iE "${coauthor_re}" || true)
+
+            if [ "${offending}" -eq 1 ]; then
+              bad+=("${sha} ${subject}")
             fi
           done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
 
