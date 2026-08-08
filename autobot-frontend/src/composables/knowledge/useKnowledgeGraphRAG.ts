@@ -8,6 +8,7 @@
  *
  * Encapsulates all HTTP fetching for the GraphRAGQuery component (#6050):
  *   - searchGraph()  — POST /graph-rag/search with query parameters
+ *   - findPath()     — POST /graph-rag/path, shortest connection path (#13474)
  *   - checkHealth()  — GET  /graph-rag/health
  *
  * All calls use apiClient (Pattern B) inside useLoadingState.wrap() so
@@ -21,6 +22,9 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useKnowledgeGraphRAG')
+
+/** Mirrors the backend default in GraphRAGPathRequest (#13474). */
+const DEFAULT_PATH_MAX_DEPTH = 6
 
 // ============================================================================
 // Types
@@ -64,6 +68,99 @@ export interface GraphRAGSearchParams {
   enable_reranking?: boolean
 }
 
+// --- Connection path (#13474) ---------------------------------------------
+
+export type GraphPathDirection = 'outgoing' | 'incoming' | 'both'
+
+/** Why no path was returned. `null` when one was found. */
+export type GraphPathReason = 'no_path' | 'entity_not_found' | 'not_in_graph' | null
+
+export interface GraphPathEntity {
+  id?: string
+  name?: string
+  type?: string
+}
+
+export interface GraphPathHop {
+  relation?: string
+  /** How this edge was crossed — 'incoming' means against its stored direction. */
+  direction?: GraphPathDirection
+  edge_id?: string
+  from?: string
+  to?: string
+  node: GraphPathEntity
+}
+
+export interface GraphPathResponse {
+  success: boolean
+  found: boolean
+  reason: GraphPathReason
+  from_entity: GraphPathEntity | null
+  to_entity: GraphPathEntity | null
+  missing_entities: string[]
+  hops: number
+  path: GraphPathHop[]
+  query?: Record<string, unknown>
+  traversal_time?: number
+  request_id?: string
+}
+
+export interface GraphPathParams {
+  from_entity: string
+  to_entity: string
+  relation?: string | null
+  max_depth?: number
+  direction?: GraphPathDirection
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Pull `missing_entities` out of a 404 body, tolerating either the
+ * `{detail: {...}}` envelope FastAPI produces or a bare object. (#13474)
+ *
+ * Returns `null` when the body is not recognisably this endpoint's
+ * entity-not-found response, so the caller can raise instead of misreporting an
+ * unrelated 404 as bad user input.
+ */
+async function readMissingEntities(response: Response): Promise<string[] | null> {
+  try {
+    const body = (await response.json()) as Record<string, unknown>
+    const detail = (body?.detail ?? body) as Record<string, unknown>
+    if (detail === null || typeof detail !== 'object') return null
+    const missing = detail.missing_entities
+    if (Array.isArray(missing)) return missing.map(String)
+    // Only a body that actually identifies itself as this error may be shaped
+    // into "your entity names are wrong". A bare FastAPI 404 (route missing on
+    // an older backend, stale proxy) must stay an error — telling the user
+    // their data is bad when the endpoint is not deployed is a false negative.
+    return detail.error === 'entity_not_found' ? [] : null
+  } catch {
+    logger.warn('Could not parse the 404 body from /graph-rag/path')
+    return null
+  }
+}
+
+/** Shape a 404 into the same result contract a 200 uses, so the UI has one path. */
+function buildMissingEntitiesResult(
+  missing: string[],
+  params: GraphPathParams,
+): GraphPathResponse {
+  return {
+    success: true,
+    found: false,
+    reason: 'entity_not_found',
+    from_entity: null,
+    to_entity: null,
+    // An unparseable body still names both candidates rather than neither.
+    missing_entities: missing.length > 0 ? missing : [params.from_entity, params.to_entity],
+    hops: 0,
+    path: [],
+  }
+}
+
 // ============================================================================
 // Composable
 // ============================================================================
@@ -83,15 +180,23 @@ export interface UseKnowledgeGraphRAGReturn {
   searchGraph: (params: GraphRAGSearchParams) => Promise<void>
   /** Fetch health status and update healthStatus. */
   checkHealth: () => Promise<void>
+  /** Result of the last connection-path query, or null. (#13474) */
+  pathResult: Ref<GraphPathResponse | null>
+  /** True while a connection-path request is in-flight. */
+  isFindingPath: Readonly<Ref<boolean>>
+  /** Find the shortest connection path between two entities. (#13474) */
+  findPath: (params: GraphPathParams) => Promise<void>
 }
 
 export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
   const searchResults = ref<GraphRAGSearchResponse | null>(null)
   const healthStatus = ref<GraphRAGHealthStatus | null>(null)
+  const pathResult = ref<GraphPathResponse | null>(null)
   const errorMessage = ref('')
 
   const { isLoading: isSearching, wrap: wrapSearch } = useLoadingState()
   const { isLoading: isCheckingHealth, wrap: wrapHealth } = useLoadingState()
+  const { isLoading: isFindingPath, wrap: wrapPath } = useLoadingState()
 
   // --------------------------------------------------------------------------
   // Public actions
@@ -121,6 +226,58 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
       searchResults.value = ((parsed as Record<string, unknown>)?.data ?? parsed) as unknown as GraphRAGSearchResponse
 
       logger.info(`Search complete: ${searchResults.value?.results?.length ?? 0} results`)
+    })
+  }
+
+  /**
+   * POST /graph-rag/path and update pathResult. (#13474)
+   *
+   * Three outcomes must stay distinguishable in the UI, so none of them is
+   * collapsed into a generic error:
+   *   - a path was found           -> found: true
+   *   - both entities exist, no link -> 200, found: false, reason 'no_path'
+   *   - a name did not resolve      -> 404, reason 'entity_not_found'
+   *
+   * The 404 body carries `missing_entities`, so it is read from the raw
+   * Response rather than the thrown Error — apiClient.post() would flatten the
+   * structured detail into a message string and the UI could not name which
+   * entity was wrong.
+   */
+  async function findPath(params: GraphPathParams): Promise<void> {
+    errorMessage.value = ''
+    pathResult.value = null
+
+    await wrapPath(async () => {
+      const response = await apiClient.rawRequest(`${getApiBase()}/graph-rag/path`, {
+        method: 'POST',
+        body: {
+          from_entity: params.from_entity,
+          to_entity: params.to_entity,
+          relation: params.relation ?? null,
+          max_depth: params.max_depth ?? DEFAULT_PATH_MAX_DEPTH,
+          direction: params.direction ?? 'both',
+        },
+      })
+
+      if (response.ok) {
+        pathResult.value = (await response.json()) as GraphPathResponse
+        logger.info(
+          `Connection path: found=${pathResult.value?.found} hops=${pathResult.value?.hops}`,
+        )
+        return
+      }
+
+      if (response.status === 404) {
+        const missing = await readMissingEntities(response)
+        if (missing !== null) {
+          pathResult.value = buildMissingEntitiesResult(missing, params)
+          logger.info(`Connection path: unresolved entities ${pathResult.value.missing_entities}`)
+          return
+        }
+        throw new Error('HTTP 404: /graph-rag/path is not available on this backend')
+      }
+
+      throw new Error(`HTTP ${response.status}: ${response.statusText || 'Request failed'}`)
     })
   }
 
@@ -172,5 +329,8 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
     errorMessage,
     searchGraph,
     checkHealth,
+    pathResult,
+    isFindingPath: readonly(isFindingPath),
+    findPath,
   }
 }

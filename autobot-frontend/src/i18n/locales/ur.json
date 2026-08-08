@@ -2601,7 +2601,8 @@
       "graphRagService": "Graph-RAG Service",
       "refreshStats": "Refresh Stats",
       "retry": "Retry",
-      "relationTypes": "Relation Types"
+      "relationTypes": "Relation Types",
+      "tabPath": "رابطے کا راستہ"
     },
     "pipeline": {
       "runner": {
@@ -3480,6 +3481,39 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "رابطے کا راستہ",
+      "description": "دو اکائیوں کو جوڑنے والی تعلقات کی مختصر ترین کڑی تلاش کریں۔",
+      "fromEntity": "اکائی سے",
+      "fromEntityPlaceholder": "ابتدائی اکائی کا نام...",
+      "toEntity": "اکائی تک",
+      "toEntityPlaceholder": "ہدف اکائی کا نام...",
+      "swap": "اکائیاں بدلیں",
+      "direction": "سمت",
+      "directionBoth": "کوئی بھی سمت",
+      "directionOutgoing": "تعلقات کو آگے کی طرف دیکھیں",
+      "directionIncoming": "تعلقات کو پیچھے کی طرف دیکھیں",
+      "directionHint": "تعلقات اکثر صرف ایک ہی سمت میں محفوظ ہوتے ہیں۔",
+      "maxDepth": "زیادہ سے زیادہ گہرائی",
+      "hops": "{count} چھلانگیں",
+      "relation": "تعلق",
+      "relationHint": "(اختیاری)",
+      "relationPlaceholder": "صرف اسی قسم کے تعلق کی پیروی کریں...",
+      "findPath": "راستہ تلاش کریں",
+      "searching": "تلاش جاری ہے...",
+      "connectedIn": "{count} چھلانگ میں منسلک | {count} چھلانگوں میں منسلک",
+      "sameEntity": "دونوں نام ایک ہی اکائی کی طرف اشارہ کرتے ہیں: {name}",
+      "crossedForwards": "آگے",
+      "crossedBackwards": "پیچھے",
+      "unnamedRelation": "سے متعلق",
+      "noPathFound": "ان اکائیوں کے درمیان کوئی رابطہ نہیں ملا۔",
+      "noPathHint": "گہرائی بڑھائیں، کوئی بھی سمت اجازت دیں، یا تعلق کا فلٹر ہٹا دیں۔",
+      "entityNotFound": "یہ نام کسی اکائی سے میل نہیں کھاتے:",
+      "entityNotFoundHint": "ہجے جانچیں، یا پہلے اکائیاں نکالیں تاکہ وہ گراف میں موجود ہوں۔",
+      "errorEnterBoth": "براہ کرم ماخذ اور ہدف دونوں اکائیاں درج کریں۔",
+      "notInGraph": "یہ اکائیاں ابھی تعلقات کے گراف میں نہیں ہیں۔",
+      "notInGraphHint": "وہ موجود ہیں مگر گراف میں ان کے روابط نہیں، اس لیے کوئی رابطہ تلاش نہیں کیا جا سکتا۔ اکائیوں کا اخراج دوبارہ چلائیں۔"
     }
   },
   "reasoningTrace": {
