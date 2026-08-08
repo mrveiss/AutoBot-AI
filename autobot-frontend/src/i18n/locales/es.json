@@ -2824,7 +2824,8 @@
       "entitiesAndRelations": "{entities} entidades, {relations} relaciones",
       "success": "Éxito",
       "failedStatus": "Fallido",
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "tabPath": "Ruta de conexión"
     },
     "failedVectorizations": {
       "title": "Vectorizaciones fallidas",
@@ -4080,6 +4081,39 @@
     },
     "watchFolders": {
       "confirmDelete": "¿Está seguro de que desea eliminar esta carpeta supervisada?"
+    },
+    "graphPath": {
+      "title": "Ruta de conexión",
+      "description": "Encuentre la cadena más corta de relaciones que une dos entidades.",
+      "fromEntity": "Entidad de origen",
+      "fromEntityPlaceholder": "Nombre de la entidad inicial...",
+      "toEntity": "Entidad de destino",
+      "toEntityPlaceholder": "Nombre de la entidad objetivo...",
+      "swap": "Intercambiar entidades",
+      "direction": "Dirección",
+      "directionBoth": "Cualquier dirección",
+      "directionOutgoing": "Seguir relaciones hacia adelante",
+      "directionIncoming": "Seguir relaciones hacia atrás",
+      "directionHint": "Las relaciones suelen almacenarse en un solo sentido.",
+      "maxDepth": "Profundidad máxima",
+      "hops": "{count} saltos",
+      "relation": "Relación",
+      "relationHint": "(opcional)",
+      "relationPlaceholder": "Seguir solo este tipo de relación...",
+      "findPath": "Buscar ruta",
+      "searching": "Buscando...",
+      "connectedIn": "Conectadas en {count} salto | Conectadas en {count} saltos",
+      "sameEntity": "Ambos nombres corresponden a la misma entidad: {name}",
+      "crossedForwards": "hacia adelante",
+      "crossedBackwards": "hacia atrás",
+      "unnamedRelation": "relacionado con",
+      "noPathFound": "No se encontró conexión entre estas entidades.",
+      "noPathHint": "Pruebe a aumentar la profundidad, permitir cualquier dirección o quitar el filtro de relación.",
+      "entityNotFound": "Estos nombres no coinciden con ninguna entidad:",
+      "entityNotFoundHint": "Compruebe la ortografía o extraiga entidades primero para que existan en el grafo.",
+      "errorEnterBoth": "Introduzca una entidad de origen y una de destino.",
+      "notInGraph": "Estas entidades aún no están en el grafo de relaciones.",
+      "notInGraphHint": "Existen, pero no tienen enlaces en el grafo, por lo que no se puede trazar ninguna conexión. Vuelva a ejecutar la extracción de entidades."
     }
   },
   "workflow": {

@@ -88,7 +88,7 @@ repos:
 
 **Steps**:
 1. Checkout code
-2. Set up Python 3.11
+2. Set up Python 3.14
 3. Cache pip dependencies
 4. Install quality tools
 5. Run Black formatting check
