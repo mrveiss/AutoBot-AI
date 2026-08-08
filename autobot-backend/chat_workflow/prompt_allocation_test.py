@@ -56,17 +56,73 @@ class TestPromptFitsTheWindow:
         assert message in prompt
 
     def test_trajectory_is_shed_before_conversation(self):
-        """The untrusted reference block is the least valuable section."""
+        """The untrusted reference block is the least valuable section.
+
+        Asserts on the allocator's own report, not on character counts of the
+        assembled prompt: the earlier version of this test passed just as
+        happily with the priorities reversed, because `max_share` alone (0.2 vs
+        0.5) satisfied a `count("t") < count("c")` comparison, and the prompt
+        template contains literal "t" and "c" of its own.
+        """
         handler = _handler()
 
-        prompt = handler._build_full_prompt(
-            _text(20_000, "k"),
-            _text(20_000, "c"),
-            "question",
-            _text(20_000, "t"),
-        )
+        with patch("chat_workflow.llm_handler.logger") as log:
+            handler._build_full_prompt(_text(20_000, "k"), _text(20_000, "c"), "question", _text(20_000, "t"))
 
-        assert prompt.count("t") < prompt.count("c"), "trajectory must be pruned before conversation history"
+        [call] = [c for c in log.info.call_args_list if c.args and "#13640" in str(c.args[0])]
+        dropped = call.args[6]
+        assert "trajectory" in dropped, f"trajectory must be dropped first, got dropped={dropped!r}"
+        assert "conversation" not in dropped, "conversation outranks trajectory and must survive it"
+
+
+class TestMessageIsReservedNotTrimmed:
+    def test_a_modest_message_does_not_evict_sections_that_fit_beside_it(self):
+        """#13640 review B2: the message used to be entered as a trimmable peer.
+
+        At priority 100 it won every contest, wiping knowledge, history and
+        trajectory to make room for text that was then restored in full. With
+        the message reserved out of the budget instead, sections that genuinely
+        fit alongside it are kept.
+        """
+        handler = _handler()
+        message = "what changed in the deploy?"
+
+        prompt = handler._build_full_prompt("KB-KEEP", "HISTORY-KEEP", message, "TRAJ-KEEP")
+
+        assert message in prompt
+        assert "KB-KEEP" in prompt
+        assert "HISTORY-KEEP" in prompt
+        assert "TRAJ-KEEP" in prompt
+
+    def test_a_message_larger_than_the_window_survives_and_is_reported_honestly(self):
+        """When the message alone exhausts the budget there is genuinely no room
+        for context — but the message is still never truncated, and the logged
+        total is the real one rather than the budget the code aimed at."""
+        handler = _handler()
+        cwm = ContextWindowManager()
+        huge_message = _text(50_000, "m")
+
+        with patch("chat_workflow.llm_handler.logger") as log:
+            prompt = handler._build_full_prompt("KB", "HISTORY", huge_message, "TRAJ")
+
+        assert huge_message in prompt, "the user's own message is never truncated"
+        assert cwm.estimate_tokens(prompt) >= 50_000
+
+        [call] = [c for c in log.info.call_args_list if c.args and "#13640" in str(c.args[0])]
+        assert call.args[2] >= 50_000, "reported total must include the message actually shipped"
+
+    def test_reported_totals_include_the_message(self):
+        """The logged number must be what was actually shipped."""
+        handler = _handler()
+
+        with patch("chat_workflow.llm_handler.logger") as log:
+            handler._build_full_prompt(_text(20_000, "k"), _text(20_000, "c"), _text(500, "m"), _text(20_000, "t"))
+
+        [call] = [c for c in log.info.call_args_list if c.args and "#13640" in str(c.args[0])]
+        before, after, _budget, message_tokens = call.args[1], call.args[2], call.args[3], call.args[4]
+        assert message_tokens == 500
+        assert before >= 60_000 + 500
+        assert after >= message_tokens, "the message is part of the shipped total"
 
 
 class TestUnderBudgetUnchanged:

@@ -55,7 +55,7 @@ class TestShareCap:
     def test_max_share_binds_even_for_the_highest_priority_section(self, manager):
         """AC: one oversized section cannot crowd out the rest, however important."""
         sections = [
-            ContextSection(name="greedy", content=_text(900), priority=999, max_share=0.5),
+            ContextSection(name="greedy", content=_text(1500), priority=999, max_share=0.5),
             ContextSection(name="humble", content=_text(100), priority=1),
         ]
 
@@ -64,6 +64,21 @@ class TestShareCap:
         greedy = next(s for s in result.sections if s.name == "greedy")
         assert manager.estimate_tokens(greedy.content) <= 500
         assert "greedy" in result.trimmed
+
+    def test_caps_do_not_bind_when_there_is_headroom(self, manager):
+        """max_share is a *contention* ceiling, not an unconditional cap.
+
+        Enforcing it with the window half empty discards content for nothing —
+        strictly worse than the unbudgeted concatenation this replaces.
+        """
+        sections = [
+            ContextSection(name="roomy", content=_text(800), priority=1, max_share=0.2),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=10_000)
+
+        assert manager.estimate_tokens(result.sections[0].content) == 800
+        assert result.trimmed == []
 
     def test_cap_applies_before_priority_so_low_priority_survives(self, manager):
         sections = [
@@ -208,3 +223,98 @@ class TestAllocationShape:
         assert isinstance(result, ContextAllocation)
         assert result.tokens_before == 0
         assert result.fits
+
+
+# ---------------------------------------------------------------------------
+# Branches surfaced by review of PR #13706
+# ---------------------------------------------------------------------------
+
+
+class TestOvershootingTrimStrategy:
+    def test_a_strategy_that_overshoots_is_reclamped(self, manager):
+        """A section's trim is a ceiling, not a suggestion.
+
+        `prompt_manager._truncate_large_file` — the reuse target this issue
+        names — returns head+marker+tail, which exceeds the limit at small
+        allocations. Without a re-clamp one such section silently puts the whole
+        prompt back over budget.
+        """
+
+        def overshoot(content: str, max_chars: int) -> str:
+            return content[:max_chars] + "X" * max_chars
+
+        sections = [ContextSection(name="s", content=_text(5000), priority=1, trim=overshoot)]
+
+        result = manager.allocate_sections(sections, budget_tokens=100)
+
+        assert result.tokens_after <= 100
+        assert result.fits
+
+    def test_a_strategy_returning_a_non_string_falls_back(self, manager):
+        sections = [
+            ContextSection(name="s", content=_text(5000), priority=1, trim=lambda c, n: None),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=100)
+
+        assert result.fits
+
+
+class TestDegenerateBudgets:
+    def test_zero_budget_empties_everything_and_reports_it(self, manager):
+        sections = [ContextSection(name="a", content=_text(100), priority=1)]
+
+        result = manager.allocate_sections(sections, budget_tokens=0)
+
+        assert result.tokens_after == 0
+        assert result.dropped == ["a"]
+
+    def test_negative_budget_does_not_crash_or_loop(self, manager):
+        sections = [ContextSection(name="a", content=_text(100), priority=1)]
+
+        result = manager.allocate_sections(sections, budget_tokens=-5)
+
+        assert result.tokens_after == 0
+
+    def test_max_share_zero_empties_the_section_under_contention(self, manager):
+        sections = [
+            ContextSection(name="banned", content=_text(900), priority=99, max_share=0.0),
+            ContextSection(name="kept", content=_text(900), priority=1),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=1000)
+
+        banned = next(s for s in result.sections if s.name == "banned")
+        assert banned.content == ""
+
+
+class TestDuplicateNames:
+    def test_duplicate_names_are_not_double_counted(self, manager):
+        """`trimmed`/`dropped` are built from indices, so a repeated name cannot
+        double-count or cross-attribute."""
+        sections = [
+            ContextSection(name="dup", content=_text(900), priority=1),
+            ContextSection(name="dup", content=_text(900), priority=2),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=100)
+
+        assert result.tokens_after <= 100
+        assert len(result.trimmed) == len([s for s in result.sections if manager.estimate_tokens(s.content) < 900])
+
+
+class TestSharedManager:
+    def test_the_factory_returns_one_cached_instance(self):
+        """Constructing per turn put ~45ms of YAML parsing on the event loop."""
+        from context_window_manager import get_context_window_manager
+
+        assert get_context_window_manager() is get_context_window_manager()
+
+
+class TestPromptBudgetReservesRoomToAnswer:
+    def test_prompt_budget_is_smaller_than_the_window(self, manager):
+        window = manager.get_adaptive_context_length(None)
+        budget = manager.get_prompt_budget(None)
+
+        assert budget < window, "a prompt filling the window leaves nowhere to generate"
+        assert budget > 0

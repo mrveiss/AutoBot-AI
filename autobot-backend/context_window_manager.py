@@ -19,6 +19,7 @@ code happened to cut last.
 """
 
 from dataclasses import dataclass, field, replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, List
 
@@ -252,19 +253,28 @@ class ContextWindowManager:
         Returns:
             Estimated token count
         """
-        chars_per_token = self.config["token_estimation"]["chars_per_token"]
-        return len(text) // chars_per_token
+        return len(text) // self._chars_per_token()
 
     def _chars_per_token(self) -> int:
         """Runtime chars-per-token ratio backing :meth:`estimate_tokens`."""
         return max(1, int(self.config["token_estimation"]["chars_per_token"]))
 
     def _shrink(self, section: ContextSection, max_tokens: int) -> ContextSection:
-        """Return a copy of *section* reduced to at most *max_tokens*."""
+        """Return a copy of *section* reduced to at most *max_tokens*.
+
+        A section's own ``trim`` is free to overshoot — ``_truncate_large_file``
+        adds a marker, so at small allocations head+tail+marker exceeds the
+        limit. The allocation is a ceiling, not a suggestion, so the result is
+        re-clamped. Without this a single overshooting strategy silently puts
+        the whole prompt back over budget.
+        """
         if max_tokens <= 0:
             return replace(section, content="")
-        shrunk = section.trim(section.content, max_tokens * self._chars_per_token())
-        return replace(section, content=shrunk)
+        max_chars = max_tokens * self._chars_per_token()
+        shrunk = section.trim(section.content, max_chars)
+        if not isinstance(shrunk, str):
+            shrunk = _head_trim(section.content, max_chars)
+        return replace(section, content=shrunk[:max_chars])
 
     def allocate_sections(
         self,
@@ -295,12 +305,12 @@ class ContextWindowManager:
         tokens = [self.estimate_tokens(s.content) for s in allocated]
         tokens_before = sum(tokens)
 
-        # Byte-identical pass-through, but only when nothing is out of shape:
-        # the total fits *and* no section exceeds its own share ceiling. A
-        # section over its ceiling is not "under budget" in allocation terms
-        # even when the sum happens to fit, so the cap still has to bind.
-        caps_bind = any(t > int(budget_tokens * s.max_share) for s, t in zip(allocated, tokens))
-        if tokens_before <= budget_tokens and not caps_bind:
+        # Pass-through when the total already fits. ``max_share`` is a
+        # *contention* ceiling — with headroom to spare there is nothing to
+        # crowd out, and enforcing it would throw away content while the window
+        # sits idle, which is strictly worse than the concatenation this
+        # replaces.
+        if tokens_before <= budget_tokens:
             return ContextAllocation(
                 sections=allocated,
                 tokens_before=tokens_before,
@@ -308,11 +318,14 @@ class ContextWindowManager:
                 budget=budget_tokens,
             )
 
-        trimmed: List[str] = []
-        allocated, tokens = self._apply_share_caps(allocated, tokens, budget_tokens, trimmed)
-        allocated, tokens = self._trim_by_priority(allocated, tokens, budget_tokens, trimmed)
+        trimmed_idx: set = set()
+        allocated, tokens = self._apply_share_caps(allocated, tokens, budget_tokens, trimmed_idx)
+        allocated, tokens = self._trim_by_priority(allocated, tokens, budget_tokens, trimmed_idx)
 
-        dropped = [s.name for s, t in zip(allocated, tokens) if t <= 0 and s.name in trimmed]
+        # Indices, not names: duplicate section names would otherwise double-count
+        # in `trimmed` and cross-attribute in `dropped`.
+        trimmed = [allocated[i].name for i in sorted(trimmed_idx)]
+        dropped = [allocated[i].name for i in sorted(trimmed_idx) if tokens[i] <= 0]
         return ContextAllocation(
             sections=allocated,
             tokens_before=tokens_before,
@@ -322,7 +335,9 @@ class ContextWindowManager:
             dropped=dropped,
         )
 
-    def _apply_share_caps(self, allocated, tokens, budget, trimmed):
+    def _apply_share_caps(
+        self, allocated: List[ContextSection], tokens: List[int], budget: int, trimmed: set
+    ) -> "tuple[List[ContextSection], List[int]]":
         """Phase 1: cap each section at ``budget * max_share``."""
         for i, section in enumerate(allocated):
             cap = int(budget * section.max_share)
@@ -330,10 +345,12 @@ class ContextWindowManager:
                 continue
             allocated[i] = self._shrink(section, cap)
             tokens[i] = self.estimate_tokens(allocated[i].content)
-            trimmed.append(section.name)
+            trimmed.add(i)
         return allocated, tokens
 
-    def _trim_by_priority(self, allocated, tokens, budget, trimmed):
+    def _trim_by_priority(
+        self, allocated: List[ContextSection], tokens: List[int], budget: int, trimmed: set
+    ) -> "tuple[List[ContextSection], List[int]]":
         """Phase 2: reduce lowest-priority sections until the total fits."""
         # Ascending priority = pruned first; name breaks ties deterministically.
         order = sorted(range(len(allocated)), key=lambda i: (allocated[i].priority, allocated[i].name))
@@ -346,9 +363,25 @@ class ContextWindowManager:
             keep = max(0, tokens[i] - overflow)
             allocated[i] = self._shrink(allocated[i], keep)
             tokens[i] = self.estimate_tokens(allocated[i].content)
-            if allocated[i].name not in trimmed:
-                trimmed.append(allocated[i].name)
+            trimmed.add(i)
         return allocated, tokens
+
+    def get_prompt_budget(self, model_name: str | None = None) -> int:
+        """Tokens available to the *prompt*, after reserving room to answer (#13640).
+
+        ``get_adaptive_context_length`` returns the whole declared window. A
+        prompt that fills it leaves the model nowhere to generate, and the
+        system prompt is sent separately (Ollama ``system`` field) so it
+        consumes window while being invisible to the allocator. Both are
+        subtracted here.
+        """
+        window = self.get_adaptive_context_length(model_name)
+        info = self.get_model_info(model_name)
+        reserved = int(info.get("max_output_tokens", 0) or 0)
+        reserved += int((info.get("message_budget") or {}).get("system_prompt", 0) or 0)
+        # Never reserve the window away entirely: a pathological config must
+        # still leave a usable prompt budget rather than zero.
+        return max(window // 4, window - reserved)
 
     def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.
@@ -539,3 +572,15 @@ class ContextWindowManager:
             model = self.config["models"]["default"]["name"]
 
         return self.config["models"][model]
+
+
+@lru_cache(maxsize=4)
+def get_context_window_manager(config_path: str = "config/context_windows.yaml") -> ContextWindowManager:
+    """Return a shared ContextWindowManager (#13640).
+
+    ``__init__`` reads and parses a 13 KB YAML file. Constructing one per chat
+    turn put ~45 ms of synchronous parsing on the event loop, blocking every
+    concurrent request, and logged a config line per turn. The config is static
+    for the process lifetime, so it is parsed once.
+    """
+    return ContextWindowManager(config_path=config_path)

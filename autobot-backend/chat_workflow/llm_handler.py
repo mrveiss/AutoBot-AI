@@ -730,45 +730,51 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
     ) -> tuple[str, str, str]:
         """Fit the prompt's competing sections into the model's window (#13640).
 
-        Priorities encode what the turn cannot lose: the user's own message
-        outranks conversation history, which outranks retrieved knowledge,
-        which outranks the untrusted trajectory reference block. ``max_share``
-        stops a large retrieval set from crowding out history even though it
-        would survive on priority alone.
+        The user's message is **reserved out of the budget**, not entered into
+        the trimmable set. It is never truncated — truncating what the user
+        actually asked is a worse failure than dropping context — so counting
+        it as trimmable would both wipe every other section to make room for
+        text that is then restored in full, and report a token total the code
+        knows is not what it shipped.
 
-        The user's message participates in the accounting so the budget is
-        computed against the real prompt, but its allocation is advisory: it is
-        never returned trimmed. Truncating what the user actually asked is a
-        worse failure than overflowing by that much.
+        Priorities encode what the turn cannot lose next: conversation history
+        outranks retrieved knowledge, which outranks the untrusted trajectory
+        reference block. ``max_share`` stops a large retrieval set from
+        crowding out history, and binds only when the sections actually
+        contend for the budget.
 
         Non-fatal: any failure returns the sections unchanged, because a
         budgeting error must never cost the user their turn.
         """
         try:
-            from context_window_manager import ContextSection, ContextWindowManager
+            from context_window_manager import ContextSection, get_context_window_manager
 
-            cwm = ContextWindowManager()
+            cwm = get_context_window_manager()
             sections = [
-                ContextSection("message", message, priority=100),
                 ContextSection("conversation", conversation_context, priority=70, max_share=0.5),
                 ContextSection("knowledge", knowledge_context, priority=40, max_share=0.5),
                 ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
             ]
-            result = cwm.allocate_sections(sections, budget_tokens=cwm.get_adaptive_context_length(model_name))
-            if result.trimmed:
-                logger.info(
-                    "[#13640] Prompt over budget: %d -> %d tokens (budget %d); trimmed %s; dropped %s",
-                    result.tokens_before,
-                    result.tokens_after,
-                    result.budget,
-                    ", ".join(result.trimmed),
-                    ", ".join(result.dropped) or "none",
-                )
-            by_name = {s.name: s.content for s in result.sections}
-            return by_name["knowledge"], by_name["trajectory"], by_name["conversation"]
+            message_tokens = cwm.estimate_tokens(message)
+            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
-            logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc)
+            logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
             return knowledge_context, trajectory_context, conversation_context
+
+        if result.trimmed:
+            logger.info(
+                "[#13640] Prompt over budget: %d -> %d tokens (sections budget %d, message %d); "
+                "trimmed %s; dropped %s",
+                result.tokens_before + message_tokens,
+                result.tokens_after + message_tokens,
+                result.budget,
+                message_tokens,
+                ", ".join(result.trimmed),
+                ", ".join(result.dropped) or "none",
+            )
+        by_name = {s.name: s.content for s in result.sections}
+        return by_name["knowledge"], by_name["trajectory"], by_name["conversation"]
 
     def _build_full_prompt(
         self,
