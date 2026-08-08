@@ -770,6 +770,8 @@ async def test_lock_wait_timeout_raises_instead_of_refreshing_unsynchronized(mon
     monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=True)))
     monkeypatch.setattr(mod, "_REFRESH_WAIT_S", 0.3)
     monkeypatch.setattr(mod, "_REFRESH_POLL_S", 0.05)
+    # The waiter now also re-attempts acquisition each poll, so keep it losing.
+    monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
 
     with pytest.raises(TimeoutError, match="concurrent OAuth refresh"):
         await cs.get_access_token(secret_id, "u1")
@@ -800,3 +802,43 @@ async def test_without_redis_refresh_proceeds_rather_than_failing(monkeypatch):
     )
 
     assert await cs.get_access_token(secret_id, "u1") == "new"
+
+
+@pytest.mark.asyncio
+async def test_double_checked_read_skips_a_refresh_another_holder_already_did(monkeypatch):
+    """#13627: the winner must re-read after acquiring the lease.
+
+    Coverage showed this branch was never executed — every earlier test had the
+    loser fail acquisition, so nobody reached the double-check. It guards the
+    window between the first read and acquiring the lease: if a holder finished
+    in that gap, refreshing again would burn the rotated token for nothing.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await _expired_oauth_secret(cs, store, "c-13627d")
+
+    from knowledge.connectors import oauth_flow
+
+    called = []
+
+    async def _must_not_run(*a, **kw):
+        called.append(1)
+        return {"access_token": "should-never-happen"}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _must_not_run)
+
+    # Acquisition succeeds, but a "concurrent holder" writes a fresh token in the
+    # gap — simulated by mutating the stored credential as the lease is taken.
+    async def _acquire_and_let_someone_else_finish(self, *a, **kw):
+        bundle = json.loads(store[secret_id]["value"])
+        bundle["access_token"] = "written-by-the-other-holder"
+        bundle["access_token_expires_at"] = (now_utc() + timedelta(hours=1)).isoformat()
+        store[secret_id]["value"] = json.dumps(bundle)
+        self._is_leader = True
+        return True
+
+    monkeypatch.setattr(LeaderLease, "update_leadership", _acquire_and_let_someone_else_finish)
+    monkeypatch.setattr(LeaderLease, "release", AsyncMock())
+
+    assert await cs.get_access_token(secret_id, "u1") == "written-by-the-other-holder"
+    assert not called, "refreshed despite another holder having just written a valid token"

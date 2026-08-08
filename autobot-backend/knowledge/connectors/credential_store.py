@@ -10,9 +10,11 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 """
 
 import asyncio
+import contextlib
 import json
 import os
 import time
+import uuid
 from datetime import timedelta
 
 from autobot_shared.leader_lease import LeaderLease
@@ -52,13 +54,45 @@ _AUTH_TYPE_TO_SECRET_TYPE: dict = {
 # in-flight requests never race a hard expiry. Not a cache TTL — a safety skew.
 ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 60
 
-# #13627: per-credential refresh serialization. TTL bounds how long a crashed
-# holder can block others; the wait bounds how long a loser blocks before failing
-# loudly. Env-tunable rather than hardcoded, per the project's TTL rule.
+# #13627: per-credential refresh serialization.
+#
+# Both windows are derived from the token endpoint's own timeout, not picked
+# independently. A lease TTL equal to that timeout expires *during* a slow
+# refresh, a second caller wins SET NX, and both POST the same rotating token —
+# which is this bug, unchanged. Likewise a wait shorter than the refresh makes
+# every loser raise while the winner is still working correctly.
 _REFRESH_LOCK_PREFIX = "connector:oauth:refresh:"
-_REFRESH_LOCK_TTL_MS = int(os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "30000"))
-_REFRESH_WAIT_S = float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "20"))
-_REFRESH_POLL_S = float(os.getenv("AUTOBOT_OAUTH_REFRESH_POLL_S", "0.2"))
+_REFRESH_DB = "knowledge"
+
+
+def _token_timeout_s() -> float:
+    """The token endpoint's HTTP timeout — the floor for every window below."""
+    try:
+        from knowledge.connectors.oauth_flow import _TOKEN_REQUEST_TIMEOUT
+
+        return float(_TOKEN_REQUEST_TIMEOUT)
+    except Exception:
+        return 30.0
+
+
+# Lease must outlive the slowest possible refresh, with headroom for the
+# surrounding read/decrypt/write.
+_REFRESH_LOCK_TTL_MS = int(os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", str(int(_token_timeout_s() * 3 * 1000))))
+# A loser must outwait the lease, or it gives up on a refresh still in progress.
+_REFRESH_WAIT_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "0")), (_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
+# Guarded against 0 from the environment, which would busy-loop the executor.
+_REFRESH_POLL_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_POLL_S", "0.2")), 0.05)
+
+
+async def _release_quietly(lease: LeaderLease) -> None:
+    """Release without letting cancellation or a Redis blip strand the lease (#13627).
+
+    A bare ``await lease.release()`` in a ``finally`` re-raises ``CancelledError``
+    if the request was cancelled mid-refresh, leaving the lease held for its full
+    TTL and every other caller waiting it out.
+    """
+    with contextlib.suppress(Exception):
+        await asyncio.shield(lease.release())
 
 
 class ConnectorCredentialStore:
@@ -264,7 +298,7 @@ class ConnectorCredentialStore:
         return json.loads(secret["value"])
 
     @staticmethod
-    async def _refresh_lock_available() -> bool:
+    async def _refresh_lock_available(secret_id: str) -> bool:
         """Whether the refresh lease can be taken at all (#13627).
 
         Distinguishes "another worker holds the lease" from "there is no Redis to
@@ -273,7 +307,15 @@ class ConnectorCredentialStore:
         try:
             from autobot_shared.redis_client import get_async_redis_client
 
-            return await get_async_redis_client(database="knowledge") is not None
+            redis = await get_async_redis_client(database=_REFRESH_DB)
+            if redis is None:
+                return False
+            # Ask whether the key is actually held. "A client object exists" is the
+            # wrong question: LeaderLease swallows any Redis error and returns
+            # False, so a degraded-but-pingable Redis (OOM, MISCONF, read-only
+            # replica) would look like "someone else is refreshing" and make every
+            # refresh wait then fail — the same total outage this guards against.
+            return await redis.get(f"{_REFRESH_LOCK_PREFIX}{secret_id}") is not None
         except Exception:
             return False
 
@@ -286,12 +328,33 @@ class ConnectorCredentialStore:
         unsynchronized refresh, which would reintroduce the bug.
         """
         deadline = time.monotonic() + _REFRESH_WAIT_S
+        delay = _REFRESH_POLL_S
         while time.monotonic() < deadline:
-            await asyncio.sleep(_REFRESH_POLL_S)
+            await asyncio.sleep(delay)
+            # Back off: a waiter polling every 200ms drives a sqlite
+            # connect/decrypt/UPDATE/commit per iteration through
+            # ``_update_access_tracking``, inflating the access audit with
+            # non-accesses and loading the shared executor.
+            delay = min(delay * 2, 2.0)
             creds = await self._read_oauth_creds(secret_id, owner_id)
             token = creds.get("access_token")
             if token and not self._access_token_expired(creds.get("access_token_expires_at")):
                 return token
+            # Take over if the holder died or its refresh failed — otherwise one
+            # provider error costs every waiter the full wait and then reports a
+            # misleading "timed out waiting for a concurrent refresh".
+            takeover = LeaderLease(
+                key=f"{_REFRESH_LOCK_PREFIX}{secret_id}",
+                database=_REFRESH_DB,
+                ttl_ms=_REFRESH_LOCK_TTL_MS,
+                worker_id=uuid.uuid4().hex,
+                label="OAuth refresh",
+            )
+            if await takeover.update_leadership():
+                try:
+                    return await self._refresh_and_store(secret_id, owner_id, creds)
+                finally:
+                    await _release_quietly(takeover)
         raise TimeoutError(
             f"Timed out after {_REFRESH_WAIT_S}s waiting for a concurrent OAuth refresh of {secret_id!r}. "
             "Refusing to refresh unsynchronized — a second refresh can invalidate the rotated token."
@@ -303,24 +366,15 @@ class ConnectorCredentialStore:
         Raises PermissionError on owner mismatch, LookupError when the secret is
         missing or holds no refresh token while the access token is expired.
         Propagates RuntimeError from the token endpoint on a failed refresh.
+        Raises TimeoutError (#13627) when another worker holds the refresh lease
+        and does not publish a token within the wait window — the caller should
+        treat that as retryable rather than fatal.
 
         When the vault-read flag is on, the vault envelope store is tried first
         (matching :meth:`load`'s expand-phase read-first behaviour, #10088 Task 5) —
         OAuth-managed connector tokens follow the same cutover path as static creds.
         """
-        secret = None
-        if _vault_read_enabled():
-            secret = await load_imported_credential(secret_id, owner_id)
-        if secret is None:
-            secret = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: self._svc.get_secret(secret_id=secret_id, include_value=True, accessed_by=owner_id),
-            )
-        if secret is None:
-            raise LookupError(f"OAuth secret {secret_id!r} not found or expired")
-        self._require_owner(secret, secret_id, owner_id)
-
-        creds = json.loads(secret["value"])
+        creds = await self._read_oauth_creds(secret_id, owner_id)
         access_token = creds.get("access_token")
         if access_token and not self._access_token_expired(creds.get("access_token_expires_at")):
             return access_token
@@ -335,9 +389,16 @@ class ConnectorCredentialStore:
         # (OAuth 2.0 Security BCP 4.14.2), turning the race into a full disconnect.
         lease = LeaderLease(
             key=f"{_REFRESH_LOCK_PREFIX}{secret_id}",
-            database="knowledge",
+            database=_REFRESH_DB,
             ttl_ms=_REFRESH_LOCK_TTL_MS,
-            label=f"OAuth refresh {secret_id}",
+            # A unique id per lease, NOT the default hostname-pid. Two refreshes in
+            # one process would otherwise share an identity, and ``release()``'s
+            # "only delete if it is still mine" guard would happily delete the other
+            # holder's key — letting a third caller in while the second still
+            # refreshes. The scheduler never hit this because it holds one lease per
+            # process; this is the first multi-lease-per-process user.
+            worker_id=uuid.uuid4().hex,
+            label="OAuth refresh",
         )
         if not await lease.update_leadership():
             # LeaderLease returns False both when another holder has the lease and
@@ -345,7 +406,7 @@ class ConnectorCredentialStore:
             # Treating "no Redis" as "someone else is refreshing" would make every
             # refresh wait and then fail — a total outage of connector auth wherever
             # Redis is not running, which is far worse than the race being fixed.
-            if await self._refresh_lock_available():
+            if await self._refresh_lock_available(secret_id):
                 # Someone else holds it. Wait for their write instead of issuing a
                 # second refresh — the loser must not touch the token endpoint.
                 return await self._await_refreshed_token(secret_id, owner_id)
@@ -365,7 +426,7 @@ class ConnectorCredentialStore:
             creds = recheck
             return await self._refresh_and_store(secret_id, owner_id, creds)
         finally:
-            await lease.release()
+            await _release_quietly(lease)
 
     async def _refresh_and_store(self, secret_id: str, owner_id: str, creds: dict) -> str:
         """Refresh at the provider and persist. Caller MUST hold the lease (#13627)."""
