@@ -16,7 +16,7 @@ because a permanently-red module stops carrying information: a genuine
 regression would look identical and be dismissed for the same reason.
 
 The skip is not coverage loss where it counts.  CI runs 3.14 and the platform
-floor is 3.12 (``startup_validator._validate_system_requirements``), so nothing
+floor is 3.14 (``startup_validator._validate_system_requirements``), so nothing
 is skipped on any supported interpreter.  The gate is the capability itself, not
 a version number, so it stays correct without tracking release history.  The
 other tests in this module do not depend on it and keep running everywhere.

@@ -63,7 +63,7 @@ nvcc --version
 # Check GPU availability
 nvidia-smi
 
-# Python 3.9+ required
+# Python 3.14 required
 python3 --version
 ```
 
