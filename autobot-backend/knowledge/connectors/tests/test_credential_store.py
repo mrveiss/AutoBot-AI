@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import knowledge.connectors.credential_store as mod
 from autobot_shared.auth.connector_auth import (
     ApiKeyAuth,
     BasicAuth,
@@ -19,7 +20,6 @@ from autobot_shared.auth.connector_auth import (
 )
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-import knowledge.connectors.credential_store as mod
 from knowledge.connectors.credential_store import ConnectorCredentialStore
 
 # ---------------------------------------------------------------------------
@@ -683,6 +683,7 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
     with pytest.raises(LookupError, match="re-auth required"):
         await cs.get_access_token(secret_id, "u1")
 
+
 # ---------------------------------------------------------------------------
 # #13627: refresh serialization
 # ---------------------------------------------------------------------------
@@ -690,9 +691,14 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
 
 async def _expired_oauth_secret(cs, store, name):
     secret_id = await cs.store_oauth(
-        name, "u1", "gitlab",
+        name,
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     bundle = json.loads(store[secret_id]["value"])
     bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
@@ -791,7 +797,8 @@ async def test_without_redis_refresh_proceeds_rather_than_failing(monkeypatch):
     from knowledge.connectors import oauth_flow
 
     monkeypatch.setattr(
-        oauth_flow, "refresh_access_token",
+        oauth_flow,
+        "refresh_access_token",
         AsyncMock(return_value={"access_token": "new", "expires_in": 3600}),
     )
     monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
