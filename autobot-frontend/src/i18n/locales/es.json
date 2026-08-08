@@ -872,6 +872,7 @@
       "loadFailed": "No se pudieron cargar las memorias. Es posible que el backend no esté disponible.",
       "forgetFailed": "No se pudo olvidar el elemento de memoria.",
       "forgetEverywhereFailed": "No se pudo eliminar en cascada el elemento de memoria.",
+      "forgetEverywhereAmbiguous": "Esta memoria existe en más de un almacén: use el borrado por almacén de la fila en su lugar.",
       "exportDownloaded": "Exportación de memoria descargada.",
       "exportFailed": "La exportación falló. Inténtelo de nuevo."
     },

@@ -872,6 +872,7 @@
       "loadFailed": "Failed to load memories. The backend may be unavailable.",
       "forgetFailed": "Failed to forget memory item.",
       "forgetEverywhereFailed": "Failed to cascade-delete memory item.",
+      "forgetEverywhereAmbiguous": "This memory exists in more than one store — use the per-store delete on the row instead.",
       "exportDownloaded": "Memory export downloaded.",
       "exportFailed": "Export failed. Please try again."
     },

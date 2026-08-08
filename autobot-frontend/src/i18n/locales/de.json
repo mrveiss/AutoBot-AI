@@ -872,6 +872,7 @@
       "loadFailed": "Erinnerungen konnten nicht geladen werden. Das Backend ist möglicherweise nicht verfügbar.",
       "forgetFailed": "Erinnerungseintrag konnte nicht vergessen werden.",
       "forgetEverywhereFailed": "Erinnerungseintrag konnte nicht kaskadierend gelöscht werden.",
+      "forgetEverywhereAmbiguous": "Diese Erinnerung existiert in mehr als einem Speicher — verwenden Sie stattdessen das speicherbezogene Löschen in der Zeile.",
       "exportDownloaded": "Speicher-Export heruntergeladen.",
       "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen."
     },

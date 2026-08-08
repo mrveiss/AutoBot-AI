@@ -872,6 +872,7 @@
       "loadFailed": "Échec du chargement des mémoires. Le backend est peut-être indisponible.",
       "forgetFailed": "Échec de l'oubli de l'élément de mémoire.",
       "forgetEverywhereFailed": "Échec de la suppression en cascade de l'élément de mémoire.",
+      "forgetEverywhereAmbiguous": "Cette mémoire existe dans plusieurs magasins — utilisez plutôt la suppression par magasin sur la ligne.",
       "exportDownloaded": "Export de mémoire téléchargé.",
       "exportFailed": "L'export a échoué. Veuillez réessayer."
     },
