@@ -33,9 +33,10 @@ _GUARDED = {
 def test_connector_outbound_calls_declare_an_egress_policy(filename, expected):
     """Every outbound call in these modules passes guard_egress explicitly."""
     src = (_CONNECTORS / filename).read_text(encoding="utf-8")
-    assert src.count("guard_egress=") == expected, (
-        f"{filename}: expected {expected} guarded call(s), found {src.count('guard_egress=')}"
-    )
+    # Count only real arguments, not the string appearing in a comment.
+    code = "\n".join(ln.split("#", 1)[0] for ln in src.splitlines())
+    found = code.count("guard_egress=")
+    assert found == expected, f"{filename}: expected {expected} guarded call(s), found {found}"
 
 
 def test_content_urls_never_use_the_instance_host_opt_in():
@@ -67,8 +68,9 @@ def test_no_unguarded_tracked_request_remains_in_the_named_connectors():
     offenders = []
     for filename in _GUARDED:
         src = (_CONNECTORS / filename).read_text(encoding="utf-8")
-        calls = len(re.findall(r"tracked_request\(", src))
-        guarded = src.count("guard_egress=")
+        code = "\n".join(ln.split("#", 1)[0] for ln in src.splitlines())
+        calls = len(re.findall(r"tracked_request\(", code))
+        guarded = code.count("guard_egress=")
         if calls != guarded:
             offenders.append(f"{filename}: {calls} call(s), {guarded} guarded")
     assert not offenders, "unguarded outbound calls: " + "; ".join(offenders)

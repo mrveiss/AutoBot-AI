@@ -33,8 +33,16 @@ from autobot_shared.ssot_constants import TimingConstants
 logger = logging.getLogger(__name__)
 
 
-class EgressBlockedError(ValueError):
-    """Raised when a guarded request targets an address egress policy forbids."""
+class EgressBlockedError(aiohttp.ClientError, ValueError):
+    """Raised when a guarded request targets an address egress policy forbids.
+
+    #13625: deliberately an ``aiohttp.ClientError`` as well as a ``ValueError``.
+    Every connector already wraps its outbound call in
+    ``except (RetryableError, aiohttp.ClientError)`` and returns a structured
+    error; a bare ``ValueError`` escaped that and handed the operator a traceback
+    instead. ``ValueError`` is kept so existing callers of the url-safety layer
+    that catch it keep working.
+    """
 
 
 async def _assert_egress_allowed(url: str, *, allow_private: bool) -> None:
@@ -46,7 +54,11 @@ async def _assert_egress_allowed(url: str, *, allow_private: bool) -> None:
     from autobot_shared.url_safety import is_public_url_async
 
     if not await is_public_url_async(url, allow_private=allow_private):
-        raise EgressBlockedError(f"Refusing outbound request to a disallowed address: {url!r}")
+        raise EgressBlockedError(
+            f"Refusing outbound request to a disallowed address: {url!r}. "
+            "If this is a self-hosted instance on a private network, set "
+            "AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS=true."
+        )
 
 
 class HTTPClientManager:

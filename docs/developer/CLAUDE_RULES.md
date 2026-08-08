@@ -281,7 +281,16 @@ When an issue is complete, wait for explicit user instruction before starting ne
 
 ## Rule 8: Outbound HTTP Goes Through the Guarded Fetch (#13625)
 
-**Every outbound connector/integration HTTP request MUST go through the SSRF guard in `autobot_shared/security/ssrf_guard.py`. Never build a bare `aiohttp.ClientSession` against a host that came from stored config or user input.**
+**Every outbound connector/integration HTTP request MUST declare an egress policy. Never build a bare `aiohttp.ClientSession`, and never call the shared client without `guard_egress`, against a host that came from stored config or user input.**
+
+Two mechanisms, and which one you need depends on redirects:
+
+| You need | Use |
+|---|---|
+| A request that must NOT follow redirects | `get_http_client().tracked_request(..., guard_egress=...)` |
+| A request that MUST follow redirects | `ssrf_guard.pinned_request_with_redirects` |
+
+`guard_egress` validates the URL and then **refuses redirects** — it raises if you pass `allow_redirects=True`. That is deliberate: validating a URL and then letting aiohttp follow a 302 elsewhere is worse than no guard, because it reads as protected. `pinned_request_with_redirects` is the one that re-resolves and re-pins *every hop*.
 
 **Why:** This rule previously existed only as a docstring inside `ssrf_guard.py`. Six connectors — Confluence, Jira, GitLab, Gitea, Nextcloud and the `integrations/base.py` session builder — were written against bare `aiohttp` with a host string-concatenated from stored config, and a grep for `is_public_url|ssrf_guard|pinned_connector` across all six returned **zero hits**. A rule nobody can find is a rule nobody follows.
 
@@ -300,9 +309,11 @@ A self-hosted Confluence/GitLab/Nextcloud instance legitimately lives on an RFC-
 **Two constraints that are not negotiable:**
 
 1. The opt-in applies to the **operator-configured instance host only**. User-supplied content and download URLs are validated public-only, unconditionally — a connector that fetches an attachment from a URL inside a document must not inherit the instance host's exemption.
-2. Validate the configured base URL **once at config-store time**, not per request. Per-request validation is a DNS lookup on every call and still races.
+2. Config-store-time validation is still the goal (**#13625 item 3, not yet built**). Today the check is per-request, which costs a DNS lookup per call and does not close the rebind race between the check and the connect — `pinned_connector` is what closes that, and it does not yet thread the private-network opt-in. Do not read this rule as claiming the race is handled.
 
-**When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop — you want `pinned_connector` or `pinned_request_with_redirects`.
+**When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop. And if you are calling `tracked_request` without `guard_egress`, that is the same mistake with fewer characters.
+
+**`urljoin` does not pin a host.** `urljoin(base, path)` returns `https://evil.example.com/x` for a path of `//evil.example.com/x`, and the caller's credentials go with it. If a path segment can come from stored data or a server response, assert the result still starts with the base.
 
 ## Rule 7: Behavioral Grep for Extraction PRs (#5372)
 

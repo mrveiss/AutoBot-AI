@@ -312,6 +312,14 @@ def test_module_has_zero_autobot_dependencies() -> None:
 
 _HARD_BLOCKED = [
     ("127.0.0.1", "loopback"),
+    # #13625: CPython reports these as is_private, so inheriting is_private
+    # wholesale let the opt-in re-open them.
+    ("0.1.2.3", "0.0.0.0/8 — not the same as 0.0.0.0"),
+    ("192.0.0.1", "192.0.0.0/29 IETF protocol assignments"),
+    ("198.18.0.1", "benchmarking range"),
+    ("2002:7f00:1::1", "6to4 embedding 127.0.0.1"),
+    ("::ffff:169.254.169.254", "IPv4-mapped cloud metadata"),
+    ("64:ff9b::7f00:1", "NAT64 embedding loopback"),
     ("169.254.169.254", "cloud metadata"),
     ("0.0.0.0", "unspecified"),
     ("224.0.0.1", "multicast"),
@@ -320,7 +328,17 @@ _HARD_BLOCKED = [
     ("fe80::1", "IPv6 link-local"),
 ]
 
-_PRIVATE = [("10.0.0.5", "RFC1918"), ("192.168.1.10", "RFC1918"), ("172.16.0.1", "RFC1918"), ("fd00::1", "IPv6 ULA")]
+_PRIVATE = [
+    ("10.0.0.5", "RFC1918"),
+    ("192.168.1.10", "RFC1918"),
+    ("172.16.0.1", "RFC1918"),
+    ("fd00::1", "IPv6 ULA"),
+    # #13625: CPython reports neither as is_private, so both were reachable in
+    # BOTH states. Private rather than hard-blocked — a self-hosted instance can
+    # legitimately sit on Tailscale or a site-local network.
+    ("100.64.1.1", "CGNAT / Tailscale"),
+    ("fec0::1", "IPv6 site-local"),
+]
 
 
 @pytest.mark.parametrize("addr,kind", _HARD_BLOCKED)

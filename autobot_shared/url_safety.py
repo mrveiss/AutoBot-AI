@@ -86,6 +86,25 @@ _IPV6_ULA = ipaddress.ip_network("fc00::/7")
 _DNS_TIMEOUT_SECONDS = 2.0
 
 
+# Never a legitimate egress target, even with the private-network opt-in (#13625).
+# ``is_private`` covers most of these on modern CPython, which is exactly the
+# problem: inheriting it wholesale let the opt-in re-open them.
+_NEVER_ROUTABLE = (
+    ipaddress.ip_network("0.0.0.0/8"),  # "this network" — 0.1.2.3 is not 0.0.0.0
+    ipaddress.ip_network("192.0.0.0/29"),  # IETF protocol assignments
+    ipaddress.ip_network("198.18.0.0/15"),  # benchmarking
+    ipaddress.ip_network("2002::/16"),  # 6to4 — 2002:7f00:1::1 embeds 127.0.0.1
+)
+
+# Not public, but a self-hosted instance can legitimately live here, so these are
+# treated as private (opt-in eligible) rather than hard-blocked. CPython reports
+# neither as ``is_private``, so both were reachable in *both* states before.
+_PRIVATE_EXTRA = (
+    ipaddress.ip_network("100.64.0.0/10"),  # CGNAT — Tailscale's whole range
+    ipaddress.ip_network("fec0::/10"),  # IPv6 site-local
+)
+
+
 def _ip_is_hard_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Return True for addresses that are never a legitimate egress target (#13625).
 
@@ -95,12 +114,21 @@ def _ip_is_hard_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bo
     on an RFC-1918 address is a real deployment, whereas an operator hosting it
     on the metadata endpoint is not.
     """
-    return bool(ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified)
+    # Unwrap ::ffff:a.b.c.d explicitly so v4 policy applies to it by intent
+    # rather than incidentally via is_reserved.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return _ip_is_hard_blocked(mapped)
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        return True
+    return any(ip in net for net in _NEVER_ROUTABLE if ip.version == net.version)
 
 
 def _ip_is_private(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Return True for RFC-1918 / ULA addresses — separable from the hard blocks (#13625)."""
     if ip.is_private and not _ip_is_hard_blocked(ip):
+        return True
+    if any(ip in net for net in _PRIVATE_EXTRA if ip.version == net.version):
         return True
     # IPv6 Unique Local Addresses (fc00::/7) — redundant with is_private on
     # modern Python but kept explicit as defence-in-depth.
