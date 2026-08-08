@@ -229,6 +229,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
         # Step planner — capability-to-agent mapping for single-workflow steps (GH #6820).
         # Populated after _initialize_default_agents so agent_registry is non-empty.
+        #
+        # #13751: constructed but never called — no method on this object is
+        # invoked anywhere. WorkflowPlanner is DEPRECATED (the planner half of
+        # the engine run_workflow left behind at #5058); the live equivalents are
+        # create_workflow_plan for planning and get_agent_recommendations_scored
+        # for capability-to-agent selection. The attribute is retained rather
+        # than dropped, per the never-delete policy; see
+        # orchestration/workflow_planner.py for the per-capability mapping.
         self._step_planner = WorkflowPlanner(
             base_orchestrator=self,
             agent_registry=self.agent_registry,
