@@ -91,6 +91,30 @@ class ResourceFactory:
         return get_orchestrator_sync()
 
     @staticmethod
+    def get_initialized_chat_history_manager():
+        """Return the process-wide ChatHistoryManager, or None — never constructs one.
+
+        Issue #13686: request-free callers (the chat workflow manager runs outside
+        any request scope) need the *same* manager the app initialised at startup,
+        because that is the object that owns the initialised ``memory_graph``
+        (``chat_history/base.py:166`` → ``_init_memory_graph``). Constructing a
+        second manager would build a second ``AutoBotMemoryGraph``, which is
+        exactly the duplicate-concept outcome #13686 forbids.
+
+        ``initialization.lifespan.app_state`` is the canonical request-free mirror
+        of ``app.state`` (written at ``lifespan.py:160``, already read this way by
+        ``api/system.py``). Returns None before startup completes or outside an
+        app process, so callers must degrade rather than assume.
+        """
+        try:
+            from initialization.lifespan import app_state
+
+            return app_state.get("chat_history_manager")
+        except Exception as exc:  # pragma: no cover - import guard only
+            logger.debug("No process-wide ChatHistoryManager available: %s", exc)
+            return None
+
+    @staticmethod
     async def get_chat_history_manager(request: Request = None):
         """Get or create ChatHistoryManager instance with app.state caching"""
         try:
@@ -100,6 +124,14 @@ class ResourceFactory:
                 if chm is not None:
                     logger.debug("Using pre-initialized ChatHistoryManager from app.state")
                     return chm
+
+            # Issue #13686: before paying for a construction, check the request-free
+            # singleton mirror. Without this, every request-less caller silently got
+            # its own manager (and its own memory graph) instead of the app's.
+            existing = ResourceFactory.get_initialized_chat_history_manager()
+            if existing is not None:
+                logger.debug("Using pre-initialized ChatHistoryManager from app_state mirror")
+                return existing
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
