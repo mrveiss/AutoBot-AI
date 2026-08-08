@@ -316,9 +316,15 @@ class StartupValidator:
         """Validate system-level requirements"""
         logger.info("Validating system requirements...")
 
-        # Check Python version
-        if sys.version_info < (3, 12):
-            self.result.add_error(f"Python 3.12+ required, found {sys.version}")
+        # Check Python version. 3.14 is the backend's actual floor, not a
+        # conservative guess: CI, .python-version, mypy, docker/backend and
+        # docker/slm, and every Ansible role that builds a backend venv all
+        # pin 3.14. This check read 3.12 while all of those said 3.14, and it
+        # is the only floor the running process enforces — so it is the one a
+        # reader trusts. The NPU worker's separate, older pin is not relevant
+        # here; it runs its own venv and never imports this module.
+        if sys.version_info < (3, 14):
+            self.result.add_error(f"Python 3.14+ required, found {sys.version}")
 
         # Check disk space for logs and data
         try:

@@ -31,8 +31,7 @@ guard) is caught here.
 The inherited guard needs ``asyncio.Task.cancelling()`` (Python 3.11+), so the
 test that exercises it is gated on that capability the same way the base class's
 own tests are — see ``llc/tests/test_poll_loop_scheduler.py`` (#13727).  Nothing
-is skipped on a supported interpreter: the platform floor is 3.12 and CI runs
-3.14.
+is skipped on a supported interpreter: the platform floor and CI are both 3.14.
 """
 
 import asyncio
