@@ -50,20 +50,28 @@ class LongTermMemoryManager:
         self,
         category: str,
         content: str,
+        *,
+        user_id: str,
         metadata: Dict | None = None,
         embedding: bytes | None = None,
     ) -> int:
-        """Map old API to canonical MemoryManager."""
+        """Map old API to canonical MemoryManager.
+
+        #13688: the owner scope is required here too — this wrapper must not
+        become the one place where an untenanted write is still reachable.
+        """
         try:
             cat = MemoryCategory[category.upper()]
         except (KeyError, AttributeError):
             cat = category  # Use as-is if not in enum
-        return await self._manager.store_memory(cat, content, metadata, embedding=embedding)
+        return await self._manager.store_memory(
+            cat, content, user_id=user_id, metadata=metadata, embedding=embedding
+        )
 
     async def retrieve_memories(
-        self, category: str, filters: Dict | None = None, limit: int = 100
+        self, category: str, filters: Dict | None = None, limit: int = 100, *, user_id: str
     ) -> List[MemoryEntry]:
-        """Map old API to canonical MemoryManager."""
+        """Map old API to canonical MemoryManager (#13688: owner-scoped)."""
         filters = filters or {}
         try:
             cat = MemoryCategory[category.upper()]
@@ -71,20 +79,21 @@ class LongTermMemoryManager:
             cat = category
         return await self._manager.retrieve_memories(
             cat,
+            user_id=user_id,
             limit=limit,
             start_date=filters.get("start_date"),
             end_date=filters.get("end_date"),
             reference_path=filters.get("reference_path"),
         )
 
-    async def search_by_metadata(self, metadata_query: Dict) -> List[MemoryEntry]:
+    async def search_by_metadata(self, metadata_query: Dict, *, user_id: str) -> List[MemoryEntry]:
         """Search by metadata (limited: converts values to a text query).
 
         WARNING: Does NOT perform true metadata key/value matching.
         Results may include false positives.
         """
         query = " ".join(str(v) for v in metadata_query.values())
-        return await self._manager.search_memories(query)
+        return await self._manager.search_memories(query, user_id=user_id)
 
     async def initialize(self) -> None:
         """Initialize the underlying storage (called by orchestrator on startup)."""
@@ -95,9 +104,9 @@ class LongTermMemoryManager:
         """Cleanup hook called by orchestrator on shutdown (no-op)."""
         logger.info("LongTermMemoryManager cleanup complete")
 
-    async def search_relevant_context(self, query: str) -> List[MemoryEntry]:
-        """Search memories for context relevant to the given query."""
-        return await self._manager.search_memories(query)
+    async def search_relevant_context(self, query: str, *, user_id: str) -> List[MemoryEntry]:
+        """Search one owner's memories for context relevant to the given query."""
+        return await self._manager.search_memories(query, user_id=user_id)
 
     async def cleanup_old_memories(self, retention_days: int | None = None) -> int:
         """Cleanup old memories."""

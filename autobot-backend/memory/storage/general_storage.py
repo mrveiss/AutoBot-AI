@@ -21,12 +21,36 @@ from ..models import MemoryEntry
 
 logger = get_logger(__name__)
 
+# Owner assigned to rows that predate tenant scoping (#13688). Rows written
+# before this column existed have no recoverable owner, so they are parked under
+# a reserved id rather than deleted (they stay queryable by asking for this id
+# explicitly) and rather than attributed to a real user (which would leak them
+# into the first caller's results). Not a valid owner for new writes.
+LEGACY_UNSCOPED_OWNER = "__unscoped__"
+
+
+def _require_user_id(user_id: str) -> str:
+    """Validate a caller-supplied owner scope (#13688).
+
+    Raises:
+        ValueError: when the scope is missing, blank, or the reserved legacy id
+                    used as a write target.
+    """
+    if not isinstance(user_id, str) or not user_id.strip():
+        raise ValueError("user_id is required — memory queries cannot be unscoped")
+    return user_id
+
 
 class GeneralStorage:
     """
     General purpose storage implementation (IGeneralStorage)
 
     Responsibility: Manage category-based memory in SQLite database
+
+    Tenancy (#13688): every row carries a first-class ``user_id`` column and
+    every read applies it as a WHERE predicate. The scope is a required
+    argument on each method, so an unscoped query cannot be constructed here —
+    isolation does not depend on a call site remembering to filter.
     """
 
     def __init__(self, db_path: str | Path):
@@ -42,7 +66,7 @@ class GeneralStorage:
         """Initialize memory entries table"""
         try:
             async with self._get_connection() as conn:
-                await conn.execute("""
+                await conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS memory_entries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         category TEXT NOT NULL,
@@ -50,9 +74,12 @@ class GeneralStorage:
                         metadata_json TEXT,
                         timestamp TIMESTAMP NOT NULL,
                         reference_path TEXT,
-                        embedding BLOB
+                        embedding BLOB,
+                        user_id TEXT NOT NULL DEFAULT '{LEGACY_UNSCOPED_OWNER}'
                     )
-                """)
+                """)  # nosec B608  # interpolates a module constant, never caller input
+
+                await self._migrate_add_user_id(conn)
 
                 # Indexes for common queries
                 await conn.execute("""
@@ -63,15 +90,41 @@ class GeneralStorage:
                     CREATE INDEX IF NOT EXISTS idx_memory_timestamp
                     ON memory_entries(timestamp)
                 """)
+                # #13688: every read filters on user_id first, so it leads the index.
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_memory_user_category
+                    ON memory_entries(user_id, category)
+                """)
 
                 await conn.commit()
         except aiosqlite.Error as e:
             logger.error("Failed to initialize general storage: %s", e)
             raise RuntimeError(f"General storage initialization failed: {e}")
 
+    async def _migrate_add_user_id(self, conn) -> None:
+        """Add the user_id column to a pre-#13688 database, preserving all rows.
+
+        Databases created before tenant scoping have no user_id column. SQLite
+        allows ADD COLUMN with a non-null default, so existing rows are parked
+        under LEGACY_UNSCOPED_OWNER instead of being dropped or rewritten — the
+        no-data-loss rule. They remain readable by querying that owner.
+        """
+        cursor = await conn.execute("PRAGMA table_info(memory_entries)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "user_id" in columns:
+            return
+        await conn.execute(
+            f"ALTER TABLE memory_entries ADD COLUMN user_id TEXT NOT NULL DEFAULT '{LEGACY_UNSCOPED_OWNER}'"  # nosec B608
+        )
+        logger.info(
+            "Migrated memory_entries: added user_id; pre-existing rows parked under %s (#13688)",
+            LEGACY_UNSCOPED_OWNER,
+        )
+
     async def store(self, entry: MemoryEntry) -> int:
-        """Store memory entry"""
+        """Store memory entry. The entry must carry an owner (#13688)."""
         category_value = entry.category.value if isinstance(entry.category, MemoryCategory) else entry.category
+        user_id = _require_user_id(entry.user_id)
 
         try:
             async with self._get_connection() as conn:
@@ -79,8 +132,8 @@ class GeneralStorage:
                     """
                     INSERT INTO memory_entries (
                         category, content, metadata_json, timestamp,
-                        reference_path, embedding
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        reference_path, embedding, user_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         category_value,
@@ -89,6 +142,7 @@ class GeneralStorage:
                         entry.timestamp,
                         entry.reference_path,
                         entry.embedding,
+                        user_id,
                     ),
                 )
                 await conn.commit()
@@ -99,12 +153,18 @@ class GeneralStorage:
             logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory entry: {e}")
 
-    async def retrieve(self, category: MemoryCategory | str, filters: Dict[str, Any]) -> List[MemoryEntry]:
-        """Retrieve memories by category and filters"""
+    async def retrieve(
+        self, user_id: str, category: MemoryCategory | str, filters: Dict[str, Any]
+    ) -> List[MemoryEntry]:
+        """Retrieve one owner's memories by category and filters (#13688).
+
+        ``user_id`` is required and applied as a WHERE predicate here, so no
+        caller can construct a cross-owner query.
+        """
         category_value = category.value if isinstance(category, MemoryCategory) else category
 
-        where_clauses = ["category = ?"]
-        values = [category_value]
+        where_clauses = ["user_id = ?", "category = ?"]
+        values = [_require_user_id(user_id), category_value]
 
         if filters.get("start_date"):
             where_clauses.append("timestamp >= ?")
@@ -138,19 +198,24 @@ class GeneralStorage:
             logger.error("Failed to retrieve memory entries: %s", e)
             raise RuntimeError(f"Failed to retrieve memory entries: {e}")
 
-    async def search(self, query: str) -> List[MemoryEntry]:
-        """Search memories by content or metadata"""
+    async def search(self, user_id: str, query: str) -> List[MemoryEntry]:
+        """Search one owner's memories by content or metadata (#13688).
+
+        The owner predicate is bracketed around the content/metadata OR so a
+        match on either column still cannot cross an owner boundary.
+        """
+        owner = _require_user_id(user_id)
         try:
             async with self._get_connection() as conn:
                 conn.row_factory = aiosqlite.Row
                 cursor = await conn.execute(
                     """
                     SELECT * FROM memory_entries
-                    WHERE content LIKE ? OR metadata_json LIKE ?
+                    WHERE user_id = ? AND (content LIKE ? OR metadata_json LIKE ?)
                     ORDER BY timestamp DESC
                     LIMIT 100
                 """,
-                    (f"%{query}%", f"%{query}%"),
+                    (owner, f"%{query}%", f"%{query}%"),
                 )
 
                 rows = await cursor.fetchall()
@@ -213,7 +278,8 @@ class GeneralStorage:
             timestamp=(parse_utc_iso(row["timestamp"]) if isinstance(row["timestamp"], str) else row["timestamp"]),
             reference_path=row["reference_path"],
             embedding=row["embedding"],
+            user_id=row["user_id"],
         )
 
 
-__all__ = ["GeneralStorage"]
+__all__ = ["GeneralStorage", "LEGACY_UNSCOPED_OWNER"]

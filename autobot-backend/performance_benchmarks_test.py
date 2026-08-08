@@ -28,6 +28,9 @@ from memory.enums import MemoryCategory
 from orchestrator import Orchestrator
 from services.llm_service import LLMService
 
+# #13688: the general memory plane is owner-scoped; tests must name an owner.
+TEST_USER = "test-user"
+
 # #13162: every test in this module asserts a wall-clock budget
 # (``avg_duration``/``total_time``) or an RSS delta — there is not one
 # functional-only test here. That makes the module a benchmark suite, so it
@@ -433,6 +436,7 @@ class TestMemorySystemPerformance:
                 await self.memory_manager.store_memory(
                     category=MemoryCategory.EXECUTION,
                     content=entry["content"],
+                    user_id=TEST_USER,
                     metadata={"test_id": i, "context": entry["context"]},
                 )
 
@@ -464,6 +468,7 @@ class TestMemorySystemPerformance:
             await self.memory_manager.store_memory(
                 category=categories[i % len(categories)],
                 content=f"Test memory {i}",
+                user_id=TEST_USER,
                 metadata={"test_id": i, "context": "performance_test"},
             )
 
@@ -473,7 +478,7 @@ class TestMemorySystemPerformance:
             for _ in range(10):
                 self.benchmark.start_measurement()
 
-                results = await self.memory_manager.retrieve_memories(category=category, limit=10)
+                results = await self.memory_manager.retrieve_memories(category=category, user_id=TEST_USER, limit=10)
 
                 self.benchmark.end_measurement()
 
