@@ -74,9 +74,7 @@ def test_create_key_uses_caller_company_not_body() -> None:
 
     issue = AsyncMock(return_value=(issued, "llc_plaintext"))
     with patch("llc.services.api_key.ApiKeyService.issue_key", new=issue):
-        response = _make_app("api_keys", _COMPANY_A, session).post(
-            f"/agents/{_AGENT}/api-keys", json={"name": "k"}
-        )
+        response = _make_app("api_keys", _COMPANY_A, session).post(f"/agents/{_AGENT}/api-keys", json={"name": "k"})
 
     assert response.status_code == 201
     assert issue.await_args.kwargs["company_id"] == _COMPANY_A
