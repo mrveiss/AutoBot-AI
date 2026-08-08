@@ -2027,9 +2027,7 @@ class FeatureConfig(RedactedSettings):
     # instance host only, NEVER to user-supplied content or download URLs.
     # Loopback, link-local (incl. 169.254.169.254 cloud metadata), multicast,
     # reserved and unspecified addresses stay blocked with the flag on.
-    connector_private_network_egress: bool = Field(
-        default=False, alias="AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS"
-    )
+    connector_private_network_egress: bool = Field(default=False, alias="AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS")
 
     # Subsystem feature flags — issue #3017
     # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
