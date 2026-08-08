@@ -33,10 +33,9 @@ import defusedxml.ElementTree as ET
 
 from autobot_shared.auth import BasicAuth
 from autobot_shared.http_client import get_http_client
-from knowledge.connectors.base import instance_host_egress
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.base import AbstractConnector, RetryableError, instance_host_egress
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -164,12 +163,19 @@ class NextcloudConnector(AbstractConnector):
 
         encoded_path = parts[3]
         file_url = urljoin(self._webdav_base, encoded_path)
+        # #13625: urljoin does NOT pin the host. ``encoded_path`` is the tail of a
+        # caller-supplied source_id, and both "//evil.example.com/x" and
+        # "http://10.0.0.5/x" escape the instance entirely — while the request
+        # below still attaches this instance's BasicAuth, making it credential
+        # exfiltration rather than plain SSRF. Refuse anything that left the base.
+        if not file_url.startswith(self._webdav_base):
+            self.logger.error("Refusing a file path that escapes the configured instance: %s", source_id)
+            return None
 
         try:
             auth = aiohttp.BasicAuth(self._username, self._password)
             timeout = aiohttp.ClientTimeout(total=300.0)
-            # file_url = urljoin(self._webdav_base, ...) — instance host, not a
-            # user-supplied content URL, despite the name (#13625).
+            # Instance host: file_url is pinned to _webdav_base by the check above.
             async with get_http_client().tracked_request(
                 "GET", file_url, auth=auth, timeout=timeout, guard_egress=instance_host_egress()
             ) as resp:

@@ -265,6 +265,17 @@ class HTTPClientManager:
         cannot be forgotten.
         """
         if guard_egress is not None:
+            # A guard on the initial URL alone is worthless: aiohttp follows
+            # redirects by default, so one 302 reaches anything the guard just
+            # refused — including cloud metadata (#13625). Refuse redirects on
+            # guarded requests instead of validating a URL we then abandon.
+            if kwargs.get("allow_redirects"):
+                raise ValueError(
+                    "guard_egress cannot be combined with allow_redirects=True — a redirect escapes the check. "
+                    "Use autobot_shared.security.ssrf_guard.pinned_request_with_redirects, which re-validates "
+                    "and re-pins every hop."
+                )
+            kwargs["allow_redirects"] = False
             await _assert_egress_allowed(url, allow_private=guard_egress)
 
         # Check if pool adjustment needed (non-blocking)
