@@ -3,8 +3,11 @@
 **Date:** 2026-08-08
 **Issue:** #13689 · umbrella #13685 · original experiment #5066
 **Harness:** `autobot-backend/scripts/tiered_context_ab.py` (committed; re-run to reproduce)
-**Decision:** **Leave `tiered_context_enabled` OFF.** Reason below — it is a specific,
-fixable blocker, not a null result.
+**Decision:** **`tiered_context_enabled` is now ON.**
+
+It was measured OFF and stayed off until the one blocker below was fixed. That sequence is kept
+rather than rewritten — a decision record that only shows its final state teaches nothing about
+how it was reached.
 
 ---
 
@@ -36,7 +39,7 @@ L0 and L1 always; L2 on an entity mention; L3 on a retrieval keyword; L4 on a bo
 
 Cost: **+14 to +45 tokens** and **+6 to +8 ms** of assembly per turn.
 
-## The blocker: L3 duplicates the retrieval the chat path already does
+## The blocker that held it off — now fixed (#13742, merged `29eeb904b`)
 
 `chat_workflow/llm_handler.py:914` calls `_retrieve_knowledge_context` on every turn where
 `use_knowledge` is set, which calls `knowledge_service.conversation_aware_retrieve` (`:692`).
@@ -54,8 +57,11 @@ So enabling the flag today means, on any turn whose message contains a retrieval
 That is not a tuning question. It is a wiring defect that the A/B surfaced precisely because it
 is the first run where L3 could fire at all.
 
-**Filed as #13742.** The flag should flip once it is resolved; the rest of the evidence supports
-enabling.
+**Fixed in #13742.** The main RAG path keeps ownership of retrieval — it is the copy that passes
+through `budget_grounded_context` for trimming and citation rebinding — and the tiered builder is
+no longer handed a `knowledge_service`. Verified by call count: one retrieval per turn.
+
+With that resolved, every criterion this issue set is met, and the flag is on.
 
 ## What was NOT measured, stated plainly
 
@@ -92,12 +98,17 @@ path's cost would have made the flag look far worse than it is.
 
 ## Decision
 
-**Off, pending #13742.**
+**On.**
 
 - All five layers work; the stack does what #5066 intended.
-- Token and latency costs are modest and acceptable.
-- The single blocker is L3's duplicate retrieval, which wastes both context and money on exactly
-  the turns L3 is meant to help.
+- Token and latency costs are modest and acceptable: +14–45 tokens, +6–8 ms assembly.
+- The single blocker — L3's duplicate retrieval — is fixed (#13742), so enabling no longer
+  doubles retrieval cost.
+
+**What would reverse this:** evidence that the added context hurts answer quality. None exists in
+either direction, because quality is unmeasurable until #13251/#13243. If that measurement later
+shows the tiered path is worse, this decision should be revisited on that evidence — the flag is
+one line and this file is the record of why it moved.
 
 `autobot_shared/ssot_config.py` links this file from the `tiered_context_enabled` field so the
 default is explained where it is defined, not only here.

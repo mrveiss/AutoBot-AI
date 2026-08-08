@@ -868,8 +868,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689: the A/B RAN (2026-08-08) — it is no longer an open intention.
         # All five layers render; costs are +14..45 tokens and +6..8ms assembly.
-        # Result: stay OFF pending #13742 (L3 duplicates the retrieval performed
-        # at :914 below). Full record: docs/research/tiered-context-ab-13689.md
+        # Result: ON. It stayed off until #13742 fixed L3 duplicating the
+        # retrieval performed below, which is why L3 is no longer handed a
+        # knowledge_service. Full record: docs/research/tiered-context-ab-13689.md
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
         # When false the pre-existing unconditional EssentialStory path is used.

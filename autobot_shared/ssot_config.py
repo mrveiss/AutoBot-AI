@@ -1982,14 +1982,18 @@ class MiscConfig(RedactedSettings):
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
     tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
-    # #13689: OFF is a recorded decision, not an unexplained default. The #5066
-    # A/B ran with all five layers live on 2026-08-08; all render, and the token
-    # and latency costs are acceptable. It stays off for one specific blocker —
-    # L3 duplicates the KB retrieval the chat path already performs (#13742), so
-    # enabling it today means two vector searches and the same chunks twice in
-    # the prompt. Flip once #13742 lands.
+    # #13689: ON is a recorded decision, not a drift. The #5066 A/B ran on
+    # 2026-08-08 with all five layers live for the first time — L2 and L4 could
+    # not render at all until #13686/#13687. All five render; the cost is
+    # +14..45 tokens and +6..8 ms of assembly per turn.
+    # It stayed off until #13742 landed, because L3 duplicated the KB retrieval
+    # the chat path already performs — two vector searches and the same chunks
+    # twice in the prompt. That is fixed; there is now one retrieval per turn.
+    # NOT measured, and no claim is implied: answer quality. Recall quality is
+    # unmeasurable until #13251/#13243, so this decision rests on what the stack
+    # demonstrably puts in the prompt, its token cost, and its latency.
     # Evidence: docs/research/tiered-context-ab-13689.md
-    tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")
+    tiered_context_enabled: bool = Field(default=True, alias="TIERED_CONTEXT_ENABLED")
     tokenizers_parallelism: str = Field(default="", alias="TOKENIZERS_PARALLELISM")
     transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
     travis: str = Field(default="", alias="TRAVIS")
