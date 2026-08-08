@@ -74,7 +74,13 @@ def _refresh_lock_key(secret_id: str) -> str:
     log lines taint-reachable from a credential. A stable digest serialises
     exactly as well.
     """
-    return _REFRESH_LOCK_PREFIX + hashlib.sha256(secret_id.encode("utf-8")).hexdigest()[:32]
+    # usedforsecurity=False states the intent precisely: this digest is a
+    # namespacing device for a Redis key, not a security control. Nothing is
+    # authenticated or authorised by it, and it is never reversed or compared
+    # against a stored hash — collision resistance is all that is required, and
+    # only to keep two credentials from sharing a lease.
+    digest = hashlib.sha256(secret_id.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return _REFRESH_LOCK_PREFIX + digest[:32]
 
 
 _REFRESH_DB = "knowledge"
