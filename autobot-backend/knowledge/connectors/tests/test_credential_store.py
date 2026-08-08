@@ -795,6 +795,8 @@ async def test_without_redis_refresh_proceeds_rather_than_failing(monkeypatch):
         AsyncMock(return_value={"access_token": "new", "expires_in": 3600}),
     )
     monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
-    monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=False)))
+    monkeypatch.setattr(
+        ConnectorCredentialStore, "_refresh_lock_available", staticmethod(AsyncMock(return_value=False))
+    )
 
     assert await cs.get_access_token(secret_id, "u1") == "new"
