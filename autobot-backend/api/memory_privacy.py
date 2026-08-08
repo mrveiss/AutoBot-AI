@@ -44,7 +44,9 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/memory/privacy", tags=["memory-privacy"])
 
-_VALID_STORES = frozenset({"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner"})
+# #13705: "general" is the SQLite memory_entries store. Without it here the
+# list endpoint returns items the delete endpoint then rejects as 422.
+_VALID_STORES = frozenset({"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general"})
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +117,7 @@ async def list_memories(
     """List all memory items stored for the authenticated user.
 
     Returns items from every store (verbatim, trajectory, working_memory,
-    graph, retrieval_learner) with provenance and timestamps.
+    graph, retrieval_learner, general) with provenance and timestamps.
     """
     from memory.transparency import list_user_memories
 
