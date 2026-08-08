@@ -768,7 +768,18 @@ async def _record_run_for_replay(
                     output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
                     recorded_events = parse_jsonl_events(raw)
                 except OSError:
-                    pass
+                    logger.warning(
+                        "Could not read transcript for replay (run_id: %s) — recording the run without output",
+                        run_id,
+                    )
+            elif output_file:
+                # A configured transcript path that does not exist is currently
+                # indistinguishable from an empty transcript: the replay record is
+                # written either way, with no output and no trace of why.
+                logger.warning(
+                    "Transcript file for replay does not exist (run_id: %s) — recording the run without output",
+                    run_id,
+                )
 
         svc = RunReplayService()
         await svc.record_run(
