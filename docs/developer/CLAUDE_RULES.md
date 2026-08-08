@@ -279,6 +279,31 @@ When an issue is complete, wait for explicit user instruction before starting ne
 
 ---
 
+## Rule 8: Outbound HTTP Goes Through the Guarded Fetch (#13625)
+
+**Every outbound connector/integration HTTP request MUST go through the SSRF guard in `autobot_shared/security/ssrf_guard.py`. Never build a bare `aiohttp.ClientSession` against a host that came from stored config or user input.**
+
+**Why:** This rule previously existed only as a docstring inside `ssrf_guard.py`. Six connectors — Confluence, Jira, GitLab, Gitea, Nextcloud and the `integrations/base.py` session builder — were written against bare `aiohttp` with a host string-concatenated from stored config, and a grep for `is_public_url|ssrf_guard|pinned_connector` across all six returned **zero hits**. A rule nobody can find is a rule nobody follows.
+
+**The private-network opt-in:**
+
+A self-hosted Confluence/GitLab/Nextcloud instance legitimately lives on an RFC-1918 address, so a public-only guard would break the feature it protects. `AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS` (default **off**) permits that range — and *only* that range:
+
+| Target | Flag off | Flag on |
+|---|---|---|
+| Public address | allowed | allowed |
+| RFC-1918 / IPv6 ULA | blocked | **allowed** |
+| Loopback | blocked | blocked |
+| Link-local, incl. `169.254.169.254` cloud metadata | blocked | blocked |
+| Multicast, reserved, unspecified | blocked | blocked |
+
+**Two constraints that are not negotiable:**
+
+1. The opt-in applies to the **operator-configured instance host only**. User-supplied content and download URLs are validated public-only, unconditionally — a connector that fetches an attachment from a URL inside a document must not inherit the instance host's exemption.
+2. Validate the configured base URL **once at config-store time**, not per request. Per-request validation is a DNS lookup on every call and still races.
+
+**When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop — you want `pinned_connector` or `pinned_request_with_redirects`.
+
 ## Rule 7: Behavioral Grep for Extraction PRs (#5372)
 
 **Extraction PRs (pulling a duplicated pattern into a shared composable/utility + migrating N sites) MUST grep for the *behavior*, not just the *symbol*, and document before/after hit counts in the PR description.**
