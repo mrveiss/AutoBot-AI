@@ -43,7 +43,7 @@ def _graph(*search_results):
 
 @pytest.mark.asyncio
 async def test_a_name_that_does_not_exist_is_not_reported_as_an_exact_hit():
-    """"Incident 7" is a typo; only "Incident 71" exists."""
+    """ "Incident 7" is a typo; only "Incident 71" exists."""
     graph = _graph(_INCIDENT_71)
 
     entity = await graph.get_entity(entity_name="Incident 7")
@@ -99,7 +99,7 @@ async def test_no_results_is_still_none():
 
 @pytest.mark.asyncio
 async def test_delete_by_name_refuses_a_near_miss():
-    """"delete Incident 7" must never delete "Incident 71"."""
+    """ "delete Incident 7" must never delete "Incident 71"."""
     graph = _graph(_INCIDENT_71)
 
     deleted = await graph.delete_entity(entity_name="Incident 7")
