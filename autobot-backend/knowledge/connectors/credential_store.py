@@ -75,6 +75,8 @@ def _refresh_lock_key(secret_id: str) -> str:
     exactly as well.
     """
     return _REFRESH_LOCK_PREFIX + hashlib.sha256(secret_id.encode("utf-8")).hexdigest()[:32]
+
+
 _REFRESH_DB = "knowledge"
 
 
