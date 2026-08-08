@@ -91,7 +91,7 @@ def sanitize_ldap_dn(value: str) -> str:
 # grouping, boolean OR, wildcards, fuzzy/optional modifiers, phrases. A caller
 # string carrying these stops being a search term and becomes query syntax
 # (#13762).
-_REDISEARCH_STRUCTURAL: frozenset[str] = frozenset("@{}[]()|*~%^\"\\")
+_REDISEARCH_STRUCTURAL: frozenset[str] = frozenset('@{}[]()|*~%^"\\')
 
 # Everything else RediSearch's tokenizer treats as a separator. Escaping these
 # is required inside a TAG filter, where the value must match exactly, and
