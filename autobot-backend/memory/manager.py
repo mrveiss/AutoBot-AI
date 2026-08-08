@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 from .agent_diary import AgentDiaryService
 from .cache import LRUCacheManager
@@ -957,4 +958,22 @@ class MemoryManager:
         return True
 
 
-__all__ = ["MemoryManager"]
+def get_memory_manager() -> MemoryManager:
+    """Return the shared MemoryManager singleton — the canonical factory (#13722).
+
+    Defined here, beside the class it constructs, rather than in ``compat.py``.
+    It was never a compatibility shim: ``task_execution_tracker.py:52`` uses it
+    in production and #10666 B2 named it canonical. Only its location was
+    legacy, and that location is why #13690 was filed on the false premise that
+    ``compat.py`` had no production callers — nobody looks for the canonical
+    factory in a module called "backward compatibility wrappers".
+
+    ``memory.compat`` re-exports this name, so both import paths keep working.
+    """
+    return _get_memory_manager_singleton()
+
+
+_get_memory_manager_singleton = lazy_singleton(MemoryManager)
+
+
+__all__ = ["MemoryManager", "get_memory_manager"]
