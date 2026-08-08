@@ -375,9 +375,19 @@ def _provided_by_multiple_roots(top_level: str) -> bool:
     # (absolute and relative forms, or a rootdir re-inserted by a conftest), and
     # counting those as separate roots would refuse the exemption for names that
     # only one source root actually provides.
+    # Only this repo's own source roots count. A dependency shipping a top-level
+    # ``utils`` in site-packages is not the shadow this guards against — CI has
+    # such packages and a dev checkout may not, which would otherwise make the
+    # exemption fire locally and refuse on CI for the very same name.
+    repo_root = Path(__file__).resolve().parents[1]
     providers: set[str] = set()
     for entry in sys.path:
         base = Path(entry or ".")
+        try:
+            if not base.resolve().is_relative_to(repo_root):
+                continue
+        except (OSError, ValueError):
+            continue
         target = base / f"{top_level}.py"
         if not target.is_file():
             target = base / top_level
