@@ -18,10 +18,12 @@ Architecture:
 
 Endpoints:
 - POST /graph-rag/search - Graph-aware search
+- POST /graph-rag/path - Shortest relationship path between two entities (#13474)
 - GET /graph-rag/health - Service health check
 - GET /graph-rag/metrics - Performance metrics
 """
 
+import asyncio
 from typing import Callable, Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -31,6 +33,8 @@ from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     GraphRAGHealthResponse,
     GraphRagMetricsData,
+    GraphRAGPathRequest,
+    GraphRAGPathResponse,
     GraphRAGSearchRequest,
     GraphRAGSearchResponse,
 )
@@ -215,6 +219,73 @@ async def graph_rag_search(
     except Exception as e:
         logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Graph-RAG search failed")
+
+
+@router.post("/path", response_model=GraphRAGPathResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="graph_rag_path",
+    error_code_prefix="GRAPH_RAG",
+)
+async def graph_rag_path(
+    path_request: GraphRAGPathRequest = Body(...),
+    service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """
+    Return the shortest relationship path between two memory-graph entities.
+
+    Issue #13474: gives the memory graph's shortest-path traversal a production
+    caller. ``/search`` expands a neighbourhood — it answers "what relates to X";
+    this answers "how does X reach Y".
+
+    An unresolvable entity name is a 404 (the caller referenced something that
+    does not exist); "these two exist but are not connected" is a 200 with
+    ``found: false``, because that is a valid answer, not a failure.
+
+    Issue #744: Requires authenticated user.
+    """
+    request_id = generate_request_id()
+
+    try:
+        result = await service.find_connection_path(
+            from_entity=path_request.from_entity,
+            to_entity=path_request.to_entity,
+            relation=path_request.relation,
+            max_depth=path_request.max_depth,
+            direction=path_request.direction,
+            timeout=path_request.timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("[%s] Graph-RAG path timed out after %ss", request_id, path_request.timeout)
+        raise HTTPException(status_code=504, detail="Graph-RAG path traversal timed out")
+    except Exception as e:
+        # Generic detail on purpose: with_error_handling would otherwise return
+        # the raw exception type and message to the client (#13740), which for a
+        # Redis failure means an internal host and port. /search guards the same
+        # way ten lines above.
+        logger.error("[%s] Graph-RAG path failed: %s", request_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Graph-RAG path traversal failed")
+
+    if result.get("reason") == "entity_not_found":
+        logger.info("[%s] Graph-RAG path: unresolved entities %s", request_id, result.get("missing_entities"))
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "entity_not_found", "missing_entities": result.get("missing_entities", [])},
+        )
+
+    logger.info(
+        "[%s] Graph-RAG path complete: found=%s hops=%s",
+        request_id,
+        result.get("found"),
+        result.get("hops"),
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "request_id": request_id, **result},
+        media_type="application/json; charset=utf-8",
+    )
 
 
 register_app_state_probe("graph_rag", "graph_rag_service")

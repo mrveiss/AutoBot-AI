@@ -383,3 +383,99 @@ def test_stdio_rejects_the_overloaded_full_token_form():
     with patch.object(config.misc, "mcp_token", f"{TEST_SECRET}:kb,memory,agents"):
         with pytest.raises(RuntimeError, match="SECRET SEGMENT ONLY"):
             _stdio_bearer_token()
+
+
+# ---------------------------------------------------------------------------
+# memory.path — #13474 exposes the shortest-path traversal as an MCP tool
+# ---------------------------------------------------------------------------
+
+
+def test_memory_path_is_declared_under_the_memory_scope():
+    """The tool must exist in the manifest, or no MCP client can ever call it."""
+    server = make_server()
+    assert "memory.path" in server.TOOLS
+    schema = server.TOOLS["memory.path"]["inputSchema"]
+    assert schema["required"] == ["from_entity", "to_entity"]
+    assert schema["properties"]["direction"]["enum"] == ["outgoing", "incoming", "both"]
+
+
+@pytest.mark.asyncio
+async def test_memory_path_hidden_from_kb_only_token():
+    server = make_server()
+    resp = await server.handle_request("tools/list", {}, KB_TOKEN, req_id=1)
+    assert "memory.path" not in {t["name"] for t in resp["result"]["tools"]}
+
+
+@pytest.mark.asyncio
+async def test_memory_path_delegates_to_find_path():
+    """No duplicated traversal: the tool calls AutoBotMemoryGraph.find_path (#13474)."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.find_path = AsyncMock(return_value={"found": True, "hops": 2, "path": []})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_path(
+            from_entity="Redis Config",
+            to_entity="Incident 7",
+            relation="CAUSED",
+        )
+
+    assert result["hops"] == 2
+    fake_graph.initialize.assert_awaited_once()
+    fake_graph.find_path.assert_awaited_once_with(
+        from_entity="Redis Config",
+        to_entity="Incident 7",
+        relation="CAUSED",
+        max_depth=6,
+        direction="both",
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_path_clamps_max_depth():
+    """An untrusted caller must not be able to request an unbounded traversal."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.find_path = AsyncMock(return_value={"found": False})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        await server._memory_path("A", "B", max_depth=9999)
+        assert fake_graph.find_path.await_args.kwargs["max_depth"] == 10
+
+        await server._memory_path("A", "B", max_depth=0)
+        assert fake_graph.find_path.await_args.kwargs["max_depth"] == 1
+
+
+@pytest.mark.asyncio
+async def test_memory_path_rejects_unknown_direction_without_traversing():
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_path("A", "B", direction="sideways")
+
+    assert result["error"] == "Invalid direction"
+    fake_graph.find_path.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_memory_path_dispatches_end_to_end():
+    """Handler name must match the tool name so _dispatch_tool resolves it."""
+    server = make_server()
+
+    with patch(
+        "mcp.autobot_server.AutoBotMCPServer._memory_path",
+        new=AsyncMock(return_value={"found": True, "hops": 1, "path": [{"relation": "CAUSED"}]}),
+    ):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.path", "arguments": {"from_entity": "A", "to_entity": "B"}},
+            VALID_TOKEN,
+        )
+
+    assert "result" in resp, resp
+    import json
+
+    content = json.loads(resp["result"]["content"][0]["text"])
+    assert content["found"] is True
+    assert content["hops"] == 1

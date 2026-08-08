@@ -6,10 +6,11 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+import os
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
@@ -4629,6 +4630,55 @@ class GraphRAGSearchResponse(BaseModel):
     success: bool = Field(..., description="Whether the search succeeded")
     results: List[Metadata] = Field(..., description="Search results")
     metrics: Metadata = Field(..., description="Performance metrics")
+    request_id: str = Field(..., description="Unique request identifier")
+
+
+# #13474: a "both"-direction walk branches twice per node and issues a Redis
+# round-trip per edge, so the traversal always carries a deadline. Overridable
+# per request; never unbounded.
+DEFAULT_PATH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS", "10.0"))
+
+
+class GraphRAGPathRequest(BaseModel):
+    """Request model for a shortest-path query between two memory-graph entities. #13474."""
+
+    from_entity: str = Field(..., min_length=1, max_length=200, description="Source entity name")
+    to_entity: str = Field(..., min_length=1, max_length=200, description="Target entity name")
+    relation: str | None = Field(
+        None, max_length=100, description="Restrict traversal to this relation type; omit for all types"
+    )
+    max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
+    direction: Literal["outgoing", "incoming", "both"] = Field(
+        "both", description="Edge direction to follow; 'both' treats relations as undirected"
+    )
+    timeout: float | None = Field(
+        DEFAULT_PATH_TIMEOUT_SECONDS,
+        ge=1.0,
+        le=30.0,
+        description="Traversal deadline in seconds (1-30). Bounds a wide 'both'-direction walk.",
+    )
+
+    @field_validator("from_entity", "to_entity")
+    @classmethod
+    def validate_entity_name(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class GraphRAGPathResponse(BaseModel):
+    """Response model for a shortest-path query. #13474."""
+
+    success: bool = Field(..., description="Whether the query executed")
+    found: bool = Field(..., description="Whether a path exists between the two entities")
+    reason: str | None = Field(None, description="Why no path was returned ('no_path'); null when found")
+    from_entity: Metadata | None = Field(None, description="Resolved source entity (id, name, type)")
+    to_entity: Metadata | None = Field(None, description="Resolved target entity (id, name, type)")
+    missing_entities: List[str] = Field(default_factory=list, description="Entity names that could not be resolved")
+    hops: int = Field(..., description="Path length in edges; 0 when both names resolve to the same entity")
+    path: List[Metadata] = Field(..., description="Ordered traversal steps, excluding the start entity")
+    query: Metadata = Field(..., description="Echo of the traversal parameters actually used")
+    traversal_time: float = Field(..., description="Traversal wall time in seconds")
     request_id: str = Field(..., description="Unique request identifier")
 
 
