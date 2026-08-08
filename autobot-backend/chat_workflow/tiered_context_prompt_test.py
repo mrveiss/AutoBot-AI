@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""End-to-end prompt capture for the reconnected L2/L4 layers (#13686, #13687).
+"""End-to-end prompt capture for the reconnected L2 layer (#13686).
 
-The unit tests in ``tiered_context_sources_test.py`` prove the resolvers return
-the right objects. These prove the *prompt the model actually receives* now
-contains the blocks those objects feed — which is what both acceptance criteria
-ask for, and what could not happen before the fix.
+``tiered_context_sources_test.py`` proves the resolver returns the graph the
+manager owns. These prove the *prompt the model actually receives* now contains
+the block that graph feeds — which is the acceptance criterion, and what could
+not happen before the fix.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -69,17 +69,15 @@ async def _capture_system_prompt(handler, session, message):
                         session,
                         message,
                         use_knowledge=False,
-                        work_item_id=getattr(session, "_work_item_id", None),
                     )
     return params["system_prompt"]
 
 
-def _session(work_item_id=None):
+def _session():
     session = MagicMock()
     session.session_id = "s-1"
     session.conversation_history = []
     session.metadata = {}
-    session._work_item_id = work_item_id
     return session
 
 
@@ -117,43 +115,3 @@ class TestL2RendersInPrompt:
 
         assert "## Related Context" not in prompt
         assert "SYSTEM" in prompt
-
-
-class TestL4RendersInPrompt:
-    @pytest.mark.asyncio
-    async def test_linked_goal_renders_goal_ancestry_block(self):
-        """AC #13687: flag on + a session linked to a goal -> '## Goal Ancestry'."""
-        chain = [
-            {"id": "1", "title": "Ship the platform", "level": "vision", "status": "active"},
-            {"id": "2", "title": "Wake the context stack", "level": "objective", "status": "active"},
-        ]
-        handler = _handler_with_tiered_context_on()
-
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=None,
-        ):
-            with patch(
-                "chat_workflow.tiered_context_sources.resolve_goal_ancestry",
-                new_callable=AsyncMock,
-                return_value=chain,
-            ):
-                prompt = await _capture_system_prompt(handler, _session("wi-1"), "status?")
-
-        assert "## Goal Ancestry" in prompt
-        assert "Wake the context stack" in prompt
-
-    @pytest.mark.asyncio
-    async def test_unlinked_session_renders_no_goal_block(self):
-        """AC #13687: no linked goal -> no L4 block (and no goal query)."""
-        handler = _handler_with_tiered_context_on()
-
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=None,
-        ):
-            with patch("user_management.database.get_async_session_factory") as factory:
-                prompt = await _capture_system_prompt(handler, _session(None), "status?")
-
-        assert "## Goal Ancestry" not in prompt
-        factory.assert_not_called()

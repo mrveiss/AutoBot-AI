@@ -766,7 +766,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         use_knowledge: bool = True,
         language: str = None,
         lightweight_mode: bool = False,
-        work_item_id: str | None = None,
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt.
 
@@ -774,10 +773,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
         Issue #11585: session.metadata["model_override"] (per-request/per-conversation
         choice) takes priority over the global config default.
-        Issue #13687: work_item_id is the governed identity lifted by
-        build_governed_identity (GH#11160); it is what maps a turn to a goal so
-        L4 GoalAncestry can render. None means "no goal linked" — L4 stays silent
-        and no goal query is issued.
         """
         selected_model = self._get_selected_model(
             session.metadata.get("model_override") if session and session.metadata else None
@@ -812,15 +807,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
                 if TIERED_CONTEXT_ENABLED:
-                    # Issues #13686/#13687: L2 and L4 were structurally unable to
-                    # render — the memory graph was read off an object that never
-                    # had it, and goal ancestry was never passed at all. Both
-                    # inputs are now resolved from their owners; both degrade to
-                    # None without failing the turn.
-                    from chat_workflow.tiered_context_sources import (
-                        resolve_goal_ancestry,
-                        resolve_memory_graph,
-                    )
+                    # Issue #13686: the memory graph was read off an object that
+                    # never had it, so L2 returned "" on every turn. It now comes
+                    # from the manager that owns it, and degrades to None rather
+                    # than failing the turn.
+                    from chat_workflow.tiered_context_sources import resolve_memory_graph
 
                     tiered_ctx = await TieredContextBuilder().build(
                         user_message=message,
@@ -828,7 +819,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                         session_id=session.session_id,
                         memory_graph=await resolve_memory_graph(),
                         knowledge_service=self.knowledge_service if use_knowledge else None,
-                        goal_ancestry=await resolve_goal_ancestry(work_item_id),
                     )
                     if tiered_ctx:
                         system_prompt = tiered_ctx + "\n\n" + system_prompt

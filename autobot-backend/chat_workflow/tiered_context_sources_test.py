@@ -2,81 +2,105 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for the tiered-context data sources (#13686, #13687).
+"""Memory-graph resolution for the tiered context stack (#13686).
 
-These cover the two structural breaks that made L2 and L4 unable to render:
-the memory graph was read off an object that never had it, and goal ancestry
-was never passed at the only production call site.
+L2 OnDemand could never render: the graph was read off ``ChatWorkflowManager``,
+which has no such attribute, so ``getattr(..., None)`` always won and the layer
+returned "" on its first branch.
+
+These exercise the real accessor against a seeded ``app_state`` rather than
+patching the accessor itself — patching it would assert only that a mock
+returns a mock, and would leave the one line carrying the fix unexecuted.
 """
 
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from chat_workflow.tiered_context_sources import resolve_goal_ancestry, resolve_memory_graph
+from chat_workflow.tiered_context_sources import resolve_memory_graph
+from utils.resource_factory import ResourceFactory
 
-# ---------------------------------------------------------------------------
-# #13686 — memory graph resolution
-# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def app_state():
+    """Yield the real process-wide app_state dict, restored afterwards."""
+    from initialization.lifespan import app_state as state
+
+    original = state.get("chat_history_manager")
+    yield state
+    state["chat_history_manager"] = original
+
+
+class TestInitializedManagerAccessor:
+    def test_returns_the_manager_the_app_registered(self, app_state):
+        """Exercises the real lookup: app_state -> manager."""
+        manager = MagicMock(name="ChatHistoryManager")
+        app_state["chat_history_manager"] = manager
+
+        assert ResourceFactory.get_initialized_chat_history_manager() is manager
+
+    def test_returns_none_before_startup_registers_one(self, app_state):
+        app_state["chat_history_manager"] = None
+
+        assert ResourceFactory.get_initialized_chat_history_manager() is None
+
+    def test_never_constructs_a_manager(self, app_state):
+        """The accessor must not pay for (or duplicate) a ChatHistoryManager."""
+        app_state["chat_history_manager"] = None
+
+        with patch("chat_history.ChatHistoryManager") as manager_cls:
+            assert ResourceFactory.get_initialized_chat_history_manager() is None
+
+        manager_cls.assert_not_called()
 
 
 class TestResolveMemoryGraph:
-    @pytest.mark.asyncio
-    async def test_returns_the_managers_own_graph_instance(self):
-        """The graph handed to L2 must be the *same object* the manager owns.
+    def test_resolves_the_graph_owned_by_the_registered_manager(self, app_state):
+        """AC #13686: the graph reaching L2 is the same instance the manager owns.
 
-        This is the #13686 regression: the old call site read
-        ``getattr(self, "memory_graph", None)`` off the workflow manager, which
-        has no such attribute, so L2 always received None.
+        End-to-end through the real accessor — not a patched one — so the fix
+        line itself is executed.
         """
         graph = MagicMock(name="AutoBotMemoryGraph")
-        chm = MagicMock()
-        chm.memory_graph = graph
+        manager = MagicMock()
+        manager.memory_graph = graph
+        app_state["chat_history_manager"] = manager
 
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=chm,
-        ):
-            resolved = await resolve_memory_graph()
+        import asyncio
 
-        assert resolved is graph
+        assert asyncio.run(resolve_memory_graph()) is graph
 
     @pytest.mark.asyncio
-    async def test_constructs_no_second_memory_graph(self):
-        """Resolution must never build its own AutoBotMemoryGraph."""
-        chm = MagicMock()
-        chm.memory_graph = MagicMock()
+    async def test_constructs_no_second_memory_graph(self, app_state):
+        """AC #13686: no new AutoBotMemoryGraph is introduced.
 
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=chm,
-        ):
-            with patch("autobot_memory_graph.AutoBotMemoryGraph") as graph_cls:
-                await resolve_memory_graph()
+        Patches the class where it is actually constructed — on ChatHistoryBase
+        (``chat_history.base.AutoBotMemoryGraph``) — so the assertion can fail.
+        """
+        manager = MagicMock()
+        manager.memory_graph = MagicMock()
+        app_state["chat_history_manager"] = manager
+
+        with patch("chat_history.base.AutoBotMemoryGraph") as graph_cls:
+            await resolve_memory_graph()
 
         graph_cls.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_degrades_to_none_without_a_manager(self):
+    async def test_degrades_to_none_without_a_manager(self, app_state):
         """No initialised manager (pre-startup, or outside an app) -> None."""
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=None,
-        ):
-            assert await resolve_memory_graph() is None
+        app_state["chat_history_manager"] = None
+
+        assert await resolve_memory_graph() is None
 
     @pytest.mark.asyncio
-    async def test_degrades_to_none_when_graph_init_failed(self):
+    async def test_degrades_to_none_when_graph_init_failed(self, app_state):
         """A manager whose graph failed to initialise leaves memory_graph None."""
-        chm = MagicMock()
-        chm.memory_graph = None
+        manager = MagicMock()
+        manager.memory_graph = None
+        app_state["chat_history_manager"] = manager
 
-        with patch(
-            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
-            return_value=chm,
-        ):
-            assert await resolve_memory_graph() is None
+        assert await resolve_memory_graph() is None
 
     @pytest.mark.asyncio
     async def test_resolution_failure_is_non_fatal(self):
@@ -86,119 +110,3 @@ class TestResolveMemoryGraph:
             side_effect=RuntimeError("boom"),
         ):
             assert await resolve_memory_graph() is None
-
-
-# ---------------------------------------------------------------------------
-# #13687 — goal ancestry resolution
-# ---------------------------------------------------------------------------
-
-
-def _install_llc_stubs(work_item, ancestry, session_factory_probe):
-    """Patch the lazily-imported LLC surface with controllable doubles."""
-    goal_service = MagicMock()
-    goal_service.get_goal_ancestry_for_work_item = AsyncMock(return_value=ancestry)
-    work_item_service = MagicMock()
-    work_item_service.get = AsyncMock(return_value=work_item)
-
-    goal_mod = MagicMock()
-    goal_mod.GoalService = MagicMock(return_value=goal_service)
-    wi_mod = MagicMock()
-    wi_mod.WorkItemService = MagicMock(return_value=work_item_service)
-    db_mod = MagicMock()
-    db_mod.get_async_session_factory = session_factory_probe
-
-    return (
-        patch.dict(
-            sys.modules,
-            {
-                "llc.services.goal": goal_mod,
-                "llc.services.work_item_service": wi_mod,
-                "user_management.database": db_mod,
-            },
-        ),
-        goal_service,
-        work_item_service,
-    )
-
-
-def _session_factory_probe():
-    """A session factory that records whether it was ever called."""
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=MagicMock())
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-    factory = MagicMock(return_value=session_cm)
-    return MagicMock(return_value=factory)
-
-
-class TestResolveGoalAncestry:
-    @pytest.mark.asyncio
-    async def test_no_work_item_issues_no_query(self):
-        """AC #13687: a turn with no linked goal must not touch the DB at all."""
-        probe = _session_factory_probe()
-        ctx, _, _ = _install_llc_stubs(MagicMock(), [], probe)
-
-        with ctx:
-            assert await resolve_goal_ancestry(None) is None
-            assert await resolve_goal_ancestry("") is None
-
-        probe.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_root_first_chain_for_linked_goal(self):
-        import uuid
-
-        goal_id = uuid.uuid4()
-        work_item = MagicMock()
-        work_item.goal_id = goal_id
-        chain = [
-            {"id": "1", "title": "Ship the platform", "level": "vision", "status": "active"},
-            {"id": "2", "title": "Wake the context stack", "level": "objective", "status": "active"},
-        ]
-        ctx, goal_service, wi_service = _install_llc_stubs(work_item, chain, _session_factory_probe())
-
-        with ctx:
-            result = await resolve_goal_ancestry("wi-123")
-
-        assert result == chain
-        wi_service.get.assert_awaited_once()
-        assert goal_service.get_goal_ancestry_for_work_item.await_args.args[1] == goal_id
-
-    @pytest.mark.asyncio
-    async def test_work_item_without_goal_returns_none(self):
-        work_item = MagicMock()
-        work_item.goal_id = None
-        ctx, goal_service, _ = _install_llc_stubs(work_item, [], _session_factory_probe())
-
-        with ctx:
-            assert await resolve_goal_ancestry("wi-123") is None
-
-        goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_missing_work_item_returns_none(self):
-        ctx, goal_service, _ = _install_llc_stubs(None, [], _session_factory_probe())
-
-        with ctx:
-            assert await resolve_goal_ancestry("wi-404") is None
-
-        goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_empty_chain_returns_none_so_l4_stays_silent(self):
-        import uuid
-
-        work_item = MagicMock()
-        work_item.goal_id = uuid.uuid4()
-        ctx, _, _ = _install_llc_stubs(work_item, [], _session_factory_probe())
-
-        with ctx:
-            assert await resolve_goal_ancestry("wi-123") is None
-
-    @pytest.mark.asyncio
-    async def test_lookup_failure_is_non_fatal(self):
-        """AC #13687: a goal-lookup failure completes the turn without L4."""
-        probe = MagicMock(side_effect=RuntimeError("db down"))
-        ctx, _, _ = _install_llc_stubs(MagicMock(), [], probe)
-
-        with ctx:
-            assert await resolve_goal_ancestry("wi-123") is None

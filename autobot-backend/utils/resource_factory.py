@@ -125,14 +125,6 @@ class ResourceFactory:
                     logger.debug("Using pre-initialized ChatHistoryManager from app.state")
                     return chm
 
-            # Issue #13686: before paying for a construction, check the request-free
-            # singleton mirror. Without this, every request-less caller silently got
-            # its own manager (and its own memory graph) instead of the app's.
-            existing = ResourceFactory.get_initialized_chat_history_manager()
-            if existing is not None:
-                logger.debug("Using pre-initialized ChatHistoryManager from app_state mirror")
-                return existing
-
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
 

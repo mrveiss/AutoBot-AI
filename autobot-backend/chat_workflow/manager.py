@@ -3364,19 +3364,8 @@ before summarizing.
         except Exception as e:
             logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
 
-        # GH#11160/#13687: lift the governed work item from the request context with
-        # the same canonical extractor _create_llm_iteration_context uses, so the
-        # goal-ancestry lookup and the approval seam can never disagree on which
-        # work item a turn belongs to.
-        _, prompt_work_item_id, _ = build_governed_identity(context or {}, session.session_id)
-
         llm_params = await self._prepare_llm_request_params(
-            session,
-            message,
-            use_knowledge=use_knowledge,
-            language=language,
-            lightweight_mode=lightweight_mode,
-            work_item_id=prompt_work_item_id,
+            session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
         # MVA-1993: Store lightweight_mode in params for response metadata
         llm_params["lightweight_mode_used"] = lightweight_mode
