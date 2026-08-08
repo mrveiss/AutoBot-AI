@@ -35,6 +35,7 @@ import aiohttp
 
 from autobot_shared.auth import BasicAuth
 from autobot_shared.http_client import get_http_client
+from knowledge.connectors.base import instance_host_egress
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -226,8 +227,14 @@ class ConfluenceConnector(AbstractConnector):
         auth = aiohttp.BasicAuth(login=self._email, password=self._api_token)
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
+            # Operator-configured instance host — private opt-in applies (#13625).
             async with get_http_client().tracked_request(
-                "GET", url, auth=auth, timeout=timeout, suppress_error_log=True
+                "GET",
+                url,
+                auth=auth,
+                timeout=timeout,
+                suppress_error_log=True,
+                guard_egress=instance_host_egress(),
             ) as resp:
                 if resp.status == 429:
                     raise RetryableError("Confluence rate-limited", status_code=429)
