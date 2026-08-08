@@ -28,6 +28,13 @@ logger = get_logger(__name__)
 # into the first caller's results). Not a valid owner for new writes.
 LEGACY_UNSCOPED_OWNER = "__unscoped__"
 
+# Owner for system-initiated work that has no human requester — scheduled scans,
+# background analysis (#13688). Unlike LEGACY_UNSCOPED_OWNER this is *writable*:
+# refusing the write instead would discard real results, moving the data loss
+# the migration was written to avoid from the read path to the write path. It is
+# still an isolated silo, so it never surfaces in a user's results.
+SYSTEM_OWNER = "__system__"
+
 
 def _require_user_id(user_id: str, *, for_write: bool = False) -> str:
     """Validate a caller-supplied owner scope (#13688).
@@ -75,7 +82,7 @@ class GeneralStorage:
         """Initialize memory entries table"""
         try:
             async with self._get_connection() as conn:
-                await conn.execute(f"""
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS memory_entries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         category TEXT NOT NULL,
@@ -84,9 +91,11 @@ class GeneralStorage:
                         timestamp TIMESTAMP NOT NULL,
                         reference_path TEXT,
                         embedding BLOB,
-                        user_id TEXT NOT NULL DEFAULT '{LEGACY_UNSCOPED_OWNER}'
+                        user_id TEXT NOT NULL
                     )
-                """)  # nosec B608  # interpolates a module constant, never caller input
+                """)  # #13688: no DEFAULT here — a fresh table must reject an
+                # ownerless INSERT outright. The default exists only on the
+                # ALTER path, where pre-migration rows genuinely have no owner.
 
                 await self._migrate_add_user_id(conn)
 
@@ -320,4 +329,4 @@ class GeneralStorage:
         )
 
 
-__all__ = ["GeneralStorage", "LEGACY_UNSCOPED_OWNER"]
+__all__ = ["GeneralStorage", "LEGACY_UNSCOPED_OWNER", "SYSTEM_OWNER"]

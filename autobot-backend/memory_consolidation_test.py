@@ -16,10 +16,10 @@ sys.path.append(str(Path(__file__).parent))
 
 from markdown_reference_system import MarkdownReferenceSystem
 from memory import MemoryCategory, MemoryManager, TaskPriority
+from task_execution_tracker import TaskExecutionTracker
 
 # #13688: the general memory plane is owner-scoped; tests must name an owner.
 TEST_USER = "test-user"
-from task_execution_tracker import TaskExecutionTracker
 
 
 async def test_memory_consolidation_system():

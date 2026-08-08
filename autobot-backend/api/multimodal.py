@@ -35,6 +35,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -80,10 +81,15 @@ def _get_modality_type(modality_str: str) -> ModalityType:
 def _principal_id(current_user: dict | None) -> str | None:
     """Owner scope for a multi-modal write (#13688).
 
+    Delegates to the canonical claim resolver rather than reading ``user_id``
+    directly: that claim is optional, so reading it alone dropped every
+    principal minted without it and split one user across two owner silos
+    depending on which endpoint wrote the row.
+
     Taken from the authenticated principal only — never from the request body,
     which would let a caller write into another tenant's memory.
     """
-    return str(current_user.get("user_id")) if current_user and current_user.get("user_id") else None
+    return resolve_principal_id(current_user)
 
 
 def _build_image_modal_input(image_data, file, intent: str, question, user_id: str | None) -> MultiModalInput:
@@ -621,7 +627,8 @@ async def combine_multimodal_inputs(
 
     try:
         # Collect all modal inputs using helper
-        inputs = await _collect_modal_inputs(text, image_file, audio_file, intent, _principal_id(current_user))
+        owner = _principal_id(current_user)
+        inputs = await _collect_modal_inputs(text, image_file, audio_file, intent, owner)
 
         if not inputs:
             raise HTTPException(status_code=400, detail="At least one input modality required")
@@ -630,7 +637,7 @@ async def combine_multimodal_inputs(
         results = [await processor.process(modal_input) for modal_input in inputs]
 
         # Create combined input and process fusion
-        combined_input = _create_combined_input(text, image_file, audio_file, intent, _principal_id(current_user))
+        combined_input = _create_combined_input(text, image_file, audio_file, intent, owner)
         fusion_result = await processor._process_combined(combined_input)
 
         processing_time = time.time() - start_time

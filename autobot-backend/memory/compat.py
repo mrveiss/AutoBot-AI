@@ -64,9 +64,7 @@ class LongTermMemoryManager:
             cat = MemoryCategory[category.upper()]
         except (KeyError, AttributeError):
             cat = category  # Use as-is if not in enum
-        return await self._manager.store_memory(
-            cat, content, user_id=user_id, metadata=metadata, embedding=embedding
-        )
+        return await self._manager.store_memory(cat, content, user_id=user_id, metadata=metadata, embedding=embedding)
 
     async def retrieve_memories(
         self, category: str, filters: Dict | None = None, limit: int = 100, *, user_id: str

@@ -70,3 +70,86 @@ class TestUnownedResultIsNotPersisted:
                 await processor._store_result(_result(user_id=None))
 
         assert any("#13688" in str(c.args[0]) for c in log.warning.call_args_list if c.args)
+
+
+# ---------------------------------------------------------------------------
+# Gaps surfaced by re-review of PR #13698
+# ---------------------------------------------------------------------------
+
+
+class TestPrincipalClaimResolution:
+    """N1: reading `user_id` alone missed every principal minted without it.
+
+    `_extract_user_from_jwt` sets `user_id` only when the token carries that
+    claim, but always sets `sub`. Resolving the optional claim dropped rows and
+    split one user across two owner silos depending on which endpoint wrote.
+    """
+
+    @pytest.mark.parametrize(
+        "principal,expected",
+        [
+            ({"id": "3f2c", "user_id": "u-42", "sub": "alice"}, "3f2c"),
+            ({"user_id": "u-42", "sub": "alice"}, "u-42"),
+            ({"sub": "alice"}, "alice"),
+            ({}, None),
+            (None, None),
+        ],
+    )
+    def test_claim_order_matches_the_repo_standard(self, principal, expected):
+        from autobot_shared.principal import resolve_principal_id
+
+        assert resolve_principal_id(principal) == expected
+
+    def test_the_two_endpoints_resolve_the_same_owner(self):
+        """Same principal must not land in two silos."""
+        from autobot_shared.principal import resolve_principal_id
+
+        principal = {"sub": "alice"}
+
+        # api.multimodal._principal_id and api.task_memory both delegate here,
+        # so one principal can no longer land in two owner silos.
+        assert resolve_principal_id(principal) == "alice"
+
+
+class TestProcessStampsTheOwner:
+    @pytest.mark.asyncio
+    async def test_process_stamps_the_result_from_the_input(self):
+        """The stamp is what carries the owner to _store_result."""
+        from multimodal_processor.models import ModalityType, MultiModalInput, ProcessingIntent
+        from multimodal_processor.processor import MultiModalProcessor
+
+        proc = MultiModalProcessor()
+        modal_input = MultiModalInput(
+            input_id="i-1",
+            modality_type=ModalityType.TEXT,
+            intent=ProcessingIntent.DECISION_MAKING,
+            data="hello",
+            user_id="user-7",
+        )
+
+        with patch.object(proc, "_route_to_processor", new_callable=AsyncMock) as route:
+            route.return_value = _result(user_id=None)
+            with patch.object(proc.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+                result = await proc.process(modal_input)
+
+        assert result.user_id == "user-7"
+        assert store.await_args.kwargs["user_id"] == "user-7"
+
+
+class TestSystemInitiatedWorkIsPersisted:
+    @pytest.mark.asyncio
+    async def test_a_system_owned_result_is_stored_not_dropped(self):
+        """N3: system-initiated work has no human requester.
+
+        Dropping it would move the data loss the migration was written to avoid
+        from the read path to the write path.
+        """
+        from memory.storage.general_storage import SYSTEM_OWNER
+
+        proc = MultiModalProcessor()
+
+        with patch.object(proc.memory_manager, "store_memory", new_callable=AsyncMock) as store:
+            await proc._store_result(_result(user_id=SYSTEM_OWNER))
+
+        store.assert_awaited_once()
+        assert store.await_args.kwargs["user_id"] == SYSTEM_OWNER
