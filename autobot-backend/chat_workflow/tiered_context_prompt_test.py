@@ -47,9 +47,7 @@ def _tiered_context_on():
 
 async def _capture_system_prompt(handler, session, message):
     """Run _prepare_llm_request_params under the flag and return the system prompt."""
-    with _tiered_context_on(), patch(
-        "chat_workflow.llm_handler._emit_before_prompt_build", new_callable=AsyncMock
-    ):
+    with _tiered_context_on(), patch("chat_workflow.llm_handler._emit_before_prompt_build", new_callable=AsyncMock):
         with patch(
             "chat_workflow.llm_handler._emit_system_prompt_ready",
             new_callable=AsyncMock,
