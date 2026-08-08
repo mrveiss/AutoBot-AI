@@ -50,11 +50,13 @@ Do **not** start #13689 first. That is the trap this whole umbrella documents.
 - **The umbrella carries a do-not-re-propose list** (four-service memory topology, per-user LLM
   persona regeneration on a timer, bespoke adapter contract) and a not-in-scope list of things we
   already do better. Read it before proposing memory work.
-- **Anonymization:** one vendor identifier (`TDAI_GATEWAY_API_KEY`) survived the first commit
-  because the verification grep used `\btdai\b` and `_` is a word character — the trailing `\b`
-  cannot match inside a `SCREAMING_SNAKE_CASE` identifier. Fixed in `dbb59ad8`; the false CLEAN
-  claim in the PR body was corrected rather than left standing. Screen with
-  `grep -noE 'tdai|TDAI_[A-Z_]+|...'`, never with word boundaries.
+- **Anonymization:** one vendor env-var identifier survived the first commit because the
+  verification grep used word boundaries (`\bNAME\b`) and `_` is a word character — the trailing
+  `\b` cannot match inside a `SCREAMING_SNAKE_CASE` token. Fixed in `dbb59ad8`; the false CLEAN
+  claim in the PR body was corrected rather than left standing. Screen for the vendor's product,
+  company and env-var prefixes **without** word boundaries, case-insensitively. Do not write the
+  screened tokens into any artifact — a note explaining the leak must not re-leak it, which is
+  the mistake this line replaces.
 - **This doc was nearly lost.** It was first written into `docs/research/` in the *main* tree,
   which fast-forwarded twice mid-session (`git reflog`: `pull --tags origin Dev_new_gui`), taking
   the untracked file with it. It survived only because it had already been moved here. Write

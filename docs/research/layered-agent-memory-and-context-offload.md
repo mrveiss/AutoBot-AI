@@ -2,15 +2,19 @@
 
 **Date:** 2026-08-08
 **Source:** an external, cloud-vendor-backed open-source "team memory hub for AI agents"
-(TypeScript monorepo, MIT-licensed core, ~17.6k stars, ~1.6k forks, created 2026-04-07,
-last push 2026-08-06, default branch `feat/server_team`). Repo name and vendor withheld per the
-no-external-names rule for committed docs; the URL was supplied in-session.
+(TypeScript monorepo, MIT-licensed core, widely starred, a few months old and still on a
+pre-1.0 development branch). Repo name, vendor, and locating metadata are withheld per the
+no-external-names rule for committed docs; the URL was supplied in-session. Exact star/fork
+counts, creation dates and branch names are omitted deliberately — together they identify the
+repository as surely as its name does.
 **Method:** read the root README, three module READMEs (`MemoryCore`, `MemoryKnowledge`,
 `MemoryProxy`), the top-level and `src/` directory trees, the default gateway config, and the
-context-offload injector source (`src/offload/mmd-injector.ts`). Vendor-identifying file and
-directory names are paraphrased throughout, per the no-external-names rule.
+context-offload injector source. Vendor, product and repository names are withheld per the
+no-external-names rule. Module and symbol names below are the source's own generic identifiers,
+kept only where the mechanism is unintelligible without a label; none of them names the vendor.
 **Status:** complete — source analysis and AutoBot comparison.
-**Filed as:** umbrella **#13685**, children **#13686-#13692**.
+**Filed as:** umbrella **#13685**, children **#13686-#13692**, plus **#13694** (token estimator)
+and **#13695** (idle-flush distillation trigger) from adopt-items 4 and 5.
 Wave 1 #13686 (L2 disconnected) · #13687 (L4 disconnected) · #13688 (memory plane untenanted).
 Wave 2 #13689 (A/B + flag decision) · #13690 (`compat.py`) · #13691 (budget guard, which depends
 on #13640). Wave 3 is #13692 (tool-output offload). Blocker under the tuning items: **#13251**.
@@ -27,10 +31,9 @@ shareable "memory assets": layered **Chat Memory**, versioned **Skills**, an **L
 **Code-Graph**. The selling proposition is organisational, not just technical: memory is an asset
 with an owner, a visibility scope (private / team / restricted), a role model (system admin / team
 admin / member), and an explicit **binding** of assets to agents ("loadout"). Maturity is high on
-adoption signals (17.6k stars, 464 PRs) but the repo is young (four months old) and the default
-branch is a feature branch, not `main` — an active, fast-moving codebase, not a settled one.
-Licence is `NOASSERTION` at repo level with MIT declared inside `MemoryCore`, which is a
-diligence flag for anything vendored.
+adoption signals but the repo is young and its default branch is a feature branch, not `main` —
+an active, fast-moving codebase, not a settled one. Licence is `NOASSERTION` at repo level with
+MIT declared inside one module, which is a diligence flag for anything vendored.
 
 ### Architecture & Key Patterns
 
@@ -39,7 +42,7 @@ Four deployable services in one monorepo, each independently Dockerised:
 | Service | Port | Role |
 | --- | --- | --- |
 | `MemoryCore` | 8420 | L0–L3 memory store, Skill registry, asset/ACL metadata, HTTP gateway |
-| `MemoryKnowledge` | 8421 | Wiki ingestion + Code-Graph indexing engines (Hono + Drizzle + SQLite FTS5) |
+| `MemoryKnowledge` | 8421 | Wiki ingestion + Code-Graph indexing engines (a TS web framework + ORM over SQLite FTS5) |
 | `MemoryPanel` | 8123 | Control plane: teams, curation, LLM binding, status callbacks |
 | `MemoryProxy` | — | Adapter layer onto third-party agent frameworks |
 
@@ -100,8 +103,7 @@ the rest:
 - History canvases are injected *only* by aggressive compression, as a replacement for messages
   that were deleted. Compression and memory injection are the same subsystem, coordinated.
 
-**3. Hybrid retrieval that degrades instead of failing.** BM25 (jieba for Chinese, standard
-tokenizer for English) fused with embeddings via RRF. Crucially `embedding.provider: "none"` is the
+**3. Hybrid retrieval that degrades instead of failing.** BM25 (a CJK-aware tokenizer for Chinese, a standard one for English) fused with embeddings via RRF. Crucially `embedding.provider: "none"` is the
 **default** — vector search is opt-in, and the system is fully functional on BM25 alone. Recall is
 bounded by `maxResults: 5`, `scoreThreshold: 0.3`, `timeoutMs: 5000`.
 
@@ -163,10 +165,10 @@ requirement to validate team/user/agent ownership on every request.
 
 | Claim | Number |
 | --- | --- |
-| PersonaMem long-term accuracy | 48% → 76% (+59% relative) |
-| WideSearch success rate | +51.52%, tokens −61.38% |
-| SWE-bench success rate | +9.93%, tokens −33.09% |
-| AA-LCR success rate | +7.95%, tokens −30.98% |
+| Long-term persona-recall accuracy (public benchmark) | 48% → 76% (+59% relative) |
+| Broad multi-source search success (public benchmark) | +51.52%, tokens −61.38% |
+| Software-engineering task success (public benchmark) | +9.93%, tokens −33.09% |
+| Long-context reasoning success (public benchmark) | +7.95%, tokens −30.98% |
 | Adoption | 17.6k stars, 1.6k forks |
 
 Caveats that matter more than the numbers: measured "over continuous multi-turn sessions, not
@@ -205,7 +207,7 @@ profiles, and they should be judged separately rather than as one package:
    self-contained, the storage substrate is plain files, and it needs *no* extra service and *no*
    extra LLM calls. Hidden costs are mostly implementation complexity, which is bounded and
    one-off. This is where the value density is.
-2. **The layered memory hub** (the PersonaMem result). Real capability, but the hidden costs —
+2. **The layered memory hub** (the persona-recall result). Real capability, but the hidden costs —
    four services, perpetual background LLM spend, outward data egress, unsettled on-disk format,
    unmeasurable recall quality — are recurring and land squarely on the operator. For a
    local-first, self-hosted platform the egress and spend costs in particular can outweigh a
@@ -290,7 +292,7 @@ context offload of tool output.
 
 #### 3. A trimming budget guard, not a warning — **adopt**
 
-- **Already-exists audit:** `chat_history/layers.py:286` sets `_L0_L1_MAX_TOKENS = 900` and
+- **Already-exists audit:** `chat_history/layers.py:285` sets `_L0_L1_MAX_TOKENS = 900` and
   `:319-325` compares the estimate against it and calls `logger.warning(...)` — then **renders
   and returns both layers anyway**. The budget is advisory. Contrast the source's
   `mmdMaxTokenRatio`, which bounds the injection as a fraction of the real context window and
