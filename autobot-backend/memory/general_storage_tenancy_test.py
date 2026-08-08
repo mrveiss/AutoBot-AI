@@ -233,3 +233,72 @@ class TestManagerApiRequiresScope:
         [entry] = await manager.retrieve_memories(MemoryCategory.FACT, user_id=ALICE, limit=10)
         assert entry.content == "AutoBot supports multi-modal AI"
         assert entry.metadata == {"source": "documentation"}
+
+
+# ---------------------------------------------------------------------------
+# Review findings on PR #13698
+# ---------------------------------------------------------------------------
+
+
+class TestReservedOwnerCannotBeWritten:
+    @pytest.mark.asyncio
+    async def test_legacy_owner_is_rejected_as_a_write_scope(self, storage):
+        """Writing under the reserved id would re-create the unscoped bucket."""
+        with pytest.raises(ValueError, match="reserved"):
+            await storage.store(_entry(LEGACY_UNSCOPED_OWNER))
+
+    @pytest.mark.asyncio
+    async def test_legacy_owner_is_still_readable(self, storage):
+        """Reads must keep accepting it or parked rows become unreachable."""
+        assert await storage.search(LEGACY_UNSCOPED_OWNER, "anything") == []
+
+
+class TestScopeNormalisation:
+    @pytest.mark.asyncio
+    async def test_surrounding_whitespace_does_not_split_a_tenant(self, storage):
+        await storage.store(_entry(f"  {ALICE}  ", "alice note"))
+
+        assert len(await storage.search(ALICE, "alice note")) == 1
+        [entry] = await storage.retrieve(ALICE, MemoryCategory.FACT, {"limit": 10})
+        assert entry.user_id == ALICE
+
+
+class TestConcurrentMigration:
+    @pytest.mark.asyncio
+    async def test_two_initializers_racing_on_a_legacy_db_both_succeed(self, tmp_path):
+        """A second worker must not die on 'duplicate column name' at startup.
+
+        PRAGMA and ALTER are not one transaction and the asyncio lock guards
+        only one process, so the loser has to treat the column already existing
+        as success.
+        """
+        import asyncio
+
+        db = tmp_path / "legacy_race.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("""
+                CREATE TABLE memory_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    metadata_json TEXT,
+                    timestamp TIMESTAMP NOT NULL,
+                    reference_path TEXT,
+                    embedding BLOB
+                )
+            """)
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "pre-existing row", datetime.now(tz=timezone.utc)),
+            )
+
+        results = await asyncio.gather(
+            *[GeneralStorage(db).initialize() for _ in range(6)],
+            return_exceptions=True,
+        )
+
+        failures = [r for r in results if isinstance(r, Exception)]
+        assert not failures, f"concurrent initialize must not raise: {failures}"
+
+        parked = await GeneralStorage(db).search(LEGACY_UNSCOPED_OWNER, "pre-existing")
+        assert len(parked) == 1

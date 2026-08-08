@@ -29,16 +29,25 @@ logger = get_logger(__name__)
 LEGACY_UNSCOPED_OWNER = "__unscoped__"
 
 
-def _require_user_id(user_id: str) -> str:
+def _require_user_id(user_id: str, *, for_write: bool = False) -> str:
     """Validate a caller-supplied owner scope (#13688).
 
+    Returns the *stripped* value: " alice" and "alice" must not become separate
+    silos through a stray space.
+
+    ``for_write`` additionally rejects LEGACY_UNSCOPED_OWNER. Reads must keep
+    accepting it so parked pre-migration rows stay retrievable, but a write
+    under it would re-create the shared unscoped bucket this issue removes.
+
     Raises:
-        ValueError: when the scope is missing, blank, or the reserved legacy id
-                    used as a write target.
+        ValueError: when the scope is missing, blank, or (on a write) reserved.
     """
     if not isinstance(user_id, str) or not user_id.strip():
         raise ValueError("user_id is required — memory queries cannot be unscoped")
-    return user_id
+    scoped = user_id.strip()
+    if for_write and scoped == LEGACY_UNSCOPED_OWNER:
+        raise ValueError(f"{LEGACY_UNSCOPED_OWNER!r} is reserved for pre-migration rows and cannot be written")
+    return scoped
 
 
 class GeneralStorage:
@@ -113,10 +122,21 @@ class GeneralStorage:
         columns = {row[1] for row in await cursor.fetchall()}
         if "user_id" in columns:
             return
-        await conn.execute(
-            "ALTER TABLE memory_entries ADD COLUMN user_id TEXT NOT NULL "
-            f"DEFAULT '{LEGACY_UNSCOPED_OWNER}'"  # nosec B608
-        )
+        try:
+            await conn.execute(
+                "ALTER TABLE memory_entries ADD COLUMN user_id TEXT NOT NULL "
+                f"DEFAULT '{LEGACY_UNSCOPED_OWNER}'"  # nosec B608
+            )
+        except aiosqlite.OperationalError as exc:
+            # The PRAGMA and the ALTER are not one transaction, and the asyncio
+            # lock above this only guards a single process. Two workers coming
+            # up together against the same DB both see the column missing and
+            # both ALTER; the loser must treat "already there" as success, not
+            # as a fatal startup error.
+            if "duplicate column name" not in str(exc).lower():
+                raise
+            logger.debug("memory_entries.user_id already added by a concurrent initializer (#13688)")
+            return
         logger.info(
             "Migrated memory_entries: added user_id; pre-existing rows parked under %s (#13688)",
             LEGACY_UNSCOPED_OWNER,
@@ -125,7 +145,7 @@ class GeneralStorage:
     async def store(self, entry: MemoryEntry) -> int:
         """Store memory entry. The entry must carry an owner (#13688)."""
         category_value = entry.category.value if isinstance(entry.category, MemoryCategory) else entry.category
-        user_id = _require_user_id(entry.user_id)
+        user_id = _require_user_id(entry.user_id, for_write=True)
 
         try:
             async with self._get_connection() as conn:
