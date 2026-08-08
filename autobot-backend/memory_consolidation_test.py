@@ -18,6 +18,9 @@ from markdown_reference_system import MarkdownReferenceSystem
 from memory import MemoryCategory, MemoryManager, TaskPriority
 from task_execution_tracker import TaskExecutionTracker
 
+# #13688: the general memory plane is owner-scoped; tests must name an owner.
+TEST_USER = "test-user"
+
 
 async def test_memory_consolidation_system():
     """Test the enhanced memory system components"""
@@ -104,8 +107,10 @@ async def test_memory_consolidation_system():
     # Add markdown reference if README exists
     readme_path = Path("README.md")
     if readme_path.exists():
-        memory_manager.add_markdown_reference(integration_task_id, str(readme_path), "project_documentation")
-        print(f"✅ Added markdown reference: README.md -> {integration_task_id}")  # noqa: print  # noqa: print
+        memory_manager.add_markdown_reference(
+            integration_task_id, str(readme_path), "project_documentation", user_id=TEST_USER
+        )
+        print(f"✅ Added markdown reference: README.md -> {integration_task_id}")  # noqa: print
 
     # Complete integration task
     memory_manager.complete_task(integration_task_id)
@@ -145,13 +150,14 @@ async def test_embedding_system():
         content_type="test_document",
         embedding_model="test_model",
         embedding_vector=test_embedding,
+        user_id=TEST_USER,
     )
 
     if success:
         print("✅ Embedding stored successfully")  # noqa: print
 
         # Retrieve embedding (store_embedding persists it as a FACT-category memory entry)
-        entries = await memory_manager.retrieve_memories(MemoryCategory.FACT, limit=10)
+        entries = await memory_manager.retrieve_memories(MemoryCategory.FACT, user_id=TEST_USER, limit=10)
         stored_entry = next(
             (
                 entry

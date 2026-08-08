@@ -96,6 +96,19 @@ async def start_oauth(
 
     _validate_redirect_uri(request.redirect_uri)
 
+    # #13628: no silent ``or "system"`` fallback — minting a shared literal owner
+    # made every credential created that way mutually readable by the others.
+    #
+    # Resolve identity the way the rest of the codebase does (api/voice.py:73,
+    # api/agent_terminal.py:614). ``get_current_user`` does NOT guarantee
+    # ``user_id``: the internal-API-key path returns only ``username``, the
+    # dev-header path likewise, and SLM-minted JWTs carry ``sub``. Requiring
+    # ``user_id`` alone would 401 those callers, who authenticate fine everywhere
+    # else. Only a caller with no identity at all is refused.
+    owner_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
+
     state = oauth_flow.generate_state()
     verifier, challenge = oauth_flow.generate_pkce()
     connector_id = str(uuid.uuid4())
@@ -103,7 +116,7 @@ async def start_oauth(
 
     payload = {
         "provider": provider,
-        "owner_id": str(user.get("user_id") or "system"),
+        "owner_id": owner_id,
         "connector_id": connector_id,
         "code_verifier": verifier,
         "redirect_uri": request.redirect_uri,

@@ -211,10 +211,11 @@ class MemoryManager:
         ... )
         >>> await manager.log_task(record)
 
-        >>> # General memory
+        >>> # General memory — user_id is required (#13688)
         >>> await manager.store_memory(
         ...     MemoryCategory.FACT,
         ...     "AutoBot supports multi-modal AI",
+        ...     user_id="user-42",
         ...     metadata={"source": "documentation"}
         ... )
 
@@ -404,6 +405,8 @@ class MemoryManager:
         self,
         category: MemoryCategory | str,
         content: str,
+        *,
+        user_id: str,
         metadata: Dict | None = None,
         reference_path: str | None = None,
         embedding: bytes | None = None,
@@ -414,6 +417,8 @@ class MemoryManager:
         Args:
             category: Memory category (MemoryCategory enum or string)
             content: Memory content
+            user_id: Owner scope (#13688). Keyword-only and required — omitting
+                     it is a TypeError, never a silent untenanted write.
             metadata: Optional metadata dictionary
             reference_path: Optional reference to markdown file
             embedding: Optional embedding vector (bytes)
@@ -422,7 +427,8 @@ class MemoryManager:
             Entry ID
 
         Raises:
-            ValueError: If category or content is empty/invalid
+            TypeError: If user_id is omitted
+            ValueError: If user_id, category or content is empty/invalid
         """
         if isinstance(category, str) and (not category or not category.strip()):
             raise ValueError("category cannot be empty string")
@@ -437,22 +443,29 @@ class MemoryManager:
             timestamp=datetime.now(tz=timezone.utc),
             reference_path=reference_path,
             embedding=embedding,
+            user_id=user_id,
         )
         return await self._general_storage.store(entry)
 
     async def retrieve_memories(
         self,
         category: MemoryCategory | str,
+        *,
+        user_id: str,
         limit: int = 100,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         reference_path: str | None = None,
     ) -> List[MemoryEntry]:
         """
-        Retrieve memories by category and filters.
+        Retrieve one owner's memories by category and filters.
+
+        Args:
+            user_id: Owner scope (#13688). Keyword-only and required.
 
         Raises:
-            ValueError: If limit is invalid or date range is invalid
+            TypeError: If user_id is omitted
+            ValueError: If user_id is blank, limit is invalid, or the date range is invalid
         """
         if limit <= 0:
             raise ValueError("limit must be positive")
@@ -467,12 +480,21 @@ class MemoryManager:
             "end_date": end_date,
             "reference_path": reference_path,
         }
-        return await self._general_storage.retrieve(category, filters)
+        return await self._general_storage.retrieve(user_id, category, filters)
 
-    async def search_memories(self, query: str) -> List[MemoryEntry]:
-        """Search memories by content or metadata."""
+    async def search_memories(self, query: str, *, user_id: str) -> List[MemoryEntry]:
+        """Search one owner's memories by content or metadata.
+
+        Args:
+            user_id: Owner scope (#13688). Keyword-only and required — this is
+                     the method that previously returned every owner's rows.
+
+        Raises:
+            TypeError: If user_id is omitted
+            ValueError: If user_id is blank
+        """
         await self._ensure_initialized()
-        return await self._general_storage.search(query)
+        return await self._general_storage.search(user_id, query)
 
     async def cleanup_old_memories(self, retention_days: int | None = None) -> int:
         """Remove memories older than retention period. Returns number deleted."""
@@ -529,12 +551,16 @@ class MemoryManager:
         """
         if not isinstance(data, MemoryEntry):
             raise TypeError("GENERAL_MEMORY strategy requires MemoryEntry")
+        # #13688: the entry carries its own owner; the strategy path must not
+        # become a way to write an unscoped row. A MemoryEntry without a
+        # user_id raises in store_memory, exactly like the direct API.
         return await self.store_memory(
             data.category,
             data.content,
-            data.metadata,
-            data.reference_path,
-            data.embedding,
+            user_id=data.user_id,
+            metadata=data.metadata,
+            reference_path=data.reference_path,
+            embedding=data.embedding,
         )
 
     def _store_cached(self, data: Any) -> str:
@@ -804,10 +830,16 @@ class MemoryManager:
         task_id: str,
         markdown_file_path: str,
         reference_type: str = "documentation",
+        *,
+        user_id: str,
     ) -> bool:
         """Store a markdown-file reference against a task (sync wrapper).
 
         Do NOT call from async code — use await store_memory() directly instead.
+
+        Args:
+            user_id: Owner scope (#13688). Required — this writes a general
+                     memory row like every other path into the plane.
         """
         from .enums import MemoryCategory
 
@@ -821,6 +853,7 @@ class MemoryManager:
             self.store_memory(
                 MemoryCategory.FACT,
                 content,
+                user_id=user_id,
                 metadata=metadata,
                 reference_path=markdown_file_path,
             )
@@ -889,10 +922,17 @@ class MemoryManager:
         content_type: str,
         embedding_model: str,
         embedding_vector: List[float],
+        *,
+        user_id: str,
     ) -> bool:
         """Persist an embedding vector as a general memory entry (sync wrapper).
 
         Do NOT call from async code — use await store_memory() directly instead.
+
+        Args:
+            user_id: Owner scope (#13688). Required — this method writes a
+                     general memory row, so it cannot be the one remaining path
+                     that produces an unscoped entry.
         """
         import json as _json
 
@@ -908,6 +948,7 @@ class MemoryManager:
             self.store_memory(
                 MemoryCategory.FACT,
                 content,
+                user_id=user_id,
                 metadata=metadata,
                 embedding=embedding_bytes,
             )
