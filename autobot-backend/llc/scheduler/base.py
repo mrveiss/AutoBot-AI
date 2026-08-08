@@ -55,7 +55,7 @@ _DRAIN_TIMEOUT_SECONDS = env_float("LLC_SCHEDULER_DRAIN_TIMEOUT_SECONDS", 5.0)
 # ``Task.cancelling()`` is Python 3.11+, and honour_pending_cancellation() has no
 # fallback below it: nothing else in asyncio records a cancellation that an
 # ``except`` arm has already masked.  Always True on every supported interpreter
-# — the platform floor is 3.12 (startup_validator._validate_system_requirements)
+# — the platform floor is 3.14 (startup_validator._validate_system_requirements)
 # and CI runs 3.14 — so this is not a compatibility shim and must never grow one.
 # A silent fallback would turn the #13085/#13203 guard permanently off and buy
 # every poll loop a full re-armed interval after shutdown, which is the exact bug
@@ -67,7 +67,7 @@ _DRAIN_TIMEOUT_SECONDS = env_float("LLC_SCHEDULER_DRAIN_TIMEOUT_SECONDS", 5.0)
 # escapes _loop, and the five resulting failures read like a cancellation bug.
 SUPPORTS_PENDING_CANCELLATION = hasattr(asyncio.Task, "cancelling")
 PENDING_CANCELLATION_REQUIREMENT = (
-    "requires asyncio.Task.cancelling() (Python 3.11+); the platform floor is 3.12 and CI runs 3.14"
+    "requires asyncio.Task.cancelling() (Python 3.11+); the platform floor is 3.14, and CI runs 3.14"
 )
 
 
