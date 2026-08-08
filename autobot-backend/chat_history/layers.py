@@ -113,18 +113,23 @@ class Layer1EssentialStory:
             return ""
 
     async def token_estimate(self, context: dict) -> int:
-        """Read budget from context_windows.yaml; fall back to 600."""
+        """Read the per-model budget from the window config; fall back to 600.
+
+        #13741: this used to read and parse ``context_windows.yaml`` on every
+        call — 49 ms — which #13691 made a per-turn cost by wiring it into
+        ``_fit_l0_l1``. It now reuses ``ContextWindowManager``, which already
+        holds that file parsed and is itself cached (#13706). That removes the
+        second parser of the same file rather than making it faster.
+
+        #7467's concern still holds: the first construction reads from disk, so
+        it is resolved on a thread rather than on the event loop.
+        """
         try:
-            from pathlib import Path
+            from context_window_manager import get_context_window_manager
 
-            import yaml
-
-            yaml_path = Path(__file__).parent.parent / "config" / "context_windows.yaml"
-            # #7467: was sync `yaml_path.read_text` blocking the event loop.
-            content = await asyncio.to_thread(yaml_path.read_text, encoding="utf-8")
-            data = yaml.safe_load(content)
+            cwm = await asyncio.to_thread(get_context_window_manager)
             model_name = context.get("model_name", "default")
-            entry = (data.get("models") or {}).get(model_name) or {}
+            entry = (cwm.config.get("models") or {}).get(model_name) or {}
             if "essential_story_tokens" in entry:
                 return int(entry["essential_story_tokens"])
         except Exception:
