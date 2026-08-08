@@ -6,6 +6,8 @@
 
 from urllib.parse import parse_qs, urlparse
 
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -34,6 +36,66 @@ def client(monkeypatch, single_use_fake_redis):
 
 _AUTHZ = "/api/knowledge_base/connectors/oauth/{p}/authorize"
 _CALLBACK = "/api/knowledge_base/connectors/oauth/callback"
+
+
+@pytest.mark.parametrize(
+    "user_dict,expected_owner",
+    [
+        ({"user_id": "user-42"}, "user-42"),
+        # SLM-minted JWTs carry ``sub``; _extract_user_from_jwt sets user_id only
+        # when the token has that claim, so these users have no user_id at all.
+        ({"sub": "user-sub-7", "username": "alice"}, "user-sub-7"),
+        # Internal API key path returns username/role/service and no id.
+        ({"username": "service:slm", "role": "admin", "service": True}, "service:slm"),
+        # Dev X-User-Role header path.
+        ({"username": "dev_admin", "role": "admin", "auth_method": "development"}, "dev_admin"),
+    ],
+)
+def test_authorize_resolves_owner_from_any_identity_claim(
+    monkeypatch, single_use_fake_redis, user_dict, expected_owner
+):
+    """#13628: get_current_user does not guarantee ``user_id``.
+
+    Requiring it alone would 401 the internal-API-key, dev-header and
+    ``sub``-only JWT callers, all of which authenticate fine everywhere else.
+    Identity is resolved as user_id -> sub -> username, matching api/voice.py
+    and api/agent_terminal.py, and the stored owner must be that identity —
+    never a shared literal.
+    """
+    fake_redis = single_use_fake_redis
+    monkeypatch.setattr(mod, "get_redis_client", lambda database=None: fake_redis)
+    monkeypatch.setattr(oauth_flow.config.auth, "google_oauth_client_id", "cid", raising=False)
+    monkeypatch.setattr(oauth_flow.config.auth, "google_oauth_client_secret", "csec", raising=False)
+
+    app = FastAPI()
+    app.include_router(mod.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: user_dict
+    tc = TestClient(app)
+
+    resp = tc.post(_AUTHZ.format(p="google"), json={"redirect_uri": "https://localhost/cb"})
+    assert resp.status_code == 200, resp.text
+
+    state = resp.json()["state"]
+    key = next(k for k in fake_redis.store if k.endswith(state))
+    stored = json.loads(fake_redis.store[key])
+    assert stored["owner_id"] == expected_owner
+    assert stored["owner_id"] != "system", "shared literal owner reintroduced"
+
+
+def test_authorize_rejects_a_caller_with_no_identity(monkeypatch, single_use_fake_redis):
+    """#13628: only a caller with no resolvable identity at all is refused."""
+    fake_redis = single_use_fake_redis
+    monkeypatch.setattr(mod, "get_redis_client", lambda database=None: fake_redis)
+    monkeypatch.setattr(oauth_flow.config.auth, "google_oauth_client_id", "cid", raising=False)
+    monkeypatch.setattr(oauth_flow.config.auth, "google_oauth_client_secret", "csec", raising=False)
+
+    app = FastAPI()
+    app.include_router(mod.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: {"role": "admin"}
+    tc = TestClient(app)
+
+    resp = tc.post(_AUTHZ.format(p="google"), json={"redirect_uri": "https://localhost/cb"})
+    assert resp.status_code == 401, resp.text
 
 
 def test_authorize_returns_url_and_persists_state(client):

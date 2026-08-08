@@ -169,7 +169,19 @@ class ConnectorCredentialStore:
             await mirror_credential_to_vault(secret_id, owner_id, new_value)
 
     async def revoke(self, secret_id: str, owner_id: str) -> None:
-        """Delete the secret. Called on connector delete."""
+        """Delete the secret. Called on connector delete.
+
+        #13628: guarded like the read paths. This was the one mutating site with
+        no ownership check at all — any caller holding a ``secret_id`` could
+        delete another owner's credential. A missing secret is left to
+        ``delete_secret`` so revoking an already-gone credential stays idempotent.
+        """
+        existing = await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: self._svc.get_secret(secret_id=secret_id, include_value=False),
+        )
+        if existing is not None:
+            self._require_owner(existing, secret_id, owner_id)
         await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.delete_secret(
@@ -350,11 +362,14 @@ class ConnectorCredentialStore:
 
         A missing ``created_by`` is a **denial**, not a skip. The previous form
         was ``if stored_owner and stored_owner != owner_id``, so a secret with an
-        empty owner — static credentials, or rows migrated by
-        ``scripts/migrate_connector_credentials.py`` — was readable, rotatable and
-        refreshable by *any* caller. This guard is the only per-user boundary on a
-        decrypted connector secret, so an unattributable credential must fail
-        closed rather than open.
+        empty owner was readable, rotatable and refreshable by *any* caller.
+
+        Defence in depth rather than a known live hole: every writer in this repo
+        goes through ``store()``, which always sets ``created_by``. The exposure
+        is a row that reaches the table another way — a direct DB write, a NULL
+        column, or a future writer that forgets. This guard is the only per-user
+        boundary on a decrypted connector secret, so an unattributable credential
+        must fail closed rather than open.
         """
         stored_owner = secret.get("created_by") or ""
         if not stored_owner:
