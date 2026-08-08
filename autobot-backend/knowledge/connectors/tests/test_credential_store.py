@@ -548,6 +548,96 @@ async def test_malformed_expires_in_falls_back_and_keeps_the_stored_lifetime(bad
 
 
 @pytest.mark.asyncio
+async def test_credential_without_recorded_owner_is_denied_everywhere():
+    """#13628: a missing ``created_by`` must fail closed at all three guard sites.
+
+    The old guard was ``if stored_owner and stored_owner != owner_id``, so an
+    empty owner skipped the comparison and *any* caller could read, rotate or
+    refresh the credential. This guard is the only per-user boundary on a
+    decrypted connector secret; static credentials and rows migrated by
+    ``scripts/migrate_connector_credentials.py`` can carry an empty owner.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13628",
+        "u1",
+        "gitlab",
+        {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
+    )
+    # Model an unattributable credential.
+    store[secret_id]["created_by"] = ""
+
+    # Lazily, so one site's failure cannot mask the others.
+    sites = {
+        "load": lambda: cs.load(secret_id, {}, MagicMock(), "anyone"),
+        "rotate": lambda: cs.rotate(secret_id, {"access_token": "new"}, "anyone"),
+        "get_access_token": lambda: cs.get_access_token(secret_id, "anyone"),
+    }
+    for label, call in sites.items():
+        with pytest.raises(PermissionError, match="no recorded owner"):
+            await call()
+        assert label in sites
+
+
+@pytest.mark.asyncio
+async def test_rotate_attributes_the_decrypt_to_the_caller():
+    """#13628: rotation decrypts the full bundle and must leave an audit trail.
+
+    ``accessed_by`` is what drives ``_update_access_tracking`` in
+    ``secrets_service``. ``load`` and ``get_access_token`` both pass it; ``rotate``
+    did not, so the one privileged read path that exposes the whole plaintext
+    bundle was the one with no attribution. Nothing failed when it was dropped,
+    which is why this needs pinning.
+    """
+    svc, _ = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13628b",
+        "u1",
+        "gitlab",
+        {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
+    )
+    svc.get_secret.reset_mock()
+
+    await cs.rotate(secret_id, {"access_token": "rotated"}, "u1")
+
+    decrypting = [c for c in svc.get_secret.call_args_list if c.kwargs.get("include_value")]
+    assert decrypting, "rotate did not read the secret value"
+    assert all(
+        c.kwargs.get("accessed_by") == "u1" for c in decrypting
+    ), f"decrypt not attributed: {[c.kwargs.get('accessed_by') for c in decrypting]}"
+
+
+@pytest.mark.asyncio
+async def test_owner_with_recorded_id_still_works():
+    """#13628 guard must not break the ordinary attributed path."""
+    svc, _ = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13628c",
+        "u1",
+        "gitlab",
+        {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
+    )
+    assert await cs.get_access_token(secret_id, "u1") == "tok"
+    await cs.rotate(secret_id, {"access_token": "tok2"}, "u1")
+    assert await cs.get_access_token(secret_id, "u1") == "tok2"
+
+
+@pytest.mark.asyncio
 async def test_get_access_token_owner_mismatch_raises():
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
