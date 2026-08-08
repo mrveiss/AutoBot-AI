@@ -290,13 +290,13 @@ class ConnectorCredentialStore:
             reported_expires_in if reported_expires_in is not None else creds.get("access_token_lifetime_seconds")
         )
         if reported_expires_in is None and effective_expires_in is not None:
-            # Provider, not secret id: the actionable fact is *which provider*
-            # omits a usable expires_in, and the id is a credential reference we
-            # keep out of logs.
+            # No interpolation from *creds*: every value read out of the
+            # decrypted bundle is sensitive, including the provider name and the
+            # lifetime, and this warning is not worth putting any of it in logs.
+            # The actionable signal is simply that the fallback fired — the
+            # original bug's whole character was leaving no trace at all.
             logger.warning(
-                "OAuth provider %s omitted a usable expires_in on refresh — reusing the last reported lifetime of %ss",
-                creds.get("provider", "unknown"),
-                effective_expires_in,
+                "OAuth refresh response omitted a usable expires_in — reusing the stored lifetime for this credential"
             )
         creds["access_token_expires_at"] = self._expiry_iso(effective_expires_in)
         if reported_expires_in is not None:
