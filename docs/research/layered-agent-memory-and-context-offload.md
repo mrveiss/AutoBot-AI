@@ -115,7 +115,8 @@ agent runs get promoted into reusable, discoverable workflows rather than evapor
 
 **6. Operational honesty in the docs.** A `v2→v3` data-format migration script with a `--dry-run`
 mode and a back-up warning; an explicit rule that binding to a non-loopback address *requires*
-`TDAI_GATEWAY_API_KEY`; CORS off by default with a "never `*` in production" note; and a stated
+the gateway API-key env var to be set; CORS off by default with a "never `*` in production"
+note; and a stated
 requirement to validate team/user/agent ownership on every request.
 
 ### Strengths
