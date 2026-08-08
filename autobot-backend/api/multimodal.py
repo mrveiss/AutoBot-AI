@@ -77,7 +77,16 @@ def _get_modality_type(modality_str: str) -> ModalityType:
     return modality_mapping.get(modality_str.lower(), ModalityType.TEXT)
 
 
-def _build_image_modal_input(image_data, file, intent: str, question) -> MultiModalInput:
+def _principal_id(current_user: dict | None) -> str | None:
+    """Owner scope for a multi-modal write (#13688).
+
+    Taken from the authenticated principal only — never from the request body,
+    which would let a caller write into another tenant's memory.
+    """
+    return str(current_user.get("user_id")) if current_user and current_user.get("user_id") else None
+
+
+def _build_image_modal_input(image_data, file, intent: str, question, user_id: str | None) -> MultiModalInput:
     """Helper for process_image. Ref: #1088."""
     input_id = f"image_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
     metadata = {"filename": file.filename, "content_type": file.content_type}
@@ -89,6 +98,7 @@ def _build_image_modal_input(image_data, file, intent: str, question) -> MultiMo
         intent=_get_processing_intent(intent),
         data=image_data,
         metadata=metadata,
+        user_id=user_id,
     )
 
 
@@ -124,7 +134,7 @@ async def process_image(
         if len(image_data) == 0:
             raise HTTPException(status_code=400, detail="Empty image file")
 
-        modal_input = _build_image_modal_input(image_data, file, intent, question)
+        modal_input = _build_image_modal_input(image_data, file, intent, question, _principal_id(current_user))
 
         # Process with unified processor
         result = await processor.process(modal_input)
@@ -196,6 +206,7 @@ async def process_audio(
             intent=_get_processing_intent(intent),
             data=audio_data,
             metadata=metadata,
+            user_id=_principal_id(current_user),
         )
 
         # Process with unified processor
@@ -257,6 +268,7 @@ async def process_text(
             intent=_get_processing_intent(request.intent),
             data=request.text,
             metadata=request.metadata or {},
+            user_id=_principal_id(current_user),
         )
 
         # Process with unified processor
@@ -506,17 +518,18 @@ def _extract_model_availability_flags(model_availability: dict) -> tuple:
     return vision_available, voice_available
 
 
-def _create_text_input(text: str, intent: str) -> MultiModalInput:
+def _create_text_input(text: str, intent: str, user_id: str | None) -> MultiModalInput:
     """Create MultiModalInput for text data (Issue #398: extracted)."""
     return MultiModalInput(
         input_id=f"text_{int(time.time() * 1000)}",
         modality_type=ModalityType.TEXT,
         intent=_get_processing_intent(intent),
         data=text,
+        user_id=user_id,
     )
 
 
-async def _create_image_input(image_file: UploadFile, intent: str) -> MultiModalInput:
+async def _create_image_input(image_file: UploadFile, intent: str, user_id: str | None) -> MultiModalInput:
     """Create MultiModalInput for image file (Issue #398: extracted)."""
     image_data = await image_file.read()
     return MultiModalInput(
@@ -525,10 +538,11 @@ async def _create_image_input(image_file: UploadFile, intent: str) -> MultiModal
         intent=_get_processing_intent(intent),
         data=image_data,
         metadata={"filename": image_file.filename},
+        user_id=user_id,
     )
 
 
-async def _create_audio_input(audio_file: UploadFile, intent: str) -> MultiModalInput:
+async def _create_audio_input(audio_file: UploadFile, intent: str, user_id: str | None) -> MultiModalInput:
     """Create MultiModalInput for audio file (Issue #398: extracted)."""
     audio_data = await audio_file.read()
     return MultiModalInput(
@@ -537,6 +551,7 @@ async def _create_audio_input(audio_file: UploadFile, intent: str) -> MultiModal
         intent=_get_processing_intent(intent),
         data=audio_data,
         metadata={"filename": audio_file.filename},
+        user_id=user_id,
     )
 
 
@@ -545,18 +560,19 @@ async def _collect_modal_inputs(
     image_file: UploadFile | None,
     audio_file: UploadFile | None,
     intent: str,
+    user_id: str | None,
 ) -> List[MultiModalInput]:
     """Collect all modal inputs from form data (Issue #398: extracted)."""
     inputs = []
 
     if text:
-        inputs.append(_create_text_input(text, intent))
+        inputs.append(_create_text_input(text, intent, user_id))
 
     if image_file:
-        inputs.append(await _create_image_input(image_file, intent))
+        inputs.append(await _create_image_input(image_file, intent, user_id))
 
     if audio_file:
-        inputs.append(await _create_audio_input(audio_file, intent))
+        inputs.append(await _create_audio_input(audio_file, intent, user_id))
 
     return inputs
 
@@ -566,6 +582,7 @@ def _create_combined_input(
     image_file: UploadFile | None,
     audio_file: UploadFile | None,
     intent: str,
+    user_id: str | None,
 ) -> MultiModalInput:
     """Create combined MultiModalInput for fusion (Issue #398: extracted)."""
     return MultiModalInput(
@@ -578,6 +595,7 @@ def _create_combined_input(
             "audio": audio_file.filename if audio_file else None,
             "text_preview": text[:100] if text else None,
         },
+        user_id=user_id,
     )
 
 
@@ -603,7 +621,7 @@ async def combine_multimodal_inputs(
 
     try:
         # Collect all modal inputs using helper
-        inputs = await _collect_modal_inputs(text, image_file, audio_file, intent)
+        inputs = await _collect_modal_inputs(text, image_file, audio_file, intent, _principal_id(current_user))
 
         if not inputs:
             raise HTTPException(status_code=400, detail="At least one input modality required")
@@ -612,7 +630,7 @@ async def combine_multimodal_inputs(
         results = [await processor.process(modal_input) for modal_input in inputs]
 
         # Create combined input and process fusion
-        combined_input = _create_combined_input(text, image_file, audio_file, intent)
+        combined_input = _create_combined_input(text, image_file, audio_file, intent, _principal_id(current_user))
         fusion_result = await processor._process_combined(combined_input)
 
         processing_time = time.time() - start_time

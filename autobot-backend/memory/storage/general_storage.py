@@ -246,12 +246,24 @@ class GeneralStorage:
             raise RuntimeError(f"Failed to search memory entries: {e}")
 
     async def cleanup_old(self, retention_days: int) -> int:
-        """Remove entries older than retention period"""
+        """Remove entries older than retention period, across all owners.
+
+        Operator-scope by design: retention is a storage policy, not a tenant
+        query, so this is the one method that spans owners deliberately.
+
+        #13688: rows parked under LEGACY_UNSCOPED_OWNER are exempt. They are by
+        definition older than any retention window, so without this the first
+        sweep after the upgrade would delete every pre-migration row — silent
+        data loss caused by the migration that was supposed to preserve them.
+        """
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
 
         try:
             async with self._get_connection() as conn:
-                cursor = await conn.execute("DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,))
+                cursor = await conn.execute(
+                    "DELETE FROM memory_entries WHERE timestamp < ? AND user_id != ?",
+                    (cutoff, LEGACY_UNSCOPED_OWNER),
+                )
                 await conn.commit()
 
                 deleted = cursor.rowcount
@@ -268,7 +280,12 @@ class GeneralStorage:
             raise RuntimeError(f"Failed to cleanup old memory entries: {e}")
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get storage statistics"""
+        """Get storage statistics across all owners.
+
+        #13688: operator-scope aggregate, deliberately not tenant-filtered — it
+        returns counts only, never content. A per-owner variant should be added
+        if this is ever surfaced to end users rather than to operators.
+        """
         try:
             async with self._get_connection() as conn:
                 conn.row_factory = aiosqlite.Row

@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_agent import (
     MemoryActiveTasksResponse,
@@ -33,6 +33,7 @@ from api.schemas_knowledge import (
     TaskCreateRequest,
     TaskUpdateRequest,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -231,16 +232,31 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
     operation="add_markdown_reference",
     error_code_prefix="MEMORY",
 )
-async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest):
-    """Add markdown file reference to a task."""
+async def add_markdown_reference(
+    task_id: str,
+    request: MarkdownReferenceRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add markdown file reference to a task.
+
+    #13688: the reference is stored as a general memory row, which is now
+    owner-scoped. The owner comes from the authenticated principal — taking it
+    from ``MarkdownReferenceRequest`` would let a caller write into another
+    user's memory.
+    """
     try:
         memory_manager, _ = await _get_managers()
+
+        owner = current_user.get("id") or current_user.get("user_id") or current_user.get("sub")
+        if not owner:
+            raise HTTPException(status_code=401, detail="User identity required")
 
         success = await asyncio.to_thread(
             memory_manager.add_markdown_reference,
             task_id=request.task_id,
             markdown_file_path=request.markdown_file_path,
             reference_type=request.reference_type,
+            user_id=str(owner),
         )
 
         if not success:

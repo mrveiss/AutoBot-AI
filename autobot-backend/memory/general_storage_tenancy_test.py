@@ -302,3 +302,36 @@ class TestConcurrentMigration:
 
         parked = await GeneralStorage(db).search(LEGACY_UNSCOPED_OWNER, "pre-existing")
         assert len(parked) == 1
+
+
+class TestRetentionDoesNotEatParkedRows:
+    @pytest.mark.asyncio
+    async def test_cleanup_old_exempts_pre_migration_rows(self, tmp_path):
+        """The migration preserves legacy rows; the first sweep must not undo that."""
+        db = tmp_path / "legacy_retention.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("""
+                CREATE TABLE memory_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    metadata_json TEXT,
+                    timestamp TIMESTAMP NOT NULL,
+                    reference_path TEXT,
+                    embedding BLOB
+                )
+            """)
+            conn.execute(
+                "INSERT INTO memory_entries (category, content, timestamp) VALUES (?, ?, ?)",
+                ("fact", "pre-existing row", datetime(2020, 1, 1, tzinfo=timezone.utc)),
+            )
+
+        storage = GeneralStorage(db)
+        await storage.initialize()
+        await storage.store(_entry(ALICE, "recent alice row"))
+
+        deleted = await storage.cleanup_old(0)
+
+        assert deleted == 1, "the owned row expires; the parked one must not"
+        parked = await storage.search(LEGACY_UNSCOPED_OWNER, "pre-existing")
+        assert len(parked) == 1

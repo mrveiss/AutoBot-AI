@@ -307,6 +307,9 @@ class TestUnifiedMultiModalSystem:
             modality_type=ModalityType.TEXT,
             intent=ProcessingIntent.DECISION_MAKING,
             data="test decision context",
+            # #13688: the memory plane refuses unowned writes, so a stored
+            # result must carry the owner of the input that produced it.
+            user_id="test-user",
         )
 
         # Issue #10626 replaced the non-existent MemoryManager.store_task()
