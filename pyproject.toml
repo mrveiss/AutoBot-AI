@@ -1,10 +1,17 @@
 [tool.black]
 line-length = 120
 # Stays py312 (NOT py314): the backend runs Python 3.14, but the NPU/OpenVINO
-# worker runs an older Python (its requirements pin 3.12+ — OpenVINO ships no
-# 3.14 wheels). A py314 target makes black emit PEP 758 unparenthesized
-# `except A, B:`, a SyntaxError on that worker's cross-imported shared code.
-# Bump only when the worker gains 3.14 support (#10877).
+# worker runs Python 3.11 (roles/npu-worker/tasks/main.yml). A py314 target
+# makes black emit PEP 758 unparenthesized `except A, B:`, a SyntaxError on
+# that worker's cross-imported shared code.
+#
+# Bump only when the worker itself is on 3.14 — never before, or the reformat
+# lands syntax the running worker cannot parse. As of 2026-08-08 that move is
+# unblocked for the Linux worker: openvino 2026.3.0, torch 2.13.0 and numpy
+# 2.5.1 all ship cp314 wheels, so #10877's "OpenVINO has no 3.14 wheels" no
+# longer holds. The Windows worker still pins onnxruntime-openvino, which has
+# no cp314 — settle whether it shares this code before bumping (#10877).
+# Audit: docs/audit/python_314_consistency.md
 target-version = ["py312"]
 
 [tool.isort]
