@@ -34,7 +34,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth import validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -246,6 +246,10 @@ async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> 
     """
     if not cfg.secret_id or auth_cls is None or not hasattr(auth_cls, "__sensitive_fields__"):
         return cfg
+    # #13702: reads keep the "system" fallback deliberately. Rows created before
+    # the write path was fixed already carry that owner; dropping it here would
+    # orphan them rather than protect anything. Migrating those rows to a real
+    # owner is the remaining half of #13702.
     owner_id = cfg.owner_id or "system"
     import dataclasses
 
@@ -398,7 +402,7 @@ async def list_connectors():
     operation="create_connector",
     error_code_prefix="KNOWLEDGE_CONNECTORS",
 )
-async def create_connector(request: CreateConnectorRequest):
+async def create_connector(request: CreateConnectorRequest, user: dict = Depends(get_current_user)):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
         raise HTTPException(
@@ -428,7 +432,18 @@ async def create_connector(request: CreateConnectorRequest):
                 )
 
     # ADR-007: extract sensitive credential fields and store encrypted.
-    owner_id = getattr(request, "owner_id", None) or "system"
+    # #13702: fall back to the authenticated caller, never to a shared literal.
+    # ``or "system"`` gave every connector created without an explicit owner the
+    # same owner_id, so `_require_owner` (#13628) compared "system" against
+    # "system" and two distinct admins passed each other's ownership check.
+    #
+    # Identity resolved user_id -> sub -> username, matching api/voice.py:73 —
+    # ``get_current_user`` does not guarantee ``user_id``: the internal-API-key
+    # path returns only ``username``, and SLM-minted JWTs carry ``sub``.
+    caller_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
+    owner_id = getattr(request, "owner_id", None) or caller_id
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
     safe_config = request.config
     secret_id: str | None = None
     # OAuth flow already stored the token bundle (store_oauth) and handed back a
