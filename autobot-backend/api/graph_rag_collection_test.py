@@ -306,9 +306,7 @@ async def test_path_endpoint_does_not_leak_the_exception_message():
     message to the client (#13740) — for a Redis failure, an internal host and
     port. /search guards the same way."""
     service = MagicMock()
-    service.find_connection_path = AsyncMock(
-        side_effect=ConnectionError("Error 111 connecting to internal-host:6379")
-    )
+    service.find_connection_path = AsyncMock(side_effect=ConnectionError("Error 111 connecting to internal-host:6379"))
 
     with pytest.raises(HTTPException) as exc_info:
         await graph_rag_path(

@@ -307,7 +307,5 @@ class PropertyGraphMixin:
             self.graph.get_node(to_node["id"]),
         )
         return [
-            entity.get("name") or entity.get("id")
-            for entity, node in zip((from_node, to_node), nodes)
-            if node is None
+            entity.get("name") or entity.get("id") for entity, node in zip((from_node, to_node), nodes) if node is None
         ]
