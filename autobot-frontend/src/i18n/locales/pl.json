@@ -2824,7 +2824,8 @@
       "entitiesAndRelations": "{entities} encji, {relations} relacji",
       "success": "Sukces",
       "failedStatus": "Niepowodzenie",
-      "retry": "Ponów"
+      "retry": "Ponów",
+      "tabPath": "Ścieżka połączenia"
     },
     "failedVectorizations": {
       "title": "Nieudane wektoryzacje",
@@ -4080,6 +4081,37 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "Ścieżka połączenia",
+      "description": "Znajdź najkrótszy łańcuch relacji łączący dwie encje.",
+      "fromEntity": "Encja źródłowa",
+      "fromEntityPlaceholder": "Nazwa encji początkowej...",
+      "toEntity": "Encja docelowa",
+      "toEntityPlaceholder": "Nazwa encji docelowej...",
+      "swap": "Zamień encje",
+      "direction": "Kierunek",
+      "directionBoth": "Dowolny kierunek",
+      "directionOutgoing": "Podążaj za relacjami w przód",
+      "directionIncoming": "Podążaj za relacjami wstecz",
+      "directionHint": "Relacje są często zapisywane tylko w jedną stronę.",
+      "maxDepth": "Maksymalna głębokość",
+      "hops": "{count} przeskoków",
+      "relation": "Relacja",
+      "relationHint": "(opcjonalne)",
+      "relationPlaceholder": "Podążaj tylko za tym typem relacji...",
+      "findPath": "Znajdź ścieżkę",
+      "searching": "Wyszukiwanie...",
+      "connectedIn": "Połączone w {count} przeskokach",
+      "sameEntity": "Obie nazwy wskazują tę samą encję: {name}",
+      "crossedForwards": "w przód",
+      "crossedBackwards": "wstecz",
+      "unnamedRelation": "powiązane z",
+      "noPathFound": "Nie znaleziono połączenia między tymi encjami.",
+      "noPathHint": "Spróbuj zwiększyć głębokość, dopuścić dowolny kierunek lub usunąć filtr relacji.",
+      "entityNotFound": "Te nazwy nie pasują do żadnej encji:",
+      "entityNotFoundHint": "Sprawdź pisownię lub najpierw wyodrębnij encje, aby istniały w grafie.",
+      "errorEnterBoth": "Podaj encję źródłową i docelową."
     }
   },
   "workflow": {

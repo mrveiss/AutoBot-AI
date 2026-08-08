@@ -2887,7 +2887,8 @@
       "entitiesAndRelations": "{entities} entities, {relations} relations",
       "success": "Success",
       "failedStatus": "Failed",
-      "retry": "Retry"
+      "retry": "Retry",
+      "tabPath": "Connection Path"
     },
     "failedVectorizations": {
       "title": "Failed Vectorizations",
@@ -4080,6 +4081,37 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "Connection Path",
+      "description": "Find the shortest chain of relationships linking two entities.",
+      "fromEntity": "From Entity",
+      "fromEntityPlaceholder": "Starting entity name...",
+      "toEntity": "To Entity",
+      "toEntityPlaceholder": "Target entity name...",
+      "swap": "Swap entities",
+      "direction": "Direction",
+      "directionBoth": "Any direction",
+      "directionOutgoing": "Follow relations forwards",
+      "directionIncoming": "Follow relations backwards",
+      "directionHint": "Relations are often stored one way only.",
+      "maxDepth": "Max Depth",
+      "hops": "{count} hops",
+      "relation": "Relation",
+      "relationHint": "(optional)",
+      "relationPlaceholder": "Only follow this relation type...",
+      "findPath": "Find Path",
+      "searching": "Searching...",
+      "connectedIn": "Connected in {count} hops",
+      "sameEntity": "Both names resolve to the same entity: {name}",
+      "crossedForwards": "forwards",
+      "crossedBackwards": "backwards",
+      "unnamedRelation": "related to",
+      "noPathFound": "No connection found between these entities.",
+      "noPathHint": "Try increasing the depth, allowing any direction, or removing the relation filter.",
+      "entityNotFound": "These names did not match any entity:",
+      "entityNotFoundHint": "Check the spelling, or extract entities first so they exist in the graph.",
+      "errorEnterBoth": "Please enter both a source and a target entity."
     }
   },
   "workflow": {

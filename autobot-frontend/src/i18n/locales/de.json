@@ -2824,7 +2824,8 @@
       "entitiesAndRelations": "{entities} Entitäten, {relations} Beziehungen",
       "success": "Erfolgreich",
       "failedStatus": "Fehlgeschlagen",
-      "retry": "Wiederholen"
+      "retry": "Wiederholen",
+      "tabPath": "Verbindungspfad"
     },
     "failedVectorizations": {
       "title": "Fehlgeschlagene Vektorisierungen",
@@ -4080,6 +4081,37 @@
     },
     "watchFolders": {
       "confirmDelete": "Möchten Sie diesen überwachten Ordner wirklich löschen?"
+    },
+    "graphPath": {
+      "title": "Verbindungspfad",
+      "description": "Finden Sie die kürzeste Kette von Beziehungen zwischen zwei Entitäten.",
+      "fromEntity": "Von Entität",
+      "fromEntityPlaceholder": "Name der Startentität...",
+      "toEntity": "Zu Entität",
+      "toEntityPlaceholder": "Name der Zielentität...",
+      "swap": "Entitäten tauschen",
+      "direction": "Richtung",
+      "directionBoth": "Beliebige Richtung",
+      "directionOutgoing": "Beziehungen vorwärts folgen",
+      "directionIncoming": "Beziehungen rückwärts folgen",
+      "directionHint": "Beziehungen werden oft nur in eine Richtung gespeichert.",
+      "maxDepth": "Maximale Tiefe",
+      "hops": "{count} Sprünge",
+      "relation": "Beziehung",
+      "relationHint": "(optional)",
+      "relationPlaceholder": "Nur diesem Beziehungstyp folgen...",
+      "findPath": "Pfad finden",
+      "searching": "Suche läuft...",
+      "connectedIn": "Verbunden in {count} Sprüngen",
+      "sameEntity": "Beide Namen verweisen auf dieselbe Entität: {name}",
+      "crossedForwards": "vorwärts",
+      "crossedBackwards": "rückwärts",
+      "unnamedRelation": "verbunden mit",
+      "noPathFound": "Keine Verbindung zwischen diesen Entitäten gefunden.",
+      "noPathHint": "Erhöhen Sie die Tiefe, erlauben Sie jede Richtung oder entfernen Sie den Beziehungsfilter.",
+      "entityNotFound": "Diese Namen stimmen mit keiner Entität überein:",
+      "entityNotFoundHint": "Prüfen Sie die Schreibweise oder extrahieren Sie zuerst Entitäten, damit sie im Graphen existieren.",
+      "errorEnterBoth": "Bitte geben Sie sowohl eine Quell- als auch eine Zielentität ein."
     }
   },
   "workflow": {

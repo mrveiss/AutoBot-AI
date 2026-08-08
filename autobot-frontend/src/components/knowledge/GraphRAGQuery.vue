@@ -251,13 +251,20 @@ async function executeSearch(): Promise<void> {
     return
   }
 
-  await searchGraph({
-    query: queryText.value.trim(),
-    start_entity: startEntity.value.trim() || null,
-    max_depth: maxDepth.value,
-    max_results: maxResults.value,
-    enable_reranking: enableReranking.value,
-  })
+  try {
+    await searchGraph({
+      query: queryText.value.trim(),
+      start_entity: startEntity.value.trim() || null,
+      max_depth: maxDepth.value,
+      max_results: maxResults.value,
+      enable_reranking: enableReranking.value,
+    })
+  } catch (error) {
+    // #13474: searchGraph propagates (useLoadingState.wrap re-raises), so a
+    // failed search was an unhandled rejection — the spinner stopped and the
+    // error notification below stayed empty, showing the user nothing at all.
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+  }
 }
 
 function formatScore(score?: number): string {

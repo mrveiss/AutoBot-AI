@@ -2601,7 +2601,8 @@
       "graphRagService": "Graph-RAG Service",
       "refreshStats": "Refresh Stats",
       "retry": "Retry",
-      "relationTypes": "Relation Types"
+      "relationTypes": "Relation Types",
+      "tabPath": "נתיב חיבור"
     },
     "pipeline": {
       "runner": {
@@ -3480,6 +3481,37 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "נתיב חיבור",
+      "description": "מצא את שרשרת הקשרים הקצרה ביותר המחברת בין שתי ישויות.",
+      "fromEntity": "מישות",
+      "fromEntityPlaceholder": "שם ישות ההתחלה...",
+      "toEntity": "לישות",
+      "toEntityPlaceholder": "שם ישות היעד...",
+      "swap": "החלף ישויות",
+      "direction": "כיוון",
+      "directionBoth": "כל כיוון",
+      "directionOutgoing": "עקוב אחר קשרים קדימה",
+      "directionIncoming": "עקוב אחר קשרים אחורה",
+      "directionHint": "קשרים נשמרים לעיתים קרובות בכיוון אחד בלבד.",
+      "maxDepth": "עומק מרבי",
+      "hops": "{count} קפיצות",
+      "relation": "קשר",
+      "relationHint": "(אופציונלי)",
+      "relationPlaceholder": "עקוב רק אחר סוג קשר זה...",
+      "findPath": "מצא נתיב",
+      "searching": "מחפש...",
+      "connectedIn": "מחוברות ב-{count} קפיצות",
+      "sameEntity": "שני השמות מפנים לאותה ישות: {name}",
+      "crossedForwards": "קדימה",
+      "crossedBackwards": "אחורה",
+      "unnamedRelation": "קשור ל",
+      "noPathFound": "לא נמצא חיבור בין הישויות האלה.",
+      "noPathHint": "נסה להגדיל את העומק, לאפשר כל כיוון, או להסיר את מסנן הקשר.",
+      "entityNotFound": "השמות האלה לא תאמו אף ישות:",
+      "entityNotFoundHint": "בדוק את האיות, או חלץ ישויות תחילה כדי שיהיו קיימות בגרף.",
+      "errorEnterBoth": "נא להזין ישות מקור וישות יעד."
     }
   },
   "reasoningTrace": {
