@@ -2019,6 +2019,16 @@ class FeatureConfig(RedactedSettings):
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
+    # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
+    # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
+    # private network. Default OFF — turning it on widens the egress surface.
+    #
+    # Scope is deliberately narrow: it applies to the operator-configured
+    # instance host only, NEVER to user-supplied content or download URLs.
+    # Loopback, link-local (incl. 169.254.169.254 cloud metadata), multicast,
+    # reserved and unspecified addresses stay blocked with the flag on.
+    connector_private_network_egress: bool = Field(default=False, alias="AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS")
+
     # Subsystem feature flags — issue #3017
     # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
     npu_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU")
