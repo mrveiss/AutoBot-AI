@@ -44688,6 +44688,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/graph-rag/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Graph Rag Path
+         * @description Return the shortest relationship path between two memory-graph entities.
+         *
+         *     Issue #13474: gives the memory graph's shortest-path traversal a production
+         *     caller. ``/search`` expands a neighbourhood — it answers "what relates to X";
+         *     this answers "how does X reach Y".
+         *
+         *     An unresolvable entity name is a 404 (the caller referenced something that
+         *     does not exist); "these two exist but are not connected" is a 200 with
+         *     ``found: false``, because that is a valid answer, not a failure.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        post: operations["graph_rag_path_api_graph_rag_path_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graph-rag/health": {
         parameters: {
             query?: never;
@@ -74382,6 +74412,113 @@ export interface components {
              * @description Timestamp of health check
              */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphRAGPathRequest
+         * @description Request model for a shortest-path query between two memory-graph entities. #13474.
+         */
+        GraphRAGPathRequest: {
+            /**
+             * From Entity
+             * @description Source entity name
+             */
+            from_entity: string;
+            /**
+             * To Entity
+             * @description Target entity name
+             */
+            to_entity: string;
+            /**
+             * Relation
+             * @description Restrict traversal to this relation type; omit for all types
+             */
+            relation?: string | null;
+            /**
+             * Max Depth
+             * @description Maximum path length to search (1-10 hops)
+             * @default 6
+             */
+            max_depth: number;
+            /**
+             * Direction
+             * @description Edge direction to follow; 'both' treats relations as undirected
+             * @default both
+             * @enum {string}
+             */
+            direction: "outgoing" | "incoming" | "both";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphRAGPathResponse
+         * @description Response model for a shortest-path query. #13474.
+         */
+        GraphRAGPathResponse: {
+            /**
+             * Success
+             * @description Whether the query executed
+             */
+            success: boolean;
+            /**
+             * Found
+             * @description Whether a path exists between the two entities
+             */
+            found: boolean;
+            /**
+             * Reason
+             * @description Why no path was returned ('no_path'); null when found
+             */
+            reason?: string | null;
+            /**
+             * From Entity
+             * @description Resolved source entity (id, name, type)
+             */
+            from_entity?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * To Entity
+             * @description Resolved target entity (id, name, type)
+             */
+            to_entity?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Missing Entities
+             * @description Entity names that could not be resolved
+             */
+            missing_entities?: string[];
+            /**
+             * Hops
+             * @description Path length in edges; 0 when both names resolve to the same entity
+             */
+            hops: number;
+            /**
+             * Path
+             * @description Ordered traversal steps, excluding the start entity
+             */
+            path: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Query
+             * @description Echo of the traversal parameters actually used
+             */
+            query: {
+                [key: string]: unknown;
+            };
+            /**
+             * Traversal Time
+             * @description Traversal wall time in seconds
+             */
+            traversal_time: number;
+            /**
+             * Request Id
+             * @description Unique request identifier
+             */
+            request_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -160179,6 +160316,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphRAGSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    graph_rag_path_api_graph_rag_path_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GraphRAGPathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphRAGPathResponse"];
                 };
             };
             /** @description Validation Error */
