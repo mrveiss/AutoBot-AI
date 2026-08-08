@@ -240,15 +240,29 @@ class GoalService(LLCServiceBase):
         self,
         session: AsyncSession,
         goal_id: uuid.UUID,
+        *,
+        company_id: Optional[str] = None,
     ) -> List[dict]:
         """Return root-first goal ancestry chain for a goal_id (GH#6469).
 
         Includes the goal itself as the last element.  Returns plain dicts
         (``id``, ``title``, ``level``, ``status``) so callers avoid importing
         LLCGoal.  Returns ``[]`` when the goal is not found.
+
+        #13704: ``company_id`` scopes the lookup. This is the one method an
+        untrusted goal reference reaches — the chat prompt path — so the tenant
+        check lives here rather than on every internal getter, whose scope is
+        already established by its own entry point. A goal belonging to another
+        company yields ``[]``, indistinguishable from "no such goal".
         """
         goal = await self.get(session, goal_id)
         if goal is None:
+            return []
+        if company_id is not None and str(goal.company_id) != str(company_id):
+            logger.warning(
+                "Refusing cross-company goal ancestry: goal=%s belongs to another company (#13704)",
+                goal_id,
+            )
             return []
         ancestors = await self.get_ancestors(session, goal_id)
         chain = ancestors + [goal]

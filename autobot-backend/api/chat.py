@@ -48,6 +48,7 @@ from api.schemas_chat import (
     TranslateRequest,
 )
 from api.schemas_common import DataResponse
+from api.user_management.dependencies import require_org_context
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
@@ -55,6 +56,7 @@ from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
+from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -1135,6 +1137,81 @@ async def set_session_role(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return DataResponse(data={"session_id": session_id, "role": role})
+
+
+@router.put("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def set_session_work_item(
+    session_id: str,
+    work_item_id: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    ctx=Depends(require_org_context),
+    request: Request = None,
+):
+    """Bind a chat session to an LLC work item so L4 can render its goal chain (#13704).
+
+    Two checks, both required: the caller must own the *session*, and the work
+    item must belong to the caller's *company*. Only then is the binding stored
+    server-side, where it overrides any client-supplied ``work_item_id``.
+
+    This endpoint is the reason L4 can be wired at all (#13687). Reading the
+    work item from the chat request body instead would let any authenticated
+    caller name another company's work item and have its goal titles rendered
+    into their own prompt.
+    """
+    from llc.deps import get_session as _llc_session
+    from llc.services.work_item_service import WorkItemService
+
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+
+    async for db in _llc_session():
+        # SECURITY: company-scoped fetch — a work item owned by another company
+        # is indistinguishable from one that does not exist.
+        item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
+        if item is None:
+            raise HTTPException(status_code=404, detail="Work item not found")
+        break
+
+    await SessionWorkItemService().set_work_item(session_id, work_item_id, str(ctx.org_id))
+    return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})
+
+
+@router.get("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def get_session_work_item(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Return the session's bound work item, or ``None`` (#13704)."""
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    work_item_id = await SessionWorkItemService().get_work_item(session_id)
+    return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})
+
+
+@router.delete("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def clear_session_work_item(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Remove the session's work-item binding (#13704)."""
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    await SessionWorkItemService().clear_work_item(session_id)
+    return DataResponse(data={"session_id": session_id, "work_item_id": None})
 
 
 @router.get("/chat/sessions/{session_id}/role", response_model=DataResponse[Dict[str, Any]])
