@@ -246,12 +246,14 @@ class TestForgetEverywhere(unittest.IsolatedAsyncioTestCase):
         with (patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,):
             results = await forget_everywhere("user-A", "mem-id-1")
 
-        # Should have tried all 5 stores
-        self.assertEqual(mock_forget.call_count, 5)
+        # Should have tried all 6 stores. #13705 added "general" — the SQLite
+        # memory_entries table, which this engine did not cover until #13688
+        # gave it an owner column to select a user's rows by.
+        self.assertEqual(mock_forget.call_count, 6)
         stores_tried = {c.args[2] for c in mock_forget.call_args_list}
         self.assertEqual(
             stores_tried,
-            {"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner"},
+            {"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general"},
         )
         # All returned True in this mock
         self.assertTrue(all(results.values()))

@@ -52219,7 +52219,7 @@ export interface paths {
          * @description List all memory items stored for the authenticated user.
          *
          *     Returns items from every store (verbatim, trajectory, working_memory,
-         *     graph, retrieval_learner) with provenance and timestamps.
+         *     graph, retrieval_learner, general) with provenance and timestamps.
          */
         get: operations["list_memories_api_memory_privacy_list_get"];
         put?: never;
