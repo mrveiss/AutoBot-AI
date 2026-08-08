@@ -145,6 +145,25 @@ class TestGroupChunks:
         # At least two groups expected (python group + other)
         assert len(groups) >= 1
 
+    def test_frequency_ties_break_on_the_keyword(self) -> None:
+        """#13682: tied keywords must group identically regardless of hash seed.
+
+        ``kws`` is a frozenset, so ``max`` without a total order returned
+        whichever element set iteration yielded first. Two chunks tying on
+        frequency could be labelled differently, land in different groups and
+        never be compared — the detector then reported no contradiction for
+        input that contained one, differently from run to run.
+        """
+        # "redis" and "data" both occur in both chunks, so their counts tie.
+        chunks = [
+            {"text": "redis caches data redis redis"},
+            {"text": "redis persists data redis redis"},
+        ]
+        groups = _group_chunks(chunks)
+        assert len(groups) == 1, f"tied keywords split across groups: {sorted(groups)}"
+        # The tie-break is the keyword itself, so the label is predictable.
+        assert sorted(groups) == ["redis"]
+
     def test_empty_chunks_go_to_ungrouped(self) -> None:
         chunks = [{"text": ""}, {"text": ""}]
         groups = _group_chunks(chunks)
