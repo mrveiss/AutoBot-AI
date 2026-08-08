@@ -418,3 +418,49 @@ async def test_stream_or_synthesize_labels_the_whole_utterance_route():
     assert len(recorded) == 1
     assert recorded[0][0] == "blob"
     assert recorded[0][1] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_does_not_bill_consumer_backpressure_to_the_worker(caplog):
+    """A slow consumer must not make a healthy worker look below real time.
+
+    This is an async generator feeding a WebSocket and a StreamingResponse, so
+    it sits suspended at each ``yield`` for as long as the client takes to
+    forward the chunk. Here the worker produces 2.0s of audio in 1.0s (a healthy
+    2.0x) while the consumer spends 20s forwarding it. Counting that consumer
+    time would report 0.09x and fire TTSSynthesisBelowRealTime against a worker
+    that is keeping up fine.
+    """
+    chunks = [_real_wav(1.0), _real_wav(1.0)]
+    mock_client = _make_routing_http_client({STREAM_URL_SUFFIX: (200, _framed(chunks))})
+    clock = _FakeClock()
+    recorded: list = []
+
+    def _monotonic() -> float:
+        # Every read costs 0.5s, so each start()->observe() production interval
+        # measures 0.5s: 1.0s of generation for 2.0s of audio.
+        clock.now += 0.5
+        return clock.now
+
+    metrics = MagicMock()
+    metrics.record_tts_synthesis = MagicMock(side_effect=lambda *a: recorded.append(a))
+
+    with (
+        patch("services.tts_client.get_http_client", return_value=mock_client),
+        patch("services.tts_client.time.monotonic", _monotonic),
+        patch(
+            "autobot_shared.monitoring.prometheus_metrics.get_metrics_manager",
+            return_value=metrics,
+        ),
+        caplog.at_level(logging.WARNING, logger="services.tts_client"),
+    ):
+        tts_client = TTSClient()
+        async for _ in tts_client.stream_or_synthesize("hello"):
+            clock.now += 10.0
+
+    assert len(recorded) == 1
+    _route, audio_seconds, wall_seconds = recorded[0]
+    assert audio_seconds == pytest.approx(2.0)
+    # 20s of consumer time excluded: the worker is recorded at its real 2.0x.
+    assert audio_seconds / wall_seconds == pytest.approx(2.0)
+    assert "below real time" not in caplog.text

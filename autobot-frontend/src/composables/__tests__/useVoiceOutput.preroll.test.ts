@@ -17,9 +17,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref } from 'vue'
 
+const mockShowToast = vi.fn()
+
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
     toasts: { value: [] },
     removeToast: vi.fn(),
     clearAllToasts: vi.fn(),
@@ -52,8 +54,10 @@ vi.mock('@/utils/debugUtils', () => ({
 // ── Controllable fakes ─────────────────────────────────────────────────────
 let clockMs = 1_700_000_000_000
 let ctxTime = 0
+let ctxState: 'running' | 'suspended' = 'running'
 let chunkDurationSec = 0.25
 let scheduledStarts = 0
+let liveSources: FakeBufferSource[] = []
 
 class FakeBufferSource {
   buffer: unknown = null
@@ -61,13 +65,24 @@ class FakeBufferSource {
   connect() {}
   start() {
     scheduledStarts++
+    // Stays "playing" until a test ends it, mirroring a real source node.
+    liveSources.push(this)
   }
   stop() {}
 }
 
+/** Finish every scheduled source, as the real timeline would on playout. */
+function endAllScheduled(): void {
+  const sources = liveSources
+  liveSources = []
+  for (const source of sources) source.onended?.()
+}
+
 class FakeAudioContext {
   destination = {}
-  state = 'running'
+  get state() {
+    return ctxState
+  }
   get currentTime() {
     return ctxTime
   }
@@ -139,8 +154,10 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
   beforeEach(async () => {
     clockMs += 60_000
     ctxTime = 0
+    ctxState = 'running'
     chunkDurationSec = 0.25
     scheduledStarts = 0
+    liveSources = []
     lastSocket = null
     vi.spyOn(Date, 'now').mockImplementation(() => clockMs)
     originalAudioContext = (globalThis as Record<string, unknown>).AudioContext
@@ -236,17 +253,130 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
     expect(scheduledStarts).toBe(scheduledAfterCalibration + 1)
   })
 
-  it('counts audio still scheduled ahead as lead-in, so a follow-on sentence is not delayed twice', async () => {
+  it('credits scheduled-ahead audio at the production rate, not at its full duration', async () => {
     await calibrate(0.25)
     const scheduledAfterCalibration = scheduledStarts
     // The playhead has not moved, so the calibration utterance's 3 x 0.25s are
-    // still queued ahead of it — 0.75s of real lead-in the next sentence inherits.
+    // still queued ahead of it: A = 0.75s.
     ctxTime = 0
 
+    // Target is 0.9s. While those 0.75s play out the worker adds only r*A =
+    // 0.1875s, NOT 0.75s — crediting A at full value would release here, one
+    // chunk in, with 0.25s buffered against a 1.2s utterance, and starve.
     serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
-    // 0.75s ahead + this 0.25s chunk clears the 0.9s target on the FIRST chunk,
-    // instead of waiting out the full lead-in a second time.
     await sendChunk(0)
-    expect(scheduledStarts).toBe(scheduledAfterCalibration + 1)
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+    await sendChunk(1000)
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+
+    // 0.75s buffered + 0.1875s credited clears 0.9s — one chunk sooner than the
+    // four needed with no audio queued ahead, which is the real benefit.
+    await sendChunk(1000)
+    expect(scheduledStarts).toBe(scheduledAfterCalibration + 3)
+  })
+
+  it('keeps isSpeaking true while holding, so the mic is not reopened mid-reply', async () => {
+    await calibrate(0.25)
+    ctxTime = 1000
+    endAllScheduled()
+    const { isSpeaking } = useVoiceOutput()
+    // Calibration audio has played out; nothing is sounding.
+    expect(isSpeaking.value).toBe(false)
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+
+    // The reply is buffering, not finished. A false here fires
+    // watch(isSpeaking) in useVoiceConversation, which expires the TTS echo
+    // cooldown and reopens the mic while AutoBot is still about to speak.
+    expect(isSpeaking.value).toBe(true)
+  })
+
+  it('does not force-release while the worker is still producing — the stall timer is not a cap', async () => {
+    // Calibrate on real timers: sendChunk drains the decode chain via a real
+    // macrotask, which a fake clock would never fire.
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+
+    vi.useFakeTimers()
+    try {
+      // A 180-char reply targets the 8s cap; filling it at 0.25x legitimately
+      // takes ~32s. A total-duration timer would force-release mid-fill and
+      // hand back exactly the stutter this feature exists to remove.
+      serverSend({ type: 'tts_start', text: 'x'.repeat(180) })
+      for (let i = 0; i < 6; i++) {
+        clockMs += 4000
+        serverSend({ type: 'tts_audio', data: B64, chunk: i })
+        await vi.advanceTimersByTimeAsync(4000)
+      }
+
+      // 24s of wall clock, well past a 20s one-shot timer, and still holding.
+      expect(scheduledStarts).toBe(scheduledAfterCalibration)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases held audio when the worker genuinely stalls', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+
+    vi.useFakeTimers()
+    try {
+      serverSend({ type: 'tts_start', text: 'x'.repeat(180) })
+      clockMs += 1000
+      serverSend({ type: 'tts_audio', data: B64, chunk: 0 })
+      await vi.advanceTimersByTimeAsync(1)
+      expect(scheduledStarts).toBe(scheduledAfterCalibration)
+
+      // No further chunk — the watchdog plays what is buffered rather than
+      // stranding it.
+      await vi.advanceTimersByTimeAsync(11_000)
+      expect(scheduledStarts).toBe(scheduledAfterCalibration + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not schedule held audio onto a context suspended during the hold', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+    await sendChunk(1000)
+
+    // The tab was backgrounded while the reply buffered. Starting sources on a
+    // frozen timeline never fires onended, which is how the indicator used to
+    // stick (#12503) — take the gesture-unlock exit instead.
+    ctxState = 'suspended'
+    const { isSpeaking } = useVoiceOutput()
+    serverSend({ type: 'tts_end' })
+
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+    expect(isSpeaking.value).toBe(false)
+    expect(mockShowToast).toHaveBeenCalledWith(expect.any(String), 'info')
+  })
+
+  it('a superseded reply mid-hold is dropped by speak(), not spoken first', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await sendChunk(0)
+    await sendChunk(1000)
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
+
+    // A new one-shot utterance supersedes the held reply. speak()'s stop guard
+    // must fire even though nothing is on the timeline yet, or _beginUtterance's
+    // release speaks the superseded audio first — the #12502 failure.
+    await useVoiceOutput().speak('a replacement utterance', true)
+
+    expect(scheduledStarts).toBe(scheduledAfterCalibration)
   })
 })

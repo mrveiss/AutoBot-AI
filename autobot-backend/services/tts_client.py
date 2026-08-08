@@ -99,24 +99,38 @@ def _wav_duration_seconds(wav_bytes: bytes) -> float:
 
 
 class _SynthesisThroughput:
-    """Audio produced vs wall time for one synthesis (#12460).
+    """Audio produced vs the time the worker spent producing it (#12460).
 
     Time-to-first-audio was fixed in #13215, but a worker that then sustains
     below real time starves the player and stutters anyway. The real-time factor
     is the number that separates those two failures, and nothing was recording
     it, so a worker running at 0.2x looked healthy on every dashboard.
+
+    Only the intervals the worker is actually generating in are counted. This
+    is an async generator feeding a WebSocket and a StreamingResponse, so it is
+    suspended at each ``yield`` for as long as the consumer takes to forward the
+    chunk. Billing that back-pressure to the worker would fire the
+    below-real-time alert against a healthy one whenever a client is slow.
     """
 
     def __init__(self, route: str) -> None:
         self.route = route
-        self._started = time.monotonic()
+        self._producing_seconds = 0.0
         self._audio_seconds = 0.0
         self._first_chunk_seconds: float | None = None
+        self._mark: float | None = None
+
+    def start(self) -> None:
+        """Open a production interval — before a request, and after each yield."""
+        self._mark = time.monotonic()
 
     def observe(self, wav_bytes: bytes) -> None:
-        """Fold one delivered WAV payload into the measurement."""
+        """Close the production interval this payload arrived on."""
+        if self._mark is not None:
+            self._producing_seconds += time.monotonic() - self._mark
+            self._mark = None
         if self._first_chunk_seconds is None:
-            self._first_chunk_seconds = time.monotonic() - self._started
+            self._first_chunk_seconds = self._producing_seconds
         self._audio_seconds += _wav_duration_seconds(wav_bytes)
 
     def report(self) -> None:
@@ -126,7 +140,7 @@ class _SynthesisThroughput:
         first chunk, or an unparseable payload) carries no rate and is skipped
         rather than recorded as a 0.0x outlier.
         """
-        wall_seconds = time.monotonic() - self._started
+        wall_seconds = self._producing_seconds
         if self._audio_seconds <= 0 or wall_seconds <= 0:
             return
         try:
@@ -259,8 +273,10 @@ class TTSClient:
 
         Throughput is measured across whichever route serves the utterance and
         reported once on exit (#12460) — including when a caller abandons the
-        stream mid-utterance, since audio-produced over wall-time is still the
-        worker's real rate.
+        stream mid-utterance, since audio-produced over generation-time is still
+        the worker's real rate. The clock covers only the intervals the worker
+        is generating in: it starts after the capability probe has resolved, and
+        restarts after each yield so a slow consumer is not billed to the worker.
         """
         throughput = _SynthesisThroughput("stream")
         try:
@@ -268,6 +284,7 @@ class TTSClient:
             if not self._streaming_known_absent():
                 degraded = self._stream_absent_until > 0.0
                 try:
+                    throughput.start()
                     async with aclosing(self.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
                         async for chunk in stream:
                             if not emitted and degraded:
@@ -278,6 +295,7 @@ class TTSClient:
                             emitted = True
                             throughput.observe(chunk)
                             yield chunk
+                            throughput.start()
                     return
                 except TTSStreamUnsupported as e:
                     if emitted:
@@ -290,6 +308,7 @@ class TTSClient:
                         STREAM_PROBE_TTL,
                     )
             throughput.route = "blob"
+            throughput.start()
             whole = await self.synthesize(text, voice_id=voice_id, language=language)
             throughput.observe(whole)
             yield whole
