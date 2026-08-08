@@ -269,7 +269,24 @@ class ConnectorCredentialStore:
             creds["token_url"], creds["client_id"], creds["client_secret"], refresh_token
         )
         creds["access_token"] = token_response["access_token"]
-        creds["access_token_expires_at"] = self._expiry_iso(token_response.get("expires_in"))
+        # #13626: ``expires_in`` is RECOMMENDED, not REQUIRED, on a refresh
+        # response (RFC 6749 §5.1) and several providers omit it. Writing None
+        # through here set the expiry to "never", and since a missing expiry is
+        # treated as non-expiring the credential was never refreshed again — the
+        # token lapsed server-side and every later sync failed with a 401, hours
+        # or days after the refresh that caused it.
+        #
+        # Reuse the lifetime the provider last reported. Carrying the old
+        # ``access_token_expires_at`` forward instead would not work: a refresh
+        # only runs once that timestamp is already past, so the credential would
+        # look expired immediately and re-refresh on every single call.
+        reported_expires_in = token_response.get("expires_in")
+        effective_expires_in = (
+            reported_expires_in if reported_expires_in is not None else creds.get("access_token_lifetime_seconds")
+        )
+        creds["access_token_expires_at"] = self._expiry_iso(effective_expires_in)
+        if reported_expires_in is not None:
+            creds["access_token_lifetime_seconds"] = self._lifetime_seconds(reported_expires_in)
         if token_response.get("refresh_token"):
             # Providers like GitLab rotate the refresh token on each use.
             creds["refresh_token"] = token_response["refresh_token"]
@@ -307,12 +324,31 @@ class ConnectorCredentialStore:
             "access_token": token_response.get("access_token", ""),
             "refresh_token": token_response.get("refresh_token", ""),
             "access_token_expires_at": cls._expiry_iso(token_response.get("expires_in")),
+            # The lifetime, kept alongside the derived timestamp so a refresh
+            # response that omits ``expires_in`` can recompute one (#13626).
+            "access_token_lifetime_seconds": cls._lifetime_seconds(token_response.get("expires_in")),
             "token_type": token_response.get("token_type", "Bearer"),
             "scope": token_response.get("scope", " ".join(scopes)),
             "client_id": client_id,
             "client_secret": client_secret,
             "token_url": token_url,
         }
+
+    @staticmethod
+    def _lifetime_seconds(expires_in) -> int | None:
+        """Return *expires_in* as whole seconds, or None when not reported (#13626).
+
+        Kept separate from :meth:`_expiry_iso` so the stored lifetime survives a
+        refresh response that omits ``expires_in``. Parsing failures return None
+        for the same reason ``_expiry_iso`` does — an unusable value is treated
+        as "not reported" rather than guessed at.
+        """
+        if expires_in is None:
+            return None
+        try:
+            return int(expires_in)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _expiry_iso(expires_in) -> str | None:

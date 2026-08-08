@@ -5,6 +5,7 @@
 """Unit and integration tests for ConnectorCredentialStore (ADR-007 / GH#9019)."""
 
 import json
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +16,7 @@ from autobot_shared.auth.connector_auth import (
     BearerAuth,
     OAuthRefreshAuth,
 )
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.credential_store import ConnectorCredentialStore
 
 # ---------------------------------------------------------------------------
@@ -336,6 +338,148 @@ async def test_get_access_token_refreshes_when_expired(monkeypatch):
     bundle = json.loads(store[secret_id]["value"])
     assert bundle["access_token"] == "new"
     assert bundle["refresh_token"] == "rt-new"
+
+
+@pytest.mark.asyncio
+async def test_refresh_without_expires_in_reuses_the_reported_lifetime(monkeypatch):
+    """#13626: a refresh response omitting ``expires_in`` must not clear the expiry.
+
+    ``expires_in`` is RECOMMENDED, not REQUIRED, on a refresh response
+    (RFC 6749 5.1). Writing None through set the expiry to "never", and a
+    missing expiry is treated as non-expiring — so the credential was never
+    refreshed again, the token lapsed server-side, and every later sync failed
+    with a 401 hours or days after the refresh that caused it.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13626", "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt-old", "expires_in": 0},
+        "cid", "csec", "https://token", ["s"],
+    )
+    # The initial exchange reported a lifetime, so it is on the bundle.
+    assert json.loads(store[secret_id]["value"])["access_token_lifetime_seconds"] == 0
+
+    # Re-store with a real lifetime, then expire it, to model a live credential.
+    secret_id = await cs.store_oauth(
+        "c-13626b", "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
+        "cid", "csec", "https://token", ["s"],
+    )
+    bundle = json.loads(store[secret_id]["value"])
+    assert bundle["access_token_lifetime_seconds"] == 3600
+    bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
+    store[secret_id]["value"] = json.dumps(bundle)
+
+    from knowledge.connectors import oauth_flow
+
+    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token):
+        return {"access_token": "new"}  # no expires_in — the provider omitted it
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_without_expiry)
+    assert await cs.get_access_token(secret_id, "u1") == "new"
+
+    refreshed = json.loads(store[secret_id]["value"])
+    assert refreshed["access_token_expires_at"] is not None, "expiry was cleared — refresh is now disabled forever"
+    # Recomputed from the stored lifetime, so roughly an hour out, not in the past.
+    expires_at = parse_utc_iso(refreshed["access_token_expires_at"])
+    assert expires_at > now_utc() + timedelta(seconds=3000)
+
+
+@pytest.mark.asyncio
+async def test_refresh_without_expires_in_does_not_refresh_again_next_call(monkeypatch):
+    """#13626: guards the naive fix of carrying the old timestamp forward.
+
+    A refresh only runs once ``access_token_expires_at`` is already past, so
+    reusing that timestamp would leave the credential looking expired and
+    trigger a refresh on every single call.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13626c", "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
+        "cid", "csec", "https://token", ["s"],
+    )
+    bundle = json.loads(store[secret_id]["value"])
+    bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
+    store[secret_id]["value"] = json.dumps(bundle)
+
+    from knowledge.connectors import oauth_flow
+
+    calls = []
+
+    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token):
+        calls.append(refresh_token)
+        return {"access_token": "new"}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_without_expiry)
+    await cs.get_access_token(secret_id, "u1")
+    await cs.get_access_token(secret_id, "u1")
+    await cs.get_access_token(secret_id, "u1")
+
+    assert len(calls) == 1, f"refreshed on every call — {len(calls)} refreshes for 3 reads"
+
+
+@pytest.mark.asyncio
+async def test_provider_that_never_reports_expiry_stays_non_expiring(monkeypatch):
+    """#13626: only the lost-after-refresh case is a bug.
+
+    A provider that never reports ``expires_in`` legitimately means
+    non-expiring, and must not start refreshing on every call.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13626d", "u1", "gitlab",
+        {"access_token": "tok", "refresh_token": "rt"},  # no expires_in, ever
+        "cid", "csec", "https://token", ["s"],
+    )
+    bundle = json.loads(store[secret_id]["value"])
+    assert bundle["access_token_expires_at"] is None
+    assert bundle["access_token_lifetime_seconds"] is None
+
+    from knowledge.connectors import oauth_flow
+
+    async def _boom(*_a, **_kw):
+        raise AssertionError("must not refresh a credential the provider never gave an expiry for")
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _boom)
+    assert await cs.get_access_token(secret_id, "u1") == "tok"
+
+
+@pytest.mark.asyncio
+async def test_legacy_bundle_without_stored_lifetime_self_heals(monkeypatch):
+    """#13626: credentials stored before this change carry no lifetime.
+
+    They cannot be rescued on a refresh that also omits ``expires_in`` — nothing
+    knows the lifetime — so that case must simply not regress. The first refresh
+    that *does* report one backfills it, and the credential is fixed from then on.
+    """
+    svc, store = _make_svc()
+    cs = ConnectorCredentialStore(svc)
+    secret_id = await cs.store_oauth(
+        "c-13626e", "u1", "gitlab",
+        {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
+        "cid", "csec", "https://token", ["s"],
+    )
+    # Model a pre-existing bundle: expiry present, lifetime key absent entirely.
+    bundle = json.loads(store[secret_id]["value"])
+    del bundle["access_token_lifetime_seconds"]
+    bundle["access_token_expires_at"] = (now_utc() - timedelta(seconds=1)).isoformat()
+    store[secret_id]["value"] = json.dumps(bundle)
+
+    from knowledge.connectors import oauth_flow
+
+    async def _refresh_reporting_expiry(token_url, client_id, client_secret, refresh_token):
+        return {"access_token": "new", "expires_in": 7200}
+
+    monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_reporting_expiry)
+    assert await cs.get_access_token(secret_id, "u1") == "new"
+
+    healed = json.loads(store[secret_id]["value"])
+    assert healed["access_token_lifetime_seconds"] == 7200, "lifetime not backfilled on a reporting refresh"
+    assert healed["access_token_expires_at"] is not None
 
 
 @pytest.mark.asyncio
