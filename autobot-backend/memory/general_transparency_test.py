@@ -120,28 +120,122 @@ class TestParkedRowsAreNotAttributed:
         assert len(await storage.list_by_owner(LEGACY_UNSCOPED_OWNER)) == 1
 
 
-class TestTransparencyEngineCoversTheStore:
-    def test_general_is_registered_in_every_aggregate(self):
-        """AC: list, forget dispatch and forget_everywhere all know the store."""
-        import inspect
+class TestScopeGuardOnDelete:
+    @pytest.mark.asyncio
+    async def test_a_blank_owner_cannot_delete(self, storage):
+        """Pins _require_user_id on the delete path.
 
+        Review found this mutation surviving: removing the guard from
+        delete_for_owner left the whole suite green, so the scope check — and
+        its whitespace normalisation — was unpinned.
+        """
+        entry_id = await storage.store(_entry(ALICE, "alice fact"))
+
+        for blank in ("", "   ", None):
+            with pytest.raises(ValueError):
+                await storage.delete_for_owner(blank, entry_id)
+
+        assert len(await storage.list_by_owner(ALICE)) == 1
+
+    @pytest.mark.asyncio
+    async def test_surrounding_whitespace_still_resolves_to_the_owner(self, storage):
+        entry_id = await storage.store(_entry(ALICE, "alice fact"))
+
+        assert await storage.delete_for_owner(f"  {ALICE}  ", entry_id) is True
+
+    @pytest.mark.asyncio
+    async def test_the_reserved_parked_owner_cannot_delete(self, storage):
+        """Reads accept it so an operator can still reach parked rows; the
+        transparency engine must not be able to erase them."""
+        with pytest.raises(ValueError, match="reserved"):
+            await storage.delete_for_owner(LEGACY_UNSCOPED_OWNER, 1)
+
+
+class TestTransparencyEngineBehaviour:
+    """Behavioural, not structural.
+
+    The first version of these asserted on `inspect.getsource` and `__doc__`.
+    Review showed why that is worse than nothing: the docstring test passed
+    while the prose it pinned was false — parked rows *were* reachable — so the
+    suite was certifying an incorrect policy.
+    """
+
+    @pytest.mark.asyncio
+    async def test_list_user_memories_includes_a_general_row(self, tmp_path, monkeypatch):
+        """AC 1, end to end through the public surface."""
         from memory import transparency
 
-        assert "_list_general_memory" in inspect.getsource(transparency.list_user_memories)
-        assert '"general"' in inspect.getsource(transparency.forget_memory)
-        assert '"general"' in inspect.getsource(transparency.forget_everywhere)
+        entry = _entry(ALICE, "alice general memory")
+        entry.id = 7
+        monkeypatch.setattr(transparency, "_list_general_memory", _stub_list([_general_row(entry)]), raising=True)
+        for name in (
+            "_list_verbatim",
+            "_list_trajectory",
+            "_list_working_memory",
+            "_list_graph_entities",
+            "_list_rl_patterns",
+        ):
+            monkeypatch.setattr(transparency, name, _stub_list([]), raising=True)
 
-    def test_export_inherits_the_store_through_list(self):
-        """export_user_memory reuses list_user_memories, so coverage follows."""
-        import inspect
+        items = await transparency.list_user_memories(ALICE)
 
+        assert [i["store"] for i in items] == ["general"]
+        assert items[0]["content"] == "alice general memory"
+
+    @pytest.mark.asyncio
+    async def test_export_includes_the_general_store(self, monkeypatch):
+        """AC 4 — export inherits the store through list_user_memories."""
         from memory import transparency
 
-        assert "list_user_memories" in inspect.getsource(transparency.export_user_memory)
+        entry = _entry(ALICE, "exported memory")
+        entry.id = 8
+        monkeypatch.setattr(transparency, "_list_general_memory", _stub_list([_general_row(entry)]), raising=True)
+        for name in (
+            "_list_verbatim",
+            "_list_trajectory",
+            "_list_working_memory",
+            "_list_graph_entities",
+            "_list_rl_patterns",
+        ):
+            monkeypatch.setattr(transparency, name, _stub_list([]), raising=True)
 
-    def test_the_parked_row_policy_is_documented(self):
-        """#13719's decision must be stated, not inferred from a missing branch."""
-        from memory import transparency
+        export = await transparency.export_user_memory(ALICE)
 
-        assert "__unscoped__" in (transparency.__doc__ or "")
-        assert "13719" in (transparency.__doc__ or "")
+        assert "general" in export["stores"]
+        assert export["total_items"] == 1
+
+    @pytest.mark.asyncio
+    async def test_parked_rows_are_refused_as_a_user_footprint(self):
+        """The policy the old docstring test only claimed.
+
+        `list_by_owner(LEGACY_UNSCOPED_OWNER)` still works at the storage layer —
+        that is #13688's design so an operator can reach parked rows. What must
+        not happen is surfacing them through the user-facing engine.
+        """
+        from memory.transparency import _list_general_memory
+
+        assert await _list_general_memory(LEGACY_UNSCOPED_OWNER) == []
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_store_id_never_deletes_a_general_row(self):
+        """Cross-store collision: forget_everywhere fans one id to all stores.
+
+        A graph entity id or Redis key must not coerce onto a general row id.
+        """
+        from memory.transparency import _forget_general_memory
+
+        for foreign in ("abc", "autobot:session:x:memory:y", " 2 ", "+3", "0004", "5\n", "1_0", ""):
+            assert await _forget_general_memory(ALICE, foreign) is False, foreign
+
+
+def _general_row(entry):
+    from memory.transparency import _general_item
+
+    return _general_item(entry)
+
+
+def _stub_list(items):
+    async def _stub(_user_id):
+        return items
+
+    return _stub

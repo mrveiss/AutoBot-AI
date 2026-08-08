@@ -38,6 +38,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from memory._redis_util import decode as _decode
 from memory._redis_util import redis_scan as _redis_scan
+from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER
 from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
@@ -288,6 +289,24 @@ async def _list_rl_patterns(user_id: str) -> List[Dict[str, Any]]:
     return items
 
 
+def _general_item(entry: Any) -> Dict[str, Any]:
+    """Shape one general memory row as a transparency item."""
+    category = entry.category.value if hasattr(entry.category, "value") else str(entry.category)
+    return {
+        "memory_id": str(entry.id),
+        "store": "general",
+        "content": entry.content,
+        # Splat metadata FIRST: a metadata key named "category" or
+        # "reference_path" must not overwrite the real provenance.
+        "provenance": {
+            **(entry.metadata or {}),
+            "category": category,
+            "reference_path": entry.reference_path or "",
+        },
+        "timestamp": entry.timestamp.isoformat() if entry.timestamp else "",
+    }
+
+
 async def _list_general_memory(user_id: str) -> List[Dict[str, Any]]:
     """Return general memory entries owned by *user_id* (#13705).
 
@@ -295,34 +314,25 @@ async def _list_general_memory(user_id: str) -> List[Dict[str, Any]]:
     ``memory_entries`` a first-class ``user_id`` column — before that there was
     no predicate to select a user's rows by, so the omission was defensible.
     It is not any more.
-    """
-    try:
-        from memory.manager import MemoryManager
 
-        manager = MemoryManager()
+    The reserved parked owner is refused: those rows cannot be attributed to a
+    requester, so surfacing them through a right-to-be-forgotten endpoint would
+    present one pseudo-user's footprint as a real user's.
+    """
+    if user_id == LEGACY_UNSCOPED_OWNER:
+        logger.warning("Refusing to list parked pre-migration rows as a user footprint (#13705)")
+        return []
+    try:
+        from memory import get_memory_manager
+
+        manager = get_memory_manager()
         await manager._ensure_initialized()
-        entries = await manager._general_storage.list_by_owner(user_id)
+        entries = await manager._general_storage.list_by_owner(user_id, limit=None)
     except Exception as exc:
         logger.warning("_list_general_memory failed: %s", exc)
         return []
 
-    items = []
-    for entry in entries:
-        category = entry.category.value if hasattr(entry.category, "value") else str(entry.category)
-        items.append(
-            {
-                "memory_id": str(entry.id),
-                "store": "general",
-                "content": entry.content,
-                "provenance": {
-                    "category": category,
-                    "reference_path": entry.reference_path or "",
-                    **(entry.metadata or {}),
-                },
-                "timestamp": entry.timestamp.isoformat() if entry.timestamp else "",
-            }
-        )
-    return items
+    return [_general_item(entry) for entry in entries]
 
 
 # ---------------------------------------------------------------------------
@@ -425,17 +435,23 @@ async def _forget_general_memory(user_id: str, memory_id: str) -> bool:
 
     The owner is part of the DELETE predicate, so this cannot erase another
     user's row even if handed their ``memory_id``.
-    """
-    try:
-        from memory.manager import MemoryManager
 
-        manager = MemoryManager()
+    General is the only store with a dense small-integer id space, and
+    ``forget_everywhere`` fans one id out to every store — so a numeric-looking
+    id belonging to another store (a graph entity id, say) would otherwise land
+    on an unrelated general row of the same user and silently delete it. The
+    canonical-decimal check keeps that to exact matches only; the remaining
+    ambiguity in the fan-out is tracked in #13739.
+    """
+    if not isinstance(memory_id, str) or not memory_id.isdigit() or str(int(memory_id)) != memory_id:
+        # Not a general-store id shape: another store owns this item.
+        return False
+    try:
+        from memory import get_memory_manager
+
+        manager = get_memory_manager()
         await manager._ensure_initialized()
         return await manager._general_storage.delete_for_owner(user_id, int(memory_id))
-    except (TypeError, ValueError):
-        # A general memory id is an integer row id; anything else belongs to
-        # another store and is simply not found here.
-        return False
     except Exception as exc:
         logger.warning("_forget_general_memory failed for %s: %s", memory_id, exc)
         return False

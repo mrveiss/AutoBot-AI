@@ -254,13 +254,18 @@ class GeneralStorage:
             logger.error("Failed to search memory entries: %s", e)
             raise RuntimeError(f"Failed to search memory entries: {e}")
 
-    async def list_by_owner(self, user_id: str, limit: int = 1000) -> List[MemoryEntry]:
+    async def list_by_owner(self, user_id: str, limit: int | None = None) -> List[MemoryEntry]:
         """Return every entry belonging to *user_id*, across all categories (#13705).
 
         The transparency engine needs a user's whole footprint, which neither
         :meth:`retrieve` (category-scoped) nor :meth:`search` (LIKE-scoped) can
         give. Owner-scoped like every other read here — there is no unscoped
         variant to reach for.
+
+        ``limit=None`` (the default) returns everything. A cap here would make
+        general the only store in the transparency fan-out that silently
+        truncates — the exact under-reporting #13705 exists to fix. Chroma and
+        the Redis scans are uncapped, so this matches them.
         """
         owner = _require_user_id(user_id)
         try:
@@ -273,7 +278,7 @@ class GeneralStorage:
                     ORDER BY timestamp DESC
                     LIMIT ?
                 """,
-                    (owner, limit),
+                    (owner, limit if limit is not None else -1),  # SQLite: -1 means no limit
                 )
                 rows = await cursor.fetchall()
                 return [self._row_to_entry(row) for row in rows]
@@ -288,8 +293,13 @@ class GeneralStorage:
         there is no window between the check and the delete and no way to call
         this with an id alone. Returns False when the row does not exist *or*
         belongs to someone else — the caller cannot tell the two apart.
+
+        ``for_write=True`` rejects LEGACY_UNSCOPED_OWNER: reads accept it so
+        parked pre-migration rows stay retrievable by an operator, but deletion
+        through the transparency engine must not be able to erase a row that
+        cannot be attributed to the requester (#13705).
         """
-        owner = _require_user_id(user_id)
+        owner = _require_user_id(user_id, for_write=True)
         try:
             async with self._get_connection() as conn:
                 cursor = await conn.execute(
