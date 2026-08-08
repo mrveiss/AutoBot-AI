@@ -75,10 +75,19 @@ export type GraphPathDirection = 'outgoing' | 'incoming' | 'both'
 /** Why no path was returned. `null` when one was found. */
 export type GraphPathReason = 'no_path' | 'entity_not_found' | 'not_in_graph' | null
 
+/**
+ * How a typed endpoint name was matched (#13761). Only present on the two
+ * endpoints — nodes along the path were reached by id, so there is nothing to
+ * qualify. `'fuzzy'` means no entity carries that name and the backend fell
+ * back to the closest relevance hit: a real path to a different entity.
+ */
+export type GraphPathResolution = 'exact' | 'fuzzy'
+
 export interface GraphPathEntity {
   id?: string
   name?: string
   type?: string
+  resolution?: GraphPathResolution
 }
 
 export interface GraphPathHop {

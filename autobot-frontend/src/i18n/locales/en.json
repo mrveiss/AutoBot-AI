@@ -4104,6 +4104,7 @@
       "searching": "Searching...",
       "connectedIn": "Connected in {count} hop | Connected in {count} hops",
       "sameEntity": "Both names resolve to the same entity: {name}",
+      "fuzzyMatch": "No entity is named {names} — the path below is about the closest match instead. | No entities are named {names} — the path below is about the closest matches instead.",
       "crossedForwards": "forwards",
       "crossedBackwards": "backwards",
       "unnamedRelation": "related to",

@@ -4104,6 +4104,7 @@
       "searching": "Recherche...",
       "connectedIn": "Reliées en {count} saut | Reliées en {count} sauts",
       "sameEntity": "Les deux noms désignent la même entité : {name}",
+      "fuzzyMatch": "Aucune entité ne s'appelle {names} — le chemin ci-dessous concerne la correspondance la plus proche. | Aucune entité ne s'appelle {names} — le chemin ci-dessous concerne les correspondances les plus proches.",
       "crossedForwards": "vers l'avant",
       "crossedBackwards": "vers l'arrière",
       "unnamedRelation": "lié à",

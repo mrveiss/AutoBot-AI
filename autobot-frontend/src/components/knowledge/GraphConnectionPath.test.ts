@@ -274,6 +274,75 @@ describe('GraphConnectionPath.vue (#13474)', () => {
     expect(wrapper.text()).not.toContain(en.knowledge.graphPath.noPathFound)
   })
 
+  // --- Fuzzy endpoint resolution (#13761) ----------------------------------
+
+  it('warns when a typed name matched nothing and the nearest entity was used', async () => {
+    const wrapper = mountComponent()
+    await submit(wrapper, 'Incident 7', 'Redis Config')
+    pathResult.value = {
+      found: true,
+      reason: null,
+      // "Incident 7" does not exist; the backend fell back to "Incident 71".
+      from_entity: { id: 'e71', name: 'Incident 71', type: 'incident', resolution: 'fuzzy' },
+      to_entity: { id: 'e1', name: 'Redis Config', type: 'decision', resolution: 'exact' },
+      missing_entities: [],
+      hops: 1,
+      path: [
+        {
+          relation: 'CAUSED',
+          direction: 'outgoing',
+          edge_id: 'edge-1',
+          node: { id: 'e1', name: 'Redis Config', type: 'decision' },
+        },
+      ],
+    }
+    await wrapper.vm.$nextTick()
+
+    const warning = wrapper.find('.fuzzy-match-warning')
+    expect(warning.exists()).toBe(true)
+    // The warning must quote what the user typed, not what it resolved to —
+    // "Incident 71" alone reads as a successful lookup.
+    expect(warning.text()).toContain('Incident 7')
+    expect(warning.attributes('role')).toBe('alert')
+    // The path itself is still rendered; it is real, just about something else.
+    expect(wrapper.find('.path-chain').exists()).toBe(true)
+  })
+
+  it('does not warn when both endpoints resolved exactly', async () => {
+    const wrapper = mountComponent()
+    await submit(wrapper, 'Redis Config', 'Incident 7')
+    pathResult.value = {
+      found: true,
+      reason: null,
+      from_entity: { id: 'e1', name: 'Redis Config', type: 'decision', resolution: 'exact' },
+      to_entity: { id: 'e2', name: 'Incident 7', type: 'incident', resolution: 'exact' },
+      missing_entities: [],
+      hops: 1,
+      path: [{ relation: 'CAUSED', direction: 'outgoing', edge_id: 'e', node: { id: 'e2', name: 'Incident 7' } }],
+    }
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.fuzzy-match-warning').exists()).toBe(false)
+  })
+
+  it('does not warn when a backend omits resolution entirely', async () => {
+    // Older backends do not send the field; absence must not read as fuzzy.
+    const wrapper = mountComponent()
+    await submit(wrapper, 'Redis Config', 'Incident 7')
+    pathResult.value = {
+      found: true,
+      reason: null,
+      from_entity: { id: 'e1', name: 'Redis Config', type: 'decision' },
+      to_entity: { id: 'e2', name: 'Incident 7', type: 'incident' },
+      missing_entities: [],
+      hops: 0,
+      path: [],
+    }
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.fuzzy-match-warning').exists()).toBe(false)
+  })
+
   it('says "1 hop", not "1 hops"', async () => {
     const wrapper = mountComponent()
     pathResult.value = {

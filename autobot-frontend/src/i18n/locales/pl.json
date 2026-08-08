@@ -4104,6 +4104,7 @@
       "searching": "Wyszukiwanie...",
       "connectedIn": "Połączone w {count} przeskoku | Połączone w {count} przeskokach",
       "sameEntity": "Obie nazwy wskazują tę samą encję: {name}",
+      "fuzzyMatch": "Żadna encja nie nazywa się {names} — poniższa ścieżka dotyczy najbliższego dopasowania. | Żadne encje nie nazywają się {names} — poniższa ścieżka dotyczy najbliższych dopasowań.",
       "crossedForwards": "w przód",
       "crossedBackwards": "wstecz",
       "unnamedRelation": "powiązane z",
