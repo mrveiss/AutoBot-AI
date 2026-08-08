@@ -337,7 +337,9 @@ async def test_stream_or_synthesize_warns_and_records_below_real_time(caplog):
     assert len(recorded) == 1
     route, audio_seconds, wall_seconds = recorded[0]
     assert route == "stream"
-    assert audio_seconds == pytest.approx(1.0)
+    # Steady state only: the first chunk and the warm-up interval that produced
+    # it are excluded, so 1.0s of audio over two chunks is recorded as 0.5s.
+    assert audio_seconds == pytest.approx(0.5)
     assert audio_seconds / wall_seconds < 1.0
     assert "below real time" in caplog.text
 
@@ -460,7 +462,59 @@ async def test_stream_or_synthesize_does_not_bill_consumer_backpressure_to_the_w
 
     assert len(recorded) == 1
     _route, audio_seconds, wall_seconds = recorded[0]
-    assert audio_seconds == pytest.approx(2.0)
+    # Steady state: the first chunk's 1.0s and its warm-up interval drop out.
+    assert audio_seconds == pytest.approx(1.0)
     # 20s of consumer time excluded: the worker is recorded at its real 2.0x.
     assert audio_seconds / wall_seconds == pytest.approx(2.0)
     assert "below real time" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_excludes_warm_up_from_the_rate(caplog):
+    """Model warm-up is time-to-first-audio, not generation rate (#12460).
+
+    A worker that takes 3s to load state and then generates faster than real
+    time is healthy. Folding the warm-up into the factor reports it at 0.375x
+    and fires TTSSynthesisBelowRealTime — and it would disagree with the client,
+    which measures its own rate from the second chunk on for the same reason.
+    """
+    chunks = [_real_wav(1.0), _real_wav(1.0), _real_wav(1.0)]
+    mock_client = _make_routing_http_client({STREAM_URL_SUFFIX: (200, _framed(chunks))})
+    clock = _FakeClock()
+    recorded: list = []
+    first_chunk: list = []
+    reads = {"n": 0}
+
+    def _monotonic() -> float:
+        # Reads run: probe, start(), observe(chunk1), start(), observe(chunk2)...
+        # The 3rd read closes the start()->first-chunk interval, so that is the
+        # warm-up; every other interval costs 0.5s of real generation.
+        reads["n"] += 1
+        clock.now += 3.0 if reads["n"] == 3 else 0.5
+        return clock.now
+
+    metrics = MagicMock()
+    metrics.record_tts_synthesis = MagicMock(side_effect=lambda *a: recorded.append(a))
+    metrics.record_tts_first_chunk = MagicMock(side_effect=lambda *a: first_chunk.append(a))
+
+    with (
+        patch("services.tts_client.get_http_client", return_value=mock_client),
+        patch("services.tts_client.time.monotonic", _monotonic),
+        patch(
+            "autobot_shared.monitoring.prometheus_metrics.get_metrics_manager",
+            return_value=metrics,
+        ),
+        caplog.at_level(logging.WARNING, logger="services.tts_client"),
+    ):
+        tts_client = TTSClient()
+        async for _ in tts_client.stream_or_synthesize("hello"):
+            pass
+
+    assert len(recorded) == 1
+    _route, audio_seconds, wall_seconds = recorded[0]
+    # Warm-up dropped: 2 remaining chunks of 1.0s over 2 x 0.5s of generation.
+    assert audio_seconds == pytest.approx(2.0)
+    assert audio_seconds / wall_seconds == pytest.approx(2.0)
+    assert "below real time" not in caplog.text
+    # ...and the warm-up is still reported, as the latency it actually is.
+    assert first_chunk and first_chunk[0][1] == pytest.approx(3.0)

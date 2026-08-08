@@ -118,6 +118,8 @@ class _SynthesisThroughput:
         self._producing_seconds = 0.0
         self._audio_seconds = 0.0
         self._first_chunk_seconds: float | None = None
+        self._first_chunk_audio = 0.0
+        self._chunks = 0
         self._mark: float | None = None
 
     def start(self) -> None:
@@ -129,9 +131,15 @@ class _SynthesisThroughput:
         if self._mark is not None:
             self._producing_seconds += time.monotonic() - self._mark
             self._mark = None
+        duration = _wav_duration_seconds(wav_bytes)
+        self._chunks += 1
         if self._first_chunk_seconds is None:
+            # The first interval is connect + upload + model warm-up, not
+            # generation rate. It is time-to-first-audio, and it is reported as
+            # exactly that below rather than folded into the factor.
             self._first_chunk_seconds = self._producing_seconds
-        self._audio_seconds += _wav_duration_seconds(wav_bytes)
+            self._first_chunk_audio = duration
+        self._audio_seconds += duration
 
     def report(self) -> None:
         """Emit the metrics and warn when the worker ran below real time.
@@ -140,29 +148,49 @@ class _SynthesisThroughput:
         first chunk, or an unparseable payload) carries no rate and is skipped
         rather than recorded as a 0.0x outlier.
         """
-        wall_seconds = self._producing_seconds
-        if self._audio_seconds <= 0 or wall_seconds <= 0:
+        # Steady-state rate: drop the warm-up interval and the audio it produced,
+        # so this measures the same thing the client's pre-roll measures. A
+        # single-chunk synthesis (the whole-utterance route) has no steady state
+        # to isolate, so its one interval is the only rate available.
+        if self._chunks > 1 and self._first_chunk_seconds is not None:
+            audio_seconds = self._audio_seconds - self._first_chunk_audio
+            wall_seconds = self._producing_seconds - self._first_chunk_seconds
+        else:
+            audio_seconds = self._audio_seconds
+            wall_seconds = self._producing_seconds
+        # Latency telemetry stands on its own — a payload we could not measure
+        # the duration of still tells us how long the caller waited.
+        if self._first_chunk_seconds is not None:
+            self._record_first_chunk(self._first_chunk_seconds)
+        if audio_seconds <= 0 or wall_seconds <= 0:
             return
         try:
             # Lazy import to avoid a circular dependency with prometheus_metrics.
             from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
             metrics = get_metrics_manager()
-            metrics.record_tts_synthesis(self.route, self._audio_seconds, wall_seconds)
-            if self._first_chunk_seconds is not None:
-                metrics.record_tts_first_chunk(self.route, self._first_chunk_seconds)
+            metrics.record_tts_synthesis(self.route, audio_seconds, wall_seconds)
         except Exception:
             logger.debug("TTS throughput metrics unavailable", exc_info=True)
-        factor = self._audio_seconds / wall_seconds
+        factor = audio_seconds / wall_seconds
         if factor < REALTIME_FACTOR_FLOOR:
             logger.warning(
                 "TTS synthesis ran below real time: %.2fx (%.1fs of audio in %.1fs via %s) — "
                 "streamed playback drains faster than the worker fills it",
                 factor,
-                self._audio_seconds,
+                audio_seconds,
                 wall_seconds,
                 self.route,
             )
+
+    def _record_first_chunk(self, seconds: float) -> None:
+        """Report time-to-first-audio, independent of whether a rate was derived."""
+        try:
+            from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+
+            get_metrics_manager().record_tts_first_chunk(self.route, seconds)
+        except Exception:
+            logger.debug("TTS first-chunk metrics unavailable", exc_info=True)
 
 
 class TTSStreamUnsupported(RuntimeError):

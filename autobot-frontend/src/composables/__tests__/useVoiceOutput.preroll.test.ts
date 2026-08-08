@@ -292,30 +292,26 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
     expect(isSpeaking.value).toBe(true)
   })
 
-  it('does not force-release while the worker is still producing — the stall timer is not a cap', async () => {
-    // Calibrate on real timers: sendChunk drains the decode chain via a real
-    // macrotask, which a fake clock would never fire.
+  it('starts speaking within the wait budget rather than buffering indefinitely', async () => {
     await calibrate(0.25)
     const scheduledAfterCalibration = scheduledStarts
     ctxTime = 1000
+    endAllScheduled()
 
-    vi.useFakeTimers()
-    try {
-      // A 180-char reply targets the 8s cap; filling it at 0.25x legitimately
-      // takes ~32s. A total-duration timer would force-release mid-fill and
-      // hand back exactly the stutter this feature exists to remove.
-      serverSend({ type: 'tts_start', text: 'x'.repeat(180) })
-      for (let i = 0; i < 6; i++) {
-        clockMs += 4000
-        serverSend({ type: 'tts_audio', data: B64, chunk: i })
-        await vi.advanceTimersByTimeAsync(4000)
-      }
+    // Chunks trickle in every 4s (0.0625x live). The wall-clock bound caps the
+    // target at MAX_WAIT*r, so the buffer that must accumulate is small and
+    // speech starts inside the budget instead of after the whole reply.
+    serverSend({ type: 'tts_start', text: 'x'.repeat(180) })
+    const before = clockMs
+    await sendChunk(0)
+    await sendChunk(4000)
+    await sendChunk(4000)
 
-      // 24s of wall clock, well past a 20s one-shot timer, and still holding.
-      expect(scheduledStarts).toBe(scheduledAfterCalibration)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(scheduledStarts).toBeGreaterThan(scheduledAfterCalibration)
+    // Because the wait is bounded at 8s and the stall watchdog only fires after
+    // 10s of silence, filling the lead-in can never outlast the watchdog — so
+    // it can only ever fire on a genuine stall, never as a duration cap.
+    expect(clockMs - before).toBeLessThanOrEqual(8000)
   })
 
   it('releases held audio when the worker genuinely stalls', async () => {
@@ -338,6 +334,62 @@ describe('useVoiceOutput — adaptive pre-roll for a below-real-time worker (#12
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('bounds the WAIT, not just the buffer — a 0.09x worker must not buy 90s of silence', async () => {
+    // 0.09x is the slowest rate measured in #12460.
+    await calibrate(0.09)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    // A 180-char reply: the derived lead-in is (1 - 0.09) * 10.8s = 9.8s, capped
+    // to 8 audio-seconds. Filling 8s at 0.09x would take ~90s of silence. The
+    // wall-clock bound caps the buffer at MAX_WAIT*r = 0.72s instead.
+    serverSend({ type: 'tts_start', text: 'x'.repeat(180) })
+    await sendChunk(0)
+    await sendChunk(2778)
+    await sendChunk(2778)
+
+    // 0.75s buffered clears the 0.72s bound: speech starts inside the wait
+    // budget rather than a minute and a half later.
+    expect(scheduledStarts).toBe(scheduledAfterCalibration + 3)
+  })
+
+  it('a chunk decoded after its utterance ended is not folded into the next one', async () => {
+    await calibrate(0.25)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    // Last chunk of utterance A is still decoding when tts_end and the next
+    // tts_start arrive — the real ordering, since decodeAudioData is async.
+    clockMs += 1000
+    serverSend({ type: 'tts_audio', data: B64, chunk: 9 })
+    serverSend({ type: 'tts_end' })
+    serverSend({ type: 'tts_start', text: 'twenty chars exactly' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // It belongs to the reply already playing, so it goes straight to the
+    // timeline instead of being held with — and skewing the rate of — utterance B.
+    expect(scheduledStarts).toBe(scheduledAfterCalibration + 1)
+  })
+
+  it('recovers its target after a transient arrival gap instead of ratcheting to the cap', async () => {
+    await calibrate(0.5)
+    const scheduledAfterCalibration = scheduledStarts
+    ctxTime = 1000
+    endAllScheduled()
+
+    serverSend({ type: 'tts_start', text: 'x'.repeat(60) })
+    await sendChunk(0)
+    // One long stall, then the worker catches up at a healthy rate.
+    await sendChunk(6000)
+    for (let i = 0; i < 8; i++) await sendChunk(120)
+
+    // The cumulative rate recovers, so the target falls back and the audio is
+    // released. A one-way ratchet pinned it at the cap for the whole utterance.
+    expect(scheduledStarts).toBeGreaterThan(scheduledAfterCalibration)
   })
 
   it('does not schedule held audio onto a context suspended during the hold', async () => {

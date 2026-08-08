@@ -78,9 +78,15 @@ let _activeChunkCount = 0
 // worker adds only r*A. Extending the derivation over A + D of playout gives
 // B >= (1 - r) * D - r * A, so scheduled-ahead audio is credited at r*A.
 const _RTF_TARGET = 1.0
-// Upper bound on the lead-in, so a very slow worker degrades to "a bit late"
-// rather than "silent for the length of the reply".
+// Upper bound on the lead-in in AUDIO-seconds.
 const _PREROLL_MAX_SEC = 8
+// ...and the bound that actually caps latency. Buffering B audio-seconds at rate
+// r costs B/r of WALL time, so an audio-seconds cap alone is not a wait bound: at
+// the 0.09x measured in #12460 an 8s target is ~90s of silence before speech.
+// Affordable buffer within this wait is MAX_WAIT*r, so the slowest workers buy
+// less lead-in rather than an unbounded delay — they stutter, and the
+// below-real-time alert is what surfaces the real problem.
+const _PREROLL_MAX_WAIT_SEC = 8
 // Stall watchdog, NOT a cap on filling the lead-in: filling T audio-seconds at
 // rate r legitimately takes T/r wall-seconds, so a total-duration timer would
 // force-release exactly the slow workers this exists for. Re-armed on every held
@@ -103,6 +109,9 @@ let _utteranceEstimateSec = 0
 // Rate this utterance is being sized against — the carried rate, lowered if the
 // utterance turns out to be producing even more slowly than that.
 let _utteranceRtf = 0
+// Bumped per utterance so a chunk that finishes decoding after its own
+// utterance ended is not folded into the next one's buffer or rate.
+let _utteranceSeq = 0
 let _prerollTimer: ReturnType<typeof setTimeout> | null = null
 // Arrival wall-clock of this utterance's FIRST chunk. Time-to-first-chunk is
 // model warm-up, not production rate, so the rate is measured from chunk 2 on.
@@ -446,8 +455,10 @@ function _recordRtfSample(sample: number): void {
 
 /** Lead-in needed for `estimateSec` of audio produced at `rtf` (#12460). */
 function _prerollTargetSec(rtf: number, estimateSec: number): number {
-  if (rtf >= _RTF_TARGET) return 0
-  return Math.min(_PREROLL_MAX_SEC, Math.max(0, (1 - rtf) * estimateSec))
+  if (rtf >= _RTF_TARGET || rtf <= 0) return 0
+  const derived = (1 - rtf) * estimateSec
+  // Bounded by audio-seconds AND by what fits in the wall-clock wait budget.
+  return Math.max(0, Math.min(derived, _PREROLL_MAX_SEC, _PREROLL_MAX_WAIT_SEC * rtf))
 }
 
 /**
@@ -459,6 +470,7 @@ function _beginUtterance(text: string): void {
   // explicit stop discards it.
   _releasePending()
   _resetPreroll()
+  _utteranceSeq++
   const rtf = _measuredRtf
   if (rtf === null) return
   _utteranceRtf = rtf
@@ -466,7 +478,9 @@ function _beginUtterance(text: string): void {
   _utterancePrerollSec = _prerollTargetSec(rtf, _utteranceEstimateSec)
   if (_utterancePrerollSec <= 0) return
   _utteranceHolding = true
-  _armStallTimer()
+  // The watchdog is armed by the first held chunk, NOT here: a slow first chunk
+  // would otherwise fire it against an empty buffer, and that release clears
+  // _utteranceHolding — silently disabling pre-roll for the whole utterance.
 }
 
 /**
@@ -497,6 +511,7 @@ function _endUtterance(): void {
  * utterance at the observed production rate.
  */
 async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
+  const seq = _utteranceSeq
   const ctx = _getOrCreateContext()
   if (ctx.state === 'suspended') {
     // A resume() from the WS onmessage handler is not a user gesture; try once,
@@ -513,6 +528,16 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   }
 
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+
+  if (seq !== _utteranceSeq) {
+    // Decoding is genuinely async, so the previous utterance's last chunk often
+    // resolves after the next tts_start. It belongs to the reply already being
+    // played — schedule it straight through rather than holding it with, and
+    // skewing the rate of, an utterance it is not part of.
+    _scheduleBuffer(ctx, audioBuffer)
+    return
+  }
+
   const liveRtf = _observeChunkRate(audioBuffer.duration)
 
   if (!_utteranceHolding) {
@@ -527,14 +552,13 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   // expiring the TTS echo cooldown and reopening the mic mid-reply.
   isSpeaking.value = true
   _armStallTimer()
-  if (liveRtf !== null && liveRtf < _utteranceRtf) {
-    // This utterance is producing even slower than the carried rate predicted —
-    // raise its target rather than start into a stream that will still starve.
+  if (liveRtf !== null) {
+    // Track the live rate in both directions. _observeChunkRate is cumulative
+    // over the utterance, so it is already smooth; ratcheting it downward instead
+    // let one transient arrival gap pin the target at the cap for the rest of
+    // the utterance with no way to recover.
     _utteranceRtf = liveRtf
-    _utterancePrerollSec = Math.max(
-      _utterancePrerollSec,
-      _prerollTargetSec(liveRtf, _utteranceEstimateSec)
-    )
+    _utterancePrerollSec = _prerollTargetSec(liveRtf, _utteranceEstimateSec)
   }
   if (_leadSec(_utteranceRtf) >= _utterancePrerollSec) _releasePending()
 }

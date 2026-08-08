@@ -82,6 +82,20 @@
     patterns: "alerts-*.yml"
   register: _prometheus_alert_rules
 
+# `find` returns an empty list for a missing directory without failing, so a
+# monitoring-only node with no repo checkout would report green while installing
+# zero alerts — the same silent no-op this change exists to remove. Fail loudly
+# instead; a node that legitimately ships no rules sets the flag below.
+- name: Assert Prometheus alert rules were found
+  ansible.builtin.assert:
+    that: _prometheus_alert_rules.files | length > 0
+    fail_msg: >-
+      No alerts-*.yml found under {{ autobot_repo_dir }}/autobot-monitoring.
+      Prometheus would start with rule_files pointing at an empty directory and
+      no alert would ever fire. Check autobot_repo_dir, or set
+      prometheus_alert_rules_required=false for a node that intentionally has none.
+  when: prometheus_alert_rules_required | bool
+
 - name: Install Prometheus alert rules
   ansible.builtin.copy:
     src: "{{ item.path }}"
