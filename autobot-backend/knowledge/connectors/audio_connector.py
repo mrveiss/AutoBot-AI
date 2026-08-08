@@ -374,11 +374,16 @@ async def _download_direct_url(url: str, dest_dir: str) -> str:
     import aiohttp
 
     from autobot_shared.http_client import get_http_client
+    from knowledge.connectors.base import CONTENT_URL_EGRESS
 
     filename = os.path.basename(url.split("?")[0]) or "audio.mp3"
     dest_path = os.path.join(dest_dir, filename)
 
-    async with get_http_client().tracked_request("GET", url, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+    # *url* is an arbitrary download target, not operator config — public-only,
+    # so the instance-host opt-in can never extend to it (#13625, Rule 8).
+    async with get_http_client().tracked_request(
+        "GET", url, timeout=aiohttp.ClientTimeout(total=300), guard_egress=CONTENT_URL_EGRESS
+    ) as resp:
         if resp.status != 200:
             raise RuntimeError(f"Failed to download {url}: HTTP {resp.status}")
         with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]
