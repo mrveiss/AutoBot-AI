@@ -928,6 +928,24 @@ for _causal_mod in [
     if _causal_mod not in sys.modules:
         sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
 
+# ``agent_loop.tool_output_spill`` is deliberately real-imported despite its
+# parent package being stubbed above (#13692). Same reasoning the comment gives
+# for ``orchestration.causal_validator``: it has none of the heavy chain the
+# stub exists for — stdlib plus ``autobot_shared.logging_manager`` only. Leaving
+# it behind the stub's empty ``__path__`` would hand its tests a MagicMock and
+# have them assert against mock defaults, which is the #13111/#13162 bug.
+if "agent_loop.tool_output_spill" not in sys.modules:
+    import importlib.util as _ilu
+
+    _spill_path = Path(__file__).parent / "agent_loop" / "tool_output_spill.py"
+    if _spill_path.exists():
+        _spec = _ilu.spec_from_file_location("agent_loop.tool_output_spill", _spill_path)
+        if _spec and _spec.loader:
+            _spill_mod = _ilu.module_from_spec(_spec)
+            sys.modules["agent_loop.tool_output_spill"] = _spill_mod
+            _spec.loader.exec_module(_spill_mod)
+            sys.modules["agent_loop"].tool_output_spill = _spill_mod
+
 # code_intelligence.code_generation.diff real-load (#12438) — tools/parallel/executor.py
 # imports the real DiffGenerator (self-contained: stdlib difflib only) to build CODE_DIFF
 # artifacts. code_intelligence itself is stubbed above (its __init__ has Python-3.10-
