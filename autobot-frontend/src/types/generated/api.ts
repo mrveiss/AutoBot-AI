@@ -74492,6 +74492,12 @@ export interface components {
              * @enum {string}
              */
             direction: "outgoing" | "incoming" | "both";
+            /**
+             * Timeout
+             * @description Traversal deadline in seconds (1-30). Bounds a wide 'both'-direction walk.
+             * @default 10
+             */
+            timeout: number | null;
         } & {
             [key: string]: unknown;
         };
