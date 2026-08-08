@@ -112,8 +112,48 @@ def _history_key(connector_id: str) -> str:
     return "%s%s%s" % (_REDIS_KEY_PREFIX, connector_id, _HISTORY_KEY_SUFFIX)
 
 
+# Config keys that hold an operator-configured *instance host* (#13625). These
+# are the only URLs the private-network opt-in may apply to; anything read out of
+# a document or an API response is validated public-only at fetch time.
+_INSTANCE_HOST_KEYS = ("base_url", "gitlab_url", "gitea_url", "nextcloud_url")
+
+
+async def _validate_instance_hosts(cfg: ConnectorConfig) -> None:
+    """Validate the configured instance host once, at store time (#13625 item 3).
+
+    Rule 8 asks for this to happen here rather than per request. Per-request
+    validation costs a DNS lookup on every call and still races: the guard
+    resolves, then aiohttp resolves again independently, so a rebind between the
+    two is unguarded. Checking at store time means a host that cannot pass is
+    rejected before it is ever persisted, and the per-request guard becomes a
+    second line rather than the only one.
+
+    Raises HTTPException(422) so the operator learns at configuration time, which
+    is when they can actually fix it.
+    """
+    from autobot_shared.url_safety import is_public_url_async
+    from knowledge.connectors.base import instance_host_egress
+
+    allow_private = instance_host_egress()
+    for key in _INSTANCE_HOST_KEYS:
+        url = (cfg.config or {}).get(key)
+        if not url:
+            continue
+        if not await is_public_url_async(str(url), allow_private=allow_private):
+            hint = (
+                ""
+                if allow_private
+                else " If this instance is on a private network, set AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS=true."
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Connector {key!r} is not an allowed egress target.{hint}",
+            )
+
+
 async def _save_connector(cfg: ConnectorConfig) -> None:
     """Serialize and save a ConnectorConfig to Redis (Issue #1254)."""
+    await _validate_instance_hosts(cfg)
     redis = get_redis_client(database="knowledge")
     data = {
         "connector_id": cfg.connector_id,
