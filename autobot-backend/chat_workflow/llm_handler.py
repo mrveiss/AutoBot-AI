@@ -720,12 +720,63 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             session.metadata["used_knowledge"] = False
             return "", []
 
+    def _allocate_prompt_sections(
+        self,
+        knowledge_context: str,
+        trajectory_context: str,
+        conversation_context: str,
+        message: str,
+        model_name: str | None,
+    ) -> tuple[str, str, str]:
+        """Fit the prompt's competing sections into the model's window (#13640).
+
+        Priorities encode what the turn cannot lose: the user's own message
+        outranks conversation history, which outranks retrieved knowledge,
+        which outranks the untrusted trajectory reference block. ``max_share``
+        stops a large retrieval set from crowding out history even though it
+        would survive on priority alone.
+
+        The user's message participates in the accounting so the budget is
+        computed against the real prompt, but its allocation is advisory: it is
+        never returned trimmed. Truncating what the user actually asked is a
+        worse failure than overflowing by that much.
+
+        Non-fatal: any failure returns the sections unchanged, because a
+        budgeting error must never cost the user their turn.
+        """
+        try:
+            from context_window_manager import ContextSection, ContextWindowManager
+
+            cwm = ContextWindowManager()
+            sections = [
+                ContextSection("message", message, priority=100),
+                ContextSection("conversation", conversation_context, priority=70, max_share=0.5),
+                ContextSection("knowledge", knowledge_context, priority=40, max_share=0.5),
+                ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
+            ]
+            result = cwm.allocate_sections(sections, budget_tokens=cwm.get_adaptive_context_length(model_name))
+            if result.trimmed:
+                logger.info(
+                    "[#13640] Prompt over budget: %d -> %d tokens (budget %d); trimmed %s; dropped %s",
+                    result.tokens_before,
+                    result.tokens_after,
+                    result.budget,
+                    ", ".join(result.trimmed),
+                    ", ".join(result.dropped) or "none",
+                )
+            by_name = {s.name: s.content for s in result.sections}
+            return by_name["knowledge"], by_name["trajectory"], by_name["conversation"]
+        except Exception as exc:
+            logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc)
+            return knowledge_context, trajectory_context, conversation_context
+
     def _build_full_prompt(
         self,
         knowledge_context: str,
         conversation_context: str,
         message: str,
         trajectory_context: str = "",
+        model_name: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -733,7 +784,15 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         to avoid double-injection and context-window waste. ``trajectory_context``
         (#11261) is an untrusted reference block of similar past turns, prepended
         so the model can reuse prior solutions without treating them as commands.
+
+        Issue #13640: this is the multi-section assembly point — four pieces
+        competing for one window, previously concatenated with no budget at all.
+        Allocation is priority-ordered so overflow sheds the least valuable
+        content first, and what was shed is logged instead of vanishing.
         """
+        knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
+            knowledge_context, trajectory_context, conversation_context, message, model_name
+        )
         prefix = ""
         if knowledge_context:
             prefix += knowledge_context + "\n"
@@ -857,7 +916,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 tenant_id=str(session.metadata.get("tenant_id") or ""),
             )
 
-        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message, trajectory_context)
+        full_prompt = self._build_full_prompt(
+            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+        )
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
         full_prompt = await _emit_after_prompt_build(

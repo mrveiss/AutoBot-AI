@@ -10,10 +10,17 @@ and do not face the quadratic attention cost that justifies the 4K/8K
 compression trigger.  For those families the model's declared
 ``context_window_tokens`` is used directly as the compression threshold
 instead of hard-capping at 8192.
+
+Issue #13640: multi-section allocation.  Sizing the window is not the same as
+dividing it.  ``allocate_sections`` allocates one budget across named,
+prioritised sections so an overflowing prompt sheds its least valuable content
+first — and reports what it shed — instead of dropping whatever the calling
+code happened to cut last.
 """
 
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 _CONTEXT_HEADROOM: float = 0.85
 _CONTEXT_HARD_MAX: int = 200_000
@@ -43,6 +50,64 @@ def _get_compression_service():
 
         _compression_service = ContextCompressionService()
     return _compression_service
+
+
+def _head_trim(content: str, max_chars: int) -> str:
+    """Default section shrink: keep the head, drop the tail.
+
+    Deliberately dumb. Sections with a better strategy pass their own ``trim``
+    — e.g. ``prompt_manager._truncate_large_file``, which keeps head+tail and
+    snaps to JSON/XML boundaries. #13640 decides *how much* a section gets; it
+    does not decide *how* a section shrinks.
+    """
+    return content[:max_chars]
+
+
+@dataclass
+class ContextSection:
+    """One named, prioritised piece of a prompt competing for the budget.
+
+    Attributes:
+        name: Stable identifier reported back when the section is trimmed.
+        content: The section text.
+        priority: Higher is pruned last. Ties break on ``name`` for determinism.
+        max_share: Ceiling as a fraction of the budget, applied *before*
+                   priority. A high-priority section still cannot crowd out
+                   the rest of the prompt.
+        trim: Optional shrink strategy ``(content, max_chars) -> str``.
+    """
+
+    name: str
+    content: str
+    priority: int = 0
+    max_share: float = 1.0
+    trim: Callable[[str, int], str] = _head_trim
+
+
+@dataclass
+class ContextAllocation:
+    """Outcome of an allocation, including what was lost.
+
+    ``trimmed`` and ``dropped`` are what make prompt degradation traceable:
+    without them an overflowing prompt ships silently degraded and neither a
+    quality regression nor a cost spike can be attributed to a cause.
+    """
+
+    sections: List[ContextSection]
+    tokens_before: int
+    tokens_after: int
+    budget: int
+    trimmed: List[str] = field(default_factory=list)
+    dropped: List[str] = field(default_factory=list)
+
+    @property
+    def fits(self) -> bool:
+        """True when the allocated sections are within budget."""
+        return self.tokens_after <= self.budget
+
+    def render(self, separator: str = "\n\n") -> str:
+        """Join the allocated sections, skipping any reduced to empty."""
+        return separator.join(s.content for s in self.sections if s.content)
 
 
 class ContextWindowManager:
@@ -189,6 +254,101 @@ class ContextWindowManager:
         """
         chars_per_token = self.config["token_estimation"]["chars_per_token"]
         return len(text) // chars_per_token
+
+    def _chars_per_token(self) -> int:
+        """Runtime chars-per-token ratio backing :meth:`estimate_tokens`."""
+        return max(1, int(self.config["token_estimation"]["chars_per_token"]))
+
+    def _shrink(self, section: ContextSection, max_tokens: int) -> ContextSection:
+        """Return a copy of *section* reduced to at most *max_tokens*."""
+        if max_tokens <= 0:
+            return replace(section, content="")
+        shrunk = section.trim(section.content, max_tokens * self._chars_per_token())
+        return replace(section, content=shrunk)
+
+    def allocate_sections(
+        self,
+        sections: List[ContextSection],
+        budget_tokens: int,
+    ) -> ContextAllocation:
+        """Allocate one token budget across competing sections by priority.
+
+        Pure function — no I/O, no config reload, no mutation of the inputs.
+
+        Two phases, in this order:
+
+        1. **Cap.** Each section is limited to ``budget_tokens * max_share``.
+           This runs before priority so a single oversized section cannot
+           crowd out everything else merely by being important.
+        2. **Trim.** If the total still exceeds the budget, sections are
+           reduced lowest-priority-first until it fits.
+
+        Args:
+            sections: Competing sections. Input order is preserved in the result.
+            budget_tokens: Total token budget for all sections combined.
+
+        Returns:
+            ContextAllocation with before/after totals and the names of
+            sections that were trimmed or reduced to nothing.
+        """
+        allocated = list(sections)
+        tokens = [self.estimate_tokens(s.content) for s in allocated]
+        tokens_before = sum(tokens)
+
+        # Byte-identical pass-through, but only when nothing is out of shape:
+        # the total fits *and* no section exceeds its own share ceiling. A
+        # section over its ceiling is not "under budget" in allocation terms
+        # even when the sum happens to fit, so the cap still has to bind.
+        caps_bind = any(t > int(budget_tokens * s.max_share) for s, t in zip(allocated, tokens))
+        if tokens_before <= budget_tokens and not caps_bind:
+            return ContextAllocation(
+                sections=allocated,
+                tokens_before=tokens_before,
+                tokens_after=tokens_before,
+                budget=budget_tokens,
+            )
+
+        trimmed: List[str] = []
+        allocated, tokens = self._apply_share_caps(allocated, tokens, budget_tokens, trimmed)
+        allocated, tokens = self._trim_by_priority(allocated, tokens, budget_tokens, trimmed)
+
+        dropped = [s.name for s, t in zip(allocated, tokens) if t <= 0 and s.name in trimmed]
+        return ContextAllocation(
+            sections=allocated,
+            tokens_before=tokens_before,
+            tokens_after=sum(tokens),
+            budget=budget_tokens,
+            trimmed=trimmed,
+            dropped=dropped,
+        )
+
+    def _apply_share_caps(self, allocated, tokens, budget, trimmed):
+        """Phase 1: cap each section at ``budget * max_share``."""
+        for i, section in enumerate(allocated):
+            cap = int(budget * section.max_share)
+            if tokens[i] <= cap:
+                continue
+            allocated[i] = self._shrink(section, cap)
+            tokens[i] = self.estimate_tokens(allocated[i].content)
+            trimmed.append(section.name)
+        return allocated, tokens
+
+    def _trim_by_priority(self, allocated, tokens, budget, trimmed):
+        """Phase 2: reduce lowest-priority sections until the total fits."""
+        # Ascending priority = pruned first; name breaks ties deterministically.
+        order = sorted(range(len(allocated)), key=lambda i: (allocated[i].priority, allocated[i].name))
+        for i in order:
+            overflow = sum(tokens) - budget
+            if overflow <= 0:
+                break
+            if tokens[i] <= 0:
+                continue
+            keep = max(0, tokens[i] - overflow)
+            allocated[i] = self._shrink(allocated[i], keep)
+            tokens[i] = self.estimate_tokens(allocated[i].content)
+            if allocated[i].name not in trimmed:
+                trimmed.append(allocated[i].name)
+        return allocated, tokens
 
     def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.
