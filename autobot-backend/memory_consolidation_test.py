@@ -108,9 +108,9 @@ async def test_memory_consolidation_system():
     readme_path = Path("README.md")
     if readme_path.exists():
         memory_manager.add_markdown_reference(
-        integration_task_id, str(readme_path), "project_documentation", user_id=TEST_USER
-    )
-        print(f"✅ Added markdown reference: README.md -> {integration_task_id}")  # noqa: print  # noqa: print
+            integration_task_id, str(readme_path), "project_documentation", user_id=TEST_USER
+        )
+        print(f"✅ Added markdown reference: README.md -> {integration_task_id}")  # noqa: print
 
     # Complete integration task
     memory_manager.complete_task(integration_task_id)

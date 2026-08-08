@@ -114,7 +114,8 @@ class GeneralStorage:
         if "user_id" in columns:
             return
         await conn.execute(
-            f"ALTER TABLE memory_entries ADD COLUMN user_id TEXT NOT NULL DEFAULT '{LEGACY_UNSCOPED_OWNER}'"  # nosec B608
+            "ALTER TABLE memory_entries ADD COLUMN user_id TEXT NOT NULL "
+            f"DEFAULT '{LEGACY_UNSCOPED_OWNER}'"  # nosec B608
         )
         logger.info(
             "Migrated memory_entries: added user_id; pre-existing rows parked under %s (#13688)",
