@@ -155,3 +155,68 @@ class TestBatch:
 
 def _raise(*_args, **_kwargs):
     raise OSError("disk full")
+
+
+class TestRunScopedWindowedRead:
+    """#13754: the anchor is a bearer token, so reads must be run-scoped.
+
+    And a re-read must be a seek, not an undo — returning the whole artifact
+    would put back exactly what the offload removed.
+    """
+
+    def test_a_window_is_returned_not_the_whole_artifact(self):
+        big = "I" * 500
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", big)
+        window = spill.read_spilled_window(value["anchor"], TASK, offset=0, limit=50)
+
+        assert window["found"] is True
+        assert len(window["content"]) == 50
+        assert window["total_chars"] == 500
+        assert window["has_more"] is True
+
+    def test_paging_reaches_the_end(self):
+        big = "".join(str(i % 10) for i in range(300))
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", big)
+        first = spill.read_spilled_window(value["anchor"], TASK, offset=0, limit=200)
+        second = spill.read_spilled_window(value["anchor"], TASK, offset=200, limit=200)
+
+        assert first["content"] + second["content"] == big
+        assert second["has_more"] is False
+
+    def test_an_anchor_from_another_run_is_refused(self):
+        """The security case: a leaked anchor must not read another run."""
+        big = "J" * 500
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", big)
+
+        assert spill.read_spilled(value["anchor"], task_id="someone-elses-run") is None
+        assert spill.read_spilled_window(value["anchor"], "someone-elses-run")["found"] is False
+
+    def test_the_owning_run_still_reads_it(self):
+        big = "K" * 500
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", big)
+
+        assert spill.read_spilled(value["anchor"], task_id=TASK) == big
+
+    def test_a_missing_anchor_reports_not_found_rather_than_raising(self):
+        window = spill.read_spilled_window("autobot:spill:x:y:deadbeef", TASK)
+
+        assert window["found"] is False
+
+
+class TestTheExcerptNamesARealTool:
+    def test_the_instruction_matches_the_registered_tool_name(self):
+        """The excerpt tells the model what to call; that name must exist.
+
+        Naming a capability the agent cannot invoke is worse than saying
+        nothing — it invites a call that will fail.
+        """
+        from tools.tool_registry import ToolRegistry
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", "L" * 500)
+
+        assert "read_spilled_output" in value["note"]
+        assert hasattr(ToolRegistry, "read_spilled_output")
