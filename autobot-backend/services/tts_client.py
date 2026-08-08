@@ -17,7 +17,9 @@ Usage:
 """
 
 import asyncio
+import io
 import time
+import wave
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 
@@ -26,6 +28,7 @@ import aiohttp
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.metrics.tts import REALTIME_FACTOR_FLOOR
 from autobot_shared.ssot_config import config, get_config
 from autobot_shared.ssot_constants import TTL_5_MINUTES
 
@@ -74,6 +77,78 @@ def _resolve_stream_probe_ttl() -> int:
 STREAM_PROBE_TTL = _resolve_stream_probe_ttl()
 
 _client_instance: "TTSClient | None" = None
+
+
+def _wav_duration_seconds(wav_bytes: bytes) -> float:
+    """Return the playable length of a WAV payload, or 0.0 if it cannot be read.
+
+    Used to measure synthesis throughput (#12460). The worker's streamed chunks
+    are complete mini-WAVs, so each one carries the header this needs. Anything
+    unparseable contributes nothing rather than raising: telemetry must never be
+    able to break audio delivery.
+    """
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
+            frame_rate = wav.getframerate()
+            if frame_rate <= 0:
+                return 0.0
+            return wav.getnframes() / float(frame_rate)
+    except Exception:
+        logger.debug("Unparseable WAV payload; excluded from throughput", exc_info=True)
+        return 0.0
+
+
+class _SynthesisThroughput:
+    """Audio produced vs wall time for one synthesis (#12460).
+
+    Time-to-first-audio was fixed in #13215, but a worker that then sustains
+    below real time starves the player and stutters anyway. The real-time factor
+    is the number that separates those two failures, and nothing was recording
+    it, so a worker running at 0.2x looked healthy on every dashboard.
+    """
+
+    def __init__(self, route: str) -> None:
+        self.route = route
+        self._started = time.monotonic()
+        self._audio_seconds = 0.0
+        self._first_chunk_seconds: float | None = None
+
+    def observe(self, wav_bytes: bytes) -> None:
+        """Fold one delivered WAV payload into the measurement."""
+        if self._first_chunk_seconds is None:
+            self._first_chunk_seconds = time.monotonic() - self._started
+        self._audio_seconds += _wav_duration_seconds(wav_bytes)
+
+    def report(self) -> None:
+        """Emit the metrics and warn when the worker ran below real time.
+
+        A synthesis that produced no measurable audio (cancelled before the
+        first chunk, or an unparseable payload) carries no rate and is skipped
+        rather than recorded as a 0.0x outlier.
+        """
+        wall_seconds = time.monotonic() - self._started
+        if self._audio_seconds <= 0 or wall_seconds <= 0:
+            return
+        try:
+            # Lazy import to avoid a circular dependency with prometheus_metrics.
+            from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+
+            metrics = get_metrics_manager()
+            metrics.record_tts_synthesis(self.route, self._audio_seconds, wall_seconds)
+            if self._first_chunk_seconds is not None:
+                metrics.record_tts_first_chunk(self.route, self._first_chunk_seconds)
+        except Exception:
+            logger.debug("TTS throughput metrics unavailable", exc_info=True)
+        factor = self._audio_seconds / wall_seconds
+        if factor < REALTIME_FACTOR_FLOOR:
+            logger.warning(
+                "TTS synthesis ran below real time: %.2fx (%.1fs of audio in %.1fs via %s) — "
+                "streamed playback drains faster than the worker fills it",
+                factor,
+                self._audio_seconds,
+                wall_seconds,
+                self.route,
+            )
 
 
 class TTSStreamUnsupported(RuntimeError):
@@ -181,32 +256,45 @@ class TTSClient:
         Callers get one uniform contract regardless of how current the worker
         is, which is what keeps a worker/backend skew from turning into
         silence (WebSocket path) or a hard 404 (HTTP path).
+
+        Throughput is measured across whichever route serves the utterance and
+        reported once on exit (#12460) — including when a caller abandons the
+        stream mid-utterance, since audio-produced over wall-time is still the
+        worker's real rate.
         """
-        emitted = False
-        if not self._streaming_known_absent():
-            degraded = self._stream_absent_until > 0.0
-            try:
-                async with aclosing(self.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
-                    async for chunk in stream:
-                        if not emitted and degraded:
-                            # Recovery is otherwise silent, leaving an operator
-                            # unable to tell which route is in use (#13215 review).
-                            logger.info("TTS worker now serves /tts/synthesize/stream; streaming resumed")
-                            self._stream_absent_until = 0.0
-                        emitted = True
-                        yield chunk
-                return
-            except TTSStreamUnsupported as e:
-                if emitted:
-                    raise  # cannot restart mid-utterance without repeating audio
-                self._stream_absent_until = time.monotonic() + STREAM_PROBE_TTL
-                logger.warning(
-                    "TTS worker does not serve /tts/synthesize/stream (%s); using the "
-                    "whole-utterance route for the next %ds",
-                    e,
-                    STREAM_PROBE_TTL,
-                )
-        yield await self.synthesize(text, voice_id=voice_id, language=language)
+        throughput = _SynthesisThroughput("stream")
+        try:
+            emitted = False
+            if not self._streaming_known_absent():
+                degraded = self._stream_absent_until > 0.0
+                try:
+                    async with aclosing(self.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
+                        async for chunk in stream:
+                            if not emitted and degraded:
+                                # Recovery is otherwise silent, leaving an operator
+                                # unable to tell which route is in use (#13215 review).
+                                logger.info("TTS worker now serves /tts/synthesize/stream; streaming resumed")
+                                self._stream_absent_until = 0.0
+                            emitted = True
+                            throughput.observe(chunk)
+                            yield chunk
+                    return
+                except TTSStreamUnsupported as e:
+                    if emitted:
+                        raise  # cannot restart mid-utterance without repeating audio
+                    self._stream_absent_until = time.monotonic() + STREAM_PROBE_TTL
+                    logger.warning(
+                        "TTS worker does not serve /tts/synthesize/stream (%s); using the "
+                        "whole-utterance route for the next %ds",
+                        e,
+                        STREAM_PROBE_TTL,
+                    )
+            throughput.route = "blob"
+            whole = await self.synthesize(text, voice_id=voice_id, language=language)
+            throughput.observe(whole)
+            yield whole
+        finally:
+            throughput.report()
 
     async def clone_voice(self, text: str, reference_audio: bytes) -> bytes:
         """Send text + reference audio to TTS worker; returns WAV bytes."""

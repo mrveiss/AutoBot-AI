@@ -18,6 +18,7 @@ alerting:
 
 rule_files:
   - "alerts-chat-ssot.yml"  # Phase 4 (#7590): SSOT cardinality + disk file alerts
+  - "alerts-tts-throughput.yml"  # #12460: TTS real-time factor below playback speed
 
 scrape_configs:
   # Prometheus self-monitoring
