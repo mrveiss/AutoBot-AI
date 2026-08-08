@@ -273,9 +273,8 @@ class ConnectorCredentialStore:
 
         from knowledge.connectors import oauth_flow
 
-        token_response = await oauth_flow.refresh_access_token(
-            creds["token_url"], creds["client_id"], creds["client_secret"], refresh_token
-        )
+        token_url, client_id, client_secret = self._resolve_app_credentials(creds)
+        token_response = await oauth_flow.refresh_access_token(token_url, client_id, client_secret, refresh_token)
         creds["access_token"] = token_response["access_token"]
         # #13626: ``expires_in`` is RECOMMENDED, not REQUIRED, on a refresh
         # response (RFC 6749 §5.1) and several providers omit it. Writing None
@@ -379,6 +378,44 @@ class ConnectorCredentialStore:
             )
         if stored_owner != owner_id:
             raise PermissionError(f"owner_id mismatch for secret {secret_id!r}: expected {stored_owner!r}")
+
+    @staticmethod
+    def _resolve_app_credentials(creds: dict) -> tuple[str, str, str]:
+        """Return (token_url, client_id, client_secret) for a refresh (#13630).
+
+        Prefers the operator's *current* OAuth app config over the copy embedded in
+        this user's credential bundle. That copy is a snapshot taken when the user
+        connected, so rotating the app secret would otherwise strand every existing
+        connection — refresh keeps presenting the old secret and starts failing,
+        and no code path anywhere rewrites those stored copies.
+
+        Falls back to the stored copy when the provider is unknown or unconfigured,
+        so this needs no migration and cannot make a working credential worse: a
+        bundle whose provider was since removed from config keeps refreshing
+        exactly as it does today.
+        """
+        stored = (
+            creds.get("token_url", ""),
+            creds.get("client_id", ""),
+            creds.get("client_secret", ""),
+        )
+        provider_name = creds.get("provider")
+        if not provider_name:
+            return stored
+        try:
+            from knowledge.connectors import oauth_flow
+
+            provider = oauth_flow.get_provider(provider_name)
+            client_id, client_secret = oauth_flow.resolve_client_credentials(provider)
+        except Exception:
+            # Unknown or unconfigured provider — the stored snapshot is all we have.
+            return stored
+        if (client_id, client_secret) != (stored[1], stored[2]):
+            logger.info(
+                "Refreshing with the operator's current OAuth app credentials; "
+                "the copy stored in this credential is stale (#13630)."
+            )
+        return (getattr(provider, "token_url", "") or stored[0], client_id, client_secret)
 
     @staticmethod
     def _lifetime_seconds(expires_in) -> int | None:

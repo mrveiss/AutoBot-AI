@@ -679,3 +679,75 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
     )
     with pytest.raises(LookupError, match="re-auth required"):
         await cs.get_access_token(secret_id, "u1")
+
+
+# ---------------------------------------------------------------------------
+# #13630: app client secret resolved at use time, not from the stored snapshot
+# ---------------------------------------------------------------------------
+
+
+def test_rotated_app_secret_is_used_instead_of_the_stored_snapshot(monkeypatch):
+    """#13630: rotating the OAuth app secret must not strand existing connections.
+
+    The bundle carries a copy taken when the user connected, and nothing rewrites
+    it. Refreshing from that copy means every existing credential keeps presenting
+    the retired secret and starts failing — silently, at the next refresh.
+    """
+    from knowledge.connectors import oauth_flow
+
+    provider = oauth_flow.get_provider("gitlab")
+    monkeypatch.setattr(oauth_flow, "resolve_client_credentials", lambda p: ("cid-new", "csec-ROTATED"))
+
+    stored = {
+        "provider": "gitlab",
+        "token_url": "https://old/token",
+        "client_id": "cid-old",
+        "client_secret": "csec-OLD",
+    }
+    token_url, client_id, client_secret = ConnectorCredentialStore._resolve_app_credentials(stored)
+
+    assert client_secret == "csec-ROTATED", "refresh would still present the retired app secret"
+    assert client_id == "cid-new"
+    assert token_url == provider.token_url
+
+
+def test_unknown_provider_falls_back_to_the_stored_copy():
+    """#13630: no migration required — an unresolvable provider keeps working."""
+    stored = {
+        "provider": "a-provider-that-no-longer-exists",
+        "token_url": "https://old/token",
+        "client_id": "cid-old",
+        "client_secret": "csec-OLD",
+    }
+    assert ConnectorCredentialStore._resolve_app_credentials(stored) == (
+        "https://old/token",
+        "cid-old",
+        "csec-OLD",
+    )
+
+
+def test_bundle_without_a_provider_falls_back_to_the_stored_copy():
+    """#13630: pre-provider bundles must not regress."""
+    stored = {"token_url": "https://old/token", "client_id": "cid", "client_secret": "csec"}
+    assert ConnectorCredentialStore._resolve_app_credentials(stored) == ("https://old/token", "cid", "csec")
+
+
+def test_unconfigured_provider_falls_back_rather_than_raising(monkeypatch):
+    """#13630: resolve_client_credentials raises when the app is unregistered."""
+    from knowledge.connectors import oauth_flow
+
+    def _unconfigured(_p):
+        raise ValueError("not configured")
+
+    monkeypatch.setattr(oauth_flow, "resolve_client_credentials", _unconfigured)
+    stored = {
+        "provider": "gitlab",
+        "token_url": "https://old/token",
+        "client_id": "cid-old",
+        "client_secret": "csec-OLD",
+    }
+    assert ConnectorCredentialStore._resolve_app_credentials(stored) == (
+        "https://old/token",
+        "cid-old",
+        "csec-OLD",
+    )
