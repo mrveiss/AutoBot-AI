@@ -270,8 +270,8 @@ async def pinned_request_with_redirects(
             # resolve_safe_ip guard on THIS hop's URL and pins the resolved public
             # IP (defeats DNS-rebind); redirects are disabled so every hop is
             # re-validated here rather than followed by aiohttp.
-            # codeql[py/full-ssrf] (#13624, pattern from #12278)
-            resp = await session.request(
+            # (#13624, pattern from #12278)
+            resp = await session.request(  # codeql[py/full-ssrf]
                 current_method, current_url, headers=current_headers, allow_redirects=False, ssl=ssl
             )
         except Exception:
