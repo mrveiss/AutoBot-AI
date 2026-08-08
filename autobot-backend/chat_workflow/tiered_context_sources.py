@@ -10,15 +10,16 @@ OnDemand was therefore permanently silent in production: `llm_handler` read
 ``memory_graph`` off the chat *workflow* manager, which has no such attribute
 (#13686). The graph lives on the chat *history* manager.
 
-L4 GoalAncestry is still dark, deliberately. Wiring it needs a server-side
-session→work-item binding that does not exist yet, and a tenant-scoped goal
-lookup — see the follow-up issue referenced from #13687. Sourcing the work item
-from the client-supplied request context would have made an unscoped
-cross-tenant read out of a rendering fix.
+L4 GoalAncestry (#13687) is wired as of #13704, which supplied the two things
+it needed: a server-side session→work-item binding
+(:mod:`chat_workflow.session_work_item`) and a tenant-scoped goal lookup. The
+work item is never read from the client-supplied request context — that would
+have made an unscoped cross-tenant read out of a rendering fix.
 """
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
@@ -48,4 +49,63 @@ async def resolve_memory_graph() -> Any | None:
         return None
 
 
-__all__ = ["resolve_memory_graph"]
+async def resolve_goal_ancestry(session_id: str) -> list | None:
+    """Return the root-first goal ancestry chain for a session, or None (#13687).
+
+    Both the work item **and** the company come from the server-side session
+    binding (:class:`chat_workflow.session_work_item.SessionWorkItemService`),
+    which the bind endpoint wrote only after verifying the caller owns the
+    session and the work item belongs to their company.
+
+    Nothing here is taken from the request context. That is deliberate: the
+    context bag is client-supplied, and ``session.metadata["company_id"]`` is
+    assigned from it at ``chat_workflow/manager.py:3331``, so neither can serve
+    as a tenant scope.
+
+    A turn with no binding is the common case and must cost **no** DB round-trip,
+    which is why the falsy check precedes the session factory. Returns None on
+    any failure so a goal-lookup error leaves L4 silent rather than failing the
+    turn.
+    """
+    work_item_id = None
+    try:
+        from chat_workflow.session_work_item import SessionWorkItemService
+
+        work_item_id, company_id = await SessionWorkItemService().get_binding(session_id)
+        if not work_item_id or not company_id:
+            return None
+        return await _query_goal_ancestry(str(work_item_id), company_id)
+    except Exception as exc:
+        logger.warning("Goal ancestry lookup failed for work item %s: %s", work_item_id, exc)
+        return None
+
+
+async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> list | None:
+    """Resolve work item -> goal_id -> ancestry chain, scoped to *company_id*.
+
+    Split out to keep the LLC imports lazy (the stack is optional at import
+    time) and both functions inside the 30-line limit.
+    """
+    try:
+        uuid.UUID(work_item_id)
+    except (ValueError, TypeError):
+        # A malformed id is a client-shaped problem, not a system failure —
+        # debug, not a per-turn warning.
+        logger.debug("Ignoring malformed work_item_id for goal ancestry: %r", work_item_id)
+        return None
+
+    from llc.services.goal import GoalService
+    from llc.services.work_item_service import WorkItemService
+    from user_management.database import get_async_session_factory
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        work_item = await WorkItemService().get(session, work_item_id, company_id=company_id)
+        goal_id = getattr(work_item, "goal_id", None) if work_item else None
+        if not goal_id:
+            return None
+        chain = await GoalService().get_goal_ancestry_for_work_item(session, goal_id, company_id=company_id)
+        return chain or None
+
+
+__all__ = ["resolve_goal_ancestry", "resolve_memory_graph"]

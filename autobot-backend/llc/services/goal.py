@@ -83,6 +83,15 @@ class GoalService(LLCServiceBase):
             parent = await self.get(session, parent_goal_id)
             if parent is None:
                 raise HTTPException(status_code=404, detail="Parent goal not found")
+            # #13704: reject a cross-tenant parent on CREATE, as update() already
+            # does. Without this, a caller could root a goal of their own company
+            # under another company's goal and read that company's titles back
+            # through the ancestry walk.
+            if str(parent.company_id) != str(company_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Parent goal belongs to a different company",
+                )
             _validate_level_order(level, _as_goal_level(parent.level))
 
         goal = LLCGoal(
@@ -218,8 +227,17 @@ class GoalService(LLCServiceBase):
 
     # ----------------------------------------------------------- Traversal
 
-    async def get_ancestors(self, session: AsyncSession, goal_id: uuid.UUID) -> List[LLCGoal]:
-        """Walk parent chain from goal_id up to the root (exclusive of goal_id)."""
+    async def get_ancestors(
+        self, session: AsyncSession, goal_id: uuid.UUID, *, company_id: Optional[str] = None
+    ) -> List[LLCGoal]:
+        """Walk parent chain from goal_id up to the root (exclusive of goal_id).
+
+        #13704: when *company_id* is given the walk **stops** at the first
+        ancestor owned by another company rather than continuing through it.
+        Scoping only the leaf is not enough — a cross-company parent edge makes
+        the chain itself the leak, and such an edge was creatable until the
+        guard added to :meth:`create` in the same change.
+        """
         ancestors: List[LLCGoal] = []
         current_id: Optional[uuid.UUID] = goal_id
         visited: set = set()
@@ -231,6 +249,12 @@ class GoalService(LLCServiceBase):
             goal = await self.get(session, current_id)
             if goal is None:
                 break
+            if company_id is not None and str(goal.company_id) != str(company_id):
+                logger.warning(
+                    "Stopping goal ancestry walk at %s: ancestor belongs to another company (#13704)",
+                    current_id,
+                )
+                break
             if current_id != goal_id:
                 ancestors.append(goal)
             current_id = goal.parent_goal_id
@@ -240,17 +264,31 @@ class GoalService(LLCServiceBase):
         self,
         session: AsyncSession,
         goal_id: uuid.UUID,
+        *,
+        company_id: Optional[str] = None,
     ) -> List[dict]:
         """Return root-first goal ancestry chain for a goal_id (GH#6469).
 
         Includes the goal itself as the last element.  Returns plain dicts
         (``id``, ``title``, ``level``, ``status``) so callers avoid importing
         LLCGoal.  Returns ``[]`` when the goal is not found.
+
+        #13704: ``company_id`` scopes the lookup. This is the one method an
+        untrusted goal reference reaches — the chat prompt path — so the tenant
+        check lives here rather than on every internal getter, whose scope is
+        already established by its own entry point. A goal belonging to another
+        company yields ``[]``, indistinguishable from "no such goal".
         """
         goal = await self.get(session, goal_id)
         if goal is None:
             return []
-        ancestors = await self.get_ancestors(session, goal_id)
+        if company_id is not None and str(goal.company_id) != str(company_id):
+            logger.warning(
+                "Refusing cross-company goal ancestry: goal=%s belongs to another company (#13704)",
+                goal_id,
+            )
+            return []
+        ancestors = await self.get_ancestors(session, goal_id, company_id=company_id)
         chain = ancestors + [goal]
         return [
             {
