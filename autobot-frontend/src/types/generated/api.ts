@@ -51331,6 +51331,12 @@ export interface paths {
          *
          *     Reads from the KB via ``AgentDiaryService``.  Supports ``limit``/``offset``
          *     pagination and optional ``date_from``/``date_to`` filters (inclusive).
+         *
+         *     Diary entries carry no tenant dimension of their own, so the agent is bound
+         *     to a company the same way the sibling run routes above do it (#13771): via
+         *     ``LLCHeartbeatRun``. An agent that has never run for the caller's company
+         *     reads as empty rather than 404, so the response cannot be used to probe
+         *     which agent ids exist elsewhere.
          */
         get: operations["get_agent_diary_api_llc_agents__agent_id__diary_get"];
         put?: never;
