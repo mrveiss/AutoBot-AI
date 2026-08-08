@@ -282,7 +282,55 @@ class TieredContextBuilder:
     returned so the caller falls through to the existing unconditional path.
     """
 
-    _L0_L1_MAX_TOKENS: int = 900  # acceptance-criterion guard
+    # #13691: the identity + essential-story block's share of the model's real
+    # prompt budget, replacing a flat 900-token constant that meant something
+    # different on an 8k model than on a 200k one. Enforcement is #13640's
+    # allocator — this is a share, not a second budgeting mechanism.
+    _L0_L1_BUDGET_SHARE: float = 0.25
+
+    def _fit_l0_l1(self, l0_text: str, l1_text: str, model_name: str) -> "tuple[str, str]":
+        """Trim the always-loaded L0+L1 block to fit its budget (#13691).
+
+        This used to compare two *estimates* against a flat 900 and then render
+        both layers in full regardless — a constant commented "guard" that only
+        logged. Two changes follow from adopting #13640's allocator:
+
+        * The budget is a share of the model's real prompt budget, consistent
+          with how L1 already reads ``context_windows.yaml``.
+        * It measures the rendered text rather than the ``words * 1.3`` estimate
+          family, which is weakest exactly where prompts get large — code, JSON,
+          CJK (#13694).
+
+        Identity outranks the essential story: a turn can lose recalled facts
+        and still behave correctly, but losing who it is cannot be recovered
+        from. Non-fatal — on any failure both layers pass through untrimmed,
+        which is the pre-#13691 behaviour.
+        """
+        try:
+            from context_window_manager import ContextSection, get_context_window_manager
+
+            cwm = get_context_window_manager()
+            budget = int(cwm.get_prompt_budget(model_name) * self._L0_L1_BUDGET_SHARE)
+            sections = [
+                ContextSection("identity", l0_text, priority=90, max_share=0.4),
+                ContextSection("essential_story", l1_text, priority=60, max_share=0.8),
+            ]
+            result = cwm.allocate_sections(sections, budget_tokens=budget)
+        except Exception as exc:
+            logger.warning("L0+L1 budget fitting failed, rendering untrimmed: %s", exc, exc_info=True)
+            return l0_text, l1_text
+
+        if result.trimmed:
+            logger.info(
+                "L0+L1 over budget: %d -> %d tokens (budget %d); trimmed %s; dropped %s (#13691)",
+                result.tokens_before,
+                result.tokens_after,
+                result.budget,
+                ", ".join(result.trimmed),
+                ", ".join(result.dropped) or "none",
+            )
+        by_name = {sec.name: sec.content for sec in result.sections}
+        return by_name["identity"], by_name["essential_story"]
 
     async def build(
         self,
@@ -314,18 +362,9 @@ class TieredContextBuilder:
         l0 = Layer0Identity()
         l1 = Layer1EssentialStory()
 
-        l0_est = await l0.token_estimate(base_ctx)
-        l1_est = await l1.token_estimate(base_ctx)
-        total_l0_l1 = l0_est + l1_est
-        if total_l0_l1 > self._L0_L1_MAX_TOKENS:
-            logger.warning(
-                "L0+L1 estimated tokens (%d) exceed budget (%d)",
-                total_l0_l1,
-                self._L0_L1_MAX_TOKENS,
-            )
-
         l0_text = await l0.render(base_ctx)
         l1_text = await l1.render(base_ctx)
+        l0_text, l1_text = self._fit_l0_l1(l0_text, l1_text, model_name)
 
         parts: list[str] = [t for t in [l0_text, l1_text] if t]
 
