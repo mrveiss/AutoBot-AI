@@ -4102,7 +4102,7 @@
       "relationPlaceholder": "Podążaj tylko za tym typem relacji...",
       "findPath": "Znajdź ścieżkę",
       "searching": "Wyszukiwanie...",
-      "connectedIn": "Połączone w {count} przeskokach",
+      "connectedIn": "Połączone w {count} przeskoku | Połączone w {count} przeskokach",
       "sameEntity": "Obie nazwy wskazują tę samą encję: {name}",
       "crossedForwards": "w przód",
       "crossedBackwards": "wstecz",
@@ -4111,7 +4111,9 @@
       "noPathHint": "Spróbuj zwiększyć głębokość, dopuścić dowolny kierunek lub usunąć filtr relacji.",
       "entityNotFound": "Te nazwy nie pasują do żadnej encji:",
       "entityNotFoundHint": "Sprawdź pisownię lub najpierw wyodrębnij encje, aby istniały w grafie.",
-      "errorEnterBoth": "Podaj encję źródłową i docelową."
+      "errorEnterBoth": "Podaj encję źródłową i docelową.",
+      "notInGraph": "Te encje nie znajdują się jeszcze w grafie relacji.",
+      "notInGraphHint": "Istnieją, ale nie mają powiązań w grafie, więc nie można prześledzić połączenia. Uruchom ponownie wyodrębnianie encji."
     }
   },
   "workflow": {

@@ -23,6 +23,7 @@ Endpoints:
 - GET /graph-rag/metrics - Performance metrics
 """
 
+import asyncio
 from typing import Callable, Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -246,13 +247,25 @@ async def graph_rag_path(
     """
     request_id = generate_request_id()
 
-    result = await service.find_connection_path(
-        from_entity=path_request.from_entity,
-        to_entity=path_request.to_entity,
-        relation=path_request.relation,
-        max_depth=path_request.max_depth,
-        direction=path_request.direction,
-    )
+    try:
+        result = await service.find_connection_path(
+            from_entity=path_request.from_entity,
+            to_entity=path_request.to_entity,
+            relation=path_request.relation,
+            max_depth=path_request.max_depth,
+            direction=path_request.direction,
+            timeout=path_request.timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("[%s] Graph-RAG path timed out after %ss", request_id, path_request.timeout)
+        raise HTTPException(status_code=504, detail="Graph-RAG path traversal timed out")
+    except Exception as e:
+        # Generic detail on purpose: with_error_handling would otherwise return
+        # the raw exception type and message to the client (#13740), which for a
+        # Redis failure means an internal host and port. /search guards the same
+        # way ten lines above.
+        logger.error("[%s] Graph-RAG path failed: %s", request_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Graph-RAG path traversal failed")
 
     if result.get("reason") == "entity_not_found":
         logger.info("[%s] Graph-RAG path: unresolved entities %s", request_id, result.get("missing_entities"))

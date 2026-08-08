@@ -6,6 +6,7 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+import os
 import re
 from datetime import datetime
 from enum import Enum
@@ -4632,6 +4633,12 @@ class GraphRAGSearchResponse(BaseModel):
     request_id: str = Field(..., description="Unique request identifier")
 
 
+# #13474: a "both"-direction walk branches twice per node and issues a Redis
+# round-trip per edge, so the traversal always carries a deadline. Overridable
+# per request; never unbounded.
+DEFAULT_PATH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS", "10.0"))
+
+
 class GraphRAGPathRequest(BaseModel):
     """Request model for a shortest-path query between two memory-graph entities. #13474."""
 
@@ -4643,6 +4650,12 @@ class GraphRAGPathRequest(BaseModel):
     max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
     direction: Literal["outgoing", "incoming", "both"] = Field(
         "both", description="Edge direction to follow; 'both' treats relations as undirected"
+    )
+    timeout: float | None = Field(
+        DEFAULT_PATH_TIMEOUT_SECONDS,
+        ge=1.0,
+        le=30.0,
+        description="Traversal deadline in seconds (1-30). Bounds a wide 'both'-direction walk.",
     )
 
     @field_validator("from_entity", "to_entity")

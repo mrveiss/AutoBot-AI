@@ -108,7 +108,7 @@
         <div class="result-header">
           <h5>
             <Icon name="link" />
-            {{ $t('knowledge.graphPath.connectedIn', { count: pathResult.hops }) }}
+            {{ t('knowledge.graphPath.connectedIn', { count: pathResult.hops }, pathResult.hops) }}
           </h5>
           <span v-if="pathResult.traversal_time !== undefined" class="metric-badge">
             <Icon name="clock" />
@@ -159,6 +159,13 @@
             <li v-for="name in pathResult.missing_entities" :key="name">{{ name }}</li>
           </ul>
           <p class="hint">{{ $t('knowledge.graphPath.entityNotFoundHint') }}</p>
+        </template>
+        <template v-else-if="pathResult.reason === 'not_in_graph'">
+          <!-- The entities exist but were never mirrored into the traversal
+               graph, so "not connected" would be a confident wrong answer. -->
+          <Icon name="exclamation-circle" />
+          <p>{{ $t('knowledge.graphPath.notInGraph') }}</p>
+          <p class="hint">{{ $t('knowledge.graphPath.notInGraphHint') }}</p>
         </template>
         <template v-else>
           <Icon name="unlink" />

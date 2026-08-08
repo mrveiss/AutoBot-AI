@@ -163,7 +163,9 @@ describe('useKnowledgeGraphRAG.findPath (#13474)', () => {
     expect(pathResult.value?.missing_entities).toEqual(['Nope'])
   })
 
-  it('names both candidates when the 404 body cannot be parsed', async () => {
+  it('raises on an unparseable 404 rather than blaming the user\'s input', async () => {
+    // #13474 review: mapping every 404 to "entity not found" told the user
+    // their data was wrong when the endpoint simply was not deployed.
     vi.mocked(apiClient.rawRequest).mockResolvedValue({
       ok: false,
       status: 404,
@@ -174,10 +176,41 @@ describe('useKnowledgeGraphRAG.findPath (#13474)', () => {
     } as unknown as Response)
     const { findPath, pathResult } = useKnowledgeGraphRAG()
 
+    await expect(findPath({ from_entity: 'A', to_entity: 'B' })).rejects.toThrow('HTTP 404')
+    expect(pathResult.value).toBeNull()
+  })
+
+  it('raises on a bare FastAPI 404 from a backend without this route', async () => {
+    vi.mocked(apiClient.rawRequest).mockResolvedValue(mockResponse(404, { detail: 'Not Found' }))
+    const { findPath, pathResult } = useKnowledgeGraphRAG()
+
+    await expect(findPath({ from_entity: 'A', to_entity: 'B' })).rejects.toThrow('HTTP 404')
+    expect(pathResult.value).toBeNull()
+  })
+
+  it('accepts a 404 that identifies itself without listing names', async () => {
+    vi.mocked(apiClient.rawRequest).mockResolvedValue(
+      mockResponse(404, { detail: { error: 'entity_not_found' } }),
+    )
+    const { findPath, pathResult } = useKnowledgeGraphRAG()
+
     await findPath({ from_entity: 'A', to_entity: 'B' })
 
     expect(pathResult.value?.reason).toBe('entity_not_found')
     expect(pathResult.value?.missing_entities).toEqual(['A', 'B'])
+  })
+
+  it('passes through not_in_graph as its own outcome', async () => {
+    vi.mocked(apiClient.rawRequest).mockResolvedValue(
+      mockResponse(200, { ...FOUND_BODY, found: false, reason: 'not_in_graph', hops: 0, path: [] }),
+    )
+    const { findPath, pathResult } = useKnowledgeGraphRAG()
+
+    await findPath({ from_entity: 'A', to_entity: 'B' })
+
+    // Distinct from no_path: the entities exist but were never mirrored into
+    // the traversal graph, so "not connected" would be a wrong answer.
+    expect(pathResult.value?.reason).toBe('not_in_graph')
   })
 
   it('does not report a server failure as "no path"', async () => {

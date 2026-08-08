@@ -4102,7 +4102,7 @@
       "relationPlaceholder": "Suivre uniquement ce type de relation...",
       "findPath": "Trouver le chemin",
       "searching": "Recherche...",
-      "connectedIn": "Reliées en {count} sauts",
+      "connectedIn": "Reliées en {count} saut | Reliées en {count} sauts",
       "sameEntity": "Les deux noms désignent la même entité : {name}",
       "crossedForwards": "vers l'avant",
       "crossedBackwards": "vers l'arrière",
@@ -4111,7 +4111,9 @@
       "noPathHint": "Essayez d'augmenter la profondeur, d'autoriser toute direction ou de retirer le filtre de relation.",
       "entityNotFound": "Ces noms ne correspondent à aucune entité :",
       "entityNotFoundHint": "Vérifiez l'orthographe, ou extrayez d'abord les entités pour qu'elles existent dans le graphe.",
-      "errorEnterBoth": "Veuillez saisir une entité de départ et une entité d'arrivée."
+      "errorEnterBoth": "Veuillez saisir une entité de départ et une entité d'arrivée.",
+      "notInGraph": "Ces entités ne sont pas encore dans le graphe de relations.",
+      "notInGraphHint": "Elles existent mais n'ont aucun lien dans le graphe : aucune connexion ne peut être tracée. Relancez l'extraction d'entités."
     }
   },
   "workflow": {

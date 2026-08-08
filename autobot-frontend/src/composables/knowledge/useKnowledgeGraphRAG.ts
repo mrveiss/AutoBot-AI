@@ -73,7 +73,7 @@ export interface GraphRAGSearchParams {
 export type GraphPathDirection = 'outgoing' | 'incoming' | 'both'
 
 /** Why no path was returned. `null` when one was found. */
-export type GraphPathReason = 'no_path' | 'entity_not_found' | null
+export type GraphPathReason = 'no_path' | 'entity_not_found' | 'not_in_graph' | null
 
 export interface GraphPathEntity {
   id?: string
@@ -121,18 +121,25 @@ export interface GraphPathParams {
  * Pull `missing_entities` out of a 404 body, tolerating either the
  * `{detail: {...}}` envelope FastAPI produces or a bare object. (#13474)
  *
- * A body we cannot parse yields an empty list rather than throwing: the UI can
- * still say "one of these names did not resolve", which beats a raw 404.
+ * Returns `null` when the body is not recognisably this endpoint's
+ * entity-not-found response, so the caller can raise instead of misreporting an
+ * unrelated 404 as bad user input.
  */
-async function readMissingEntities(response: Response): Promise<string[]> {
+async function readMissingEntities(response: Response): Promise<string[] | null> {
   try {
     const body = (await response.json()) as Record<string, unknown>
     const detail = (body?.detail ?? body) as Record<string, unknown>
-    const missing = detail?.missing_entities
-    return Array.isArray(missing) ? missing.map(String) : []
+    if (detail === null || typeof detail !== 'object') return null
+    const missing = detail.missing_entities
+    if (Array.isArray(missing)) return missing.map(String)
+    // Only a body that actually identifies itself as this error may be shaped
+    // into "your entity names are wrong". A bare FastAPI 404 (route missing on
+    // an older backend, stale proxy) must stay an error — telling the user
+    // their data is bad when the endpoint is not deployed is a false negative.
+    return detail.error === 'entity_not_found' ? [] : null
   } catch {
-    logger.warn('Could not parse missing_entities from 404 body')
-    return []
+    logger.warn('Could not parse the 404 body from /graph-rag/path')
+    return null
   }
 }
 
@@ -261,12 +268,13 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
       }
 
       if (response.status === 404) {
-        pathResult.value = buildMissingEntitiesResult(
-          await readMissingEntities(response),
-          params,
-        )
-        logger.info(`Connection path: unresolved entities ${pathResult.value.missing_entities}`)
-        return
+        const missing = await readMissingEntities(response)
+        if (missing !== null) {
+          pathResult.value = buildMissingEntitiesResult(missing, params)
+          logger.info(`Connection path: unresolved entities ${pathResult.value.missing_entities}`)
+          return
+        }
+        throw new Error('HTTP 404: /graph-rag/path is not available on this backend')
       }
 
       throw new Error(`HTTP ${response.status}: ${response.statusText || 'Request failed'}`)

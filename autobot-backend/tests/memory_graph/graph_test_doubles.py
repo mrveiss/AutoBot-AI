@@ -145,8 +145,28 @@ class MixinHarness(PropertyGraphMixin):
     def graph(self) -> PropertyGraph:
         return self._graph_obj
 
+    # #13474: the real get_entity swallows infrastructure errors and returns
+    # None, so find_path pings the store before trusting a None. These two hooks
+    # let a test reproduce that outage rather than only the happy path.
+    entity_lookup_error: Exception | None = None
+    ping_error: Exception | None = None
+
     async def get_entity(self, entity_id=None, entity_name=None, include_relations=False):
+        if self.entity_lookup_error is not None:
+            return None  # mirrors the real swallow-and-return-None behaviour
         return self._entities.get(entity_name)
+
+    @property
+    def redis_client(self):
+        harness = self
+
+        class _Redis:
+            async def ping(self):
+                if harness.ping_error is not None:
+                    raise harness.ping_error
+                return True
+
+        return _Redis()
 
 
 async def make_harness() -> MixinHarness:

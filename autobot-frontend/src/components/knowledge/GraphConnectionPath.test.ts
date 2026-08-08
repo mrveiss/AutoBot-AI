@@ -252,4 +252,42 @@ describe('GraphConnectionPath.vue (#13474)', () => {
 
     expect(wrapper.find('.chain-node.start').text()).toContain('Redis Config')
   })
+
+  it('distinguishes "not in the graph" from "not connected"', async () => {
+    // #13474 review: the entities exist but were never mirrored into the
+    // traversal graph. Saying "no connection found" there is a confident wrong
+    // answer about data that may well be related.
+    const wrapper = mountComponent()
+    pathResult.value = {
+      found: false,
+      reason: 'not_in_graph',
+      from_entity: { id: 'e1' },
+      to_entity: { id: 'e9' },
+      missing_entities: [],
+      hops: 0,
+      path: [],
+    }
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.empty-result.not_in_graph').exists()).toBe(true)
+    expect(wrapper.text()).toContain(en.knowledge.graphPath.notInGraph)
+    expect(wrapper.text()).not.toContain(en.knowledge.graphPath.noPathFound)
+  })
+
+  it('says "1 hop", not "1 hops"', async () => {
+    const wrapper = mountComponent()
+    pathResult.value = {
+      found: true,
+      reason: null,
+      from_entity: { id: 'e1', name: 'A' },
+      to_entity: { id: 'e2', name: 'B' },
+      missing_entities: [],
+      hops: 1,
+      path: [{ relation: 'CAUSED', direction: 'outgoing', node: { id: 'e2', name: 'B' } }],
+    }
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('Connected in 1 hop')
+    expect(wrapper.text()).not.toContain('1 hops')
+  })
 })

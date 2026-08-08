@@ -624,3 +624,54 @@ class TestFindPath:
 
         with pytest.raises(ConnectionError):
             await h.find_path("Redis Config", "Incident 7")
+
+
+class TestFindPathFailureModes:
+    """#13474 review follow-ups: a failure must never be returned as an answer."""
+
+    @pytest.mark.asyncio
+    async def test_lookup_outage_raises_instead_of_reporting_entity_not_found(self):
+        """get_entity swallows Redis errors and returns None. Reporting that as
+        "your entity does not exist" tells the user their data is wrong during an
+        infrastructure outage — a false negative dressed as an answer."""
+        h = await make_harness()
+        h.entity_lookup_error = ConnectionError("redis down")
+        h.ping_error = ConnectionError("redis down")
+
+        with pytest.raises(RuntimeError):
+            await h.find_path("Redis Config", "Incident 7")
+
+    @pytest.mark.asyncio
+    async def test_genuine_typo_still_reports_entity_not_found(self):
+        """The outage guard must not swallow the real not-found case: with the
+        store reachable, an unknown name is still reported as such."""
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Does Not Exist")
+
+        assert result["reason"] == "entity_not_found"
+        assert result["missing_entities"] == ["Does Not Exist"]
+
+    @pytest.mark.asyncio
+    async def test_entity_absent_from_graph_is_not_reported_as_no_path(self):
+        """An entity can exist in the main store yet never have been mirrored
+        into the property graph (best-effort sync, or created before the mirror
+        existed). Answering "not connected" there is a confident wrong answer."""
+        h = await make_harness()
+        h._entities["Unmirrored"] = {"id": "e9", "name": "Unmirrored", "type": "note"}
+
+        result = await h.find_path("Redis Config", "Unmirrored")
+
+        assert result["found"] is False
+        assert result["reason"] == "not_in_graph"
+        assert result["reason"] != "no_path"
+
+    @pytest.mark.asyncio
+    async def test_both_endpoints_in_graph_still_reports_no_path(self):
+        """The not_in_graph guard must not mask a genuine disconnection."""
+        h = await make_harness()
+
+        result = await h.find_path("Redis Config", "Orphan")
+
+        assert result["found"] is False
+        assert result["reason"] == "no_path"

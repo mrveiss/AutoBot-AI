@@ -253,6 +253,7 @@ async def test_path_endpoint_forwards_every_query_parameter():
             relation="CAUSED",
             max_depth=3,
             direction="incoming",
+            timeout=5.0,
         ),
         service=service,
         current_user={"id": "u1"},
@@ -264,7 +265,61 @@ async def test_path_endpoint_forwards_every_query_parameter():
         relation="CAUSED",
         max_depth=3,
         direction="incoming",
+        timeout=5.0,
     )
+
+
+async def test_path_endpoint_always_carries_a_deadline_by_default():
+    """#13474 review: a 'both'-direction walk branches twice per node and issues
+    a Redis round-trip per edge, so an unbounded traversal is a denial-of-service
+    vector on an authenticated endpoint. The request model supplies a default."""
+    service = _path_service({"found": False, "reason": "no_path", "hops": 0, "path": []})
+
+    await graph_rag_path(
+        path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
+        service=service,
+        current_user={"id": "u1"},
+    )
+
+    assert service.find_connection_path.await_args.kwargs["timeout"] is not None
+
+
+async def test_path_endpoint_reports_a_timeout_as_504_not_as_no_path():
+    """An abandoned walk is not evidence that two entities are unconnected."""
+    import asyncio
+
+    service = MagicMock()
+    service.find_connection_path = AsyncMock(side_effect=asyncio.TimeoutError())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await graph_rag_path(
+            path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
+            service=service,
+            current_user={"id": "u1"},
+        )
+
+    assert exc_info.value.status_code == 504
+
+
+async def test_path_endpoint_does_not_leak_the_exception_message():
+    """with_error_handling would otherwise return the raw exception type and
+    message to the client (#13740) — for a Redis failure, an internal host and
+    port. /search guards the same way."""
+    service = MagicMock()
+    service.find_connection_path = AsyncMock(
+        side_effect=ConnectionError("Error 111 connecting to internal-host:6379")
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await graph_rag_path(
+            path_request=GraphRAGPathRequest(from_entity="A", to_entity="B"),
+            service=service,
+            current_user={"id": "u1"},
+        )
+
+    assert exc_info.value.status_code == 500
+    assert "internal-host" not in str(exc_info.value.detail)
+    assert "6379" not in str(exc_info.value.detail)
 
 
 async def test_path_endpoint_returns_200_when_unconnected():

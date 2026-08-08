@@ -4102,7 +4102,7 @@
       "relationPlaceholder": "Sekot tikai šim attiecību veidam...",
       "findPath": "Meklēt ceļu",
       "searching": "Meklē...",
-      "connectedIn": "Savienotas {count} lēcienos",
+      "connectedIn": "Savienotas {count} lēcienā | Savienotas {count} lēcienos",
       "sameEntity": "Abi nosaukumi atbilst vienai entītijai: {name}",
       "crossedForwards": "uz priekšu",
       "crossedBackwards": "atpakaļ",
@@ -4111,7 +4111,9 @@
       "noPathHint": "Mēģiniet palielināt dziļumu, atļaut jebkuru virzienu vai noņemt attiecību filtru.",
       "entityNotFound": "Šie nosaukumi neatbilst nevienai entītijai:",
       "entityNotFoundHint": "Pārbaudiet pareizrakstību vai vispirms izgūstiet entītijas, lai tās pastāvētu grafā.",
-      "errorEnterBoth": "Lūdzu, ievadiet gan sākuma, gan mērķa entītiju."
+      "errorEnterBoth": "Lūdzu, ievadiet gan sākuma, gan mērķa entītiju.",
+      "notInGraph": "Šīs entītijas vēl nav attiecību grafā.",
+      "notInGraphHint": "Tās pastāv, bet tām nav grafa saišu, tāpēc savienojumu nevar izsekot. Palaidiet entītiju izguvi vēlreiz."
     }
   },
   "workflow": {

@@ -3502,7 +3502,7 @@
       "relationPlaceholder": "עקוב רק אחר סוג קשר זה...",
       "findPath": "מצא נתיב",
       "searching": "מחפש...",
-      "connectedIn": "מחוברות ב-{count} קפיצות",
+      "connectedIn": "מחוברות בקפיצה {count} | מחוברות ב-{count} קפיצות",
       "sameEntity": "שני השמות מפנים לאותה ישות: {name}",
       "crossedForwards": "קדימה",
       "crossedBackwards": "אחורה",
@@ -3511,7 +3511,9 @@
       "noPathHint": "נסה להגדיל את העומק, לאפשר כל כיוון, או להסיר את מסנן הקשר.",
       "entityNotFound": "השמות האלה לא תאמו אף ישות:",
       "entityNotFoundHint": "בדוק את האיות, או חלץ ישויות תחילה כדי שיהיו קיימות בגרף.",
-      "errorEnterBoth": "נא להזין ישות מקור וישות יעד."
+      "errorEnterBoth": "נא להזין ישות מקור וישות יעד.",
+      "notInGraph": "ישויות אלה עדיין אינן בגרף הקשרים.",
+      "notInGraphHint": "הן קיימות אך אין להן קישורים בגרף, ולכן לא ניתן לאתר חיבור. הרץ מחדש את חילוץ הישויות."
     }
   },
   "reasoningTrace": {

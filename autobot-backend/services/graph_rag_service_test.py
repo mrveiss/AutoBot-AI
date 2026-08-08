@@ -867,3 +867,29 @@ async def test_find_connection_path_does_not_swallow_failures(graph_rag_service,
 
     with pytest.raises(ConnectionError):
         await graph_rag_service.find_connection_path("A", "B")
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_enforces_the_timeout(graph_rag_service, mock_memory_graph) -> None:
+    """#13474 review: an unbounded 'both'-direction walk is a DoS vector, so the
+    service enforces the deadline rather than trusting the traversal to end."""
+    import asyncio
+
+    async def _never_finishes(*args, **kwargs):
+        await asyncio.sleep(10)
+
+    mock_memory_graph.find_path = _never_finishes
+
+    with pytest.raises(asyncio.TimeoutError):
+        await graph_rag_service.find_connection_path("A", "B", timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_without_timeout_is_unbounded(graph_rag_service, mock_memory_graph) -> None:
+    """timeout=None must not silently impose one — callers outside the API
+    (tests, batch jobs) may legitimately want the full walk."""
+    mock_memory_graph.find_path = AsyncMock(return_value={"found": True, "hops": 1, "path": []})
+
+    result = await graph_rag_service.find_connection_path("A", "B", timeout=None)
+
+    assert result["found"] is True

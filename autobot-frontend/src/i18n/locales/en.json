@@ -4102,7 +4102,7 @@
       "relationPlaceholder": "Only follow this relation type...",
       "findPath": "Find Path",
       "searching": "Searching...",
-      "connectedIn": "Connected in {count} hops",
+      "connectedIn": "Connected in {count} hop | Connected in {count} hops",
       "sameEntity": "Both names resolve to the same entity: {name}",
       "crossedForwards": "forwards",
       "crossedBackwards": "backwards",
@@ -4111,7 +4111,9 @@
       "noPathHint": "Try increasing the depth, allowing any direction, or removing the relation filter.",
       "entityNotFound": "These names did not match any entity:",
       "entityNotFoundHint": "Check the spelling, or extract entities first so they exist in the graph.",
-      "errorEnterBoth": "Please enter both a source and a target entity."
+      "errorEnterBoth": "Please enter both a source and a target entity.",
+      "notInGraph": "These entities are not in the relationship graph yet.",
+      "notInGraphHint": "They exist, but have no graph links — so no connection can be traced. Re-run entity extraction to index their relations."
     }
   },
   "workflow": {
