@@ -452,6 +452,8 @@ class _LeakGuard:
         # each of the thousands of collectors a session brackets.
         self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
+        # name -> why the synthetic->genuine exemption was refused (#13651)
+        self._exempt_blocked: dict[str, str] = {}
         self._reported: set[tuple[str, str]] = set()
         self._warned_owners: set[str] = set()
         # Baselined owners this session has loaded but not yet taken anywhere
@@ -509,6 +511,7 @@ class _LeakGuard:
         owner_dir_display = _display(owner_dir, self._rootdir)
         owner_ancestors = frozenset(owner_dir.parents)
         for name, module, previous in changed:
+            self._exempt_blocked.pop(name, None)
             kind = self._classify(name, module, previous)
             if kind is None:
                 continue
@@ -519,7 +522,8 @@ class _LeakGuard:
                 owner_dir=owner_dir,
                 owner_dir_display=owner_dir_display,
                 obj_id=id(module),
-                prev_kind=_previous_kind(previous),
+                prev_kind=_previous_kind(previous)
+                + (f" [exempt-refused: {self._exempt_blocked[name]}]" if name in self._exempt_blocked else ""),
                 owner_ancestors=owner_ancestors,
             )
 
@@ -594,13 +598,15 @@ class _LeakGuard:
             # Narrow on purpose: genuine-over-genuine stays reported (#13633), and
             # the newcomer must have a real file so a spec-carrying shim for a
             # deleted submodule cannot pass as genuine (#13599).
-            if (
-                _is_synthetic(previous)
-                and not _is_synthetic(module)
-                and _has_real_file(module)
-                and not _provided_by_multiple_roots(name.partition(".")[0])
-            ):
-                return None
+            if _is_synthetic(previous) and not _is_synthetic(module):
+                # Record which condition refused, so a CI run that keeps
+                # reporting this says why instead of leaving it to be inferred.
+                if not _has_real_file(module):
+                    self._exempt_blocked[name] = "no-real-file"
+                elif _provided_by_multiple_roots(name.partition(".")[0]):
+                    self._exempt_blocked[name] = "multi-root"
+                else:
+                    return None
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
 
