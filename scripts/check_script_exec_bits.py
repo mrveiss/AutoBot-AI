@@ -73,6 +73,21 @@ _INTERPRETED = re.compile(r"(?:^|[\s`\"'|(&;])(?:bash|sh|zsh|source|\.)\s+(?:\./
 _DIRECTIVE = re.compile(r"shellcheck\s+source=")
 
 
+def _require_git_ok(result: "subprocess.CompletedProcess[str]", root: Path) -> None:
+    """Fail loudly when git could not answer (#13668).
+
+    Both call sites use ``check=False`` and read only stdout, so a broken or
+    missing git — or a directory that is not a checkout — produced an empty file
+    list, no disagreements, and ``main()`` exiting 0. The CI check then reported
+    success while having verified nothing, which is the failure mode this
+    checker exists to prevent.
+    """
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"git failed in {root} (exit {result.returncode}): {result.stderr.strip() or '<no stderr>'}"
+        )
+
+
 def _tracked_files(patterns: Iterable[str], root: Path = REPO_ROOT) -> list[Path]:
     out: list[Path] = []
     for pattern in patterns:
@@ -80,6 +95,7 @@ def _tracked_files(patterns: Iterable[str], root: Path = REPO_ROOT) -> list[Path
         result = subprocess.run(  # nosec B603 B607
             ["git", "ls-files", pattern], cwd=root, capture_output=True, text=True, check=False
         )
+        _require_git_ok(result, root)
         out.extend(root / line for line in result.stdout.splitlines() if line)
     return out
 
@@ -93,6 +109,7 @@ def _is_executable(path: Path, root: Path = REPO_ROOT) -> bool:
         text=True,
         check=False,
     )
+    _require_git_ok(result, root)
     # "100755 <sha> 0\t<path>" — read the mode git records, not the working tree,
     # because that is what a fresh clone gets.
     return result.stdout.startswith("100755")
