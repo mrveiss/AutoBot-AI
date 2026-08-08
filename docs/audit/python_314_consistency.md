@@ -31,6 +31,7 @@ native deployment path found while checking venv consistency.
 | `deploy-native-services.yml` NPU play | 3.11 into a **shared** venv path | ❌ collision, see F5 |
 | `deploy-native-services.yml` NPU play | requirements path **does not exist** | ❌ broken, see F6 |
 | `deploy-native-services.yml` host groups | `npu` / `aiml` | ❌ not in the inventory, see F7 |
+| `docs/` (all `.md`) | mixed | ⚠️ 7 stale claims, 1 pointing at live code, see F8 |
 
 `autobot-npu-worker` (Windows variant) is blocked and stays blocked — see F1.
 
@@ -137,6 +138,53 @@ F5, F6 and F7 are all in the same documented-but-unexercised playbook, which is 
 independent defects accumulated in it.
 
 ---
+
+## F8 — Documentation: mostly consistent, seven stale claims, one pointing at live code
+
+Every `.md` under `docs/` and `README.md` was grepped for a Python version claim and each hit
+classified. The **user-facing install and deploy path is already correct** — `docs/user-guide/`,
+`docs/runbooks/SINGLE_HOST_DEPLOYMENT.md` and `docs/deployment/` all say 3.14, and `install.sh`
+really does install 3.14 (`install.sh:397`).
+
+Stale claims, corrected in this PR:
+
+| File | Said | Reality |
+|---|---|---|
+| `docs/GETTING_STARTED_COMPLETE.md:22` | "`install.sh` installs Python **3.12**" | installs 3.14 — and this is the first-contact doc |
+| `docs/architecture/README.md:64` | "Python **3.11+** — Core backend language" | 3.14 |
+| `docs/architecture/CODE_VECTORIZATION_README.md:257` | "Python **3.9+**" | 3.14 |
+| `docs/guides/VLLM_SETUP_GUIDE.md:66` | "Python **3.9+** required" | 3.14 |
+| `docs/developer/CODE_QUALITY_IMPLEMENTATION.md:91` | CI step "Set up Python **3.11**" | CI is 3.14 |
+| `docs/developer/BACKEND_DEBUGGING.md:221` | writes a shim into `.../lib/**python3.13**/site-packages/` | hardcoded minor; the backend is 3.14, so the shim lands where nothing imports it. Now resolved from the venv via `sysconfig` |
+| `docs/ROADMAP.md:190` | "Actual: 3.14 (conda, backend), **3.10 (dev)**" | dev is now 3.14 too |
+
+**Deliberately left as-is** — these are correct *as historical records*, and rewriting them would
+falsify the measurement they exist to preserve:
+
+- `docs/audit/*` — dated baselines that state the interpreter they were measured on ("Python 3.10.12").
+- `docs/archives/plans/*`, `docs/superpowers/plans/*` — plan documents with a "Tech Stack: Python 3.11+"
+  line, describing what was true when written.
+- `docs/developer/BACKEND_DEBUGGING.md:245` — the red-herrings table row "Python 3.13 incompatibility |
+  Tested with Python 3.14 | ❌ Same issue" is an investigation record, not an instruction.
+
+### The one that is not a doc problem
+
+`docs/developer/audits/datetime-parsing-audit.md` and `autobot_shared/time_utils.py:42` both carry a
+migration plan whose step 6 is:
+
+> ⏳ Python 3.11+ upgrade — drops the 9 `.replace("Z", "+00:00")` workaround sites since 3.11
+> `fromisoformat` accepts `Z` natively
+
+**That precondition was met four minor versions ago.** The step is still marked pending, and three
+shim sites remain in shipped code:
+
+- `autobot_shared/time_utils.py:127`
+- `autobot-backend/integrations/microsoft365_integration.py:84`
+- `autobot-slm-backend/api/security.py:852`
+
+Not fixed here — removing a parsing shim is a code change with its own blast radius, and the
+docstring's "9 sites" no longer matches the 3 that are left, so the migration state needs
+re-establishing before anything is deleted. Filed separately.
 
 ## Recommended order
 
