@@ -11,6 +11,7 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import os
 import time
@@ -62,6 +63,18 @@ ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 60
 # which is this bug, unchanged. Likewise a wait shorter than the refresh makes
 # every loser raise while the winner is still working correctly.
 _REFRESH_LOCK_PREFIX = "connector:oauth:refresh:"
+
+
+def _refresh_lock_key(secret_id: str) -> str:
+    """Redis key for the per-credential refresh lease (#13627).
+
+    Hashes the id rather than embedding it. Two reasons, both real: a credential
+    identifier does not belong in a Redis keyspace that anyone with KEYS access
+    can enumerate, and passing it into ``LeaderLease`` makes that module's own
+    log lines taint-reachable from a credential. A stable digest serialises
+    exactly as well.
+    """
+    return _REFRESH_LOCK_PREFIX + hashlib.sha256(secret_id.encode("utf-8")).hexdigest()[:32]
 _REFRESH_DB = "knowledge"
 
 
@@ -315,7 +328,7 @@ class ConnectorCredentialStore:
             # False, so a degraded-but-pingable Redis (OOM, MISCONF, read-only
             # replica) would look like "someone else is refreshing" and make every
             # refresh wait then fail — the same total outage this guards against.
-            return await redis.get(f"{_REFRESH_LOCK_PREFIX}{secret_id}") is not None
+            return await redis.get(_refresh_lock_key(secret_id)) is not None
         except Exception:
             return False
 
@@ -344,7 +357,7 @@ class ConnectorCredentialStore:
             # provider error costs every waiter the full wait and then reports a
             # misleading "timed out waiting for a concurrent refresh".
             takeover = LeaderLease(
-                key=f"{_REFRESH_LOCK_PREFIX}{secret_id}",
+                key=_refresh_lock_key(secret_id),
                 database=_REFRESH_DB,
                 ttl_ms=_REFRESH_LOCK_TTL_MS,
                 worker_id=uuid.uuid4().hex,
@@ -388,7 +401,7 @@ class ConnectorCredentialStore:
         # a rotated token as a breach signal and revoke the whole grant family
         # (OAuth 2.0 Security BCP 4.14.2), turning the race into a full disconnect.
         lease = LeaderLease(
-            key=f"{_REFRESH_LOCK_PREFIX}{secret_id}",
+            key=_refresh_lock_key(secret_id),
             database=_REFRESH_DB,
             ttl_ms=_REFRESH_LOCK_TTL_MS,
             # A unique id per lease, NOT the default hostname-pid. Two refreshes in
