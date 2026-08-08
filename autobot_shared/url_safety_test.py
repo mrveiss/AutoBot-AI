@@ -15,8 +15,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import ipaddress
+
 import pytest
 
+from autobot_shared import url_safety
 from autobot_shared.url_safety import (
     host_matches,
     is_public_url,
@@ -302,3 +305,67 @@ def test_module_has_zero_autobot_dependencies() -> None:
     assert "from web_fetch" not in source
     assert "from autobot_backend" not in source
     assert "from autobot_shared" not in source  # no sibling cross-deps either
+
+
+# ---------------------------------------------------------------------------
+# #13625: private-network opt-in, separable from the hard blocks
+# ---------------------------------------------------------------------------
+
+_HARD_BLOCKED = [
+    ("127.0.0.1", "loopback"),
+    ("169.254.169.254", "cloud metadata"),
+    ("0.0.0.0", "unspecified"),
+    ("224.0.0.1", "multicast"),
+    ("240.0.0.1", "reserved"),
+    ("::1", "IPv6 loopback"),
+    ("fe80::1", "IPv6 link-local"),
+]
+
+_PRIVATE = [("10.0.0.5", "RFC1918"), ("192.168.1.10", "RFC1918"), ("172.16.0.1", "RFC1918"), ("fd00::1", "IPv6 ULA")]
+
+
+@pytest.mark.parametrize("addr,kind", _HARD_BLOCKED)
+def test_hard_blocked_addresses_stay_blocked_with_the_opt_in(addr, kind):
+    """#13625: the opt-in permits private ranges only — never these.
+
+    An operator hosting Confluence on an RFC-1918 address is a real deployment;
+    an operator hosting it on the cloud-metadata endpoint is not. If this ever
+    passes, the opt-in has become an SSRF bypass.
+    """
+    ip = ipaddress.ip_address(addr)
+    assert url_safety._ip_is_public(ip) is False, kind
+    assert url_safety._ip_is_public(ip, allow_private=True) is False, f"{kind} allowed by the opt-in"
+
+
+@pytest.mark.parametrize("addr,kind", _PRIVATE)
+def test_private_addresses_flip_with_the_opt_in(addr, kind):
+    """#13625: RFC-1918/ULA is the range the opt-in exists to permit."""
+    ip = ipaddress.ip_address(addr)
+    assert url_safety._ip_is_public(ip) is False, f"{kind} allowed by default"
+    assert url_safety._ip_is_public(ip, allow_private=True) is True, kind
+
+
+def test_public_address_is_unaffected_by_the_opt_in():
+    ip = ipaddress.ip_address("93.184.216.34")
+    assert url_safety._ip_is_public(ip) is True
+    assert url_safety._ip_is_public(ip, allow_private=True) is True
+
+
+def test_default_call_is_unchanged_by_the_new_parameter():
+    """#13625: every existing caller must keep public-only behaviour."""
+    for addr, _ in _HARD_BLOCKED + _PRIVATE:
+        assert url_safety._ip_is_public(ipaddress.ip_address(addr)) is False
+    assert url_safety._ip_is_public(ipaddress.ip_address("8.8.8.8")) is True
+
+
+def test_localhost_is_refused_even_with_the_opt_in():
+    """#13625: the hostname short-circuit must not become a loopback bypass."""
+    assert url_safety.is_public_url("http://localhost:8080/x") is False
+    assert url_safety.is_public_url("http://localhost:8080/x", allow_private=True) is False
+
+
+def test_private_ip_literal_url_honours_the_opt_in():
+    assert url_safety.is_public_url("https://10.0.0.5/api") is False
+    assert url_safety.is_public_url("https://10.0.0.5/api", allow_private=True) is True
+    # ...but the metadata endpoint stays refused either way.
+    assert url_safety.is_public_url("http://169.254.169.254/latest/meta-data/", allow_private=True) is False

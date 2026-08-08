@@ -33,6 +33,7 @@ preserved as backward-compat thin wrappers that delegate here.
 from __future__ import annotations
 
 import asyncio
+import functools
 import ipaddress
 import os
 import socket
@@ -85,18 +86,42 @@ _IPV6_ULA = ipaddress.ip_network("fc00::/7")
 _DNS_TIMEOUT_SECONDS = 2.0
 
 
-def _ip_is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Return True only if an IP address is routable on the public internet."""
-    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
-        return False
+def _ip_is_hard_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True for addresses that are never a legitimate egress target (#13625).
+
+    Loopback, link-local (which covers the 169.254.169.254 cloud-metadata
+    endpoint), multicast, reserved and unspecified. These stay blocked even when
+    a deployment opts into private-network egress: an operator hosting Confluence
+    on an RFC-1918 address is a real deployment, whereas an operator hosting it
+    on the metadata endpoint is not.
+    """
+    return bool(ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified)
+
+
+def _ip_is_private(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True for RFC-1918 / ULA addresses — separable from the hard blocks (#13625)."""
+    if ip.is_private and not _ip_is_hard_blocked(ip):
+        return True
     # IPv6 Unique Local Addresses (fc00::/7) — redundant with is_private on
     # modern Python but kept explicit as defence-in-depth.
-    if isinstance(ip, ipaddress.IPv6Address) and ip in _IPV6_ULA:
+    return isinstance(ip, ipaddress.IPv6Address) and ip in _IPV6_ULA
+
+
+def _ip_is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address, *, allow_private: bool = False) -> bool:
+    """Return True if an IP is an acceptable egress target.
+
+    With *allow_private* the RFC-1918/ULA range is permitted — self-hosted
+    Confluence/GitLab/Nextcloud instances legitimately live there — while the
+    hard blocks above still apply. Default is unchanged: public only.
+    """
+    if _ip_is_hard_blocked(ip):
         return False
+    if _ip_is_private(ip):
+        return allow_private
     return True
 
 
-def is_public_url(url: str) -> bool:
+def is_public_url(url: str, *, allow_private: bool = False) -> bool:
     """Return True only for public HTTP/HTTPS URLs.
 
     Resolves the hostname via DNS and rejects if *any* resolved address is
@@ -117,11 +142,13 @@ def is_public_url(url: str) -> bool:
         if not host:
             return False
         # Reject bare private names and private TLDs outright — no DNS needed.
-        if host in ("localhost",) or any(host.endswith(tld) for tld in _PRIVATE_TLDS):
+        if host == "localhost":
+            return False  # loopback is hard-blocked in both states (#13625)
+        if any(host.endswith(tld) for tld in _PRIVATE_TLDS) and not allow_private:
             return False
         # If host is a literal IP, check directly without DNS.
         try:
-            return _ip_is_public(ipaddress.ip_address(host))
+            return _ip_is_public(ipaddress.ip_address(host), allow_private=allow_private)
         except ValueError:
             pass
         # Resolve hostname and reject if *any* A/AAAA record is non-public.
@@ -137,7 +164,7 @@ def is_public_url(url: str) -> bool:
             addr = info[4][0]
             # Strip IPv6 scope id (e.g. "fe80::1%eth0") before parsing.
             addr = addr.split("%", 1)[0]  # type: ignore[union-attr]  # GH#7105: info[4] is always (str,...) for TCP/UDP
-            if not _ip_is_public(ipaddress.ip_address(addr)):
+            if not _ip_is_public(ipaddress.ip_address(addr), allow_private=allow_private):
                 return False
         return True
     except (socket.gaierror, socket.timeout, ValueError, OSError):
@@ -145,13 +172,15 @@ def is_public_url(url: str) -> bool:
         return False
 
 
-async def is_public_url_async(url: str) -> bool:
+async def is_public_url_async(url: str, *, allow_private: bool = False) -> bool:
     """Async wrapper: run the blocking DNS check in the default executor."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, is_public_url, url)
+    return await loop.run_in_executor(None, functools.partial(is_public_url, url, allow_private=allow_private))
 
 
-async def resolve_safe_ip_async(host: str, *, timeout: float = _DNS_TIMEOUT_SECONDS) -> str:
+async def resolve_safe_ip_async(
+    host: str, *, timeout: float = _DNS_TIMEOUT_SECONDS, allow_private: bool = False
+) -> str:
     """Resolve *host* and return the first globally-routable IP literal.
 
     Raises ``ValueError`` if the hostname resolves to any private, loopback,
@@ -180,7 +209,7 @@ async def resolve_safe_ip_async(host: str, *, timeout: float = _DNS_TIMEOUT_SECO
             ip = ipaddress.ip_address(ip_str)
         except ValueError:
             continue
-        if not _ip_is_public(ip):
+        if not _ip_is_public(ip, allow_private=allow_private):
             raise ValueError(f"Host '{host}' resolves to a non-public address: {ip_str}")
         if safe_ip is None:
             safe_ip = ip_str
