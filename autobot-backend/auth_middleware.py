@@ -25,6 +25,7 @@ from autobot_shared.auth.jwt_core import (
 )
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exported, #13688)
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso

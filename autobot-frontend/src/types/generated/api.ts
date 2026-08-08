@@ -40333,6 +40333,11 @@ export interface paths {
         /**
          * Add Markdown Reference
          * @description Add markdown file reference to a task.
+         *
+         *     #13688: the reference is stored as a general memory row, which is now
+         *     owner-scoped. The owner comes from the authenticated principal — taking it
+         *     from ``MarkdownReferenceRequest`` would let a caller write into another
+         *     user's memory.
          */
         post: operations["add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post"];
         delete?: never;

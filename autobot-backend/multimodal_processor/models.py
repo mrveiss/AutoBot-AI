@@ -27,6 +27,10 @@ class MultiModalInput:
     data: Any  # Flexible data field for any input type
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    # #13688: owner of this input, carried as a first-class field rather than a
+    # metadata key so the memory write below it can be tenant-scoped. Set from
+    # the authenticated principal at the API boundary.
+    user_id: str | None = None
 
 
 @dataclass
@@ -43,3 +47,7 @@ class ProcessingResult:
     processing_time: float
     error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # #13688: stamped from the originating input in MultiModalProcessor.process
+    # so every result knows whose it is without each of the 25 construction
+    # sites having to remember.
+    user_id: str | None = None
