@@ -39,6 +39,10 @@ grafana_group: "grafana"
 # Installation directories
 prometheus_install_dir: "/opt/prometheus"
 prometheus_config_dir: "/etc/prometheus"
+
+# #12460: fail the play when no alerts-*.yml is found rather than installing
+# zero rules silently. Set false only for a node that intentionally ships none.
+prometheus_alert_rules_required: true
 prometheus_data_dir: "/var/lib/prometheus"
 grafana_data_dir: "/var/lib/grafana"
 
