@@ -12,7 +12,8 @@ _get_embedding_cache_size, cleanup_old_data) now live on MemoryManager
 directly.
 
 #10666 B2: UnifiedMemoryManager renamed to MemoryManager.
-get_memory_manager() is the canonical factory.
+#13722: get_memory_manager() is the canonical factory and is DEFINED in
+memory/manager.py; this module only re-exports it.
 
 #13690: this module is NOT caller-less, despite a grep for ``memory.compat``
 finding nothing — both production consumers import through the package
@@ -36,7 +37,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .enums import MemoryCategory
-from .manager import MemoryManager
+from .manager import MemoryManager, get_memory_manager  # noqa: F401  (re-exported, #13722)
 from .models import MemoryEntry
 
 logger = get_logger(__name__)
@@ -130,7 +131,9 @@ class LongTermMemoryManager:
 # GLOBAL INSTANCES
 # ============================================================================
 
-get_memory_manager = lazy_singleton(MemoryManager)
+# #13722: get_memory_manager now lives in memory/manager.py, beside the class
+# it constructs. Re-exported here so both import paths keep working — this
+# is the only name in this module that genuinely is a compatibility alias.
 get_long_term_memory_manager = lazy_singleton(LongTermMemoryManager)
 
 
