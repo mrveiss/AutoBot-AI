@@ -19,15 +19,6 @@ Selection rule
     (e.g. ``2026-04-18T19:34:50.123456+00:00``).
     Round-trips via ``datetime.fromisoformat`` on Python 3.10+.
 
-``utc_timestamp_z()`` — **DEPRECATED — legacy compatibility only.**
-    Returns ``Z``-suffix ISO-8601 with second precision
-    (e.g. ``2026-04-18T19:34:50Z``). Retained ONLY because
-    ``services/workflow_versioning.py`` writes records in this format
-    historically. The audit confirmed zero internal parsers consume
-    those records, so a future migration of that producer is safe and
-    will allow this helper to be deleted.
-    **Do not call from new code.**
-
 Migration plan (#5169 part C)
 -----------------------------
 
@@ -35,12 +26,20 @@ Migration plan (#5169 part C)
 2. ✅ Audit + canonicalization decision (this PR)
 3. ✅ Migrated 57 direct ``datetime.utcnow().isoformat()`` sites
    to ``utc_timestamp()`` — tracked by #5178
-4. ⏳ Migrate ``workflow_versioning._utc_now`` → ``utc_timestamp``
-   (after step 3, requires either tolerant readers or one-time
-   data migration of stored Z records)
+4. ✅ Migrated ``workflow_versioning._utc_now`` → ``utc_timestamp``
+   (``services/workflow_versioning.py`` now imports it under that alias)
 5. ✅ Deleted ``utc_timestamp_z()`` (after step 4)
-6. ⏳ Python 3.11+ upgrade — drops the 9 ``.replace("Z", "+00:00")``
-   workaround sites since 3.11 ``fromisoformat`` accepts ``Z`` natively
+6. ✅ Python 3.11+ upgrade — the ``.replace("Z", "+00:00")`` shim sites are
+   gone. ``fromisoformat`` has accepted a ``Z`` suffix natively since 3.11
+   and the platform runs 3.14 in CI, both Dockerfiles and every Ansible
+   role. Closed by #13755; the step stayed marked pending for four minor
+   versions after its precondition cleared, which is how the recorded count of
+   nine drifted from the three that were actually left.
+
+This plan is complete. A step still marked pending after its blocker has
+cleared stops being a plan and becomes noise — if a future step is added here,
+retire it when it lands rather than leaving the next reader to re-derive the
+state, as #13755 had to.
 """
 
 from datetime import datetime, timezone
@@ -107,7 +106,7 @@ def parse_utc_iso(value: str) -> datetime:
 
     Accepts three forms:
     - ``+00:00`` offset (canonical, produced by :func:`utc_timestamp`)
-    - ``Z`` suffix (legacy, produced by :func:`utc_timestamp_z`)
+    - ``Z`` suffix (legacy producers, and external ones such as Notion and git)
     - **Naive** (no offset/suffix) — assumed UTC and tagged as such
 
     Use this in consumer code that compares parsed timestamps against
@@ -118,13 +117,17 @@ def parse_utc_iso(value: str) -> datetime:
 
     Raises ``ValueError`` on non-string or malformed input — matches the
     ``datetime.fromisoformat`` exception surface adopters expect (#5464).
-    Non-string inputs previously escaped as ``AttributeError`` from the
-    inner ``.replace()`` call, slipping past the common
-    ``except (ValueError, TypeError)`` adopter pattern.
+    Non-string inputs previously escaped as ``AttributeError`` from an inner
+    ``.replace()`` call, slipping past the common
+    ``except (ValueError, TypeError)`` adopter pattern. The explicit
+    ``isinstance`` check is what preserves that surface now that the
+    ``.replace()`` is gone (#13755).
     """
     if not isinstance(value, str):
         raise ValueError(f"parse_utc_iso: expected str, got {type(value).__name__}")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # #13755: no ``Z`` shim — fromisoformat has parsed the suffix natively
+    # since 3.11 and the platform floor is 3.14 (enforced at boot, #13738).
+    parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed

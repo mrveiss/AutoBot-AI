@@ -12,7 +12,7 @@
 | `2026-04-18T19:34:50Z` | `utc_timestamp_z()` | ❌ **raises `ValueError`** | 0 files (write-only producer) |
 | `2026-04-18T19:34:50` (naive) | `datetime.utcnow().isoformat()` | ✅ accepts (returns naive) | tracked separately by [#5178](https://github.com/mrveiss/AutoBot-AI/issues/5178) |
 
-**Decision (Part C)**: canonicalize on `+00:00`. Mark `utc_timestamp_z()` deprecated. Plan a Python 3.11 upgrade so the 9 explicit Z-shim sites become redundant. No on-disk data migration required — the only Z-suffix producer (`workflow_versioning`) has zero internal parsers.
+**Decision (Part C)**: canonicalize on `+00:00`. Mark `utc_timestamp_z()` deprecated. Plan a Python 3.11 upgrade so the 9 explicit Z-shim sites become redundant. **Resolved (#13755):** the platform runs 3.14, `utc_timestamp_z()` is deleted, and all Z-shim sites are gone. No on-disk data migration required — the only Z-suffix producer (`workflow_versioning`) has zero internal parsers.
 
 ---
 
@@ -62,7 +62,7 @@ tests/        3 files
 | [`api/analytics_conversation.py:40,52,495`](autobot-backend/api/analytics_conversation.py) | 40, 52, 495 | conversation record |
 | [`api/chat.py:140`](autobot-backend/api/chat.py) | 140 | chat record |
 
-**These 9 files are safe under either format.** The shim is defensive: it was added because external APIs (Notion, git, Redis writes from older AutoBot versions) sometimes emit `Z`. Once we canonicalize on `+00:00` AND upgrade to Python 3.11+, the shim becomes redundant but harmless.
+**These 9 files are safe under either format.** The shim was defensive: it was added because external APIs (Notion, git, Redis writes from older AutoBot versions) sometimes emit `Z`. Both preconditions are now met, so the shim was removed in #13755 — external `Z` producers are still tolerated, by `fromisoformat` itself rather than by a preprocessing step. Six of the nine sites had already gone by other routes; the remaining three were removed together.
 
 #### Class B — unguarded (assumes `+00:00` or naive)
 
@@ -142,7 +142,7 @@ This was changed in Python 3.11 — `fromisoformat` accepts both forms natively 
 Rationale:
 1. **No on-disk migration risk.** The only `Z`-format producer (`workflow_versioning`) has zero internal parsers. We can deprecate `utc_timestamp_z()` without touching any record.
 2. **86% of parsers are already only-`+00:00`-compatible.** They work today because all our internal producers emit `+00:00` or naive. Choosing `+00:00` aligns the rule with what the codebase already does.
-3. **The Z-shim is a workaround, not a feature.** 9 files preprocess `Z`→`+00:00` defensively because external APIs (Notion, git, etc.) emit `Z`. After Python 3.11 upgrade, the shim is redundant. Designing internal producers around an external-API quirk is the wrong direction.
+3. **The Z-shim was a workaround, not a feature.** 9 files preprocessed `Z`→`+00:00` defensively because external APIs (Notion, git, etc.) emit `Z`. The upgrade landed and the shim is gone (#13755). Designing internal producers around an external-API quirk is the wrong direction.
 4. **`+00:00` is what `datetime.now(timezone.utc).isoformat()` produces by default.** Picking the Python idiomatic form means new code is correct without thinking about format.
 
 ### Implementation plan
@@ -152,10 +152,10 @@ Rationale:
 | 1. Document selection rule (Part A) | ✅ Done — PR #5176 | — |
 | 2. Mark `utc_timestamp_z()` as `@deprecated` in docstring | ✅ This PR | — |
 | 3. Migrate 57 direct `datetime.utcnow().isoformat()` sites to `utc_timestamp()` | Tracked by [#5178](https://github.com/mrveiss/AutoBot-AI/issues/5178) | — |
-| 4. Migrate `workflow_versioning._utc_now` consumer to `utc_timestamp()` | Future PR — only after step 3 | — |
-| 5. Delete `utc_timestamp_z()` from `time_utils.py` | After step 4 | — |
-| 6. Plan Python 3.11+ upgrade | Separate issue (#5169 follow-up) | — |
-| 7. Drop the 9 Z-shim workarounds (no longer needed after step 6) | Final cleanup | — |
+| 4. Migrate `workflow_versioning._utc_now` consumer to `utc_timestamp()` | ✅ Done — imports it as `_utc_now` | — |
+| 5. Delete `utc_timestamp_z()` from `time_utils.py` | ✅ Done | — |
+| 6. Plan Python 3.11+ upgrade | ✅ Done — the platform runs 3.14, enforced at boot (#13738) | — |
+| 7. Drop the 9 Z-shim workarounds (no longer needed after step 6) | ✅ Done — [#13755](https://github.com/mrveiss/AutoBot-AI/issues/13755) | — |
 
 ### What this PR does (closes #5169)
 
@@ -170,7 +170,7 @@ Steps 3–7 are tracked as separate issues (#5178 + future). #5169 itself is clo
 - Does not migrate any of the 57 direct-usage sites — that's #5178
 - Does not delete `utc_timestamp_z()` — premature; it's still the canonical alias for `workflow_versioning`'s on-disk format until step 4
 - Does not bump Python to 3.11 — that's a separate scope
-- Does not touch the 9 Z-shim sites — they remain defensive against external APIs even after canonicalization
+- Does not touch the 9 Z-shim sites — they remain defensive against external APIs even after canonicalization (removed later, in #13755, once the interpreter floor made them redundant)
 
 ---
 
