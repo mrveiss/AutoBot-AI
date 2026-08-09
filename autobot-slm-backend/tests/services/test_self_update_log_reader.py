@@ -324,4 +324,4 @@ def test_the_executor_writes_the_header_the_reader_expects():
     executor_src = (_BACKEND_ROOT / "services" / "playbook_executor.py").read_text(encoding="utf-8")
     assert f'SELF_UPDATE_RUN_HEADER: str = "{reader_header}"' in executor_src
     # …and that the constant is what actually gets written, not a stale literal.
-    assert "f\"{SELF_UPDATE_RUN_HEADER} {datetime.now(timezone.utc).isoformat()}" in executor_src
+    assert 'f"{SELF_UPDATE_RUN_HEADER} {datetime.now(timezone.utc).isoformat()}' in executor_src
