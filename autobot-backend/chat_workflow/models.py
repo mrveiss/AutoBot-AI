@@ -405,10 +405,12 @@ def build_governed_identity(
     approval gates resolved upstream. All absent → a plain, ungoverned run.
 
     Trust boundary: enforcement is fail-safe under a user-controlled context — a
-    caller can only *add* restrictions to their own run (an unknown/omitted
-    ``agent_id`` forbids nothing; a set one only forbids), never lift them. But for
-    these to be a real control a *trusted* server-side path must populate them; a
-    future trusted producer must override, not merge with, user-supplied keys.
+    caller can only *add* restrictions to their own run, never lift them. An omitted
+    ``agent_id`` forbids nothing (there is no identity to bound); an *unrecognised*
+    one resolves to the default boundary rather than to none (GH#13588), so a typo
+    cannot buy free rein. But for these to be a real control a *trusted* server-side
+    path must populate them; a future trusted producer must override, not merge
+    with, user-supplied keys.
     """
     agent_id = source.get("agent_id")
     agent_context = AgentContext(agent_id=agent_id, session_id=session_id) if agent_id else None

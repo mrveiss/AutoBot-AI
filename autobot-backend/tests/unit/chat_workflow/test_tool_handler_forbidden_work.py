@@ -73,12 +73,28 @@ def test_enforce_noop_for_executor_agent() -> None:
 
 
 def test_enforce_noop_for_profileless_chat_agent() -> None:
-    """No agent_context (plain chat) → empty manifest → never blocked."""
+    """No agent_context (plain chat) → no identity to bound → never blocked."""
     mixin = _mixin()
     results: list[dict] = []
     assert mixin._enforce_forbidden_work({"name": "bash"}, None, results) is None
-    assert mixin._enforce_forbidden_work({"name": "bash"}, _ctx("unknown_agent"), results) is None
     assert results == []
+
+
+def test_enforce_blocks_an_unregistered_agent_id() -> None:
+    """GH#13588: an unknown id is bounded, not waved through.
+
+    This used to sit in the profile-less test above, asserting that ``unknown_agent``
+    reached ``bash`` — the two cases look alike (both resolved to an empty manifest)
+    but mean opposite things. "No agent identity" is the documented ungoverned path;
+    "an agent identity nothing recognises" is a typo or a wrong-namespace id, and
+    letting it run unbounded is the defect that issue reports.
+    """
+    mixin = _mixin()
+    results: list[dict] = []
+    msg = mixin._enforce_forbidden_work({"name": "bash"}, _ctx("unknown_agent"), results)
+
+    assert msg is not None
+    assert results, "the block was not recorded in the execution results"
 
 
 @pytest.mark.asyncio

@@ -323,13 +323,16 @@
     npu_venv: /opt/autobot/autobot-npu-worker/venv
 
   tasks:
-    # Python 3.11 pinned: OpenVINO/NPU runtime has no 3.14 wheels (do not bump with the rest of the fleet)
+    # #13747: was pinned to 3.11 on the premise that OpenVINO ships no 3.14
+    # wheels (#10877). Measured 2026-08-08: openvino 2026.3.0, torch 2.13.0 and
+    # numpy 2.5.1 all publish cp314, and autobot-npu-worker/requirements.txt
+    # resolves cleanly on 3.14. The NPU worker now matches the rest of the fleet.
     - name: Install Python dependencies for NPU Worker
       apt:
         name:
-          - python3.11
-          - python3.11-venv
-          - python3.11-dev
+          - python3.14
+          - python3.14-venv
+          - python3.14-dev
           - build-essential
           - pkg-config
           - libssl-dev
@@ -372,18 +375,22 @@
     # site-packages built by the other interpreter; the failure is a native
     # ImportError at worker startup, so the deploy still reports success.
     # roles/npu-worker already uses its own {{ npu_install_dir }}/venv — this
-    # matches it. The 3.11 interpreter is deliberate and out of scope here;
-    # moving the NPU worker to 3.14 is #13747.
+    # matches it.
+    #
+    # #13747: the interpreter is now 3.14, matching the rest of the fleet. This
+    # task is what makes the move safe on an already-deployed box — it detects
+    # the existing 3.11 venv as wrong-version and removes it, so 3.11-built
+    # OpenVINO binaries are never carried into a 3.14 venv.
     - name: Enforce the target interpreter on any existing NPU venv
       ansible.builtin.include_role:
         name: python314
         tasks_from: ensure_venv_version
       vars:
         venv_path: "{{ npu_venv }}"
-        venv_python: python3.11
+        venv_python: python3.14
 
     - name: Create Python virtual environment for NPU Worker
-      shell: "python3.11 -m venv {{ npu_venv }}"
+      shell: "python3.14 -m venv {{ npu_venv }}"
       args:
         creates: "{{ npu_venv }}/bin/activate"
       become_user: autobot-service
@@ -400,7 +407,7 @@
       pip:
         requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
         virtualenv: "{{ npu_venv }}"
-        virtualenv_python: python3.11
+        virtualenv_python: python3.14
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"

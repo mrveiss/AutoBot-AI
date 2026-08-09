@@ -13,7 +13,7 @@ forbidden tools through a real dispatch path.
 Acceptance criteria:
   - ``agent_id`` populates ``config.forbidden_tools`` from the agent's profile.
   - The designated executor (``system_agent``, no ``forbidden_work``) stays unbounded.
-  - No / unknown ``agent_id`` is a no-op (backward compatible).
+  - No ``agent_id`` is a no-op; an *unknown* one falls closed (GH#13588).
   - An explicit ``config.forbidden_tools`` is never overwritten by the manifest.
   - A forbidden tool is blocked in ``_execute_tools`` before the approval gate.
 """
@@ -24,6 +24,7 @@ import pytest
 
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig
+from orchestration.agent_registry import DEFAULT_FORBIDDEN_TOOLS
 
 
 def _make_loop(agent_id: str | None = None, config: AgentLoopConfig | None = None) -> AgentLoop:
@@ -54,9 +55,17 @@ class TestManifestWiring:
         loop = _make_loop(agent_id=None)
         assert loop.config.forbidden_tools == frozenset()
 
-    def test_unknown_agent_is_unbounded(self) -> None:
+    def test_unknown_agent_is_bounded_by_the_default(self) -> None:
+        """GH#13588: was ``test_unknown_agent_is_unbounded``, asserting the defect.
+
+        An id nothing recognises used to reach the loop with no boundary at all —
+        indistinguishable from ``system_agent`` above, which earns that by
+        declaration. The loop now inherits the fail-closed default instead.
+        """
         loop = _make_loop(agent_id="does_not_exist")
-        assert loop.config.forbidden_tools == frozenset()
+
+        assert loop.config.forbidden_tools == DEFAULT_FORBIDDEN_TOOLS
+        assert loop.config.forbidden_tools != frozenset()
 
     def test_explicit_config_forbidden_tools_not_overwritten(self) -> None:
         cfg = AgentLoopConfig(
