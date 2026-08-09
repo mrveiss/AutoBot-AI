@@ -872,6 +872,7 @@
       "loadFailed": "Falha ao carregar memórias. O backend pode estar indisponível.",
       "forgetFailed": "Falha ao esquecer o item de memória.",
       "forgetEverywhereFailed": "Falha ao excluir em cascata o item de memória.",
+      "forgetEverywhereAmbiguous": "Esta memória existe em mais de um armazenamento — utilize antes a eliminação por armazenamento na linha.",
       "exportDownloaded": "Exportação de memória baixada.",
       "exportFailed": "A exportação falhou. Tente novamente."
     },

@@ -872,6 +872,7 @@
       "loadFailed": "Neizdevās ielādēt atmiņas. Aizmugursistēma var būt nepieejama.",
       "forgetFailed": "Neizdevās aizmirst atmiņas vienumu.",
       "forgetEverywhereFailed": "Neizdevās kaskādes veidā dzēst atmiņas vienumu.",
+      "forgetEverywhereAmbiguous": "Šī atmiņa pastāv vairāk nekā vienā krātuvē — tā vietā izmantojiet dzēšanu pa krātuvēm rindā.",
       "exportDownloaded": "Atmiņas eksports lejupielādēts.",
       "exportFailed": "Eksports neizdevās. Lūdzu, mēģiniet vēlreiz."
     },

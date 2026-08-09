@@ -52279,10 +52279,16 @@ export interface paths {
         post?: never;
         /**
          * Forget Everywhere
-         * @description Cascade-delete a memory item from every store.
+         * @description Cascade-delete a memory item from the store that owns it.
          *
          *     Returns a per-store map of ``{store: true/false}`` indicating whether the
          *     item existed in that store.  A True value means it was deleted from there.
+         *
+         *     Raises:
+         *         409: the id exists in more than one store (#13739). Deleting from all of
+         *             them destroys unrelated data and picking one is a guess, so the
+         *             caller re-issues against ``DELETE /{store}/{memory_id}``. The
+         *             response names the candidate stores.
          */
         delete: operations["forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete"];
         options?: never;

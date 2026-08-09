@@ -397,16 +397,58 @@ async def forget_memory(user_id: str, memory_id: str, store: str) -> bool:
         return False
 
 
-async def forget_everywhere(user_id: str, memory_id: str) -> Dict[str, bool]:
-    """Fan-out delete across ALL stores for *memory_id*.
+MEMORY_STORES = ("verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general")
 
-    Tries each store; a False result means the item was not found there
-    (not an error — memory items live in exactly one store).
-    Returns a dict mapping store name to deletion result.
+
+class AmbiguousMemoryId(Exception):
+    """More than one store holds *memory_id* for this user (#13739).
+
+    Raised instead of guessing. The caller resolves it with the single-item
+    ``forget_memory(user_id, memory_id, store)``, which has never been ambiguous.
     """
-    stores = ["verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general"]
-    results = await asyncio.gather(*[forget_memory(user_id, memory_id, s) for s in stores])
-    return dict(zip(stores, results))
+
+    def __init__(self, memory_id: str, stores: List[str]):
+        super().__init__(f"memory_id {memory_id!r} exists in more than one store: {', '.join(stores)}")
+        self.memory_id = memory_id
+        self.stores = stores
+
+
+async def _stores_holding(user_id: str, memory_id: str) -> List[str]:
+    """Return the stores whose listing actually shows *memory_id* for *user_id*."""
+    items = await list_user_memories(user_id)
+    return sorted({item["store"] for item in items if str(item.get("memory_id")) == memory_id})
+
+
+async def forget_everywhere(user_id: str, memory_id: str) -> Dict[str, bool]:
+    """Delete *memory_id* from the store that owns it (#13739).
+
+    This used to issue the delete against **every** store with the same id. That
+    was safe only while every store's id space was structurally distinct — Chroma
+    UUIDs, or Redis keys containing ``:``. #13705 added ``general``, whose ids are
+    dense SQLite rowids, so a numeric id from another store would land on an
+    unrelated general row of the same user and silently destroy it. The owner is
+    in every DELETE predicate, so this was never cross-user; it was data loss.
+
+    Resolution comes from the user's own listing, which already carries the
+    ``(store, memory_id)`` pair on every item. Stores the id does not appear in
+    are reported ``False`` without a delete ever being attempted.
+
+    Raises:
+        AmbiguousMemoryId: the id appears in more than one store. Deleting from
+            all of them is the original bug; picking one would be a guess. A
+            store that fails to list is likewise reported ``False`` rather than
+            deleted blind — during an outage "we could not look" must not become
+            "delete it anyway".
+    """
+    holders = await _stores_holding(user_id, memory_id)
+    if len(holders) > 1:
+        logger.warning("forget_everywhere: %r is ambiguous across %s", memory_id, holders)
+        raise AmbiguousMemoryId(memory_id, holders)
+
+    results = {store: False for store in MEMORY_STORES}
+    for store in holders:
+        results[store] = await forget_memory(user_id, memory_id, store)
+    return results
 
 
 async def export_user_memory(user_id: str) -> Dict[str, Any]:
@@ -558,6 +600,8 @@ async def _forget_rl_pattern(user_id: str, redis_key: str) -> bool:
 
 
 __all__ = [
+    "AmbiguousMemoryId",
+    "MEMORY_STORES",
     "list_user_memories",
     "forget_memory",
     "forget_everywhere",

@@ -237,42 +237,104 @@ class TestForgetTenantIsolation(unittest.IsolatedAsyncioTestCase):
 
 
 class TestForgetEverywhere(unittest.IsolatedAsyncioTestCase):
-    """forget_everywhere fans out to all stores."""
+    """forget_everywhere resolves the owning store instead of guessing (#13739).
 
-    async def test_forget_everywhere_calls_all_stores(self):
-        """forget_everywhere tries every store and returns a per-store result dict."""
+    It used to issue the delete against all six stores with the same id. That
+    was safe only while every store's id space was structurally distinct;
+    #13705 added ``general``, whose ids are dense SQLite rowids, so a numeric
+    id from another store landed on an unrelated general row of the same user.
+    """
+
+    @staticmethod
+    def _listing(*pairs):
+        """Patch list_user_memories with the given (memory_id, store) pairs."""
+
+        async def _stub(_user_id):
+            return [{"memory_id": mid, "store": store, "content": "", "timestamp": ""} for mid, store in pairs]
+
+        return patch("memory.transparency.list_user_memories", side_effect=_stub)
+
+    async def test_deletes_only_from_the_store_that_holds_the_id(self):
         from memory.transparency import forget_everywhere
 
-        with (patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,):
+        with (
+            self._listing(("mem-id-1", "verbatim")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,
+        ):
             results = await forget_everywhere("user-A", "mem-id-1")
 
-        # Should have tried all 6 stores. #13705 added "general" — the SQLite
-        # memory_entries table, which this engine did not cover until #13688
-        # gave it an owner column to select a user's rows by.
-        self.assertEqual(mock_forget.call_count, 6)
-        stores_tried = {c.args[2] for c in mock_forget.call_args_list}
-        self.assertEqual(
-            stores_tried,
-            {"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general"},
-        )
-        # All returned True in this mock
-        self.assertTrue(all(results.values()))
-
-    async def test_forget_everywhere_partial_results(self):
-        """forget_everywhere returns False for stores where the item was not found."""
-        from memory.transparency import forget_everywhere
-
-        async def _selective_forget(user_id, memory_id, store):
-            return store == "verbatim"  # only verbatim had the item
-
-        with patch("memory.transparency.forget_memory", side_effect=_selective_forget):
-            results = await forget_everywhere("user-A", "mem-id-1")
-
+        self.assertEqual(mock_forget.call_count, 1)
+        self.assertEqual(mock_forget.call_args.args[2], "verbatim")
         self.assertTrue(results["verbatim"])
-        self.assertFalse(results["trajectory"])
-        self.assertFalse(results["working_memory"])
+
+    async def test_a_numeric_foreign_id_never_reaches_the_general_store(self):
+        """The reproduction from #13739: graph entity "6" vs general row 6.
+
+        The general row is unrelated and belongs to the same user, so the owner
+        predicate does not protect it — only refusing to guess does.
+        """
+        from memory.transparency import forget_everywhere
+
+        # Only the graph entity carries this id; general row 6 is a different item.
+        with (
+            self._listing(("6", "graph"), ("42", "general")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,
+        ):
+            results = await forget_everywhere("alice", "6")
+
+        self.assertEqual([c.args[2] for c in mock_forget.call_args_list], ["graph"])
+        self.assertFalse(results["general"])
+        self.assertTrue(results["graph"])
+
+    async def test_an_id_held_by_two_stores_is_refused_not_guessed(self):
+        """Deleting from both is the original bug; picking one is a coin flip."""
+        from memory.transparency import AmbiguousMemoryId, forget_everywhere
+
+        with (
+            self._listing(("6", "graph"), ("6", "general")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,
+        ):
+            with self.assertRaises(AmbiguousMemoryId) as caught:
+                await forget_everywhere("alice", "6")
+
+        mock_forget.assert_not_called()
+        self.assertEqual(caught.exception.stores, ["general", "graph"])
+
+    async def test_an_unknown_id_deletes_nothing(self):
+        from memory.transparency import forget_everywhere
+
+        with (
+            self._listing(("other", "verbatim")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,
+        ):
+            results = await forget_everywhere("user-A", "mem-id-1")
+
+        mock_forget.assert_not_called()
+        self.assertFalse(any(results.values()))
+
+    async def test_every_store_is_still_reported(self):
+        """The response shape is unchanged — all six keys, absent ones False."""
+        from memory.transparency import MEMORY_STORES, forget_everywhere
+
+        with (
+            self._listing(("mem-id-1", "verbatim")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)),
+        ):
+            results = await forget_everywhere("user-A", "mem-id-1")
+
+        self.assertEqual(set(results), set(MEMORY_STORES))
+        self.assertEqual(len(MEMORY_STORES), 6)
+
+    async def test_a_failed_delete_is_reported_not_swallowed(self):
+        from memory.transparency import forget_everywhere
+
+        with (
+            self._listing(("mem-id-1", "graph")),
+            patch("memory.transparency.forget_memory", AsyncMock(return_value=False)),
+        ):
+            results = await forget_everywhere("user-A", "mem-id-1")
+
         self.assertFalse(results["graph"])
-        self.assertFalse(results["retrieval_learner"])
 
 
 class TestExportUserMemory(unittest.IsolatedAsyncioTestCase):

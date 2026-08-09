@@ -872,6 +872,7 @@
       "loadFailed": "Nie udało się załadować wspomnień. Backend może być niedostępny.",
       "forgetFailed": "Nie udało się zapomnieć elementu pamięci.",
       "forgetEverywhereFailed": "Nie udało się kaskadowo usunąć elementu pamięci.",
+      "forgetEverywhereAmbiguous": "Ta pamięć istnieje w więcej niż jednym magazynie — użyj zamiast tego usuwania per magazyn w wierszu.",
       "exportDownloaded": "Eksport pamięci pobrany.",
       "exportFailed": "Eksport nie powiódł się. Spróbuj ponownie."
     },
