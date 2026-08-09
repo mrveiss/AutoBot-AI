@@ -28,7 +28,6 @@ from orchestration.agent_registry import (
     resolve_forbidden_tools,
 )
 
-
 # ------------------------------------------------------------ the fail-open fix
 
 
