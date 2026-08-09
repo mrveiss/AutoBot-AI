@@ -49,7 +49,9 @@ on:
     # on Dev_new_gui. It is now also on `main`, which is what makes the sweep
     # periodic rather than incidental.
     #
-    # Keep this copy in sync with the `main` one. The push and
+    # This file exists on both `main` and `Dev_new_gui` and the two copies must
+    # stay byte-identical — a direction-specific note here makes them permanently
+    # conflict on every release sync. The push and
     # pull_request hooks below are still not redundant: they catch a PR head
     # parking within seconds rather than up to 15 minutes later.
     - cron: '*/15 * * * *'
