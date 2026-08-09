@@ -71,13 +71,81 @@ async def resolve_goal_ancestry(session_id: str) -> list | None:
     try:
         from chat_workflow.session_work_item import SessionWorkItemService
 
-        work_item_id, company_id = await SessionWorkItemService().get_binding(session_id)
+        binding = await SessionWorkItemService().get_binding(session_id)
+        work_item_id, company_id = binding.work_item_id, binding.company_id
         if not work_item_id or not company_id:
+            return None
+        # Reject a malformed id before the membership round-trip (#13729): a
+        # client-shaped mistake should not cost a query.
+        if not _is_uuid(work_item_id):
+            logger.debug("Ignoring malformed work_item_id for goal ancestry: %r", work_item_id)
+            return None
+        if not await _authorisation_still_holds(company_id, binding.user_id):
             return None
         return await _query_goal_ancestry(str(work_item_id), company_id)
     except Exception as exc:
         logger.warning("Goal ancestry lookup failed for work item %s: %s", work_item_id, exc)
         return None
+
+
+def _is_uuid(value: str) -> bool:
+    """True when *value* parses as a UUID."""
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+async def _authorisation_still_holds(company_id: str, user_id: str | None) -> bool:
+    """Re-check the bound user's access to *company_id* at resolve time (#13729).
+
+    The binding recorded a decision the bind endpoint made, and nothing expired
+    it before ``SESSION_WORK_ITEM_TTL_SECONDS`` — so a user removed from the
+    company kept receiving its goal chain for up to a day. This closes that
+    window at the cost of one indexed membership lookup, and only on sessions
+    that actually have a binding.
+
+    Bindings written before #13729 carry no ``user_id``. They are refused rather
+    than grandfathered: they expire within the TTL, and the alternative is to
+    keep honouring exactly the unverifiable claim this fixes.
+
+    A platform admin may bind a company they are not a member of, so the current
+    admin flag is checked too — read from the database, never from the stored
+    binding, so losing admin takes effect on the next turn as well.
+    """
+    if not user_id:
+        logger.debug("Goal ancestry: binding predates user recording (#13729); treating as unauthorised")
+        return False
+
+    from llc.services.membership_service import MembershipService
+    from user_management.database import get_async_session_factory
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        if await MembershipService().is_member(session, company_id, user_id):
+            return True
+        if await _is_platform_admin(session, user_id):
+            return True
+
+    logger.info("Goal ancestry: user %s is no longer scoped to company %s; chain withheld", user_id, company_id)
+    return False
+
+
+async def _is_platform_admin(session, user_id: str) -> bool:
+    """Return the user's *current* platform-admin flag (#13729)."""
+    import uuid as _uuid  # noqa: PLC0415
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from user_management.models import User  # noqa: PLC0415
+
+    try:
+        parsed = _uuid.UUID(str(user_id))
+    except (ValueError, TypeError):
+        return False
+    result = await session.execute(select(User.is_platform_admin).where(User.id == parsed))
+    return bool(result.scalar_one_or_none())
 
 
 async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> list | None:
@@ -86,11 +154,10 @@ async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> lis
     Split out to keep the LLC imports lazy (the stack is optional at import
     time) and both functions inside the 30-line limit.
     """
-    try:
-        uuid.UUID(work_item_id)
-    except (ValueError, TypeError):
+    if not _is_uuid(work_item_id):
         # A malformed id is a client-shaped problem, not a system failure —
-        # debug, not a per-turn warning.
+        # debug, not a per-turn warning. Also checked by the caller, before the
+        # membership round-trip; kept here for any direct caller.
         logger.debug("Ignoring malformed work_item_id for goal ancestry: %r", work_item_id)
         return None
 

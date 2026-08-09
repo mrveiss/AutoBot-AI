@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from chat_workflow.session_work_item import SessionWorkItemBinding
+
 
 def _handler_with_tiered_context_on():
     """Build a bare LLMHandlerMixin for prompt assembly.
@@ -140,12 +142,24 @@ class TestL4RendersInPromptViaTheBinding:
             with patch(
                 "chat_workflow.session_work_item.SessionWorkItemService.get_binding",
                 new_callable=AsyncMock,
-                return_value=("wi-1", "company-a"),
+                return_value=SessionWorkItemBinding(
+                    "33333333-3333-3333-3333-333333333333", "company-a", "user-a"
+                ),
             ):
-                with patch(
-                    "chat_workflow.tiered_context_sources._query_goal_ancestry",
-                    new_callable=AsyncMock,
-                    return_value=chain,
+                # #13729: the per-turn membership re-check has its own tests in
+                # session_work_item_test.py; here it is a seam so this test stays
+                # about what reaches the prompt.
+                with (
+                    patch(
+                        "chat_workflow.tiered_context_sources._authorisation_still_holds",
+                        new_callable=AsyncMock,
+                        return_value=True,
+                    ),
+                    patch(
+                        "chat_workflow.tiered_context_sources._query_goal_ancestry",
+                        new_callable=AsyncMock,
+                        return_value=chain,
+                    ),
                 ):
                     prompt = await _capture_system_prompt(handler, _session(), "what is the status")
 
@@ -163,7 +177,7 @@ class TestL4RendersInPromptViaTheBinding:
             with patch(
                 "chat_workflow.session_work_item.SessionWorkItemService.get_binding",
                 new_callable=AsyncMock,
-                return_value=(None, None),
+                return_value=SessionWorkItemBinding(),
             ):
                 prompt = await _capture_system_prompt(handler, _session(), "what is the status")
 
