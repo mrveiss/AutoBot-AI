@@ -203,6 +203,31 @@ class APIErrorResponse:
         }
         return status_map.get(category, 500)
 
+    @staticmethod
+    def get_client_message_for_category(category: ErrorCategory) -> str:
+        """Return the static, client-safe message for an error category (#13740).
+
+        Deliberately says nothing about *why* the operation failed. An unhandled
+        exception's own text is not curated for disclosure — in this codebase it
+        routinely carries install paths, DSNs, Redis database indices, and ORM
+        table and column names. The diagnostic detail is logged server-side
+        against the response's ``trace_id`` instead, so nothing is lost to
+        whoever is allowed to see it.
+        """
+        message_map = {
+            ErrorCategory.VALIDATION: "The request was not valid.",
+            ErrorCategory.USER_INPUT: "The request was not valid.",
+            ErrorCategory.AUTHENTICATION: "Authentication is required.",
+            ErrorCategory.AUTHORIZATION: "You do not have access to this resource.",
+            ErrorCategory.NOT_FOUND: "The requested resource was not found.",
+            ErrorCategory.CONFLICT: "The request conflicts with the current state.",
+            ErrorCategory.RATE_LIMIT: "Too many requests — try again later.",
+            ErrorCategory.EXTERNAL_SERVICE: "An upstream service failed.",
+            ErrorCategory.SERVICE_UNAVAILABLE: "The service is temporarily unavailable.",
+            ErrorCategory.NETWORK: "The service is temporarily unavailable.",
+        }
+        return message_map.get(category, "The operation failed.")
+
 
 class ErrorBoundaryException(Exception):
     """Custom exception for error boundary system"""
