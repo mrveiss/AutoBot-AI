@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
 
@@ -458,12 +459,13 @@ class ContextOverflowProtection:
         # Reset token tracker (conversation now starts from summary)
         await self.tracker.reset_session(session_id)
 
-        # Re-add tokens for remaining messages
+        # Re-add tokens for remaining messages.
+        # #13694: was an inline `len(text) // 4` — a fourth estimator beside the
+        # three that already existed. These are the numbers the 80/90% trigger
+        # runs on until the next provider response supplies an authoritative
+        # count, so they use the shared fast path.
         for msg in messages[split_point:]:
-            # Estimate tokens (rough approximation)
-            text = msg.get("text", "")
-            estimated_tokens = len(text) // 4
-            await self.tracker.add_message_tokens(session_id, prompt_tokens=estimated_tokens)
+            await self.tracker.add_message_tokens(session_id, prompt_tokens=estimate_fast(msg.get("text", "")))
 
         return summary
 
