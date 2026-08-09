@@ -367,9 +367,17 @@
         creates: /opt/autobot/venv/bin/activate
       become_user: autobot-service
 
+    # #13744: this read docker/npu-worker/requirements.txt, a path that has
+    # never existed in the repo, so the documented native NPU deploy
+    # (SERVICE_MANAGEMENT.md: `--tags npu`) could not install anything.
+    # autobot-npu-worker/ is the native source tree — the sibling under
+    # autobot-infrastructure/.../docker/ is the container recipe, and carries
+    # the whole web stack this play installs separately. The file's relative
+    # `-e ../autobot_shared` and `-c ../constraints/shared.txt` resolve because
+    # the task above syncs the full source tree to /opt/autobot/src/.
     - name: Install Python dependencies for NPU Worker
       pip:
-        requirements: /opt/autobot/src/docker/npu-worker/requirements.txt
+        requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
         virtualenv: /opt/autobot/venv
         virtualenv_python: python3.11
       become_user: autobot-service
