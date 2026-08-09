@@ -133,16 +133,31 @@
   when: npu_log_dir != '/var/log/autobot'
   tags: ['npu', 'dirs']
 
-# #11374: Install python3.11 (OpenVINO's supported interpreter) BEFORE any
-# venv work. `ensure_venv_version` removes a wrong-version venv and the
-# `python3.11 -m venv` step recreates it — both fail if python3.11 is absent.
-# The SAME python314 role installs it via the parametrized version var,
-# reusing the deadsnakes apt logic (no duplication). Idempotent + fail-loud.
-- name: NPU worker | Install target Python interpreter (python3.11)
+# #11374: Install the target interpreter BEFORE any venv work.
+# `ensure_venv_version` removes a wrong-version venv and the `-m venv` step
+# recreates it — both fail if the interpreter is absent. The SAME python314
+# role installs it via the parametrized version var, reusing the deadsnakes
+# apt logic (no duplication). Idempotent + fail-loud.
+#
+# #13747: was pinned to 3.11 because OpenVINO shipped no 3.14 wheels (#10877).
+# That is no longer true — openvino 2026.3.0, torch 2.13.0 and numpy 2.5.1 all
+# publish cp314, and this worker's requirements.txt resolves cleanly on 3.14.
+# The NPU worker now matches the rest of the fleet, which is what unpins black's
+# target-version (#13748) — that must land only AFTER this is deployed, or the
+# reformat writes PEP 758 syntax into shared code a still-3.11 worker imports.
+#
+# The Windows NPU worker (resources/windows-npu-worker/) stays where it is: it
+# pins onnxruntime-openvino, which has no cp314 as of 2026-08-08.
+#
+# ensure_venv_version below is what makes this safe on an already-deployed box:
+# it detects the existing 3.11 venv as wrong-version and removes it, so the
+# 3.11-built OpenVINO binaries in site-packages are never carried into a 3.14
+# venv (which would fail at import, not at deploy).
+- name: NPU worker | Install target Python interpreter (python3.14)
   ansible.builtin.include_role:
     name: python314
   vars:
-    python_interpreter_version: "3.11"
+    python_interpreter_version: "3.14"
 
 - name: NPU worker | Enforce venv target Python version (env-drift fix)
   ansible.builtin.include_role:
@@ -150,11 +165,11 @@
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ npu_install_dir }}/venv"
-    venv_python: python3.11
+    venv_python: python3.14
 
 - name: Create Python virtual environment
   ansible.builtin.command:
-    cmd: python3.11 -m venv {{ npu_install_dir }}/venv
+    cmd: python3.14 -m venv {{ npu_install_dir }}/venv
     creates: "{{ npu_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership

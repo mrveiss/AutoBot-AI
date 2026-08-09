@@ -397,10 +397,19 @@ async def create_entity(
         )
 
     except ValueError as e:
+        # #13795: this used to answer "Internal server error" with a 400 — a
+        # client-error code carrying a server-error message, and the one string
+        # that says what was actually wrong was thrown away. It made a total
+        # outage of this endpoint undiagnosable from the outside. ValueError here
+        # is raised only by create_entity's own input validation (unknown
+        # entity_type, blank name), so its message is caller-facing by
+        # construction and safe to return.
         logger.warning("[%s] Validation error creating entity: %s", request_id, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=f"Invalid entity: {e}")
     except Exception as e:
-        logger.error("[%s] Error creating entity: %s", request_id, e)
+        # Generic to the caller, full traceback to the log — the reverse of the
+        # above, because an unexpected failure may carry internals (#13740).
+        logger.error("[%s] Error creating entity: %s", request_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create entity")
 
 
