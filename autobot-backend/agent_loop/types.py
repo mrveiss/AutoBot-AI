@@ -216,7 +216,15 @@ class AgentLoopConfig:
     max_retries_low: int = 5  # LOW/RETRY-class: 5 retries (transient errors)
 
     # Repetitive tool-call detection (#3255)
-    max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
+    # #13764: 2, not 3. The production seam counts on (call fingerprint,
+    # result hash) since #13590, so a repeat only counts when the result is
+    # unchanged too — a polling loop resets and is never affected by this
+    # number. What remains is an agent reproducing a result it already has,
+    # where each further call is worth nothing and the asymmetry is stark:
+    # halting one call early costs almost nothing, one call late costs the
+    # rest of the iteration budget. AUTOBOT_GUARD_MAX_IDENTICAL raises it
+    # per deployment without a code change.
+    max_identical_tool_calls: int = 2
 
     # Semantic stagnation detection (#6627)
     stagnation_window: int = 5  # Rolling window of observations to evaluate
