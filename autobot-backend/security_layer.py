@@ -17,10 +17,11 @@ import datetime
 import json
 import os
 from datetime import timezone
+from functools import lru_cache
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.auth.permissions import ADMIN_ROLES, ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from config import get_config_manager
@@ -80,25 +81,46 @@ def _parse_audit_log_entry(line: str, user: str | None = None) -> Dict[str, Any]
     return entry
 
 
+def _normalise_role(user_role: str) -> str:
+    """Canonical spelling of a role, for every lookup that keys on one (#13820).
+
+    Deprecated privileged aliases resolve to ``admin`` here too. ``check_permission``
+    already downgrades them via ``_handle_deprecated_role``, but the approval gate
+    did not — so ``god`` cleared the shell-execution check through the downgrade
+    and then found an empty permission list in ``_should_force_approval``, where no
+    approval branch could fire. A HIGH-risk command therefore ran unapproved.
+    Pre-existing; fixed here because this change makes the two gates share a
+    resolver, and leaving one of them out is what created the gap in the first
+    place. The audit entry stays with ``_handle_deprecated_role`` so a downgrade is
+    still logged exactly once.
+    """
+    normalised = str(user_role or "").strip().lower()
+    return Role.ADMIN.value if normalised in DEPRECATED_PRIVILEGED_ROLES else normalised
+
+
+@lru_cache(maxsize=64)
 def canonical_role_permissions(user_role: str) -> List[str]:
     """Permission values ``user_role`` holds in ``ROLE_PERMISSIONS`` (#13820).
 
     Case-insensitive, because every other role check in this codebase is and a
-    role arriving as ``"Admin"`` must not resolve to nothing.
+    role arriving as ``"Admin"`` must not resolve to nothing. ``check_permission``
+    normalises once for *all* its sources, so this and the configured/default
+    lookups always agree on who a role is — a normalisation applied to one source
+    of three creates a second identity that holds some grants and not others.
 
-    ``superadmin`` is mapped to ``admin``'s set: it is administrative per
-    ``ADMIN_ROLES`` but is **not** a ``Role`` enum member, so resolving it
-    directly raises. That gap already caused a live misreport in #13228 stage 2,
-    where the most privileged role in the system was reported as denied on every
-    tool. Fixing it here fixes it for every consumer at once.
+    ``superadmin`` deliberately resolves to ``[]`` here. It is administrative per
+    ``ADMIN_ROLES`` and is **not** a ``Role`` member, so mapping it onto admin's
+    set would hand it 54 permissions including shell execution that it did not
+    previously hold — a live authorisation expansion, which is not what #13820
+    decided. The real fix is making it a first-class ``Role`` with its own
+    ``ROLE_PERMISSIONS`` entry (see the TODO in ``autobot_shared.auth.permissions``);
+    tracked in #13854.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
     """
     normalised = str(user_role or "").strip().lower()
     if not normalised:
         return []
-    if normalised in ADMIN_ROLES:
-        normalised = Role.ADMIN.value
     try:
         role = Role(normalised)
     except ValueError:
@@ -402,7 +424,20 @@ class SecurityLayer:
             return True
 
         # SECURITY: Removed god mode — all access must go through proper RBAC
+        # #13820: resolve the canonical set from the role as *given*, before the
+        # deprecated-alias rebinding below. Reading it after would turn
+        # `_handle_deprecated_role`'s documented "downgrade to admin with granular
+        # permissions" into a near-no-op, handing god/root/superuser the full
+        # 54-permission admin set instead of the 8 defaults they had.
+        canonical_permissions = canonical_role_permissions(user_role)
+
         user_role = self._handle_deprecated_role(user_role, action_type, resource)
+        # One normalisation for every source below. Applying it to only one
+        # source creates a second identity for the same role that holds some
+        # grants and not others — and `_should_force_approval` resolves by exact
+        # string, so such an identity can pass the permission gate while missing
+        # the approval gate entirely.
+        user_role = _normalise_role(user_role)
 
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
@@ -414,7 +449,6 @@ class SecurityLayer:
         # Permission member is assigned, and this resolver never read it — so a
         # permission declared there was held by nobody. Every `mcp.*` grant added
         # in #13228 was in exactly that state: False for every role, admin included.
-        canonical_permissions = canonical_role_permissions(user_role)
         all_permissions = list(role_permissions) + list(default_permissions) + list(canonical_permissions)
 
         # Special handling for command execution
@@ -534,6 +568,11 @@ class SecurityLayer:
 
         Issue #281: Extracted from execute_command.
         """
+        # #13820: same normalisation as check_permission. Without it "Admin" and
+        # "superadmin" could clear the permission gate and arrive here with an
+        # empty permission list, so no approval branch could fire and a HIGH-risk
+        # command ran unapproved.
+        user_role = _normalise_role(user_role)
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
         if not role_permissions:
             role_permissions = self._get_default_role_permissions(user_role)
