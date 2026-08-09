@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
@@ -55,11 +56,30 @@ MAX_LOG_BYTES = 512 * 1024
 # one — the last run's actual verdict is sitting in the rotation, and going
 # silent all day is its own gap. So the rotation is read instead.
 #
+# That fallback is only SAFE because a started run stamps the log with
+# ``SELF_UPDATE_RUN_HEADER`` (playbook_executor._write_fresh_log_file). The
+# executor also truncates this file per run, so without the stamp "empty" would
+# have two causes — rotation, and a run that started and emitted nothing (a
+# systemd-run exec failure, or output diverted to the #12425 fallback path) —
+# and reading the rotation would report the PREVIOUS run's clean verdict over a
+# live failure. With the stamp, an empty live log means only "no run since the
+# rotation", and a header-only log is a started run with no plays: degraded, as
+# it should be.
+#
 # ``.1`` only: the stanza sets ``delaycompress``, so the most recent rotation is
-# always the uncompressed ``.1``. Older ones are ``.2.gz`` and up, and a verdict
-# from two rotations back describes a run at least two days old — staleness the
-# freshness marker below could not honestly paper over.
+# always the uncompressed ``.1`` (each cycle compresses the previous ``.1`` to
+# ``.2.gz``). ``notifempty`` is load-bearing here too — it stops logrotate
+# rotating an already-empty live log, so ``.1`` keeps holding the last real run
+# instead of ageing into ``.2.gz`` on an idle node. That also means ``.1`` can be
+# far older than a day, which is why the reason carries its mtime rather than
+# implying "yesterday".
 _ROTATED_SUFFIX = ".1"
+
+# Kept in step with services.playbook_executor.SELF_UPDATE_RUN_HEADER. Not
+# imported from it: that module pulls in ansible/inventory machinery this reader
+# has no business loading on the status path, and the value is a log format both
+# sides agree on. The pairing is pinned by a test.
+_RUN_HEADER = "SELF-UPDATE RUN STARTED"
 
 
 @dataclass
@@ -80,6 +100,10 @@ class SelfUpdateVerdict:
     #: had been truncated to zero bytes by logrotate. The verdict is real but
     #: describes a run from before the last rotation, so the reason says so.
     from_rotated_log: bool = False
+    #: When that rotation was last written (ISO-8601 UTC). ``notifempty`` means
+    #: an idle node's rotation is never superseded, so it can be far older than
+    #: a day — the reason states the date instead of implying "yesterday".
+    rotated_log_mtime: str | None = None
 
     @property
     def degraded(self) -> bool:
@@ -111,55 +135,87 @@ def _read_tail(path: Path, max_bytes: int = MAX_LOG_BYTES) -> str | None:
         return None
 
 
-def _read_log_text(log_path: Path) -> tuple[str | None, bool]:
-    """Return (text, from_rotated) for the newest log that actually has content.
+@dataclass
+class _LogSource:
+    """Which log the verdict came from, and whether it could be read at all."""
+
+    text: str | None = None
+    from_rotated: bool = False
+    rotated_age: str | None = None
+    unreadable: bool = False
+
+
+def _rotated_path(log_path: Path) -> Path:
+    return log_path.with_name(log_path.name + _ROTATED_SUFFIX)
+
+
+def _read_log_text(log_path: Path) -> _LogSource:
+    """Return the newest log that actually describes a run.
 
     Prefers the live log. When logrotate's ``copytruncate`` has emptied it
     (#13125) the most recent rotation is read instead, so the verdict keeps
     describing the last real run rather than going blank until the next one.
 
-    Returns ``(None, False)`` when neither has content — the genuine "nothing to
-    say" case, which is NOT a failure (see :attr:`SelfUpdateVerdict.degraded`).
+    ``text=None`` with ``unreadable=False`` is the genuine "nothing to say" case,
+    which is NOT a failure (see :attr:`SelfUpdateVerdict.degraded`).
     """
     if log_path.exists():
         text = _read_tail(log_path)
         if text is None:
-            return None, False
+            # A log that is a directory, or one this process cannot read, is a
+            # broken deployment — reported as its own thing rather than folded
+            # into "no log yet", which would look like a fresh box.
+            return _LogSource(unreadable=True)
         if text.strip():
-            return text, False
+            return _LogSource(text=text)
 
-    rotated = log_path.with_name(log_path.name + _ROTATED_SUFFIX)
-    if rotated.exists():
-        rotated_text = _read_tail(rotated)
-        if rotated_text and rotated_text.strip():
-            logger.info(
-                "self-update log %s is empty (logrotate copytruncate) — reading %s instead (#13125)",
-                log_path,
-                rotated,
-            )
-            return rotated_text, True
+    rotated = _rotated_path(log_path)
+    rotated_text = _read_tail(rotated) if rotated.exists() else None
+    if rotated_text and rotated_text.strip():
+        logger.info(
+            "self-update log %s is empty (logrotate copytruncate) — reading %s instead (#13125)",
+            log_path,
+            rotated,
+        )
+        return _LogSource(text=rotated_text, from_rotated=True, rotated_age=_mtime_iso(rotated))
 
-    return None, False
+    return _LogSource()
+
+
+def _mtime_iso(path: Path) -> str | None:
+    """UTC mtime of *path* as an ISO-8601 string, or None if unavailable.
+
+    The rotation can be far older than a day (``notifempty`` skips an idle
+    node's empty log), so the verdict states when it is from rather than letting
+    "rotated away" imply yesterday.
+    """
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
+    except OSError:
+        return None
 
 
 def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
     """Parse *log_path* and report whether the last self-update run completed.
 
     Never raises: a status endpoint must not fail because a log is missing or
-    malformed. A log that is missing, unreadable, or empty on both the live and
-    rotated paths yields ``log_present=False``, which is treated as "nothing to
-    say" rather than as a failure.
+    malformed. A log that is missing, or empty on both the live and rotated
+    paths, yields ``log_present=False``, which is treated as "nothing to say"
+    rather than as a failure.
     """
-    if not log_path.exists() and not log_path.with_name(log_path.name + _ROTATED_SUFFIX).exists():
-        return SelfUpdateVerdict(reason="no self-update log yet")
-
-    text, from_rotated = _read_log_text(log_path)
-    if text is None:
+    source = _read_log_text(log_path)
+    if source.unreadable:
+        # Path-free on purpose: this string reaches an API response, and an
+        # internal filesystem path does not belong in one.
+        return SelfUpdateVerdict(reason="self-update log unreadable")
+    if source.text is None:
         # #13125: an empty live log with no usable rotation is the same
         # situation as no log at all — a box that has nothing to report. It was
         # previously parsed as zero plays and reported as a run cut short.
         return SelfUpdateVerdict(reason="no self-update log yet")
 
+    text = source.text
+    from_rotated = source.from_rotated
     plays = _PLAY_HEADER.findall(text)
     has_recap = bool(_PLAY_RECAP.search(text))
 
@@ -179,6 +235,7 @@ def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
         failed_hosts=failed,
         unreachable_hosts=unreachable,
         from_rotated_log=from_rotated,
+        rotated_log_mtime=source.rotated_age,
     )
     verdict.reason = _describe(verdict)
     if verdict.degraded:
@@ -193,7 +250,12 @@ def _describe(v: SelfUpdateVerdict) -> str:
     An operator reading "completed, no failures" needs to know it describes the
     run before the last rotation, not one since.
     """
-    suffix = " (from the rotated log — the live log was rotated away)" if v.from_rotated_log else ""
+    if not v.from_rotated_log:
+        suffix = ""
+    elif v.rotated_log_mtime:
+        suffix = f" (from the log rotated at {v.rotated_log_mtime}; no self-update has run since)"
+    else:
+        suffix = " (from the rotated log; no self-update has run since)"
     if not v.complete:
         seen = ", ".join(v.plays_seen) if v.plays_seen else "none"
         return (

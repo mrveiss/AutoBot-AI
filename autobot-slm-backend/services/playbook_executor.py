@@ -16,6 +16,7 @@ import re
 import shlex
 import shutil
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
@@ -115,6 +116,13 @@ ANSIBLE_ENV_ALLOWLIST_EXACT = (
 # still alive. Mirrors the existing /var/log/autobot/provision-wizard.log
 # precedent (api/setup_wizard.py).
 SELF_UPDATE_LOG_PATH = Path(os.getenv("SLM_SELF_UPDATE_LOG_PATH", "/var/log/autobot/self-update-ansible.log"))
+
+# #13125: first line of every fresh self-update log. Two different things empty
+# this file — the per-run truncation in _write_fresh_log_file and logrotate's
+# nightly `copytruncate` — and the completion verdict has to tell them apart, so
+# a started run stamps itself. Read by services/self_update_log_reader.py; keep
+# the two in step (a shared constant rather than a literal on each side).
+SELF_UPDATE_RUN_HEADER: str = "SELF-UPDATE RUN STARTED"
 
 # #12425: /var/log/autobot is a shared dir that any autobot-* service user
 # may have created/re-created first (observed owned by the TTS worker,
@@ -590,12 +598,25 @@ class PlaybookExecutor:
         Ansible output can contain sensitive paths/values — 0600, not the
         world-readable default umask.
 
+        #13125: the file is stamped with a run-start header rather than left at
+        zero bytes. Two different things empty this file — this truncation, and
+        logrotate's ``copytruncate`` — and the completion verdict has to tell
+        them apart. Without the header, "empty" is ambiguous: a run that started
+        and produced nothing (systemd-run failed to exec, or output went to the
+        #12425 fallback path) is indistinguishable from "no run since the
+        nightly rotation", so the verdict must either cry wolf on the second or
+        stay silent about the first. The header makes it decidable, and the
+        timestamp gives the verdict something honest to say about staleness.
+
         Returns None on any OSError; the caller decides whether to fall back
         to another path or give up.
         """
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("", encoding="utf-8")
+            path.write_text(
+                f"{SELF_UPDATE_RUN_HEADER} {datetime.now(timezone.utc).isoformat()}\n",
+                encoding="utf-8",
+            )
             os.chmod(path, 0o600)
             return path
         except OSError:
