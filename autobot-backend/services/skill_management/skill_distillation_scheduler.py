@@ -26,12 +26,14 @@ turn latency.
 """
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import parse_utc_iso
 
 from .skill_extractor import SkillExtractor
 from .skill_proposer import SkillProposer
@@ -47,6 +49,18 @@ MAX_SESSIONS_PER_RUN = env_int("AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS", 10)
 # A conversation shorter than this cannot contain a workflow worth extracting;
 # SkillExtractor rejects it anyway, so skip it before paying for the load.
 MIN_MESSAGES_TO_DISTILL = env_int("AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES", 4)
+# #13695: idle-flush. Distillation was purely clock-bound, so a session ending at
+# 09:00 waited for the small hours before anything depending on distilled output
+# — the essential story, proposed skills — stopped being stale. When a pending
+# conversation has been quiet this long, run the pass now instead of waiting out
+# the interval.
+#
+# Deliberately ONE knob. The source design this came from also has a debounce
+# delay and a min/max interval band; those are excluded by #13695 and must stay
+# excluded until #13251 makes recall quality measurable. Interacting constants
+# with no metric to tune against is how that design ended up unable to tell
+# whether its memory layer helped.
+IDLE_FLUSH_S = env_int("AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S", 900)
 
 _REDIS_DB = "knowledge"
 _LEADER_KEY = "skills:distillation:leader"
@@ -134,7 +148,12 @@ class SkillDistillationScheduler:
                     await asyncio.sleep(self._lease.poll_s)
                     continue
                 await self._lease.update_leadership()
-                if self._lease.is_leader and elapsed >= DISTILLATION_INTERVAL_S:
+                # #13695: the interval remains the backstop — a session that never
+                # goes idle, or a worker that dies mid-flush, must still be swept.
+                # Idle-flush only makes the pass happen *sooner*; it runs the same
+                # run_once, under the same lease, against the same cursor, so a
+                # race with the interval cannot double-process or skip.
+                if self._lease.is_leader and (elapsed >= DISTILLATION_INTERVAL_S or await self._has_idle_pending()):
                     await self.run_once()
                     elapsed = 0
 
@@ -207,6 +226,38 @@ class SkillDistillationScheduler:
         except Exception as exc:
             logger.error("Skill distillation failed for conversation %s: %s", session_id, exc)
             return None
+
+    async def _has_idle_pending(self) -> bool:
+        """True when an undistilled conversation has been quiet past the threshold (#13695).
+
+        Reuses the durable cursor rather than tracking its own idea of
+        "unprocessed": a conversation counts only if it is past the cursor *and*
+        has not been touched for ``IDLE_FLUSH_S``. Cheap enough to run each
+        leader cycle — it is the same listing the pass already performs.
+
+        Never raises into the leader loop; a failure here simply means the
+        interval backstop is what triggers the pass, which is the pre-#13695
+        behaviour.
+        """
+        if IDLE_FLUSH_S <= 0:
+            return False
+        try:
+            pending = await self._select_pending_sessions(await self._read_cursor())
+            if not pending:
+                return False
+            newest = max(item["updated_at"] for item in pending)
+            idle_for = (datetime.now(tz=timezone.utc) - parse_utc_iso(newest)).total_seconds()
+            if idle_for < IDLE_FLUSH_S:
+                return False
+            logger.info(
+                "Skill distillation idle-flush: %d conversation(s) pending, quiet for %.0fs (#13695)",
+                len(pending),
+                idle_for,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Idle-flush check failed, falling back to the interval: %s", exc)
+            return False
 
     async def _select_pending_sessions(self, cursor: str | None) -> List[Dict[str, Any]]:
         """Conversations updated after ``cursor``, oldest first, capped per run."""
