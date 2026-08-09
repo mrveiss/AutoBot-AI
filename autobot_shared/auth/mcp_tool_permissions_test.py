@@ -70,9 +70,9 @@ def test_every_bridge_has_a_default():
     """A bridge with no default leaves its whole tool surface undeclared."""
     bridges = {p.stem for p in _bridge_files()}
 
-    assert not (bridges - set(BRIDGE_DEFAULT_PERMISSIONS)), (
-        f"bridges with no declared default: {sorted(bridges - set(BRIDGE_DEFAULT_PERMISSIONS))}"
-    )
+    assert not (
+        bridges - set(BRIDGE_DEFAULT_PERMISSIONS)
+    ), f"bridges with no declared default: {sorted(bridges - set(BRIDGE_DEFAULT_PERMISSIONS))}"
 
 
 def test_the_bridge_sources_are_actually_being_read():
@@ -86,9 +86,27 @@ def test_the_bridge_sources_are_actually_being_read():
 # Verbs that mean a tool changes state, sends a body, or drives input. A tool
 # named with one of these must carry an EXPLICIT entry — inheriting its bridge's
 # read-level baseline is the silent under-grant this issue exists to prevent.
-_MUTATING = ("write", "delete", "remove", "create", "edit", "move", "execute", "set",
-             "post", "put", "patch", "click", "type", "fill", "hover", "evaluate",
-             "flush", "crawl", "add_")
+_MUTATING = (
+    "write",
+    "delete",
+    "remove",
+    "create",
+    "edit",
+    "move",
+    "execute",
+    "set",
+    "post",
+    "put",
+    "patch",
+    "click",
+    "type",
+    "fill",
+    "hover",
+    "evaluate",
+    "flush",
+    "crawl",
+    "add_",
+)
 
 
 @pytest.mark.parametrize("bridge", [p.stem for p in _bridge_files()])
@@ -101,9 +119,7 @@ def test_state_changing_tools_carry_an_explicit_declaration(bridge):
     """
     path = _BRIDGE_DIR / f"{bridge}.py"
     inheriting = [
-        t
-        for t in sorted(_declared_tools(path))
-        if any(verb in t for verb in _MUTATING) and t not in TOOL_PERMISSIONS
+        t for t in sorted(_declared_tools(path)) if any(verb in t for verb in _MUTATING) and t not in TOOL_PERMISSIONS
     ]
 
     assert not inheriting, f"{bridge}: mutating tools inheriting a read default: {inheriting}"
