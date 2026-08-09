@@ -792,13 +792,22 @@ export function useCodeSync() {
    *
    * Uses rawRequest so the 409 (restart in flight) detail is surfaced verbatim
    * in `error.value` (the convenience `post` would prefix "HTTP 409: ").
+   *
+   * #13851: `force` overrides the deletion guard. A resolve is a delete-style
+   * rsync, so the backend refuses when it would remove deployed paths that
+   * source does not have and names them in the job message. Without this
+   * parameter the GUI would have no way past a refusal — and updates must go
+   * through this builtin updater.
    */
-  async function startResolveDriftAsync(component: string): Promise<DriftResolveJobResponse | null> {
+  async function startResolveDriftAsync(
+    component: string,
+    force = false
+  ): Promise<DriftResolveJobResponse | null> {
     error.value = null
     try {
       const response = await slmApiClient.rawRequest('/code-sync/drift/resolve-async', {
         method: 'POST',
-        body: { component },
+        body: { component, force },
       })
       if (!response.ok) {
         const detail = await readDetail(response)

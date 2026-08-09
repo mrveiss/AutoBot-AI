@@ -386,7 +386,7 @@ def test_run_component_resolve_job_shared_sync_failure() -> None:
         patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch(
             "api.code_sync._ensure_autobot_shared_synced",
-            AsyncMock(return_value=(False, "autobot_shared-first: resync failed before autobot-slm-backend")),
+            AsyncMock(return_value=(False, "autobot_shared-first: resync failed before autobot-slm-backend", [])),
         ),
         patch("api.code_sync._rsync_component_local", rsync_mock),
         patch("api.code_sync._run_post_sync_steps", AsyncMock()),

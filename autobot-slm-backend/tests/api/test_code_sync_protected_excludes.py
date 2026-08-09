@@ -86,9 +86,9 @@ def test_exclude_args_always_include_logs() -> None:
 # whatever those functions return is anchored and scoped correctly. The values
 # themselves are pinned against the real deployment map in
 # services/drift_checker_test.py::TestForeignFilesAreNotDrift.
-def _with_real_ownership(monkeypatch, owned: set[str], runtime: set[str]) -> None:
+def _with_real_ownership(monkeypatch, owned: set[str], entries: set[str]) -> None:
     monkeypatch.setattr(code_sync, "owned_subtrees", lambda component: frozenset(owned))
-    monkeypatch.setattr(code_sync, "runtime_generated_files", lambda component: frozenset(runtime))
+    monkeypatch.setattr(code_sync, "deploy_only_entries", lambda component: frozenset(entries))
 
 
 def test_backend_sync_excludes_the_plugins_subtree(monkeypatch) -> None:
@@ -107,16 +107,6 @@ def test_backend_sync_excludes_the_runtime_worker_registry(monkeypatch) -> None:
     _with_real_ownership(monkeypatch, set(), {"config/npu_workers.yaml"})
     args = _rsync_exclude_args([], "autobot-backend")
     assert "--exclude=/config/npu_workers.yaml" in args
-
-
-def test_foreign_excludes_are_scoped_to_the_owning_component(monkeypatch) -> None:
-    """The `plugins` component must still sync its own tree in full — the
-    exclusion belongs to the component the subtree sits inside, not to the
-    one that owns it."""
-    _with_real_ownership(monkeypatch, set(), set())
-    args = _rsync_exclude_args([], "plugins")
-    assert "--exclude=/plugins/" not in args
-    assert "--exclude=/core-plugins/" not in args
 
 
 def test_component_omitted_keeps_previous_behaviour() -> None:

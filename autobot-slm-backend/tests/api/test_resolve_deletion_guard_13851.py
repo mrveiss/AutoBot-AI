@@ -23,8 +23,10 @@ subject of the test rather than an accident of one.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import shutil
 import sys
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -53,6 +55,55 @@ _needs_rsync = pytest.mark.skipif(not _HAS_RSYNC, reason="rsync not installed on
 # so nothing outside the test's own directory is reachable. A faked rsync would
 # verify only that the parser matches the fake.
 _REAL_SUBPROCESS_EXEC = asyncio.create_subprocess_exec
+
+
+def _load_real_drift_checker():
+    """Real-load services/drift_checker.py, bypassing the conftest MagicMock.
+
+    The root conftest stubs ``services.*``, so ``owned_subtrees`` and
+    ``deploy_only_entries`` as seen by api.code_sync return an empty iterator —
+    a preview test against those stubs would pass no matter what the deployment
+    map says. These tests are specifically about the real map (does the backend
+    protect the plugins subtree? the shared symlink?), so they need the real
+    module. Loaded standalone, with the dependency-free deploy_artifacts real
+    too, and never installed into sys.modules.
+    """
+    backend_root = Path(__file__).resolve().parents[2]
+    services_dir = backend_root / "services"
+
+    da_spec = importlib.util.spec_from_file_location(
+        "services.deploy_artifacts", services_dir / "deploy_artifacts.py"
+    )
+    da = importlib.util.module_from_spec(da_spec)
+    da_spec.loader.exec_module(da)
+
+    gt_stub = types.ModuleType("services.git_tracker")
+    gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"
+
+    saved = {k: sys.modules.get(k) for k in ("services.deploy_artifacts", "services.git_tracker")}
+    sys.modules["services.deploy_artifacts"] = da
+    sys.modules["services.git_tracker"] = gt_stub
+    try:
+        spec = importlib.util.spec_from_file_location("_drift_checker_guard_test", services_dir / "drift_checker.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = value
+    return module
+
+
+_REAL_DC = _load_real_drift_checker()
+
+
+@pytest.fixture
+def real_deployment_map(monkeypatch):
+    """Point code_sync's exclude builder at the REAL component ownership map."""
+    monkeypatch.setattr(code_sync, "owned_subtrees", _REAL_DC.owned_subtrees)
+    monkeypatch.setattr(code_sync, "deploy_only_entries", _REAL_DC.deploy_only_entries)
 
 
 def real_rsync():
@@ -214,3 +265,81 @@ def test_blocked_path_list_is_capped_with_a_remainder_count() -> None:
 
 def test_no_blocked_paths_leaves_the_message_alone() -> None:
     assert _with_blocked_paths("Refusing.", []) == "Refusing."
+
+
+# ---------------------------------------------------------------------------
+# #13851 review: the guard must not fire on entries the DEPLOY itself creates.
+#
+# A refusal an operator cannot avoid is worse than no guard: it trains everyone
+# to pass force=true, which switches the guard off for the deletions it exists
+# to catch. These run the real preview against a tree shaped like a deployed
+# backend and assert it comes back clean.
+# ---------------------------------------------------------------------------
+
+
+@_needs_rsync
+def test_backend_preview_is_clean_with_only_the_shared_symlink(tmp_path, real_deployment_map) -> None:
+    """<backend>/autobot_shared is a symlink created by
+    _ensure_autobot_shared_symlink (#10912) and absent from code_source. Before
+    the exclude, every unforced backend resolve refused over it."""
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    _write(src / "main.py", b"same")
+    _write(dep / "main.py", b"same")
+    (tmp_path / "shared").mkdir()
+    (dep / "autobot_shared").symlink_to(tmp_path / "shared", target_is_directory=True)
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-backend", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, [])
+    assert (dep / "autobot_shared").is_symlink(), "the symlink must survive the preview"
+
+
+@_needs_rsync
+def test_backend_preview_is_clean_with_plugins_and_runtime_state(tmp_path, real_deployment_map) -> None:
+    """The live-host shape that produced the 55-deletion dry run: the plugin
+    subtree another component owns, the audit logs, and the worker registry."""
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    _write(src / "main.py", b"same")
+    _write(dep / "main.py", b"same")
+    _write(dep / "plugins" / "core-plugins" / "hello" / "main.py", b"plugin code")
+    _write(dep / "logs" / "audit" / "audit_2026-08-03.jsonl", b"{}")
+    _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-backend", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, [])
+
+
+@_needs_rsync
+def test_npu_worker_preview_protects_the_rendered_script(tmp_path, real_deployment_map) -> None:
+    """npu-worker.py is rendered from a .j2 in the role and has no counterpart
+    in the component's source dir, so a deleting sync removes the running
+    worker script."""
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    src.mkdir()
+    _write(dep / "npu-worker.py", b"# rendered by ansible\n")
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-npu-worker", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, [])
+
+
+@_needs_rsync
+def test_a_genuinely_stale_file_is_still_reported(tmp_path, real_deployment_map) -> None:
+    """The protections must not blanket everything — an ordinary leftover the
+    component's source really does not have is exactly what to refuse on."""
+    src = tmp_path / "src"
+    dep = tmp_path / "dep"
+    src.mkdir()
+    _write(dep / "removed_module.py", b"old code")
+
+    cmd = _rsync_local_cmd(str(tmp_path), "autobot-backend", [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    assert (ok, deletions) == (True, ["removed_module.py"])

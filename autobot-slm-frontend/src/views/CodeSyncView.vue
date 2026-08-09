@@ -90,6 +90,12 @@ const resolveDriftTransientErrors = ref(0)
 const RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS = 90 // ~3 min at 2s intervals
 const RESOLVE_DRIFT_LOST_CONTACT_ERRORS = 30 // ~1 min before "lost contact" banner
 const resolveDriftLostContact = ref(false)
+// #13851: the resolve refused because it would have deleted deployed paths that
+// source does not have. The paths are inside the job message (the job row
+// carries no structured field); this flag only decides whether to offer the
+// override, so it keys off the backend's own refusal wording.
+const RESOLVE_BLOCKED_MARKER = 'would be DELETED'
+const resolveDriftBlocked = ref(false)
 let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // Clear stale results when the user switches to a different component (#3433)
@@ -598,9 +604,14 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   if (result.status === 'completed' && result.success) {
     successMessage.value = result.message || `Resynced ${result.component} from code_source`
     await handleCheckDrift()
-  } else {
-    codeSync.setError(result.message || 'Drift resolve job failed')
+    return
   }
+  // #13851: a refusal is not a failure — the resolve would have DELETED
+  // deployed paths that source does not have, and it named them in the
+  // message. Surfacing it as a plain error would leave the operator with no
+  // way forward inside the GUI, which is the only sanctioned updater.
+  resolveDriftBlocked.value = (result.message || '').includes(RESOLVE_BLOCKED_MARKER)
+  codeSync.setError(result.message || 'Drift resolve job failed')
 }
 
 /**
@@ -648,13 +659,16 @@ function _scheduleResolveDriftPoll(jobId: string): void {
 // #7149/#11303: Resync the selected component from code_source/ as an async
 // job so the button returns immediately instead of blocking on the rsync +
 // post-sync steps (which can take 40-120s and may restart the component).
-async function handleResolveDrift(): Promise<void> {
+async function handleResolveDrift(force = false): Promise<void> {
   if (!driftReport.value?.drift_detected) return
   codeSync.clearError()
   resolveDriftLostContact.value = false
   resolveDriftJob.value = null
+  // #13851: a previous refusal is answered by this attempt — clear it so a
+  // stale "would delete N paths" banner cannot outlive the run it described.
+  resolveDriftBlocked.value = false
   isResolvingDrift.value = true
-  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value)
+  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value, force)
   if (!job) {
     isResolvingDrift.value = false
     return
@@ -1394,7 +1408,7 @@ onUnmounted(() => {
         <!-- Action row: Resync (#7149) + Toggle details -->
         <div v-if="driftReport.drift_detected" class="flex items-center gap-3 mb-3">
           <button
-            @click="handleResolveDrift"
+            @click="handleResolveDrift()"
             :disabled="isResolvingDrift || isDriftLoading"
             class="btn btn-primary flex items-center gap-2 text-sm"
             :title="$t('codeSyncView.runRsyncFromTo', { source: driftReport.source_dir, dest: driftReport.deployed_dir })"
@@ -1431,6 +1445,33 @@ onUnmounted(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {{ resolveDriftJob.post_steps[resolveDriftJob.post_steps.length - 1] || $t('codeSyncView.resyncing') }}
+        </div>
+
+        <!--
+          #13851: the resolve refused rather than deleting. The message names
+          the paths; this offers the documented override so the operator is not
+          stuck — the builtin updater is the only sanctioned path.
+        -->
+        <div
+          v-if="resolveDriftBlocked"
+          class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3"
+        >
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
+              <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
+              <button
+                @click="handleResolveDrift(true)"
+                :disabled="isResolvingDrift"
+                class="mt-2 text-sm font-medium text-red-800 underline hover:text-red-900"
+              >
+                {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- #11303: Lost contact banner — component's own service restart drops the connection -->

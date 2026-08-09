@@ -72,9 +72,9 @@ _FRONTEND_EXTENSIONS = _dc._FRONTEND_EXTENSIONS
 _FRONTEND_COMPONENTS = _dc._FRONTEND_COMPONENTS
 comparable_extensions = _dc.comparable_extensions
 owned_subtrees = _dc.owned_subtrees
-runtime_generated_files = _dc.runtime_generated_files
+deploy_only_entries = _dc.deploy_only_entries
 _RENDERED_FILES = _dc._RENDERED_FILES
-_RUNTIME_GENERATED_FILES = _dc._RUNTIME_GENERATED_FILES
+_DEPLOY_ONLY_ENTRIES = _dc._DEPLOY_ONLY_ENTRIES
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +240,7 @@ class TestComputeDrift:
         assert entry["source_checksum"] is not None
         assert entry["deployed_checksum"] is None
 
-    def test_deployed_only_file(self, tmp_path):
+    def test_file_present_only_on_the_host_is_untracked(self, tmp_path):
         """A file that exists only in deployed dir → 'untracked' (#13851).
 
         It was 'deployed_only' and counted as drift, which made a delete-style
@@ -1033,7 +1033,7 @@ class TestForeignFilesAreNotDrift:
         _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
         drifted, _ = compute_drift(str(src), str(dep), "autobot-backend")
         assert drifted == []
-        assert runtime_generated_files("autobot-backend") == frozenset({"config/npu_workers.yaml"})
+        assert "config/npu_workers.yaml" in _DEPLOY_ONLY_ENTRIES["autobot-backend"]
 
     def test_runtime_exclusion_is_component_scoped(self, tmp_path):
         """The same relative path under a different component is ordinary
@@ -1158,3 +1158,102 @@ class TestUntrackedIsNotDrift:
         assert report["drift_detected"] is True
         assert [e["path"] for e in report["drifted_files"]] == ["new_module.py"]
         assert report["untracked_files"] == []
+
+
+class TestDeployOnlyEntriesAreProtectedFromDeletion:
+    """#13851 review: what the drift walk skips and what the sync must not
+    delete are two different sets, and both have to be right.
+
+    A resolve refuses on ANY would-be deletion, so an entry the deploy itself
+    creates — and that source therefore never has — makes the guard fire on
+    every unforced run. That trains operators to pass force, which turns the
+    guard off for the deletions it exists to catch.
+    """
+
+    def test_backend_trees_protect_the_autobot_shared_symlink(self):
+        """_ensure_autobot_shared_symlink creates <backend>/autobot_shared and
+        the deploy sync used to remove it every time (#10912). It is absent
+        from code_source, so an unprotected resolve refuses forever."""
+        for component in ("autobot-backend", "autobot-slm-backend"):
+            assert "autobot_shared" in deploy_only_entries(component), component
+
+    def test_rendered_artifacts_are_protected_but_still_compared(self, tmp_path, monkeypatch):
+        """npu-worker.py has no counterpart in the component's source dir, so a
+        deleting sync would remove the running worker script — but the drift
+        walk must still compare it against its template."""
+        assert "npu-worker.py" in deploy_only_entries("autobot-npu-worker")
+
+        repo = tmp_path / "repo"
+        template = "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2"
+        _write(repo / template, b'ROUTE = "/infer"\n')
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", b'ROUTE = "/predict"\n')
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-npu-worker")
+        assert [e["path"] for e in drifted] == ["npu-worker.py"], "protection must not silence the walk"
+
+    def test_deploy_only_entries_are_not_compared(self, tmp_path):
+        """The symlink and the runtime registry are skipped by the walk itself,
+        so they never reach the untracked list either."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
+        report = build_drift_report(str(src), str(dep), "autobot-backend")
+        assert report["drifted_files"] == []
+        assert report["untracked_files"] == []
+
+
+class TestRenderedComparisonPrefersChecksum:
+    """#13851 review: npu-worker.py.j2 contains ZERO Jinja expressions, so it
+    renders byte-identically. A raw checksum is the stronger check there — the
+    AST digest discards comment-only and formatting drift in a file that runs
+    on the host."""
+
+    TEMPLATE_REL = "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2"
+
+    def _setup(self, tmp_path, monkeypatch, template_body, deployed_body):
+        repo = tmp_path / "repo"
+        _write(repo / self.TEMPLATE_REL, template_body)
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", deployed_body)
+        return compute_drift(str(src), str(dep), "autobot-npu-worker")
+
+    def test_comment_only_drift_is_reported(self, tmp_path, monkeypatch):
+        """An AST-only comparison calls these identical. For a template with no
+        Jinja expressions they are genuinely different bytes on the host."""
+        drifted, _ = self._setup(
+            tmp_path,
+            monkeypatch,
+            b'ROUTE = "/infer"  # canonical\n',
+            b'ROUTE = "/infer"  # hand-edited on the box\n',
+        )
+        assert [e["path"] for e in drifted] == ["npu-worker.py"]
+
+    def test_identical_bytes_are_clean(self, tmp_path, monkeypatch):
+        body = b'ROUTE = "/infer"\n'
+        drifted, total = self._setup(tmp_path, monkeypatch, body, body)
+        assert (drifted, total) == ([], 1)
+
+    def test_substituted_value_still_reads_clean(self, tmp_path, monkeypatch):
+        """The bytes differ, so the render-invariant fallback decides — and a
+        substituted install dir is not drift (#12886)."""
+        drifted, _ = self._setup(
+            tmp_path,
+            monkeypatch,
+            b'INSTALL = "{{ npu_install_dir }}"\nROUTE = "/infer"\n',
+            b'INSTALL = "/opt/autobot/autobot-npu-worker"\nROUTE = "/infer"\n',
+        )
+        assert drifted == []
+
+    def test_real_template_has_no_jinja_expressions_today(self):
+        """Pins the premise of the checksum-first order. If a `{{ }}` is added,
+        the fallback takes over and this assertion is the place to say so."""
+        repo_root = Path(__file__).resolve().parents[2]
+        text = (repo_root / self.TEMPLATE_REL).read_text(encoding="utf-8")
+        assert "{{" not in text and "{%" not in text

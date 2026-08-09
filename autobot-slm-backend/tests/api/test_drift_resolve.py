@@ -304,7 +304,7 @@ def test_shared_sync_failure_fails_resolve_and_skips_component_rsync(stub_user):
     rsync_mock = AsyncMock(return_value=(True, ""))
     shared_patch = patch(
         "api.code_sync._ensure_autobot_shared_synced",
-        AsyncMock(return_value=(False, "autobot_shared-first: resync failed")),
+        AsyncMock(return_value=(False, "autobot_shared-first: resync failed", [])),
     )
     rsync_patch = patch("api.code_sync._rsync_component_local", rsync_mock)
     with src_patch, dep_patch, shared_patch, rsync_patch, _noop_post_sync():
@@ -560,7 +560,7 @@ def test_force_proceeds_without_previewing(stub_user):
         patch.object(_CS, "_preview_rsync_deletions", preview_mock),
         # the autobot_shared-first sync (#11611) rsyncs too — patched out so the
         # assertion below is about the COMPONENT's own sync.
-        patch.object(_CS, "_ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch.object(_CS, "_ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch.object(_CS, "_rsync_component_local", rsync_mock),
         _noop_post_sync(),
         patch.object(_CS, "_advance_node_version_if_fully_synced", AsyncMock()),
@@ -579,9 +579,12 @@ def test_shared_first_sync_is_guarded_too(stub_user):
     rsync_mock = AsyncMock(return_value=(True, ""))
 
     # Per-component dirs (not the shared _setup_dir_mocks constant) so the two
-    # previews are distinguishable by the paths in their argv.
+    # previews are distinguishable. Keyed on the SOURCE/DEST arguments (the last
+    # two), not on the whole argv: every backend's excludes now mention
+    # autobot_shared too (#13851 protects the symlink), so an `any(...)` match
+    # would fire on the component's own preview.
     async def _fake_preview(cmd):
-        if any("autobot_shared" in arg for arg in cmd):
+        if "autobot_shared" in cmd[-1]:
             return True, ["stale_helper.py"], ""
         return True, [], ""
 
