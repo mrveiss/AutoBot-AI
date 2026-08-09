@@ -23,6 +23,7 @@ from orchestration.agent_registry import (
     DEFAULT_FORBIDDEN_TOOLS,
     agent_type_aliases,
     get_default_agents,
+    is_unbounded_agent_id,
     resolve_agent_id,
     resolve_forbidden_tools,
 )
@@ -39,9 +40,26 @@ def test_an_unknown_agent_id_is_bounded_not_unleashed():
     assert forbidden == DEFAULT_FORBIDDEN_TOOLS
 
 
-def test_the_default_boundary_covers_the_tools_the_boundary_exists_for():
-    """Falling closed is only meaningful if it lands on the infra/shell set."""
-    assert set(INFRA_AND_SHELL_TOOLS) <= DEFAULT_FORBIDDEN_TOOLS
+def test_the_default_is_stricter_than_any_profile_not_merely_equal_to_them():
+    """The property that makes falling closed worth the name.
+
+    A misidentified agent must not land on the *typical* profile boundary: that set
+    is only infra/shell, so it would still leave ``terminal``, ``write_file``,
+    ``delete_file``, ``git_force_push`` and ``code_interpreter`` reachable. The
+    default has to dominate every real profile's manifest, strictly.
+    """
+    profile_manifests = [frozenset(p.forbidden_work) for p in get_default_agents() if p.forbidden_work]
+
+    assert profile_manifests, "no bounded profiles — this test would pass vacuously"
+    for manifest in profile_manifests:
+        assert manifest < DEFAULT_FORBIDDEN_TOOLS, "the default is no stricter than a profile"
+
+
+@pytest.mark.parametrize("tool", ["terminal", "write_file", "delete_file", "git_force_push", "code_interpreter"])
+def test_the_default_covers_what_the_profile_default_leaves_open(tool):
+    """Named explicitly: these are the tools an unknown id reached under INFRA_AND_SHELL."""
+    assert tool not in set(INFRA_AND_SHELL_TOOLS)
+    assert tool in DEFAULT_FORBIDDEN_TOOLS
 
 
 def test_no_agent_id_stays_unbounded():
@@ -51,7 +69,16 @@ def test_no_agent_id_stays_unbounded():
 
 
 def test_a_registered_bounded_agent_keeps_its_declared_manifest():
-    assert resolve_forbidden_tools("research_agent") == frozenset(INFRA_AND_SHELL_TOOLS)
+    """Reads the profile — it does not just hand back the fallback.
+
+    Only discriminating because the default is now strictly wider than any profile
+    manifest: delete the profile lookup and this fails, where against an equal
+    default it would have passed either way.
+    """
+    resolved = resolve_forbidden_tools("research_agent")
+
+    assert resolved == frozenset(INFRA_AND_SHELL_TOOLS)
+    assert resolved != DEFAULT_FORBIDDEN_TOOLS
 
 
 @pytest.mark.parametrize("executor", ["system_agent", "system_commands"])
@@ -74,7 +101,7 @@ def test_a_resolved_id_logs_nothing(caplog):
     with caplog.at_level("WARNING"):
         resolve_forbidden_tools("research_agent")
 
-    assert "GH#13588" not in "\n".join(r.getMessage() for r in caplog.records)
+    assert not [r for r in caplog.records if "research_agent" in r.getMessage()]
 
 
 # ------------------------------------------------- "unbounded" is declared, not inferred
@@ -129,14 +156,90 @@ def test_every_db_namespace_agent_id_is_bounded():
 
     ``api/agent_config.py`` seeds 29 agent ids; only a handful share a name with a
     capability profile. Before this fix the other ~22 resolved to no boundary at all.
+
+    Asserted per-id against the *expected source* of the manifest, not merely
+    "non-empty": an id with a profile must get that profile's manifest, and one
+    without must get the fallback. A blanket truthiness check would pass even if the
+    profile lookup were deleted, since both answers are non-empty.
     """
     from api.agent_config import DEFAULT_AGENT_CONFIGS
 
-    unbounded_ids = sorted(p.agent_id for p in get_default_agents() if p.unbounded)
-    unexpected = sorted(
-        agent_id
-        for agent_id in DEFAULT_AGENT_CONFIGS
-        if agent_id not in unbounded_ids and not resolve_forbidden_tools(agent_id)
-    )
+    mismatched = {}
+    for agent_id in DEFAULT_AGENT_CONFIGS:
+        resolved = resolve_agent_id(agent_id)
+        if resolved is not None and is_unbounded_agent_id(agent_id):
+            expected = frozenset()
+        elif resolved is not None:
+            expected = frozenset(next(p for p in get_default_agents() if p.agent_id == resolved).forbidden_work)
+        else:
+            expected = DEFAULT_FORBIDDEN_TOOLS
+        actual = resolve_forbidden_tools(agent_id)
+        if actual != expected:
+            mismatched[agent_id] = (sorted(expected), sorted(actual))
 
-    assert unexpected == [], f"DB-namespace agent ids with no tool boundary: {unexpected}"
+    assert mismatched == {}, f"DB-namespace ids resolving to the wrong manifest: {mismatched}"
+
+
+def test_the_db_namespace_check_is_not_vacuous():
+    """Both branches of the test above must actually occur, or it proves little."""
+    from api.agent_config import DEFAULT_AGENT_CONFIGS
+
+    with_profile = [a for a in DEFAULT_AGENT_CONFIGS if resolve_agent_id(a) is not None]
+    without_profile = [a for a in DEFAULT_AGENT_CONFIGS if resolve_agent_id(a) is None]
+
+    assert with_profile, "no DB id resolved to a profile"
+    assert without_profile, "every DB id resolved — the fallback branch is never exercised"
+
+
+# ------------------------------------------------- executors are not delegable
+
+
+def test_an_executor_is_recognised_as_unbounded():
+    assert is_unbounded_agent_id("system_agent") is True
+    assert is_unbounded_agent_id("system_commands") is True
+
+
+@pytest.mark.parametrize("agent_id", ["research_agent", "no_such_agent", None, ""])
+def test_everything_else_is_not_unbounded(agent_id):
+    """An id nobody recognises is bounded, not an executor — the two must not merge."""
+    assert is_unbounded_agent_id(agent_id) is False
+
+
+@pytest.mark.asyncio
+async def test_delegation_refuses_an_executor_agent_type():
+    """A bounded agent must not obtain an unbounded subagent by naming one.
+
+    ``agent_type`` arrives straight from the model's tool call and ``delegate`` is not
+    itself an infra/shell tool, so a parent with a manifest can still call it. Without
+    this refusal the subagent's boundary is whatever the parent asked for.
+    """
+    from chat_workflow.delegation import run_delegated_subtask
+
+    with pytest.raises(ValueError, match="unbounded"):
+        await run_delegated_subtask("do a thing", agent_type="system_agent")
+
+
+@pytest.mark.asyncio
+async def test_delegation_still_accepts_an_unregistered_agent_type():
+    """Unknown ids are already safe — they resolve to the default boundary.
+
+    Refusing them too would turn a typo into a hard failure for no security gain, so
+    the check is narrowly about executors.
+    """
+    from chat_workflow import delegation
+
+    seen = {}
+
+    async def _fake_engine(task, agent_type, depth):
+        seen.update(task=task, agent_type=agent_type, depth=depth)
+        return "ok"
+
+    original = delegation._ENGINES.get("claude_code")
+    delegation._ENGINES["claude_code"] = _fake_engine
+    try:
+        assert await delegation.run_delegated_subtask("t", agent_type="typo_agent") == "ok"
+    finally:
+        if original is not None:
+            delegation._ENGINES["claude_code"] = original
+
+    assert seen["agent_type"] == "typo_agent"

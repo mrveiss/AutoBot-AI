@@ -12,7 +12,7 @@ Contains agent registration, lookup, and management functionality.
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS, match_tool_name
+from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS, SENSITIVE_TOOLS, match_tool_name
 
 from .types import AgentCapability, AgentProfile
 
@@ -484,11 +484,17 @@ def get_default_capability_registry() -> AgentCapabilityRegistry:
     return _default_registry
 
 
-# GH#13588: the boundary an unrecognised agent id falls back to. Every bounded
-# profile in the registry declares exactly this manifest, so an unknown id lands on
-# the same restriction its intended profile would have imposed — a typo or a
-# wrong-namespace id costs precision, never containment.
-DEFAULT_FORBIDDEN_TOOLS: "frozenset[str]" = frozenset(_INFRA_AND_SHELL_TOOLS)
+# GH#13588: the boundary an unrecognised agent id falls back to.
+#
+# Deliberately the *approval* catalogue and not ``INFRA_AND_SHELL_TOOLS`` — which is
+# what every bounded profile declares. A profile's manifest is a considered
+# least-privilege decision for a known role; this is the opposite situation, an id
+# nobody has decided anything about. Falling back to the profile default would still
+# leave ``terminal``, ``write_file``, ``delete_file``, ``git_force_push``,
+# ``http_delete`` and ``code_interpreter`` reachable, which is not "closed" in any
+# sense worth the name. A misidentified agent is therefore *more* restricted than
+# any real one, which is the correct direction for a case that should not happen.
+DEFAULT_FORBIDDEN_TOOLS: "frozenset[str]" = frozenset(SENSITIVE_TOOLS)
 
 _agent_type_aliases: "Dict[str, str] | None" = None
 
@@ -528,6 +534,22 @@ def resolve_agent_id(agent_id: str) -> "str | None":
     if agent_id in get_default_capability_registry():
         return agent_id
     return agent_type_aliases().get(agent_id)
+
+
+def is_unbounded_agent_id(agent_id: "str | None") -> bool:
+    """True when *agent_id* names a profile that declares itself unbounded (GH#13588).
+
+    For callers that must *refuse* an executor rather than merely resolve one — a
+    manifest of ``frozenset()`` alone cannot tell "designated executor" apart from
+    "no agent identity", and those two want opposite handling.
+    """
+    if not agent_id:
+        return False
+    resolved = resolve_agent_id(agent_id)
+    if resolved is None:
+        return False
+    profile = get_default_capability_registry().get(resolved)
+    return bool(profile is not None and profile.unbounded)
 
 
 def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
