@@ -336,6 +336,9 @@ def _is_expected_drift(
         owned: Pre-computed ``owned_subtrees(component)``. The caller passes it
             once per walk rather than per file — recomputing it inside a
             several-thousand-file loop rebuilt the same frozenset every time.
+            REQUIRED when *component* is given: an empty frozenset passed as a
+            "harmless default" would silently switch the subtree check off and
+            bring back the 17 false plugin entries, so it is not defaulted.
 
     Returns:
         True when the path represents expected (non-actionable) drift.
@@ -351,8 +354,9 @@ def _is_expected_drift(
     # still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
         return True
-    subtrees = owned_subtrees(component) if owned is None else owned
-    return any(rel_path == sub or rel_path.startswith(sub + "/") for sub in subtrees)
+    if owned is None:
+        raise ValueError("owned_subtrees must be supplied when component is given (#13851)")
+    return any(rel_path == sub or rel_path.startswith(sub + "/") for sub in owned)
 
 
 def _file_checksum(path: Path, block_size: int = 65536) -> str:

@@ -204,8 +204,23 @@ async def reconcile_stale_component_sync_jobs() -> Tuple[int, List[Tuple[str, st
     return count, requeued
 
 
-async def _fail_resolve_job(job_id: str, message: str) -> None:
-    """Mark a component-resolve job failed with *message* (#13851).
+# #13851: a resolve the guard refused is NOT a failed resolve — nothing ran and
+# the host is untouched, whereas "failed" means the run started and its outcome
+# is unknown. It is also the one terminal state that has a next step for the
+# operator (review the paths, then force), so the GUI needs to tell them apart
+# without pattern-matching on message text. Fits the status column's String(20),
+# so no migration; the poll loop already treats anything that is not
+# pending/running as terminal.
+RESOLVE_STATUS_BLOCKED: str = "blocked"
+
+
+async def _fail_resolve_job(
+    job_id: str,
+    message: str,
+    status: str = "failed",
+    post_steps: List[str] | None = None,
+) -> None:
+    """Mark a component-resolve job terminal with *message* (#13851).
 
     The three inline copies of this block had already diverged only in their
     message; a fourth would be a fourth chance to forget ``completed_at`` and
@@ -217,9 +232,11 @@ async def _fail_resolve_job(job_id: str, message: str) -> None:
         result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
         job_row = result.scalar_one_or_none()
         if job_row:
-            job_row.status = "failed"
+            job_row.status = status
             job_row.success = False
             job_row.message = message
+            if post_steps:
+                job_row.post_steps = "\n".join(post_steps)
             job_row.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
@@ -301,7 +318,14 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
                 component, source_root, excludes, source_dir, deployed_dir
             )
             if not allowed:
-                await _fail_resolve_job(job_id, _with_blocked_paths(guard_msg, blocked))
+                # post_steps carries the FULL path list; the message inlines a
+                # capped preview so a text-only reader still sees what is at stake.
+                await _fail_resolve_job(
+                    job_id,
+                    _with_blocked_paths(guard_msg, blocked),
+                    status=RESOLVE_STATUS_BLOCKED,
+                    post_steps=blocked,
+                )
                 logger.error("component resolve job %s: %s", job_id, guard_msg)
                 return
 
@@ -309,9 +333,16 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
         # component's own rsync + restart so a newly-added `from autobot_shared.X`
         # import resolves at startup and the control plane cannot crash-loop on a
         # half-deployed shared tree. Fail the job if it cannot be synced.
-        shared_ok, shared_msg, _shared_blocked = await _ensure_autobot_shared_synced(component, force)
+        shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(component, force)
         if not shared_ok:
-            await _fail_resolve_job(job_id, shared_msg)
+            # A refused shared sync is the same terminal state as a refused
+            # component sync — the operator's next step is the same too.
+            await _fail_resolve_job(
+                job_id,
+                shared_msg,
+                status=RESOLVE_STATUS_BLOCKED if shared_blocked else "failed",
+                post_steps=shared_blocked,
+            )
             logger.error("component resolve job %s: %s", job_id, shared_msg)
             return
 

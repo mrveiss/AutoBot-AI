@@ -340,7 +340,7 @@
     "refreshing": "Refreshing...",
     "remove": "Remove",
     "resolveWouldDelete": "Resync refused — it would delete files",
-    "resolveWouldDeleteExplainer": "The deployed tree holds paths that this component's source does not have, and resyncing removes them. The paths are listed in the error above. Only proceed if you are sure they should go.",
+    "resolveWouldDeleteExplainer": "The deployed tree holds paths that this component's source does not have, and resyncing removes them. Nothing has run — the host is untouched. Only proceed if you are sure these should go.",
     "restartServiceAfterSync": "Restart service after sync",
     "restartStrategy": "Restart Strategy",
     "resyncAndDeleteAnyway": "Resync and delete them anyway",

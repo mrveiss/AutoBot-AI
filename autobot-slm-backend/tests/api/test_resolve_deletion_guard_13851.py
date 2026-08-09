@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import pathlib
 import shutil
 import sys
 import types
@@ -335,3 +336,83 @@ def test_a_genuinely_stale_file_is_still_reported(tmp_path, real_deployment_map)
     with real_rsync():
         ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
     assert (ok, deletions) == (True, ["removed_module.py"])
+
+
+# ---------------------------------------------------------------------------
+# #13851 review: the refusal must be a distinct terminal STATUS, not a phrase.
+#
+# The GUI first keyed the override affordance off the substring "would be
+# DELETED" in the job message. Two sides holding the same string in sync drift
+# apart with no symptom except the button silently never appearing again — so
+# the contract is the status value, and both ends are pinned here.
+# ---------------------------------------------------------------------------
+
+
+def test_blocked_is_a_distinct_status_from_failed() -> None:
+    """A refused resolve did not run: the host is untouched and the operator has
+    a next step. `failed` means the run started and its outcome is unknown."""
+    assert code_sync.RESOLVE_STATUS_BLOCKED == "blocked"
+    assert code_sync.RESOLVE_STATUS_BLOCKED != "failed"
+
+
+def test_blocked_status_fits_the_job_status_column() -> None:
+    """String(20) in models/database.py — a longer value would truncate or raise
+    on commit, which is a migration this deliberately avoids."""
+    assert len(code_sync.RESOLVE_STATUS_BLOCKED) <= 20
+
+
+def test_the_frontend_keys_off_the_same_status_value() -> None:
+    """Pins the cross-language contract. Nothing else fails if these diverge —
+    the override button just stops appearing, silently."""
+    view = (
+        pathlib.Path(__file__).resolve().parents[3]
+        / "autobot-slm-frontend"
+        / "src"
+        / "views"
+        / "CodeSyncView.vue"
+    ).read_text(encoding="utf-8")
+    assert f"const RESOLVE_STATUS_BLOCKED = '{code_sync.RESOLVE_STATUS_BLOCKED}'" in view
+    assert "result.status === RESOLVE_STATUS_BLOCKED" in view
+
+
+def test_the_client_state_union_admits_the_blocked_status() -> None:
+    """useCodeSync narrows `status` to a literal union, so a value the backend
+    can emit but the union omits is a type error at the branch — which is how
+    this was caught. Pinned so the union cannot drift back."""
+    composable = (
+        pathlib.Path(__file__).resolve().parents[3]
+        / "autobot-slm-frontend"
+        / "src"
+        / "composables"
+        / "useCodeSync.ts"
+    ).read_text(encoding="utf-8")
+    assert f"| '{code_sync.RESOLVE_STATUS_BLOCKED}'" in composable
+
+
+def test_blocked_status_is_terminal_for_the_frontend_poll_loop() -> None:
+    """The poller keeps going only for pending/running, so a new terminal status
+    needs no client change — but if that ever narrows, this catches it."""
+    view = (
+        pathlib.Path(__file__).resolve().parents[3]
+        / "autobot-slm-frontend"
+        / "src"
+        / "views"
+        / "CodeSyncView.vue"
+    ).read_text(encoding="utf-8")
+    assert "result.status === 'running' || result.status === 'queued'" in view
+
+
+def test_unpatched_backend_excludes_carry_the_shared_symlink(real_deployment_map) -> None:
+    """The real map, reached through the real accessor — no stub.
+
+    test_code_sync_protected_excludes.py can only pin the anchoring/formatting
+    (its harness stubs services.*), so a wiring mistake in `_rsync_exclude_args`
+    — wrong accessor, dropped call — would pass every test there. The symlink is
+    the entry whose absence made the guard refuse every unforced backend
+    resolve, so it is the one worth asserting end to end.
+    """
+    for component in ("autobot-backend", "autobot-slm-backend"):
+        args = code_sync._rsync_exclude_args([], component)
+        assert "--exclude=/autobot_shared" in args, component
+    assert "--exclude=/npu-worker.py" in code_sync._rsync_exclude_args([], "autobot-npu-worker")
+    assert "--exclude=/plugins/" in code_sync._rsync_exclude_args([], "autobot-backend")

@@ -91,11 +91,14 @@ const RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS = 90 // ~3 min at 2s intervals
 const RESOLVE_DRIFT_LOST_CONTACT_ERRORS = 30 // ~1 min before "lost contact" banner
 const resolveDriftLostContact = ref(false)
 // #13851: the resolve refused because it would have deleted deployed paths that
-// source does not have. The paths are inside the job message (the job row
-// carries no structured field); this flag only decides whether to offer the
-// override, so it keys off the backend's own refusal wording.
-const RESOLVE_BLOCKED_MARKER = 'would be DELETED'
+// source does not have. Keyed on the job's own terminal status rather than the
+// wording of its message — a string both sides had to keep in sync would drift
+// apart with no symptom except the override button silently never appearing.
+const RESOLVE_STATUS_BLOCKED = 'blocked'
 const resolveDriftBlocked = ref(false)
+// The full path list travels in post_steps; the message carries a capped
+// preview for text-only readers.
+const blockedDeletions = ref<string[]>([])
 let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // Clear stale results when the user switches to a different component (#3433)
@@ -103,6 +106,15 @@ watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
   showUntrackedDetails.value = false
+  // #13851: the refusal banner and the error holding its paths belong to the
+  // component that was refused. Left set, they re-appear over the NEXT
+  // component's drift report — pointing at the wrong paths — and its override
+  // button forces a delete for a component whose refusal was never shown. That
+  // is exactly the "force deletes what the operator wasn't shown" outcome the
+  // guard exists to prevent.
+  resolveDriftBlocked.value = false
+  blockedDeletions.value = []
+  codeSync.clearError()
 })
 
 // =============================================================================
@@ -606,11 +618,13 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
     await handleCheckDrift()
     return
   }
-  // #13851: a refusal is not a failure — the resolve would have DELETED
-  // deployed paths that source does not have, and it named them in the
-  // message. Surfacing it as a plain error would leave the operator with no
-  // way forward inside the GUI, which is the only sanctioned updater.
-  resolveDriftBlocked.value = (result.message || '').includes(RESOLVE_BLOCKED_MARKER)
+  // #13851: a refusal is not a failure — nothing ran and the host is untouched,
+  // whereas 'failed' means the run started and its outcome is unknown. It is
+  // also the one terminal state with a next step, so surfacing it as a plain
+  // error would leave the operator with no way forward inside the GUI, which is
+  // the only sanctioned updater.
+  resolveDriftBlocked.value = result.status === RESOLVE_STATUS_BLOCKED
+  blockedDeletions.value = resolveDriftBlocked.value ? result.post_steps || [] : []
   codeSync.setError(result.message || 'Drift resolve job failed')
 }
 
@@ -667,6 +681,7 @@ async function handleResolveDrift(force = false): Promise<void> {
   // #13851: a previous refusal is answered by this attempt — clear it so a
   // stale "would delete N paths" banner cannot outlive the run it described.
   resolveDriftBlocked.value = false
+  blockedDeletions.value = []
   isResolvingDrift.value = true
   const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value, force)
   if (!job) {
@@ -1463,6 +1478,12 @@ onUnmounted(() => {
             <div>
               <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
               <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
+              <ul
+                v-if="blockedDeletions.length"
+                class="mt-2 text-xs font-mono text-red-800 space-y-0.5 max-h-40 overflow-y-auto"
+              >
+                <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
+              </ul>
               <button
                 @click="handleResolveDrift(true)"
                 :disabled="isResolvingDrift"
