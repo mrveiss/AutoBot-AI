@@ -142,9 +142,7 @@ class TestL4RendersInPromptViaTheBinding:
             with patch(
                 "chat_workflow.session_work_item.SessionWorkItemService.get_binding",
                 new_callable=AsyncMock,
-                return_value=SessionWorkItemBinding(
-                    "33333333-3333-3333-3333-333333333333", "company-a", "user-a"
-                ),
+                return_value=SessionWorkItemBinding("33333333-3333-3333-3333-333333333333", "company-a", "user-a"),
             ):
                 # #13729: the per-turn membership re-check has its own tests in
                 # session_work_item_test.py; here it is a seam so this test stays

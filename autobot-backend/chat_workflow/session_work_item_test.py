@@ -85,9 +85,7 @@ class TestBindingCarriesItsVerifiedCompany:
         svc = SessionWorkItemService()
         redis = MagicMock()
         redis.get = AsyncMock(
-            return_value=json.dumps(
-                {"work_item_id": WORK_ITEM, "company_id": ALICE_CO, "user_id": ALICE}
-            ).encode()
+            return_value=json.dumps({"work_item_id": WORK_ITEM, "company_id": ALICE_CO, "user_id": ALICE}).encode()
         )
 
         with patch.object(SessionWorkItemService, "_get_redis", new_callable=AsyncMock, return_value=redis):
