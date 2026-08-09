@@ -28,12 +28,18 @@ import uuid
 
 import aiohttp
 
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
+
+# #13228 stage 2: role -> the permission *values* it holds, built once. The shadow
+# runs on every dispatch and rebuilding a 50+ element set per call is needless.
+_ROLE_PERMISSION_VALUES: "dict[Role, frozenset[str]]" = {
+    role: frozenset(p.value for p in perms) for role, perms in ROLE_PERMISSIONS.items()
+}
 
 # #13265: minimum run-JWT scopes per isolated bridge. resolve_mode() forces
 # SUBPROCESS for filesystem_mcp, browser_mcp and vnc_mcp regardless of config,
@@ -77,6 +83,9 @@ class MCPDispatcher:
         self._tool_cache: dict[str, dict] = {}
         self._cache_loaded = False
         self._cache_timestamp: float = 0.0
+        # #13228 stage 2: (tool, role, reason) triples already reported, so the
+        # shadow log stays an inventory rather than a per-call stream.
+        self._rbac_shadow_seen: "set[tuple[str, str, str]]" = set()
 
     # ------------------------------------------------------------------
     # Cache management
@@ -140,6 +149,71 @@ class MCPDispatcher:
         """Return True if tool_name matches any admin-only pattern (#2598)."""
         return any(pattern in tool_name for pattern in self._ADMIN_ONLY_TOOLS)
 
+    def _would_deny(self, tool_name: str, role: str) -> str | None:
+        """Return why RBAC *would* refuse this call, or None (#13228 stage 2).
+
+        Reports only; the caller does not act on it. The declaration landed in
+        stage 1 and the enforcement flip is stage 3, so this exists to answer the
+        one question the flip needs answered first: **which working calls would
+        it break?** The issue's own risk note predicts default-deny "will surface
+        tools that were silently reachable" — this turns that prediction into a
+        list before it costs anyone a broken agent run.
+
+        Two distinct outcomes, kept distinct because they need different fixes:
+        an undeclared tool needs a declaration; a declared one the role lacks
+        needs a grant (or is the guard working as intended).
+        """
+        if not self._tool_cache:
+            # An empty cache means the registry never answered, not that every
+            # tool is undeclared (refresh_tool_cache swallows failures and
+            # returns 0). Reporting "undeclared" here would fill the inventory
+            # with an infrastructure outage dressed as a policy gap — and if
+            # stage 3 enforced on that same signal, a registry blip would deny
+            # every MCP call. No cache, no verdict.
+            return None
+
+        entry = self._tool_cache.get(tool_name)
+        declared = entry.get("required_permission") if isinstance(entry, dict) else None
+        if declared is None:
+            return "undeclared"
+
+        # superadmin is administrative but is not a Role enum member (see
+        # ADMIN_ROLES in autobot_shared.auth.permissions), so resolving it
+        # through Role() would report the most privileged role in the system as
+        # denied on every tool. is_admin_role is the canonical, case-insensitive
+        # answer and is what the legacy gate below already uses.
+        if is_admin_role(role):
+            return None
+        try:
+            held = _ROLE_PERMISSION_VALUES[Role(str(role or "").lower())]
+        except (ValueError, KeyError):
+            # An unrecognised role string is itself worth surfacing rather than
+            # silently treating as permitted.
+            return f"unknown-role:{role}"
+        return None if declared in held else f"missing:{declared}"
+
+    def _log_rbac_shadow(self, tool_name: str, role: str) -> None:
+        """Log what canonical RBAC would have decided, without deciding (#13228).
+
+        Deduplicated on ``(tool, role, reason)``. The deliverable is the *set* of
+        disagreements, so repeating one per call would multiply the volume without
+        adding a fact — an agent loop touching one undeclared tool would otherwise
+        emit a warning per iteration.
+        """
+        reason = self._would_deny(tool_name, role)
+        if reason is None:
+            return
+        seen_key = (tool_name, role, reason)
+        if seen_key in self._rbac_shadow_seen:
+            return
+        self._rbac_shadow_seen.add(seen_key)
+        logger.warning(
+            "MCPDispatcher[rbac-shadow]: role=%s tool=%s would be denied (%s) — " "not enforced yet, see #13228",
+            role,
+            tool_name,
+            reason,
+        )
+
     async def dispatch(
         self,
         tool_name: str,
@@ -166,6 +240,10 @@ class MCPDispatcher:
         from chat_workflow.cot_events import emit_tool_call, emit_tool_result
 
         await self._ensure_cache_fresh()
+
+        # #13228 stage 2: record the canonical-RBAC verdict alongside the legacy
+        # blocklist without acting on it. The blocklist below still decides.
+        self._log_rbac_shadow(tool_name, role)
 
         if not is_admin_role(role) and self._is_admin_only(tool_name):
             logger.warning(
