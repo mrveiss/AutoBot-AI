@@ -230,3 +230,43 @@ def test_deploy_native_services_resolves_everywhere_it_needs_to():
     unresolved = guard._unresolvable_hosts(play.read_text(encoding="utf-8"), all_groups)
 
     assert unresolved == [], f"deploy-native-services targets undefined groups: {unresolved}"
+
+
+# ------------------------------------------------ the job that runs the guard
+
+
+def test_the_workflow_installs_every_third_party_import_the_guard_needs():
+    """CI must not be the thing that discovers a missing dependency.
+
+    This job went red twice for exactly that: once for `pytest-asyncio`
+    (pytest.ini sets --asyncio-mode=auto) and once for `pyyaml` (the guard parses
+    inventories). Both were a full CI round-trip to learn something checkable here.
+    """
+    import ast  # noqa: PLC0415
+
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    workflow = repo_root / ".github/workflows/ansible-file-references.yml"
+    if not workflow.exists():  # pragma: no cover - repo layout guard
+        pytest.skip("workflow not present")
+
+    declared = set()
+    for line in workflow.read_text(encoding="utf-8").splitlines():
+        if "extra-packages:" in line:
+            declared.update(line.split("extra-packages:", 1)[1].split())
+
+    stdlib = set(sys.stdlib_module_names)
+    imported = set()
+    for source in (_SCRIPT, pathlib.Path(__file__)):
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                imported.add(node.module.split(".")[0])
+
+    # Distribution names differ from import names for some packages.
+    dist_for = {"yaml": "pyyaml", "pytest": "pytest"}
+    local = {_SCRIPT.stem}
+    third_party = {m for m in imported - stdlib - local if not m.startswith("_")}
+
+    missing = {m for m in third_party if dist_for.get(m, m) not in declared}
+    assert not missing, f"the workflow does not install: {sorted(missing)}"
