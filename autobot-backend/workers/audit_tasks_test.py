@@ -568,9 +568,9 @@ class TestDeferralIsObservedNotAssumed:
 
         assert (filed, deferred) == (0, 0)
         assert "LOST" in caplog.text
-        assert "instead of being filed or lost" not in caplog.text, (
-            "the reassuring deferral message must not be emitted when nothing was queued"
-        )
+        assert (
+            "instead of being filed or lost" not in caplog.text
+        ), "the reassuring deferral message must not be emitted when nothing was queued"
 
     def test_successful_deferral_still_reports_the_reassuring_message(self, caplog):
         """The fix must not turn a working fallback into an alarm."""
