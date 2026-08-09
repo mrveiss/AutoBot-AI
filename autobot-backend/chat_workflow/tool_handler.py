@@ -3127,6 +3127,44 @@ class ToolHandlerMixin:
             metadata={"tool": name, "error": True, "fact_forcing": True},
         )
 
+    def _enforce_repetition(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Halt an agent re-issuing the same call for the same result (#13590).
+
+        The guard existed in ``agent_loop/`` and ran nowhere; the live path had
+        only a prompt sentence and a counter for *malformed* calls. Counting is
+        keyed on ``(call fingerprint, result hash)``, so a polling loop whose
+        result moves is never halted — only a call reproducing a result it
+        already has.
+
+        State lives on ``ctx.context``, which is per-turn and per-session; the
+        seam is concurrent across sessions, so nothing here may be module-global.
+        A missing ``ctx`` is a no-op, matching the other enforcers.
+        """
+        from autobot_shared.repetition_guard import (  # noqa: PLC0415
+            REPETITION_STATE_KEY,
+            repetition_halt_reason,
+        )
+
+        if ctx is None:
+            return None
+        state = ctx.context.setdefault(REPETITION_STATE_KEY, {})
+        reason = repetition_halt_reason(tool_call, execution_results, state)
+        if reason is None:
+            return None
+
+        name = tool_call.get("name", "")
+        execution_results.append({"tool": name, "status": "error", "error": reason, "repetition_halt": True})
+        return WorkflowMessage(
+            type="error",
+            content=reason,
+            metadata={"tool": name, "error": True, "repetition_halt": True},
+        )
+
     def _enforce_work_item_approval(
         self,
         tool_call: dict[str, Any],
@@ -3223,6 +3261,16 @@ class ToolHandlerMixin:
         approval_msg = self._enforce_work_item_approval(tool_call, ctx, execution_results)
         if approval_msg is not None:
             yield approval_msg
+            return
+
+        # #13590: halt a stagnating agent — same tool, same args, same result —
+        # at the profile's max_identical_tool_calls. Placed last of the
+        # enforcers so a call blocked for a *policy* reason above is not also
+        # counted as repetition; those blocks are the agent being stopped, not
+        # the agent looping.
+        repetition_msg = self._enforce_repetition(tool_call, ctx, execution_results)
+        if repetition_msg is not None:
+            yield repetition_msg
             return
 
         # GH#11568: sandboxed Python composition tool (main-chat only).
