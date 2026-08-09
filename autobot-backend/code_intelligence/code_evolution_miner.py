@@ -17,15 +17,32 @@ Features:
 - Evolution reports and visualizations
 """
 
+import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)
+
+# #13639: a commit touching more files than this is a bulk rename, a vendored-tree
+# import or a reformat — not a coupling signal. Left uncapped, one 400-file commit
+# contributes ~80k pair updates and drowns every real pair beneath it. Cost is
+# quadratic in files-per-commit, so the cap is what keeps the walk affordable.
+MAX_FILES_PER_COMMIT: int = env_int("AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT", default=50)
+
+# Bound on the history walk; never a literal at the call site.
+_GIT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS", default=120)
+
+# Paths that co-change because a tool wrote them, not because they depend on each
+# other. Lockfiles are the clearest case: every dependency bump touches all of them.
+_COCHANGE_SKIP_DIRS: frozenset = frozenset(
+    {"node_modules", "venv", ".venv", "dist", "build", "__pycache__", ".git", "vendor", "third_party"}
+)
 
 
 class PatternOccurrence:
@@ -73,6 +90,30 @@ class PatternLifecycle:
         if self.first_seen and self.last_seen:
             return (self.last_seen - self.first_seen).days
         return 0
+
+
+def _run_git(repo_path: str, *args: str) -> str:
+    """Run a read-only git command; empty string on any failure (#13639).
+
+    The git binary is present wherever the repository is, which GitPython is not.
+    """
+    try:
+        completed = subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option
+            ["git", "-C", repo_path, *args],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("git %s failed in %s: %s", args, repo_path, exc)
+        return ""
+    return completed.stdout if completed.returncode == 0 else ""
+
+
+def _is_vendored_path(path: str) -> bool:
+    """True for paths whose co-changes come from tooling rather than from design."""
+    return any(part in _COCHANGE_SKIP_DIRS for part in PurePosixPath(path).parts)
 
 
 class GitHistoryCrawler:
@@ -127,6 +168,44 @@ class GitHistoryCrawler:
             logger.error("Failed to retrieve commits: %s", e)
 
         return commits
+
+    def get_commit_file_sets(self, since: "datetime | None" = None) -> "tuple[list[set[str]], int]":
+        """Return ``(file sets, commits skipped)`` for co-change analysis (#13639).
+
+        One set of changed paths per commit.
+
+        Reads the git binary rather than GitPython. The rest of this class goes
+        through ``self.repo``, which is **always ``None``** — ``import git``
+        succeeds nowhere in this project, because GitPython appears in no
+        requirements file and is imported in exactly one place: the ``try`` block
+        above. Every other method here has therefore been returning ``[]`` in
+        every environment (see #13832). Building on that would have produced a
+        feature that silently computes nothing, which is the defect this track
+        exists to remove rather than add to.
+
+        Commits touching more than ``MAX_FILES_PER_COMMIT`` paths are skipped and
+        counted rather than truncated: taking the first N files of a bulk rename
+        would invent pairs that no author ever related, which is worse than
+        admitting the commit was not analysed.
+        """
+        args = ["log", "--no-merges", "--pretty=format:%x00%H", "--name-only"]
+        if since is not None:
+            args.append(f"--since={since.isoformat()}")
+        output = _run_git(str(self.repo_path), *args)
+        if not output:
+            return [], 0
+
+        file_sets: list[set[str]] = []
+        skipped = 0
+        for block in output.split("\x00"):
+            lines = [line for line in block.splitlines()[1:] if line.strip()]
+            paths = {line for line in lines if not _is_vendored_path(line)}
+            if len(paths) > MAX_FILES_PER_COMMIT:
+                skipped += 1
+                continue
+            if len(paths) > 1:
+                file_sets.append(paths)
+        return file_sets, skipped
 
     def get_file_history(self, file_path: str) -> List[Dict]:
         """Get commit history for a specific file"""
