@@ -365,11 +365,7 @@ def test_the_frontend_keys_off_the_same_status_value() -> None:
     """Pins the cross-language contract. Nothing else fails if these diverge —
     the override button just stops appearing, silently."""
     view = (
-        pathlib.Path(__file__).resolve().parents[3]
-        / "autobot-slm-frontend"
-        / "src"
-        / "views"
-        / "CodeSyncView.vue"
+        pathlib.Path(__file__).resolve().parents[3] / "autobot-slm-frontend" / "src" / "views" / "CodeSyncView.vue"
     ).read_text(encoding="utf-8")
     assert f"const RESOLVE_STATUS_BLOCKED = '{code_sync.RESOLVE_STATUS_BLOCKED}'" in view
     assert "result.status === RESOLVE_STATUS_BLOCKED" in view
@@ -380,11 +376,7 @@ def test_the_client_state_union_admits_the_blocked_status() -> None:
     can emit but the union omits is a type error at the branch — which is how
     this was caught. Pinned so the union cannot drift back."""
     composable = (
-        pathlib.Path(__file__).resolve().parents[3]
-        / "autobot-slm-frontend"
-        / "src"
-        / "composables"
-        / "useCodeSync.ts"
+        pathlib.Path(__file__).resolve().parents[3] / "autobot-slm-frontend" / "src" / "composables" / "useCodeSync.ts"
     ).read_text(encoding="utf-8")
     assert f"| '{code_sync.RESOLVE_STATUS_BLOCKED}'" in composable
 
@@ -393,11 +385,7 @@ def test_blocked_status_is_terminal_for_the_frontend_poll_loop() -> None:
     """The poller keeps going only for pending/running, so a new terminal status
     needs no client change — but if that ever narrows, this catches it."""
     view = (
-        pathlib.Path(__file__).resolve().parents[3]
-        / "autobot-slm-frontend"
-        / "src"
-        / "views"
-        / "CodeSyncView.vue"
+        pathlib.Path(__file__).resolve().parents[3] / "autobot-slm-frontend" / "src" / "views" / "CodeSyncView.vue"
     ).read_text(encoding="utf-8")
     assert "result.status === 'running' || result.status === 'queued'" in view
 
