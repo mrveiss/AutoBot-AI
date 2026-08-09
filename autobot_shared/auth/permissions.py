@@ -88,6 +88,26 @@ class Permission(str, Enum):
     MCP_EXECUTE = "mcp.execute"
     MCP_MANAGE = "mcp.manage"
 
+    # === MCP bridges with no home in the categories above (#13228) ===
+    # MCP tool access was governed by a substring blocklist of seven Redis
+    # command names — default-allow, so every tool on every other bridge was
+    # reachable by role="user". These give the remaining bridges a real
+    # permission each, split read/execute so a browser *observation* and a
+    # browser *click* are not the same grant.
+    #
+    # filesystem/knowledge/thinking bridges are NOT here: they map onto the
+    # existing FILES_*, KNOWLEDGE_* and AGENT_EXECUTE members.
+    MCP_BROWSER_READ = "mcp.browser.read"
+    MCP_BROWSER_CONTROL = "mcp.browser.control"
+    MCP_DATABASE_READ = "mcp.database.read"
+    MCP_DATABASE_WRITE = "mcp.database.write"
+    MCP_GIT_READ = "mcp.git.read"
+    MCP_HTTP_READ = "mcp.http.read"
+    MCP_HTTP_WRITE = "mcp.http.write"
+    MCP_METRICS_READ = "mcp.metrics.read"
+    MCP_DESKTOP_READ = "mcp.desktop.read"
+    MCP_DESKTOP_CONTROL = "mcp.desktop.control"
+
     # === Batch Jobs ===
     BATCH_VIEW = "batch.view"
     BATCH_CREATE = "batch.create"
@@ -194,6 +214,17 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_MANAGE,
         Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
+        # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
+        Permission.MCP_BROWSER_READ,
+        Permission.MCP_DATABASE_READ,
+        Permission.MCP_GIT_READ,
+        Permission.MCP_HTTP_READ,
+        Permission.MCP_METRICS_READ,
+        Permission.MCP_DESKTOP_READ,
+        Permission.MCP_BROWSER_CONTROL,
+        Permission.MCP_DATABASE_WRITE,
+        Permission.MCP_HTTP_WRITE,
+        Permission.MCP_DESKTOP_CONTROL,
     ],
     Role.OPERATOR: [
         Permission.API_READ,
@@ -218,6 +249,17 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
         Permission.SERVICE_MANAGEMENT,
+        # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
+        Permission.MCP_BROWSER_READ,
+        Permission.MCP_DATABASE_READ,
+        Permission.MCP_GIT_READ,
+        Permission.MCP_HTTP_READ,
+        Permission.MCP_METRICS_READ,
+        Permission.MCP_DESKTOP_READ,
+        Permission.MCP_BROWSER_CONTROL,
+        Permission.MCP_DATABASE_WRITE,
+        Permission.MCP_HTTP_WRITE,
+        Permission.MCP_DESKTOP_CONTROL,
     ],
     Role.ANALYST: [
         Permission.API_READ,
@@ -232,6 +274,13 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SECURITY_VIEW,
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
+        # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
+        Permission.MCP_BROWSER_READ,
+        Permission.MCP_DATABASE_READ,
+        Permission.MCP_GIT_READ,
+        Permission.MCP_HTTP_READ,
+        Permission.MCP_METRICS_READ,
+        Permission.MCP_DESKTOP_READ,
     ],
     Role.EDITOR: [
         Permission.API_READ,
@@ -248,6 +297,13 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
         Permission.BATCH_CREATE,
+        # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
+        Permission.MCP_BROWSER_READ,
+        Permission.MCP_DATABASE_READ,
+        Permission.MCP_GIT_READ,
+        Permission.MCP_HTTP_READ,
+        Permission.MCP_METRICS_READ,
+        Permission.MCP_DESKTOP_READ,
     ],
     Role.USER: [
         Permission.API_READ,
@@ -259,6 +315,13 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.FILES_DOWNLOAD,
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
+        # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
+        Permission.MCP_BROWSER_READ,
+        Permission.MCP_DATABASE_READ,
+        Permission.MCP_GIT_READ,
+        Permission.MCP_HTTP_READ,
+        Permission.MCP_METRICS_READ,
+        Permission.MCP_DESKTOP_READ,
     ],
     Role.READONLY: [
         Permission.API_READ,
