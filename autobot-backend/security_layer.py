@@ -20,6 +20,7 @@ from datetime import timezone
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.auth.permissions import ADMIN_ROLES, ROLE_PERMISSIONS, Permission, Role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from config import get_config_manager
@@ -77,6 +78,32 @@ def _parse_audit_log_entry(line: str, user: str | None = None) -> Dict[str, Any]
         return None
 
     return entry
+
+
+def canonical_role_permissions(user_role: str) -> List[str]:
+    """Permission values ``user_role`` holds in ``ROLE_PERMISSIONS`` (#13820).
+
+    Case-insensitive, because every other role check in this codebase is and a
+    role arriving as ``"Admin"`` must not resolve to nothing.
+
+    ``superadmin`` is mapped to ``admin``'s set: it is administrative per
+    ``ADMIN_ROLES`` but is **not** a ``Role`` enum member, so resolving it
+    directly raises. That gap already caused a live misreport in #13228 stage 2,
+    where the most privileged role in the system was reported as denied on every
+    tool. Fixing it here fixes it for every consumer at once.
+
+    An unrecognised role yields ``[]`` — no grant, and no exception either.
+    """
+    normalised = str(user_role or "").strip().lower()
+    if not normalised:
+        return []
+    if normalised in ADMIN_ROLES:
+        normalised = Role.ADMIN.value
+    try:
+        role = Role(normalised)
+    except ValueError:
+        return []
+    return [p.value if isinstance(p, Permission) else str(p) for p in ROLE_PERMISSIONS.get(role, [])]
 
 
 class SecurityLayer:
@@ -383,7 +410,12 @@ class SecurityLayer:
         # respects defaults too (roles like 'admin' that only have allow_shell_execute
         # in defaults were previously denied shell access).
         default_permissions = self._get_default_role_permissions(user_role)
-        all_permissions = list(role_permissions) + list(default_permissions)
+        # #13820: ROLE_PERMISSIONS is the dict both backends import and where every
+        # Permission member is assigned, and this resolver never read it — so a
+        # permission declared there was held by nobody. Every `mcp.*` grant added
+        # in #13228 was in exactly that state: False for every role, admin included.
+        canonical_permissions = canonical_role_permissions(user_role)
+        all_permissions = list(role_permissions) + list(default_permissions) + list(canonical_permissions)
 
         # Special handling for command execution
         if action_type == "allow_shell_execute":
@@ -395,6 +427,10 @@ class SecurityLayer:
 
         # Check default role permissions
         if self._check_permission_match(action_type, default_permissions):
+            return True
+
+        # Check the canonical role→permission mapping
+        if self._check_permission_match(action_type, canonical_permissions):
             return True
 
         logger.warning(
