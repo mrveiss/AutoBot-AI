@@ -53,9 +53,7 @@ def test_argument_order_does_not_change_the_fingerprint():
 
 def test_both_argument_key_spellings_are_read():
     """The seam passes `params` at some call sites and `arguments` at others."""
-    assert call_fingerprint({"name": "t", "params": {"x": 1}}) == call_fingerprint(
-        {"name": "t", "arguments": {"x": 1}}
-    )
+    assert call_fingerprint({"name": "t", "params": {"x": 1}}) == call_fingerprint({"name": "t", "arguments": {"x": 1}})
 
 
 def test_last_result_hash_reads_the_most_recent_entry_for_that_tool():
@@ -143,9 +141,7 @@ def test_an_unknown_profile_falls_back_rather_than_raising():
 
 
 def test_the_per_guard_env_override_wins():
-    with patch.dict(
-        os.environ, {"AUTOBOT_GUARD_PROFILE": "strict", "AUTOBOT_GUARD_MAX_IDENTICAL": "7"}, clear=False
-    ):
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict", "AUTOBOT_GUARD_MAX_IDENTICAL": "7"}, clear=False):
         assert max_identical_tool_calls() == 7
 
 
@@ -229,7 +225,7 @@ def test_an_observation_is_scored_once_across_repeated_checks():
 
 
 def test_the_two_halts_give_different_reasons():
-    """"Repeating a call" and "learning nothing" ask for different corrections."""
+    """ "Repeating a call" and "learning nothing" ask for different corrections."""
     from autobot_shared.repetition_guard import stagnation_halt_reason
 
     rep_state, results = {}, [_result("read_file", "same")]
