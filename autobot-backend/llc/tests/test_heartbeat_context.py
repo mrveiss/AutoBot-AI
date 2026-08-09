@@ -165,6 +165,7 @@ async def test_build_fat_returns_required_keys(builder: HeartbeatContextBuilder)
         agent_id="agent1",
         work_item_id=work_item_id,
         context_mode="fat",
+        company_id="co1",
     )
 
     assert "work_item_id" in result
@@ -186,6 +187,7 @@ async def test_build_thin_returns_minimal_keys(builder: HeartbeatContextBuilder)
         agent_id="agent1",
         work_item_id=work_item_id,
         context_mode="thin",
+        company_id="co1",
     )
 
     assert "work_item_id" in result
@@ -201,6 +203,7 @@ async def test_build_unknown_mode_raises(builder: HeartbeatContextBuilder) -> No
             agent_id="agent1",
             work_item_id=uuid.uuid4(),
             context_mode="superduper",
+            company_id="co1",
         )
 
 
@@ -215,6 +218,7 @@ async def test_build_fat_missing_work_item_raises(builder: HeartbeatContextBuild
             agent_id="agent1",
             work_item_id=uuid.uuid4(),
             context_mode="fat",
+            company_id="co1",
         )
 
 
@@ -234,6 +238,7 @@ async def test_build_fat_with_goal_ancestry(builder: HeartbeatContextBuilder) ->
         agent_id="agent1",
         work_item_id=wi.id,
         context_mode="fat",
+        company_id="co1",
     )
 
     builder.goal_service.get_goal_ancestry_for_work_item.assert_called_once_with(session, goal_id)
@@ -252,6 +257,7 @@ async def test_build_fat_rag_failure_graceful(builder: HeartbeatContextBuilder) 
         agent_id="agent1",
         work_item_id=uuid.uuid4(),
         context_mode="fat",
+        company_id="co1",
     )
 
     assert result["company_context"] == {"chunks": [], "sources": []}
@@ -268,6 +274,107 @@ async def test_build_fat_parallel_queries_invoked(builder: HeartbeatContextBuild
         agent_id="agent1",
         work_item_id=wi.id,
         context_mode="fat",
+        company_id="co1",
     )
 
     assert builder.rag_assembler.assemble.call_count >= 2
+
+
+# --------------------------------------------- Tenant scoping (#13756)
+
+
+@pytest.fixture
+def scoped_builder() -> HeartbeatContextBuilder:
+    """Builder whose work_item_service honours the ``company_id`` filter.
+
+    ``AsyncMock`` returns its canned value regardless of arguments, which would
+    hide the very filter under test, so the fake applies the scope itself.
+    """
+    rag = AsyncMock(spec=LLCRAGAssembler)
+    rag.assemble.return_value = LLCContext(
+        company_id="co1",
+        profile=AssemblerProfile.HEARTBEAT,
+        chunks=[],
+        sources=[],
+        metadata={},
+    )
+    goal_svc = AsyncMock()
+    goal_svc.get_goal_ancestry_for_work_item.return_value = [{"id": "g1", "title": "Secret goal"}]
+
+    owned = _make_work_item(company_id="co1", goal_id=uuid.uuid4())
+
+    async def _scoped_get(_session, _work_item_id, *, company_id=None):
+        if company_id is not None and str(company_id) != owned.company_id:
+            return None
+        return owned
+
+    work_svc = AsyncMock()
+    work_svc.get.side_effect = _scoped_get
+
+    builder = HeartbeatContextBuilder(
+        rag_assembler=rag,
+        goal_service=goal_svc,
+        work_item_service=work_svc,
+    )
+    builder.owned_item = owned  # type: ignore[attr-defined]
+    return builder
+
+
+@pytest.mark.parametrize("mode", ["fat", "thin"])
+@pytest.mark.asyncio
+async def test_build_forwards_company_scope_to_fetch(scoped_builder: HeartbeatContextBuilder, mode: str) -> None:
+    """No build path reaches work_item_service.get without an explicit scope."""
+    await scoped_builder.build(
+        session=AsyncMock(),
+        agent_id="agent1",
+        work_item_id=scoped_builder.owned_item.id,  # type: ignore[attr-defined]
+        context_mode=mode,
+        company_id="co1",
+    )
+
+    assert scoped_builder.work_item_service.get.await_args.kwargs["company_id"] == "co1"
+
+
+@pytest.mark.parametrize("mode", ["fat", "thin"])
+@pytest.mark.asyncio
+async def test_build_rejects_other_companys_item(scoped_builder: HeartbeatContextBuilder, mode: str) -> None:
+    """Company B's token asking for company A's item id gets "not found" (-> 404)."""
+    with pytest.raises(ValueError, match="not found"):
+        await scoped_builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=scoped_builder.owned_item.id,  # type: ignore[attr-defined]
+            context_mode=mode,
+            company_id="co2",
+        )
+
+    scoped_builder.goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_build_fat_rejects_row_whose_company_differs(builder: HeartbeatContextBuilder) -> None:
+    """Defence in depth: a row that slipped past the filter is still refused."""
+    builder.work_item_service.get.return_value = _make_work_item(company_id="co1")
+
+    with pytest.raises(ValueError, match="not found"):
+        await builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=uuid.uuid4(),
+            context_mode="fat",
+            company_id="co2",
+        )
+
+    builder.goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_build_requires_company_id(builder: HeartbeatContextBuilder) -> None:
+    """The scope is not optional — omitting it is a TypeError, not a silent leak."""
+    with pytest.raises(TypeError):
+        await builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=uuid.uuid4(),
+            context_mode="fat",
+        )

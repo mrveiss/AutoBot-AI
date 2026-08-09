@@ -51090,7 +51090,8 @@ export interface paths {
          *         item_id: Work item UUID
          *         mode: "thin" or "fat" context mode
          *         session: DB session
-         *         ctx: Tenant context
+         *         ctx: Tenant context — its ``org_id`` scopes the whole assembled
+         *             context, so another company's item id reads as 404 (#13756)
          *
          *     Returns:
          *         Dict with assembled context:
