@@ -1,7 +1,8 @@
 # Orphaned frontend components — built, documented, unreachable
 
 **Date:** 2026-08-09
-**Umbrella issue:** https://github.com/mrveiss/AutoBot-AI/issues/13794
+**Umbrella issue:** https://github.com/mrveiss/AutoBot-AI/issues/13810
+**Pairing wiring gap:** https://github.com/mrveiss/AutoBot-AI/issues/13794
 **Method:** every `components/**/*.vue` checked for any reference (import or tag) from any other `.vue`/`.ts`/`.js` in `autobot-frontend/src`.
 
 ```
