@@ -171,9 +171,87 @@ def test_large_log_is_read_from_the_tail(tmp_path):
 
 
 @pytest.mark.parametrize("empty", ["", "\n\n"])
-def test_empty_log_is_degraded(tmp_path, empty):
-    """An empty log means a run started and produced nothing — not a success."""
+def test_empty_log_with_no_rotation_is_not_degraded(tmp_path, empty):
+    """#13125: an empty log does NOT mean a run started and produced nothing.
+
+    logrotate truncates the live log to zero bytes daily (``copytruncate``, which
+    the append: units require), so from 01:00 until the next self-update the file
+    exists and is empty on every node. Read as "a run was cut short", that fired
+    daily on healthy deployments and was discounted as noise before the cause was
+    found — the expensive failure, because it trains operators to ignore the
+    whole class of alert.
+
+    With nothing in the rotation either, this is the same situation as no log at
+    all: nothing to say, which is explicitly not a failure.
+    """
     v = read_self_update_verdict(_write(tmp_path, empty))
 
+    assert v.log_present is False
+    assert v.degraded is False
+    assert v.reason == "no self-update log yet"
+
+
+def test_empty_log_falls_back_to_the_rotation(tmp_path):
+    """The last run's real verdict is sitting in the rotated file — read it.
+
+    Going silent for the rest of the day would trade a false alarm for a blind
+    spot; the point of the verdict is to be able to answer at any hour.
+    """
+    live = _write(tmp_path, "")
+    live.with_name(live.name + ".1").write_text(_COMPLETE, encoding="utf-8")
+
+    v = read_self_update_verdict(live)
+
     assert v.log_present is True
+    assert v.complete is True
+    assert v.degraded is False
+    assert v.from_rotated_log is True
+    assert "rotated log" in (v.reason or "")
+
+
+def test_rotation_is_only_consulted_when_the_live_log_is_empty(tmp_path):
+    """A live log with content wins — the rotation is older by definition."""
+    live = _write(tmp_path, _COMPLETE)
+    live.with_name(live.name + ".1").write_text(_TRUNCATED, encoding="utf-8")
+
+    v = read_self_update_verdict(live)
+
+    assert v.complete is True
+    assert v.from_rotated_log is False
+    assert "rotated log" not in (v.reason or "")
+
+
+def test_a_genuinely_incomplete_rotation_is_still_degraded(tmp_path):
+    """The fallback must not launder a failure into silence: if the last real
+    run died mid-play, that verdict survives the rotation."""
+    live = _write(tmp_path, "")
+    live.with_name(live.name + ".1").write_text(_TRUNCATED, encoding="utf-8")
+
+    v = read_self_update_verdict(live)
+
     assert v.degraded is True
+    assert v.from_rotated_log is True
+
+
+def test_missing_live_log_still_reads_a_rotation(tmp_path):
+    """copytruncate preserves the live file, but a hand-cleaned /var/log or a
+    different rotation mode can leave only the rotated copy."""
+    live = tmp_path / "self-update-ansible.log"
+    live.with_name(live.name + ".1").write_text(_COMPLETE, encoding="utf-8")
+
+    v = read_self_update_verdict(live)
+
+    assert v.log_present is True
+    assert v.complete is True
+    assert v.from_rotated_log is True
+
+
+def test_empty_rotation_is_not_used(tmp_path):
+    """An empty rotation is no more informative than an empty live log."""
+    live = _write(tmp_path, "")
+    live.with_name(live.name + ".1").write_text("\n\n", encoding="utf-8")
+
+    v = read_self_update_verdict(live)
+
+    assert v.log_present is False
+    assert v.degraded is False

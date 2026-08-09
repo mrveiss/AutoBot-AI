@@ -37,6 +37,30 @@ _RECAP_COUNTS = re.compile(r"\b(?P<key>failed|unreachable)=(?P<count>\d+)")
 # (play headers and the recap) is cheap to find without holding the whole file.
 MAX_LOG_BYTES = 512 * 1024
 
+# #13125: logrotate rotates /var/log/autobot/*.log daily with ``copytruncate``
+# (roles/common/templates/autobot-logrotate.j2) — mandatory for the append: units
+# that hold their fd open. It copies the file aside and truncates the original to
+# zero bytes, so from the 01:00 rotation until the next self-update runs, the
+# live log EXISTS and is EMPTY.
+#
+# The reader distinguished missing from present but not present-but-empty, so an
+# empty log reached the parse path, found zero play headers, and produced "the
+# run was cut short; later plays did not execute" — on a deployment whose last
+# self-update finished normally. For most of every day, on every node. It was
+# discounted as noise once before the cause was found, which is the real damage:
+# a detector that cries wolf daily teaches everyone to ignore that whole class of
+# alert.
+#
+# Suppressing to "nothing to say" would fix the false positive and lose a true
+# one — the last run's actual verdict is sitting in the rotation, and going
+# silent all day is its own gap. So the rotation is read instead.
+#
+# ``.1`` only: the stanza sets ``delaycompress``, so the most recent rotation is
+# always the uncompressed ``.1``. Older ones are ``.2.gz`` and up, and a verdict
+# from two rotations back describes a run at least two days old — staleness the
+# freshness marker below could not honestly paper over.
+_ROTATED_SUFFIX = ".1"
+
 
 @dataclass
 class SelfUpdateVerdict:
@@ -52,6 +76,10 @@ class SelfUpdateVerdict:
     #: Independent of the log — a run can reach its recap cleanly and still
     #: deliver nothing, because the updater applies almost none of the roles.
     role_delivery_incomplete: bool = False
+    #: #13125: the verdict was parsed from the rotated log because the live one
+    #: had been truncated to zero bytes by logrotate. The verdict is real but
+    #: describes a run from before the last rotation, so the reason says so.
+    from_rotated_log: bool = False
 
     @property
     def degraded(self) -> bool:
@@ -83,19 +111,54 @@ def _read_tail(path: Path, max_bytes: int = MAX_LOG_BYTES) -> str | None:
         return None
 
 
+def _read_log_text(log_path: Path) -> tuple[str | None, bool]:
+    """Return (text, from_rotated) for the newest log that actually has content.
+
+    Prefers the live log. When logrotate's ``copytruncate`` has emptied it
+    (#13125) the most recent rotation is read instead, so the verdict keeps
+    describing the last real run rather than going blank until the next one.
+
+    Returns ``(None, False)`` when neither has content — the genuine "nothing to
+    say" case, which is NOT a failure (see :attr:`SelfUpdateVerdict.degraded`).
+    """
+    if log_path.exists():
+        text = _read_tail(log_path)
+        if text is None:
+            return None, False
+        if text.strip():
+            return text, False
+
+    rotated = log_path.with_name(log_path.name + _ROTATED_SUFFIX)
+    if rotated.exists():
+        rotated_text = _read_tail(rotated)
+        if rotated_text and rotated_text.strip():
+            logger.info(
+                "self-update log %s is empty (logrotate copytruncate) — reading %s instead (#13125)",
+                log_path,
+                rotated,
+            )
+            return rotated_text, True
+
+    return None, False
+
+
 def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
     """Parse *log_path* and report whether the last self-update run completed.
 
     Never raises: a status endpoint must not fail because a log is missing or
-    malformed. An unreadable log yields ``log_present=False``, which is treated
-    as "nothing to say" rather than as a failure.
+    malformed. A log that is missing, unreadable, or empty on both the live and
+    rotated paths yields ``log_present=False``, which is treated as "nothing to
+    say" rather than as a failure.
     """
-    if not log_path.exists():
+    if not log_path.exists() and not log_path.with_name(log_path.name + _ROTATED_SUFFIX).exists():
         return SelfUpdateVerdict(reason="no self-update log yet")
 
-    text = _read_tail(log_path)
+    text, from_rotated = _read_log_text(log_path)
     if text is None:
-        return SelfUpdateVerdict(reason=f"self-update log unreadable: {log_path}")
+        # #13125: an empty live log with no usable rotation is the same
+        # situation as no log at all — a box that has nothing to report. It was
+        # previously parsed as zero plays and reported as a run cut short.
+        return SelfUpdateVerdict(reason="no self-update log yet")
 
     plays = _PLAY_HEADER.findall(text)
     has_recap = bool(_PLAY_RECAP.search(text))
@@ -115,6 +178,7 @@ def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
         plays_seen=plays,
         failed_hosts=failed,
         unreachable_hosts=unreachable,
+        from_rotated_log=from_rotated,
     )
     verdict.reason = _describe(verdict)
     if verdict.degraded:
@@ -123,18 +187,24 @@ def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
 
 
 def _describe(v: SelfUpdateVerdict) -> str:
-    """Human-readable reason, naming what is missing rather than just 'failed'."""
+    """Human-readable reason, naming what is missing rather than just 'failed'.
+
+    #13125: when the verdict came from the rotated log it is qualified as such.
+    An operator reading "completed, no failures" needs to know it describes the
+    run before the last rotation, not one since.
+    """
+    suffix = " (from the rotated log — the live log was rotated away)" if v.from_rotated_log else ""
     if not v.complete:
         seen = ", ".join(v.plays_seen) if v.plays_seen else "none"
         return (
             f"self-update run did not finish — no PLAY RECAP in the log "
-            f"(plays started: {seen}). The run was cut short; later plays did not execute."
+            f"(plays started: {seen}). The run was cut short; later plays did not execute.{suffix}"
         )
     if v.unreachable_hosts:
-        return f"self-update finished with {v.unreachable_hosts} unreachable host(s)"
+        return f"self-update finished with {v.unreachable_hosts} unreachable host(s){suffix}"
     if v.failed_hosts:
-        return f"self-update finished with {v.failed_hosts} failed task(s)"
-    return f"self-update completed ({len(v.plays_seen)} plays, no failures)"
+        return f"self-update finished with {v.failed_hosts} failed task(s){suffix}"
+    return f"self-update completed ({len(v.plays_seen)} plays, no failures){suffix}"
 
 
 __all__ = ["SelfUpdateVerdict", "read_self_update_verdict", "MAX_LOG_BYTES"]
