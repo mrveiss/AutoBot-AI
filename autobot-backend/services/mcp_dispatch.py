@@ -140,6 +140,48 @@ class MCPDispatcher:
         """Return True if tool_name matches any admin-only pattern (#2598)."""
         return any(pattern in tool_name for pattern in self._ADMIN_ONLY_TOOLS)
 
+    def _would_deny(self, tool_name: str, role: str) -> str | None:
+        """Return why RBAC *would* refuse this call, or None (#13228 stage 2).
+
+        Reports only; the caller does not act on it. The declaration landed in
+        stage 1 and the enforcement flip is stage 3, so this exists to answer the
+        one question the flip needs answered first: **which working calls would
+        it break?** The issue's own risk note predicts default-deny "will surface
+        tools that were silently reachable" — this turns that prediction into a
+        list before it costs anyone a broken agent run.
+
+        Two distinct outcomes, kept distinct because they need different fixes:
+        an undeclared tool needs a declaration; a declared one the role lacks
+        needs a grant (or is the guard working as intended).
+        """
+        from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role  # noqa: PLC0415
+
+        entry = self._tool_cache.get(tool_name) or {}
+        declared = entry.get("required_permission")
+        if declared is None:
+            return "undeclared"
+
+        try:
+            held = {p.value for p in ROLE_PERMISSIONS.get(Role(role), [])}
+        except ValueError:
+            # An unrecognised role string is itself worth surfacing rather than
+            # silently treating as permitted.
+            return f"unknown-role:{role}"
+        return None if declared in held else f"missing:{declared}"
+
+    def _log_rbac_shadow(self, tool_name: str, role: str) -> None:
+        """Log what canonical RBAC would have decided, without deciding (#13228)."""
+        reason = self._would_deny(tool_name, role)
+        if reason is None:
+            return
+        logger.warning(
+            "MCPDispatcher[rbac-shadow]: role=%s tool=%s would be denied (%s) — "
+            "not enforced yet, see #13228",
+            role,
+            tool_name,
+            reason,
+        )
+
     async def dispatch(
         self,
         tool_name: str,
@@ -166,6 +208,10 @@ class MCPDispatcher:
         from chat_workflow.cot_events import emit_tool_call, emit_tool_result
 
         await self._ensure_cache_fresh()
+
+        # #13228 stage 2: record the canonical-RBAC verdict alongside the legacy
+        # blocklist without acting on it. The blocklist below still decides.
+        self._log_rbac_shadow(tool_name, role)
 
         if not is_admin_role(role) and self._is_admin_only(tool_name):
             logger.warning(
