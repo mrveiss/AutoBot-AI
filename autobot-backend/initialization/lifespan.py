@@ -2429,6 +2429,16 @@ def create_lifespan_manager():
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
 
+        # #13738: the interpreter floor and free-disk gate ran nowhere. The
+        # floor is load-bearing — llc/scheduler/base.py calls
+        # asyncio.Task.cancelling() with no fallback, so below it every LLC
+        # poll loop dies after one tick with an AttributeError nothing
+        # retrieves (#13727). This is the first thing after logging so the
+        # failure is legible: refusing to boot beats degrading silently.
+        from startup_validator import enforce_system_requirements
+
+        enforce_system_requirements()
+
         # #11279: run the non-fatal startup file-integrity check (mirrors the
         # autobot-slm-backend lifespan wiring). No-op unless
         # AUTOBOT_INTEGRITY_CHECK_ENABLED=1; logs a WARNING on any manifest
