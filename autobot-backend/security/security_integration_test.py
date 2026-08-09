@@ -62,7 +62,15 @@ class TestSecuritySystemIntegration:
         policy = security_layer.command_executor.policy
         assert "echo" in policy.safe_commands
         assert "sudo" in policy.high_risk_commands
-        assert len(policy.dangerous_patterns) > 0
+
+        # #765 moved the pattern list off SecurityPolicy into the central
+        # security.command_patterns module; the executor reaches it through
+        # _check_dangerous_patterns(). Same repoint as #7147 applied to
+        # secure_command_executor_test.py.
+        from security.command_patterns import DANGEROUS_PATTERNS
+
+        assert len(DANGEROUS_PATTERNS) > 0
+        assert security_layer.command_executor._check_dangerous_patterns("rm -rf /")
 
     @pytest.mark.asyncio
     async def test_end_to_end_safe_command_execution(self, security_layer):

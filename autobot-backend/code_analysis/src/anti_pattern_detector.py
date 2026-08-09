@@ -592,7 +592,7 @@ class AntiPatternDetector:
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip(file_path, exclude_set):
+                if file_path.is_file() and not self._should_skip(file_path, exclude_set, root):
                     try:
                         module_info = await self._parse_file(str(file_path))
                         if module_info:
@@ -610,12 +610,34 @@ class AntiPatternDetector:
                 if imported in self.modules:
                     self.modules[imported].is_imported_by.add(module.name)
 
-    def _should_skip(self, file_path: Path, exclude_patterns: "frozenset[str] | List[str]") -> bool:
+    @staticmethod
+    def _path_for_exclusion(file_path: Path, root: Path | None) -> str:
+        """Render *file_path* relative to *root* for exclusion matching.
+
+        Exclusion patterns ("tests/", "venv", "test_", ...) describe locations
+        *inside* the analyzed tree. Matching them against the absolute path
+        made the scan depend on where that tree happens to live: a checkout
+        below a directory named e.g. ``venv`` or ``test_runs`` matched every
+        pattern and silently excluded the whole codebase.
+        """
+        if root is None:
+            return str(file_path)
+        try:
+            return str(file_path.relative_to(root))
+        except ValueError:
+            return str(file_path)
+
+    def _should_skip(
+        self,
+        file_path: Path,
+        exclude_patterns: "frozenset[str] | List[str]",
+        root: Path | None = None,
+    ) -> bool:
         """Check if file should be skipped.
 
         Issue #510: Accepts frozenset for O(1) membership check.
         """
-        path_str = str(file_path)
+        path_str = self._path_for_exclusion(file_path, root)
         return any(pattern in path_str for pattern in exclude_patterns)
 
     async def _parse_file(self, file_path: str) -> ModuleInfo | None:
@@ -1860,8 +1882,7 @@ class AntiPatternDetector:
         # Collect all Python source files (non-test) under root_path.
         py_files: List[Path] = []
         for f in root.rglob("*.py"):
-            path_str = str(f)
-            if any(pat in path_str for pat in _DEFAULT_EXCLUDE_PATTERNS):
+            if self._should_skip(f, _DEFAULT_EXCLUDE_PATTERNS, root):
                 continue
             py_files.append(f)
 

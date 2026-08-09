@@ -6,13 +6,20 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+import os
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from autobot_memory_graph.core import (
+    ENTITY_TYPES,
+    RELATION_TYPE_ALIASES,
+    RELATION_TYPES,
+    canonical_relation_type,
+)
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -2129,8 +2136,14 @@ class SearchCategoriesByPathRequest(BaseModel):
 
     @field_validator("path_pattern")
     @classmethod
-    def validate_path_pattern(cls, v):
-        """Validate path pattern format."""
+    def normalise_category_path_pattern(cls, v):
+        """Validate path pattern format.
+
+        #13518: renamed off ``validate_path_pattern`` for the same reason as
+        ``reject_traversal_in_path`` in schemas_system.py — it grepped as a
+        path-containment helper and is not one. This validates a *category*
+        pattern's character set; no filesystem path is involved.
+        """
         v = v.lower().strip()
         # Remove trailing asterisk for validation
         check_pattern = v.rstrip("*")
@@ -3788,33 +3801,23 @@ class MCPToolCallRequest(BaseModel):
 
 # memory.py schemas (#6042)
 
-_VALID_ENTITY_TYPES = frozenset(
-    {
-        "conversation",
-        "bug_fix",
-        "feature",
-        "decision",
-        "task",
-        "user_preference",
-        "context",
-        "learning",
-        "research",
-        "implementation",
-    }
-)
-_VALID_RELATION_TYPES = frozenset(
-    {
-        "relates_to",
-        "depends_on",
-        "implements",
-        "fixes",
-        "informs",
-        "guides",
-        "follows",
-        "contains",
-        "blocks",
-    }
-)
+# Issue #13795: the same defect #13452 fixed for relations, one field over.
+# EntityCreateRequest is the body of POST /api/memory/entities, which calls
+# AutoBotMemoryGraph.create_entity — so it must validate against the memory
+# graph's vocabulary, not the knowledge base's. The literal copy here was the
+# knowledge-base list ("decision", "bug_fix", …) while create_entity validates
+# against ENTITY_TYPES ("DECISION", "BUG", …). The two sets are **disjoint**, so
+# every value this schema accepted then raised ValueError inside create_entity —
+# entity creation was impossible through the API for any input at all. Derived
+# now, so it cannot drift again.
+_VALID_ENTITY_TYPES = frozenset(ENTITY_TYPES)
+# Issue #13452: RelationCreateRequest is the body of POST /api/memory/relations,
+# which calls AutoBotMemoryGraph.create_relation — so it must validate against
+# the memory graph's vocabulary, not the knowledge base's. The previous literal
+# copy was the knowledge-base list: it rejected valid graph types (related_to,
+# caused_by, leads_to, owns, ...) and admitted "relates_to", which then raised
+# ValueError inside create_relation. Derived now, so it cannot drift again.
+_VALID_RELATION_TYPES = frozenset(RELATION_TYPES | set(RELATION_TYPE_ALIASES))
 
 
 class EntityCreateRequest(BaseModel):
@@ -3827,9 +3830,17 @@ class EntityCreateRequest(BaseModel):
     @field_validator("entity_type")
     @classmethod
     def validate_entity_type(cls, v):
-        if v not in _VALID_ENTITY_TYPES:
-            raise ValueError(f"entity_type must be one of: {_VALID_ENTITY_TYPES}")
-        return v
+        """Validate against the memory graph's vocabulary, case-insensitively.
+
+        #13795: ENTITY_TYPES is upper-case; every caller written against the old
+        lower-case schema sent "decision". Normalising rather than rejecting
+        keeps those callers working, and returning the canonical casing means
+        create_entity receives a value it accepts.
+        """
+        canonical = v.upper() if isinstance(v, str) else v
+        if canonical not in _VALID_ENTITY_TYPES:
+            raise ValueError(f"entity_type must be one of: {sorted(_VALID_ENTITY_TYPES)}")
+        return canonical
 
 
 class ObservationAddRequest(BaseModel):
@@ -3848,8 +3859,10 @@ class RelationCreateRequest(BaseModel):
     @classmethod
     def validate_relation_type(cls, v):
         if v not in _VALID_RELATION_TYPES:
-            raise ValueError(f"relation_type must be one of: {_VALID_RELATION_TYPES}")
-        return v
+            # sorted(): a raw frozenset repr renders in arbitrary order (#13452).
+            raise ValueError(f"relation_type must be one of: {sorted(_VALID_RELATION_TYPES)}")
+        # #13452: normalise legacy spellings so only the canonical name is stored.
+        return canonical_relation_type(v)
 
 
 class InvalidateEntityRequest(BaseModel):
@@ -4230,7 +4243,7 @@ class AddUrlRequest(BaseModel):
 
     url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
     title: str = Field(default="", max_length=500, description="Document title")
-    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
+    method: str = Field(default="fetch", pattern=r"^(fetch|raw)\z", description="Fetch method")
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
     board_id: str | None = Field(
@@ -4253,7 +4266,7 @@ class AudioIngestRequest(BaseModel):
     category: str = Field(default="audio", max_length=100)
     tags: List[str] = Field(default_factory=list)
     whisper_model: str = Field(
-        default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size"
+        default="base", pattern=r"^(tiny|base|small|medium|large|large-v2|large-v3)\z", description="Whisper model size"
     )
     language: str | None = Field(default=None, max_length=10, description="ISO-639-1 language hint")
 
@@ -4288,9 +4301,9 @@ class DocsBrowseRequest(BaseModel):
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
     sort_by: str = Field(
-        default="indexed_at", pattern="^(indexed_at|title|category|file_path)$", description="Sort field"
+        default="indexed_at", pattern=r"^(indexed_at|title|category|file_path)\z", description="Sort field"
     )
-    sort_order: str = Field(default="desc", pattern="^(asc|desc)$", description="Sort order")
+    sort_order: str = Field(default="desc", pattern=r"^(asc|desc)\z", description="Sort order")
 
 
 class OrgKnowledgeConfigPayload(BaseModel):
@@ -4368,7 +4381,7 @@ class CreateRelationRequest(BaseModel):
 
     source_fact_id: str = Field(..., description="ID of the source fact")
     target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: str = Field(..., description="Type of relation (e.g., relates_to, depends_on, implements)")
+    relation_type: str = Field(..., description="Type of relation (e.g., related_to, depends_on, implements)")
     metadata: dict | None = Field(None, description="Optional metadata for the relation")
 
 
@@ -4623,6 +4636,118 @@ class GraphRAGSearchResponse(BaseModel):
     results: List[Metadata] = Field(..., description="Search results")
     metrics: Metadata = Field(..., description="Performance metrics")
     request_id: str = Field(..., description="Unique request identifier")
+
+
+# #13474: a "both"-direction walk branches twice per node and issues a Redis
+# round-trip per edge, so the traversal always carries a deadline. Overridable
+# per request; never unbounded.
+DEFAULT_PATH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS", "10.0"))
+
+
+class GraphRAGPathRequest(BaseModel):
+    """Request model for a shortest-path query between two memory-graph entities. #13474."""
+
+    from_entity: str = Field(..., min_length=1, max_length=200, description="Source entity name")
+    to_entity: str = Field(..., min_length=1, max_length=200, description="Target entity name")
+    relation: str | None = Field(
+        None, max_length=100, description="Restrict traversal to this relation type; omit for all types"
+    )
+    max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
+    direction: Literal["outgoing", "incoming", "both"] = Field(
+        "both", description="Edge direction to follow; 'both' treats relations as undirected"
+    )
+    timeout: float | None = Field(
+        DEFAULT_PATH_TIMEOUT_SECONDS,
+        ge=1.0,
+        le=30.0,
+        description="Traversal deadline in seconds (1-30). Bounds a wide 'both'-direction walk.",
+    )
+
+    @field_validator("from_entity", "to_entity")
+    @classmethod
+    def validate_entity_name(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class GraphRAGPathResponse(BaseModel):
+    """Response model for a shortest-path query. #13474."""
+
+    success: bool = Field(..., description="Whether the query executed")
+    found: bool = Field(..., description="Whether a path exists between the two entities")
+    reason: str | None = Field(None, description="Why no path was returned ('no_path'); null when found")
+    from_entity: Metadata | None = Field(None, description="Resolved source entity (id, name, type)")
+    to_entity: Metadata | None = Field(None, description="Resolved target entity (id, name, type)")
+    missing_entities: List[str] = Field(default_factory=list, description="Entity names that could not be resolved")
+    hops: int = Field(..., description="Path length in edges; 0 when both names resolve to the same entity")
+    path: List[Metadata] = Field(..., description="Ordered traversal steps, excluding the start entity")
+    query: Metadata = Field(..., description="Echo of the traversal parameters actually used")
+    traversal_time: float = Field(..., description="Traversal wall time in seconds")
+    request_id: str = Field(..., description="Unique request identifier")
+
+
+# #13762: the MCP ``memory.*`` tools reach the same graph as the routes above,
+# but a JSON-RPC caller supplies raw kwargs with no Pydantic in the path. These
+# models give those tools the request contract the REST surface already has —
+# one validation seam, rather than bounds re-implemented per tool. Constraints
+# match GraphRAGPathRequest/GraphRAGSearchRequest deliberately: the same field
+# means the same thing on both surfaces.
+
+
+class MemoryEntityLookupRequest(BaseModel):
+    """Arguments for the ``memory.entity_lookup`` tool. #13762."""
+
+    name: str = Field(..., min_length=1, max_length=200, description="Entity name to look up")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryTimelineRequest(BaseModel):
+    """Arguments for the ``memory.timeline`` tool. #13762."""
+
+    entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
+    range: str | None = Field(None, max_length=100, description="ISO-8601 range as 'start/end'")
+
+    @field_validator("entity")
+    @classmethod
+    def validate_entity(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryRelatedRequest(BaseModel):
+    """Arguments for the ``memory.related`` tool. #13762."""
+
+    entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
+    depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
+
+    @field_validator("entity")
+    @classmethod
+    def validate_entity(cls, v):
+        if not v.strip():
+            raise ValueError("Entity name cannot be empty or whitespace")
+        return v.strip()
+
+
+class MemoryVerbatimSearchRequest(BaseModel):
+    """Arguments for the ``memory.verbatim_search`` tool. #13762."""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
+    session_filter: str | None = Field(None, max_length=200, description="Restrict results to this session_id")
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v):
+        if not v.strip():
+            raise ValueError("Query cannot be empty or whitespace")
+        return v.strip()
 
 
 class GraphRAGHealthResponse(BaseModel):
@@ -4894,7 +5019,7 @@ class ScopedSearchRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
     mode: str = Field(
         default="hybrid",
-        pattern="^(semantic|keyword|hybrid|auto)$",
+        pattern=r"^(semantic|keyword|hybrid|auto)\z",
         description="Search mode",
     )
     category: str | None = Field(default=None, description="Filter by category")

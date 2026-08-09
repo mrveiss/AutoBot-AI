@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 import types
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,10 +26,13 @@ import pytest
 # ──────────────────────────────────────────────────────────────────────────────
 # Stub agents/* so importing autobot_agent_adapter doesn't pull the full chain.
 # autobot_agent_adapter only needs `AgentRequest` from agents.base_agent.
+# #13162: ``__path__`` points at the real ``agents`` directory so only
+# ``agents/__init__.py`` is bypassed — an empty ``__path__`` here would make
+# every ``agents.<submodule>`` import fail for the rest of the worker.
 # ──────────────────────────────────────────────────────────────────────────────
 if "agents" not in sys.modules:
     _agents_stub = types.ModuleType("agents")
-    _agents_stub.__path__ = []
+    _agents_stub.__path__ = [str(Path(__file__).resolve().parents[2] / "agents")]
     _agents_stub.__package__ = "agents"
     sys.modules["agents"] = _agents_stub
 
@@ -253,6 +258,8 @@ async def test_invoke_returns_run_id_then_completed():
     await asyncio.sleep(0)
 
     status = await adapter.status({}, run_id)
+    # status() must honour the LLCAdapter contract, not just carry the right value.
+    assert isinstance(status, AdapterRunStatus)
     assert status.status == LLCRunStatus.COMPLETED
     assert status.exit_code == 0
 
@@ -501,6 +508,7 @@ async def test_cost_forwarded_to_budget_service():
             budget_session_factory=session_factory,
         )
         run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        assert isinstance(run_id, str) and run_id
         await asyncio.sleep(0.05)
 
         MockBS.return_value.ingest_cost_event.assert_called_once()
@@ -599,6 +607,12 @@ def test_llcadapter_protocol_satisfied():
     assert isinstance(adapter, LLCAdapter)
 
 
+# #13387: mirrors SummarizationAgent.AGENT_ID. Kept as a literal rather than
+# imported, because importing the agent here would re-introduce exactly the
+# module-availability coupling this test is being freed from.
+SUMMARIZATION_AGENT_ID = "summarization"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Integration: dispatch SummarizationAgent stub on a work item (needs live LLM)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -615,7 +629,22 @@ async def test_integration_summarization_agent_reaches_completed():
     Verifies the run record reaches ``COMPLETED`` (maps to GH#8227's
     "succeeded" language; GH#8261 unified both into ``LLCRunStatus.COMPLETED``).
     """
-    pytest.importorskip("agents.summarization_agent", reason="Real agent module not available in unit test env")
+    # #13387: skip on what this test actually needs — a configured LLM provider —
+    # rather than on whether a module imports.
+    #
+    # It used to call ``pytest.importorskip("agents.summarization_agent")``. Until
+    # #13385 that always fired, but for the wrong reason: llc/tests/conftest.py
+    # installed an ``agents`` stub with ``__path__ = []``, so every ``agents.*``
+    # submodule was unimportable. Once that was fixed the module imports fine and
+    # the test proceeds to fail on ``AgentConfigurationError`` instead — because
+    # ``SummarizationAgent.__init__`` calls ``get_agent_provider_explicit``, which
+    # reads ``AUTOBOT_SUMMARIZATION_PROVIDER`` and raises when it is unset.
+    #
+    # An importable module was never the precondition; it only happened to
+    # coincide with one while a harness bug hid the real dependency.
+    provider_var = f"AUTOBOT_{SUMMARIZATION_AGENT_ID.upper()}_PROVIDER"
+    if not os.environ.get(provider_var):
+        pytest.skip(f"needs a configured LLM provider: {provider_var} is not set")
     adapter = AutoBotAgentAdapter({"agent_class": "agents.summarization_agent.SummarizationAgent"})
     context = {
         "title": "Summarize the widget documentation",

@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import TTL_90_DAYS
 from autobot_shared.time_utils import now_utc
 
@@ -102,7 +103,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
 
                 for entry_raw in feedback_entries:
                     try:
-                        entry = json.loads(entry_raw.decode())
+                        entry = json.loads(decode_redis_value(entry_raw))
                         rating = entry.get("rating", 0)
                         feedback = entry.get("feedback", "")
 

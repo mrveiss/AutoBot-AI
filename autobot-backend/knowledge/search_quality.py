@@ -26,6 +26,26 @@ from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 
+
+def _as_utc(value: datetime) -> datetime:
+    """Return *value* as an aware UTC datetime, treating naive input as UTC.
+
+    Mixing naive and aware datetimes raises ``TypeError: can't compare
+    offset-naive and offset-aware datetimes`` — the failure that made ten tests
+    in this module and its scheduler sibling red (#13162).
+
+    The mix is not a test artefact. ``parse_utc_iso`` returns aware values while
+    the objects it is compared against arrive from callers: a database column
+    declared without a timezone, a JSON payload, or a plain ``datetime.now()``
+    all produce naive ones. Rejecting them would turn a recoverable ambiguity
+    into a crash on the request path.
+
+    UTC is the right assumption rather than a convenient one: every timestamp
+    this codebase writes goes through ``autobot_shared.time_utils.now_utc``.
+    """
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
 # Issue #78: Pre-compiled patterns for performance
 _WORD_PATTERN = re.compile(r"\b\w+\b")
 
@@ -246,7 +266,7 @@ class RelevanceScorer:
         if not created_at:
             return 0.5  # Neutral for unknown age
 
-        age = datetime.now(tz=timezone.utc) - created_at
+        age = datetime.now(tz=timezone.utc) - _as_utc(created_at)
         if age.days <= 0:
             return 1.0
         if age.days >= max_age_days:
@@ -514,9 +534,11 @@ class AdvancedFilter:
         except (ValueError, TypeError):
             return True
 
-        if self.filters.created_after and created_at < self.filters.created_after:
+        # The bounds come from the caller and may be naive, while created_at is
+        # aware from parse_utc_iso — comparing the two raises TypeError (#13162).
+        if self.filters.created_after and created_at < _as_utc(self.filters.created_after):
             return False
-        if self.filters.created_before and created_at > self.filters.created_before:
+        if self.filters.created_before and created_at > _as_utc(self.filters.created_before):
             return False
 
         return True

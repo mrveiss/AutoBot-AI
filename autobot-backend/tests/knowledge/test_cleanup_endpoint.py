@@ -10,47 +10,34 @@ Verifies:
 - dry_run=False returns fixes_applied, issues_details=None
 - Empty KB returns zeroed counts
 
-Heavy dependencies (Redis, ChromaDB, llama_index) are stubbed via
-sys.modules patching so these tests run without a live backend.
+``knowledge.bulk`` is imported directly; it needs no stubbing (#13361).
 """
 
 from __future__ import annotations
 
 import json
-import sys
-import types
 from unittest.mock import MagicMock
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub heavy imports before pulling in knowledge.bulk
-# ---------------------------------------------------------------------------
+from knowledge.bulk import BulkOperationsMixin
 
-for _mod in (
-    "llama_index",
-    "llama_index.core",
-    "llama_index.vector_stores",
-    "llama_index.vector_stores.chroma",
-    "llama_index.llms",
-    "llama_index.llms.ollama",
-    "llama_index.embeddings",
-    "llama_index.embeddings.ollama",
-    "chromadb",
-    "redis",
-    "redis.asyncio",
-):
-    sys.modules.setdefault(_mod, types.ModuleType(_mod))
+# #13361: eleven ``sys.modules`` stubs used to stand here — the eight
+# ``llama_index.*`` names, ``chromadb``, ``redis`` and ``redis.asyncio`` — all
+# installed at import time and never removed, so they escaped into every module
+# collected after this one.  None of them was needed: ``knowledge/bulk.py``
+# imports only ``autobot_shared`` at module level and keeps ``redis``/``aioredis``
+# under ``if TYPE_CHECKING``, while all three packages are hard requirements and
+# therefore importable for real.
+#
+# The two lines after the stub loop were the damaging ones and no ``sys.modules``
+# guard could see them: ``setdefault`` returns the REAL ``redis`` module whenever
+# an earlier import already loaded it, and the code then rebound
+# ``redis.RedisError`` to bare ``Exception`` and ``redis.Redis`` /
+# ``redis.asyncio.Redis`` to ``MagicMock`` on that real module, permanently, for
+# every test in the session.  See the PR for the four provider tests whose
+# runtime silently depended on it.
 
-# Minimal stubs for symbols referenced at module load
-_redis_mod = sys.modules["redis"]
-_redis_mod.RedisError = Exception  # type: ignore[attr-defined]
-_redis_mod.Redis = MagicMock  # type: ignore[attr-defined]
-
-_aioredis_mod = sys.modules["redis.asyncio"]
-_aioredis_mod.Redis = MagicMock  # type: ignore[attr-defined]
-
-from knowledge.bulk import BulkOperationsMixin  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fake composed KB that drives BulkOperationsMixin without a real Redis

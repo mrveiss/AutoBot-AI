@@ -18,10 +18,22 @@ import pytest
 # root conftest installs for services.npu_pipeline.*.
 _PKG_DIR = Path(__file__).parent
 
+_MISSING = object()
+
+_REAL_LOAD_KEYS = (
+    "services.npu_pipeline.shard_planner",
+    "services.npu_pipeline.dispatcher",
+)
+
 
 def _load_module(name: str, filename: str):
-    if name in sys.modules and hasattr(sys.modules[name], "__file__"):
-        return sys.modules[name]
+    # Probe __dict__ rather than using hasattr: the root conftest's package
+    # stubs define a module-level __getattr__ that answers EVERY attribute
+    # with a MagicMock, so hasattr(stub, "__file__") is always True and the
+    # stub would be handed back instead of the real module.
+    existing = sys.modules.get(name)
+    if existing is not None and existing.__dict__.get("__file__"):
+        return existing
     spec = importlib.util.spec_from_file_location(name, str(_PKG_DIR / filename))
     mod = importlib.util.module_from_spec(spec)
     mod.__package__ = "services.npu_pipeline"
@@ -30,8 +42,32 @@ def _load_module(name: str, filename: str):
     return mod
 
 
-_shard_planner = _load_module("services.npu_pipeline.shard_planner", "shard_planner.py")
-_dispatcher_mod = _load_module("services.npu_pipeline.dispatcher", "dispatcher.py")
+def _load_real_modules():
+    """Real-load both modules, then hand ``sys.modules`` back untouched (#13361).
+
+    The registrations are needed only while the two files execute:
+    ``dispatcher.py`` resolves ``from services.npu_pipeline.shard_planner import
+    ShardAssignment`` at exec time, and the module object itself has to be in
+    ``sys.modules`` before its own body runs. Afterwards every symbol the tests
+    need is bound below, so keeping the entries buys nothing and costs the rest
+    of the session: they replaced the root conftest's package stubs for every
+    later-collected module, which is the escape #13361 tracks.
+    """
+    prior = {key: sys.modules.get(key, _MISSING) for key in _REAL_LOAD_KEYS}
+    try:
+        return (
+            _load_module("services.npu_pipeline.shard_planner", "shard_planner.py"),
+            _load_module("services.npu_pipeline.dispatcher", "dispatcher.py"),
+        )
+    finally:
+        for key, module in prior.items():
+            if module is _MISSING:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = module
+
+
+_shard_planner, _dispatcher_mod = _load_real_modules()
 
 LayerRange = _shard_planner.LayerRange
 ShardAssignment = _shard_planner.ShardAssignment
@@ -75,7 +111,7 @@ async def test_happy_path_three_workers():
 
     call_log: List[str] = []
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
         if "/forward" in url:
@@ -123,7 +159,7 @@ async def test_worker_drop_mid_pass_failover():
 
     import aiohttp as _aiohttp
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
 
@@ -172,7 +208,7 @@ async def test_worker_drop_no_peer_raises():
 
     import aiohttp as _aiohttp
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         raise _aiohttp.ClientConnectionError("worker0 down")
 
     session_mock = MagicMock()
@@ -195,7 +231,7 @@ async def test_single_worker_produces_tokens():
     """Single-worker plan: worker is both first and last, produces tokens."""
     plan = _make_plan("w0")
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         assert "/generate" in url, f"Expected /generate, got {url}"
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()

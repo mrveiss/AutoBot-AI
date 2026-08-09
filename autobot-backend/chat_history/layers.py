@@ -113,18 +113,23 @@ class Layer1EssentialStory:
             return ""
 
     async def token_estimate(self, context: dict) -> int:
-        """Read budget from context_windows.yaml; fall back to 600."""
+        """Read the per-model budget from the window config; fall back to 600.
+
+        #13741: this used to read and parse ``context_windows.yaml`` on every
+        call — 49 ms — which #13691 made a per-turn cost by wiring it into
+        ``_fit_l0_l1``. It now reuses ``ContextWindowManager``, which already
+        holds that file parsed and is itself cached (#13706). That removes the
+        second parser of the same file rather than making it faster.
+
+        #7467's concern still holds: the first construction reads from disk, so
+        it is resolved on a thread rather than on the event loop.
+        """
         try:
-            from pathlib import Path
+            from context_window_manager import get_context_window_manager
 
-            import yaml
-
-            yaml_path = Path(__file__).parent.parent / "config" / "context_windows.yaml"
-            # #7467: was sync `yaml_path.read_text` blocking the event loop.
-            content = await asyncio.to_thread(yaml_path.read_text, encoding="utf-8")
-            data = yaml.safe_load(content)
+            cwm = await asyncio.to_thread(get_context_window_manager)
             model_name = context.get("model_name", "default")
-            entry = (data.get("models") or {}).get(model_name) or {}
+            entry = (cwm.config.get("models") or {}).get(model_name) or {}
             if "essential_story_tokens" in entry:
                 return int(entry["essential_story_tokens"])
         except Exception:
@@ -282,7 +287,83 @@ class TieredContextBuilder:
     returned so the caller falls through to the existing unconditional path.
     """
 
-    _L0_L1_MAX_TOKENS: int = 900  # acceptance-criterion guard
+    # #13691: the identity + essential-story block's share of the model's real
+    # prompt budget, replacing a flat 900-token constant that meant something
+    # different on an 8k model than on a 200k one. Enforcement is #13640's
+    # allocator — this is a share, not a second budgeting mechanism.
+    _L0_L1_BUDGET_SHARE: float = 0.25
+
+    # Identity is pruned last: a turn can lose recalled facts and still behave
+    # correctly, but losing who it is cannot be recovered from.
+    _IDENTITY_PRIORITY: int = 90
+    _STORY_PRIORITY: int = 60
+
+    async def _fit_l0_l1(self, l0_text: str, l1_text: str, model_name: str | None) -> "tuple[str, str]":
+        """Trim the always-loaded L0+L1 block to fit its budget (#13691).
+
+        This used to compare two *estimates* against a flat 900 and then render
+        both layers in full regardless — a constant commented "guard" that only
+        logged. Enforcement is now #13640's allocator; this method only decides
+        how much each layer gets.
+
+        The sizes come from the layers themselves. ``Layer1EssentialStory.token_estimate``
+        reads a per-model ``essential_story_tokens`` from ``context_windows.yaml``
+        (``layers.py:115-132``), which is a better statement of intent than any
+        fraction invented here — and it is the precedent the flat 900 was already
+        inconsistent with. ``_L0_L1_BUDGET_SHARE`` is only a ceiling, so a bad
+        config entry cannot hand this block the whole window.
+
+        Identity outranks the essential story: a turn can lose recalled facts
+        and still behave correctly, but losing who it is cannot be recovered
+        from. Non-fatal — on any failure both layers pass through untrimmed,
+        which is the pre-#13691 behaviour.
+        """
+        try:
+            from context_window_manager import ContextSection, get_context_window_manager
+
+            ctx = {"model_name": model_name}
+            l0_target = await Layer0Identity().token_estimate(ctx)
+            l1_target = await Layer1EssentialStory().token_estimate(ctx)
+            # #7467 precedent: never parse the window config on the event loop.
+            cwm = await asyncio.to_thread(get_context_window_manager)
+            ceiling = int(cwm.get_prompt_budget(model_name) * self._L0_L1_BUDGET_SHARE)
+            budget = max(1, min(l0_target + l1_target, ceiling))
+            sections = [
+                ContextSection(
+                    "identity",
+                    l0_text,
+                    priority=self._IDENTITY_PRIORITY,
+                    max_share=l0_target / (l0_target + l1_target),
+                ),
+                # The story takes the whole ceiling: identity is a fixed ~3-line
+                # block that almost never uses its share, and capping the story
+                # at its proportional slice would strand that slack unused.
+                # Identity is protected by its own cap plus its higher priority,
+                # which is what decides who gives way when both overflow.
+                ContextSection("essential_story", l1_text, priority=self._STORY_PRIORITY, max_share=1.0),
+            ]
+            result = cwm.allocate_sections(sections, budget_tokens=budget)
+        except Exception as exc:
+            logger.warning("L0+L1 budget fitting failed, rendering untrimmed: %s", exc, exc_info=True)
+            return l0_text, l1_text
+
+        self._log_trim(result)
+        by_name = {sec.name: sec.content for sec in result.sections}
+        return by_name["identity"], by_name["essential_story"]
+
+    @staticmethod
+    def _log_trim(result) -> None:
+        """Report what the L0+L1 fit shed, so a degraded prompt is not silent."""
+        if not result.trimmed:
+            return
+        logger.info(
+            "L0+L1 over budget: %d -> %d tokens (budget %d); trimmed %s; dropped %s (#13691)",
+            result.tokens_before,
+            result.tokens_after,
+            result.budget,
+            ", ".join(result.trimmed),
+            ", ".join(result.dropped) or "none",
+        )
 
     async def build(
         self,
@@ -314,18 +395,9 @@ class TieredContextBuilder:
         l0 = Layer0Identity()
         l1 = Layer1EssentialStory()
 
-        l0_est = await l0.token_estimate(base_ctx)
-        l1_est = await l1.token_estimate(base_ctx)
-        total_l0_l1 = l0_est + l1_est
-        if total_l0_l1 > self._L0_L1_MAX_TOKENS:
-            logger.warning(
-                "L0+L1 estimated tokens (%d) exceed budget (%d)",
-                total_l0_l1,
-                self._L0_L1_MAX_TOKENS,
-            )
-
         l0_text = await l0.render(base_ctx)
         l1_text = await l1.render(base_ctx)
+        l0_text, l1_text = await self._fit_l0_l1(l0_text, l1_text, model_name)
 
         parts: list[str] = [t for t in [l0_text, l1_text] if t]
 

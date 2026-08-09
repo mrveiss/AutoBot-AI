@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.input_sanitizer import escape_redisearch, escape_redisearch_tag
 
 from .core import AutoBotMemoryGraphCore
 
@@ -80,16 +81,21 @@ class QueryOperationsMixin:
         Returns:
             RediSearch query string
         """
+        # #13762: every value here is caller-supplied. Unescaped, punctuation is
+        # read as query syntax — a term stops being a term and becomes a field
+        # selector, a wildcard, or a boolean operator. The MCP surface reaches
+        # this without the Pydantic bounds the REST surface applies, so the
+        # escaping lives here rather than depending on every caller validating.
         query_parts = []
         if entity_type:
-            query_parts.append(f"@type:{{{entity_type}}}")
+            query_parts.append(f"@type:{{{escape_redisearch_tag(entity_type)}}}")
         if status:
-            query_parts.append(f"@status:{{{status}}}")
+            query_parts.append(f"@status:{{{escape_redisearch_tag(status)}}}")
         if tags:
-            tag_filter = "|".join(tags)
+            tag_filter = "|".join(escape_redisearch_tag(tag) for tag in tags)
             query_parts.append(f"@tags:{{{tag_filter}}}")
         if query and query != "*":
-            query_parts.append(f"({query})")
+            query_parts.append(f"({escape_redisearch(query)})")
         return " ".join(query_parts) if query_parts else "*"
 
     async def _execute_redis_search(

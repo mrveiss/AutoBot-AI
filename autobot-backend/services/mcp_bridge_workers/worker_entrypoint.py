@@ -42,8 +42,13 @@ from autobot_shared.ssot_config import config
 
 logger = get_logger("mcp_worker")
 
-# When set to "1" the worker enforces run-scoped JWT on every ``call`` request.
-# Workers spawned without JWT support can opt out by leaving this unset.
+# Run-scoped JWT is enforced on every ``call`` request when MCP_RUN_JWT_ENFORCE
+# is "1" (#6473). It shipped defaulting ON; the #7437 config migration dropped
+# the default to "" and silently turned it OFF (#13263).
+# #13265 removed the blocker: services/mcp_dispatch.py now mints and forwards a
+# run JWT on every isolated call, and the parent provisions RUN_JWT_SECRET into
+# this scrubbed child's environment so the token can actually be verified.
+# Flipping the default back to "1" belongs to #13263.
 _JWT_ENFORCE = config.mcp_run_jwt_enforce == "1"
 
 _JSONRPC = "2.0"
@@ -124,6 +129,13 @@ async def _validate_run_jwt_param(params: Dict[str, Any]) -> Dict[str, Any] | No
         raise PermissionError(f"run_jwt: token expired — {exc}") from exc
     except JWTDecodeError as exc:
         raise PermissionError(f"run_jwt: invalid token — {exc}") from exc
+    except RuntimeError as exc:
+        # #13265: _secret() raises RuntimeError when no signing secret resolves.
+        # _handle_request only catches PermissionError, so letting this escape
+        # kills the serve loop and the parent restarts the worker until the
+        # restart budget is exhausted. Fail closed on the request instead, with
+        # the reason preserved in the response and the log.
+        raise PermissionError(f"run_jwt: cannot verify token — {exc}") from exc
 
 
 async def _handle_request(bridge: Any, req: Dict[str, Any]) -> Dict[str, Any]:

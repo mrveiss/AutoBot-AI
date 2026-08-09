@@ -3,8 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot Log Rotation Script
 
-LOGS_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs"
-ARCHIVE_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/archive"
+# #13149: both paths defaulted to the deployed install, so running this from a
+# checkout gzipped and `-delete`d the LIVE install's logs — the #13092 failure
+# class. The shared helper resolves the root from this file's own location and
+# still lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
+LOGS_DIR="${PROJECT_ROOT}/logs"
+ARCHIVE_DIR="${PROJECT_ROOT}/logs/archive"
 MAX_AGE_DAYS=30
 
 # Create archive directory

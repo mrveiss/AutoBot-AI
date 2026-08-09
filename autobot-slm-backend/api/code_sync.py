@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -1741,7 +1741,15 @@ _FAST_HEALTH_POLL_TIMEOUT: float = float(
     os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
 )
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
-_HEALTH_POLL_CONNECT_TIMEOUT: float = 3.0
+_DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S = "3"
+_HEALTH_POLL_CONNECT_TIMEOUT: float = float(
+    os.environ.get("AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", _DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S)
+)
+# Delay between health-probe attempts (seconds). Env-overridable alongside the
+# windows above so the whole poll shape is configurable from one place rather
+# than a literal buried in the loop.
+_DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
+_HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
 # Per-component health URLs (localhost only — never egress).
 _COMPONENT_HEALTH_URLS: Dict[str, str] = {
     "autobot-backend": "http://127.0.0.1:8001/api/health",
@@ -2375,7 +2383,7 @@ async def _wait_component_healthy(component: str, steps: List[str], *, slow_star
                 return True
         except Exception:
             pass
-        await asyncio.sleep(2.0)
+        await asyncio.sleep(_HEALTH_POLL_INTERVAL)
 
     # Timeout reached but no systemd failure — the unit may still be starting
     # (e.g. py3.14 venv cold-start). Warn but do NOT roll back (#11413).
@@ -2385,7 +2393,7 @@ async def _wait_component_healthy(component: str, steps: List[str], *, slow_star
         return False
     steps.append(
         f"health: {component} did not respond within {timeout:.0f}s"
-        " — unit not failed; deploy treated as successful (check {url} manually)"
+        f" — unit not failed; deploy treated as successful (check {url} manually)"
     )
     logger.warning("health: %s timeout after %.0fs but unit not failed — proceeding", component, timeout)
     return True
@@ -3579,7 +3587,7 @@ async def get_fleet_sync_job_status(
 @router.get("/fleet/jobs", response_model=List[FleetSyncJobStatus])
 async def list_fleet_sync_jobs(
     _: Annotated[dict, Depends(get_current_user)],
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=100),
 ) -> List[FleetSyncJobStatus]:
     """
     List recent fleet sync jobs (Issue #741 Phase 8).

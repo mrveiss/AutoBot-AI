@@ -13,7 +13,7 @@ Issue #424: Added periodic task for incremental man page updates.
 import asyncio
 import fnmatch
 import os
-import subprocess  # nosec B404 - used for internal script execution only
+import subprocess  # nosec B404  # used for internal script execution only
 import sys
 import time
 from pathlib import Path
@@ -85,7 +85,7 @@ def _run_indexing_subprocess() -> dict:
     dict.  On non-zero exit returns a 'failed' dict; on success returns a
     'success' dict with commands_indexed and total_facts.
     """
-    result = subprocess.run(  # nosec B603 - uses sys.executable with fixed internal script path
+    result = subprocess.run(  # nosec B603  # uses sys.executable with fixed internal script path
         [sys.executable, "scripts/utilities/index_all_man_pages.py"],
         capture_output=True,
         text=True,

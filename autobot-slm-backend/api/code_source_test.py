@@ -128,14 +128,14 @@ class TestCodeSourceValidation:
             # Mock finding similar path
             with patch(
                 "code_source_module._find_similar_paths",
-                return_value="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
+                return_value="/opt/autobot/code_source",
             ):
                 with pytest.raises(HTTPException) as exc_info:
                     await _validate_repo_path(mock_node, "/home/${USER:-autobot}/Desktop/Autobot")
 
                 assert exc_info.value.status_code == 400
                 assert "does not exist" in exc_info.value.detail
-                assert "Did you mean: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}?" in exc_info.value.detail
+                assert "Did you mean: /opt/autobot/code_source?" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_validate_repo_path_timeout(self, mock_node):
@@ -203,7 +203,7 @@ class TestCodeSourceValidation:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            result = await _find_similar_paths(mock_node, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+            result = await _find_similar_paths(mock_node, "/opt/autobot/code_source")
 
             assert result is None
 

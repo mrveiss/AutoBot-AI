@@ -2601,7 +2601,8 @@
       "graphRagService": "Graph-RAG Service",
       "refreshStats": "Refresh Stats",
       "retry": "Retry",
-      "relationTypes": "Relation Types"
+      "relationTypes": "Relation Types",
+      "tabPath": "مسیر ارتباط"
     },
     "pipeline": {
       "runner": {
@@ -3480,6 +3481,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "مسیر ارتباط",
+      "description": "کوتاه‌ترین زنجیره روابط میان دو موجودیت را بیابید.",
+      "fromEntity": "از موجودیت",
+      "fromEntityPlaceholder": "نام موجودیت آغازین...",
+      "toEntity": "به موجودیت",
+      "toEntityPlaceholder": "نام موجودیت مقصد...",
+      "swap": "جابه‌جایی موجودیت‌ها",
+      "direction": "جهت",
+      "directionBoth": "هر جهت",
+      "directionOutgoing": "دنبال‌کردن روابط رو به جلو",
+      "directionIncoming": "دنبال‌کردن روابط رو به عقب",
+      "directionHint": "روابط اغلب تنها در یک جهت ذخیره می‌شوند.",
+      "maxDepth": "بیشینه عمق",
+      "hops": "{count} پرش",
+      "relation": "رابطه",
+      "relationHint": "(اختیاری)",
+      "relationPlaceholder": "تنها این نوع رابطه دنبال شود...",
+      "findPath": "یافتن مسیر",
+      "searching": "در حال جست‌وجو...",
+      "connectedIn": "متصل در {count} پرش | متصل در {count} پرش",
+      "sameEntity": "هر دو نام به یک موجودیت اشاره دارند: {name}",
+      "fuzzyMatch": "هیچ موجودیتی با نام {names} وجود ندارد — مسیر زیر به نزدیک‌ترین تطابق مربوط است. | هیچ موجودیتی با نام‌های {names} وجود ندارد — مسیر زیر به نزدیک‌ترین تطابق‌ها مربوط است.",
+      "crossedForwards": "رو به جلو",
+      "crossedBackwards": "رو به عقب",
+      "unnamedRelation": "مرتبط با",
+      "noPathFound": "هیچ ارتباطی میان این موجودیت‌ها یافت نشد.",
+      "noPathHint": "عمق را افزایش دهید، هر جهت را مجاز کنید یا فیلتر رابطه را بردارید.",
+      "entityNotFound": "این نام‌ها با هیچ موجودیتی مطابقت نداشتند:",
+      "entityNotFoundHint": "املا را بررسی کنید یا ابتدا موجودیت‌ها را استخراج کنید تا در گراف موجود باشند.",
+      "errorEnterBoth": "لطفاً هم موجودیت مبدأ و هم مقصد را وارد کنید.",
+      "notInGraph": "این موجودیت‌ها هنوز در گراف روابط نیستند.",
+      "notInGraphHint": "آن‌ها وجود دارند اما پیوندی در گراف ندارند، بنابراین ارتباطی قابل ردیابی نیست. استخراج موجودیت‌ها را دوباره اجرا کنید."
     }
   },
   "reasoningTrace": {
@@ -6686,6 +6721,7 @@
       "loadFailed": "بارگذاری حافظه‌ها ناموفق بود. ممکن است بک‌اند در دسترس نباشد.",
       "forgetFailed": "فراموش کردن مورد حافظه ناموفق بود.",
       "forgetEverywhereFailed": "حذف آبشاری مورد حافظه ناموفق بود.",
+      "forgetEverywhereAmbiguous": "این حافظه در بیش از یک مخزن وجود دارد — به‌جای آن از حذف به‌ازای هر مخزن در همان ردیف استفاده کنید.",
       "exportDownloaded": "خروجی حافظه دانلود شد.",
       "exportFailed": "خروجی گرفتن ناموفق بود. لطفاً دوباره تلاش کنید."
     },

@@ -4,6 +4,12 @@
 # AutoBot Chat System Debug Script
 # Demonstrates comprehensive MCP debugging workflow
 
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
 echo "🔍 AutoBot Chat System Debugging Session"
 echo "========================================"
 echo "Scenario: Users report chat messages not sending properly"
@@ -102,8 +108,8 @@ echo -e "\n${BLUE}📁 Step 6: File System Analysis${NC}"
 echo "Examining chat implementation files..."
 
 # Check if chat files exist
-CHAT_FILES=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}", "pattern": "**/[Cc]hat*.{js,vue,py}", "excludePatterns": ["node_modules/**", "venv/**"]}}}' | \
-    mcp-server-filesystem ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} 2>&1 | parse_mcp_response)
+CHAT_FILES=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "${PROJECT_ROOT}", "pattern": "**/[Cc]hat*.{js,vue,py}", "excludePatterns": ["node_modules/**", "venv/**"]}}}' | \
+    mcp-server-filesystem ${PROJECT_ROOT} 2>&1 | parse_mcp_response)
 
 FILE_COUNT=$(echo "$CHAT_FILES" | jq -r '.files | length // 0' 2>/dev/null)
 echo -e "  Found ${GREEN}$FILE_COUNT${NC} chat-related files"

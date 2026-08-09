@@ -144,7 +144,7 @@ User Query: "What bugs did we fix today?"
 │   - Updated API calls in frontend components                │
 │   - Deployed to Frontend VM (<frontend-ip>)                 │
 │ Created: 2025-10-03 09:15                                    │
-│ Relations: [relates_to: API Documentation Update]           │
+│ Relations: [related_to: API Documentation Update]           │
 └─────────────────────────────────────────────────────────────┘
                          ↓
          ┌───────────────────────────────────┐

@@ -77,6 +77,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from autobot_shared.url_safety import is_public_url_async
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
 from services.mcp_bridge_manifest import MCPBridgeManifest
@@ -111,15 +112,53 @@ BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BRO
 DEFAULT_BROWSER_SESSION_ID = "default"
 
 # URL Whitelist - Only these domains are allowed
-ALLOWED_URL_PATTERNS = [
-    r"^https?://localhost",
-    r"^https?://127\.0\.0\.1",
-    r"^https?://172\.16\.168\.\d+",  # AutoBot VMs
-    r"^https?://.*\.example\.com$",  # Example - add real domains
-    r"^https?://github\.com",
-    r"^https?://.*\.github\.com",
-    r"^https?://.*\.githubusercontent\.com",
-]
+# Internal hosts this ADMIN surface may still reach (#13236 step 5).
+#
+# Replaces a regex allowlist over the whole URL, which was unsound: the
+# patterns were anchored at the start but not the end, so any attacker domain
+# prefixed with an allowlisted string passed —
+# ``https://github.com.evil.example/`` matched ``^https?://github\.com``.
+# Public hosts no longer need listing at all; they are permitted by the
+# DNS-resolving guard, so this list is only the internal exceptions.
+#
+# Kept because reaching internal services is what this surface is *for*:
+# pointing the browser at one and reading what the page requests is how wrong
+# API calls get found and callers mapped to the right routes. Matched against
+# the parsed hostname, never against the raw URL string.
+INTERNAL_HOST_EXCEPTIONS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
+
+#: SSOT config keys naming the fleet's own hosts. The admin surface may reach
+#: these, resolved from ConfigRegistry rather than hardcoded — the old regex
+#: baked a /24 into the source, which is both a wider exemption than needed
+#: (a whole subnet, not the known hosts) and a fleet address in code.
+_FLEET_HOST_ATTRS = (
+    "MAIN_MACHINE_IP",
+    "FRONTEND_VM_IP",
+    "NPU_WORKER_VM_IP",
+    "REDIS_VM_IP",
+    "AI_STACK_VM_IP",
+    "BROWSER_VM_IP",
+    "SLM_VM_IP",
+)
+
+
+def fleet_host_exceptions() -> frozenset[str]:
+    """The fleet's own VM addresses, from SSOT config.
+
+    Read on each call rather than at import: ``NetworkConstants`` resolves
+    these lazily through ``ConfigRegistry``, so caching here would pin
+    whatever the values were at import time.
+    """
+    hosts = set()
+    for attr in _FLEET_HOST_ATTRS:
+        try:
+            value = getattr(NetworkConstants, attr, "")
+        except Exception:  # config unavailable — exempt nothing rather than guess
+            continue
+        if value:
+            hosts.add(str(value).strip().lower())
+    return frozenset(hosts)
+
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
@@ -148,29 +187,52 @@ BLOCKED_JS_PATTERNS = [
 ]
 
 
-def is_url_allowed(url: str) -> bool:
+def _is_excepted_internal_host(hostname: str) -> bool:
+    """True if *hostname* is an internal host this admin surface may reach.
+
+    Matches the **parsed hostname**, exactly or by network containment — never
+    a substring of the URL. That is the difference from the regex allowlist
+    this replaced, under which ``https://localhost.evil.example/`` was allowed.
     """
-    Validate URL against whitelist patterns
+    host = (hostname or "").strip("[]").lower()
+    if not host:
+        return False
+    if host in INTERNAL_HOST_EXCEPTIONS:
+        return True
+
+    return host in fleet_host_exceptions()
+
+
+async def is_url_allowed(url: str) -> bool:
+    """Validate a URL for the admin browser surface (#13236 step 5).
 
     Security measures:
-    - Pattern-based URL validation
-    - Block potentially dangerous schemes
-    - Prevent access to internal/private networks (except AutoBot VMs)
+    - block non-HTTP schemes;
+    - permit any URL that resolves to a **public** address, via
+      ``is_public_url_async`` — the DNS-resolving guard, so a hostname that
+      resolves into private space is rejected however it is spelled;
+    - permit a **non**-public address only when its hostname is an explicit
+      internal exception, matched on the parsed host rather than by regex.
+
+    This replaces a prefix-matching regex allowlist that was bypassable: its
+    patterns had no end anchor, so ``https://github.com.evil.example/`` and
+    ``https://localhost.evil.example/`` both passed.
     """
     try:
         parsed = urlparse(url)
 
-        # Block dangerous schemes
         if parsed.scheme not in ALLOWED_URL_SCHEMES:
             logger.warning("Blocked non-HTTP scheme: %s", parsed.scheme)
             return False
 
-        # Check against whitelist patterns
-        for pattern in ALLOWED_URL_PATTERNS:
-            if re.match(pattern, url):
-                return True
+        if await is_public_url_async(url):
+            return True
 
-        logger.warning("URL not in whitelist: %s", url)
+        if _is_excepted_internal_host(parsed.hostname or ""):
+            logger.info("Allowing admin browser navigation to internal host: %s", parsed.hostname)
+            return True
+
+        logger.warning("Blocked browser navigation to non-public URL: %s", url)
         return False
 
     except Exception as e:
@@ -631,10 +693,31 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+async def _reject_non_public_url(params: Metadata) -> None:
+    """Validate a ``url`` in *params* with the DNS-resolving guard (#13204).
+
+    No-op when the action carries no URL. Raises 403 rather than returning a
+    falsy result so a caller cannot mistake a blocked navigation for an empty
+    page.
+    """
+    url = params.get("url") if isinstance(params, dict) else None
+    if not url:
+        return
+
+    if not await is_public_url_async(str(url)):
+        logger.warning("Blocked browser navigation to non-public URL: %s", url)
+        raise HTTPException(
+            status_code=403,
+            detail="URL is not a public address",
+        )
+
+
 async def send_to_browser_vm(
     action: str,
     params: Metadata,
     session_id: str = DEFAULT_BROWSER_SESSION_ID,
+    *,
+    internal_ok: bool = False,
 ) -> Metadata:
     """
     Send automation command to Browser VM
@@ -645,7 +728,40 @@ async def send_to_browser_vm(
     Issue #11539: ``session_id`` is threaded on every call so the worker
     routes to the BrowserContext dedicated to that conversation instead of a
     single context shared (and its cookies leaked) across every caller.
+
+    #13204: any URL in *params* is validated here, at the transport itself.
+    This helper previously performed **no** validation, and it is reachable
+    from the agent tool path — ``chat_workflow/tool_handler.py`` forwards a
+    model-chosen ``tool_name`` with model-supplied ``params``, so a navigate
+    URL could come straight from the model to the browser worker.
+
+    The guard lives here rather than at each call site deliberately: it is the
+    one place every current *and future* caller passes through, so a new call
+    site cannot reintroduce the gap. An audit found only ``navigate`` carries
+    a URL at all — the rest pass selectors, scripts and indices — so this
+    validates the URL when present and leaves the others untouched.
+
+    Args:
+        internal_ok: Skip the public-address check. Set **only** by this
+            module's own ``/browser/mcp/*`` endpoints, which are an admin
+            browser-remote-control surface (router-level
+            ``check_admin_permission`` plus per-endpoint rate limiting).
+
+            That surface is deliberately allowed to reach internal hosts, and
+            the reason is worth recording so this exemption is not later
+            removed as a leftover: pointing the browser at an internal service
+            and reading what the page actually requests is how wrong API calls
+            get found and callers mapped to the right routes. Blocking
+            loopback and the VM range would remove that, which is what
+            ``ALLOWED_URL_PATTERNS``' loopback and VM-range entries exist for.
+
+            Callers carrying untrusted input — above all the agent tool path,
+            where ``tool_handler`` forwards a model-chosen tool name with
+            model-supplied params — must leave this False.
     """
+    if not internal_ok:
+        await _reject_non_public_url(params)
+
     try:
         http_client = get_http_client()
         payload = {
@@ -697,7 +813,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    if not is_url_allowed(request.url):
+    if not await is_url_allowed(request.url):
         raise HTTPException(
             status_code=403,
             detail=f"URL not in whitelist: {request.url}",
@@ -713,6 +829,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
             "timeout": request.timeout,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -741,6 +858,7 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
         "click",
         {"selector": request.selector, "timeout": request.timeout},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -773,6 +891,7 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
             "timeout": request.timeout,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -802,6 +921,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
         "screenshot",
         {"selector": request.selector, "full_page": request.full_page},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -838,6 +958,7 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
         "evaluate",
         {"script": request.script},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -870,6 +991,7 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
             "state": request.state,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -899,6 +1021,7 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
         "get_text",
         {"selector": request.selector},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -927,6 +1050,7 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
         "get_attribute",
         {"selector": request.selector, "attribute": request.attribute},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -956,6 +1080,7 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
         "select",
         {"selector": request.selector, "value": request.value},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -985,6 +1110,7 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
         "hover",
         {"selector": request.selector},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1014,6 +1140,7 @@ async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
         "browser_state",
         {},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1045,6 +1172,7 @@ async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1078,6 +1206,7 @@ async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1111,6 +1240,7 @@ async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1140,6 +1270,7 @@ async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
         "hover_index",
         {"index": request.index, "expected_element_count": request.expected_element_count},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1190,7 +1321,11 @@ async def get_browser_mcp_status() -> Metadata:
             "status": vm_status,
         },
         "security": {
-            "url_whitelist_patterns": len(ALLOWED_URL_PATTERNS),
+            # #13236 step 5: URLs are validated by the DNS-resolving guard,
+            # not a pattern list. What remains configurable is the set of
+            # internal hosts this admin surface may still reach.
+            "url_validation": "dns_resolving_public_address_guard",
+            "internal_host_exceptions": len(INTERNAL_HOST_EXCEPTIONS) + len(fleet_host_exceptions()),
             "blocked_js_patterns": len(BLOCKED_JS_PATTERNS),
             "rate_limit": f"{MAX_REQUESTS_PER_MINUTE} requests/minute",
         },

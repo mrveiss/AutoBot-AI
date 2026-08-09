@@ -306,7 +306,7 @@ class SystemCommandAgent(StandardizedAgent):
                 if result["exit_code"] == 0:
                     logger.info("Detected package manager: %s", pm_name)
                     return pm_name
-            except Exception:  # nosec B112 - intentional: skip failing PMs
+            except Exception:  # nosec B112  # intentional: skip failing PMs
                 continue
 
         return None

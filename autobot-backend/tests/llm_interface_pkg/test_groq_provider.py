@@ -11,38 +11,22 @@ are made.
 
 from __future__ import annotations
 
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Minimal stubs so the module can be imported without the real groq SDK
-# or the full autobot runtime.
-# ---------------------------------------------------------------------------
+from llm_shared.models import LLMRequest
+from llm_shared.providers.groq import GroqProvider
 
+# #13361: the ``groq`` and ``xxhash`` ``sys.modules`` stubs this module used to
+# install at import time are gone, together with the leak they left behind.
+# Neither is reachable from the imports below — ``GroqProvider`` imports ``groq``
+# lazily inside ``_create_client()``, which no test here triggers because every
+# one assigns ``provider._client`` itself — and ``xxhash`` is a hard requirement
+# that is always importable.  The ``xxhash`` stand-in returned a constant digest
+# for every input, so leaving it live collapsed the LLM cache key space for
+# every test that ran afterwards in the same session.
 
-def _make_groq_stub():
-    """Return a minimal ``groq`` module stub."""
-    stub = types.ModuleType("groq")
-    stub.AsyncGroq = MagicMock
-    sys.modules["groq"] = stub
-    return stub
-
-
-def _make_xxhash_stub():
-    stub = types.ModuleType("xxhash")
-    stub.xxh64 = MagicMock(return_value=MagicMock(hexdigest=MagicMock(return_value="0" * 16)))
-    sys.modules["xxhash"] = stub
-
-
-_make_groq_stub()
-_make_xxhash_stub()
-
-
-from llm_shared.models import LLMRequest  # noqa: E402
-from llm_shared.providers.groq import GroqProvider  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

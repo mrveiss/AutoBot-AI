@@ -178,6 +178,24 @@ async def cancel_run(
     return _run_to_dict(run)
 
 
+async def _agent_belongs_to_org(session: AsyncSession, agent_id: str, org_id: Any) -> bool:
+    """True when *agent_id* has run for *org_id* (#13771).
+
+    ``LLCHeartbeatRun`` is the agent-to-company binding the other routes in this
+    router already scope on; reusing it avoids inventing a second notion of
+    which company an agent belongs to.
+    """
+    result = await session.execute(
+        select(LLCHeartbeatRun.id)
+        .where(
+            LLCHeartbeatRun.agent_id == agent_id,
+            LLCHeartbeatRun.company_id == org_id,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 @router.get("/{agent_id}/diary", response_model=List[Dict[str, Any]])
 async def get_agent_diary(
     agent_id: str,
@@ -185,6 +203,7 @@ async def get_agent_diary(
     offset: int = Query(0, ge=0),
     date_from: Optional[str] = Query(None, description="ISO date filter start (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="ISO date filter end (YYYY-MM-DD)"),
+    session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -192,7 +211,16 @@ async def get_agent_diary(
 
     Reads from the KB via ``AgentDiaryService``.  Supports ``limit``/``offset``
     pagination and optional ``date_from``/``date_to`` filters (inclusive).
+
+    Diary entries carry no tenant dimension of their own, so the agent is bound
+    to a company the same way the sibling run routes above do it (#13771): via
+    ``LLCHeartbeatRun``. An agent that has never run for the caller's company
+    reads as empty rather than 404, so the response cannot be used to probe
+    which agent ids exist elsewhere.
     """
+    if not await _agent_belongs_to_org(session, agent_id, ctx.org_id):
+        return []
+
     try:
         from memory.agent_diary import AgentDiaryService
 

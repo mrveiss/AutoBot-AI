@@ -244,6 +244,10 @@ describe('useVoiceOutput — sequential fallback queue (#12502)', () => {
         return {
           ok: true,
           status: 200,
+          // #13215: a real Response always has headers; without the framing
+          // marker the client takes the whole-blob path these tests cover.
+          headers: { get: () => null },
+          body: null,
           blob: async () => ({ arrayBuffer: async () => new ArrayBuffer(8) }),
         }
       },
@@ -288,6 +292,10 @@ describe('useVoiceOutput — sequential fallback queue (#12502)', () => {
         return {
           ok: true,
           status: 200,
+          // #13215: a real Response always has headers; without the framing
+          // marker the client takes the whole-blob path these tests cover.
+          headers: { get: () => null },
+          body: null,
           blob: async () => ({ arrayBuffer: async () => new ArrayBuffer(8) }),
         }
       },

@@ -131,12 +131,16 @@ def test_hash_dict_args_unchanged():
     """Dict args continue to produce the same stable hash as before the fix."""
     tool = _make_tool(
         "read_file",
-        {"path": "/tmp/x", "encoding": "utf-8"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+        {"path": "/tmp/x", "encoding": "utf-8"},  # nosec B108  # test/controlled code uses tmpdir intentionally
     )
     expected_canonical = json.dumps(
         {
             "n": "read_file",
-            "a": {"path": "/tmp/x", "encoding": "utf-8"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+            "a": {
+                # test/controlled code uses tmpdir intentionally
+                "path": "/tmp/x",  # nosec B108
+                "encoding": "utf-8",
+            },
         },
         sort_keys=True,
     )

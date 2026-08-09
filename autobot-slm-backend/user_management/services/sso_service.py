@@ -135,7 +135,7 @@ class SSOService(BaseService):
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
-                "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
+                "token_url": "https://oauth2.googleapis.com/token",  # nosec B105  # OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
                 # Google does NOT support RP-initiated OIDC end_session (no end_session_endpoint
@@ -145,7 +145,8 @@ class SSOService(BaseService):
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
-                "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
+                # OAuth2 public token endpoint
+                "token_url": "https://github.com/login/oauth/access_token",  # nosec B105
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
                 # GitHub OAuth2 (not OIDC) — no standard end_session_endpoint

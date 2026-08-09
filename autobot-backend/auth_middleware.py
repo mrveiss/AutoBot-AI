@@ -25,9 +25,13 @@ from autobot_shared.auth.jwt_core import (
 )
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exported, #13688)
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.user_management.password_epoch import (
+    is_token_revoked_by_password_change,
+)
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -191,14 +195,22 @@ class AuthenticationMiddleware:
                 logger.error("Failed to load AUTOBOT_JWT_PRIVATE_KEY: %s — will auto-generate", exc)
 
         # Tier 2: durable file (survives restart and code-sync deploys)
-        if key_file.exists():
-            try:
+        #
+        # #13162: the existence probe belongs INSIDE the guard. Path.exists()
+        # only swallows "not there" errnos (ENOENT/ENOTDIR/ELOOP) — EACCES
+        # propagates. When the service user cannot traverse the service-keys
+        # directory (e.g. it is mode 0700 and owned by another account) the
+        # PermissionError escaped this function, out of the AuthMiddleware
+        # constructor, and turned every request behind check_admin_permission
+        # into a 500 instead of falling through to the tiers below.
+        try:
+            if key_file.exists():
                 pem_private = key_file.read_text(encoding="utf-8")
                 private_key = _load_pem(pem_private)
                 logger.info("RS256 private key loaded from durable file %s", key_file)
                 return pem_private, _derive_public(private_key), kid
-            except Exception as exc:
-                logger.warning("Durable RS256 key file %s is invalid: %s — regenerating", key_file, exc)
+        except Exception as exc:
+            logger.warning("Durable RS256 key file %s is unusable: %s — regenerating", key_file, exc)
 
         # Tier 3: in-memory security config (previous process wrote it without persisting to file)
         stored_pem = self.security_config.get("jwt_private_key_pem", "")
@@ -591,6 +603,14 @@ class AuthenticationMiddleware:
         if token_data.get("org_id"):
             user["org_id"] = token_data["org_id"]
 
+        # #12924: carry ``iat`` through so the async ``get_current_user`` can
+        # reject tokens minted before a password change. This extraction is
+        # synchronous and cannot await Redis itself, which is exactly why the
+        # previous blacklist-based control was unreachable from here.
+        if token_data.get("iat") is not None:
+            user["iat"] = token_data["iat"]
+        user["sub"] = token_data.get("sub") or username
+
         return user
 
     def _extract_user_from_session(self, request: Request) -> Dict | None:
@@ -878,6 +898,18 @@ async def get_current_user(request: Request) -> Dict:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
             )
+
+        # #12924: a token minted before its subject's password changed is no
+        # longer valid. This is the first point on the request path that can
+        # await, which is why the check lives here rather than in the
+        # synchronous extraction above.
+        if user_data.get("auth_method") == "jwt" and await is_token_revoked_by_password_change(user_data):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token is no longer valid — password was changed. Please sign in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         return user_data
 
     # Fallback: run-scoped JWT — async because it hits the Redis denylist.

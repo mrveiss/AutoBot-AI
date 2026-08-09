@@ -872,6 +872,7 @@
       "loadFailed": "Échec du chargement des mémoires. Le backend est peut-être indisponible.",
       "forgetFailed": "Échec de l'oubli de l'élément de mémoire.",
       "forgetEverywhereFailed": "Échec de la suppression en cascade de l'élément de mémoire.",
+      "forgetEverywhereAmbiguous": "Cette mémoire existe dans plusieurs magasins — utilisez plutôt la suppression par magasin sur la ligne.",
       "exportDownloaded": "Export de mémoire téléchargé.",
       "exportFailed": "L'export a échoué. Veuillez réessayer."
     },
@@ -2824,7 +2825,8 @@
       "entitiesAndRelations": "{entities} entités, {relations} relations",
       "success": "Succès",
       "failedStatus": "Échoué",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "tabPath": "Chemin de connexion"
     },
     "failedVectorizations": {
       "title": "Vectorisations échouées",
@@ -4080,6 +4082,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Voulez-vous vraiment supprimer ce dossier surveillé ?"
+    },
+    "graphPath": {
+      "title": "Chemin de connexion",
+      "description": "Trouvez la plus courte chaîne de relations reliant deux entités.",
+      "fromEntity": "Entité de départ",
+      "fromEntityPlaceholder": "Nom de l'entité de départ...",
+      "toEntity": "Entité d'arrivée",
+      "toEntityPlaceholder": "Nom de l'entité cible...",
+      "swap": "Inverser les entités",
+      "direction": "Direction",
+      "directionBoth": "Toute direction",
+      "directionOutgoing": "Suivre les relations vers l'avant",
+      "directionIncoming": "Suivre les relations vers l'arrière",
+      "directionHint": "Les relations ne sont souvent enregistrées que dans un sens.",
+      "maxDepth": "Profondeur maximale",
+      "hops": "{count} sauts",
+      "relation": "Relation",
+      "relationHint": "(facultatif)",
+      "relationPlaceholder": "Suivre uniquement ce type de relation...",
+      "findPath": "Trouver le chemin",
+      "searching": "Recherche...",
+      "connectedIn": "Reliées en {count} saut | Reliées en {count} sauts",
+      "sameEntity": "Les deux noms désignent la même entité : {name}",
+      "fuzzyMatch": "Aucune entité ne s'appelle {names} — le chemin ci-dessous concerne la correspondance la plus proche. | Aucune entité ne s'appelle {names} — le chemin ci-dessous concerne les correspondances les plus proches.",
+      "crossedForwards": "vers l'avant",
+      "crossedBackwards": "vers l'arrière",
+      "unnamedRelation": "lié à",
+      "noPathFound": "Aucune connexion trouvée entre ces entités.",
+      "noPathHint": "Essayez d'augmenter la profondeur, d'autoriser toute direction ou de retirer le filtre de relation.",
+      "entityNotFound": "Ces noms ne correspondent à aucune entité :",
+      "entityNotFoundHint": "Vérifiez l'orthographe, ou extrayez d'abord les entités pour qu'elles existent dans le graphe.",
+      "errorEnterBoth": "Veuillez saisir une entité de départ et une entité d'arrivée.",
+      "notInGraph": "Ces entités ne sont pas encore dans le graphe de relations.",
+      "notInGraphHint": "Elles existent mais n'ont aucun lien dans le graphe : aucune connexion ne peut être tracée. Relancez l'extraction d'entités."
     }
   },
   "workflow": {

@@ -13,7 +13,7 @@ Detects installed roles on the local system based on:
 
 import json
 import logging
-import subprocess  # nosec B404 - subprocess used for systemctl status checks
+import subprocess  # nosec B404  # subprocess used for systemctl status checks
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
@@ -132,7 +132,7 @@ class RoleDetector:
     def _check_service(self, service_name: str) -> bool:
         """Check if a systemd service is running."""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is a configured role name
+            result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv; service_name is a configured role name
                 ["systemctl", "is-active", service_name],
                 capture_output=True,
                 text=True,

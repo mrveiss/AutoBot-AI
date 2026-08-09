@@ -16,11 +16,18 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration
-CERT_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/certs"
+CERT_DIR="${PROJECT_ROOT}/certs"
 CA_DIR="${CERT_DIR}/ca"
 WARNING_DAYS=30
 VALIDITY_DAYS=365
@@ -247,8 +254,8 @@ if [ ${#CERTS_TO_RENEW[@]} -gt 0 ]; then
 
         # Distribute renewed certificates
         log_info "Distributing renewed certificates to VMs"
-        if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/security/distribute-certificates.sh" ]; then
-            ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/security/distribute-certificates.sh
+        if [ -f "${PROJECT_ROOT}/scripts/security/distribute-certificates.sh" ]; then
+            ${PROJECT_ROOT}/scripts/security/distribute-certificates.sh
         else
             log_warn "Certificate distribution script not found"
             log_warn "Please distribute certificates manually"

@@ -128,6 +128,34 @@ class AgentTerminalSession:
             "agent_role": self.agent_role.value,
         }
 
+    def set_live_turn_interpreting(self, live: bool) -> None:
+        """Record whether a chat turn is polling this approval (#13480).
+
+        Both the approve path and the polling chat turn used to interpret the
+        same command, so an approved command with a watcher cost two LLM calls
+        and persisted two interpretations. This marks which one is present so
+        exactly one of them does it.
+
+        No-op without a pending approval: there is nothing to interpret, and
+        creating the dict here would fabricate an approval that was never
+        requested.
+        """
+        if self.pending_approval is None:
+            return
+        self.pending_approval["live_turn_interpreting"] = bool(live)
+
+    def has_live_turn_interpreting(self) -> bool:
+        """Is a chat turn currently going to interpret this command's result?
+
+        Defaults to False, which is the safe direction: an unmarked approval
+        means the approve path interprets, so a late approval still produces
+        something. The dangerous default is the other one — believing a turn is
+        present when it has gone, which leaves nobody interpreting at all.
+        """
+        if not self.pending_approval:
+            return False
+        return bool(self.pending_approval.get("live_turn_interpreting"))
+
     def has_pending_approval(self) -> bool:
         """Check if session has pending approval (Issue #372)."""
         return self.pending_approval is not None

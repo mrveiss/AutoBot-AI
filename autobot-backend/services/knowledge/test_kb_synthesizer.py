@@ -29,6 +29,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _STUBS: dict = {}
+_STUB_MISSING = object()
 
 
 def _make_stub(name: str) -> types.ModuleType:
@@ -48,7 +49,31 @@ _ssot.config.port.chromadb = 8100  # type: ignore[attr-defined]
 # utils / chromadb_client stubs (loaded lazily inside methods — stub at import time)
 _utils_stub = _make_stub("utils")
 _chromadb_stub = _make_stub("utils.chromadb_client")
-_async_chromadb_stub = _make_stub("utils.async_chromadb_client")
+# _make_stub() uses sys.modules.setdefault but returns its own fresh object, so
+# when a sibling test module registered this name first the returned stub is a
+# dangling copy that production code never sees. Read the registered module back.
+_make_stub("utils.async_chromadb_client")
+
+# #13651: force *our* stub in for the two chromadb names, remembering what it
+# displaced. ``setdefault`` is a no-op once the genuine module is imported, and
+# the lines just below write AsyncMocks onto whatever is registered -- which was
+# the genuine module. Installing our own object means the mutations land on the
+# stub; the restore after the import puts the real module back untouched.
+_DISPLACED_BY_STUB = {}
+for _n in ("utils.chromadb_client", "utils.async_chromadb_client"):
+    _registered = sys.modules.get(_n, _STUB_MISSING)
+    if _registered is not _STUBS[_n]:
+        # Only when something else holds the name — rewriting our own stub back
+        # over itself is a no-op the leak guard would still record as a mutation.
+        _DISPLACED_BY_STUB[_n] = _registered
+        sys.modules[_n] = _STUBS[_n]
+_async_chromadb_stub = sys.modules["utils.async_chromadb_client"]
+# Injecting a submodule straight into sys.modules does not bind it on the
+# parent package, so mock.patch("utils.async_chromadb_client....") — used by
+# services/rag_service_kb_synthesis_test.py — cannot resolve it. Bind it, and
+# seed the symbol production imports so patch() finds an existing attribute.
+_async_chromadb_stub.get_async_chromadb_client = AsyncMock()  # type: ignore[attr-defined]
+sys.modules["utils"].async_chromadb_client = _async_chromadb_stub  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # Load kb_synthesizer via importlib to bypass package __init__ imports
@@ -59,7 +84,19 @@ _spec = importlib.util.spec_from_file_location("services.knowledge.kb_synthesize
 assert _spec and _spec.loader, "Could not load kb_synthesizer spec"
 _kb_synth_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.kb_synthesizer"] = _kb_synth_mod
-_spec.loader.exec_module(_kb_synth_mod)  # type: ignore[union-attr]
+try:
+    _spec.loader.exec_module(_kb_synth_mod)  # type: ignore[union-attr]
+except BaseException:  # noqa: BLE001 - re-raised below
+    # #13651: a failed import must not leave our stub installed for the rest of
+    # the session. The guard's own advice is to install and remove in the same
+    # try/finally; without this, an ImportError here is strictly worse than the
+    # old behaviour, which left the genuine module untouched.
+    for _n, _prev in _DISPLACED_BY_STUB.items():
+        if _prev is not _STUB_MISSING:
+            sys.modules[_n] = _prev
+        else:
+            sys.modules.pop(_n, None)
+    raise
 
 # Expose the module as an attribute on the package stub so patch() can resolve it
 if "services.knowledge" in sys.modules:
@@ -69,6 +106,35 @@ from services.knowledge.kb_synthesizer import (  # noqa: E402
     KBSynthesizer,
     get_kb_synthesizer,
 )
+
+# #13435: see the matching note in test_analyzer_service.py. The stubs were
+# needed to import kb_synthesizer and are needed again while this module's tests
+# run, but not in between — and "in between" is when pytest imports every other
+# module in the worker, which is how ``utils`` and its children escaped this
+# directory. ``_reinstall_module_stubs`` in this package's conftest puts these
+# exact objects back around this module's tests and removes them afterwards.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
+    if name in sys.modules
+}
+
+# Put back whatever those stubs displaced (#13651): a genuine module imported
+# before this one must survive it as the same, unmutated object.
+#
+# The parent attribute is restored alongside the ``sys.modules`` entry. They are
+# two separate channels -- ``mock.patch("utils.async_chromadb_client.X")``
+# resolves via ``getattr(sys.modules["utils"], ...)`` (#11532, #12463), while
+# ``import utils.async_chromadb_client`` reads the key -- and letting them
+# disagree would mean patching a stub while the code under test holds the real
+# module.
+for _n, _prev in _DISPLACED_BY_STUB.items():
+    if _prev is not _STUB_MISSING:
+        sys.modules[_n] = _prev
+        _parent_name, _, _leaf = _n.rpartition(".")
+        _parent = sys.modules.get(_parent_name) if _parent_name else None
+        if _parent is not None:
+            setattr(_parent, _leaf, _prev)
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
 _cluster_id = KBSynthesizer._cluster_id  # type: ignore[attr-defined]
@@ -152,8 +218,10 @@ async def test_get_collection_creates_once() -> None:
     client = _make_chromadb_client(col)
 
     synth = KBSynthesizer(llm_service=_make_llm())
-    # Patch the lazily-imported symbol inside utils.chromadb_client stub
-    _chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
+    # knowledge.backends.get_async_default_client() lazily imports
+    # get_async_chromadb_client from utils.async_chromadb_client (#5316), so the
+    # mock belongs on that stub — not on the sync utils.chromadb_client one.
+    _async_chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
 
     c1 = await synth._get_collection()
     c2 = await synth._get_collection()

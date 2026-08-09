@@ -198,7 +198,7 @@ r = redis.Redis(host='<database-ip>', port=6379, db=0)
 
 relation = {
     "to": "target-entity-uuid",
-    "type": "relates_to",
+    "type": "related_to",
     "created_at": int(time.time() * 1000),
     "metadata": {"strength": 0.9}
 }
@@ -210,7 +210,7 @@ r.json().arrappend(out_key, '$.relations', relation)
 
 # Incoming relation (reverse)
 in_key = "memory:graph:relations:in:target-entity-uuid"
-reverse_rel = {"from": "source-entity-uuid", "type": "relates_to", "created_at": relation['created_at']}
+reverse_rel = {"from": "source-entity-uuid", "type": "related_to", "created_at": relation['created_at']}
 r.json().set(in_key, '$', {"entity_id": "target-entity-uuid", "relations": []}, nx=True)
 r.json().arrappend(in_key, '$.relations', reverse_rel)
 ```
@@ -228,7 +228,7 @@ redis-cli -h <database-ip> JSON.GET "memory:graph:relations:in:267ab75b-8c44-46b
 ### Traverse Graph
 
 ```python
-def traverse_relations(entity_id, relation_type="relates_to", max_depth=3):
+def traverse_relations(entity_id, relation_type="related_to", max_depth=3):
     """BFS traversal of entity graph"""
     r = redis.Redis(host='<database-ip>', port=6379, db=0)
 

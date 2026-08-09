@@ -18,6 +18,14 @@ on:
       - '.github/workflows/slm-frontend-check.yml'
   pull_request:
     branches: [main, develop, 'Dev_*']
+    # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
+    # on Dev_new_gui, so this workflow may skip its run entirely. (The header note
+    # above about a path-filtered required check deadlocking a pull request is why
+    # the job-level self-skip exists; it applies to required contexts, and this is
+    # not one.) Mirrors the `slm_frontend` filter in `changes` below.
+    paths:
+      - 'autobot-slm-frontend/**'
+      - '.github/workflows/slm-frontend-check.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

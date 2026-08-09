@@ -44,6 +44,7 @@ sys.path.append(config.project_root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 from tests.test_helpers import get_test_backend_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -156,7 +157,7 @@ class MonitoringAndAlertingTester:
         ]
 
         # Create results directory
-        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
+        self.results_dir = project_root() / "tests" / "results"
         self.results_dir.mkdir(exist_ok=True)
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -649,11 +650,11 @@ class MonitoringAndAlertingTester:
         log_sources = [
             {
                 "name": "Backend Logs",
-                "path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/backend.log",
+                "path": str(project_root() / "logs" / "backend.log"),
             },
             {
                 "name": "Frontend Logs",
-                "path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/frontend.log",
+                "path": str(project_root() / "logs" / "frontend.log"),
             },
             {"name": "System Logs", "path": "/var/log/syslog"},
             {

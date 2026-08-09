@@ -16,9 +16,13 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
 
 const { showToast } = useToast()
+// #13307: confirm/error strings go through i18n like the rest of the view;
+// they were the only hardcoded English left in this file.
+const { t } = useI18n()
 
 const api = useSlmApi()
 const fleetStore = useFleetStore()
@@ -99,11 +103,7 @@ async function handleCreateBackup(): Promise<void> {
 }
 
 async function handleRestore(backupId: string): Promise<void> {
-  if (
-    !confirm(
-      'Are you sure you want to restore this backup? This will overwrite current data.'
-    )
-  ) {
+  if (!confirm(t('backupsView.confirmRestore'))) {
     return
   }
 
@@ -111,8 +111,28 @@ async function handleRestore(backupId: string): Promise<void> {
     await api.restoreBackup(backupId)
     await fetchBackups()
   } catch (e) {
-    showToast(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    showToast(`${t('backupsView.restoreFailed')}: ${errorText(e)}`, 'error')
   }
+}
+
+// #13307: deletion is irreversible and removes the stored file, so it is
+// confirmed. Retention prunes automatically after a successful backup; this is
+// the manual path for reclaiming space now rather than on the next run.
+async function handleDeleteBackup(backupId: string): Promise<void> {
+  if (!confirm(t('backupsView.confirmDelete'))) {
+    return
+  }
+
+  try {
+    await api.deleteBackup(backupId)
+    await fetchBackups()
+  } catch (e) {
+    showToast(`${t('backupsView.deleteFailed')}: ${errorText(e)}`, 'error')
+  }
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : 'Unknown error'
 }
 
 // =============================================================================
@@ -282,6 +302,7 @@ function getNodeHostname(nodeId: string): string {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.node') }}</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.size') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.location') }}</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.created') }}</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
@@ -301,27 +322,43 @@ function getNodeHostname(nodeId: string): string {
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
               </td>
+              <!-- #13307: backup_path was already in the API response and the
+                   page never rendered it, which is the whole of "no idea where
+                   they are created". title= carries the full path for a copy. -->
+              <td class="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                <span v-if="backup.backup_path" class="font-mono text-xs break-all" :title="backup.backup_path">
+                  {{ backup.backup_path }}
+                </span>
+                <span v-else class="text-gray-400">{{ $t('backupsView.locationPending') }}</span>
+              </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.state)]">
-                  {{ backup.state }}
+                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.status)]">
+                  {{ backup.status }}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {{ formatDate(backup.started_at) }}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
                 <button
-                  v-if="backup.state === 'completed'"
+                  v-if="backup.status === 'completed'"
                   @click="handleRestore(backup.backup_id)"
                   class="text-blue-600 hover:text-blue-800 font-medium"
                 >
                   {{ $t('backupsView.restore') }}
                 </button>
-                <span v-else class="text-gray-400">-</span>
+                <button
+                  v-if="backup.status !== 'in_progress'"
+                  @click="handleDeleteBackup(backup.backup_id)"
+                  class="text-red-600 hover:text-red-800 font-medium"
+                >
+                  {{ $t('backupsView.delete') }}
+                </button>
+                <span v-if="backup.status === 'in_progress'" class="text-gray-400">-</span>
               </td>
             </tr>
             <tr v-if="backups.length === 0 && !isLoadingBackups">
-              <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+              <td colspan="8" class="px-6 py-12 text-center text-gray-500">
                 {{ $t('backupsView.noBackupsYetClick') }}
               </td>
             </tr>

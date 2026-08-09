@@ -227,7 +227,7 @@ class TestArtifactSerializationValidation:
             build_artifact(
                 ArtifactType.DEPLOYMENT_LOG,
                 "deployed ok",
-                file_path="/tmp/log",  # nosec B108 - test/controlled code uses tmpdir intentionally
+                file_path="/tmp/log",  # nosec B108  # test/controlled code uses tmpdir intentionally
             ),
         ]
         _validate_artifact_serialization(arts)

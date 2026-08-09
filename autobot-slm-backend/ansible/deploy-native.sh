@@ -8,6 +8,12 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/project_root.sh"
+
 # Load unified configuration system
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
@@ -153,7 +159,7 @@ update_backend_config() {
     log "INFO" "🔧 Updating backend configuration for VM connections..."
 
     # Create environment file for backend with VM endpoints
-    local env_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.native"
+    local env_file="${PROJECT_ROOT}/.env.native"
 
     cat > "$env_file" << EOF
 # AutoBot Native Configuration - Backend on Host, Services on VMs
@@ -297,7 +303,7 @@ show_summary() {
     log "INFO" "  VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): autobot-browser, autobot-vnc"
     log "INFO" ""
     log "INFO" "🚀 Next Steps:"
-    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.native"
+    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${PROJECT_ROOT}/.env.native"
     log "INFO" "  2. Start backend on WSL: python backend/main.py"
     log "INFO" "  3. Access AutoBot: http://${AUTOBOT_FRONTEND_HOST:-localhost}"
     log "INFO" ""

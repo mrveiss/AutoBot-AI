@@ -40,6 +40,7 @@ from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_rol
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.password_weakness import check_password_weakness
+from autobot_shared.user_management.password_epoch import set_password_epoch
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
@@ -492,6 +493,12 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         new_password_hash = get_auth_middleware().hash_password(password_data.new_password)
         _persist_password_change(username, new_password_hash)
 
+        # #12924: stop every session opened with the old password. This is the
+        # config-backed self-service path, which never went through
+        # UserService.change_password and so had no revocation at all. The
+        # epoch is keyed by token subject, which is this username.
+        await set_password_epoch(username)
+
         get_auth_middleware().security_layer.audit_log(
             action="password_changed",
             user=username,
@@ -557,7 +564,7 @@ def _decode_refresh_token(token: str) -> Dict:
     mw = get_auth_middleware()
     token_alg = _peek_alg(token)
     try:
-        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+        if token_alg == "RS256":  # nosec B105  # JWT algorithm identifier, not a credential
             payload = decode_jwt_no_verify_exp(
                 token,
                 public_key=mw.jwt_public_key,
@@ -584,7 +591,7 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
-@router.post("/refresh", response_model=DataResponse[AuthRefreshData])
+@router.post("/refresh", response_model=AuthRefreshData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",
@@ -705,7 +712,7 @@ async def validate_token(
     # Step 2: try decode ignoring expiry to distinguish expired vs. invalid
     token_alg = _peek_alg(token)
     try:
-        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+        if token_alg == "RS256":  # nosec B105  # JWT algorithm identifier, not a credential
             expired_payload = decode_jwt_no_verify_exp(token, public_key=mw.jwt_public_key, algorithms=["RS256"])
         else:
             expired_payload = decode_jwt_no_verify_exp(token, secret=mw.jwt_secret, algorithms=["HS256"])

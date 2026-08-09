@@ -11,7 +11,7 @@ files, these tests catch regressions in the transform logic.
 
 import textwrap
 
-from parse_api_response_vue_migration import transform
+from tools.codemods.parse_api_response_vue_migration import transform
 
 
 def _dedent(s: str) -> str:

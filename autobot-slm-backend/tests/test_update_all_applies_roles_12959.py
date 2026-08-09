@@ -1,30 +1,42 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Guard: the builtin updater must APPLY the roles it deploys (#12959).
+"""Guard: the builtin updater must APPLY the roles that own deployed files (#12959).
 
 `update-all-nodes.yml` is the playbook behind code-sync / self-update — the only
-updater a GUI user can reach. It deploys components with inline tasks and
-applies exactly one role, and only a single task file of it:
+updater a GUI user can reach. It deploys component *code* with inline tasks, but
+the systemd units, env files and credential stores those components run under are
+rendered from **role-owned templates**. A role the playbook never applies cannot
+deliver a change to any of them:
 
     ansible.builtin.include_role:
       name: backend
-      tasks_from: env_only
+      tasks_from: env_only        # ... and nothing else, originally
 
-So **any fix that lands in an Ansible role is inert on every host updated
-through the builtin path**. The merge is green, the issue gets closed,
-`code_source` carries the change, and the host never receives it. Four
-confirmed instances: #12777 (faulthandler, `roles/backend/templates/`), #12886
-(TTS worker, `roles/tts-worker`), #12907 (credential consolidation,
-`roles/postgresql`), and #12959's own report.
+So a fix that lands in a role was inert on every host updated through the builtin
+path. The merge was green, the issue got closed, `code_source` carried the
+change, and the host never received it. Four confirmed instances: #12777
+(faulthandler, `roles/backend/templates/`), #12886 (TTS worker,
+`roles/tts-worker`), #12907 (credential consolidation, `roles/postgresql`), and
+#12959's own report. The failure is silent, which is what makes it expensive —
+nothing distinguishes "delivered" from "merged but never applied".
 
-The failure is silent, which is what makes it expensive: nothing distinguishes
-"delivered" from "merged but never applied". This test makes it loud.
+**Delivery is via targeted task files, not whole-role application.** Applying a
+role in full would re-run its provisioning half on every update — apt, venv
+creation, service accounts, gated model downloads — which is slow, needs network,
+and can break a box that is already correctly installed. The contract is instead
+that every role owning deployed artifacts exposes a code/config-only task file
+(`env_only`, `unit_only`, `code_only`, `credentials_reconcile`) which the updater
+applies, and which contains no provisioning. One implementation, two callers.
 
-It is marked ``xfail(strict=True)`` rather than baselined: while the gap exists
-the suite stays green, and the moment the updater applies these roles the test
-XPASSes — which strict xfail reports as a FAILURE, forcing whoever fixed it to
-delete the marker. A baseline would instead quietly absorb the fix and keep
-claiming the problem is still there (the #12894 lesson).
+`test_every_managed_component_has_an_application_path` was
+``xfail(strict=True)`` while four components had none. #13460 closed that gap and
+the test XPASSed — which strict xfail reports as a FAILURE, forcing the marker's
+removal. That is exactly what the marker was for, and why it was never replaced
+with a baseline: a baseline would have quietly absorbed the fix and kept claiming
+the problem was still there (the #12894 lesson).
+
+Every managed component now has a delivery path, so this asserts a property that
+holds rather than one that is aspirational.
 """
 
 import pathlib
@@ -48,7 +60,29 @@ MANAGED_COMPONENT_ROLES = {
     "browser": "browser",
     "tts-worker": "tts-worker",
     "postgresql": "postgresql",
+    # #13535: the database node. Its role owns the Redis systemd override, the
+    # backup script and the ChromaDB unit + credential file, and the updater had
+    # no play that reached it at all — `infrastructure` (Play 2's host list) does
+    # not contain `database`.
+    "database": "redis",
 }
+
+#: Components with a delivery path today. Each entry is a regression guard: the
+#: named task file was added *because* a merged fix failed to reach a host.
+DELIVERED = {
+    "backend": {"env_only", "unit_only"},  # #12871, #12777
+    "tts-worker": {"code_only"},  # #12886
+    "postgresql": {"credentials_reconcile"},  # #12907
+    "ai-stack": {"code_only"},  # #13460
+    "npu-worker": {"code_only"},  # #13460
+    "frontend": {"code_only"},  # #13460
+    "browser": {"code_only"},  # #13460
+    "database": {"code_only"},  # #13535
+}
+
+#: Task-name substrings that mean provisioning. None may appear in a task file
+#: the updater applies — that work must not re-run on an installed box.
+_PROVISIONING_MARKERS = ("venv", "pip install", "pre-download", "service account", "apt")
 
 
 def _iter_tasks(node):
@@ -65,9 +99,8 @@ def _iter_tasks(node):
 def applied_roles() -> dict[str, set[str | None]]:
     """Map each role the playbook applies to the ``tasks_from`` values used.
 
-    ``None`` means the role is applied in full. A role that only ever appears
-    with a ``tasks_from`` delivers just that task file — which is how `backend`
-    ships `env_only` and nothing else.
+    ``None`` means the role is applied in full — which the updater deliberately
+    never does, since that would drag provisioning onto the update path.
     """
     playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
     applied: dict[str, set[str | None]] = {}
@@ -97,26 +130,59 @@ def test_managed_component_role_exists(component, role):
     assert (_ROLES_DIR / role).is_dir(), f"{component}: roles/{role} missing"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#12959: the updater applies only backend/env_only, so role changes are inert on hosts. "
-    "When the inline tasks become role applications this XPASSes — delete this marker then.",
-)
-def test_updater_applies_every_managed_role_in_full():
-    """Every managed component's role must be applied, and applied in full.
+@pytest.mark.parametrize("component,task_files", sorted(DELIVERED.items()))
+def test_delivered_components_keep_their_application_path(component, task_files):
+    """A component that gained a delivery path must never silently lose it.
 
-    Applying with ``tasks_from`` is not delivery: `backend` is applied that way
-    today and still never receives its unit-file template (#12777).
+    Each of these exists because a merged fix did not reach a host. Dropping the
+    include re-opens exactly that issue, with no visible symptom until someone
+    re-diagnoses it on a live box weeks later.
+    """
+    role = MANAGED_COMPONENT_ROLES[component]
+    applied = applied_roles().get(role, set())
+
+    missing = task_files - applied
+    assert not missing, (
+        f"{component}: update-all-nodes.yml no longer applies roles/{role} "
+        f"tasks_from={sorted(missing)} — changes to those files become inert on "
+        f"every host again (#12959). Currently applied: {sorted(str(a) for a in applied)}"
+    )
+
+
+@pytest.mark.parametrize("component,task_files", sorted(DELIVERED.items()))
+def test_applied_task_files_exist_and_carry_no_provisioning(component, task_files):
+    """An include pointing at a missing file breaks the update on the host.
+
+    And a task file that re-provisions turns every self-update into a reinstall,
+    which is why delivery is split out of ``main.yml`` rather than applied whole.
+    """
+    role = MANAGED_COMPONENT_ROLES[component]
+
+    for name in sorted(task_files):
+        path = _ROLES_DIR / role / "tasks" / f"{name}.yml"
+        assert path.is_file(), f"{component}: include_role tasks_from={name} has no {path}"
+
+        tasks = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        names = " ".join(str(t.get("name", "")) for t in tasks if isinstance(t, dict)).lower()
+        for marker in _PROVISIONING_MARKERS:
+            assert marker not in names, (
+                f"{component}/{name}.yml: provisioning task ({marker!r}) leaked onto "
+                "the update path — it must stay in main.yml"
+            )
+
+
+def test_every_managed_component_has_an_application_path():
+    """Every managed component's role must be reachable from the updater.
+
+    ``tasks_from`` is the intended shape — full application would re-run
+    provisioning. What is asserted here is only that *some* application exists.
     """
     applied = applied_roles()
-    undelivered = []
-
-    for component, role in sorted(MANAGED_COMPONENT_ROLES.items()):
-        if role not in applied:
-            undelivered.append(f"{component}: roles/{role} is NEVER applied")
-        elif None not in applied[role]:
-            partial = ", ".join(sorted(str(t) for t in applied[role]))
-            undelivered.append(f"{component}: roles/{role} applied only via tasks_from={partial}")
+    undelivered = [
+        f"{component}: roles/{role} is NEVER applied"
+        for component, role in sorted(MANAGED_COMPONENT_ROLES.items())
+        if role not in applied
+    ]
 
     assert not undelivered, (
         "Roles whose changes cannot reach a host through the builtin updater "
@@ -125,14 +191,17 @@ def test_updater_applies_every_managed_role_in_full():
 
 
 def test_undelivered_roles_are_reported_for_visibility(capsys):
-    """Always print the current delivery gap, so CI logs carry it while xfail hides the failure."""
+    """Print any delivery gap into the CI log.
+
+    Written when `test_every_managed_component_has_an_application_path` was
+    `xfail`, so the gap stayed visible while the failure was suppressed. That
+    marker went with #13460 and the gap is currently empty — this stays as the
+    thing that names the offender in the log if one ever reappears, rather than
+    leaving whoever hits the assertion to work out which component regressed.
+    """
     applied = applied_roles()
-    gap = [
-        f"{c}: roles/{r} " + ("NEVER applied" if r not in applied else f"partial {sorted(str(t) for t in applied[r])}")
-        for c, r in sorted(MANAGED_COMPONENT_ROLES.items())
-        if r not in applied or None not in applied[r]
-    ]
-    print("\n#12959 delivery gap — roles the builtin updater does not apply in full:")
+    gap = [f"{c}: roles/{r} NEVER applied" for c, r in sorted(MANAGED_COMPONENT_ROLES.items()) if r not in applied]
+    print("\n#12959 delivery gap — roles the builtin updater cannot deliver a change through:")
     for line in gap:
         print(f"  {line}")
 

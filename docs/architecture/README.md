@@ -61,7 +61,7 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 ## Technology Stack
 
 ### Backend
-- **Python 3.11+** - Core backend language
+- **Python 3.14** - Core backend language
 - **FastAPI** - REST API framework
 - **Redis Stack** - Data layer (cache, vectors, queues)
 - **LlamaIndex** - RAG and knowledge base

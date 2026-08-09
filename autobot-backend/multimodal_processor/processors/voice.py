@@ -10,14 +10,17 @@ GPU-accelerated audio processing with Whisper and Wav2Vec2 models.
 Part of Issue #381 - God Class Refactoring
 """
 
+import asyncio
 import time
 from typing import Any, Dict, Tuple
 
 import numpy as np
 
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
+from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
@@ -61,6 +64,20 @@ except ImportError:
 logger = get_logger(__name__)
 
 
+# Issue #13207: fallbacks for the multimodal.voice section, env-overridable.
+#
+# These match the values VoiceProcessor was *actually* running on before the
+# key was corrected, and defaults.py was aligned to them in the same change so
+# fixing the lookup could not move a threshold as a side effect. The section
+# previously declared 0.8 / 15, but those numbers were unreachable for the
+# whole life of the code and were never validated against real audio; the
+# integration suite also configures multimodal.voice.confidence_threshold=0.7.
+# Retuning voice confidence/timeout is a deliberate change with its own
+# evidence, not a rider on a typo fix.
+VOICE_CONFIDENCE_THRESHOLD_DEFAULT = env_float("AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD", 0.7)
+VOICE_PROCESSING_TIMEOUT_DEFAULT = env_int("AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT", 30)
+
+
 class VoiceProcessor(BaseModalProcessor):
     """Voice processing component with GPU acceleration"""
 
@@ -69,9 +86,13 @@ class VoiceProcessor(BaseModalProcessor):
         torch = _get_torch()
 
         super().__init__("voice")
-        self.config = get_config_section("multimodal.audio")
-        self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
-        self.processing_timeout = self.config.get("processing_timeout", 30)
+        # Issue #13207: this read "multimodal.audio", a section that has never
+        # existed under any path, so get_config_section always returned {} and
+        # every value below silently came from the literal fallbacks. The live
+        # casualty was `enabled`, which gates model loading below.
+        self.config = get_config_section("multimodal.voice")
+        self.confidence_threshold = self.config.get("confidence_threshold", VOICE_CONFIDENCE_THRESHOLD_DEFAULT)
+        self.processing_timeout = self.config.get("processing_timeout", VOICE_PROCESSING_TIMEOUT_DEFAULT)
         self.enabled = self.config.get("enabled", True)
 
         # Initialize GPU device
@@ -94,9 +115,10 @@ class VoiceProcessor(BaseModalProcessor):
         try:
             # Load Whisper model for speech recognition
             self.logger.info("Loading Whisper model...")
-            self.whisper_processor = WhisperProcessor.from_pretrained(
+            # HuggingFace model loaded by name; revision pinning managed operationally.
+            self.whisper_processor = WhisperProcessor.from_pretrained(  # nosec B615
                 "openai/whisper-base", resume_download=True
-            )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            )
             self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615
                 "openai/whisper-base",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
@@ -134,60 +156,120 @@ class VoiceProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.debug("GPU cleanup skipped: %s", e)
 
+    def _failure_result(
+        self,
+        input_data: MultiModalInput,
+        processing_time: float,
+        message: str,
+    ) -> ProcessingResult:
+        """Build a failed ProcessingResult with a stated reason. Issue #13207."""
+        return ProcessingResult(
+            result_id=f"voice_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=False,
+            confidence=0.0,
+            result_data=None,
+            processing_time=processing_time,
+            error_message=message,
+        )
+
+    def _threshold_checked_result(
+        self,
+        input_data: MultiModalInput,
+        result: Dict[str, Any],
+        processing_time: float,
+    ) -> ProcessingResult:
+        """Apply the configured confidence threshold to a completed result.
+
+        Issue #13207: confidence_threshold was read from config and then never
+        consulted. A result under it is reported as a failure with a stated
+        reason rather than passed off as a successful command.
+        """
+        confidence = self.calculate_confidence(result)
+        below = confidence < self.confidence_threshold
+        if below:
+            self.logger.info(
+                "Voice result confidence %.2f below threshold %.2f — not treated as a command",
+                confidence,
+                self.confidence_threshold,
+            )
+        return ProcessingResult(
+            result_id=f"voice_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=not below,
+            confidence=confidence,
+            result_data=result,
+            processing_time=processing_time,
+            error_message=(
+                f"Voice confidence {confidence:.2f} below configured threshold {self.confidence_threshold:.2f}"
+                if below
+                else None
+            ),
+        )
+
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process audio input (voice commands, speech)"""
         start_time = time.time()
 
+        if not self.enabled:
+            # Issue #13207 review E: without this, a deliberately disabled voice
+            # processor reports "models are not loaded, check your GPU/NPU",
+            # sending an operator to debug hardware they never broke.
+            return self._build_disabled_result(input_data, time.time() - start_time)
+
+        if input_data.modality_type != ModalityType.AUDIO:
+            # #6755 LSP exception contract: don't raise — parent
+            # `BaseModalProcessor.process` only declares NotImplementedError;
+            # subclasses must return a failure ProcessingResult, not propagate
+            # ValueError. Same fix pattern as #6658 / VisionProcessor.
+            return self._failure_result(
+                input_data,
+                time.time() - start_time,
+                f"Unsupported modality: {input_data.modality_type}",
+            )
+
         try:
-            if input_data.modality_type == ModalityType.AUDIO:
-                result = await self._process_audio(input_data)
-            else:
-                # #6755 LSP exception contract: don't raise — parent
-                # `BaseModalProcessor.process` only declares NotImplementedError;
-                # subclasses must return a failure ProcessingResult, not propagate
-                # ValueError. Same fix pattern as #6658 / VisionProcessor.
-                processing_time = time.time() - start_time
-                return ProcessingResult(
-                    result_id=f"voice_{input_data.input_id}",
-                    input_id=input_data.input_id,
-                    modality_type=input_data.modality_type,
-                    intent=input_data.intent,
-                    success=False,
-                    confidence=0.0,
-                    result_data=None,
-                    processing_time=processing_time,
-                    error_message=f"Unsupported modality: {input_data.modality_type}",
-                )
+            result = await asyncio.wait_for(
+                self._process_audio(input_data),
+                timeout=self.processing_timeout,
+            )
+            return self._threshold_checked_result(input_data, result, time.time() - start_time)
 
-            processing_time = time.time() - start_time
-            confidence = self.calculate_confidence(result)
-
-            return ProcessingResult(
-                result_id=f"voice_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=True,
-                confidence=confidence,
-                result_data=result,
-                processing_time=processing_time,
+        except asyncio.TimeoutError:
+            self.logger.error("Voice processing exceeded %ss timeout", self.processing_timeout)
+            return self._failure_result(
+                input_data,
+                time.time() - start_time,
+                f"Voice processing exceeded the configured {self.processing_timeout}s timeout",
             )
 
         except Exception as e:
-            processing_time = time.time() - start_time
             self.logger.error("Voice processing failed: %s", e)
+            return self._failure_result(input_data, time.time() - start_time, str(e))
 
-            return ProcessingResult(
-                result_id=f"voice_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=False,
-                confidence=0.0,
-                result_data=None,
-                processing_time=processing_time,
-                error_message=str(e),
-            )
+    def calculate_confidence(self, processing_data: Any) -> float:
+        """Return the confidence the audio pipeline actually reported. Issue #13207.
+
+        The base implementation returns a flat 0.5 for every result, which made
+        ProcessingResult.confidence meaningless and left confidence_threshold
+        with nothing to compare against.
+        """
+        if isinstance(processing_data, dict):
+            return float(processing_data.get("confidence", 0.0))
+        return 0.0
+
+    def _build_disabled_result(self, input_data: MultiModalInput, processing_time: float) -> ProcessingResult:
+        """Report that voice is switched off, not that the hardware is broken."""
+        self.logger.info("Voice processing requested while multimodal.voice.enabled is false")
+        return self._failure_result(
+            input_data,
+            processing_time,
+            "Voice processing is disabled by configuration (multimodal.voice.enabled=false)",
+        )
 
     def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
         """Prepare and normalize audio data (Issue #315 - extracted method)"""
@@ -275,6 +357,10 @@ class VoiceProcessor(BaseModalProcessor):
             # Process with Whisper for transcription (Issue #315 - extracted method)
             transcribed_text = self._transcribe_with_whisper(audio_array, sampling_rate)
 
+            # Issue #13104: Whisper answers silence with a confident phantom
+            # phrase; drop it here so it never becomes a user turn downstream.
+            transcribed_text = self._reject_silence_hallucination(transcribed_text, audio_array, sampling_rate)
+
             # Process with Wav2Vec2 for embeddings (Issue #315 - extracted method)
             audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(audio_array, sampling_rate)
 
@@ -302,6 +388,32 @@ class VoiceProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
             # Return error result (Issue #620 - extracted method)
             return self._build_error_result(e)
+
+    def _reject_silence_hallucination(
+        self,
+        transcribed_text: str,
+        audio_array: np.ndarray,
+        sampling_rate: int,
+    ) -> str:
+        """Return "" when Whisper transcribed silence into a phantom phrase. Issue #13104.
+
+        The language is whatever Whisper decided; the multilingual model does
+        not surface it here, so only the language-independent energy and audio
+        tag gates apply on this path.
+        """
+        if not transcribed_text:
+            return transcribed_text
+
+        rms = peak_window_rms(audio_array, sampling_rate)
+        if not is_silence_hallucination(transcribed_text, rms=rms):
+            return transcribed_text
+
+        self.logger.info(
+            "Discarded Whisper silence artifact %r instead of emitting a voice command (peak RMS %.5f)",
+            transcribed_text,
+            rms,
+        )
+        return ""
 
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""

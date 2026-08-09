@@ -229,7 +229,7 @@ class SecretManagementMixin:
         if scope and secret_scope != scope:
             return False
 
-        if secret_scope == "session" and session_id:  # nosec B105 - scope enum value
+        if secret_scope == "session" and session_id:  # nosec B105  # scope enum value
             if secret.get("metadata", {}).get("session_id") != session_id:
                 return False
 

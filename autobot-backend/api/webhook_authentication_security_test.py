@@ -19,11 +19,34 @@ Target coverage: 100% of authentication paths
 """
 
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+
+# Repository root — this file lives at <root>/autobot-backend/api/.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+WEBHOOK_AUTH_DOC = PROJECT_ROOT / "docs" / "security" / "WEBHOOK_AUTHENTICATION.md"
+
+
+@pytest.fixture(scope="module")
+def client():
+    """TestClient over the real backend application.
+
+    Built through ``app_factory.create_app`` rather than ``from main import app``:
+    the repo root ships a deprecated ``main.py`` shim that exposes no ``app``, and
+    it wins over ``autobot-backend/main.py`` because ``pytest.ini`` puts ``.``
+    ahead of ``autobot-backend`` on ``pythonpath``.
+
+    Module-scoped so the app is built once and, critically, outside the
+    ``patch.dict(os.environ, ..., clear=True)`` blocks the tests below use — the
+    app must not be constructed with a wiped environment.
+    """
+    from app_factory import create_app
+
+    return TestClient(create_app())
 
 
 class TestTelegramWebhookAuthentication:
@@ -49,7 +72,7 @@ class TestTelegramWebhookAuthentication:
         }
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_fails_closed_when_secret_not_configured(self, valid_telegram_update):
+    async def test_telegram_webhook_fails_closed_when_secret_not_configured(self, client, valid_telegram_update):
         """
         CRITICAL: Telegram webhook MUST return 503 when secret not configured.
         This is the core fail-closed fix from GH#9657.
@@ -60,10 +83,6 @@ class TestTelegramWebhookAuthentication:
             "api.telegram_bot.get_telegram_webhook_secret",
             return_value=None,
         ):
-            from main import app
-
-            client = TestClient(app)
-
             response = client.post(
                 "/api/telegram/webhook",
                 json=valid_telegram_update,
@@ -75,7 +94,7 @@ class TestTelegramWebhookAuthentication:
             assert "not configured" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_returns_401_when_header_missing(self, valid_telegram_update):
+    async def test_telegram_webhook_returns_401_when_header_missing(self, client, valid_telegram_update):
         """
         Security: Telegram webhook MUST return 401 when X-Telegram-Bot-Api-Secret-Token missing.
         """
@@ -83,10 +102,6 @@ class TestTelegramWebhookAuthentication:
             "api.telegram_bot.get_telegram_webhook_secret",
             return_value="test_secret_123",
         ):
-            from main import app
-
-            client = TestClient(app)
-
             # Send request WITHOUT secret header
             response = client.post(
                 "/api/telegram/webhook",
@@ -98,7 +113,7 @@ class TestTelegramWebhookAuthentication:
             assert "missing" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_returns_403_when_secret_invalid(self, valid_telegram_update):
+    async def test_telegram_webhook_returns_403_when_secret_invalid(self, client, valid_telegram_update):
         """
         Security: Telegram webhook MUST return 403 when secret is incorrect.
         """
@@ -106,10 +121,6 @@ class TestTelegramWebhookAuthentication:
             "api.telegram_bot.get_telegram_webhook_secret",
             return_value="correct_secret_123",
         ):
-            from main import app
-
-            client = TestClient(app)
-
             # Send request with WRONG secret
             response = client.post(
                 "/api/telegram/webhook",
@@ -124,7 +135,7 @@ class TestTelegramWebhookAuthentication:
             assert "forbidden" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_succeeds_with_valid_authentication(self, valid_telegram_update):
+    async def test_telegram_webhook_succeeds_with_valid_authentication(self, client, valid_telegram_update):
         """
         Security: Telegram webhook MUST accept request with valid authentication.
         """
@@ -147,11 +158,6 @@ class TestTelegramWebhookAuthentication:
                     },
                 )()
             )
-
-            from main import app
-
-            client = TestClient(app)
-
             # Send request with CORRECT secret
             response = client.post(
                 "/api/telegram/webhook",
@@ -194,17 +200,15 @@ class TestAlertManagerWebhookAuthentication:
         }
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_fails_closed_when_secret_not_configured(self, valid_alertmanager_payload):
+    async def test_alertmanager_webhook_fails_closed_when_secret_not_configured(
+        self, client, valid_alertmanager_payload
+    ):
         """
         CRITICAL: AlertManager webhook MUST return 503 when secret not configured.
         This prevents unauthenticated alert injection (GH#9657).
         """
         # Clear ALERTMANAGER_WEBHOOK_SECRET env var
         with patch.dict(os.environ, {}, clear=True):
-            from main import app
-
-            client = TestClient(app)
-
             response = client.post(
                 "/api/webhook/alertmanager",
                 json=valid_alertmanager_payload,
@@ -216,15 +220,11 @@ class TestAlertManagerWebhookAuthentication:
             assert "not configured" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_returns_401_when_header_missing(self, valid_alertmanager_payload):
+    async def test_alertmanager_webhook_returns_401_when_header_missing(self, client, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST return 401 when X-AlertManager-Secret missing.
         """
         with patch.dict(os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "test_secret_789"}):
-            from main import app
-
-            client = TestClient(app)
-
             # Send request WITHOUT secret header
             response = client.post(
                 "/api/webhook/alertmanager",
@@ -236,15 +236,11 @@ class TestAlertManagerWebhookAuthentication:
             assert "missing" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_returns_403_when_secret_invalid(self, valid_alertmanager_payload):
+    async def test_alertmanager_webhook_returns_403_when_secret_invalid(self, client, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST return 403 when secret is incorrect.
         """
         with patch.dict(os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "correct_secret_789"}):
-            from main import app
-
-            client = TestClient(app)
-
             # Send request with WRONG secret
             response = client.post(
                 "/api/webhook/alertmanager",
@@ -259,7 +255,7 @@ class TestAlertManagerWebhookAuthentication:
             assert "invalid" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_succeeds_with_valid_authentication(self, valid_alertmanager_payload):
+    async def test_alertmanager_webhook_succeeds_with_valid_authentication(self, client, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST accept request with valid authentication.
         """
@@ -268,11 +264,6 @@ class TestAlertManagerWebhookAuthentication:
             patch("api.alertmanager_webhook.ws_manager") as mock_ws,
         ):
             mock_ws.broadcast_update = AsyncMock()
-
-            from main import app
-
-            client = TestClient(app)
-
             # Send request with CORRECT secret
             response = client.post(
                 "/api/webhook/alertmanager",
@@ -307,39 +298,34 @@ class TestWebhookSecurityDocumentation:
         assert docstring is not None
         assert "security" in docstring.lower() or "gh#9657" in docstring.lower()
 
-    def test_env_example_documents_telegram_webhook_secret(self):
-        """Verify .env.example documents TELEGRAM_WEBHOOK_SECRET"""
-        env_example_path = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example"
-        if not os.path.exists(env_example_path):
-            pytest.skip(".env.example not found")
+    def test_operator_docs_document_telegram_webhook_secret(self):
+        """The Telegram webhook secret must be documented for operators.
 
-        with open(env_example_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        Replaces a pair of tests that read
+        ``"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example"`` —
+        shell syntax Python never expands, so the file was never found and both
+        tests always skipped (#13149 class of defect). They also asserted the
+        wrong premise: the Telegram secret is not an environment variable at all,
+        it is generated per bot and stored server-side. The canonical operator
+        reference is asserted instead, resolved from this file's own location.
+        """
+        content = WEBHOOK_AUTH_DOC.read_text(encoding="utf-8")
 
-        # Should document the Telegram webhook secret requirement
-        assert "TELEGRAM_WEBHOOK_SECRET" in content or "telegram" in content.lower() and "webhook" in content.lower()
+        assert "X-Telegram-Bot-Api-Secret-Token" in content
+        assert "503 Service Unavailable" in content
 
-    def test_env_example_documents_alertmanager_webhook_secret(self):
-        """Verify .env.example documents ALERTMANAGER_WEBHOOK_SECRET"""
-        env_example_path = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example"
-        if not os.path.exists(env_example_path):
-            pytest.skip(".env.example not found")
+    def test_operator_docs_document_alertmanager_webhook_secret(self):
+        """The AlertManager webhook secret must be documented for operators."""
+        content = WEBHOOK_AUTH_DOC.read_text(encoding="utf-8")
 
-        with open(env_example_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        # Should document the AlertManager webhook secret requirement
-        assert (
-            "ALERTMANAGER_WEBHOOK_SECRET" in content
-            or "alertmanager" in content.lower()
-            and "webhook" in content.lower()
-        )
+        assert "ALERTMANAGER_WEBHOOK_SECRET" in content
+        assert "X-AlertManager-Secret" in content
 
 
 class TestWebhookSecurityRegression:
     """Regression tests to prevent re-introduction of fail-open vulnerability"""
 
-    def test_telegram_webhook_does_not_return_200_when_secret_unset(self):
+    def test_telegram_webhook_does_not_return_200_when_secret_unset(self, client):
         """
         REGRESSION: Ensure Telegram webhook NEVER returns 200 when secret unset.
         This was the original vulnerability in GH#9657.
@@ -348,10 +334,6 @@ class TestWebhookSecurityRegression:
             "api.telegram_bot.get_telegram_webhook_secret",
             return_value=None,
         ):
-            from main import app
-
-            client = TestClient(app)
-
             response = client.post(
                 "/api/telegram/webhook",
                 json={"update_id": 1, "message": {"message_id": 1}},
@@ -362,15 +344,46 @@ class TestWebhookSecurityRegression:
             # MUST be 503 (fail-closed)
             assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
-    def test_alertmanager_webhook_does_not_return_200_when_secret_unset(self):
+    @pytest.mark.parametrize(
+        "body",
+        [None, [1, 2, 3], {"not": "an update"}],
+        ids=["no-body", "wrong-type", "unexpected-shape"],
+    )
+    def test_telegram_webhook_authenticates_before_parsing_body(self, client, body):
+        """
+        REGRESSION: authentication MUST run before FastAPI validates the body.
+
+        With the check inside the handler, an unauthenticated caller who sent a
+        body FastAPI rejected got a 422 schema error instead of failing closed —
+        an unauthenticated payload-schema oracle. Auth is now a route dependency,
+        so every unauthenticated shape fails closed regardless of the body.
+        """
+        with patch("api.telegram_bot.get_telegram_webhook_secret", return_value=None):
+            response = client.post("/api/telegram/webhook", json=body)
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert "not configured" in response.json()["detail"].lower()
+
+    @pytest.mark.parametrize(
+        "body",
+        [None, [1, 2, 3], {"not": "an alert"}],
+        ids=["no-body", "wrong-type", "unexpected-shape"],
+    )
+    def test_alertmanager_webhook_authenticates_before_parsing_body(self, client, body):
+        """
+        REGRESSION: AlertManager authentication MUST run before body validation.
+        """
+        with patch.dict(os.environ, {}, clear=True):
+            response = client.post("/api/webhook/alertmanager", json=body)
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert "not configured" in response.json()["detail"].lower()
+
+    def test_alertmanager_webhook_does_not_return_200_when_secret_unset(self, client):
         """
         REGRESSION: Ensure AlertManager webhook NEVER returns 200 when secret unset.
         """
         with patch.dict(os.environ, {}, clear=True):
-            from main import app
-
-            client = TestClient(app)
-
             response = client.post(
                 "/api/webhook/alertmanager",
                 json={
