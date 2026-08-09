@@ -12,6 +12,8 @@ Usage:
     from autobot_shared.security.input_sanitizer import (
         sanitize_shell_arg,
         sanitize_ldap_filter,
+        escape_redisearch,
+        escape_redisearch_tag,
         escape_regex,
         validate_url,
     )
@@ -81,6 +83,43 @@ def sanitize_ldap_dn(value: str) -> str:
     for ch in value:
         result.append(_LDAP_DN_ESCAPE_MAP.get(ch, ch))
     return "".join(result)
+
+
+# ── RediSearch ───────────────────────────────────────────────────────
+
+# Characters that change a RediSearch query's *structure*: field selection,
+# grouping, boolean OR, wildcards, fuzzy/optional modifiers, phrases. A caller
+# string carrying these stops being a search term and becomes query syntax
+# (#13762).
+_REDISEARCH_STRUCTURAL: frozenset[str] = frozenset('@{}[]()|*~%^"\\')
+
+# Everything else RediSearch's tokenizer treats as a separator. Escaping these
+# is required inside a TAG filter, where the value must match exactly, and
+# wrong in free text, where they simply split terms.
+_REDISEARCH_SEPARATORS: frozenset[str] = frozenset(",.<>':;!#$&-+=/? \t\n")
+
+
+def escape_redisearch(value: str) -> str:
+    """Escape a free-text RediSearch query so it cannot alter the query itself.
+
+    Only structural characters are escaped. Whitespace and ordinary punctuation
+    are deliberately left alone: RediSearch splits terms on them, so escaping
+    them would turn every multi-word search into a single phrase token that
+    matches nothing — a silent regression in every search box rather than a
+    security fix.
+    """
+    return "".join(f"\\{ch}" if ch in _REDISEARCH_STRUCTURAL else ch for ch in value)
+
+
+def escape_redisearch_tag(value: str) -> str:
+    """Escape a value used inside a RediSearch ``TAG`` filter (``@field:{...}``).
+
+    A TAG value must match the indexed tag exactly, so separators are escaped
+    here as well as structural characters — an unescaped ``|`` or ``}`` would
+    otherwise end the value and start another tag.
+    """
+    special = _REDISEARCH_STRUCTURAL | _REDISEARCH_SEPARATORS
+    return "".join(f"\\{ch}" if ch in special else ch for ch in value)
 
 
 # ── Regex ────────────────────────────────────────────────────────────

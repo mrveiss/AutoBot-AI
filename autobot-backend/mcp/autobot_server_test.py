@@ -479,3 +479,94 @@ async def test_memory_path_dispatches_end_to_end():
     content = json.loads(resp["result"]["content"][0]["text"])
     assert content["found"] is True
     assert content["hops"] == 1
+
+
+# ---------------------------------------------------------------------------
+# memory.* argument validation — #13762
+#
+# The REST surface bounds these strings with Pydantic; the MCP surface passed
+# them straight through to a RediSearch query that does no escaping.
+# ---------------------------------------------------------------------------
+
+
+_OVER_LONG = "x" * 5000
+
+
+@pytest.mark.asyncio
+async def test_over_long_entity_name_is_invalid_arguments_not_an_internal_error():
+    """#13762: JSON-RPC -32602, and the traversal never starts."""
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.path", "arguments": {"from_entity": _OVER_LONG, "to_entity": "B"}},
+            VALID_TOKEN,
+        )
+
+    assert resp["error"]["code"] == -32602, resp
+    fake_graph.find_path.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("memory.entity_lookup", {"name": _OVER_LONG}),
+        ("memory.timeline", {"entity": _OVER_LONG}),
+        ("memory.related", {"entity": _OVER_LONG}),
+        ("memory.verbatim_search", {"query": _OVER_LONG}),
+    ],
+)
+async def test_every_memory_tool_bounds_its_strings(tool, arguments):
+    """#13762: the bound is on the seam, not re-implemented per tool.
+
+    The message is asserted too, not just the code: these handlers already
+    returned -32602 for an over-long string by *accidentally* raising TypeError
+    deeper in the traversal, so the code alone does not distinguish "rejected at
+    the boundary" from "blew up halfway through".
+    """
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with (
+        patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph),
+        patch("memory.verbatim_store.VerbatimStore", return_value=AsyncMock()),
+    ):
+        resp = await server.handle_request("tools/call", {"name": tool, "arguments": arguments}, VALID_TOKEN)
+
+    assert resp["error"]["code"] == -32602, resp
+    assert "String should have at most" in resp["error"]["message"], resp
+    fake_graph.initialize.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_whitespace_only_entity_name_is_rejected():
+    """A name that is only whitespace is not a name — REST already refuses it."""
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.entity_lookup", "arguments": {"name": "   "}},
+            VALID_TOKEN,
+        )
+
+    assert resp["error"]["code"] == -32602, resp
+    fake_graph.get_entity.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_valid_arguments_still_reach_the_graph():
+    """The bound must not turn ordinary lookups into errors."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.get_entity = AsyncMock(return_value={"id": "e1", "name": "Redis Config"})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_entity_lookup("  Redis Config  ")
+
+    assert result["name"] == "Redis Config"
+    fake_graph.get_entity.assert_awaited_once_with(entity_name="Redis Config", include_relations=True)

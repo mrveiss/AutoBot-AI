@@ -45,6 +45,8 @@ import secrets
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from pydantic import ValidationError as PydanticValidationError
+
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -634,7 +636,11 @@ class AutoBotMCPServer:
             elapsed = time.monotonic() - t0
             logger.info("mcp tool_call tool=%s elapsed=%.3fs", tool_name, elapsed)
             return _ok({"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, req_id)
-        except TypeError as exc:
+        except (TypeError, PydanticValidationError) as exc:
+            # #13762: a handler that validates its arguments through a request
+            # model raises ValidationError, which is an invalid-arguments error
+            # (-32602), not an internal one. Without this it fell to -32603 and
+            # read to the caller as a server fault.
             logger.warning("mcp bad_arguments tool=%s error=%s", tool_name, exc)
             return _err(-32602, f"Invalid arguments: {exc}", req_id)
         except Exception as exc:
@@ -685,8 +691,10 @@ class AutoBotMCPServer:
     # ------------------------------------------------------------------
 
     async def _memory_entity_lookup(self, name: str) -> Any:
+        from api.schemas_knowledge import MemoryEntityLookupRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
+        name = MemoryEntityLookupRequest(name=name).name
         graph = AutoBotMemoryGraph()
         await graph.initialize()
         entity = await graph.get_entity(entity_name=name, include_relations=True)
@@ -695,8 +703,11 @@ class AutoBotMCPServer:
         return entity
 
     async def _memory_timeline(self, entity: str, range: str | None = None) -> Any:
+        from api.schemas_knowledge import MemoryTimelineRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
+        args = MemoryTimelineRequest(entity=entity, range=range)
+        entity, range = args.entity, args.range
         graph = AutoBotMemoryGraph()
         await graph.initialize()
         base = await graph.get_entity(entity_name=entity, include_relations=True)
@@ -733,9 +744,14 @@ class AutoBotMCPServer:
         return {"entity": base, "timeline": neighbours, "count": len(neighbours)}
 
     async def _memory_related(self, entity: str, depth: int = 2) -> Any:
+        from api.schemas_knowledge import MemoryRelatedRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
-        depth = max(1, min(depth, 5))
+        # #13762: the entity name was unbounded. ``depth`` keeps its existing
+        # clamp rather than becoming a rejection, so the model's ge/le is the
+        # declared contract and the clamp is what enforces it.
+        args = MemoryRelatedRequest(entity=entity, depth=max(1, min(depth, 5)))
+        entity, depth = args.entity, args.depth
         graph = AutoBotMemoryGraph()
         await graph.initialize()
 
@@ -782,19 +798,21 @@ class AutoBotMCPServer:
 
         Delegates to AutoBotMemoryGraph.find_path so name resolution and path
         serialisation are not duplicated against the Graph-RAG ``/path``
-        endpoint. ``max_depth`` is clamped the way ``memory.related`` clamps
-        depth — an untrusted caller must not be able to request an unbounded
-        traversal.
+        endpoint. #13762 extends that to the input contract: the arguments go
+        through ``GraphRAGPathRequest``, the same model the REST route binds, so
+        the two surfaces cannot drift on what a valid request is. ``max_depth``
+        stays clamped rather than rejected — an untrusted caller must not be
+        able to request an unbounded traversal, but asking for too much is not
+        an error the way an unbounded entity name is.
         """
+        from api.schemas_knowledge import GraphRAGPathRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
         allowed_directions = ("outgoing", "incoming", "both")
         if direction not in allowed_directions:
             return {"error": "Invalid direction", "direction": direction, "allowed": list(allowed_directions)}
 
-        graph = AutoBotMemoryGraph()
-        await graph.initialize()
-        return await graph.find_path(
+        args = GraphRAGPathRequest(
             from_entity=from_entity,
             to_entity=to_entity,
             relation=relation,
@@ -802,11 +820,23 @@ class AutoBotMCPServer:
             direction=direction,
         )
 
+        graph = AutoBotMemoryGraph()
+        await graph.initialize()
+        return await graph.find_path(
+            from_entity=args.from_entity,
+            to_entity=args.to_entity,
+            relation=args.relation,
+            max_depth=args.max_depth,
+            direction=args.direction,
+        )
+
     async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
+        from api.schemas_knowledge import MemoryVerbatimSearchRequest
         from memory.verbatim_store import VerbatimStore
 
+        args = MemoryVerbatimSearchRequest(query=query, session_filter=session_filter)
         store = VerbatimStore()
-        results = await store.search(query, session_filter=session_filter)
+        results = await store.search(args.query, session_filter=args.session_filter)
         return {"results": results, "count": len(results)}
 
     # ------------------------------------------------------------------
