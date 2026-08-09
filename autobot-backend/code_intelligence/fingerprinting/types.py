@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Tuple
 
-from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path, project_relative_path
 
 # =============================================================================
 # Enums and Constants
@@ -111,15 +111,19 @@ class CodeFragment:
         holds for it. Empty when this fragment has no entity name — a fragment
         that names nothing cannot be identified.
 
-        ``file_path`` must be project-relative for the id to match the graph's;
-        an absolute path yields an id in a different namespace, which is a
-        mismatch that would otherwise be silent.
+        The path is made project-relative first. The detector walks with
+        ``rglob`` from whatever root it was given, which in production is
+        ``PATH.PROJECT_ROOT`` — an absolute path. Feeding that to the identity
+        scheme produced ids prefixed with the deploy root
+        (``.opt.autobot.autobot-backend.services…``) while the graph, which
+        relativises before extracting, produced ``autobot-backend.services…``.
+        The two never joined, and nothing said so.
         """
         if not self.entity_name:
             return ""
         return compute_node_id(
             self.entity_name,
-            module_path_from_rel_path(self.file_path),
+            module_path_from_rel_path(project_relative_path(self.file_path)),
             self.parent_class,
         )
 

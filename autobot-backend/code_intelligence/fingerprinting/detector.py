@@ -334,13 +334,13 @@ class CloneDetector:
 
     def _walk_definitions(
         self,
-        node: ast.AST,
+        root: ast.AST,
         file_path: str,
         lines: List[str],
         fragments: List[CodeFragment],
         parent_class: str | None,
     ) -> None:
-        """Walk *node*, recording fragments and the class each one sits in (#13470).
+        """Walk *root*, recording fragments and the class each one sits in (#13470).
 
         Replaces a flat ``ast.walk``. That walk yielded every definition with no
         record of its enclosing class, so a method's ``entity_name`` was a bare
@@ -348,13 +348,21 @@ class CloneDetector:
         and unable to produce the canonical node id, which is class-qualified.
         Without the class the fingerprinter's findings cannot be joined to the
         code graph's, which is the whole point of a shared identity.
+
+        Iterative rather than recursive on purpose: ``ast.walk`` never recursed,
+        so recursing here would newly turn a deeply nested expression into a
+        ``RecursionError`` — which ``_extract_fragments`` catches, silently
+        reporting the file as having no fragments at all.
         """
-        for child in ast.iter_child_nodes(node):
-            fragment = self._maybe_create_fragment(child, file_path, lines, parent_class)
-            if fragment:
-                fragments.append(fragment)
-            inner_class = child.name if isinstance(child, ast.ClassDef) else parent_class
-            self._walk_definitions(child, file_path, lines, fragments, inner_class)
+        stack: list[tuple[ast.AST, str | None]] = [(root, parent_class)]
+        while stack:
+            node, enclosing = stack.pop()
+            for child in ast.iter_child_nodes(node):
+                fragment = self._maybe_create_fragment(child, file_path, lines, enclosing)
+                if fragment:
+                    fragments.append(fragment)
+                inner = child.name if isinstance(child, ast.ClassDef) else enclosing
+                stack.append((child, inner))
 
     def _maybe_create_fragment(
         self, node: ast.AST, file_path: str, lines: List[str], parent_class: str | None = None
@@ -373,7 +381,7 @@ class CloneDetector:
         if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
             return self._create_fragment_from_node(node, file_path, lines, "function", parent_class)
         if isinstance(node, ast.ClassDef):
-            return self._create_fragment_from_node(node, file_path, lines, "class")
+            return self._create_fragment_from_node(node, file_path, lines, "class", parent_class)
         return None
 
     def _generate_fingerprints(self, fragment: CodeFragment) -> None:
