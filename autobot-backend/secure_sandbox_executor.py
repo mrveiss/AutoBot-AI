@@ -45,6 +45,7 @@ except ImportError:
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.singleton_factory import lazy_optional_singleton
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
@@ -726,7 +727,7 @@ class SecureSandboxExecutor:
             container_config["volumes"] = config.volumes
         else:
             # Default volumes
-            container_config["tmpfs"] = {  # nosec B108 - container tmpfs mounts
+            container_config["tmpfs"] = {  # nosec B108  # container tmpfs mounts
                 "/tmp": "size=50M,mode=1777",
                 "/sandbox/tmp": "size=50M,mode=1777",
             }
@@ -929,9 +930,12 @@ class SecureSandboxExecutor:
             # Issue #361 - avoid blocking
             stats = await asyncio.to_thread(self.redis_client.hgetall, "autobot:sandbox:stats")
 
+            # hincrby at _log_metrics writes str field names and the shared client
+            # is decode_responses=True, so hgetall yields str keys. Probing with
+            # bytes literals always missed and both counters read 0 (#13274).
             return {
-                "successful_executions": int(stats.get(b"successful_executions", 0)),
-                "failed_executions": int(stats.get(b"failed_executions", 0)),
+                "successful_executions": int(decode_redis_value(stats.get("successful_executions")) or 0),
+                "failed_executions": int(decode_redis_value(stats.get("failed_executions")) or 0),
                 "active_containers": len(self.active_containers),
                 "security_levels_available": [level.value for level in SandboxSecurityLevel],
             }

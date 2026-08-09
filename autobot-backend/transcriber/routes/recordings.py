@@ -27,6 +27,8 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_path
+from autobot_shared.ssot_constants import SecurityConstants
 from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.models import RecordingOut
@@ -36,7 +38,9 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["transcriber-recordings"])
 
-_ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Same canonical set the upload security boundary enforces (#13512) — this
+# route guard admitting a format the validator rejects would be a gap.
+_ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
 
 
@@ -165,18 +169,30 @@ async def delete_recording(recording_id: int, request: Request, db: Database = D
 def _resolve_audio_path(filepath: str, upload_dir: Path) -> Path:
     """Resolve and validate an audio filepath is within the upload directory.
 
-    Raises HTTPException(404) on path-traversal attempts, symlinks, or missing files.
+    Raises HTTPException(404) on path-traversal attempts or missing files.
+
+    #13518: was a second, hand-rolled implementation of path containment
+    (``resolve()`` + ``relative_to()``). It was correct, but it would not have
+    inherited future hardening of ``path_validator.py`` — the drift that makes
+    two implementations of one invariant expensive. Now delegates to the
+    canonical helper, which does the same realpath + containment check against
+    an allow-list of roots.
+
+    The old body also rejected symlinks explicitly. **That check could never
+    fire**: it ran on the output of ``.resolve()``, which follows symlinks, so
+    the value tested is always the target and never a link
+    (``Path(link).resolve().is_symlink()`` is ``False`` for both live and
+    dangling links). Its intent is satisfied anyway — a symlink pointing outside
+    the upload directory resolves to a path that fails the containment check,
+    and one pointing inside is harmless. Dropped rather than carried across, so
+    nobody folds dead code into the shared helper.
     """
-    resolved_upload = upload_dir.resolve()
     try:
-        resolved_file = Path(filepath).resolve()
-        resolved_file.relative_to(resolved_upload)  # raises ValueError on traversal
-    except (ValueError, OSError):
+        resolved_file = validate_path(filepath, allowed_roots=[str(upload_dir)])
+    except ValueError:
         logger.warning("Path traversal or invalid path rejected: %r", filepath)
         raise HTTPException(404, "Audio file not found")
-    if resolved_file.is_symlink():
-        logger.warning("Symlink rejected: %r", str(resolved_file))
-        raise HTTPException(404, "Audio file not found")
+
     if not resolved_file.is_file():
         raise HTTPException(404, "Audio file not found")
     return resolved_file
@@ -310,7 +326,11 @@ async def audio_waveform(
     peaks = _generate_waveform(str(audio_path), width)
     segments_raw = await db.list_segments(recording_id)
     segments = [
-        {"start_time": s["start_time"], "end_time": s["end_time"], "speaker_id": s.get("speaker_id")}
+        {
+            "start_time": s["start_time"],
+            "end_time": s["end_time"],
+            "speaker_id": s.get("speaker_id"),
+        }
         for s in segments_raw
     ]
 

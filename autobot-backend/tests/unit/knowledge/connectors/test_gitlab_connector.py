@@ -239,8 +239,12 @@ async def test_gitlab_detect_changes_full_sync():
 
     with (
         patch.object(connector, "_gl_get", side_effect=fake_gl_get),
-        patch("knowledge.connectors.gitlab._load_ts", return_value=None),
-        patch("knowledge.connectors.gitlab._store_ts"),
+        # #13559: _load_ts/_store_ts are coroutines on AbstractConnector
+        # (connectors/base.py:272,293), not module-level functions in
+        # gitlab.py. Patching them by dotted string raised AttributeError,
+        # so four tests errored instead of exercising the sync path.
+        patch.object(connector, "_load_ts", AsyncMock(return_value=None)),
+        patch.object(connector, "_store_ts", AsyncMock()),
     ):
         changes = await connector.detect_changes(since=None)
 
@@ -276,7 +280,7 @@ async def test_gitlab_fetch_issue_content():
 
     with (
         patch.object(connector, "_gl_get", side_effect=fake_gl_get),
-        patch("knowledge.connectors.gitlab._store_ts"),
+        patch.object(connector, "_store_ts", AsyncMock()),
     ):
         result = await connector.fetch_content(source_id)
 
@@ -308,7 +312,7 @@ async def test_gitlab_fetch_mr_content():
 
     with (
         patch.object(connector, "_gl_get", side_effect=fake_gl_get),
-        patch("knowledge.connectors.gitlab._store_ts"),
+        patch.object(connector, "_store_ts", AsyncMock()),
     ):
         result = await connector.fetch_content(source_id)
 
@@ -438,7 +442,7 @@ async def test_gitea_fetch_issue_content():
 
     with (
         patch.object(connector, "_gitea_get", side_effect=fake_gitea_get),
-        patch("knowledge.connectors.gitlab._store_ts"),
+        patch.object(connector, "_store_ts", AsyncMock()),
     ):
         result = await connector.fetch_content(source_id)
 

@@ -63,15 +63,24 @@ class ApiKeyService(LLCServiceBase):
         session: AsyncSession,
         agent_id: str,
         key_id: uuid.UUID,
+        *,
+        company_id: Optional[str] = None,
     ) -> None:
-        """Revoke a key (sets revoked_at). Raises KeyError if not found or not owned."""
-        result = await session.execute(
-            select(LLCApiKey).where(
-                LLCApiKey.id == key_id,
-                LLCApiKey.agent_id == agent_id,
-                LLCApiKey.revoked_at.is_(None),
-            )
-        )
+        """Revoke a key (sets revoked_at). Raises KeyError if not found or not owned.
+
+        ``company_id`` is keyword-only and optional so internal callers whose
+        scope is already established stay unchanged (#13771); the HTTP route,
+        where an untrusted agent/key id pair arrives, always passes it. A
+        mismatch raises ``KeyError`` — indistinguishable from "no such key".
+        """
+        conditions = [
+            LLCApiKey.id == key_id,
+            LLCApiKey.agent_id == agent_id,
+            LLCApiKey.revoked_at.is_(None),
+        ]
+        if company_id is not None:
+            conditions.append(LLCApiKey.company_id == str(company_id))
+        result = await session.execute(select(LLCApiKey).where(*conditions))
         record = result.scalar_one_or_none()
         if record is None:
             raise KeyError(f"API key {key_id} not found for agent {agent_id}")

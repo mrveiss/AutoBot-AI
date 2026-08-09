@@ -166,8 +166,62 @@ jobs:
     - name: Block print/console regressions (#1082, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
 
+    - name: Block developer absolute-path regressions (#13409, #13149)
+      run: |
+        set -euo pipefail
+        # An absolute /home/<developer>/... path in tracked source only ever
+        # resolves on the machine it was written on. #13409 fixed four such
+        # files: one was a guard test that raised FileNotFoundError on every
+        # CI run, three pointed into a worktree that had been deleted.
+        # Full-tree scan (not changed-files-only): the tree is clean as of
+        # #13409, so any new hit is a genuine regression.
+        #
+        # ALLOWED_HOMES — deployment/CI service accounts that legitimately
+        # appear as absolute paths in playbooks, units and container images.
+        # Templated homes (/home/{{ ansible_user }}, /home/$USER) never match
+        # the username character class and need no exemption.
+        ALLOWED_HOMES='autobot|kali|user|ubuntu|runner|vagrant|sandbox|node'
+        # ALLOWED_FILES — synthetic fixtures only. The generated third-party
+        # config that used to sit here was untracked instead (#13429), which is
+        # the right fix: exemptions for real files become permanent.
+        # Do NOT extend this list to work around a violation.
+        ALLOWED_FILES='^(autobot-frontend/src/components/audit/AuditTimeline\.stories\.ts|pipeline-scripts/test_audit_unwired_trackers\.py):'
+        PATTERN="(^|[^A-Za-z0-9_])/home/(?!(?:${ALLOWED_HOMES})[/\"'[:space:]]|\{)[A-Za-z0-9._-]+/"
+        set +e
+        raw=$(git grep -nIP "$PATTERN" -- \
+          '*.py' '*.sh' '*.bash' '*.ts' '*.tsx' '*.vue' '*.js' '*.mjs' '*.cjs' \
+          '*.yml' '*.yaml' '*.json' '*.toml' '*.ini' '*.cfg' '*.j2' '*.conf')
+        rc=$?
+        set -e
+        if [ "$rc" -gt 1 ]; then
+          echo "git grep failed (exit $rc) — PCRE (-P) support missing or bad pattern"
+          exit 1
+        fi
+        violations=""
+        if [ -n "$raw" ]; then
+          violations=$(printf '%s\n' "$raw" | grep -vE "${ALLOWED_FILES}" || true)
+        fi
+        if [ -n "$violations" ]; then
+          echo "$violations"
+          echo ""
+          echo "⚠️ Hardcoded developer absolute path(s) detected in tracked source"
+          echo "Resolve paths from __file__ instead, e.g."
+          echo "  Path(__file__).resolve().parents[N] / 'sub' / 'dir'"
+          echo "Do NOT use autobot_shared.ssot_config.PROJECT_ROOT for this — its"
+          echo ".env marker-walk escapes git worktrees and resolves to the wrong"
+          echo "checkout (#13357)."
+          exit 1
+        fi
+        echo "No hardcoded developer absolute paths found."
+
     - name: Check design-token contrast meets WCAG AA (#12730)
       run: python3 scripts/check_token_contrast.py
+
+    - name: Check script exec bits agree with how the docs invoke them (#13355)
+      run: python3 scripts/check_script_exec_bits.py
+
+    - name: Check nosec annotations reach bandit intact (#13521, #13528)
+      run: python3 scripts/check_nosec_format.py
 
     - name: Check for unused imports with autoflake
       run: |

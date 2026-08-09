@@ -34,6 +34,20 @@ query-filters:
       3) For ssh: resolve_safe_ip_async() blocks RFC1918/loopback/link-local ranges
       The validation happens before any use in _run_git(). See #MVA-2605.
   - exclude:
+      id: py/full-ssrf
+      files: autobot_shared/security/ssrf_guard.py
+    reason: >-
+      This module IS the SSRF guard. Both outbound call sites (fetch_safe_url,
+      pinned_request_with_redirects) are immediately preceded by
+      pinned_connector(url), which runs resolve_safe_ip on that exact URL and pins
+      the resolved public IP into the connector's resolver, defeating DNS-rebind.
+      pinned_request_with_redirects additionally sets allow_redirects=False and
+      re-validates every hop itself rather than letting aiohttp follow one.
+      CodeQL models the caller-supplied URL as reaching the request and cannot
+      see the guard in between. Pre-existing on main (alerts 1042/1045, both
+      dismissed as false positives); surfaced as "new" on #13624 only because
+      that PR edits the line. See #13624.
+  - exclude:
       id: py/path-injection
     paths:
       - autobot-backend/transcriber/upload_security.py

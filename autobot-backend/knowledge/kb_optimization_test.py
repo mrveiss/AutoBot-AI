@@ -11,6 +11,8 @@ import os
 import sys
 import time
 
+import pytest
+
 from autobot_shared.ssot_config import config
 
 # Add AutoBot to path
@@ -68,14 +70,29 @@ The architecture supports distributed deployment scenarios where multiple AutoBo
 """
 
 
+@pytest.mark.integration
 async def test_knowledge_base_optimization():
-    """Test knowledge base with GPU optimization."""
+    """Test knowledge base with GPU optimization.
+
+    Requires a fully initialised KnowledgeBase (Redis 'knowledge' database plus
+    ChromaDB): without one, get_knowledge_base() raises RuntimeError. It cannot
+    run on the PR unit gate, where no such stack exists, so it is marked
+    integration (#13551).
+
+    Be clear about where that puts it: marker-tests.yml owns the excluded
+    markers, but its cron is commented out — "SCHEDULE INTENTIONALLY WITHHELD
+    UNTIL THE SUITE IS GREEN (#13286)" — leaving workflow_dispatch as the only
+    live trigger. So this test now runs on manual dispatch and nowhere else,
+    until #13286 turns the schedule on. Coverage loss is nil regardless: the
+    body contains no assertions at all, so it could only ever fail on
+    infrastructure, never on a regression. It is listed on #13286's triage.
+    """
     print("🧪 Testing AutoBot Knowledge Base with GPU Optimization")  # noqa: print
     print("=" * 60)  # noqa: print
 
     # Initialize knowledge base
     print("📚 Initializing knowledge base...")  # noqa: print
-    kb = get_knowledge_base()
+    kb = await get_knowledge_base()
 
     # Check if GPU optimization is active
     print("\n🔍 Checking optimization status...")  # noqa: print

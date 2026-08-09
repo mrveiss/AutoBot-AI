@@ -43,7 +43,7 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 |---|---|
 | Redis | `from autobot_shared.redis_client import get_redis_client` |
 | Config | `from autobot_shared.ssot_config import config` / `import { getBackendUrl } from '@/config/ssot-config'` |
-| Logging | `logging.getLogger(__name__)` / `createLogger('Name')` — no `print()` or `console.*` |
+| Logging | `from autobot_shared.logging_manager import get_logger` → `get_logger(__name__)` / `createLogger('Name')` — no `print()` or `console.*`; stdlib `logging` only where a config-mocking test harness forbids it (see `autobot_shared/user_management/password_epoch.py`) |
 | Encoding | Always `encoding='utf-8'` explicitly |
 | Cache TTL | Never hard-code — use module-level constant from env var (see `chat_history/cache.py`) |
 | LEDGER/EXECUTOR | Coordination tools complete instantly — do NOT wait; continue immediately with execution tools |
@@ -57,11 +57,12 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 - **Commit format:** `<type>(scope): <description> (#issue-number)`
 - **Security reviews are findings-first:** read the diff only, emit a severity/`file:line`/issue/fix table within 3 tool calls, verify *after* — never explore before the table lands (skill: `secreview`)
 - **Long analyses go to a file, not the response:** research/audit/comparison output is written to `docs/research/<topic>.md` (or `docs/audit/`) incrementally as it is produced; the reply is the path plus a short summary — an interrupted or token-capped response must never lose the work
+- **Red CI never merges:** a failing required check is root-caused and fixed, never merged past — filing a tracking issue is not a substitute. Can't fix now → label the PR `blocked` with a root-cause writeup and move on ([`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) "Red CI Never Merges")
 - **Never `--no-verify`** — PostToolUse hook auto-formats `.py`
 - **Protected branches:** `main`/`master` blocked by pre-commit hook → use `issue-*` or `hotfix-*`
 - **PR template headings:** `Thinking Path` · `What Changed` · `Verification` · `Model Used`
 - **No internal info in outward artifacts:** never expose IPs, hostnames, secrets/tokens, or internal filesystem paths in GitHub issues/PRs/comments/logs — redact to generic role/node refs
-- **PR queue limit:** ≥5 open PRs → defer implementation and notify
+- **No PR queue limit:** solve issues one by one without capping open PRs. Dispatch is gated on **review capacity**, not on open-PR count — every PR still gets a `code-reviewer` pass before merge, and PRs merge as their CI finishes. Review and merge the finished ones instead of deferring new work.
 - **Codebase is source of truth:** never edit `/opt/autobot/` or `/var/log/autobot/`
 - **System updates (test AND prod):** ONLY via the builtin updater a user reaches at `/slm/maintenance/updates/code-sync` (code-sync API / self-update); if the builtin can't do it, fix that gap (issue + PR) — never side-channel via ad-hoc ansible/shell
 - **Batch similar-scope issues per PR:** one PR may close several similar-scope issues (`Closes #A, #B, …`) — each MUST be fully delivered (closure Gate 3: partial delivery never closes); genuinely independent or different-risk changes still get separate PRs

@@ -9,7 +9,7 @@ Detects listening TCP ports on the local system.
 """
 
 import logging
-import subprocess  # nosec B404 - subprocess used with fixed commands for system inspection
+import subprocess  # nosec B404  # subprocess used with fixed commands for system inspection
 from dataclasses import dataclass
 from typing import List
 
@@ -128,7 +128,7 @@ def get_listening_ports() -> List[PortInfo]:
 
     try:
         # ss -tlnp: TCP, listening, numeric, show process
-        result = subprocess.run(  # nosec B603 B607 - fixed ss argv for port scanning, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed ss argv for port scanning, no user input
             ["ss", "-tlnp"],
             capture_output=True,
             text=True,
@@ -167,7 +167,7 @@ def _get_ports_netstat() -> List[PortInfo]:
     ports = []
 
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed netstat argv for port scanning, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed netstat argv for port scanning, no user input
             ["netstat", "-tlnp"],
             capture_output=True,
             text=True,

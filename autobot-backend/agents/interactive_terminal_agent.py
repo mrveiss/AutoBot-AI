@@ -11,13 +11,13 @@ import asyncio
 import fcntl
 import os
 import pty
-import select
 import struct
 import termios
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from autobot_shared.fd_poll import poll_readable
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
@@ -26,6 +26,11 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
+
+# Issue #13219: the availability check has always been a non-blocking probe
+# (select() timeout 0 seconds == poll() timeout 0 milliseconds); the caller
+# sleeps separately when nothing is ready.
+_NON_BLOCKING_POLL_MS = 0
 
 
 class InteractiveTerminalAgent(StandardizedAgent):
@@ -258,9 +263,10 @@ class InteractiveTerminalAgent(StandardizedAgent):
         if not self.master_fd:
             return False
 
-        # Use select with timeout to check data availability
-        readable, _, _ = select.select([self.master_fd], [], [], 0)
-        return bool(readable)
+        # Non-blocking poll for readability. poll() has no FD_SETSIZE ceiling,
+        # so a PTY fd >= 1024 still works where select() raised
+        # "filedescriptor out of range in select()" (#13219).
+        return poll_readable(self.master_fd, _NON_BLOCKING_POLL_MS)
 
     async def _process_output(self, data: bytes):
         """Process and send terminal output (thread-safe)"""

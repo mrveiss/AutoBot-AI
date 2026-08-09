@@ -109,15 +109,31 @@ class TestLayer1EssentialStory:
 
 
 class TestL0L1CombinedBudget:
+    """#13691: this class used to assert the estimates were `<= 900`.
+
+    That was the test recording the acceptance criterion as met on the strength
+    of a constant that only logged — the exact thing #13691 was filed about. The
+    flat 900 is gone, and the layers' own `token_estimate` values are now the
+    per-model *targets* the allocator caps against, so what matters is that they
+    are usable as a budget input rather than that they fall under a magic number.
+    """
+
     @pytest.mark.asyncio
-    async def test_l0_l1_combined_token_estimate_le_900(self):
+    async def test_token_estimates_are_positive_and_per_model(self):
         from chat_history.layers import Layer0Identity, Layer1EssentialStory
 
-        ctx: dict = {"model_name": "default"}
-        l0_est = await Layer0Identity().token_estimate(ctx)
-        l1_est = await Layer1EssentialStory().token_estimate(ctx)
-        total = l0_est + l1_est
-        assert total <= 900, f"L0+L1 combined estimate {total} exceeds 900-token budget"
+        default_ctx: dict = {"model_name": "default"}
+        l0_est = await Layer0Identity().token_estimate(default_ctx)
+        l1_est = await Layer1EssentialStory().token_estimate(default_ctx)
+
+        assert l0_est > 0 and l1_est > 0, "a zero target would make max_share undefined"
+
+    @pytest.mark.asyncio
+    async def test_the_flat_900_budget_is_gone(self):
+        """The constant, and any assertion resting on it, must not come back."""
+        from chat_history.layers import TieredContextBuilder
+
+        assert not hasattr(TieredContextBuilder, "_L0_L1_MAX_TOKENS")
 
 
 # ---------------------------------------------------------------------------

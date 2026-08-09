@@ -12,7 +12,7 @@ and converting HTML/Markdown content via the optional markdownify dep.
 import json
 import os
 import platform
-import subprocess  # nosec B404 - required for system commands
+import subprocess  # nosec B404  # required for system commands
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -98,7 +98,7 @@ class SystemIntegration:
                 capture_output=True,
                 text=True,
                 check=True,
-                shell=shell,  # nosec B602 - shell=False by default, caller controls
+                shell=shell,  # nosec B602  # shell=False by default, caller controls
             )
             # Cache stripped values to avoid repeated calls (Issue #624)
             stdout_stripped = result.stdout.strip() if result.stdout else ""
@@ -313,7 +313,7 @@ class SystemIntegration:
         # This is similar to execute_shell_command in worker_node,
         # but kept here for abstraction and potential future OS-specific
         # enhancements (e.g., direct API calls instead of shell)
-        return self._run_command([command], shell=True)  # nosec B604 - internal command execution
+        return self._run_command([command], shell=True)  # nosec B604  # internal command execution
 
     def get_process_info(self, process_name: str | None = None, pid: int | None = None) -> Dict[str, Any]:
         """

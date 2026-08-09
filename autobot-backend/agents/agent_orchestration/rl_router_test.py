@@ -155,6 +155,11 @@ class TestEpsilonGreedy:
 
         agents = ["chat", "code_generation", "research"]
         for _ in range(10):
+            # select_agent() ends with _decay_epsilon(), which floors epsilon at
+            # _EPSILON_MIN — so a single plant only holds for the first draw and
+            # the remaining nine ran with 5% exploration, failing ~21% of runs
+            # (#13551). Re-plant so every draw exercises the greedy path.
+            store[_KEY("rl:router:epsilon")] = b"0.0"
             agent_id, _, _ = await router.select_agent("write code", agents)
             assert agent_id == "code_generation"
 

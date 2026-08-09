@@ -54,7 +54,7 @@ class TestKnowledgeBaseRedisIntegration:
         """Test that Redis connection is properly established"""
         # Verify connection exists
         assert kb._aioredis_client is not None
-        assert kb.redis_manager is not None
+        assert kb.redis_client is not None
 
         # Verify connection works with ping
         result = await kb.redis().ping()
@@ -404,23 +404,39 @@ class TestKnowledgeBaseRedisIntegration:
 
 
 class TestKnowledgeBaseAsyncRedisManagerIntegration:
-    """Integration tests for AsyncRedisManager integration"""
+    """Redis-pool and resilience coverage for the knowledge base.
+
+    Named for ``AsyncRedisManager``, which no longer exists: ``utils/
+    async_redis_manager.py`` was deleted in the Nov 2025 Redis consolidation and
+    its last compatibility shim removed by #12649/#12667, which migrated the
+    surviving caller onto ``autobot_shared.redis_client``. These tests kept
+    asserting ``kb.redis_manager``, an attribute ``KnowledgeBase`` has not had
+    since — so they did not fail, they **errored at fixture setup**, which reads
+    like an environment problem rather than dead code (#13657).
+
+    Re-pointed at the surface that actually exists (``kb.redis_client``) rather
+    than retired: the intent — that the knowledge base's Redis usage is pooled
+    and survives failures — is still worth covering.
+    """
 
     @pytest.fixture
     async def kb(self):
-        """Create KnowledgeBase with AsyncRedisManager"""
+        """Create a KnowledgeBase with its Redis client initialised."""
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
-        if not kb.redis_manager:
-            pytest.skip("AsyncRedisManager not available")
+        # getattr, not attribute access: a bare `kb.redis_client` raises when the
+        # attribute is absent, so the skip below could never fire — that is
+        # exactly how three tests turned into three errors.
+        if not getattr(kb, "redis_client", None):
+            pytest.skip("Redis unavailable — these exercise a live connection")
 
         yield kb
 
     @pytest.mark.asyncio
-    async def test_async_redis_manager_initialized(self, kb):
-        """Test that AsyncRedisManager is properly initialized"""
-        assert kb.redis_manager is not None
+    async def test_redis_client_initialized(self, kb):
+        """The knowledge base exposes an initialised Redis client."""
+        assert kb.redis_client is not None
         assert kb._aioredis_client is not None
 
     @pytest.mark.asyncio

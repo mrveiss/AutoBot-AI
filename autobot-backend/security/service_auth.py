@@ -19,6 +19,7 @@ from fastapi import HTTPException, Request
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.service_signing import _service_signature
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_90_DAYS
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
@@ -36,7 +37,10 @@ class ServiceAuthManager:
             redis_client: AsyncRedisDatabase instance for key storage
         """
         self.redis = redis_client
-        self.timestamp_window = 300  # 5 minutes - prevents replay attacks
+        # #13335: AUTH_TIMESTAMP_WINDOW was written by the service_auth Ansible
+        # role and by export_service_keys.py but read by nobody -- this value was
+        # hard-coded, so the documented knob silently did nothing.
+        self.timestamp_window = config.service_auth_timestamp_window
 
     async def generate_service_key(self, service_id: str) -> str:
         """

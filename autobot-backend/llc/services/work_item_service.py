@@ -28,7 +28,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -302,8 +302,28 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
         return item
 
-    async def get(self, session: AsyncSession, work_item_id: str) -> Optional[LLCWorkItem]:
-        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
+    async def get(
+        self,
+        session: AsyncSession,
+        work_item_id: Union[str, uuid.UUID],
+        *,
+        company_id: Optional[str] = None,
+    ) -> Optional[LLCWorkItem]:
+        """Fetch a work item, optionally scoped to a company (#13704).
+
+        ``company_id`` is keyword-only and optional so the many internal callers
+        whose scope is already established stay unchanged; the chat prompt path,
+        which is the one place an untrusted id arrives, always passes it. A
+        mismatch returns ``None`` — indistinguishable from "no such item".
+
+        ``work_item_id`` accepts a ``UUID`` as well as a string (#13756): the
+        heartbeat context path holds a parsed ``UUID`` and #13704's unconditional
+        ``uuid.UUID(work_item_id)`` raised ``AttributeError`` on it.
+        """
+        stmt = select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(str(work_item_id)))
+        if company_id is not None:
+            stmt = stmt.where(LLCWorkItem.company_id == uuid.UUID(str(company_id)))
+        result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def update(

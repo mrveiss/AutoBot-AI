@@ -59,6 +59,8 @@ class HeartbeatContextBuilder:
         agent_id: str,
         work_item_id: uuid.UUID,
         context_mode: str = "fat",
+        *,
+        company_id: str,
     ) -> Dict[str, Any]:
         """Build heartbeat context for an agent.
 
@@ -67,17 +69,20 @@ class HeartbeatContextBuilder:
             agent_id: Agent ID
             work_item_id: Work item being checked out
             context_mode: "thin" (minimal) or "fat" (rich, GH#8236)
+            company_id: Caller's tenant scope (#13756). Keyword-only and
+                required — the work item is fetched under this scope, so an
+                item belonging to another company is reported as missing.
 
         Returns:
             Dict with assembled context, ready to compress and store.
 
         Raises:
-            ValueError: If work_item_id not found
+            ValueError: If work_item_id is not found within ``company_id``
         """
         if context_mode == "thin":
-            return await self._build_thin(session, agent_id, work_item_id)
+            return await self._build_thin(session, agent_id, work_item_id, company_id=company_id)
         elif context_mode == "fat":
-            return await self._build_fat(session, agent_id, work_item_id)
+            return await self._build_fat(session, agent_id, work_item_id, company_id=company_id)
         else:
             raise ValueError(f"Unknown context_mode: {context_mode}")
 
@@ -86,13 +91,15 @@ class HeartbeatContextBuilder:
         session: AsyncSession,
         agent_id: str,
         work_item_id: uuid.UUID,
+        *,
+        company_id: str,
     ) -> Dict[str, Any]:
         """Build minimal context for quick heartbeat startup.
 
         Returns:
             Dict with work_item_id, api_base, agent_api_key
         """
-        work_item = await self.work_item_service.get(session, work_item_id)
+        work_item = await self.work_item_service.get(session, work_item_id, company_id=company_id)
         if work_item is None:
             raise ValueError(f"Work item {work_item_id} not found")
 
@@ -107,6 +114,8 @@ class HeartbeatContextBuilder:
         session: AsyncSession,
         agent_id: str,
         work_item_id: uuid.UUID,
+        *,
+        company_id: str,
     ) -> Dict[str, Any]:
         """Build rich context with parallel RAG queries (GH#8236).
 
@@ -118,11 +127,16 @@ class HeartbeatContextBuilder:
             Dict with goal_ancestry, company_context, project_context, agent_memory,
             similar_past_work, acceptance_criteria, work_item_detail
         """
-        work_item = await self.work_item_service.get(session, work_item_id)
+        work_item = await self.work_item_service.get(session, work_item_id, company_id=company_id)
         if work_item is None:
             raise ValueError(f"Work item {work_item_id} not found")
 
-        company_id = str(work_item.company_id)
+        # The scope every downstream RAG/goal lookup runs under is the caller's,
+        # never the fetched row's (#13756). The row is only reachable under that
+        # scope now, so a mismatch means the store ignored the filter.
+        if str(work_item.company_id) != str(company_id):
+            raise ValueError(f"Work item {work_item_id} not found")
+
         project_id = str(work_item.project_id) if work_item.project_id else None
         query_text = f"{work_item.title}\n{work_item.description or ''}"
 

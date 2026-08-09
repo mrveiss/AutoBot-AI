@@ -73,12 +73,15 @@ class StartupValidator:
         """Initialize validator with default validation result and dependency lists."""
         self.result = ValidationResult(success=True)
 
-        # Critical imports that must be available
+        # Critical imports that must be available. ``aioredis`` was listed here
+        # until #13738; it has not been a dependency since the move to
+        # ``redis.asyncio`` and would have reported a permanent false failure the
+        # moment anything ran this validator.
         self.critical_imports = [
             "fastapi",
             "pydantic",
             "redis",
-            "aioredis",
+            "redis.asyncio",
             "jwt",
             "bcrypt",
             "yaml",
@@ -86,25 +89,29 @@ class StartupValidator:
             "logging",
         ]
 
-        # AutoBot modules that should be importable
+        # AutoBot modules that should be importable. These read ``src.*`` until
+        # #13738 — a layout this repository has not used for a long time, so
+        # every entry raised ModuleNotFoundError. Each name below is verified to
+        # import under the backend's own sys.path.
         self.autobot_modules = [
-            "src.unified_config",
-            "src.auth_middleware",
-            "src.security_layer",
-            "src.knowledge_base_factory",
-            "src.knowledge_base",
+            "autobot_shared.ssot_config",
+            "auth_middleware",
+            "security_layer",
+            "knowledge_base_factory",
+            "knowledge_base",
         ]
 
-        # Optional modules (warnings only if missing)
-        # Note: Obsolete chat_workflow_consolidated removed in Issue #567 archive cleanup
+        # Optional modules (warnings only if missing).
+        # Note: Obsolete chat_workflow_consolidated removed in Issue #567 archive cleanup.
+        # ``conversation`` (deprecated in #3831) and ``llm_interface`` (gone) are
+        # not listed: a warning for a module that was deliberately retired is
+        # noise, not a signal.
         self.optional_modules = [
-            "src.agents.kb_librarian_agent",
-            "src.agents.librarian_assistant",
-            "src.agents.llm_failsafe_agent",
-            "src.conversation",
-            "src.async_chat_workflow",
-            "src.llm_interface",
-            "src.circuit_breaker",
+            "agents.kb_librarian_agent",
+            "agents.librarian_assistant",
+            "agents.llm_failsafe_agent",
+            "async_chat_workflow",
+            "circuit_breaker",
         ]
 
         # Services to validate connectivity
@@ -316,9 +323,15 @@ class StartupValidator:
         """Validate system-level requirements"""
         logger.info("Validating system requirements...")
 
-        # Check Python version
-        if sys.version_info < (3, 12):
-            self.result.add_error(f"Python 3.12+ required, found {sys.version}")
+        # Check Python version. 3.14 is the backend's actual floor, not a
+        # conservative guess: CI, .python-version, mypy, docker/backend and
+        # docker/slm, and every Ansible role that builds a backend venv all
+        # pin 3.14. This check read 3.12 while all of those said 3.14, and it
+        # is the only floor the running process enforces — so it is the one a
+        # reader trusts. The NPU worker's separate, older pin is not relevant
+        # here; it runs its own venv and never imports this module.
+        if sys.version_info < (3, 14):
+            self.result.add_error(f"Python 3.14+ required, found {sys.version}")
 
         # Check disk space for logs and data
         try:
@@ -344,6 +357,42 @@ async def validate_startup_dependencies() -> ValidationResult:
     """Main validation function"""
     validator = StartupValidator()
     return await validator.validate_all()
+
+
+def validate_system_requirements() -> ValidationResult:
+    """Check the interpreter floor and free disk space (#13738).
+
+    Split out of :meth:`StartupValidator.validate_all` so the boot path can gate
+    on it alone. The rest of ``validate_all`` performs Redis and Ollama round
+    trips, which belong in a health probe rather than in front of every start;
+    this part is pure local inspection and costs nothing.
+
+    The floor is load-bearing rather than advisory: ``llc/scheduler/base.py``
+    calls ``asyncio.Task.cancelling()`` with no fallback, so on a sub-floor
+    interpreter every LLC poll loop dies after one tick with an ``AttributeError``
+    nothing ever retrieves (#13727). Failing loudly at boot is the difference
+    between a clear error and background scheduling that silently does nothing.
+    """
+    validator = StartupValidator()
+    validator._validate_system_requirements()
+    return validator.result
+
+
+def enforce_system_requirements() -> None:
+    """Fail startup when the host cannot support the platform (#13738).
+
+    Raises:
+        RuntimeError: the interpreter is below the floor, or the disk is full.
+            Warnings (low-but-sufficient disk) are logged and do not block boot.
+    """
+    result = validate_system_requirements()
+    for warning in result.warnings:
+        logger.warning("Startup requirement warning: %s", warning)
+    if result.success:
+        return
+    for error in result.errors:
+        logger.error("Startup requirement not met: %s", error)
+    raise RuntimeError("Startup requirements not met: " + "; ".join(result.errors))
 
 
 def validate_import_quickly(module_name: str) -> Tuple[bool, str | None]:
@@ -375,6 +424,8 @@ async def validate_service_health(service_name: str) -> Tuple[bool, str | None]:
 __all__ = [
     "ValidationResult",
     "StartupValidator",
+    "enforce_system_requirements",
+    "validate_system_requirements",
     "validate_startup_dependencies",
     "validate_import_quickly",
     "validate_service_health",

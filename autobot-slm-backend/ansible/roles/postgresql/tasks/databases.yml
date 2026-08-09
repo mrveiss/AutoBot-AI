@@ -134,68 +134,15 @@
   become: true
   no_log: true
 
-# #12907 (Defect 1): hosts provisioned before #12224 still carry UNMARKED
-# assignments written by the old whole-file template (roles/postgresql/
-# templates/db-credentials.env.j2), which used the same key names. blockinfile
-# only owns the region between its markers, so those stale lines survive every
-# redeploy and sit BEFORE the managed block -- two assignments per key, the
-# first one dead. `set -a; . file` takes the last, so this is survivable; any
-# consumer that greps the first match silently reads a dead secret, which is
-# exactly how #12883 became an outage.
+# #12907 reconciliation (strip pre-#12224 unmarked duplicates, retire the
+# superseded legacy store) lives in credentials_reconcile.yml so the builtin
+# updater can apply the SAME tasks without running the whole role (#12959) —
+# before that split the fix was role-only and never reached a host.
 #
 # Runs AFTER blockinfile, never before: the managed block must already be in
 # place, so a play that aborts here can never leave a host with no credentials.
-- name: "Strip pre-#12224 unmarked {{ db_env_prefix }} credential lines (#12907)"
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      f='{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}'
-      [ -f "$f" ] || exit 0
-      tmp="$(mktemp "${f}.XXXXXX")"
-      trap 'rm -f "$tmp"' EXIT
-      awk -v pfx='{{ db_env_prefix }}' '
-        $0 ~ "^# BEGIN " pfx " DB CREDENTIALS" { inblock = 1; print; next }
-        $0 ~ "^# END " pfx " DB CREDENTIALS"   { inblock = 0; print; next }
-        !inblock && $0 ~ "^" pfx "_[A-Z0-9_]*=" { dropped++; next }
-        { print }
-        END { exit (dropped ? 10 : 0) }
-      ' "$f" > "$tmp" && rc=0 || rc=$?
-      if [ "$rc" -eq 10 ]; then
-        chown --reference="$f" "$tmp"
-        chmod --reference="$f" "$tmp"
-        mv -f "$tmp" "$f"
-        trap - EXIT
-        echo CHANGED
-      elif [ "$rc" -ne 0 ]; then
-        exit "$rc"
-      fi
-  register: _cred_strip
-  changed_when: "'CHANGED' in _cred_strip.stdout"
-  become: true
-  no_log: true
-
-# #12907 (Defect 2): #10636 gave the backend its own autobot-db-credentials.env
-# because the whole-file template made the two prefixes clobber each other.
-# #12224's per-prefix markers removed that constraint, but the second file
-# stayed and drifted a month behind, holding a password Postgres rejects.
-# Retire it once the canonical file actually carries this prefix's block --
-# never unconditionally, so a half-applied run cannot strand a host.
-- name: "Retire the superseded {{ db_env_prefix }} credential file (#12907)"
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      canonical='{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}'
-      legacy='{{ postgresql_credentials_dir }}/autobot-db-credentials.env'
-      [ -f "$legacy" ] || exit 0
-      [ "$legacy" != "$canonical" ] || exit 0
-      grep -q "^# BEGIN {{ db_env_prefix }} DB CREDENTIALS" "$canonical" || exit 0
-      mv -f "$legacy" "${legacy}.superseded-12907"
-      echo CHANGED
-  register: _cred_retire
-  changed_when: "'CHANGED' in _cred_retire.stdout"
-  become: true
-  no_log: true
-  when: db_env_prefix == 'AUTOBOT'
+- name: "Reconcile the {{ db_env_prefix }} credential store (#12907)"
+  ansible.builtin.include_tasks: credentials_reconcile.yml
 
 - name: Display database setup completion
   ansible.builtin.debug:

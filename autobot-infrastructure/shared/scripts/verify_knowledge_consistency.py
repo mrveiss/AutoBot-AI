@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+from autobot_shared.redis_utils import decode_redis_list
 from config import ConfigManager
 from knowledge_base import KnowledgeBase
 from autobot_shared.redis_client import get_redis_client
@@ -51,13 +52,21 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_vector_dim_from_attr(attr: List) -> Optional[int]:
-    """Extract dimension from a vector attribute (Issue #338 - extracted helper)."""
+    """Extract the dimension from a vector attribute of an ``FT.INFO`` reply.
+
+    #13290: an attribute is a flat key/value array such as
+    ``['identifier', 'vector', 'attribute', 'vector', 'type', 'VECTOR',
+    'DIM', '768', ...]``. The type marker sits after its ``'type'`` key, not at
+    a fixed index, so this scans for it rather than testing ``attr[1]``. Key
+    casing varies across RediSearch versions, so comparisons are case-folded.
+    """
     if not isinstance(attr, list) or len(attr) == 0:
         return None
-    if attr[1] != b"VECTOR":
+    tokens = [t for t in attr if isinstance(t, str)]
+    if not any(t.upper() == "VECTOR" for t in tokens):
         return None
     for k, val in enumerate(attr):
-        if val == b"DIM" and k + 1 < len(attr):
+        if isinstance(val, str) and val.upper() == "DIM" and k + 1 < len(attr):
             return int(attr[k + 1])
     return None
 
@@ -65,7 +74,7 @@ def _extract_vector_dim_from_attr(attr: List) -> Optional[int]:
 def _find_vector_dimension_in_index(index_info: List) -> Optional[int]:
     """Find vector dimension from FT.INFO response (Issue #338 - extracted helper)."""
     for i, field in enumerate(index_info):
-        if field != b"attributes":
+        if field != "attributes":
             continue
         attrs = index_info[i + 1]
         for attr in attrs:
@@ -81,7 +90,7 @@ def _verify_redis_vector_dimension(redis_client: Any, expected_dimension: int) -
         return True, None  # Skip if no client
 
     try:
-        index_info = redis_client.execute_command("FT.INFO", "llama_index")
+        index_info = decode_redis_list(redis_client.execute_command("FT.INFO", "llama_index"))
         actual_dim = _find_vector_dimension_in_index(index_info)
 
         if actual_dim is None:

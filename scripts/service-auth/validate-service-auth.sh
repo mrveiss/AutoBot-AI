@@ -8,6 +8,12 @@
 # Usage: bash scripts/service-auth/validate-service-auth.sh
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
@@ -23,7 +29,7 @@ BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-ENV_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env"
+ENV_FILE="${PROJECT_ROOT}/.env"
 
 # Counters
 PASS_COUNT=0

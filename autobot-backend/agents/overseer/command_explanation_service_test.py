@@ -4,11 +4,13 @@
 # Author: mrveiss
 """Unit tests for CommandExplanationService (#690)."""
 
+import hashlib
 import json
 from unittest.mock import AsyncMock
 
 import pytest
 
+import agents.overseer.command_explanation_service as ces_module
 from agents.overseer.command_explanation_service import (
     CommandExplanationService,
     get_command_explanation_service,
@@ -46,6 +48,34 @@ def service():
     return CommandExplanationService()
 
 
+class _StubOutputFilter:
+    """Stand-in for services.tool_output_filter.ToolOutputFilter.
+
+    The real filter tees oversized output to disk and embeds a content hash, so
+    tests that need deterministic, side-effect-free filtering substitute this.
+    """
+
+    def __init__(self, filtered: str):
+        self.filtered = filtered
+        self.calls: list[tuple[str, str]] = []
+
+    def filter(self, command: str, output: str, exit_code: int = 0, stderr: str = "") -> str:
+        self.calls.append((command, output))
+        return self.filtered
+
+
+@pytest.fixture()
+def stub_filter(monkeypatch):
+    """Replace the module's tool-output filter with a deterministic stub."""
+
+    def _install(filtered: str) -> _StubOutputFilter:
+        stub = _StubOutputFilter(filtered)
+        monkeypatch.setattr(ces_module, "get_tool_output_filter", lambda: stub)
+        return stub
+
+    return _install
+
+
 class TestCacheKeys:
     """Tests for cache key generation."""
 
@@ -64,11 +94,19 @@ class TestCacheKeys:
         k2 = service._get_output_cache_key("ls", "output")
         assert k1 == k2
 
-    def test_output_cache_key_truncates_long_output(self, service):
+    def test_output_cache_key_derives_from_filtered_output(self, service, stub_filter):
+        """The key hashes the tool-output-filtered text, not the raw output.
+
+        Output size control lives in services.tool_output_filter; the service no
+        longer applies a hard character truncation of its own.
+        """
+        stub = stub_filter("FILTERED")
         long_output = "x" * 5000
-        k1 = service._get_output_cache_key("ls", long_output)
-        k2 = service._get_output_cache_key("ls", long_output[:2000])
-        assert k1 == k2
+
+        key = service._get_output_cache_key("ls", long_output)
+
+        assert stub.calls == [("ls", long_output)]
+        assert key == hashlib.md5(b"ls::FILTERED", usedforsecurity=False).hexdigest()
 
 
 class TestExplainCommand:
@@ -176,15 +214,25 @@ class TestPromptBuilding:
         assert "nmap -sn 10.0.0.0/24" in prompt
         assert "JSON" in prompt
 
-    def test_output_prompt_truncates_long_output(self, service):
+    def test_output_prompt_notes_filtered_output(self, service, stub_filter):
+        """A shortened output is sent with a note stating the before/after sizes."""
+        stub_filter("FILTERED")
         long_output = "x" * 5000
-        prompt = service._build_output_explanation_prompt("ls", long_output, 0)
-        assert "truncated" in prompt.lower()
-        assert "4000" in prompt
 
-    def test_output_prompt_no_truncation_short(self, service):
+        prompt = service._build_output_explanation_prompt("ls", long_output, 0)
+
+        assert "FILTERED" in prompt
+        assert "[Output filtered from 5000 chars to 8 chars]" in prompt
+        assert long_output not in prompt
+
+    def test_output_prompt_no_filter_note_when_unchanged(self, service, stub_filter):
+        """No note is added when the filter returns the output untouched."""
+        stub_filter("short output")
+
         prompt = service._build_output_explanation_prompt("ls", "short output", 0)
-        assert "truncated" not in prompt.lower()
+
+        assert "short output" in prompt
+        assert "Output filtered from" not in prompt
 
 
 class TestParsing:

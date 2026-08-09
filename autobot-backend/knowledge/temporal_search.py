@@ -12,10 +12,25 @@ from datetime import datetime
 from typing import List, Set
 from uuid import UUID
 
+from redis.exceptions import RedisError
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
+
+# #13273: only genuine Redis-connectivity failures degrade to an empty
+# result here. Any other exception (a programming bug like the .decode()
+# defect fixed in #13270) must propagate so the route handlers' own
+# ``except Exception -> HTTPException(500)`` actually fires instead of
+# reporting "no data" for an infrastructure failure.
+# ``redis.exceptions.ConnectionError`` is a subclass of ``RedisError`` and is
+# already covered. Naming the bare ``ConnectionError`` here would resolve to the
+# *builtin* (an ``OSError`` subclass) and silently re-widen this handler to any
+# socket failure raised by anything in the try block — reintroducing the very
+# swallow-into-silence pattern this change removes. redis-py already wraps
+# socket errors into ``redis.exceptions.ConnectionError``, so nothing is lost.
+_TRANSIENT_REDIS_ERRORS = (RedisError,)
 
 
 class TemporalSearchService:
@@ -87,7 +102,7 @@ class TemporalSearchService:
             )
             return events
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Event range search failed: %s", e)
             return []
 
@@ -126,7 +141,7 @@ class TemporalSearchService:
             )
             return events[:limit]
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Timeline retrieval failed: %s", e)
             return []
 
@@ -168,7 +183,7 @@ class TemporalSearchService:
             )
             return chain
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Causal chain traversal failed: %s", e)
             return []
 
@@ -210,11 +225,20 @@ class TemporalSearchService:
             )
 
     async def _get_entity_id_by_name(self, entity_name: str) -> str | None:
-        """Lookup entity ID by canonical name."""
+        """Lookup entity ID by canonical name.
+
+        The shared Redis client is built with ``decode_responses=True``
+        (``autobot_shared/redis_management/config.py``), so ``get`` yields
+        ``str``.  A bare ``.decode()`` raised ``AttributeError`` on every
+        lookup, which ``get_event_timeline`` swallowed into an empty
+        timeline for every entity.  Handle both wire shapes (#13270).
+        """
         canonical_name = entity_name.lower().strip()
         name_key = f"entity:name:{canonical_name}"
         entity_id = await self.redis.get(name_key)
-        return entity_id.decode() if entity_id else None
+        if not entity_id:
+            return None
+        return entity_id.decode() if isinstance(entity_id, bytes) else entity_id
 
     async def _get_event(self, event_id: str) -> dict | None:
         """Retrieve event data from Redis JSON."""
@@ -222,6 +246,6 @@ class TemporalSearchService:
             key = f"event:{event_id}"
             event_data = await self.redis.json().get(key)
             return event_data
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.warning("Failed to get event %s: %s", event_id, e)
             return None

@@ -250,7 +250,7 @@ async def list_catalog(
 @router.post(
     "/catalog/{name}/install",
     summary="Install a skill from an HTTP catalog",
-    response_model=DataResponse[SkillCatalogInstallData],
+    response_model=SkillCatalogInstallData,
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

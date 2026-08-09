@@ -211,7 +211,7 @@ class TestGetUserBundle:
         """User can get their own bundle assignment."""
         client = _make_client(_USER_ALICE)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx:
+        with patch("user_management.database.db_session_context") as mock_session_ctx:
             mock_session = AsyncMock(spec=AsyncSession)
             mock_result = MagicMock()
             mock_result.fetchone.return_value = ("voice_extended",)
@@ -229,7 +229,7 @@ class TestGetUserBundle:
         """Admin can get any user's bundle assignment."""
         client = _make_client(_ADMIN)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx:
+        with patch("user_management.database.db_session_context") as mock_session_ctx:
             mock_session = AsyncMock(spec=AsyncSession)
             mock_result = MagicMock()
             mock_result.fetchone.return_value = ("voice_admin",)
@@ -254,7 +254,7 @@ class TestGetUserBundle:
         """Getting bundle when none assigned returns null."""
         client = _make_client(_USER_ALICE)
 
-        with patch("user_management.database.get_async_session") as mock_session_ctx:
+        with patch("user_management.database.db_session_context") as mock_session_ctx:
             mock_session = AsyncMock(spec=AsyncSession)
             mock_result = MagicMock()
             mock_result.fetchone.return_value = None
@@ -309,7 +309,7 @@ class TestSetUserBundle:
         client = _make_client(_ADMIN)
 
         with (
-            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("user_management.database.db_session_context") as mock_session_ctx,
             patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
@@ -335,7 +335,7 @@ class TestSetUserBundle:
         client = _make_client(_ADMIN)
 
         with (
-            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("user_management.database.db_session_context") as mock_session_ctx,
             patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
@@ -380,7 +380,7 @@ class TestSetUserBundle:
         client = _make_client(_SUPERADMIN)
 
         with (
-            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("user_management.database.db_session_context") as mock_session_ctx,
             patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
@@ -404,7 +404,7 @@ class TestSetUserBundle:
         client = _make_client(_ADMIN)
 
         with (
-            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("user_management.database.db_session_context") as mock_session_ctx,
             patch("api.voice_bundle_user.emit") as mock_emit,
         ):
             mock_session = AsyncMock(spec=AsyncSession)
@@ -472,3 +472,52 @@ class TestSuperadminIsNotLockedOut:
         plain = {"role": "user", "user_id": "user-1"}
         assert _check_self_or_admin(MagicMock(), plain, "user-2") is False
         assert _check_self_or_admin(MagicMock(), plain, "user-1") is True
+
+
+class TestSessionAcquisitionIsAContextManager:
+    """#13364: the voice-bundle endpoints must open sessions with a real
+    async context manager.
+
+    Every other test in this file patches the session helper with a mock that
+    implements ``__aenter__``, so they pass whatever the production code calls —
+    which is exactly how this shipped. ``get_async_session`` is an undecorated
+    async *generator* (a FastAPI ``Depends`` dependency); ``async with`` on it
+    raises ``AttributeError: __aenter__``, and the endpoints' ``except
+    Exception`` turned that into an unconditional ``500 Database error``. All
+    four sites were dead on arrival in production and green in CI.
+
+    These tests use the real objects, so they fail if the endpoints go back to
+    the generator.
+    """
+
+    def test_db_session_context_supports_async_with(self):
+        from user_management.database import db_session_context
+
+        cm = db_session_context()
+        assert hasattr(cm, "__aenter__"), "db_session_context must be usable with 'async with'"
+        assert hasattr(cm, "__aexit__")
+
+    def test_get_async_session_does_not_support_async_with(self):
+        """Documents *why* the endpoints must not use it — it is a Depends generator."""
+        from user_management.database import get_async_session
+
+        gen = get_async_session()
+        assert not hasattr(gen, "__aenter__"), (
+            "get_async_session gained __aenter__; if it is now a context manager this test "
+            "and the #13364 comments in the voice-bundle endpoints should be revisited"
+        )
+
+    def test_voice_bundle_endpoints_do_not_async_with_the_generator(self):
+        """Source-level guard: neither module may 'async with' the Depends generator."""
+        from pathlib import Path
+
+        import api.voice_bundle_admin as admin_mod
+        import api.voice_bundle_user as user_mod
+
+        for module in (admin_mod, user_mod):
+            source = Path(module.__file__).read_text(encoding="utf-8")
+            assert "async with get_async_session()" not in source, (
+                f"{Path(module.__file__).name} opens a session with the Depends generator; "
+                "use db_session_context() (#13364)"
+            )
+            assert "async with db_session_context()" in source

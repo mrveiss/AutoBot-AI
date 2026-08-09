@@ -12,14 +12,21 @@ Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
-{% if chromadb_auth_token %}
-# #12513: CHROMA_SERVER_AUTHN_* token auth. Only rendered when
-# chromadb_auth_token is set (group_vars/vault) — chroma fails to start if the
-# provider is configured with no credentials, so this must stay conditional.
-Environment="CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token_authn.TokenAuthenticationServerProvider"
-Environment="CHROMA_SERVER_AUTHN_CREDENTIALS={{ chromadb_auth_token }}"
-{% endif %}
 EnvironmentFile=/etc/autobot/autobot-ai-stack.env
+# #12513: chroma's server-side token auth. The credential is deliberately NOT
+# inlined here as Environment=: this unit is deployed 0644 and world-readable, so
+# an inline value publishes the token to every local user. It arrives instead
+# through the env file below, rendered 0600 root:root by
+# _shared/tasks/write_chromadb_authn_env.yml immediately before this template.
+#
+# No `-` prefix, on purpose. The optional form is exactly why a missing
+# credential produced a running-but-unauthenticated chroma: systemd silently
+# tolerated the absent file and the service came up enforcing nothing. Mandatory
+# turns that into a visible start failure. It is safe because the env file is
+# written unconditionally (with no keys when no token is configured) by the same
+# role, in the task immediately preceding this one, on every path that renders
+# this unit.
+EnvironmentFile={{ chromadb_authn_env_file }}
 ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
 Restart=always
 RestartSec=10

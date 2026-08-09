@@ -7,14 +7,33 @@ Unit tests for the EncryptionService module.
 
 import os
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
+from autobot_shared.ssot_config import reload_config
 from encryption_service import (
     EncryptionService,
     decrypt_data,
     encrypt_data,
     is_encryption_enabled,
 )
+
+
+@contextmanager
+def encryption_key_env(value: str):
+    """Publish an encryption key through the environment, SSOT-aware.
+
+    ``autobot_shared.ssot_config.get_config()`` is an ``lru_cache``
+    singleton, so patching ``os.environ`` alone is invisible to
+    ``config.encryption_key``. Reload inside the patch, and again on the way
+    out so the cached singleton does not leak the test key into other tests.
+    """
+    try:
+        with patch.dict(os.environ, {"AUTOBOT_ENCRYPTION_KEY": value}):
+            reload_config()
+            yield
+    finally:
+        reload_config()
 
 
 class TestEncryptionService(unittest.TestCase):
@@ -36,10 +55,10 @@ class TestEncryptionService(unittest.TestCase):
         with self.assertRaises(ValueError):
             EncryptionService()
 
-    @patch.dict(os.environ, {"AUTOBOT_ENCRYPTION_KEY": "env_test_key"})
     def test_initialization_from_environment(self):
         """Test service initialization from environment variable."""
-        service = EncryptionService()
+        with encryption_key_env("env_test_key"):
+            service = EncryptionService()
         self.assertEqual(service.master_key, "env_test_key")
 
     def test_encrypt_decrypt_string(self):
@@ -169,23 +188,23 @@ class TestEncryptionService(unittest.TestCase):
 class TestConvenienceFunctions(unittest.TestCase):
     """Test convenience functions."""
 
-    @patch.dict(os.environ, {"AUTOBOT_ENCRYPTION_KEY": "test_key_for_convenience"})
     def test_encrypt_decrypt_data_string(self):
         """Test convenience functions with string data."""
         original = "Test message for convenience functions"
 
-        encrypted = encrypt_data(original)
-        decrypted = decrypt_data(encrypted)
+        with encryption_key_env("test_key_for_convenience"):
+            encrypted = encrypt_data(original)
+            decrypted = decrypt_data(encrypted)
 
         self.assertEqual(decrypted, original)
 
-    @patch.dict(os.environ, {"AUTOBOT_ENCRYPTION_KEY": "test_key_for_convenience"})
     def test_encrypt_decrypt_data_json(self):
         """Test convenience functions with JSON data."""
         original = {"message": "test", "value": 42}
 
-        encrypted = encrypt_data(original)
-        decrypted = decrypt_data(encrypted, as_json=True)
+        with encryption_key_env("test_key_for_convenience"):
+            encrypted = encrypt_data(original)
+            decrypted = decrypt_data(encrypted, as_json=True)
 
         self.assertEqual(decrypted, original)
 

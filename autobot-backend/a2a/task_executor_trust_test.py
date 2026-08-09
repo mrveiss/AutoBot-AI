@@ -174,15 +174,16 @@ class TestExecutorRecordsFailure:
 class TestExecutorRecordsThreatEvent:
     @pytest.mark.asyncio
     async def test_inbound_pii_block_records_threat_event(self):
-        from a2a.pii_pipeline import PIIBlocked
+        from a2a.pii_pipeline import PIIBlocked, PIIType
 
         tm = _make_task_manager_mock()
         trust_mgr = MagicMock()
+        blocked = PIIBlocked([PIIType.SSN], peer_id="suspect-agent")
 
         with (
             patch("a2a.task_executor.get_task_manager", return_value=tm),
             patch("a2a.task_executor.get_trust_manager", return_value=trust_mgr),
-            patch("a2a.task_executor.scrub_outbound", side_effect=PIIBlocked("pii found")),
+            patch("a2a.task_executor.scrub_outbound", side_effect=blocked),
         ):
             await execute_a2a_task("task-5", "ssn: 123-45-6789", peer_id="suspect-agent")
 
@@ -192,7 +193,7 @@ class TestExecutorRecordsThreatEvent:
 
     @pytest.mark.asyncio
     async def test_outbound_pii_block_records_threat_event(self):
-        from a2a.pii_pipeline import PIIBlocked
+        from a2a.pii_pipeline import PIIBlocked, PIIType
 
         tm = _make_task_manager_mock()
         trust_mgr = MagicMock()
@@ -212,7 +213,7 @@ class TestExecutorRecordsThreatEvent:
                 result.redaction_count = 0
                 return result
             # Outbound response: blocked
-            raise PIIBlocked("secret in response")
+            raise PIIBlocked([PIIType.API_KEY], peer_id="suspect-agent")
 
         with (
             patch("a2a.task_executor.get_task_manager", return_value=tm),

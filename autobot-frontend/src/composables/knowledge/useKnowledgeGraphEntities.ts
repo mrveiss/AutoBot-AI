@@ -115,7 +115,9 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
           allRelations.push({
             from: entity.id,
             to: (rel.entity as Record<string, unknown>)?.id as string ?? rel.id as string,
-            type: rel.relation_type as string ?? rel.type as string ?? 'relates_to',
+            // #13452: 'related_to' is the canonical spelling; 'relates_to' was
+            // the knowledge-base-only variant and is not a memory-graph type.
+            type: rel.relation_type as string ?? rel.type as string ?? 'related_to',
             strength: rel.strength as number ?? 1.0,
           })
         }

@@ -13,7 +13,7 @@ Created: 2025-10-31
 
 import json
 import re
-import subprocess  # nosec B404 - required for shell detection
+import subprocess  # nosec B404  # required for shell detection
 from pathlib import Path
 from typing import Any, List
 
@@ -193,7 +193,7 @@ def run_command_utf8(cmd: str | List[str], **kwargs) -> subprocess.CompletedProc
     kwargs["text"] = True
     kwargs["errors"] = kwargs.get("errors", "replace")
 
-    return subprocess.run(cmd, **kwargs)  # nosec B603 - encoding wrapper; callers own argv safety
+    return subprocess.run(cmd, **kwargs)  # nosec B603  # encoding wrapper; callers own argv safety
 
 
 def strip_ansi_codes(text: str) -> str:

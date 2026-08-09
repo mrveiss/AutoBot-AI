@@ -118,6 +118,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hello": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Root Hello
+         * @description Dependency-free liveness probe (#13162).
+         *
+         *     The readiness helpers in the E2E suites and the operator diagnostic
+         *     scripts have always polled this path to decide whether the backend has
+         *     finished booting, but it was never registered on the real app — only on
+         *     the standalone minimal_backend_test fixture. Every one of those probes
+         *     therefore waited for a 200 that could not arrive.
+         *
+         *     Deliberately touches no Redis, database or config so that it answers
+         *     while the rest of startup is still in progress.
+         */
+        get: operations["root_hello_api_hello_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/version": {
         parameters: {
             query?: never;
@@ -1242,6 +1271,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/work-item": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Work Item
+         * @description Return the session's bound work item, or ``None`` (#13704).
+         */
+        get: operations["get_session_work_item_api_chat_sessions__session_id__work_item_get"];
+        /**
+         * Set Session Work Item
+         * @description Bind a chat session to an LLC work item so L4 can render its goal chain (#13704).
+         *
+         *     Two checks, both required: the caller must own the *session*, and the work
+         *     item must belong to the caller's *company*. Only then is the binding stored
+         *     server-side, where it overrides any client-supplied ``work_item_id``.
+         *
+         *     This endpoint is the reason L4 can be wired at all (#13687). Reading the
+         *     work item from the chat request body instead would let any authenticated
+         *     caller name another company's work item and have its goal titles rendered
+         *     into their own prompt.
+         */
+        put: operations["set_session_work_item_api_chat_sessions__session_id__work_item_put"];
+        post?: never;
+        /**
+         * Clear Session Work Item
+         * @description Remove the session's work-item binding (#13704).
+         */
+        delete: operations["clear_session_work_item_api_chat_sessions__session_id__work_item_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/sessions/{session_id}/approval-categories": {
         parameters: {
             query?: never;
@@ -1905,7 +1971,9 @@ export interface paths {
          *     This endpoint is called by Telegram servers when a message is sent to the bot.
          *     Messages are normalized via TelegramAdapter and routed to AutoBot chat.
          *
-         *     Security: Verifies X-Telegram-Bot-Api-Secret-Token header matches stored secret.
+         *     Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
+         *     stored secret, enforced by the ``verify_telegram_secret`` route dependency
+         *     so authentication runs before the request body is parsed.
          *
          *     Args:
          *         request: FastAPI request (for header access)
@@ -10944,6 +11012,9 @@ export interface paths {
         /**
          * Voice Speak Api
          * @description Converts text to speech and plays it.
+         *
+         *     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
+         *     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
          */
         post: operations["voice_speak_api_api_voice_speak_post"];
         delete?: never;
@@ -10963,7 +11034,13 @@ export interface paths {
         put?: never;
         /**
          * Voice Synthesize Api
-         * @description Synthesize speech via Pocket TTS worker. Returns audio/wav stream.
+         * @description Synthesize speech via the Pocket TTS worker.
+         *
+         *     Returns a whole ``audio/wav`` body by default. With ``stream=true`` the
+         *     response is ``application/octet-stream`` carrying
+         *     ``[4-byte length][WAV]`` chunks emitted as the worker produces them, so
+         *     the caller hears audio after the first ~250ms instead of after the whole
+         *     utterance (#13215).
          */
         post: operations["voice_synthesize_api_api_voice_synthesize_post"];
         delete?: never;
@@ -12005,6 +12082,10 @@ export interface paths {
          * Vnc Screenshot
          * @description Capture desktop screenshot.
          *     Issue #74: Desktop interaction controls.
+         *
+         *     Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
+         *     on the success path, on capture failure and on any exception. Previously
+         *     only the success path unlinked it and each failed capture leaked a PNG.
          *
          *     Returns:
          *         {
@@ -13420,6 +13501,11 @@ export interface paths {
          * Desktop Screenshot Mcp
          * @description MCP tool: Capture desktop screenshot.
          *     Issue #74: Agent desktop observation.
+         *
+         *     Issue #13208: the temp file is owned by ``temporary_file_path``, so it is
+         *     removed on the success path, on capture failure and on any exception.
+         *     Previously only the success path unlinked it, so production leaked one PNG
+         *     per failed capture, indefinitely.
          */
         post: operations["desktop_screenshot_mcp_api_vnc_mcp_desktop_screenshot_post"];
         delete?: never;
@@ -13656,6 +13742,12 @@ export interface paths {
         /**
          * Enable Mcp Bridge
          * @description Enable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["enable_mcp_bridge_api_mcp_bridges__name__enable_post"];
         delete?: never;
@@ -13676,6 +13768,12 @@ export interface paths {
         /**
          * Disable Mcp Bridge
          * @description Disable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["disable_mcp_bridge_api_mcp_bridges__name__disable_post"];
         delete?: never;
@@ -20368,6 +20466,11 @@ export interface paths {
          *     Issue #12330: Scope the scan to the requested source's clone path so one
          *     project cannot see another's call graph. The cache key is derived from the
          *     resolved root (path-hashed) so each source keeps a distinct cache entry.
+         *     Issue #13468: scans every file by default (previously hardcoded to the
+         *     first 300 while reporting summary statistics as if they were repo-wide).
+         *     Configurable back down via AUTOBOT_CALL_GRAPH_MAX_FILES for a deployment
+         *     that needs to bound scan cost; either way the response states exactly
+         *     how many files it covers.
          */
         get: operations["get_call_graph_api_analytics_codebase_analytics_call_graph_get"];
         put?: never;
@@ -28536,8 +28639,8 @@ export interface paths {
          *     Phase 3 (Issue #346): AlertManager → WebSocket integration
          *     Replaces MonitoringAlertsManager's WebSocket notification channel
          *
-         *     Security (GH#9657): Requires X-AlertManager-Secret header authentication.
-         *     Fails closed when ALERTMANAGER_WEBHOOK_SECRET is not configured.
+         *     Security (GH#9657): Requires X-AlertManager-Secret header authentication,
+         *     enforced by the ``verify_alertmanager_secret`` route dependency.
          */
         post: operations["receive_alertmanager_webhook_api_webhook_alertmanager_post"];
         delete?: never;
@@ -40267,6 +40370,11 @@ export interface paths {
         /**
          * Add Markdown Reference
          * @description Add markdown file reference to a task.
+         *
+         *     #13688: the reference is stored as a general memory row, which is now
+         *     owner-scoped. The owner comes from the authenticated principal — taking it
+         *     from ``MarkdownReferenceRequest`` would let a caller write into another
+         *     user's memory.
          */
         post: operations["add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post"];
         delete?: never;
@@ -42977,19 +43085,13 @@ export interface paths {
          *
          *     This enables graph-based knowledge retrieval alongside vector search.
          *
-         *     Valid relation types:
-         *     - relates_to: General relationship
-         *     - depends_on: Dependency relationship
-         *     - implements: Implementation relationship
-         *     - fixes: Bug fix relationship
-         *     - informs: Information flow
-         *     - guides: Guidance relationship
-         *     - follows: Sequential relationship
-         *     - contains: Containment relationship
-         *     - blocks: Blocking relationship
-         *     - references: Reference relationship
-         *     - supersedes: Replacement relationship
-         *     - contradicts: Contradiction relationship
+         *     Valid relation types are served by GET /api/knowledge/relations/types,
+         *     which reads the canonical vocabulary directly. They are deliberately not
+         *     restated here: the hand-maintained copy that used to live in this docstring
+         *     had already drifted from the vocabulary it documented (#13452).
+         *
+         *     The legacy spelling "relates_to" is still accepted and is stored as its
+         *     canonical name "related_to".
          */
         post: operations["create_fact_relation_api_knowledge_relations_create_post"];
         delete?: never;
@@ -44617,6 +44719,36 @@ export interface paths {
          *     Issue #744: Requires authenticated user.
          */
         post: operations["graph_rag_search_api_graph_rag_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph-rag/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Graph Rag Path
+         * @description Return the shortest relationship path between two memory-graph entities.
+         *
+         *     Issue #13474: gives the memory graph's shortest-path traversal a production
+         *     caller. ``/search`` expands a neighbourhood — it answers "what relates to X";
+         *     this answers "how does X reach Y".
+         *
+         *     An unresolvable entity name is a 404 (the caller referenced something that
+         *     does not exist); "these two exist but are not connected" is a 200 with
+         *     ``found: false``, because that is a valid answer, not a failure.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        post: operations["graph_rag_path_api_graph_rag_path_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -49076,23 +49208,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Token breakdown per agent+model with cache hit rate (GH#8486)
-         * @description Return token usage broken down by agent and model for a company.
+         * Lifetime token/cost totals per agent (GH#8486, GH#13330)
+         * @description Return lifetime token totals per agent for a company (GH#13330).
          *
-         *     Required fields: agentId, agentName, model, inputTokens,
-         *     cachedInputTokens, outputTokens, cacheHitRate.
-         *
-         *     Cache hit rate = cachedInputTokens / totalInputTokens.  A low rate
-         *     signals session churn — the agent is not benefiting from prompt caching.
-         *
-         *     Data is sourced from ``agent_org_nodes`` (for model + name) joined to
-         *     ``llc_heartbeat_runs`` (for token usage).  Rows without any heartbeat
-         *     runs are included with zero token counts so the roster is always complete.
-         *
-         *     Note: ``llc_heartbeat_runs`` does not yet have ``input_tokens`` /
-         *     ``cached_input_tokens`` columns.  The query returns zeros for those until
-         *     a future migration adds the columns.  The endpoint is intentionally
-         *     available from day one so dashboards can start wiring up immediately.
+         *     Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
+         *     ingest_cost_event`` (the actual writer) maintains — enriched with the
+         *     display name and model from ``agent_org_nodes`` when the agent is
+         *     registered there. ``input_tokens`` / ``cached_input_tokens`` /
+         *     ``output_tokens`` / ``cache_hit_rate`` cannot be populated honestly (see
+         *     ``AgentModelCostRow`` docstring); the real spend signal is
+         *     ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+         *     ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
+         *     in GH#13067.
          */
         get: operations["costs_by_agent_model_api_llc_companies__company_id__costs_by_agent_model_get"];
         put?: never;
@@ -50963,7 +51090,8 @@ export interface paths {
          *         item_id: Work item UUID
          *         mode: "thin" or "fat" context mode
          *         session: DB session
-         *         ctx: Tenant context
+         *         ctx: Tenant context — its ``org_id`` scopes the whole assembled
+         *             context, so another company's item id reads as 404 (#13756)
          *
          *     Returns:
          *         Dict with assembled context:
@@ -51204,6 +51332,12 @@ export interface paths {
          *
          *     Reads from the KB via ``AgentDiaryService``.  Supports ``limit``/``offset``
          *     pagination and optional ``date_from``/``date_to`` filters (inclusive).
+         *
+         *     Diary entries carry no tenant dimension of their own, so the agent is bound
+         *     to a company the same way the sibling run routes above do it (#13771): via
+         *     ``LLCHeartbeatRun``. An agent that has never run for the caller's company
+         *     reads as empty rather than 404, so the response cannot be used to probe
+         *     which agent ids exist elsewhere.
          */
         get: operations["get_agent_diary_api_llc_agents__agent_id__diary_get"];
         put?: never;
@@ -51865,11 +51999,18 @@ export interface paths {
         };
         /**
          * Costs By Agent Model
-         * @description Return normalised token usage per agent/model pair.
+         * @description Return lifetime token totals per agent for a company.
          *
-         *     Aggregates rows from ``llc_cost_events`` and normalises token field names
-         *     across Anthropic, OpenAI, and Google so callers receive a consistent schema.
-         *     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
+         *     Originally specified against ``llc_cost_events`` (GH#8215's per-event log
+         *     with model/provider columns), a table that was never migrated — confirmed
+         *     absent from every migration tree, so this endpoint always raised
+         *     ``UndefinedTable`` and silently returned ``[]`` (GH#13067). The actual
+         *     writer, ``BudgetService.ingest_cost_event``, only maintains a lifetime
+         *     aggregate on ``llc_agent_budgets`` (no per-model dimension, no timestamp),
+         *     so each row here is one lifetime token total per agent with
+         *     ``model="unknown"`` rather than a real per-model/time-windowed breakdown.
+         *     ``llc/services/agent_scorecard.py`` hit the identical gap and made the
+         *     same sourcing choice for spend.
          */
         get: operations["costs_by_agent_model_api_llc_costs_by_agent_model_get"];
         put?: never;
@@ -52115,7 +52256,7 @@ export interface paths {
          * @description List all memory items stored for the authenticated user.
          *
          *     Returns items from every store (verbatim, trajectory, working_memory,
-         *     graph, retrieval_learner) with provenance and timestamps.
+         *     graph, retrieval_learner, general) with provenance and timestamps.
          */
         get: operations["list_memories_api_memory_privacy_list_get"];
         put?: never;
@@ -52138,10 +52279,16 @@ export interface paths {
         post?: never;
         /**
          * Forget Everywhere
-         * @description Cascade-delete a memory item from every store.
+         * @description Cascade-delete a memory item from the store that owns it.
          *
          *     Returns a per-store map of ``{store: true/false}`` indicating whether the
          *     item existed in that store.  A True value means it was deleted from there.
+         *
+         *     Raises:
+         *         409: the id exists in more than one store (#13739). Deleting from all of
+         *             them destroys unrelated data and picking one is a guess, so the
+         *             caller re-issues against ``DELETE /{store}/{memory_id}``. The
+         *             response names the candidate stores.
          */
         delete: operations["forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete"];
         options?: never;
@@ -54482,6 +54629,17 @@ export interface components {
         /**
          * AgentModelCost
          * @description Normalised token usage for one agent/model pair.
+         *
+         *     ``input_tokens``/``cached_input_tokens``/``output_tokens`` require a
+         *     real per-event log to populate honestly (GH#13067) — ``llc_agent_budgets``
+         *     only accumulates a single combined ``tokens_spent`` counter
+         *     (``llc/services/budget.py``'s ``total_tokens = tokens_in + tokens_out``),
+         *     with no record of the input/output split. Rather than presenting that
+         *     combined total under one of the three split fields — which would apply
+         *     the wrong per-token pricing rate to whichever share it silently
+         *     misrepresents — they stay ``0`` and the real number is reported only in
+         *     ``total_tokens``, following ``llc/api/budget.py``'s ``list_cost_events``
+         *     precedent for the identical gap.
          */
         AgentModelCost: {
             /** Agent Id */
@@ -54498,12 +54656,37 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
         /**
          * AgentModelCostRow
          * @description Per-agent + per-model token breakdown row.
+         *
+         *     Mirrors ``llc/api/costs.py``'s ``AgentModelCost`` (GH#13067): this
+         *     endpoint previously raw-SELECTed ``hr.tokens_in`` / ``hr.tokens_out`` from
+         *     ``llc_heartbeat_runs``, columns that never existed on that model
+         *     (GH#13330 — every call 500'd).  The only real per-agent token source is
+         *     ``llc_agent_budgets.tokens_spent`` — a single combined
+         *     ``tokens_in + tokens_out`` lifetime counter (``llc/services/budget.py``'s
+         *     ``ingest_cost_event``), with no per-model dimension and no input/output
+         *     split.  ``input_tokens`` / ``cached_input_tokens`` / ``output_tokens``
+         *     stay ``0`` rather than putting the combined total under
+         *     ``output_tokens`` — the first #13067 attempt did exactly that and applied
+         *     output-rate pricing to input tokens (3-5x over).  The real number is
+         *     reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
+         *     all — no per-model cache-read counter exists anywhere in the schema — so
+         *     it is ``None`` rather than a fabricated value.  ``window`` is always
+         *     ``"lifetime"`` — this endpoint has no date/period parameter, and both
+         *     ``total_tokens`` and ``cost_usd`` are cumulative totals-to-date, matching
+         *     ``AgentModelCost.window`` in ``llc/api/costs.py``.
          */
         AgentModelCostRow: {
             /** Agent Id */
@@ -54518,10 +54701,17 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
             /** Cache Hit Rate */
-            cache_hit_rate: number;
+            cache_hit_rate?: number | null;
             /** Cost Usd */
             cost_usd: string;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
@@ -56669,7 +56859,7 @@ export interface components {
             /** Name */
             name: string;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58475,6 +58665,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** Body_set_session_work_item_api_chat_sessions__session_id__work_item_put */
+        Body_set_session_work_item_api_chat_sessions__session_id__work_item_put: {
+            /** Work Item Id */
+            work_item_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** Body_stream_ai_stack_chat_api_stream_ai_stack_post */
         Body_stream_ai_stack_chat_api_stream_ai_stack_post: {
             message?: components["schemas"]["ChatMessage"];
@@ -58586,6 +58783,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -58608,6 +58810,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -62441,9 +62648,8 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
-            codebase_path: string;
+            codebase_path?: string;
             /**
              * File Patterns
              * @description File patterns to include
@@ -64933,7 +65139,7 @@ export interface components {
             target_fact_id: string;
             /**
              * Relation Type
-             * @description Type of relation (e.g., relates_to, depends_on, implements)
+             * @description Type of relation (e.g., related_to, depends_on, implements)
              */
             relation_type: string;
             /**
@@ -65744,21 +65950,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AnalyticsCodeGenRollbackData] */
-        DataResponse_AnalyticsCodeGenRollbackData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AnalyticsCodeGenRollbackData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AnalyticsDebtByCategoryResponse] */
         DataResponse_AnalyticsDebtByCategoryResponse_: {
             /**
@@ -66284,51 +66475,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AuditCleanupData] */
-        DataResponse_AuditCleanupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditCleanupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuditLogData] */
-        DataResponse_AuditLogData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditLogData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuditOperationsData] */
-        DataResponse_AuditOperationsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditOperationsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AuthLogoutData] */
         DataResponse_AuthLogoutData_: {
             /**
@@ -66337,21 +66483,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AuthLogoutData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuthRefreshData] */
-        DataResponse_AuthRefreshData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuthRefreshData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -66944,21 +67075,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[CommandHistoryData] */
-        DataResponse_CommandHistoryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["CommandHistoryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[ComprehensiveResearchData] */
         DataResponse_ComprehensiveResearchData_: {
             /**
@@ -67517,81 +67633,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[GPUBenchmarkResponse] */
-        DataResponse_GPUBenchmarkResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUBenchmarkResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUCapabilitiesResponse] */
-        DataResponse_GPUCapabilitiesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUCapabilitiesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUConfigUpdateResponse] */
-        DataResponse_GPUConfigUpdateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUConfigUpdateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUEfficiencyResponse] */
-        DataResponse_GPUEfficiencyResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUEfficiencyResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUOptimizeResponse] */
-        DataResponse_GPUOptimizeResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUOptimizeResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[GoalData] */
         DataResponse_GoalData_: {
             /**
@@ -67645,36 +67686,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["KnowledgeExtractionResult"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeFreshStatsData] */
-        DataResponse_KnowledgeFreshStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeFreshStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeRebuildIndexData] */
-        DataResponse_KnowledgeRebuildIndexData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeRebuildIndexData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -67910,36 +67921,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ManPageLookupData] */
-        DataResponse_ManPageLookupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageLookupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ManPageSearchData] */
-        DataResponse_ManPageSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[MemoryEntityData] */
         DataResponse_MemoryEntityData_: {
             /**
@@ -68120,111 +68101,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[MultimodalBatchSizeData] */
-        DataResponse_MultimodalBatchSizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalBatchSizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalEmbeddingData] */
-        DataResponse_MultimodalEmbeddingData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalEmbeddingData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalFusionData] */
-        DataResponse_MultimodalFusionData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalFusionData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalOptimizeData] */
-        DataResponse_MultimodalOptimizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalOptimizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfStatsData] */
-        DataResponse_MultimodalPerfStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfSummaryData] */
-        DataResponse_MultimodalPerfSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfSummaryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalStatsData] */
-        DataResponse_MultimodalStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[OrchestrationActiveWorkflowsResponse] */
         DataResponse_OrchestrationActiveWorkflowsResponse_: {
             /**
@@ -68345,21 +68221,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[OverseerQueryData] */
-        DataResponse_OverseerQueryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["OverseerQueryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[ParseToolOutputData] */
         DataResponse_ParseToolOutputData_: {
             /**
@@ -68368,21 +68229,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["ParseToolOutputData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[PendingApprovalsData] */
-        DataResponse_PendingApprovalsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["PendingApprovalsData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68480,81 +68326,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ProjectStateActivatePhaseResponse] */
-        DataResponse_ProjectStateActivatePhaseResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateActivatePhaseResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateAutoProgressResponse] */
-        DataResponse_ProjectStateAutoProgressResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateAutoProgressResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStatePhasesResponse] */
-        DataResponse_ProjectStatePhasesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStatePhasesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateReportResponse] */
-        DataResponse_ProjectStateReportResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateReportResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateValidateResponse] */
-        DataResponse_ProjectStateValidateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateValidateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[QueryReformulationResult] */
         DataResponse_QueryReformulationResult_: {
             /**
@@ -68638,21 +68409,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["RedisScanFileResultResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[SavedReportDeleteResponse] */
-        DataResponse_SavedReportDeleteResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SavedReportDeleteResponse"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68825,21 +68581,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SequentialThinkingClearData] */
-        DataResponse_SequentialThinkingClearData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SequentialThinkingClearData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SessionActivitiesData] */
         DataResponse_SessionActivitiesData_: {
             /**
@@ -69005,21 +68746,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SkillCatalogInstallData] */
-        DataResponse_SkillCatalogInstallData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SkillCatalogInstallData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SkillFeedbackData] */
         DataResponse_SkillFeedbackData_: {
             /**
@@ -69043,36 +68769,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SnapshotWithRegionsResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StartupPhaseUpdateData] */
-        DataResponse_StartupPhaseUpdateData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StartupPhaseUpdateData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StructuredThinkingSummaryData] */
-        DataResponse_StructuredThinkingSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StructuredThinkingSummaryData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -74101,9 +73797,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * File Path
              * @description File to blame
@@ -74130,9 +73825,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * All Branches
              * @description Show remote branches too
@@ -74150,9 +73844,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Staged
              * @description Show staged changes only
@@ -74382,9 +74075,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Max Count
              * @description Maximum number of commits (1-100)
@@ -74472,9 +74164,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Ref
              * @description Commit or ref to show (default: HEAD)
@@ -74492,9 +74183,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path (must be whitelisted)
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Short
              * @description Use short format output
@@ -74779,6 +74469,119 @@ export interface components {
              * @description Timestamp of health check
              */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphRAGPathRequest
+         * @description Request model for a shortest-path query between two memory-graph entities. #13474.
+         */
+        GraphRAGPathRequest: {
+            /**
+             * From Entity
+             * @description Source entity name
+             */
+            from_entity: string;
+            /**
+             * To Entity
+             * @description Target entity name
+             */
+            to_entity: string;
+            /**
+             * Relation
+             * @description Restrict traversal to this relation type; omit for all types
+             */
+            relation?: string | null;
+            /**
+             * Max Depth
+             * @description Maximum path length to search (1-10 hops)
+             * @default 6
+             */
+            max_depth: number;
+            /**
+             * Direction
+             * @description Edge direction to follow; 'both' treats relations as undirected
+             * @default both
+             * @enum {string}
+             */
+            direction: "outgoing" | "incoming" | "both";
+            /**
+             * Timeout
+             * @description Traversal deadline in seconds (1-30). Bounds a wide 'both'-direction walk.
+             * @default 10
+             */
+            timeout: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphRAGPathResponse
+         * @description Response model for a shortest-path query. #13474.
+         */
+        GraphRAGPathResponse: {
+            /**
+             * Success
+             * @description Whether the query executed
+             */
+            success: boolean;
+            /**
+             * Found
+             * @description Whether a path exists between the two entities
+             */
+            found: boolean;
+            /**
+             * Reason
+             * @description Why no path was returned ('no_path'); null when found
+             */
+            reason?: string | null;
+            /**
+             * From Entity
+             * @description Resolved source entity (id, name, type)
+             */
+            from_entity?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * To Entity
+             * @description Resolved target entity (id, name, type)
+             */
+            to_entity?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Missing Entities
+             * @description Entity names that could not be resolved
+             */
+            missing_entities?: string[];
+            /**
+             * Hops
+             * @description Path length in edges; 0 when both names resolve to the same entity
+             */
+            hops: number;
+            /**
+             * Path
+             * @description Ordered traversal steps, excluding the start entity
+             */
+            path: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Query
+             * @description Echo of the traversal parameters actually used
+             */
+            query: {
+                [key: string]: unknown;
+            };
+            /**
+             * Traversal Time
+             * @description Traversal wall time in seconds
+             */
+            traversal_time: number;
+            /**
+             * Request Id
+             * @description Unique request identifier
+             */
+            request_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -76794,11 +76597,8 @@ export interface components {
             /**
              * Source Paths
              * @description Paths to populate from
-             * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
-             *     ]
              */
-            source_paths: string[];
+            source_paths?: string[];
             /**
              * Document Types
              * @description Document types to include
@@ -85030,9 +84830,8 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
-            path: string;
+            path?: string;
             /**
              * Source Id
              * @description #1772: source_id for API consistency
@@ -91670,11 +91469,8 @@ export interface components {
             /**
              * Scan Paths
              * @description Paths to scan
-             * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
-             *     ]
              */
-            scan_paths: string[];
+            scan_paths?: string[];
             /**
              * Scan Types
              * @description Types of security scans
@@ -94551,11 +94347,17 @@ export interface components {
                 [key: string]: number;
             };
             /** Stage Progression */
-            stage_progression?: unknown[];
+            stage_progression?: {
+                [key: string]: unknown[];
+            };
             /** Metadata Analysis */
             metadata_analysis?: {
                 [key: string]: unknown;
             };
+            /** Cognitive Flow */
+            cognitive_flow?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -96866,9 +96668,8 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI/autobot-backend
              */
-            test_path: string;
+            test_path?: string;
             /**
              * Test Patterns
              * @description Test file patterns
@@ -102244,6 +102045,26 @@ export interface operations {
             };
         };
     };
+    root_hello_api_hello_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     root_version_api_version_get: {
         parameters: {
             query?: never;
@@ -102761,7 +102582,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditCleanupData_"];
+                    "application/json": components["schemas"]["AuditCleanupData"];
                 };
             };
             /** @description Validation Error */
@@ -102790,7 +102611,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditOperationsData_"];
+                    "application/json": components["schemas"]["AuditOperationsData"];
                 };
             };
         };
@@ -103048,7 +102869,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuthRefreshData_"];
+                    "application/json": components["schemas"]["AuthRefreshData"];
                 };
             };
         };
@@ -103919,6 +103740,103 @@ export interface operations {
         };
     };
     clear_session_role_api_chat_sessions__session_id__role_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_work_item_api_chat_sessions__session_id__work_item_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_work_item_api_chat_sessions__session_id__work_item_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_work_item_api_chat_sessions__session_id__work_item_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_work_item_api_chat_sessions__session_id__work_item_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -120042,7 +119960,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SequentialThinkingClearData_"];
+                    "application/json": components["schemas"]["SequentialThinkingClearData"];
                 };
             };
             /** @description Validation Error */
@@ -120148,7 +120066,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StructuredThinkingSummaryData_"];
+                    "application/json": components["schemas"]["StructuredThinkingSummaryData"];
                 };
             };
             /** @description Validation Error */
@@ -122554,7 +122472,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -122587,7 +122505,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -122620,7 +122538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -123851,7 +123769,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_OverseerQueryData_"];
+                    "application/json": components["schemas"]["OverseerQueryData"];
                 };
             };
             /** @description Validation Error */
@@ -132804,7 +132722,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AnalyticsCodeGenRollbackData_"];
+                    "application/json": components["schemas"]["AnalyticsCodeGenRollbackData"];
                 };
             };
             /** @description Validation Error */
@@ -139031,7 +138949,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUEfficiencyResponse_"];
+                    "application/json": components["schemas"]["GPUEfficiencyResponse"];
                 };
             };
         };
@@ -139051,7 +138969,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUCapabilitiesResponse_"];
+                    "application/json": components["schemas"]["GPUCapabilitiesResponse"];
                 };
             };
         };
@@ -139071,7 +138989,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUBenchmarkResponse_"];
+                    "application/json": components["schemas"]["GPUBenchmarkResponse"];
                 };
             };
         };
@@ -139091,7 +139009,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUOptimizeResponse_"];
+                    "application/json": components["schemas"]["GPUOptimizeResponse"];
                 };
             };
         };
@@ -139115,7 +139033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUConfigUpdateResponse_"];
+                    "application/json": components["schemas"]["GPUConfigUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -145009,7 +144927,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalEmbeddingData_"];
+                    "application/json": components["schemas"]["MultimodalEmbeddingData"];
                 };
             };
             /** @description Validation Error */
@@ -145071,7 +144989,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalStatsData_"];
+                    "application/json": components["schemas"]["MultimodalStatsData"];
                 };
             };
         };
@@ -145095,7 +145013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalFusionData_"];
+                    "application/json": components["schemas"]["MultimodalFusionData"];
                 };
             };
             /** @description Validation Error */
@@ -145124,7 +145042,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfStatsData_"];
+                    "application/json": components["schemas"]["MultimodalPerfStatsData"];
                 };
             };
         };
@@ -145144,7 +145062,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalOptimizeData_"];
+                    "application/json": components["schemas"]["MultimodalOptimizeData"];
                 };
             };
         };
@@ -145164,7 +145082,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfSummaryData_"];
+                    "application/json": components["schemas"]["MultimodalPerfSummaryData"];
                 };
             };
         };
@@ -145187,7 +145105,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalBatchSizeData_"];
+                    "application/json": components["schemas"]["MultimodalBatchSizeData"];
                 };
             };
             /** @description Validation Error */
@@ -147750,7 +147668,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateValidateResponse_"];
+                    "application/json": components["schemas"]["ProjectStateValidateResponse"];
                 };
             };
         };
@@ -147770,7 +147688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateReportResponse_"];
+                    "application/json": components["schemas"]["ProjectStateReportResponse"];
                 };
             };
         };
@@ -147790,7 +147708,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStatePhasesResponse_"];
+                    "application/json": components["schemas"]["ProjectStatePhasesResponse"];
                 };
             };
         };
@@ -147812,7 +147730,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateActivatePhaseResponse_"];
+                    "application/json": components["schemas"]["ProjectStateActivatePhaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -147841,7 +147759,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateAutoProgressResponse_"];
+                    "application/json": components["schemas"]["ProjectStateAutoProgressResponse"];
                 };
             };
         };
@@ -148354,7 +148272,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StartupPhaseUpdateData_"];
+                    "application/json": components["schemas"]["StartupPhaseUpdateData"];
                 };
             };
             /** @description Validation Error */
@@ -149730,7 +149648,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_PendingApprovalsData_"];
+                    "application/json": components["schemas"]["PendingApprovalsData"];
                 };
             };
         };
@@ -149753,7 +149671,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_CommandHistoryData_"];
+                    "application/json": components["schemas"]["CommandHistoryData"];
                 };
             };
             /** @description Validation Error */
@@ -149784,7 +149702,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditLogData_"];
+                    "application/json": components["schemas"]["AuditLogData"];
                 };
             };
             /** @description Validation Error */
@@ -157795,7 +157713,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeFreshStatsData_"];
+                    "application/json": components["schemas"]["KnowledgeFreshStatsData"];
                 };
             };
         };
@@ -157815,7 +157733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeRebuildIndexData_"];
+                    "application/json": components["schemas"]["KnowledgeRebuildIndexData"];
                 };
             };
         };
@@ -160571,6 +160489,39 @@ export interface operations {
             };
         };
     };
+    graph_rag_path_api_graph_rag_path_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GraphRAGPathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphRAGPathResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     graph_rag_health_api_graph_rag_health_get: {
         parameters: {
             query?: never;
@@ -162504,7 +162455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SkillCatalogInstallData_"];
+                    "application/json": components["schemas"]["SkillCatalogInstallData"];
                 };
             };
             /** @description Validation Error */
@@ -163800,7 +163751,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SavedReportDeleteResponse_"];
+                    "application/json": components["schemas"]["SavedReportDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173416,7 +173367,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -173449,7 +173400,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -173482,7 +173433,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */

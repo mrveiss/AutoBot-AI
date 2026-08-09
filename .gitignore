@@ -96,6 +96,11 @@ ssh_host_*
 *.password
 *.passwd
 credentials*
+# Note: ansible task files are code, not credential data. `credentials*`
+# silently swallowed roles/postgresql/tasks/credentials_reconcile.yml — the
+# tests passed locally off the working copy while the file never reached the
+# remote, which is the same "green but not delivered" failure #12959 is about.
+!**/ansible/roles/*/tasks/credentials*.yml
 # Note: secrets.py and secrets_service.py are legitimate code files for secrets management
 # Only exclude actual secret/password data files:
 *.secrets
@@ -486,3 +491,8 @@ docs/.obsidian/core-plugins.json
 # Claims audit generated output
 .claude/skills/claims-audit/extracted-claims.json
 .superpowers/
+
+# .paperclip/ holds a generated per-machine config ("$meta.source": "configure").
+# It carried five absolute machine paths, including a master-key location, into a
+# public repository, and regenerates on demand — so it is not tracked (#13429).
+.paperclip/

@@ -12,7 +12,7 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import asyncio
-import pickle  # nosec B403 - internal profile storage only
+import pickle  # nosec B403  # internal profile storage only
 import threading
 from collections import defaultdict, deque
 from datetime import timedelta
@@ -47,6 +47,7 @@ from .models import (
     ThreatEvent,
     UserProfile,
 )
+from .types import SEVERITY_PRIORITY
 
 logger = get_logger(__name__)
 
@@ -417,9 +418,13 @@ class ThreatDetectionEngine:
 
     async def _process_detected_threat(self, detected_threats: List[ThreatEvent]) -> ThreatEvent:
         """Process detected threats and update statistics. Issue #620."""
+        # #13551: ThreatLevel values are plain strings with no ordering, so
+        # ranking on `.value` compared them alphabetically — "medium" > "high" >
+        # "critical" — and a MEDIUM anomaly outranked a CRITICAL injection.
+        # SEVERITY_PRIORITY (#315) is the canonical severity ordering.
         primary_threat = max(
             detected_threats,
-            key=lambda t: (t.threat_level.value, t.confidence_score),
+            key=lambda t: (SEVERITY_PRIORITY.get(t.threat_level.value, 0), t.confidence_score),
         )
 
         self.stats["threats_detected"] += 1

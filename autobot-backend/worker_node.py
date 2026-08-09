@@ -13,7 +13,7 @@ import asyncio
 import json
 import os
 import platform
-import subprocess  # nosec B404 - required for GPU detection
+import subprocess  # nosec B404  # required for GPU detection
 import sys
 from typing import Any, Dict
 
@@ -195,7 +195,7 @@ class WorkerNode:
         """Get detailed GPU information using nvidia-smi."""
         try:
             nvidia_smi_output = (
-                subprocess.check_output(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
+                subprocess.check_output(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
                     [
                         "nvidia-smi",
                         "--query-gpu=name,memory.total,memory.used,memory.free," "utilization.gpu,utilization.memory",

@@ -48,6 +48,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
@@ -722,7 +723,7 @@ async def get_review_history(
 )
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
-    period: str = Query("30d", pattern="^(7d|30d|90d)$"),
+    period: str = Query("30d", pattern=r"^(7d|30d|90d)\z"),
     source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
@@ -917,12 +918,16 @@ async def get_pattern_preferences(
         key = "code_review:pattern_prefs"
         prefs_raw = await asyncio.to_thread(redis.hgetall, key)
 
-        # Build preferences dict with defaults
+        # Build preferences dict with defaults.
+        # The shared client is decode_responses=True, so hgetall yields str keys.
+        # Probing with pattern_id.encode() never matched, so every stored
+        # preference was ignored and disabled patterns silently re-enabled
+        # themselves on the next read (#13274).
         patterns = {}
         for pattern_id in REVIEW_PATTERNS.keys():
             # Check if preference exists in Redis
-            if pattern_id.encode() in prefs_raw:
-                enabled_str = prefs_raw[pattern_id.encode()].decode()
+            if pattern_id in prefs_raw:
+                enabled_str = decode_redis_value(prefs_raw[pattern_id]) or ""
                 enabled = enabled_str.lower() == "true"
             else:
                 # Default to enabled

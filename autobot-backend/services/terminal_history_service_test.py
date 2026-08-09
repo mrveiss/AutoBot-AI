@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Tests for terminal history service."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -25,16 +25,17 @@ class TestTerminalHistoryService:
 
     @pytest.fixture
     def service(self, mock_redis):
-        """Create history service with mocked Redis."""
-        with patch(
-            "autobot_shared.redis_client.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ):
-            from services.terminal_history_service import TerminalHistoryService
+        """Create history service with mocked Redis.
 
-            svc = TerminalHistoryService()
-            svc.redis = mock_redis
-            return svc
+        TerminalHistoryService gets its client from AsyncRedisClientMixin, which
+        caches on ``_redis`` and returns it from ``_get_redis()``. Seeding that
+        attribute is what keeps the service off a real connection.
+        """
+        from services.terminal_history_service import TerminalHistoryService
+
+        svc = TerminalHistoryService()
+        svc._redis = mock_redis
+        return svc
 
     @pytest.mark.asyncio
     async def test_add_command(self, service, mock_redis) -> None:

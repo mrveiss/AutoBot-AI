@@ -67,6 +67,10 @@ class TestAuditAction:
             "USER_DELETE",
             "CONFIG_CHANGE",
             "ADMIN_ACTION",
+            "RUN_JWT_MINT",  # run-scoped JWT lifecycle, added after the test was written
+            "RUN_JWT_REVOKE",
+            "RUN_JWT_REFRESH",
+            "DEVICE_JWT_MINT",  # GH#9493
         }
         names = {a.name for a in AuditAction}
         assert required == names

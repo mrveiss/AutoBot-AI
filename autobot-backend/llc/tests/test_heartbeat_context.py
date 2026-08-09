@@ -81,14 +81,31 @@ async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssemble
             "sources": [coll_name],
         }
 
+    # ``assemble`` imports the ChromaDB client lazily inside the function, so the
+    # only seam is ``builtins.__import__``. Two things this shim must get right:
+    #   * hold the ORIGINAL __import__ (``_real_import``) rather than looking the
+    #     name up again at call time — the global lookup resolves to the patch
+    #     itself, so every non-matching import recursed until the stack blew.
+    #     It stayed invisible until Python 3.14 moved linecache's ``import os``
+    #     inside ``updatecache()``: the traceback formatting of any error raised
+    #     under the patch then re-entered the shim (#13162).
+    #   * hand back an AWAITABLE ``get_async_chromadb_client``. A bare MagicMock
+    #     made ``await get_async_chromadb_client()`` raise, so assemble() took its
+    #     graceful-degradation path and returned an EMPTY context — this test
+    #     asserted only ``isinstance(ctx, LLCContext)`` and passed without ever
+    #     reaching the merge it is named for.
+    _real_import = __import__
+    chromadb_stub = MagicMock()
+    chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=MagicMock())
+
+    def _import_with_chromadb_stub(name, *a, **kw):
+        if name == "utils.async_chromadb_client":
+            return chromadb_stub
+        return _real_import(name, *a, **kw)
+
     with (
         patch.object(assembler, "_query_collection", new=fake_query),
-        patch(
-            "builtins.__import__",
-            side_effect=lambda name, *a, **kw: (
-                MagicMock() if name == "utils.async_chromadb_client" else __import__(name, *a, **kw)
-            ),
-        ),
+        patch("builtins.__import__", side_effect=_import_with_chromadb_stub),
     ):
         ctx = await assembler.assemble(
             company_id="co1",
@@ -98,6 +115,9 @@ async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssemble
         )
 
     assert isinstance(ctx, LLCContext)
+    # project + agent + company collections, one chunk each, merged in order.
+    assert ctx.sources == ["co1:project:proj1", "co1:agent:agent1", "co1:company"]
+    assert [c["content"] for c in ctx.chunks] == [f"doc from {s}" for s in ctx.sources]
 
 
 @pytest.mark.asyncio
@@ -145,6 +165,7 @@ async def test_build_fat_returns_required_keys(builder: HeartbeatContextBuilder)
         agent_id="agent1",
         work_item_id=work_item_id,
         context_mode="fat",
+        company_id="co1",
     )
 
     assert "work_item_id" in result
@@ -166,6 +187,7 @@ async def test_build_thin_returns_minimal_keys(builder: HeartbeatContextBuilder)
         agent_id="agent1",
         work_item_id=work_item_id,
         context_mode="thin",
+        company_id="co1",
     )
 
     assert "work_item_id" in result
@@ -181,6 +203,7 @@ async def test_build_unknown_mode_raises(builder: HeartbeatContextBuilder) -> No
             agent_id="agent1",
             work_item_id=uuid.uuid4(),
             context_mode="superduper",
+            company_id="co1",
         )
 
 
@@ -195,6 +218,7 @@ async def test_build_fat_missing_work_item_raises(builder: HeartbeatContextBuild
             agent_id="agent1",
             work_item_id=uuid.uuid4(),
             context_mode="fat",
+            company_id="co1",
         )
 
 
@@ -214,6 +238,7 @@ async def test_build_fat_with_goal_ancestry(builder: HeartbeatContextBuilder) ->
         agent_id="agent1",
         work_item_id=wi.id,
         context_mode="fat",
+        company_id="co1",
     )
 
     builder.goal_service.get_goal_ancestry_for_work_item.assert_called_once_with(session, goal_id)
@@ -232,6 +257,7 @@ async def test_build_fat_rag_failure_graceful(builder: HeartbeatContextBuilder) 
         agent_id="agent1",
         work_item_id=uuid.uuid4(),
         context_mode="fat",
+        company_id="co1",
     )
 
     assert result["company_context"] == {"chunks": [], "sources": []}
@@ -248,6 +274,107 @@ async def test_build_fat_parallel_queries_invoked(builder: HeartbeatContextBuild
         agent_id="agent1",
         work_item_id=wi.id,
         context_mode="fat",
+        company_id="co1",
     )
 
     assert builder.rag_assembler.assemble.call_count >= 2
+
+
+# --------------------------------------------- Tenant scoping (#13756)
+
+
+@pytest.fixture
+def scoped_builder() -> HeartbeatContextBuilder:
+    """Builder whose work_item_service honours the ``company_id`` filter.
+
+    ``AsyncMock`` returns its canned value regardless of arguments, which would
+    hide the very filter under test, so the fake applies the scope itself.
+    """
+    rag = AsyncMock(spec=LLCRAGAssembler)
+    rag.assemble.return_value = LLCContext(
+        company_id="co1",
+        profile=AssemblerProfile.HEARTBEAT,
+        chunks=[],
+        sources=[],
+        metadata={},
+    )
+    goal_svc = AsyncMock()
+    goal_svc.get_goal_ancestry_for_work_item.return_value = [{"id": "g1", "title": "Secret goal"}]
+
+    owned = _make_work_item(company_id="co1", goal_id=uuid.uuid4())
+
+    async def _scoped_get(_session, _work_item_id, *, company_id=None):
+        if company_id is not None and str(company_id) != owned.company_id:
+            return None
+        return owned
+
+    work_svc = AsyncMock()
+    work_svc.get.side_effect = _scoped_get
+
+    builder = HeartbeatContextBuilder(
+        rag_assembler=rag,
+        goal_service=goal_svc,
+        work_item_service=work_svc,
+    )
+    builder.owned_item = owned  # type: ignore[attr-defined]
+    return builder
+
+
+@pytest.mark.parametrize("mode", ["fat", "thin"])
+@pytest.mark.asyncio
+async def test_build_forwards_company_scope_to_fetch(scoped_builder: HeartbeatContextBuilder, mode: str) -> None:
+    """No build path reaches work_item_service.get without an explicit scope."""
+    await scoped_builder.build(
+        session=AsyncMock(),
+        agent_id="agent1",
+        work_item_id=scoped_builder.owned_item.id,  # type: ignore[attr-defined]
+        context_mode=mode,
+        company_id="co1",
+    )
+
+    assert scoped_builder.work_item_service.get.await_args.kwargs["company_id"] == "co1"
+
+
+@pytest.mark.parametrize("mode", ["fat", "thin"])
+@pytest.mark.asyncio
+async def test_build_rejects_other_companys_item(scoped_builder: HeartbeatContextBuilder, mode: str) -> None:
+    """Company B's token asking for company A's item id gets "not found" (-> 404)."""
+    with pytest.raises(ValueError, match="not found"):
+        await scoped_builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=scoped_builder.owned_item.id,  # type: ignore[attr-defined]
+            context_mode=mode,
+            company_id="co2",
+        )
+
+    scoped_builder.goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_build_fat_rejects_row_whose_company_differs(builder: HeartbeatContextBuilder) -> None:
+    """Defence in depth: a row that slipped past the filter is still refused."""
+    builder.work_item_service.get.return_value = _make_work_item(company_id="co1")
+
+    with pytest.raises(ValueError, match="not found"):
+        await builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=uuid.uuid4(),
+            context_mode="fat",
+            company_id="co2",
+        )
+
+    builder.goal_service.get_goal_ancestry_for_work_item.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_build_requires_company_id(builder: HeartbeatContextBuilder) -> None:
+    """The scope is not optional — omitting it is a TypeError, not a silent leak."""
+    with pytest.raises(TypeError):
+        await builder.build(
+            session=AsyncMock(),
+            agent_id="agent1",
+            work_item_id=uuid.uuid4(),
+            context_mode="fat",
+        )

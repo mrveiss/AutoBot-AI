@@ -15,11 +15,18 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration
-CERT_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/certs"
+CERT_DIR="${PROJECT_ROOT}/certs"
 CA_DIR="${CERT_DIR}/ca"
 VALIDITY_DAYS=365
 KEY_SIZE=4096
@@ -294,7 +301,7 @@ log_info "Certificate summary saved: ${SUMMARY_FILE}"
 
 log_info "Step 4: Updating .gitignore to exclude certificates"
 
-GITIGNORE_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.gitignore"
+GITIGNORE_FILE="${PROJECT_ROOT}/.gitignore"
 
 if ! grep -q "^certs/" "${GITIGNORE_FILE}" 2>/dev/null; then
     cat >> "${GITIGNORE_FILE}" <<EOF

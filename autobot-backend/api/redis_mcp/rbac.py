@@ -125,10 +125,42 @@ _ACCESS_TO_TAG: dict[ToolAccess, str] = {
 }
 
 
+# Privilege ordering of the capability tags. A bundle admits every tag at or
+# below its own ceiling, so the ranking is what makes "voice_safe ⊆
+# voice_extended ⊆ voice_admin" hold.
+_TAG_PRIVILEGE_RANK: dict[str, int] = {
+    "read": 0,
+    "scoped_write": 1,
+    "full": 2,
+    "approval": 2,
+}
+
+
 def get_tool_capability_tag(tool_name: str, is_admin: bool) -> str:
     """Return the capability tag for a tool given the user's role."""
     access = get_tool_access(tool_name, is_admin)
     return _ACCESS_TO_TAG.get(access, "blocked")
+
+
+def get_bundle_capability_tag(tool_name: str) -> str:
+    """Return the role-independent capability tag used for bundle membership.
+
+    Bundle membership must never shrink when a caller is promoted to admin —
+    a promotion may only add tools. The access matrix deliberately grants
+    admins a *higher* level on write tools (``redis_set`` is SCOPED_WRITE for
+    a user but FULL_WRITE for an admin), so keying membership off the per-role
+    tag dropped every write tool out of ``voice_extended`` for admins while a
+    plain user kept them. Membership therefore uses the least-privileged
+    non-blocked tag across roles; whether the caller may use the tool at all
+    stays with the per-role BLOCKED gate in ``filter_tools_for_bundle``.
+    """
+    entry = TOOL_ACCESS_MATRIX.get(tool_name)
+    if entry is None:
+        return "blocked"
+    tags = [_ACCESS_TO_TAG[access] for access in entry if access is not ToolAccess.BLOCKED]
+    if not tags:
+        return "blocked"
+    return min(tags, key=lambda tag: _TAG_PRIVILEGE_RANK[tag])
 
 
 def filter_tools_for_bundle(
@@ -154,8 +186,9 @@ def filter_tools_for_bundle(
     for tool in tools:
         if tool in denied:
             continue
-        tag = get_tool_capability_tag(tool, is_admin)
-        if tag in allowed_tags:
+        if get_tool_access(tool, is_admin) is ToolAccess.BLOCKED:
+            continue
+        if get_bundle_capability_tag(tool) in allowed_tags:
             result.append(tool)
     logger.debug(
         "voice_bundle bundle=%s is_admin=%s tools_in=%d tools_out=%d",
@@ -189,12 +222,17 @@ async def resolve_bundle_for_user(user_id: str, role: str = "user") -> tuple[str
 
     Resolution values: 'user_override' | 'role_default' | 'global_env'
     """
-    # 1. Check per-user DB override
+    # 1. Check per-user DB override.
+    # This used to import `database.session`, a module that does not exist —
+    # the resulting ImportError was swallowed by the except below, so the
+    # per-user override (GH#8605) never took effect and every caller silently
+    # fell through to the role default.
     try:
-        from database.session import get_async_session  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
-        async with get_async_session() as session:
+        from user_management.database import db_session_context  # noqa: PLC0415
+
+        async with db_session_context() as session:
             row = await session.execute(
                 text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
                 {"uid": str(user_id)},

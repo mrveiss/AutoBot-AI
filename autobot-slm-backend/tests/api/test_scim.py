@@ -83,6 +83,12 @@ def _load_scim_module():
         "models.database": MagicMock(),
         "services.database": MagicMock(),
         "services.encryption": MagicMock(),
+        # #13581/#13362: scim.py also imports services.system_secrets_vault.
+        # Without a stub the loader resolves the real parent, which is shadowed
+        # under pytest by autobot-slm-backend/api/services.py, and the whole
+        # module errors at collection with "'services' is not a package" — so
+        # SCIM had no test coverage at all rather than a failing test.
+        "services.system_secrets_vault": MagicMock(),
         "user_management.database": MagicMock(),
         "user_management.models": MagicMock(),
         "user_management.models.sso": MagicMock(),
@@ -312,7 +318,11 @@ class TestScimCreateUser:
         mock_svc.deactivate_user = AsyncMock()
 
         fields = _scim._extract_scim_user_fields(
-            {"userName": "ghost", "emails": [{"value": "ghost@example.com", "primary": True}], "active": False}
+            {
+                "userName": "ghost",
+                "emails": [{"value": "ghost@example.com", "primary": True}],
+                "active": False,
+            }
         )
         assert fields["active"] is False
 

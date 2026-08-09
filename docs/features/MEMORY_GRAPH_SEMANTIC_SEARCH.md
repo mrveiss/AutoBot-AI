@@ -301,7 +301,7 @@ class Entity:
     observations: List[str]
     created_at: datetime
     updated_at: datetime
-    relations: List[Dict[str, str]]  # [{"to": "entity_name", "type": "relates_to"}]
+    relations: List[Dict[str, str]]  # [{"to": "entity_name", "type": "related_to"}]
     metadata: Dict[str, Any]
 
 @dataclass
@@ -1165,7 +1165,7 @@ context = await memory_search.get_conversation_context(
             {"id": "API Documentation Update", "type": "documentation"}
         ],
         "edges": [
-            {"from": "System Status Bug Fix", "to": "API Documentation Update", "type": "relates_to"}
+            {"from": "System Status Bug Fix", "to": "API Documentation Update", "type": "related_to"}
         ]
     }
 }

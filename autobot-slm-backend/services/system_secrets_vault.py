@@ -55,13 +55,13 @@ logger = logging.getLogger(__name__)
 
 #: Auth-bootstrap credential — gates access to the vault this module talks to.
 #: Migrating it would create a confused-deputy cycle; see module docstring.
-IRREDUCIBLE_KEYS: frozenset[str] = frozenset({"autobot_internal_api_key"})  # nosec B105 - key name, not a credential
+IRREDUCIBLE_KEYS: frozenset[str] = frozenset({"autobot_internal_api_key"})  # nosec B105  # key name, not a credential
 
 #: SSO provider secrets already have a dedicated migration path (#10153).
 _SSO_KEY_PREFIX = "sso:provider:"
 
 #: Vault secret-type label for system_secrets rows imported by this module.
-_SECRET_TYPE = "system-secret"  # nosec B105 - type label, not a credential
+_SECRET_TYPE = "system-secret"  # nosec B105  # type label, not a credential
 
 
 def is_migratable(key: str) -> bool:

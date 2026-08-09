@@ -5,6 +5,42 @@
 """
 Workflow Planner
 
+DEPRECATED — NOT A PRODUCTION PLANNING PATH (#13751). Every public method on
+``WorkflowPlanner`` has **zero callers**. It is the planner half of the
+orchestration engine that ``orchestrator.run_workflow`` stopped using at #5058;
+#12373/#12579 deprecated the executor half
+(``orchestration/workflow_executor.py``) in place and did not reach this
+sibling. ``Orchestrator`` still constructs it as ``self._step_planner``
+(orchestrator.py) but never calls a method on it.
+
+Unlike the executor, this module holds **no capability the canonical path
+lacks**, so there is nothing here staged for future consolidation. Each
+capability maps to wired code today:
+
+- Base plan + capability-to-agent assignment
+  (``plan_workflow_steps_with_agents``) -> ``orchestrator.create_workflow_plan``
+  builds the plan and ``AgentRouter.get_agent_recommendations_scored`` does the
+  scored capability-to-agent selection, reached via
+  ``WorkflowRunner``/``Orchestrator.get_agent_recommendations_scored``.
+- Similar-trajectory priors (``_annotate_context_with_trajectories``, GH#7357)
+  -> ``orchestrator._fetch_planning_context`` (#10580/#10581), tenant-scoped by
+  #11015/#11089.
+- Plan without executing (``get_plan_summary``) ->
+  ``orchestrator.create_workflow_plan``, which builds and stores a
+  ``WorkflowPlan`` without running it.
+- Approval presentation (``create_plan_summary_for_approval``) ->
+  ``services.workflow_automation.executor.WorkflowExecutor
+  .present_plan_for_approval``, reached through
+  ``WorkflowAutomationManager.present_plan_for_approval`` (#390) and the
+  ``/api/workflow-automation/*`` surface.
+
+Kept **in place with all code intact** — per repo policy code is never deleted,
+only wired in or superseded. Do not wire these methods into a request path:
+doing so would create a second planning path alongside
+``create_workflow_plan`` for the two to drift against, which is the outcome
+#13751 was filed to avoid. ``repo_tests/workflow_planner_deprecation_test.py``
+holds this invariant so the statement above cannot silently go stale.
+
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow planning, step estimation, and capability determination.
 """
@@ -24,6 +60,10 @@ logger = get_logger(__name__)
 class WorkflowPlanner:
     """
     Plans workflow steps with intelligent agent assignment.
+
+    DEPRECATED — no callers on any public method; see the module docstring for
+    the per-capability mapping to the canonical code that supersedes each one.
+    Retained in full for reference — no code removed (#13751).
 
     Handles:
     - Enhanced workflow step planning
@@ -109,8 +149,10 @@ class WorkflowPlanner:
         # GH#7357: consult trajectory store for similar solved tasks
         await self._annotate_context_with_trajectories(user_request, context)
 
-        # Get base workflow steps from original orchestrator
-        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
+        # Get base workflow steps from original orchestrator.
+        # #13730: coroutine function — without await the loop below iterated a
+        # coroutine object rather than the plan.
+        base_steps = await self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         steps_with_agents = []
 
@@ -124,13 +166,16 @@ class WorkflowPlanner:
                 required_capabilities=required_capabilities,
             )
 
+            # #13730: dict keys are this module's own contract (consumed by
+            # create_plan_summary_for_approval) and stay as they are; only the
+            # attribute reads move to the canonical WorkflowTask names.
             assigned_step = {
-                "id": step.id,
+                "id": step.task_id,
                 "agent_type": step.agent_type,
                 "assigned_agent": assigned_agent,
                 "action": step.action,
                 "inputs": step.inputs,
-                "user_approval_required": step.user_approval_required,
+                "user_approval_required": step.requires_approval,
                 "dependencies": step.dependencies or [],
                 "required_capabilities": list(required_capabilities),
                 "estimated_duration": self.estimate_step_duration(step.action, assigned_agent),
@@ -196,13 +241,19 @@ class WorkflowPlanner:
 
         return estimated_duration
 
-    def get_plan_summary(
+    async def get_plan_summary(
         self,
         user_request: str,
         context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Get workflow plan summary without executing.
+
+        #13730: was ``def``, calling the orchestrator's coroutine planning API
+        without awaiting it — ``complexity.value`` and ``len(base_steps)`` both
+        operated on coroutine objects. Now ``async def`` so the awaits are legal.
+        This method currently has no callers; it is corrected rather than
+        removed, and the wiring gap is tracked separately.
 
         Args:
             user_request: The user's request to plan
@@ -214,10 +265,10 @@ class WorkflowPlanner:
         context = context or {}
 
         # Classify complexity
-        complexity = self.base_orchestrator.classify_request_complexity(user_request)
+        complexity = await self.base_orchestrator.classify_request_complexity(user_request)
 
-        # Get base steps synchronously (no agent assignment yet)
-        base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
+        # Get base steps (no agent assignment yet)
+        base_steps = await self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
         return {
             "request": user_request,
@@ -225,10 +276,10 @@ class WorkflowPlanner:
             "total_steps": len(base_steps),
             "steps": [
                 {
-                    "id": step.id,
+                    "id": step.task_id,
                     "action": step.action,
                     "agent_type": step.agent_type,
-                    "requires_approval": step.user_approval_required,
+                    "requires_approval": step.requires_approval,
                     "dependencies": step.dependencies or [],
                 }
                 for step in base_steps

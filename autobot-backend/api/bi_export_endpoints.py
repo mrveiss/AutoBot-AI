@@ -139,7 +139,7 @@ async def update_saved_report(
 # =========================================================================
 
 
-@router.delete("/reports/saved/{report_id}", response_model=DataResponse[SavedReportDeleteResponse])
+@router.delete("/reports/saved/{report_id}", response_model=SavedReportDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_saved_report",

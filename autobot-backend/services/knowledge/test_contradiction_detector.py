@@ -145,6 +145,25 @@ class TestGroupChunks:
         # At least two groups expected (python group + other)
         assert len(groups) >= 1
 
+    def test_frequency_ties_break_on_the_keyword(self) -> None:
+        """#13682: tied keywords must group identically regardless of hash seed.
+
+        ``kws`` is a frozenset, so ``max`` without a total order returned
+        whichever element set iteration yielded first. Two chunks tying on
+        frequency could be labelled differently, land in different groups and
+        never be compared — the detector then reported no contradiction for
+        input that contained one, differently from run to run.
+        """
+        # "redis" and "data" both occur in both chunks, so their counts tie.
+        chunks = [
+            {"text": "redis caches data redis redis"},
+            {"text": "redis persists data redis redis"},
+        ]
+        groups = _group_chunks(chunks)
+        assert len(groups) == 1, f"tied keywords split across groups: {sorted(groups)}"
+        # The tie-break is the keyword itself, so the label is predictable.
+        assert sorted(groups) == ["redis"]
+
     def test_empty_chunks_go_to_ungrouped(self) -> None:
         chunks = [{"text": ""}, {"text": ""}]
         groups = _group_chunks(chunks)
@@ -207,12 +226,12 @@ class TestContradictionDetectorScan:
     @pytest.fixture()
     def mock_llm(self):
         llm = AsyncMock()
-        llm.chat_completion = AsyncMock()
+        llm.chat = AsyncMock()
         return llm
 
     @pytest.mark.asyncio
     async def test_scan_finds_contradictions(self, mock_llm) -> None:
-        mock_llm.chat_completion.return_value = _llm_response(_contradiction_json(pairs=1, gaps=["gap1"]))
+        mock_llm.chat.return_value = _llm_response(_contradiction_json(pairs=1, gaps=["gap1"]))
         detector = ContradictionDetector(llm_interface=mock_llm)
         # Both chunks share the rare keyword "redis" so they land in the same group
         chunks = [
@@ -230,7 +249,7 @@ class TestContradictionDetectorScan:
         report = await detector.scan([])
         assert report.contradictions == []
         assert report.gaps == []
-        mock_llm.chat_completion.assert_not_called()
+        mock_llm.chat.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_scan_single_chunk_skips_group(self, mock_llm) -> None:
@@ -240,11 +259,11 @@ class TestContradictionDetectorScan:
         chunks = [{"text": "zzzmultiworduniquexyz topic content"}]
         report = await detector.scan(chunks)
         assert report.contradictions == []
-        mock_llm.chat_completion.assert_not_called()
+        mock_llm.chat.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_scan_llm_error_skips_group(self, mock_llm) -> None:
-        mock_llm.chat_completion.return_value = _llm_response("", error="timeout")
+        mock_llm.chat.return_value = _llm_response("", error="timeout")
         detector = ContradictionDetector(llm_interface=mock_llm)
         chunks = [
             {"text": "database stores data efficiently"},
@@ -255,7 +274,7 @@ class TestContradictionDetectorScan:
 
     @pytest.mark.asyncio
     async def test_scan_llm_returns_none_skips_group(self, mock_llm) -> None:
-        mock_llm.chat_completion.return_value = None
+        mock_llm.chat.return_value = None
         detector = ContradictionDetector(llm_interface=mock_llm)
         chunks = [
             {"text": "redis stores data in memory"},
@@ -267,9 +286,7 @@ class TestContradictionDetectorScan:
     @pytest.mark.asyncio
     async def test_scan_deduplicated_gaps(self, mock_llm) -> None:
         """Gaps returned from multiple groups should be deduplicated."""
-        mock_llm.chat_completion.return_value = _llm_response(
-            json.dumps({"contradictions": [], "gaps": ["missing auth docs"]})
-        )
+        mock_llm.chat.return_value = _llm_response(json.dumps({"contradictions": [], "gaps": ["missing auth docs"]}))
         detector = ContradictionDetector(llm_interface=mock_llm)
         # Create two groups of similar-but-distinct keywords
         chunks = [
@@ -284,7 +301,7 @@ class TestContradictionDetectorScan:
 
     @pytest.mark.asyncio
     async def test_scan_checked_at_is_utc(self, mock_llm) -> None:
-        mock_llm.chat_completion.return_value = _llm_response(json.dumps({"contradictions": [], "gaps": []}))
+        mock_llm.chat.return_value = _llm_response(json.dumps({"contradictions": [], "gaps": []}))
         detector = ContradictionDetector(llm_interface=mock_llm)
         report = await detector.scan([])
         assert report.checked_at.tzinfo is not None

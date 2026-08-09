@@ -33,12 +33,16 @@ Backward Compatibility:
 """
 
 from .core import (  # noqa: F401 - re-exports for package API
+    CORE_RELATION_TYPES,
     ENTITY_TYPES,
+    IDENTITY_RELATION_TYPES,
     INCOMING_DIRECTIONS,
     OUTGOING_DIRECTIONS,
+    RELATION_TYPE_ALIASES,
     RELATION_TYPES,
     VALID_ACTIVITY_TYPES,
     AutoBotMemoryGraphCore,
+    canonical_relation_type,
     config,
 )
 from .entities import EntityOperationsMixin
@@ -128,10 +132,15 @@ __all__ = [
     "AutoBotMemoryGraphCore",
     # Constants
     "ENTITY_TYPES",
+    "CORE_RELATION_TYPES",
+    "IDENTITY_RELATION_TYPES",
     "RELATION_TYPES",
+    "RELATION_TYPE_ALIASES",
     "VALID_ACTIVITY_TYPES",
     "OUTGOING_DIRECTIONS",
     "INCOMING_DIRECTIONS",
+    # Helpers
+    "canonical_relation_type",
     # Mixins (for extension)
     "EntityOperationsMixin",
     "RelationOperationsMixin",

@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright, expect
 
 # Add project root to path
@@ -30,6 +31,15 @@ from constants.network_constants import ServiceURLs
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
 logger = get_logger(__name__)
+
+# Every test here drives a real Chromium through Playwright against a live
+# frontend VM and backend API, so it cannot run without that external stack
+# (a bare checkout has no downloaded browser and no fleet). Same rationale as
+# security/security_api_e2e_test.py — the `integration` marker matches the
+# filename and is already excluded by the two
+# `-m "not integration and not slow and not distributed and not performance"`
+# invocations in .github/workflows/ci.yml.
+pytestmark = pytest.mark.integration
 
 
 # Fixtures
@@ -45,11 +55,35 @@ def backend_url():
     return ServiceURLs.BACKEND_API
 
 
+def _is_missing_browser(exc: PlaywrightError) -> bool:
+    """True only when Chromium was never downloaded, not for any other launch failure."""
+    message = str(exc)
+    return "Executable doesn't exist" in message or "playwright install" in message
+
+
 @pytest.fixture
 async def browser_context():
-    """Create browser context for E2E testing."""
+    """Create browser context for E2E testing.
+
+    The Chromium binary is a separate download (`playwright install`), not a pip
+    dependency, so a checkout with playwright installed can still have no browser
+    to launch. That is a missing optional dependency, which skips — the same rule
+    the repo applies to `pytest.importorskip`. Without this the fixture raises and
+    every test here reports as an error rather than a skip (#13549).
+
+    Only the missing-binary case skips. `playwright.async_api.Error` is the root
+    of the whole hierarchy — `TimeoutError` is a subclass of it — so catching the
+    class would also swallow a crashed browser, a launch timeout, an EACCES on
+    the executable and a sandbox failure, leaving these tests structurally
+    incapable of failing at launch. Anything else is re-raised.
+    """
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            if not _is_missing_browser(exc):
+                raise
+            pytest.skip(f"Chromium is not downloaded for Playwright: {exc}")
         context = await browser.new_context(
             viewport={"width": 1280, "height": 720},
             record_video_dir="tests/results/videos/",  # Record videos for debugging
