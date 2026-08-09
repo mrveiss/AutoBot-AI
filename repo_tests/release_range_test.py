@@ -18,9 +18,7 @@ never happened looked like one that did.
 
 import pathlib
 import subprocess
-import tempfile
 
-import pytest
 import yaml
 
 WORKFLOW = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
