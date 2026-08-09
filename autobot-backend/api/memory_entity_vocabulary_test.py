@@ -34,8 +34,8 @@ import pytest
 
 pytest.importorskip("pydantic")
 
+from api.schemas_knowledge import _VALID_ENTITY_TYPES, EntityCreateRequest  # noqa: E402
 from autobot_memory_graph.core import ENTITY_TYPES  # noqa: E402
-from api.schemas_knowledge import EntityCreateRequest, _VALID_ENTITY_TYPES  # noqa: E402
 
 
 def _req(entity_type: str) -> EntityCreateRequest:
