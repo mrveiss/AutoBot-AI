@@ -1,5 +1,14 @@
 # PairDeviceDialog Component Design
 
+**Issue:** https://github.com/mrveiss/AutoBot-AI/issues/4463 (originating feature)
+**Wiring gap:** https://github.com/mrveiss/AutoBot-AI/issues/13794
+
+> **Status: implemented but not wired.** Both files below were built to this spec,
+> and the backend endpoint is registered — but `PairDeviceDialog.vue` is imported
+> by nothing, so no user can reach it. This design names the files to create and
+> never names a parent view or entry point, which is the gap #13794 closes.
+> Read it as a component spec, not as a description of shipped behaviour.
+
 ## Overview
 
 Build a QR code pairing dialog component that allows users to pair mobile devices with their AutoBot account using a time-limited challenge token.
