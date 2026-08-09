@@ -22,11 +22,13 @@ scores 0.02, which is what it deserves.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from typing import Dict, Iterable, List, Tuple
 
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.code_evolution_miner import MAX_FILES_PER_COMMIT
 
 logger = get_logger(__name__)
 
@@ -42,6 +44,16 @@ COCHANGE_STRENGTH_THRESHOLD: float = env_float("AUTOBOT_COCHANGE_STRENGTH_THRESH
 # Default analysis window. Coupling decays — a pair that co-changed for a month two
 # years ago is history, not structure.
 COCHANGE_WINDOW_DAYS: int = env_int("AUTOBOT_COCHANGE_WINDOW_DAYS", default=180)
+
+
+def default_window_start() -> datetime:
+    """Start of the default analysis window.
+
+    Exists because the constant above was previously declared, documented as the
+    default window, and read by nothing — so every caller silently walked all of
+    history while the PR body claimed a 180-day window.
+    """
+    return datetime.now(timezone.utc) - timedelta(days=COCHANGE_WINDOW_DAYS)
 
 
 @dataclass(frozen=True)
@@ -83,27 +95,43 @@ class CoChangeAnalyzer:
         self,
         min_co_changes: int = MIN_CO_CHANGES,
         strength_threshold: float = COCHANGE_STRENGTH_THRESHOLD,
+        max_files_per_commit: int = MAX_FILES_PER_COMMIT,
     ) -> None:
         self.min_co_changes = min_co_changes
         self.strength_threshold = strength_threshold
+        self.max_files_per_commit = max_files_per_commit
+        self.commits_too_large_to_pair = 0
 
     def analyze(self, commit_file_sets: Iterable[Iterable[str]]) -> List[CoChangePair]:
-        """Return the coupled pairs, strongest first."""
+        """Return the coupled pairs, strongest first.
+
+        *commit_file_sets* must be **every** commit, single-file ones included.
+        Change counts are taken from all of them; pairs are formed only from
+        commits small enough to pair. Counting and pairing are deliberately
+        separated: a file that changed alone still changed, and a bulk rename
+        still touched its files even though pairing them would be noise.
+        """
         changes: Dict[str, int] = {}
         co_changes: Dict[Tuple[str, str], int] = {}
+        self.commits_too_large_to_pair = 0
 
         for files in commit_file_sets:
             unique = sorted(set(files))
             for path in unique:
                 changes[path] = changes.get(path, 0) + 1
-            for pair in combinations(unique, 2):
-                co_changes[pair] = co_changes.get(pair, 0) + 1
+            if len(unique) > self.max_files_per_commit:
+                # Counted above, not paired: taking a subset would invent pairs
+                # no author ever related.
+                self.commits_too_large_to_pair += 1
+                continue
+            for pair_key in combinations(unique, 2):
+                co_changes[pair_key] = co_changes.get(pair_key, 0) + 1
 
         pairs = [
-            pair
+            built
             for (source, target), count in co_changes.items()
             if count >= self.min_co_changes
-            and (pair := self._build(source, target, count, changes)).strength >= self.strength_threshold
+            and (built := self._build(source, target, count, changes)).strength >= self.strength_threshold
         ]
         return sorted(pairs, key=lambda p: (-p.strength, -p.co_changes, p.source, p.target))
 

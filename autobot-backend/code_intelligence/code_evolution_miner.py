@@ -99,16 +99,29 @@ def _run_git(repo_path: str, *args: str) -> str:
     """
     try:
         completed = subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option
-            ["git", "-C", repo_path, *args],
+            # -c core.quotepath=false: without it git C-quotes any non-ASCII path
+            # ("lat\\303\\253le.py"), so the key depends on the reader's git config
+            # and can never match a filesystem-derived path. errors="replace"
+            # because a path byte that is not valid UTF-8 must not raise a
+            # ValueError that the except clause below does not even catch.
+            ["git", "-c", "core.quotepath=false", "-C", repo_path, *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("git %s failed in %s: %s", args, repo_path, exc)
         return ""
-    return completed.stdout if completed.returncode == 0 else ""
+    if completed.returncode != 0:
+        # Without this, a timeout, a non-repo path and a genuinely empty window
+        # are the same empty string to the caller — the silent-computes-nothing
+        # shape this method was written to get away from.
+        logger.warning("git %s exited %s in %s: %s", args, completed.returncode, repo_path, completed.stderr.strip())
+        return ""
+    return completed.stdout
 
 
 def _is_vendored_path(path: str) -> bool:
@@ -169,43 +182,39 @@ class GitHistoryCrawler:
 
         return commits
 
-    def get_commit_file_sets(self, since: "datetime | None" = None) -> "tuple[list[set[str]], int]":
-        """Return ``(file sets, commits skipped)`` for co-change analysis (#13639).
+    def get_commit_file_sets(self, since: "datetime | None" = None) -> "list[set[str]]":
+        """Return the changed-path set for **every** commit in the window (#13639).
 
-        One set of changed paths per commit.
+        Every commit, including single-file ones. That is not incidental: the
+        co-change denominator is "how often did this file change", and dropping
+        solo commits here would silently redefine it as "how often did it change
+        alongside something else". On this repository 32% of commits touch one
+        file, and excluding them inflated 44% of reported pairs past the
+        threshold — the precise noise the normalised formula exists to reject.
+
+        Deciding which commits are *too large to pair* is an analysis question,
+        so it belongs to ``CoChangeAnalyzer``, not here. This method reports
+        history; it does not judge it.
 
         Reads the git binary rather than GitPython. The rest of this class goes
-        through ``self.repo``, which is **always ``None``** — ``import git``
-        succeeds nowhere in this project, because GitPython appears in no
-        requirements file and is imported in exactly one place: the ``try`` block
-        above. Every other method here has therefore been returning ``[]`` in
-        every environment (see #13832). Building on that would have produced a
-        feature that silently computes nothing, which is the defect this track
-        exists to remove rather than add to.
-
-        Commits touching more than ``MAX_FILES_PER_COMMIT`` paths are skipped and
-        counted rather than truncated: taking the first N files of a bulk rename
-        would invent pairs that no author ever related, which is worse than
-        admitting the commit was not analysed.
+        through ``self.repo``, which is **always ``None``** — GitPython appears
+        in no requirements file and is imported in exactly one place, the ``try``
+        block above, so every other method here returns ``[]`` in every
+        environment (#13832).
         """
         args = ["log", "--no-merges", "--pretty=format:%x00%H", "--name-only"]
         if since is not None:
             args.append(f"--since={since.isoformat()}")
         output = _run_git(str(self.repo_path), *args)
         if not output:
-            return [], 0
+            return []
 
         file_sets: list[set[str]] = []
-        skipped = 0
         for block in output.split("\x00"):
-            lines = [line for line in block.splitlines()[1:] if line.strip()]
-            paths = {line for line in lines if not _is_vendored_path(line)}
-            if len(paths) > MAX_FILES_PER_COMMIT:
-                skipped += 1
-                continue
-            if len(paths) > 1:
+            paths = {line for line in block.splitlines()[1:] if line.strip() and not _is_vendored_path(line)}
+            if paths:
                 file_sets.append(paths)
-        return file_sets, skipped
+        return file_sets
 
     def get_file_history(self, file_path: str) -> List[Dict]:
         """Get commit history for a specific file"""

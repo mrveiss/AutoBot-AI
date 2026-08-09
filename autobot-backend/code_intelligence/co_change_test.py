@@ -64,8 +64,9 @@ def repo(tmp_path):
 
 
 def _pairs(repo_path: Path, **kwargs):
-    file_sets, skipped = GitHistoryCrawler(str(repo_path)).get_commit_file_sets()
-    return CoChangeAnalyzer(**kwargs).analyze(file_sets), skipped
+    file_sets = GitHistoryCrawler(str(repo_path)).get_commit_file_sets()
+    analyzer = CoChangeAnalyzer(**kwargs)
+    return analyzer.analyze(file_sets), analyzer.commits_too_large_to_pair
 
 
 def _pair_names(pairs):
@@ -87,6 +88,42 @@ def test_the_coupled_pair_is_the_strongest(repo):
     assert pairs, "no pairs at all"
     assert (pairs[0].source, pairs[0].target) == ("schema.py", "serializer.py")
     assert pairs[0].strength == 1.0, "a pair that only ever moves together is total coupling"
+
+
+def test_a_file_that_usually_changes_alone_is_not_coupled(tmp_path):
+    """The denominator must count **every** change, not only paired ones.
+
+    Discarding single-file commits before counting silently redefines
+    ``changes(A)`` as "how often A changed alongside something else". On this
+    repository 32% of commits touch one file, and excluding them inflated 44% of
+    reported pairs past the threshold — the exact noise the normalised formula
+    exists to reject, arriving by a different route.
+    """
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git(tmp_path, "config", "user.email", "a@b.c")
+    _git(tmp_path, "config", "user.name", "t")
+    for i in range(20):
+        _commit(tmp_path, {"busy.py": f"v{i}\n"}, f"solo {i}")
+    for i in range(3):
+        _commit(tmp_path, {"busy.py": f"pair {i}\n", "rare.py": f"v{i}\n"}, f"together {i}")
+
+    pairs, _ = _pairs(tmp_path)
+
+    assert pairs == [], "a file that changes alone 20 times was reported as coupled"
+
+
+def test_solo_commits_reach_the_change_counter(tmp_path):
+    """Directly: the count is history, not the paired subset."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git(tmp_path, "config", "user.email", "a@b.c")
+    _git(tmp_path, "config", "user.name", "t")
+    _commit(tmp_path, {"a.py": "1\n"}, "solo")
+    _commit(tmp_path, {"a.py": "2\n", "b.py": "1\n"}, "pair")
+
+    file_sets = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+
+    assert {"a.py"} in file_sets, "the single-file commit never reached the analyzer"
+    assert len(file_sets) == 2
 
 
 # ------------------------------------------- the noise the formula must reject
@@ -122,39 +159,67 @@ def test_dividing_by_the_smaller_count_would_have_reported_it(repo):
 # ------------------------------------------------------- thresholds and caps
 
 
-def test_a_pair_below_the_minimum_count_is_not_reported(repo):
-    pairs, _ = _pairs(repo, min_co_changes=7)
+def test_the_minimum_count_is_inclusive_at_its_boundary(repo):
+    """Asserts both sides of the boundary, so ``>=`` cannot decay to ``>``.
 
-    assert pairs == [], "a pair under the count threshold was reported"
+    Testing only the empty side leaves the off-by-one alive: the coupled pair has
+    exactly 6 co-changes, so 6 must report it and 7 must not.
+    """
+    at_boundary, _ = _pairs(repo, min_co_changes=6)
+    above, _ = _pairs(repo, min_co_changes=7)
+
+    assert len(at_boundary) == 1
+    assert above == []
 
 
-def test_thresholds_are_configurable_not_baked_in(repo):
-    strict, _ = _pairs(repo, strength_threshold=0.99)
+def test_the_strength_threshold_alone_changes_the_result(repo):
+    """Varies one knob. The previous version moved both at once, so replacing the
+    strength comparison with ``>= 0.0`` left it green — it only ever proved the
+    count threshold was wired."""
+    strict, _ = _pairs(repo, min_co_changes=1, strength_threshold=0.99)
+    loose, _ = _pairs(repo, min_co_changes=1, strength_threshold=0.0)
+
+    assert len(loose) > len(strict)
+
+
+def test_the_minimum_count_alone_changes_the_result(repo):
+    strict, _ = _pairs(repo, strength_threshold=0.0, min_co_changes=6)
     loose, _ = _pairs(repo, strength_threshold=0.0, min_co_changes=1)
 
     assert len(loose) > len(strict)
 
 
-def test_an_over_cap_commit_is_skipped_and_counted(tmp_path, monkeypatch):
-    """A bulk rename must be excluded, and must say so.
+def test_pairs_are_returned_strongest_first(repo):
+    """The fixture yields one pair at defaults, so the sort key needs its own case."""
+    pairs, _ = _pairs(repo, min_co_changes=1, strength_threshold=0.0)
 
-    Truncating to the first N files would invent pairs no author ever related —
-    worse than admitting the commit was not analysed.
+    assert len(pairs) > 1, "fixture no longer exercises ordering"
+    assert [p.strength for p in pairs] == sorted((p.strength for p in pairs), reverse=True)
+
+
+def test_coupled_with_honours_its_limit(repo):
+    pairs, _ = _pairs(repo, min_co_changes=1, strength_threshold=0.0)
+
+    assert len(CoChangeAnalyzer().coupled_with("changelog.md", pairs, limit=2)) <= 2
+
+
+def test_an_over_cap_commit_is_counted_but_never_paired(tmp_path):
+    """A bulk rename touched its files, so it counts; pairing them would be noise.
+
+    Truncating to the first N would invent pairs no author ever related — worse
+    than declining to pair the commit and saying so.
     """
-    import code_intelligence.code_evolution_miner as miner
-
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"a.py": "1\n", "b.py": "1\n"}, "small")
     _commit(tmp_path, {f"bulk/f{i}.py": "x\n" for i in range(12)}, "mass rename")
 
-    monkeypatch.setattr(miner, "MAX_FILES_PER_COMMIT", 5)
-    file_sets, skipped = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+    analyzer = CoChangeAnalyzer(min_co_changes=1, strength_threshold=0.0, max_files_per_commit=5)
+    pairs = analyzer.analyze(GitHistoryCrawler(str(tmp_path)).get_commit_file_sets())
 
-    assert skipped == 1
-    assert all(len(s) <= 5 for s in file_sets)
-    assert not any(any(p.startswith("bulk/") for p in s) for s in file_sets)
+    assert analyzer.commits_too_large_to_pair == 1
+    assert not any(p.source.startswith("bulk/") or p.target.startswith("bulk/") for p in pairs)
 
 
 def test_vendored_paths_never_enter_the_analysis(tmp_path):
@@ -169,7 +234,7 @@ def test_vendored_paths_never_enter_the_analysis(tmp_path):
             f"c{i}",
         )
 
-    file_sets, _ = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+    file_sets = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
 
     assert not any(any("node_modules" in p for p in s) for s in file_sets)
 
@@ -180,10 +245,11 @@ def test_a_single_file_commit_contributes_no_pair(tmp_path):
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"only.py": "1\n"}, "solo")
 
-    file_sets, skipped = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+    file_sets = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+    pairs = CoChangeAnalyzer(min_co_changes=1, strength_threshold=0.0).analyze(file_sets)
 
-    assert file_sets == []
-    assert skipped == 0
+    assert file_sets == [{"only.py"}], "the commit must still count toward change totals"
+    assert pairs == [], "one file cannot pair with anything"
 
 
 # ------------------------------------------------------------ window and shape
@@ -193,15 +259,13 @@ def test_the_window_excludes_older_commits(repo):
     """A pair that co-changed long ago is history, not structure."""
     future = datetime.now(timezone.utc) + timedelta(days=1)
 
-    file_sets, _ = GitHistoryCrawler(str(repo)).get_commit_file_sets(since=future)
+    file_sets = GitHistoryCrawler(str(repo)).get_commit_file_sets(since=future)
 
     assert file_sets == []
 
 
 def test_a_missing_repo_degrades_rather_than_raising(tmp_path):
-    file_sets, skipped = GitHistoryCrawler(str(tmp_path / "nope")).get_commit_file_sets()
-
-    assert (file_sets, skipped) == ([], 0)
+    assert GitHistoryCrawler(str(tmp_path / "nope")).get_commit_file_sets() == []
 
 
 def test_the_edge_is_a_distinct_kind_never_a_call(repo):
@@ -234,3 +298,52 @@ def test_the_analyzer_needs_no_git_at_all():
     assert pairs == [
         CoChangePair(source="a.py", target="b.py", co_changes=3, source_changes=3, target_changes=3, strength=1.0)
     ]
+
+
+def test_non_ascii_paths_are_not_c_quoted(tmp_path):
+    """Git C-quotes non-ASCII paths unless told not to.
+
+    Left quoted, the key is an octal-escaped mangle that can never match a
+    filesystem-derived path — and worse, it depends on the *reader's*
+    ``core.quotepath`` setting, so the same repository yields different identities
+    for different people.
+    """
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git(tmp_path, "config", "user.email", "a@b.c")
+    _git(tmp_path, "config", "user.name", "t")
+    _commit(tmp_path, {"lätïn.py": "1\n", "plain.py": "1\n"}, "unicode")
+
+    paths = set().union(*GitHistoryCrawler(str(tmp_path)).get_commit_file_sets())
+
+    assert "lätïn.py" in paths, f"path came back quoted or mangled: {sorted(paths)}"
+    assert not any(p.startswith('"') for p in paths)
+
+
+def test_a_quoted_vendored_path_cannot_slip_past_the_filter(tmp_path):
+    """The filter splits on path segments, so a leading quote would defeat it."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git(tmp_path, "config", "user.email", "a@b.c")
+    _git(tmp_path, "config", "user.name", "t")
+    _commit(tmp_path, {"node_modules/pkg/ä.js": "1\n", "app.py": "1\n"}, "vendored unicode")
+
+    paths = set().union(*GitHistoryCrawler(str(tmp_path)).get_commit_file_sets())
+
+    assert not any("node_modules" in p for p in paths)
+
+
+def test_a_failing_git_call_is_logged_not_swallowed(tmp_path, caplog):
+    """A timeout, a non-repo path and an empty window must not look identical."""
+    with caplog.at_level("WARNING"):
+        result = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
+
+    assert result == []
+    assert any("git" in r.getMessage() for r in caplog.records), "a git failure produced no log line"
+
+
+def test_the_default_window_is_actually_applied():
+    """The window constant was previously declared, documented and read by nothing."""
+    from code_intelligence.co_change import COCHANGE_WINDOW_DAYS, default_window_start
+
+    delta = datetime.now(timezone.utc) - default_window_start()
+
+    assert abs(delta.days - COCHANGE_WINDOW_DAYS) <= 1
