@@ -28,7 +28,8 @@ import asyncio
 import hashlib
 import json
 import os
-import subprocess
+import re
+import subprocess  # nosec B404  # read-only git queries for graph provenance (#13508)
 from dataclasses import asdict, dataclass, field
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
@@ -79,7 +80,7 @@ class CodeIndexResult:
     edges: int = 0
     resolved_edges: int = 0
     unresolved_edges: int = 0
-    files_indexed: int = 0
+    files_with_extractor: int = 0
     files_total: int = 0
 
 
@@ -111,27 +112,48 @@ class GraphProvenance:
     before provenance existed must not read as current, which is why every
     consumer goes through ``load_graph_provenance`` returning ``None`` rather
     than a zero-valued default.
+
+    ``nodes``/``edges``/``resolved_edges`` describe **the graph**, counted from the
+    collection. ``last_run_*`` describe the run that wrote this record. Keeping
+    them apart is the point: an incremental run extracts nothing, and per-run
+    totals would report a healthy graph as empty.
+
+    Every field carries a default so a record written by an older version stays
+    readable — a missing field must degrade one value, not the whole record.
     """
 
-    indexed_at_commit: str
-    indexed_at: str
-    extractor_version: int
-    files_indexed: int
-    files_total: int
-    nodes: int
-    edges: int
-    resolved_edges: int
-    unresolved_edges: int
+    root_dir: str = ""
+    indexed_at_commit: str = ""
+    indexed_at: str = ""
+    extractor_version: int = 0
+    files_with_extractor: int = 0
+    files_total: int = 0
+    nodes: int = 0
+    edges: int = 0
+    resolved_edges: int = 0
+    unresolved_edges: int = 0
+    last_run_nodes_stored: int = 0
+    last_run_failures: int = 0
 
     @property
-    def coverage(self) -> float:
-        """Fraction of collected files actually indexed; 0.0 when nothing was seen."""
-        return self.files_indexed / self.files_total if self.files_total else 0.0
+    def extractor_coverage(self) -> float:
+        """Fraction of the code the registry recognises that this indexer can read.
+
+        Deliberately not called "coverage": it says nothing about whether those
+        files were successfully extracted on any given run, only that a grammar
+        exists for them (#13510).
+        """
+        return self.files_with_extractor / self.files_total if self.files_total else 0.0
 
     @property
     def resolution_rate(self) -> float:
-        """Fraction of edges that resolved to a known node; 0.0 when there were none."""
+        """Fraction of edges in the graph that resolved to a known node."""
         return self.resolved_edges / self.edges if self.edges else 0.0
+
+    @property
+    def is_current_extractor(self) -> bool:
+        """Whether the graph was built by the extractor this process is running."""
+        return self.extractor_version == EXTRACTOR_VERSION
 
 
 def _count_by_extension(paths: "list[Path]") -> dict[str, int]:
@@ -525,7 +547,7 @@ class CodeIndexer:
                 aggregate.edges += result.edges
                 aggregate.resolved_edges += result.resolved_edges
                 aggregate.unresolved_edges += result.unresolved_edges
-            aggregate.files_indexed = len(paths)
+            aggregate.files_with_extractor = len(paths)
             aggregate.files_total = len(paths) + len(unsupported)
             await self._write_provenance(root_dir, aggregate)
             return aggregate
@@ -537,38 +559,94 @@ class CodeIndexer:
         because its provenance could not be stored. A missing record already means
         "unknown" to every reader, which is the safe reading.
         """
-        provenance = GraphProvenance(
-            indexed_at_commit=await asyncio.to_thread(_git_head_commit, root_dir),
-            indexed_at=datetime.now(timezone.utc).isoformat(),
-            extractor_version=EXTRACTOR_VERSION,
-            files_indexed=aggregate.files_indexed,
-            files_total=aggregate.files_total,
-            nodes=aggregate.nodes,
-            edges=aggregate.edges,
-            resolved_edges=aggregate.resolved_edges,
-            unresolved_edges=aggregate.unresolved_edges,
-        )
+        provenance = await self._build_provenance(root_dir, aggregate)
+        if provenance is None:
+            return
+        document = f"code graph built at {provenance.indexed_at_commit or 'unknown commit'} from {provenance.root_dir}"
+        # The provenance record shares the docs collection, whose vector dimension
+        # is fixed by its first insert. A placeholder vector would be rejected on a
+        # populated collection and — far worse — *accepted* on an empty one,
+        # pinning it to that dimension and permanently breaking every later real
+        # upsert. So it is embedded with the same model as every other record.
+        try:
+            embedding = await asyncio.to_thread(self._embed_model.get_text_embedding, document)
+        except Exception as exc:
+            logger.warning("code_indexer: could not embed graph provenance, not recording it: %s (#13508)", exc)
+            return
         try:
             await asyncio.to_thread(
                 self._collection.upsert,
                 ids=[_PROVENANCE_ID],
-                embeddings=[[0.0]],
-                documents=[f"code graph built at {provenance.indexed_at_commit or 'unknown commit'}"],
+                embeddings=[embedding],
+                documents=[document],
                 metadatas=[{"record_type": _PROVENANCE_RECORD_TYPE, **asdict(provenance)}],
             )
         except Exception as exc:
             logger.warning("code_indexer: could not write graph provenance: %s (#13508)", exc)
             return
         logger.info(
-            "code_indexer: graph provenance commit=%s files=%d/%d nodes=%d edges=%d resolved=%d/%d",
+            "code_indexer: graph provenance commit=%s coverage=%d/%d nodes=%d edges=%d "
+            "resolved=%d run(stored=%d failed=%d)",
             provenance.indexed_at_commit[:12] or "unknown",
-            provenance.files_indexed,
+            provenance.files_with_extractor,
             provenance.files_total,
             provenance.nodes,
             provenance.edges,
             provenance.resolved_edges,
-            provenance.edges,
+            provenance.last_run_nodes_stored,
+            provenance.last_run_failures,
         )
+
+    async def _build_provenance(self, root_dir: str, aggregate: CodeIndexResult) -> "GraphProvenance | None":
+        """Assemble the record, counting the graph rather than the run (#13508).
+
+        The distinction matters and was wrong in the first draft of this feature:
+        an incremental run hash-skips every unchanged file and therefore extracts
+        nothing, so per-run counters would overwrite a healthy record with
+        ``nodes=0, resolution_rate=0.0``. The stated purpose of these numbers is
+        that a resolver regression shows up as a value going *down* — a value that
+        drops to zero on every no-op nightly run can never do that.
+
+        So the graph totals are read back from the collection, which is the graph,
+        and the run's own outcome is recorded beside them under ``last_run_*``.
+        """
+        totals = await self._count_graph_records()
+        if totals is None:
+            return None
+        nodes, edges, resolved = totals
+        return GraphProvenance(
+            root_dir=str(Path(root_dir).resolve()),
+            indexed_at_commit=await asyncio.to_thread(_git_head_commit, root_dir),
+            indexed_at=datetime.now(timezone.utc).isoformat(),
+            extractor_version=EXTRACTOR_VERSION,
+            files_with_extractor=aggregate.files_with_extractor,
+            files_total=aggregate.files_total,
+            nodes=nodes,
+            edges=edges,
+            resolved_edges=resolved,
+            unresolved_edges=edges - resolved,
+            last_run_nodes_stored=aggregate.success,
+            last_run_failures=aggregate.failed,
+        )
+
+    async def _count_graph_records(self) -> "tuple[int, int, int] | None":
+        """Return ``(nodes, edges, resolved_edges)`` held in the collection, or None.
+
+        None means the store could not be counted, and the caller then writes no
+        record at all — leaving the previous one in place rather than replacing it
+        with numbers this run could not verify.
+        """
+        try:
+            node_ids = await asyncio.to_thread(self._collection.get, where={"record_type": {"$eq": "node"}}, include=[])
+            edge_records = await asyncio.to_thread(
+                self._collection.get, where={"record_type": {"$eq": "edge"}}, include=["metadatas"]
+            )
+        except Exception as exc:
+            logger.warning("code_indexer: could not count graph records: %s (#13508)", exc)
+            return None
+        edge_metadatas = (edge_records or {}).get("metadatas") or []
+        resolved = sum(1 for m in edge_metadatas if isinstance(m, dict) and str(m.get("resolved")).lower() == "true")
+        return len((node_ids or {}).get("ids") or []), len(edge_metadatas), resolved
 
     @staticmethod
     async def _collect_source_files(root_dir: str) -> "tuple[list[Path], list[Path]]":
@@ -773,12 +851,14 @@ def _git(root_dir: str, *args: str) -> str:
     fail an index run that otherwise succeeded.
     """
     try:
-        completed = subprocess.run(
-            ["git", "-C", root_dir, *args],
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT_SECONDS,
-            check=False,
+        completed = (
+            subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option can be injected
+                ["git", "-C", root_dir, *args],
+                capture_output=True,
+                text=True,
+                timeout=_GIT_TIMEOUT_SECONDS,
+                check=False,
+            )
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("code_indexer: git %s failed in %s: %s", args, root_dir, exc)
@@ -791,24 +871,30 @@ def _git_head_commit(root_dir: str) -> str:
     return _git(root_dir, "rev-parse", "HEAD")
 
 
-def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+async def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
     """Return how the graph in *collection* was built, or ``None`` if unknown.
 
     ``None`` covers every uncertain case — no record, an unreadable store, a
-    record written by a schema this build does not understand. A collection
-    indexed before #13508 has no record and therefore reads as unknown, never as
-    fresh, which is the constraint the issue is explicit about.
+    record this build cannot parse. A collection indexed before #13508 has no
+    record and therefore reads as unknown, never as fresh, which is the
+    constraint the issue is explicit about.
+
+    Async because the read is blocking store I/O; the first caller on an event
+    loop would otherwise stall it.
     """
     try:
-        found = collection.get(ids=[_PROVENANCE_ID], include=["metadatas"])
+        found = await asyncio.to_thread(collection.get, ids=[_PROVENANCE_ID], include=["metadatas"])
     except Exception as exc:
         logger.warning("code_indexer: could not read graph provenance: %s", exc)
         return None
     metadatas = (found or {}).get("metadatas") or []
     if not metadatas or not isinstance(metadatas[0], dict):
         return None
-    fields = {f.name for f in dataclass_fields(GraphProvenance)}
-    payload = {k: v for k, v in metadatas[0].items() if k in fields}
+    known = {f.name for f in dataclass_fields(GraphProvenance)}
+    payload = {k: v for k, v in metadatas[0].items() if k in known}
     try:
         return GraphProvenance(**payload)
     except TypeError as exc:
@@ -816,20 +902,39 @@ def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
         return None
 
 
-def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
+async def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
     """How many commits *root_dir*'s HEAD is ahead of the indexed commit.
 
-    ``None`` means unanswerable — no provenance, no git, or the recorded commit is
-    not in this checkout's history (a rebase or a force-push, where a *number*
-    would be a fabrication). ``0`` means the graph is current.
+    ``None`` means unanswerable, and it is deliberately returned in more cases
+    than "no record":
 
-    Answers the question without re-walking the repo: one ``rev-list --count``,
-    no re-index, no file reads.
+    - the graph was built by a **different extractor version**, so a commit
+      distance of 0 would read as "current" for a graph this build cannot trust;
+    - the record describes a **different tree** than the one being asked about;
+    - the recorded commit is **not in this history** — after a rebase or a
+      force-push it is gone, and ``0`` would be the worst possible answer, since
+      it reads as current for a graph built on a commit that no longer exists.
+
+    ``0`` therefore means current, and only that. Answered without re-walking the
+    repo: one ``rev-list --count``.
     """
-    provenance = load_graph_provenance(collection)
+    provenance = await load_graph_provenance(collection)
     if provenance is None or not provenance.indexed_at_commit:
         return None
-    counted = _git(root_dir, "rev-list", "--count", f"{provenance.indexed_at_commit}..HEAD")
+    if not provenance.is_current_extractor:
+        logger.info(
+            "code_indexer: graph was built by extractor version %s, running %s — staleness unanswerable (#13508)",
+            provenance.extractor_version,
+            EXTRACTOR_VERSION,
+        )
+        return None
+    if provenance.root_dir and provenance.root_dir != str(Path(root_dir).resolve()):
+        return None
+    # Validated before reaching a subprocess: this value came back out of the
+    # store, and a commit id is the one untrusted string in this path.
+    if not _SHA_RE.match(provenance.indexed_at_commit):
+        return None
+    counted = await asyncio.to_thread(_git, root_dir, "rev-list", "--count", f"{provenance.indexed_at_commit}..HEAD")
     if not counted.isdigit():
         return None
     return int(counted)
