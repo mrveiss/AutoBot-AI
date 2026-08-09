@@ -175,8 +175,7 @@ class MCPDispatcher:
         if reason is None:
             return
         logger.warning(
-            "MCPDispatcher[rbac-shadow]: role=%s tool=%s would be denied (%s) — "
-            "not enforced yet, see #13228",
+            "MCPDispatcher[rbac-shadow]: role=%s tool=%s would be denied (%s) — " "not enforced yet, see #13228",
             role,
             tool_name,
             reason,

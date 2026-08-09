@@ -95,8 +95,9 @@ async def test_a_would_be_denial_still_dispatches():
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
 
-    with patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()), patch(
-        "chat_workflow.cot_events.emit_tool_result", AsyncMock()
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
     ):
         result = await d.dispatch("mystery", {}, role="readonly")
 
@@ -110,8 +111,9 @@ async def test_the_legacy_blocklist_still_decides():
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
 
-    with patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()), patch(
-        "chat_workflow.cot_events.emit_tool_result", AsyncMock()
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
     ):
         result = await d.dispatch("flushall", {}, role="user")
 
@@ -125,8 +127,9 @@ async def test_the_shadow_verdict_is_logged_for_the_inventory(caplog):
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
 
-    with patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()), patch(
-        "chat_workflow.cot_events.emit_tool_result", AsyncMock()
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
     ):
         with caplog.at_level("WARNING"):
             await d.dispatch("mystery", {}, role="readonly")
@@ -144,8 +147,9 @@ async def test_a_permitted_call_logs_nothing(caplog):
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
 
-    with patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()), patch(
-        "chat_workflow.cot_events.emit_tool_result", AsyncMock()
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
     ):
         with caplog.at_level("WARNING"):
             await d.dispatch("get_text", {}, role="user")
