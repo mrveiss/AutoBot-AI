@@ -117,15 +117,25 @@ def _code_sync_src() -> str:
 
 
 def test_rsync_helper_accepts_explicit_paths():
-    """The helper must be able to take paths verbatim, not rebuild them."""
+    """The helper must be able to take paths verbatim, not rebuild them.
+
+    #13851 moved the argv construction into ``_rsync_local_cmd`` so the deletion
+    dry run and the real sync are built by the same code — the ``… or`` fallback
+    lives there now, and the helper still takes both keyword paths.
+    """
     src = _code_sync_src()
     fn = src[src.index("async def _rsync_component_local(") :]
     fn = fn[: fn.index("\nasync def ", 1)]
 
     assert "source_dir: str | None = None" in fn
     assert "dest_dir: str | None = None" in fn
-    assert "source_dir or" in fn, "source must prefer the explicit path"
-    assert "dest_dir or" in fn, "destination must prefer the explicit path"
+    assert "source_dir=source_dir" in fn, "source must be forwarded to the argv builder"
+    assert "dest_dir=dest_dir" in fn, "destination must be forwarded to the argv builder"
+
+    builder = src[src.index("def _rsync_local_cmd(") :]
+    builder = builder[: builder.index("\nasync def ", 1)]
+    assert "source_dir or" in builder, "source must prefer the explicit path"
+    assert "dest_dir or" in builder, "destination must prefer the explicit path"
 
 
 def test_drift_resolve_passes_the_resolved_paths():
@@ -138,10 +148,23 @@ def test_drift_resolve_passes_the_resolved_paths():
     assert "dest_dir=deployed_dir" in call, "resolve still rebuilds the destination path"
 
 
-def test_other_callers_keep_the_convention():
-    """The four non-drift callers must be untouched, so their behaviour is unchanged."""
+def test_every_resolve_caller_passes_the_resolved_paths():
+    """All three resolve-shaped callers must hand over override-aware paths.
+
+    #12872 fixed only the sync endpoint. #13851 found the async job
+    (``_run_component_resolve_job``) and the autobot_shared-first sync still
+    rebuilding ``{source_path}/{component}`` from the component name — which for
+    a path-overridden component (ai-stack, slm-agent) points a DELETE-style
+    rsync at a directory that is not that component's source.
+
+    The remaining callers legitimately keep the convention: they sync
+    conventionally-laid-out components from a source root.
+    """
     src = _code_sync_src()
     calls = re.findall(r"_rsync_component_local\((.*?)\)", src, re.S)
     explicit = [c for c in calls if "source_dir=" in c or "dest_dir=" in c]
 
-    assert len(explicit) == 1, f"expected only the drift-resolve caller to pass explicit paths, got {len(explicit)}"
+    assert len(explicit) == 3, f"expected the three resolve callers to pass explicit paths, got {len(explicit)}"
+    assert all("source_dir=" in c and "dest_dir=" in c for c in explicit), (
+        "a caller passing only one explicit path still rebuilds the other"
+    )

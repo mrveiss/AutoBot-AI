@@ -74,6 +74,11 @@ const driftReport = ref<FileDriftReport | null>(null)
 const isDriftLoading = ref(false)
 const isResolvingDrift = ref(false) // #7149: separate from drift-check spinner
 const showDriftDetails = ref(false)
+// #13851: untracked files (present on the host, absent from this component's
+// source) are reported separately from drift and collapsed by default — they
+// are informational, and "Resync from source" would DELETE them.
+const showUntrackedDetails = ref(false)
+const untrackedFiles = computed(() => driftReport.value?.untracked_files ?? [])
 const selectedDriftComponent = ref('autobot-slm-backend')
 
 // Async drift/resolve job polling (#11303) — mirrors the update-all pattern so
@@ -91,6 +96,7 @@ let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
 watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
+  showUntrackedDetails.value = false
 })
 
 // =============================================================================
@@ -1463,10 +1469,10 @@ onUnmounted(() => {
                     :class="{
                       'text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded text-xs': file.status === 'modified',
                       'text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs': file.status === 'source_only',
-                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'deployed_only',
+                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'untracked',
                     }"
                   >
-                    {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.deployedOnly') }}
+                    {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.untracked') }}
                   </span>
                 </td>
                 <td class="py-2 pr-4 font-mono text-xs text-gray-700">{{ file.path }}</td>
@@ -1479,6 +1485,30 @@ onUnmounted(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!--
+          #13851: files present on the host with no counterpart in this
+          component's source. Reported separately because they are NOT drift —
+          folding them in made every healthy host look stale, and "Resync from
+          source" is a delete-style rsync, so acting on them removes them.
+        -->
+        <div v-if="untrackedFiles.length > 0" class="mt-4">
+          <button
+            @click="showUntrackedDetails = !showUntrackedDetails"
+            class="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length, plural: untrackedFiles.length !== 1 ? 's' : '' }) }}
+          </button>
+          <div v-if="showUntrackedDetails" class="mt-2">
+            <p class="text-xs text-gray-500 mb-2">{{ $t('codeSyncView.untrackedExplainer') }}</p>
+            <ul class="text-xs font-mono text-gray-700 space-y-1">
+              <li v-for="file in untrackedFiles" :key="file.path">{{ file.path }}</li>
+            </ul>
+          </div>
         </div>
       </div>
 

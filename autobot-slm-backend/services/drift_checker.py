@@ -211,22 +211,116 @@ _EXPECTED_DRIFT_EXACT: frozenset[str] = frozenset(
 
 _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 
+# Per-component files that the RUNTIME writes into the deployed tree and that
+# therefore have no counterpart in source at all (#13851). Unlike
+# ``_EXPECTED_DRIFT_EXACT`` these are scoped to the component whose tree they
+# sit in, because the same relative path under a different component would be
+# ordinary source.
+#
+#   autobot-backend/config/npu_workers.yaml — the worker registry, written by
+#   NPUWorkerManager._save_workers_to_config() on every worker add/remove/update
+#   (services/npu_worker_manager.py). The repo ships only
+#   autobot-infrastructure/shared/config/npu_workers.example.yaml; the live file
+#   is state, not deployed code. Comparing it reported permanent false drift,
+#   and resolving that drift would DELETE the live worker registry.
+_RUNTIME_GENERATED_FILES: dict[str, frozenset[str]] = {
+    "autobot-backend": frozenset({"config/npu_workers.yaml"}),
+}
 
-def _is_expected_drift(rel_path: str) -> bool:
+# Individual files inside an otherwise-1:1 component tree that are deployed as a
+# *rendered* Jinja2 template (#13851). Maps component -> {deployed rel path ->
+# template path relative to the repo root}.
+#
+# ``_TEMPLATED_COMPONENTS`` above covers a component that is ENTIRELY a rendered
+# file; this covers the far commoner case of one rendered file inside a normal
+# directory sync. Both use the same render-invariant AST comparison (#12886) —
+# excluding the file outright would trade permanent false drift for no signal at
+# all, which is the mistake #12886 was written to undo.
+#
+#   autobot-npu-worker/npu-worker.py — rendered from
+#   roles/npu-worker/templates/npu-worker.py.j2 by roles/npu-worker/tasks/
+#   code_only.yml:25-26 into {{ npu_install_dir }}/npu-worker.py. A rendered
+#   artifact can never checksum-match its template, so this drift was permanent.
+_RENDERED_FILES: dict[str, dict[str, str]] = {
+    "autobot-npu-worker": {
+        "npu-worker.py": "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2",
+    },
+}
+
+
+def _deployed_relpath(component: str) -> str:
+    """Deployed path of *component* relative to the deployed root.
+
+    Mirrors :func:`get_default_deployed_dir` without the root prefix so
+    ownership between component trees can be reasoned about (#13851).
+    """
+    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
+    return override[1] if override else component
+
+
+def owned_subtrees(component: str) -> frozenset[str]:
+    """Sub-paths of *component*'s deployed tree that belong to ANOTHER component.
+
+    ``plugins`` is its own component whose source is ``<repo>/plugins`` but whose
+    deployed target is ``<root>/autobot-backend/plugins`` — so the backend's own
+    drift walk found 17 plugin files, looked for them under
+    ``code_source/autobot-backend/plugins/`` where they have never existed, and
+    reported them as drift. They were perfectly in sync with their real source
+    (#13851).
+
+    A file owned by another component is that component's business: it must not
+    count as drift for the component whose tree it happens to sit in, and it must
+    not be deleted by that component's delete-style resolve.
+
+    Args:
+        component: Bare component name, e.g. ``"autobot-backend"``.
+
+    Returns:
+        Frozenset of POSIX relative sub-paths (e.g. ``{"plugins"}``), empty when
+        no other component deploys inside this one.
+    """
+    prefix = _deployed_relpath(component) + "/"
+    return frozenset(
+        _deployed_relpath(other)[len(prefix) :]
+        for other in VISIBILITY_COMPONENTS
+        if other != component and _deployed_relpath(other).startswith(prefix)
+    )
+
+
+def runtime_generated_files(component: str) -> frozenset[str]:
+    """Deployed-tree files *component*'s runtime writes and source never has.
+
+    Public so the rsync chokepoint can protect the same paths the drift walk
+    ignores — the two disagreeing is what let a false drift report recommend
+    deleting live state (#13851, same lockstep rationale as #11459).
+    """
+    return _RUNTIME_GENERATED_FILES.get(component, frozenset())
+
+
+def _is_expected_drift(rel_path: str, component: str | None = None) -> bool:
     """Return True if *rel_path* is a deployment-generated file to exclude.
 
     Checks against the exact-match set and prefix list defined in
-    ``_EXPECTED_DRIFT_EXACT`` and ``_EXPECTED_DRIFT_PREFIXES`` (Issue #4610).
+    ``_EXPECTED_DRIFT_EXACT`` and ``_EXPECTED_DRIFT_PREFIXES`` (Issue #4610),
+    then the component-scoped subtrees and runtime-written files (#13851).
 
     Args:
         rel_path: POSIX-style relative path of the file being evaluated.
+        component: Bare component name whose tree is being walked, or ``None``
+            for the component-agnostic default.
 
     Returns:
         True when the path represents expected (non-actionable) drift.
     """
     if rel_path in _EXPECTED_DRIFT_EXACT:
         return True
-    return any(rel_path.startswith(prefix) for prefix in _EXPECTED_DRIFT_PREFIXES)
+    if any(rel_path.startswith(prefix) for prefix in _EXPECTED_DRIFT_PREFIXES):
+        return True
+    if component is None:
+        return False
+    if rel_path in runtime_generated_files(component):
+        return True
+    return any(rel_path == sub or rel_path.startswith(sub + "/") for sub in owned_subtrees(component))
 
 
 def _file_checksum(path: Path, block_size: int = 65536) -> str:
@@ -418,6 +512,66 @@ def _templated_drift_entry(
     ]
 
 
+def _rendered_file_drift(rel_path: str, template_rel: str, deployed_path: Path) -> dict | None:
+    """Render-invariant comparison for one templated file inside a normal tree.
+
+    Same mechanism as :func:`_compute_templated_drift` (#12886) but scoped to a
+    single file rather than a whole component (#13851): a rendered artifact can
+    never checksum-match its ``.j2``, so a raw comparison reports permanent
+    false drift, while excluding the file reports nothing at all.
+
+    Args:
+        rel_path: POSIX relative path of the deployed file inside the component.
+        template_rel: Template path relative to the repo root.
+        deployed_path: Absolute path to the deployed rendered file.
+
+    Returns:
+        A drift dict, or ``None`` when the rendered file matches its template.
+    """
+    template_path = Path(DEFAULT_REPO_PATH) / template_rel
+    try:
+        template_src = template_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("drift_checker: cannot read template %s: %s", template_path, exc)
+        return None
+
+    try:
+        deployed_src: str | None = deployed_path.read_text(encoding="utf-8")
+    except OSError:
+        deployed_src = None
+
+    digests = _render_invariant_digests(template_src, deployed_src)
+    if digests is None:
+        # Either side failing to parse as Python is real drift when the deployed
+        # file exists — the template is pinned parseable by drift_checker_test.
+        if deployed_src is None:
+            logger.error("drift_checker: template does not parse as Python: %s", template_path)
+            return None
+        return {
+            "path": rel_path,
+            "source_checksum": None,
+            "deployed_checksum": _file_checksum(deployed_path),
+            "status": "modified",
+        }
+
+    source_digest, deployed_digest = digests
+    if deployed_digest is None:
+        return {
+            "path": rel_path,
+            "source_checksum": source_digest,
+            "deployed_checksum": None,
+            "status": "source_only",
+        }
+    if deployed_digest == source_digest:
+        return None
+    return {
+        "path": rel_path,
+        "source_checksum": source_digest,
+        "deployed_checksum": deployed_digest,
+        "status": "modified",
+    }
+
+
 def compute_drift(
     source_dir: str,
     deployed_dir: str,
@@ -431,7 +585,11 @@ def compute_drift(
         path            – POSIX relative path
         source_checksum – SHA-256 of the source file (None if absent)
         deployed_checksum – SHA-256 of the deployed file (None if absent)
-        status          – "modified" | "source_only" | "deployed_only"
+        status          – "modified" | "source_only" | "untracked"
+
+    ``untracked`` (present on the host, absent from this component's source)
+    is returned in the same list but partitioned out of ``drift_detected`` by
+    :func:`build_drift_report` — see the status assignment below (#13851).
 
     Files that exist in both directories with identical checksums are not
     included in the returned list.
@@ -466,16 +624,27 @@ def compute_drift(
     src_checksums = _collect_checksums(src_path, extensions)
     dep_checksums = _collect_checksums(dep_path, extensions)
 
-    all_paths = set(src_checksums) | set(dep_checksums)
+    rendered = _RENDERED_FILES.get(component or "", {})
+    # Rendered files are always compared, even when neither tree lists them:
+    # an absent rendered artifact means the deploy never ran, which is exactly
+    # the drift this is for (#13851).
+    all_paths = set(src_checksums) | set(dep_checksums) | set(rendered)
     compared = 0
     drifted: List[dict] = []
 
     for rel_path in sorted(all_paths):
-        if _is_expected_drift(rel_path):
+        if _is_expected_drift(rel_path, component):
             logger.debug("drift_checker: skipping expected-drift path: %s", rel_path)
             continue
 
         compared += 1
+
+        if rel_path in rendered:
+            entry = _rendered_file_drift(rel_path, rendered[rel_path], dep_path / rel_path)
+            if entry is not None:
+                drifted.append(entry)
+            continue
+
         src_cs = src_checksums.get(rel_path)
         dep_cs = dep_checksums.get(rel_path)
 
@@ -484,7 +653,11 @@ def compute_drift(
             continue
 
         if src_cs is None:
-            status = "deployed_only"
+            # Present on the host, absent from THIS component's source: not out
+            # of date, foreign. Reported as its own state so it is visible
+            # without being folded into drift_detected — a delete-style resolve
+            # is the wrong remedy for a file that source never owned (#13851).
+            status = "untracked"
         elif dep_cs is None:
             status = "source_only"
         else:
@@ -519,12 +692,20 @@ def build_drift_report(
     Returns:
         Dict matching the ``FileDriftReport`` schema.
     """
-    drifted, total = compute_drift(source_dir, deployed_dir, component)
+    entries, total = compute_drift(source_dir, deployed_dir, component)
+
+    # #13851: "present on the host, absent from source" is reported, but it is
+    # not drift. Folding it in made stale_components non-empty on a fully-synced
+    # host, and the obvious remedy — a delete-style resolve — would have removed
+    # the untracked files rather than updating anything.
+    drifted = [entry for entry in entries if entry["status"] != "untracked"]
+    untracked = [entry for entry in entries if entry["status"] == "untracked"]
 
     return {
         "source_dir": source_dir,
         "deployed_dir": deployed_dir,
         "drifted_files": drifted,
+        "untracked_files": untracked,
         "total_compared": total,
         "drift_detected": len(drifted) > 0,
         "checked_at": utc_timestamp(),
