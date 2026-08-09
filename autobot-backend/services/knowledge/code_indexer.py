@@ -308,20 +308,35 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
 # not indexing the file, which is why this list exists instead of a blanket map.
 _NO_GRAMMAR_EXTENSIONS: "frozenset[str]" = frozenset({".pyx", ".pxd"})
 
+# #13510: a stub shares its implementation's module path — ``module_path_from_rel_path``
+# strips the suffix, so ``foo.py`` and ``foo.pyi`` compute the *same* node ids and the
+# stub's declarations would overwrite the real ones in the shared collection. Held back
+# until node identity carries the extension (#13824). Distinct from the set above: the
+# grammar reads these fine, the identity scheme cannot tell them apart.
+_COLLIDING_STUB_EXTENSIONS: "frozenset[str]" = frozenset({".pyi"})
+
+_HELD_BACK_EXTENSIONS: "frozenset[str]" = _NO_GRAMMAR_EXTENSIONS | _COLLIDING_STUB_EXTENSIONS
+
 # #13510: derived from the canonical registry in ``utils/file_categorization``
 # rather than restated here, so "what the platform calls source code" and "what the
 # indexer will read" cannot drift apart silently. ``.ts``/``.tsx`` were already
 # parsed with the JavaScript grammar; ``.mts``/``.cts`` join them on the same terms.
 _EXTRACTORS: dict[str, Any] = {
-    **{ext: extract_python for ext in PYTHON_EXTENSIONS - _NO_GRAMMAR_EXTENSIONS},
-    **{ext: extract_javascript for ext in JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS},
+    **{ext.lower(): extract_python for ext in PYTHON_EXTENSIONS - _HELD_BACK_EXTENSIONS},
+    **{ext.lower(): extract_javascript for ext in JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS},
 }
 
 # Extensions the canonical registry calls code but this indexer has no extractor
 # for. Files with these extensions are *counted* as skipped (#13510) — previously
 # they were dropped during collection, so they could not appear in any total and a
 # partially-covered graph reported itself as complete.
-UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ALL_CODE_EXTENSIONS) - frozenset(_EXTRACTORS)
+#
+# Lowercased because the walk matches on ``suffix.lower()``. The registry carries
+# uppercase members (``.R``, ``.Rmd``, ``.S``) that would otherwise sit in this set
+# and never match anything — invisible again, which is the defect this issue fixes.
+UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ext.lower() for ext in ALL_CODE_EXTENSIONS) - frozenset(
+    _EXTRACTORS
+)
 
 
 _DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"

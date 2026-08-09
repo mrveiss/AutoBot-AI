@@ -17,7 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.code_graph import module_path_from_rel_path
 from services.knowledge.code_indexer import (
+    _COLLIDING_STUB_EXTENSIONS,
     _EXTRACTORS,
     _NO_GRAMMAR_EXTENSIONS,
     UNSUPPORTED_CODE_EXTENSIONS,
@@ -42,7 +44,7 @@ def test_every_js_family_extension_has_an_extractor(ext):
     assert _EXTRACTORS.get(ext) is extract_javascript
 
 
-@pytest.mark.parametrize("ext", sorted(PYTHON_EXTENSIONS - _NO_GRAMMAR_EXTENSIONS))
+@pytest.mark.parametrize("ext", sorted(PYTHON_EXTENSIONS - _NO_GRAMMAR_EXTENSIONS - _COLLIDING_STUB_EXTENSIONS))
 def test_every_parseable_python_extension_has_an_extractor(ext):
     assert _EXTRACTORS.get(ext) is extract_python
 
@@ -50,14 +52,46 @@ def test_every_parseable_python_extension_has_an_extractor(ext):
 def test_cython_is_held_back_deliberately():
     """Deriving blindly would map Cython onto the Python grammar.
 
-    Measured: tree-sitter-python reads a file declaring ``cdef add``, ``cpdef scale``
-    and ``def normal`` as containing only ``normal``. The cdef definitions vanish
-    while calls to them survive as unresolvable edges — worse than not indexing the
-    file, which is the exact trade the issue warns about for ``.mjs``.
+    The measurement is *run here* rather than described in a comment: a claim a test
+    only asserts in prose stops being true the moment the grammar changes, and
+    nothing notices.
     """
     assert _NO_GRAMMAR_EXTENSIONS <= PYTHON_EXTENSIONS
     for ext in _NO_GRAMMAR_EXTENSIONS:
         assert ext not in _EXTRACTORS
+
+    cython = b"cdef int add(int a, int b):\n    return a + b\n\ndef normal(y):\n    return add(y, 1)\n"
+    extracted = extract_python("x.pyx", cython)
+    names = {n.get("name") for n in extracted["nodes"]}
+
+    assert names == {"normal"}, "tree-sitter-python now reads cdef — reconsider the holdback"
+    assert extracted["edges"], "the call to the invisible cdef survives as a dangling edge"
+
+
+def test_python_stubs_are_held_back_over_node_identity_not_grammar():
+    """``foo.py`` and ``foo.pyi`` compute the same node ids, so the stub would win.
+
+    A different reason from Cython's, kept in a different constant: the grammar reads
+    stubs perfectly. It is ``module_path_from_rel_path`` stripping the suffix that
+    makes them indistinguishable. See #13824.
+    """
+    assert _COLLIDING_STUB_EXTENSIONS <= PYTHON_EXTENSIONS
+    assert not (_COLLIDING_STUB_EXTENSIONS & _NO_GRAMMAR_EXTENSIONS)
+    for ext in _COLLIDING_STUB_EXTENSIONS:
+        assert ext not in _EXTRACTORS
+        assert ext in UNSUPPORTED_CODE_EXTENSIONS
+
+    assert module_path_from_rel_path("pkg/foo.pyi") == module_path_from_rel_path("pkg/foo.py")
+
+
+def test_every_extension_the_walk_can_match_is_lowercase():
+    """The walk matches on ``suffix.lower()``, so an uppercase member matches nothing.
+
+    ``ALL_CODE_EXTENSIONS`` carries ``.R``/``.Rmd``/``.S``. Left uncased they would sit
+    in the unsupported set and never fire — invisible again, which is this issue.
+    """
+    for ext in UNSUPPORTED_CODE_EXTENSIONS | frozenset(_EXTRACTORS):
+        assert ext == ext.lower(), ext
 
 
 def test_cython_shows_up_as_unsupported_rather_than_unknown():
@@ -66,16 +100,20 @@ def test_cython_shows_up_as_unsupported_rather_than_unknown():
         assert ext in UNSUPPORTED_CODE_EXTENSIONS
 
 
-def test_the_two_sets_partition_the_canonical_registry():
-    """Every code extension is either extractable or explicitly unsupported.
+def test_the_indexer_never_claims_an_extension_the_registry_does_not_call_code():
+    """The one direction that is not set algebra.
 
-    The property that makes the counting honest: nothing the platform calls code can
-    fall outside both sets and so escape both the index and the skip tally.
+    "Every code extension is covered by one set or the other" holds for *any*
+    `_EXTRACTORS` whatsoever, because `UNSUPPORTED_CODE_EXTENSIONS` is defined as the
+    complement — asserting it proves nothing about this map. The containment that can
+    actually fail is the other way round: an extractor registered for something the
+    canonical registry does not classify as code, which would mean the two have
+    drifted apart again in the opposite direction.
     """
-    covered = frozenset(_EXTRACTORS) | UNSUPPORTED_CODE_EXTENSIONS
+    registry = frozenset(ext.lower() for ext in ALL_CODE_EXTENSIONS)
+    stray = frozenset(_EXTRACTORS) - registry
 
-    assert frozenset(ALL_CODE_EXTENSIONS) <= covered
-    assert not (frozenset(_EXTRACTORS) & UNSUPPORTED_CODE_EXTENSIONS)
+    assert stray == frozenset(), f"extractors for extensions the registry does not call code: {sorted(stray)}"
 
 
 def test_unsupported_is_not_empty():
@@ -154,6 +192,60 @@ def test_hidden_directories_below_root_are_still_skipped(tmp_path):
     found, _ = _collect(tmp_path)
 
     assert [p.name for p in found] == ["app.py"]
+
+
+# ------------------------------------------- what index_directory actually reports
+
+
+class _StubIndexer(CodeIndexer):
+    """Drives ``index_directory``'s counting without ChromaDB or a hash cache."""
+
+    def __init__(self, cache_file):
+        self._cache_file = cache_file
+        self._hash_cache = {}
+        self._known_ids = set()
+
+    def _load_cache(self):
+        return {}
+
+    async def _seed_known_ids_from_collection(self):
+        return set()
+
+    async def index_file(self, path, root_dir=None, force=False):
+        from services.knowledge.code_indexer import CodeIndexResult
+
+        return CodeIndexResult(success=1)
+
+
+def test_index_directory_reports_the_files_it_could_not_read(tmp_path):
+    """The production-facing half of the fix, and the part nothing else covers.
+
+    Collection returning the unsupported list is inert unless ``index_directory``
+    folds it into the result — which is what a consumer reads. Without this test the
+    counting branch could be deleted and only the collection unit tests would notice.
+    """
+    (tmp_path / "app.py").write_text("def f():\n    pass\n", encoding="utf-8")
+    (tmp_path / "run.sh").write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+    (tmp_path / "deploy.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "main.go").write_text("package main\n", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("# hi\n", encoding="utf-8")
+
+    result = asyncio.run(_StubIndexer(tmp_path / "cache.json").index_directory(str(tmp_path)))
+
+    assert result.success == 1, "the one indexable file was not indexed"
+    assert result.skipped == 3, "the three unreadable code files were not counted"
+    assert result.unsupported_extensions == {".sh": 2, ".go": 1}
+    assert ".md" not in result.unsupported_extensions, "a non-code file leaked into the coverage report"
+
+
+def test_index_directory_reports_nothing_when_everything_was_readable(tmp_path):
+    """An empty report must mean full coverage, not an absent one."""
+    (tmp_path / "app.py").write_text("def f():\n    pass\n", encoding="utf-8")
+
+    result = asyncio.run(_StubIndexer(tmp_path / "cache.json").index_directory(str(tmp_path)))
+
+    assert result.unsupported_extensions == {}
+    assert result.skipped == 0
 
 
 def test_vendor_directories_are_still_skipped(tmp_path):
