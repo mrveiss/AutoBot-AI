@@ -342,8 +342,7 @@ class TestEqualPrioritySectionsShare:
     def test_four_peers_each_retain_a_share(self, manager):
         """AC 1. The reported failure was alpha=0 bravo=0 charlie=0 delta=100."""
         sections = [
-            ContextSection(name=n, content=_text(100), priority=5)
-            for n in ("alpha", "bravo", "charlie", "delta")
+            ContextSection(name=n, content=_text(100), priority=5) for n in ("alpha", "bravo", "charlie", "delta")
         ]
 
         result = manager.allocate_sections(sections, budget_tokens=100)
