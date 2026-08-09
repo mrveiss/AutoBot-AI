@@ -120,3 +120,27 @@ def test_the_active_profile_changes_live_behaviour(profile: str, identical_calls
         assert _drive(mixin, ctx, results, times=identical_calls - 1) is None
         # … and the next one halts.
         assert mixin._enforce_repetition(_call(), ctx, results) is not None
+
+
+def test_a_stagnation_run_halts_with_a_distinct_reason() -> None:
+    """Different calls, nothing learned — a separate halt from repetition."""
+    mixin, ctx = _mixin(), _Ctx()
+    results = [{"tool": f"t{i}", "status": "ok", "result": "the same words over and over"} for i in range(12)]
+
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        msg = mixin._enforce_repetition(_call("something_new"), ctx, results)
+
+    assert msg is not None
+    assert msg.metadata.get("stagnation_halt") is True
+    assert msg.metadata.get("repetition_halt") is None, "the two halts must stay distinguishable"
+
+
+def test_a_productive_run_is_not_halted_as_stagnant() -> None:
+    mixin, ctx = _mixin(), _Ctx()
+    results = [
+        {"tool": f"t{i}", "status": "ok", "result": f"entirely distinct finding {i} about subsystem {i}"}
+        for i in range(12)
+    ]
+
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        assert mixin._enforce_repetition(_call("something_new"), ctx, results) is None

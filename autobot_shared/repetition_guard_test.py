@@ -169,3 +169,73 @@ def test_two_sessions_do_not_share_counters():
 
     assert repetition_halt_reason(_call(), results, session_b, threshold=3) is None
     assert register_call(_call(), results, session_b) == 2, "session B counted session A's calls"
+
+
+# ----------------------------------------------------------- stagnation
+
+
+def _low_novelty_results(n, text="the same words over and over"):
+    return [_result(f"tool_{i}", text) for i in range(n)]
+
+
+def test_a_run_of_uninformative_results_halts():
+    """Different calls, nothing learned — the other shape of a stuck agent."""
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        from autobot_shared.repetition_guard import stagnation_halt_reason
+
+        reason = stagnation_halt_reason(_low_novelty_results(12), {})
+
+    assert reason is not None
+    assert "new information" in reason
+
+
+def test_results_that_keep_saying_something_new_are_not_halted():
+    from autobot_shared.repetition_guard import stagnation_halt_reason
+
+    varied = [_result(f"t{i}", f"entirely distinct finding number {i} about subsystem {i}") for i in range(12)]
+
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        assert stagnation_halt_reason(varied, {}) is None
+
+
+def test_a_short_turn_is_never_judged_stagnant():
+    """The window must fill first — two observations are not a trend."""
+    from autobot_shared.repetition_guard import stagnation_halt_reason
+
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        assert stagnation_halt_reason(_low_novelty_results(2), {}) is None
+
+
+def test_the_minimal_profile_disables_the_stagnation_halt():
+    """`minimal` sets halt_on_stagnation False — the profile must reach here."""
+    from autobot_shared.repetition_guard import stagnation_halt_reason
+
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "minimal"}, clear=False):
+        os.environ.pop("AUTOBOT_GUARD_STAGNATION_HALT", None)
+        assert stagnation_halt_reason(_low_novelty_results(12), {}) is None
+
+
+def test_an_observation_is_scored_once_across_repeated_checks():
+    """The guard is called per dispatch; re-scoring would skew the window."""
+    from autobot_shared.repetition_guard import stagnation_halt_reason
+
+    state, results = {}, _low_novelty_results(3)
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        stagnation_halt_reason(results, state)
+        first = state["counted"]
+        stagnation_halt_reason(results, state)
+
+    assert state["counted"] == first == 3
+
+
+def test_the_two_halts_give_different_reasons():
+    """"Repeating a call" and "learning nothing" ask for different corrections."""
+    from autobot_shared.repetition_guard import stagnation_halt_reason
+
+    rep_state, results = {}, [_result("read_file", "same")]
+    for _ in range(3):
+        rep = repetition_halt_reason(_call(), results, rep_state, threshold=2)
+    with patch.dict(os.environ, {"AUTOBOT_GUARD_PROFILE": "strict"}, clear=False):
+        stag = stagnation_halt_reason(_low_novelty_results(12), {})
+
+    assert rep and stag and rep != stag

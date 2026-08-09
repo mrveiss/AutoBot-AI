@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Repetition guard for the production tool seam (#13590).
+"""Repetition and stagnation guards for the production tool seam (#13590).
 
 The guard machinery existed in ``agent_loop/`` and ran nowhere: the live path's
 only countermeasure was a sentence in the system prompt
@@ -33,8 +33,9 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-# Key under which the caller stores this guard's per-turn state.
+# Keys under which the caller stores each guard's per-turn state.
 REPETITION_STATE_KEY = "_repetition_guard"
+STAGNATION_STATE_KEY = "_stagnation_guard"
 
 # Tools whose whole purpose is to be re-issued until something changes. A
 # changing result already exempts them via the pair key; this covers the case
@@ -148,12 +149,88 @@ def repetition_halt_reason(
     )
 
 
+def _stagnation_config() -> tuple:
+    """Resolve ``(enabled, window, min_novelty)`` from the guard profile."""
+    from agent_loop.guard_profile import resolve_guard_config_overrides  # noqa: PLC0415
+    from agent_loop.types import AgentLoopConfig  # noqa: PLC0415
+
+    overrides = resolve_guard_config_overrides()
+
+    def _get(field: str):
+        return overrides.get(field, getattr(AgentLoopConfig, field))
+
+    try:
+        window = max(2, int(_get("stagnation_window")))
+        novelty = float(_get("min_observation_novelty"))
+    except (TypeError, ValueError):
+        window = AgentLoopConfig.stagnation_window
+        novelty = AgentLoopConfig.min_observation_novelty
+    return bool(_get("halt_on_stagnation")), window, novelty
+
+
+def stagnation_halt_reason(
+    execution_results: list,
+    state: Dict[str, Any],
+) -> Optional[str]:
+    """Return a halt reason when recent results stop carrying new information.
+
+    Repetition catches an agent re-issuing one call. This catches the other
+    shape: a run of *different* calls whose results say nothing new — the agent
+    is moving but not learning, and the iteration cap is the only thing that
+    would stop it.
+
+    Novelty is the fraction of tokens in a result absent from everything seen
+    before it this turn, so the vocabulary accumulates and a genuinely new
+    result scores high however it is phrased. The halt fires only once the
+    window is full, so a short turn is never judged on two observations.
+    """
+    from agent_loop.fingerprint import compute_novel_token_ratio  # noqa: PLC0415
+
+    enabled, window, min_novelty = _stagnation_config()
+    if not enabled:
+        return None
+
+    seen_tokens: set = state.setdefault("seen_tokens", set())
+    ratios: list = state.setdefault("ratios", [])
+    counted: int = state.get("counted", 0)
+
+    # Score only results not yet scored, so repeated calls into this function
+    # within one turn do not re-score the same observation.
+    fresh = (execution_results or [])[counted:]
+    for entry in fresh:
+        payload = entry.get("result", entry.get("error", "")) if isinstance(entry, dict) else entry
+        ratios.append(compute_novel_token_ratio(payload, seen_tokens))
+    state["counted"] = counted + len(fresh)
+
+    if len(ratios) < window:
+        return None
+
+    recent = ratios[-window:]
+    average = sum(recent) / len(recent)
+    if average >= min_novelty:
+        return None
+
+    logger.warning(
+        "stagnation_guard: halting — mean novelty %.3f over the last %d results is below %.3f",
+        average,
+        window,
+        min_novelty,
+    )
+    return (
+        f"Stopped: the last {window} tool results carried almost no new information "
+        f"(novelty {average:.1%}, below the {min_novelty:.0%} threshold). Continuing "
+        f"would repeat what is already known — change approach, or say what is blocking."
+    )
+
+
 __all__ = [
     "POLLABLE_TOOLS",
     "REPETITION_STATE_KEY",
+    "STAGNATION_STATE_KEY",
     "call_fingerprint",
     "last_result_hash",
     "max_identical_tool_calls",
     "register_call",
     "repetition_halt_reason",
+    "stagnation_halt_reason",
 ]

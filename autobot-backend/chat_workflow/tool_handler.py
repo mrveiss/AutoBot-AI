@@ -3133,7 +3133,7 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext" | None,
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage | None:
-        """Halt an agent re-issuing the same call for the same result (#13590).
+        """Halt a looping or stagnating agent at the live seam (#13590).
 
         The guard existed in ``agent_loop/`` and ran nowhere; the live path had
         only a prompt sentence and a counter for *malformed* calls. Counting is
@@ -3147,22 +3147,36 @@ class ToolHandlerMixin:
         """
         from autobot_shared.repetition_guard import (  # noqa: PLC0415
             REPETITION_STATE_KEY,
+            STAGNATION_STATE_KEY,
             repetition_halt_reason,
+            stagnation_halt_reason,
         )
 
         if ctx is None:
             return None
-        state = ctx.context.setdefault(REPETITION_STATE_KEY, {})
-        reason = repetition_halt_reason(tool_call, execution_results, state)
+
+        rep_state = ctx.context.setdefault(REPETITION_STATE_KEY, {})
+        reason = repetition_halt_reason(tool_call, execution_results, rep_state)
+        halt_kind = "repetition_halt"
+
+        if reason is None:
+            # Repetition catches one call re-issued; stagnation catches a run of
+            # different calls whose results say nothing new. Distinct reasons,
+            # because "you are repeating a call" and "you are learning nothing"
+            # ask the agent for different corrections.
+            stag_state = ctx.context.setdefault(STAGNATION_STATE_KEY, {})
+            reason = stagnation_halt_reason(execution_results, stag_state)
+            halt_kind = "stagnation_halt"
+
         if reason is None:
             return None
 
         name = tool_call.get("name", "")
-        execution_results.append({"tool": name, "status": "error", "error": reason, "repetition_halt": True})
+        execution_results.append({"tool": name, "status": "error", "error": reason, halt_kind: True})
         return WorkflowMessage(
             type="error",
             content=reason,
-            metadata={"tool": name, "error": True, "repetition_halt": True},
+            metadata={"tool": name, "error": True, halt_kind: True},
         )
 
     def _enforce_work_item_approval(
