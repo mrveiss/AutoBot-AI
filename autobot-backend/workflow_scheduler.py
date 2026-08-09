@@ -337,15 +337,14 @@ class WorkflowQueue:
             base_score += urgency_bonus
 
         # Complexity adjustment (Issue #376 - use named constants)
-        complexity_multiplier = {
-            TaskComplexity.SIMPLE: WorkflowConfig.COMPLEXITY_SIMPLE,
-            TaskComplexity.RESEARCH: WorkflowConfig.COMPLEXITY_RESEARCH,
-            TaskComplexity.INSTALL: WorkflowConfig.COMPLEXITY_INSTALL,
-            TaskComplexity.COMPLEX: WorkflowConfig.COMPLEXITY_COMPLEX,
-            TaskComplexity.SECURITY_SCAN: WorkflowConfig.COMPLEXITY_SECURITY_SCAN,
-        }
-
-        complexity_factor = complexity_multiplier.get(workflow.complexity, 1.0)
+        # Issue #13806: RESEARCH, INSTALL, and SECURITY_SCAN were aliases of
+        # COMPLEX, so a dict literal with all five keys collapsed to two
+        # entries.  Use a direct if/else so the multiplier is always clear.
+        complexity_factor = (
+            WorkflowConfig.COMPLEXITY_SIMPLE
+            if workflow.complexity == TaskComplexity.SIMPLE
+            else WorkflowConfig.COMPLEXITY_COMPLEX
+        )
 
         # Add estimated duration factor (shorter workflows get slight priority)
         duration_factor = max(

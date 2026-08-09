@@ -776,10 +776,12 @@ class WorkflowConfig:
     DEFAULT_TIMEOUT_MIN = 120
     MIN_DURATION_FACTOR = 0.5
     COMPLEXITY_SIMPLE = 0.8
-    COMPLEXITY_RESEARCH = 1.0
-    COMPLEXITY_INSTALL = 1.1
+    # COMPLEXITY_RESEARCH, COMPLEXITY_INSTALL, and COMPLEXITY_SECURITY_SCAN
+    # removed (issue #13806).  The matching TaskComplexity enum members were
+    # aliases of COMPLEX, so the per-complexity scheduler dict collapsed and
+    # the values were never actually applied.  All non-SIMPLE workflows now use
+    # COMPLEXITY_COMPLEX directly.
     COMPLEXITY_COMPLEX = 1.2
-    COMPLEXITY_SECURITY_SCAN = 1.3
 
 
 class ServiceDiscoveryConfig:

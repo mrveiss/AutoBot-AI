@@ -110,7 +110,7 @@ def create_system_health_check_template() -> WorkflowTemplate:
         name="System Health Check",
         description="Comprehensive system health and performance assessment",
         category=TemplateCategory.SYSTEM_ADMIN,
-        complexity=TaskComplexity.INSTALL,
+        complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=20,
         agents_involved=["system_commands", "orchestrator", "knowledge_manager"],
         tags=["system", "health", "monitoring", "performance"],
@@ -323,7 +323,7 @@ def create_backup_and_recovery_template() -> WorkflowTemplate:
         name="Backup and Recovery",
         description="Comprehensive backup strategy and recovery testing",
         category=TemplateCategory.SYSTEM_ADMIN,
-        complexity=TaskComplexity.INSTALL,
+        complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=35,
         agents_involved=[
             "system_commands",

@@ -119,7 +119,7 @@ def create_data_analysis_template() -> WorkflowTemplate:
         name="Data Analysis",
         description="Comprehensive data analysis and insights generation",
         category=TemplateCategory.ANALYSIS,
-        complexity=TaskComplexity.RESEARCH,
+        complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=35,
         agents_involved=[
             "research",

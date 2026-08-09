@@ -119,7 +119,7 @@ def create_network_security_scan_template() -> WorkflowTemplate:
         name="Network Security Scan",
         description="Comprehensive network security assessment with tool discovery and scanning",
         category=TemplateCategory.SECURITY,
-        complexity=TaskComplexity.SECURITY_SCAN,
+        complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=15,
         agents_involved=[
             "librarian",
@@ -217,7 +217,7 @@ def create_vulnerability_assessment_template() -> WorkflowTemplate:
         name="Vulnerability Assessment",
         description="Targeted vulnerability assessment with remediation recommendations",
         category=TemplateCategory.SECURITY,
-        complexity=TaskComplexity.SECURITY_SCAN,
+        complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=20,
         agents_involved=["research", "security_scanner", "knowledge_manager"],
         tags=["security", "vulnerability", "assessment", "remediation"],
