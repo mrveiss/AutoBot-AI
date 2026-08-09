@@ -25,7 +25,6 @@ from startup_validator import (
     validate_system_requirements,
 )
 
-
 # --------------------------------------------------------------- the gate
 
 
@@ -98,9 +97,7 @@ async def test_the_gate_runs_before_any_service_is_touched(monkeypatch):
     touched = []
     monkeypatch.setattr("startup_validator.sys.version_info", (3, 10, 0))
     for name in ("initialize_critical_services", "initialize_background_services"):
-        monkeypatch.setattr(
-            lifespan_mod, name, lambda *a, _n=name, **kw: touched.append(_n), raising=False
-        )
+        monkeypatch.setattr(lifespan_mod, name, lambda *a, _n=name, **kw: touched.append(_n), raising=False)
 
     with pytest.raises(RuntimeError):
         async with lifespan_mod.create_lifespan_manager()(FastAPI()):
