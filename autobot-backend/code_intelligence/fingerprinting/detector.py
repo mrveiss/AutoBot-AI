@@ -252,7 +252,7 @@ class CloneDetector:
         return sorted(python_files)
 
     def _create_fragment_from_node(
-        self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str
+        self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str, parent_class: str | None = None
     ) -> CodeFragment | None:
         """
         Create a CodeFragment from an AST node.
@@ -282,6 +282,7 @@ class CloneDetector:
             ast_node=node,
             fragment_type=fragment_type,
             entity_name=node.name,
+            parent_class=parent_class,
         )
 
     def _extract_fragments(self, file_path: str) -> List[CodeFragment]:
@@ -328,13 +329,36 @@ class CloneDetector:
             tree = ast.parse(source, filename=file_path)
 
         fragments: List[CodeFragment] = []
-        for node in ast.walk(tree):
-            fragment = self._maybe_create_fragment(node, file_path, lines)
-            if fragment:
-                fragments.append(fragment)
+        self._walk_definitions(tree, file_path, lines, fragments, parent_class=None)
         return fragments
 
-    def _maybe_create_fragment(self, node: ast.AST, file_path: str, lines: List[str]) -> CodeFragment | None:
+    def _walk_definitions(
+        self,
+        node: ast.AST,
+        file_path: str,
+        lines: List[str],
+        fragments: List[CodeFragment],
+        parent_class: str | None,
+    ) -> None:
+        """Walk *node*, recording fragments and the class each one sits in (#13470).
+
+        Replaces a flat ``ast.walk``. That walk yielded every definition with no
+        record of its enclosing class, so a method's ``entity_name`` was a bare
+        name — indistinguishable from a module-level function of the same name,
+        and unable to produce the canonical node id, which is class-qualified.
+        Without the class the fingerprinter's findings cannot be joined to the
+        code graph's, which is the whole point of a shared identity.
+        """
+        for child in ast.iter_child_nodes(node):
+            fragment = self._maybe_create_fragment(child, file_path, lines, parent_class)
+            if fragment:
+                fragments.append(fragment)
+            inner_class = child.name if isinstance(child, ast.ClassDef) else parent_class
+            self._walk_definitions(child, file_path, lines, fragments, inner_class)
+
+    def _maybe_create_fragment(
+        self, node: ast.AST, file_path: str, lines: List[str], parent_class: str | None = None
+    ) -> CodeFragment | None:
         """
         Create a fragment from node if it's a function or class.
 
@@ -347,7 +371,7 @@ class CloneDetector:
             CodeFragment if node is function/class and meets threshold, None otherwise
         """
         if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
-            return self._create_fragment_from_node(node, file_path, lines, "function")
+            return self._create_fragment_from_node(node, file_path, lines, "function", parent_class)
         if isinstance(node, ast.ClassDef):
             return self._create_fragment_from_node(node, file_path, lines, "class")
         return None

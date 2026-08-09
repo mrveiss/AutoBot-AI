@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+
 # =============================================================================
 # Enums and Constants
 # =============================================================================
@@ -63,6 +65,10 @@ class CodeFragment:
     ast_node: ast.AST | None = None
     fragment_type: str = "unknown"  # function, class, block, etc.
     entity_name: str = ""
+    # #13470: the class this fragment sits in, or None at module level. Recorded
+    # so ``node_id`` can be class-qualified — a bare method name is ambiguous and
+    # cannot be joined to anything.
+    parent_class: str | None = None
 
     def __hash__(self) -> int:
         """
@@ -96,6 +102,27 @@ class CodeFragment:
         """Get the number of lines in this fragment."""
         return self.end_line - self.start_line + 1
 
+    @property
+    def node_id(self) -> str:
+        """Canonical code-graph id for this fragment (#13470).
+
+        The same function computes the same id here, in ``code_indexer`` and in
+        ``call_graph``, so a clone finding can be joined to the node the graph
+        holds for it. Empty when this fragment has no entity name — a fragment
+        that names nothing cannot be identified.
+
+        ``file_path`` must be project-relative for the id to match the graph's;
+        an absolute path yields an id in a different namespace, which is a
+        mismatch that would otherwise be silent.
+        """
+        if not self.entity_name:
+            return ""
+        return compute_node_id(
+            self.entity_name,
+            module_path_from_rel_path(self.file_path),
+            self.parent_class,
+        )
+
 
 @dataclass
 class Fingerprint:
@@ -116,6 +143,9 @@ class Fingerprint:
             "start_line": self.fragment.start_line,
             "end_line": self.fragment.end_line,
             "entity_name": self.fragment.entity_name,
+            # #13470: canonical code-graph id, so a finding can be joined to the
+            # node the graph holds for the same function.
+            "node_id": self.fragment.node_id,
             "line_count": self.fragment.line_count,
             "structural_features": self.structural_features,
         }
@@ -136,6 +166,9 @@ class CloneInstance:
             "start_line": self.fragment.start_line,
             "end_line": self.fragment.end_line,
             "entity_name": self.fragment.entity_name,
+            # #13470: canonical code-graph id, so a finding can be joined to the
+            # node the graph holds for the same function.
+            "node_id": self.fragment.node_id,
             "line_count": self.fragment.line_count,
             "similarity_score": self.similarity_score,
             "source_preview": self._get_source_preview(),
