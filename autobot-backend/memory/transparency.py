@@ -16,6 +16,13 @@ Store map
   working    — Redis ``autobot:session:*:memory:*``
   graph      — Redis ``memory:entity:*``        (metadata.user_id)
   rl         — Redis ``rag:retrieval_patterns:{user_id}:*``
+  general    — SQLite ``memory_entries``        (user_id column, #13705)
+
+Rows written before #13688 gave this table an owner are parked under a reserved
+``__unscoped__`` id. They have no recoverable owner, so ``forget_everywhere``
+cannot attribute them to a requester and deliberately does **not** touch them —
+stated here rather than left to be inferred from an absent branch. Their
+disposition is tracked in #13719.
 
 Each memory item returned by ``list_user_memories`` carries a ``store`` and
 ``memory_id`` field that the delete path uses to route the forget call to the
@@ -31,6 +38,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from memory._redis_util import decode as _decode
 from memory._redis_util import redis_scan as _redis_scan
+from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER
 from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
@@ -281,6 +289,52 @@ async def _list_rl_patterns(user_id: str) -> List[Dict[str, Any]]:
     return items
 
 
+def _general_item(entry: Any) -> Dict[str, Any]:
+    """Shape one general memory row as a transparency item."""
+    category = entry.category.value if hasattr(entry.category, "value") else str(entry.category)
+    return {
+        "memory_id": str(entry.id),
+        "store": "general",
+        "content": entry.content,
+        # Splat metadata FIRST: a metadata key named "category" or
+        # "reference_path" must not overwrite the real provenance.
+        "provenance": {
+            **(entry.metadata or {}),
+            "category": category,
+            "reference_path": entry.reference_path or "",
+        },
+        "timestamp": entry.timestamp.isoformat() if entry.timestamp else "",
+    }
+
+
+async def _list_general_memory(user_id: str) -> List[Dict[str, Any]]:
+    """Return general memory entries owned by *user_id* (#13705).
+
+    This store was invisible to the transparency engine until #13688 gave
+    ``memory_entries`` a first-class ``user_id`` column — before that there was
+    no predicate to select a user's rows by, so the omission was defensible.
+    It is not any more.
+
+    The reserved parked owner is refused: those rows cannot be attributed to a
+    requester, so surfacing them through a right-to-be-forgotten endpoint would
+    present one pseudo-user's footprint as a real user's.
+    """
+    if user_id == LEGACY_UNSCOPED_OWNER:
+        logger.warning("Refusing to list parked pre-migration rows as a user footprint (#13705)")
+        return []
+    try:
+        from memory import get_memory_manager
+
+        manager = get_memory_manager()
+        await manager._ensure_initialized()
+        entries = await manager._general_storage.list_by_owner(user_id, limit=None)
+    except Exception as exc:
+        logger.warning("_list_general_memory failed: %s", exc)
+        return []
+
+    return [_general_item(entry) for entry in entries]
+
+
 # ---------------------------------------------------------------------------
 # Public surface
 # ---------------------------------------------------------------------------
@@ -301,6 +355,7 @@ async def list_user_memories(user_id: str) -> List[Dict[str, Any]]:
         _safe(_list_working_memory(user_id), []),
         _safe(_list_graph_entities(user_id), []),
         _safe(_list_rl_patterns(user_id), []),
+        _safe(_list_general_memory(user_id), []),
     )
     combined: List[Dict[str, Any]] = []
     for store_items in results:
@@ -318,6 +373,7 @@ async def forget_memory(user_id: str, memory_id: str, store: str) -> bool:
     - ``working_memory``   → Redis DEL the key
     - ``graph``            → delete entity + its relations from memory graph
     - ``retrieval_learner``→ Redis DEL the pattern hash key
+    - ``general``          → SQLite DELETE scoped to (id, user_id)
 
     Returns True when the item was found and deleted.
     """
@@ -332,6 +388,8 @@ async def forget_memory(user_id: str, memory_id: str, store: str) -> bool:
             return await _forget_graph_entity(user_id, memory_id)
         if store == "retrieval_learner":
             return await _forget_rl_pattern(user_id, memory_id)
+        if store == "general":
+            return await _forget_general_memory(user_id, memory_id)
         logger.warning("forget_memory: unknown store %r", store)
         return False
     except Exception as exc:
@@ -339,16 +397,58 @@ async def forget_memory(user_id: str, memory_id: str, store: str) -> bool:
         return False
 
 
-async def forget_everywhere(user_id: str, memory_id: str) -> Dict[str, bool]:
-    """Fan-out delete across ALL stores for *memory_id*.
+MEMORY_STORES = ("verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general")
 
-    Tries each store; a False result means the item was not found there
-    (not an error — memory items live in exactly one store).
-    Returns a dict mapping store name to deletion result.
+
+class AmbiguousMemoryId(Exception):
+    """More than one store holds *memory_id* for this user (#13739).
+
+    Raised instead of guessing. The caller resolves it with the single-item
+    ``forget_memory(user_id, memory_id, store)``, which has never been ambiguous.
     """
-    stores = ["verbatim", "trajectory", "working_memory", "graph", "retrieval_learner"]
-    results = await asyncio.gather(*[forget_memory(user_id, memory_id, s) for s in stores])
-    return dict(zip(stores, results))
+
+    def __init__(self, memory_id: str, stores: List[str]):
+        super().__init__(f"memory_id {memory_id!r} exists in more than one store: {', '.join(stores)}")
+        self.memory_id = memory_id
+        self.stores = stores
+
+
+async def _stores_holding(user_id: str, memory_id: str) -> List[str]:
+    """Return the stores whose listing actually shows *memory_id* for *user_id*."""
+    items = await list_user_memories(user_id)
+    return sorted({item["store"] for item in items if str(item.get("memory_id")) == memory_id})
+
+
+async def forget_everywhere(user_id: str, memory_id: str) -> Dict[str, bool]:
+    """Delete *memory_id* from the store that owns it (#13739).
+
+    This used to issue the delete against **every** store with the same id. That
+    was safe only while every store's id space was structurally distinct — Chroma
+    UUIDs, or Redis keys containing ``:``. #13705 added ``general``, whose ids are
+    dense SQLite rowids, so a numeric id from another store would land on an
+    unrelated general row of the same user and silently destroy it. The owner is
+    in every DELETE predicate, so this was never cross-user; it was data loss.
+
+    Resolution comes from the user's own listing, which already carries the
+    ``(store, memory_id)`` pair on every item. Stores the id does not appear in
+    are reported ``False`` without a delete ever being attempted.
+
+    Raises:
+        AmbiguousMemoryId: the id appears in more than one store. Deleting from
+            all of them is the original bug; picking one would be a guess. A
+            store that fails to list is likewise reported ``False`` rather than
+            deleted blind — during an outage "we could not look" must not become
+            "delete it anyway".
+    """
+    holders = await _stores_holding(user_id, memory_id)
+    if len(holders) > 1:
+        logger.warning("forget_everywhere: %r is ambiguous across %s", memory_id, holders)
+        raise AmbiguousMemoryId(memory_id, holders)
+
+    results = {store: False for store in MEMORY_STORES}
+    for store in holders:
+        results[store] = await forget_memory(user_id, memory_id, store)
+    return results
 
 
 async def export_user_memory(user_id: str) -> Dict[str, Any]:
@@ -370,6 +470,33 @@ async def export_user_memory(user_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Per-store forget helpers
 # ---------------------------------------------------------------------------
+
+
+async def _forget_general_memory(user_id: str, memory_id: str) -> bool:
+    """Delete one general memory row owned by *user_id* (#13705).
+
+    The owner is part of the DELETE predicate, so this cannot erase another
+    user's row even if handed their ``memory_id``.
+
+    General is the only store with a dense small-integer id space, and
+    ``forget_everywhere`` fans one id out to every store — so a numeric-looking
+    id belonging to another store (a graph entity id, say) would otherwise land
+    on an unrelated general row of the same user and silently delete it. The
+    canonical-decimal check keeps that to exact matches only; the remaining
+    ambiguity in the fan-out is tracked in #13739.
+    """
+    if not isinstance(memory_id, str) or not memory_id.isdigit() or str(int(memory_id)) != memory_id:
+        # Not a general-store id shape: another store owns this item.
+        return False
+    try:
+        from memory import get_memory_manager
+
+        manager = get_memory_manager()
+        await manager._ensure_initialized()
+        return await manager._general_storage.delete_for_owner(user_id, int(memory_id))
+    except Exception as exc:
+        logger.warning("_forget_general_memory failed for %s: %s", memory_id, exc)
+        return False
 
 
 def _owns_chroma_item(existing: dict, field: str, user_id: str) -> bool:
@@ -473,6 +600,8 @@ async def _forget_rl_pattern(user_id: str, redis_key: str) -> bool:
 
 
 __all__ = [
+    "AmbiguousMemoryId",
+    "MEMORY_STORES",
     "list_user_memories",
     "forget_memory",
     "forget_everywhere",

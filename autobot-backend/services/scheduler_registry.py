@@ -222,4 +222,18 @@ REGISTRY: list[ScheduledJob] = [
         ),
         startup_marker="_init_llc_routine_scheduler",
     ),
+    ScheduledJob(
+        name="CommunityClusteringScheduler",
+        interval_seconds=6 * 3600,
+        owner_file="llc/scheduler/community_cluster_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Rebuilds mesh communities and promotes each community's highest-degree "
+            "node to an anchor, so NeuralMeshRetriever's anchor seeding stays fresh "
+            "(GH#4834, GH#13210). Runs every 6 h after a 300 s startup delay, over the "
+            "MeshDB adapter on app.state.mesh_db; skipped when that adapter is absent. "
+            "Started in initialization/lifespan._start_community_clustering_loop."
+        ),
+        startup_marker="_start_community_clustering_loop",
+    ),
 ]

@@ -53,24 +53,41 @@ def test_title_without_blank_separator_returns_full_content_as_body() -> None:
     assert body == raw
 
 
+def _reimport_source(key: str) -> str:
+    """Import *key* from scratch and return its source, restoring sys.modules.
+
+    #13361: the re-import is the point of the test — it proves the module loads
+    with nothing but the stdlib behind it — but the replacement module object it
+    leaves under *key* is not. Anything that already imported from the original
+    keeps a symbol the live module no longer owns, which is the identity split
+    that silently made ``mock.patch`` inert in #13162. Install and restore in the
+    same ``try/finally``, so the fresh import lasts exactly one statement.
+    """
+    import importlib  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    cached = sys.modules.pop(key, None)
+    try:
+        module = importlib.import_module(key)
+        with open(module.__file__, encoding="utf-8") as handle:
+            return handle.read()
+    finally:
+        if cached is not None:
+            sys.modules[key] = cached
+
+
 def test_extracted_module_has_zero_backend_dependencies() -> None:
     """The whole point of #7460: the parser must import without pulling in
     autobot-backend's heavy chain. This test imports
     ``autobot_shared.jina_parser`` in a fresh context and confirms its
     transitive imports are stdlib-only.
     """
-    import importlib
-    import sys
-
-    # Drop any cached version
-    sys.modules.pop("autobot_shared.jina_parser", None)
-    mod = importlib.import_module("autobot_shared.jina_parser")
-
     # The module's transitive imports should be stdlib-only.
     # (re, typing, __future__) — zero autobot-backend / autobot_shared deps
     # beyond the future-import. We assert by checking the module doesn't
     # import anything from media.link or knowledge.
-    src = open(mod.__file__, encoding="utf-8").read()  # noqa: SIM115
-    assert "from media.link" not in src
-    assert "from knowledge" not in src
-    assert "from autobot_shared" not in src  # no sibling cross-deps either
+    source = _reimport_source("autobot_shared.jina_parser")
+
+    assert "from media.link" not in source
+    assert "from knowledge" not in source
+    assert "from autobot_shared" not in source  # no sibling cross-deps either

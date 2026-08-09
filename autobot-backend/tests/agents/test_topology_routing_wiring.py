@@ -22,42 +22,58 @@ import pytest
 # ---------------------------------------------------------------------------
 # Hollow package stubs — ensures agents and agents.agent_orchestration can
 # be imported without pulling in heavy optional deps (llama_index, etc.).
-# Follows the pattern used in test_memory_hooks.py.
+#
+# They live for exactly the import below and are then taken back out (#13450).
+# Registering them permanently shadowed the real ``agents.agent_orchestration``
+# for every node the session collected afterwards; the leak was invisible until
+# ``test_learned_prompt_template_wiring.py`` — same directory, same two keys —
+# stopped installing them first, since only the first writer owns a stub.
 # ---------------------------------------------------------------------------
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _ORCH_DIR = _BACKEND_DIR / "agents" / "agent_orchestration"
 
-if "agents" not in sys.modules:
-    _agents_pkg = types.ModuleType("agents")
-    _agents_pkg.__path__ = [str(_BACKEND_DIR / "agents")]  # type: ignore[assignment]
-    _agents_pkg.__package__ = "agents"
-    sys.modules["agents"] = _agents_pkg
 
-if "agents.agent_orchestration" not in sys.modules:
-    _orch_pkg = types.ModuleType("agents.agent_orchestration")
-    _orch_pkg.__path__ = [str(_ORCH_DIR)]  # type: ignore[assignment]
-    _orch_pkg.__package__ = "agents.agent_orchestration"
-    sys.modules["agents.agent_orchestration"] = _orch_pkg
+def _hollow_package(name: str, path: Path | None = None) -> types.ModuleType:
+    """A package object that resolves real submodules without running __init__.py."""
+    module = types.ModuleType(name)
+    module.__package__ = name
+    if path is not None:
+        module.__path__ = [str(path)]  # type: ignore[attr-defined]
+    return module
 
-# Stub out rl_router so routing.py doesn't need it at import time.
-if "agents.agent_orchestration.rl_router" not in sys.modules:
-    _rl_stub = types.ModuleType("agents.agent_orchestration.rl_router")
-    _rl_stub.RLRouter = type("RLRouter", (), {})  # type: ignore[attr-defined]
-    sys.modules["agents.agent_orchestration.rl_router"] = _rl_stub
 
-from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
+# rl_router is stubbed so routing.py never needs the real one at import time.
+_RL_ROUTER_STUB = _hollow_package("agents.agent_orchestration.rl_router")
+_RL_ROUTER_STUB.RLRouter = type("RLRouter", (), {})  # type: ignore[attr-defined]
 
-# Now import the real modules using normal package paths.
-from agents.agent_orchestration.topology import (  # noqa: E402
-    AgentTopology,
-    AgentTopologyDB,
-    InMemoryTopologyDB,
-)
-from agents.agent_orchestration.topology_routing import TopologyAwareRouter  # noqa: E402
-from agents.agent_orchestration.types import (  # noqa: E402
-    AgentCapabilityDescriptor,
-    AgentType,
-)
+_IMPORT_STUBS = {
+    "agents": _hollow_package("agents", _BACKEND_DIR / "agents"),
+    "agents.agent_orchestration": _hollow_package("agents.agent_orchestration", _ORCH_DIR),
+    "agents.agent_orchestration.rl_router": _RL_ROUTER_STUB,
+}
+
+# Only the keys nothing else has already provided are installed, and only those
+# are removed again — a real package that was already loaded always wins.
+_INSTALLED = [_key for _key in _IMPORT_STUBS if _key not in sys.modules]
+for _key in _INSTALLED:
+    sys.modules[_key] = _IMPORT_STUBS[_key]
+try:
+    from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
+
+    # Now import the real modules using normal package paths.
+    from agents.agent_orchestration.topology import (  # noqa: E402
+        AgentTopology,
+        AgentTopologyDB,
+        InMemoryTopologyDB,
+    )
+    from agents.agent_orchestration.topology_routing import TopologyAwareRouter  # noqa: E402
+    from agents.agent_orchestration.types import (  # noqa: E402
+        AgentCapabilityDescriptor,
+        AgentType,
+    )
+finally:
+    for _key in reversed(_INSTALLED):
+        sys.modules.pop(_key, None)
 
 # ---------------------------------------------------------------------------
 # Fixtures

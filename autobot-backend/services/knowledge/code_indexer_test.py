@@ -21,6 +21,7 @@ from services.knowledge.code_indexer import (
     CodeIndexer,
     _make_node_id,
     extract_python,
+    find_callers,
 )
 
 SIMPLE_PYTHON = b"""
@@ -33,10 +34,29 @@ class Greeter:
 """
 
 
-def test_make_node_id_is_stable_and_lowercase() -> None:
-    nid = _make_node_id("MyFunc", "src/auth.py")
-    assert nid == "auth::myfunc"
-    assert nid == _make_node_id("MyFunc", "src/auth.py")
+def _all_upserted(indexer: CodeIndexer) -> list[tuple[str, dict]]:
+    """Flatten every (id, metadata) pair upserted on a MagicMock collection."""
+    pairs: list[tuple[str, dict]] = []
+    for call_args in indexer._collection.upsert.call_args_list:
+        pairs.extend(zip(call_args[1]["ids"], call_args[1]["metadatas"]))
+    return pairs
+
+
+def _find_edge(indexer: CodeIndexer, source_id: str, target_name: str) -> dict | None:
+    for _nid, meta in _all_upserted(indexer):
+        is_match = meta.get("source_id") == source_id and meta.get("target_name") == target_name
+        if meta.get("record_type") == "edge" and is_match:
+            return meta
+    return None
+
+
+def test_make_node_id_is_stable_and_dotted() -> None:
+    """#13470: the canonical identity is the dotted module-path scheme, not the
+    old lowercase '<stem>::<name>' one — that scheme collided whenever two
+    files shared a basename (see autobot_shared/code_graph/identity_test.py)."""
+    nid = _make_node_id("MyFunc", "src.auth")
+    assert nid == "src.auth.MyFunc"
+    assert nid == _make_node_id("MyFunc", "src.auth")
 
 
 @requires_tree_sitter
@@ -304,7 +324,15 @@ async def test_index_code_accepts_project_root_itself(tmp_path) -> None:
 @requires_tree_sitter
 @pytest.mark.asyncio
 async def test_class_method_call_graph(tmp_path) -> None:
-    """Class method node ID uses parent prefix; calls metadata is non-empty (#4908)."""
+    """Class method node id includes the class (#4908); its outgoing call is
+    persisted as a resolved edge document pointing at the sibling method (#13469).
+
+    Regression test for a pre-existing bug this PR fixes as a side effect of
+    the resolver rework: the call-graph pass never tracked class scope, so a
+    method's structural-pass id and its own call-graph scope disagreed and
+    its calls never attached to it at all — this test failed on
+    origin/Dev_new_gui before this PR (`run`'s calls metadata was `''`, see
+    the PR description for the captured before/after run)."""
     src = tmp_path / "mymod.py"
     src.write_bytes(b"""
 class MyClass:
@@ -318,17 +346,15 @@ class MyClass:
     result = await indexer.index_file(str(src), root_dir=str(tmp_path))
     assert result.success > 0
 
-    # Verify method node ID includes class parent prefix
-    upserted_ids = [call_args[1]["ids"][0] for call_args in indexer._collection.upsert.call_args_list]
-    assert "mymod::myclass__run" in upserted_ids, f"Expected 'mymod::myclass__run' in upserted IDs, got: {upserted_ids}"
+    upserted_ids = [nid for nid, _meta in _all_upserted(indexer)]
+    assert "mymod.MyClass.run" in upserted_ids, f"Expected 'mymod.MyClass.run' in upserted IDs, got: {upserted_ids}"
+    assert "mymod.MyClass.helper" in upserted_ids
 
-    # Verify the `calls` metadata on `run` is non-empty
-    run_calls = None
-    for call_args in indexer._collection.upsert.call_args_list:
-        if call_args[1]["ids"][0] == "mymod::myclass__run":
-            run_calls = call_args[1]["metadatas"][0]["calls"]
-            break
-    assert run_calls, f"Expected non-empty 'calls' metadata for mymod::myclass__run, got: {run_calls!r}"
+    edge = _find_edge(indexer, source_id="mymod.MyClass.run", target_name="helper")
+    assert edge is not None, f"Expected an edge run->helper, got ids: {upserted_ids}"
+    assert edge["target_id"] == "mymod.MyClass.helper"
+    assert edge["origin"] == "extracted"
+    assert edge["resolved"] is True
 
 
 @pytest.mark.asyncio
@@ -391,3 +417,131 @@ async def test_index_file_dep_error_counts_as_failed(tmp_path) -> None:
     assert result.success == 0
     assert any("missing dependency" in e for e in result.errors)
     assert any("tree-sitter-python" in e for e in result.errors)
+
+
+# ---------------------------------------------------------------------------
+# Honest provenance — ambiguous and unresolved callees (#13469, #13482 Q2)
+# ---------------------------------------------------------------------------
+
+
+@requires_tree_sitter
+@pytest.mark.asyncio
+async def test_ambiguous_and_unresolved_calls_recorded_honestly(tmp_path) -> None:
+    """A callee matching two candidates is "ambiguous", not silently dropped
+    or mislabelled "extracted"; a callee matching none is "inferred" with
+    target_id="" and resolved=False, never invented."""
+    (tmp_path / "a_one.py").write_bytes(b"def process() -> None:\n    pass\n")
+    (tmp_path / "a_two.py").write_bytes(b"def process() -> None:\n    pass\n")
+    (tmp_path / "b_caller.py").write_bytes(b"def caller() -> None:\n    process()\n    totally_unknown_function()\n")
+    indexer = _make_indexer(tmp_path)
+    result = await indexer.index_directory(str(tmp_path))
+    assert result.failed == 0
+
+    ambiguous = _find_edge(indexer, source_id="b_caller.caller", target_name="process")
+    assert ambiguous is not None
+    assert ambiguous["origin"] == "ambiguous"
+    assert ambiguous["target_id"] == ""
+    assert ambiguous["resolved"] is False
+    assert ambiguous["candidate_count"] == 2
+
+    unresolved = _find_edge(indexer, source_id="b_caller.caller", target_name="totally_unknown_function")
+    assert unresolved is not None
+    assert unresolved["origin"] == "inferred"
+    assert unresolved["target_id"] == ""
+    assert unresolved["resolved"] is False
+    assert unresolved["candidate_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Traversal — "who calls X" (#13469; the umbrella #13467 says this capability
+# does not exist today because the old `calls` CSV had no readers)
+# ---------------------------------------------------------------------------
+
+
+class _FakeCollection:
+    """Minimal in-memory ChromaDB-collection stand-in with *real* upsert/get(where=)
+    semantics, supporting exactly the query shapes this module issues
+    (plain equality and ``$and``/``$eq``).
+
+    ``autobot-backend/conftest.py`` stubs the real ``chromadb`` package for
+    this entire test suite with a MagicMock (#MVA-1119 — the real client
+    hangs at import time without a local Chroma server), so a test wanting
+    real query *behaviour* rather than a mock that only records calls needs
+    its own minimal implementation. This is not a duplicate ChromaDB client —
+    it implements only the two operations CodeIndexer/find_callers use.
+    """
+
+    def __init__(self) -> None:
+        self._records: dict[str, dict] = {}
+
+    def upsert(self, ids: list[str], embeddings: list, documents: list[str], metadatas: list[dict]) -> None:
+        for nid, meta in zip(ids, metadatas):
+            self._records[nid] = meta
+
+    def get(self, where: dict | None = None, include: list[str] | None = None) -> dict:
+        matched = [meta for meta in self._records.values() if _fake_where_matches(meta, where)]
+        return {"ids": list(self._records.keys()), "metadatas": matched}
+
+
+def _fake_where_matches(meta: dict, where: dict | None) -> bool:
+    if not where:
+        return True
+    if "$and" in where:
+        return all(_fake_where_matches(meta, clause) for clause in where["$and"])
+    return all(meta.get(key) == (val["$eq"] if isinstance(val, dict) else val) for key, val in where.items())
+
+
+@requires_tree_sitter
+@pytest.mark.asyncio
+async def test_find_callers_traversal(tmp_path) -> None:
+    """Given an indexed fixture repo, find_callers() answers "who calls helper"
+    with an exact metadata lookup against the persisted edge documents — the
+    traversal capability #13467 says does not exist today because the old
+    `calls` CSV field had no readers."""
+    collection = _FakeCollection()
+    embed_model = MagicMock()
+    embed_model.get_text_embedding = MagicMock(side_effect=lambda text: [float(len(text) % 7)] * 4)
+    indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
+
+    (tmp_path / "helpers.py").write_bytes(b"def helper() -> None:\n    pass\n")
+    (tmp_path / "service_a.py").write_bytes(b"def run_a() -> None:\n    helper()\n")
+    (tmp_path / "service_b.py").write_bytes(b"def run_b() -> None:\n    helper()\n")
+    (tmp_path / "service_c.py").write_bytes(b"def run_c() -> None:\n    pass\n")
+
+    result = await indexer.index_directory(str(tmp_path))
+    assert result.failed == 0
+
+    callers = await find_callers(collection, target_id="helpers.helper")
+    caller_ids = {edge["source_id"] for edge in callers}
+    assert caller_ids == {"service_a.run_a", "service_b.run_b"}
+    assert all(edge["origin"] in ("extracted", "inferred") for edge in callers)
+
+
+@requires_tree_sitter
+@pytest.mark.asyncio
+async def test_known_ids_seeded_across_reindex_runs(tmp_path) -> None:
+    """A second index_directory() run (simulating a later incremental reindex)
+    still resolves a cross-file call even though the callee's file is
+    unchanged and therefore skipped by the hash cache (#13469) — without
+    seeding known ids from the collection, this would regress to "unresolved"
+    every run after the first."""
+    collection = _FakeCollection()
+    embed_model = MagicMock()
+    embed_model.get_text_embedding = MagicMock(side_effect=lambda text: [float(len(text) % 7)] * 4)
+
+    (tmp_path / "helpers.py").write_bytes(b"def helper() -> None:\n    pass\n")
+    (tmp_path / "service_a.py").write_bytes(b"def run_a() -> None:\n    helper()\n")
+
+    first_indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
+    await first_indexer.index_directory(str(tmp_path))
+
+    # New file added; helpers.py/service_a.py are unchanged and will be
+    # skipped by the hash cache on this second, independent CodeIndexer run.
+    (tmp_path / "service_c.py").write_bytes(b"def run_c() -> None:\n    helper()\n")
+    second_indexer = CodeIndexer(collection=collection, embed_model=embed_model, cache_file=tmp_path / ".cache.json")
+    result = await second_indexer.index_directory(str(tmp_path))
+    assert result.failed == 0
+
+    callers = await find_callers(collection, target_id="helpers.helper")
+    caller_ids = {edge["source_id"] for edge in callers}
+    assert "service_c.run_c" in caller_ids

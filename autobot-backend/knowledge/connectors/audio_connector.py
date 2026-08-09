@@ -42,6 +42,7 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from voice_processing.hallucination_filter import is_silence_hallucination
 
 logger = get_logger(__name__)
 
@@ -111,7 +112,35 @@ def _transcribe_with_whisper_cpu(
     if language:
         options["language"] = language
     result = model.transcribe(audio_path, **options)
-    return result.get("text", "")
+    return _reject_hallucinated_transcript(result, language)
+
+
+def _mean_no_speech_prob(result: dict) -> float | None:
+    """Average no_speech_prob across segments, or None when unavailable.
+
+    openai-whisper is the one STT backend in the tree that reports this; the
+    transformers ASR pipeline used by the live voice route does not, which is
+    why the other call sites gate on audio energy instead (#13104).
+    """
+    segments = result.get("segments") or []
+    probs = [seg["no_speech_prob"] for seg in segments if isinstance(seg, dict) and "no_speech_prob" in seg]
+    if not probs:
+        return None
+    return sum(probs) / len(probs)
+
+
+def _reject_hallucinated_transcript(result: dict, language: str | None) -> str:
+    """Blank a transcript Whisper hallucinated from silence (#13104).
+
+    Ingesting a phantom sentence puts text in the knowledge base that no source
+    ever contained, so the same filter applies here as on the live voice route.
+    """
+    text = result.get("text", "")
+    detected = result.get("language") or language
+    if is_silence_hallucination(text, detected, no_speech_prob=_mean_no_speech_prob(result)):
+        logger.info("Discarded hallucinated audio transcript before ingestion: %r", text)
+        return ""
+    return text
 
 
 async def _download_audio_yt_dlp(url: str, dest_dir: str) -> str:
@@ -345,11 +374,16 @@ async def _download_direct_url(url: str, dest_dir: str) -> str:
     import aiohttp
 
     from autobot_shared.http_client import get_http_client
+    from knowledge.connectors.base import CONTENT_URL_EGRESS
 
     filename = os.path.basename(url.split("?")[0]) or "audio.mp3"
     dest_path = os.path.join(dest_dir, filename)
 
-    async with get_http_client().tracked_request("GET", url, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+    # *url* is an arbitrary download target, not operator config — public-only,
+    # so the instance-host opt-in can never extend to it (#13625, Rule 8).
+    async with get_http_client().tracked_request(
+        "GET", url, timeout=aiohttp.ClientTimeout(total=300), guard_egress=CONTENT_URL_EGRESS
+    ) as resp:
         if resp.status != 200:
             raise RuntimeError(f"Failed to download {url}: HTTP {resp.status}")
         with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]

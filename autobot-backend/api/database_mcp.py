@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.sql_identifier import validate_sql_identifier
 from autobot_shared.time_utils import now_utc
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
@@ -71,32 +72,6 @@ router = APIRouter(
 
 # Issue #380: Module-level tuple for allowed DML operations
 _ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")
-
-# Issue #2845: Allowlist pattern for SQL identifiers (table and column names)
-_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
-    """Validate a SQL identifier (table or column name) against an allowlist pattern.
-
-    Only permits names composed of ASCII letters, digits, and underscores, starting
-    with a letter or underscore. This prevents SQL injection when user-supplied identifiers
-    are interpolated into query strings. (#2845)
-
-    Args:
-        name: The identifier to validate.
-        label: Human-readable label used in the error message.
-
-    Returns:
-        The validated name unchanged.
-
-    Raises:
-        ValueError: If the name contains characters outside the allowed set.
-    """
-    if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
-    return name
-
 
 # Security Configuration
 
@@ -138,10 +113,19 @@ BLOCKED_SQL_PATTERNS = [
     r";\s*ALTER\s+",
     r";\s*CREATE\s+",
     r";\s*TRUNCATE\s+",
-    r"--",  # SQL comments
-    r"/\*",  # Block comments
     r"ATTACH\s+DATABASE",
     r"DETACH\s+DATABASE",
+]
+
+# #13520: comment tokens are checked against the query with string literals
+# removed. Checked against the raw text they rejected legitimate queries — a
+# WHERE clause matching a literal '--' or a path containing '/*' is ordinary SQL,
+# not an injection attempt. Kept as a separate list because the relaxation is
+# only safe for these two: the patterns above stay on the raw text, where a
+# stacked statement must be caught wherever it appears.
+BLOCKED_SQL_COMMENT_PATTERNS = [
+    r"--",  # line comment
+    r"/\*",  # block comment
 ]
 
 # Rate limiting
@@ -152,6 +136,54 @@ _rate_limit_lock = asyncio.Lock()
 # Query limits
 MAX_RESULT_ROWS = 1000
 MAX_QUERY_LENGTH = 10000
+
+
+def _is_readonly_statement(sql: str) -> bool:
+    """Does *sql* begin with a statement that cannot modify data? (#13520)
+
+    Deliberately a narrow allow-list rather than a denylist of write verbs: an
+    unrecognised statement is treated as a write, so a SQLite keyword nobody
+    thought of here fails closed.
+    """
+    first = sql.lstrip().split(None, 1)
+    if not first:
+        return False
+    return first[0].upper() in {"SELECT", "WITH", "EXPLAIN", "PRAGMA"}
+
+
+def _strip_sql_string_literals(sql: str) -> str:
+    """Blank out single- and double-quoted spans so comment tokens inside them are ignored (#13520).
+
+    Quoted content is replaced with spaces rather than removed, so the result is
+    the same length as the input and any offsets stay meaningful.
+
+    SQLite escapes a quote by doubling it (``'it''s'``), which this handles
+    naturally: the second quote of the pair opens a new span that the following
+    character closes.
+
+    **Fails closed.** If quoting is unbalanced — an unterminated literal — the
+    original text is returned unchanged, so the caller's comment check still runs
+    over everything. Otherwise a trailing ``'`` would place the rest of the query
+    "inside a literal" and hide exactly what this check exists to find.
+    """
+    out = []
+    quote: str | None = None
+    for char in sql:
+        if quote is None:
+            if char in ("'", '"'):
+                quote = char
+                out.append(" ")
+            else:
+                out.append(char)
+        else:
+            out.append(" ")
+            if char == quote:
+                quote = None
+
+    if quote is not None:
+        return sql
+
+    return "".join(out)
 
 
 def validate_sql_query(sql: str) -> bool:
@@ -172,6 +204,16 @@ def validate_sql_query(sql: str) -> bool:
     for pattern in BLOCKED_SQL_PATTERNS:
         if re.search(pattern, sql, re.IGNORECASE):
             logger.warning("Blocked SQL pattern detected: %s", pattern)
+            return False
+
+    # #13520: comment tokens are checked outside string literals only.
+    # `_strip_sql_string_literals` fails CLOSED — on unbalanced quoting it
+    # returns the text unchanged, so a query that could hide a comment inside an
+    # unterminated literal is still rejected.
+    sql_outside_literals = _strip_sql_string_literals(sql)
+    for pattern in BLOCKED_SQL_COMMENT_PATTERNS:
+        if re.search(pattern, sql_outside_literals, re.IGNORECASE):
+            logger.warning("Blocked SQL comment token detected: %s", pattern)
             return False
 
     # Count semicolons (should be 0 or 1 at the end)
@@ -308,11 +350,16 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         for (table_name,) in tables:
             # table_name originates from sqlite_master (system catalogue), not user input.
             # SQLite does not support parameterised identifiers; f-string is unavoidable.
-            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
-            _validate_sql_identifier(table_name, "table name")
+            # validate_sql_identifier enforces an allowlist as defence-in-depth.
+            validate_sql_identifier(table_name, "table name")
             # Bare-assign the SQL so the nosec/nosemgrep stay on the flagged line:
-            # black would split `cursor.execute(f"...")  # nosec` and orphan the
-            # comment onto the `)` line, defeating the suppression (#9489).
+            # black would split a call spanning several lines and orphan the
+            # suppression comment onto the closing paren, defeating it (#9489).
+            #
+            # #13521: this explanation deliberately avoids writing the literal
+            # suppression token followed by prose — bandit parses any such
+            # occurrence as a test-id list and warns once per following word,
+            # even inside a comment that is only talking about it.
             count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(count_sql)
             row_count = cursor.fetchone()[0]
@@ -334,9 +381,9 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
         schemas = {}
 
         if table:
-            # table is validated by _validate_sql_identifier (allowlist) above.
+            # table is validated by validate_sql_identifier (allowlist) above.
             # PRAGMA does not accept parameterised identifiers in SQLite.
-            _validate_sql_identifier(table, "table name")
+            validate_sql_identifier(table, "table name")
             pragma_sql = f"PRAGMA table_info([{table}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(pragma_sql)
             columns = cursor.fetchall()
@@ -356,9 +403,9 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
-                # table_name from sqlite_master; _validate_sql_identifier enforces allowlist.
+                # table_name from sqlite_master; validate_sql_identifier enforces allowlist.
                 # PRAGMA does not support ? parameters in SQLite.
-                _validate_sql_identifier(table_name, "table name")
+                validate_sql_identifier(table_name, "table name")
                 pragma_sql = f"PRAGMA table_info([{table_name}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
                 cursor.execute(pragma_sql)
                 columns = cursor.fetchall()
@@ -405,8 +452,8 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         for (table_name,) in tables:
             # table_name from sqlite_master (system catalogue), not user input.
             # SQLite does not support parameterised identifiers; f-string unavoidable.
-            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
-            _validate_sql_identifier(table_name, "table name")
+            # validate_sql_identifier enforces an allowlist as defence-in-depth.
+            validate_sql_identifier(table_name, "table name")
             count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(count_sql)
             total_rows += cursor.fetchone()[0]
@@ -682,6 +729,18 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
 
     if not validate_sql_query(request.query):
         raise HTTPException(status_code=400, detail="Query contains blocked patterns or is too long")
+
+    # #13520: /mcp/execute consulted the read-only flag and this path did not.
+    # Harmless in practice — SQLQueryRequest's validator already forbids anything
+    # but SELECT, and the sync executor never commits — but that left the
+    # guarantee resting on one check where it can rest on two independent ones.
+    # A read-only database should refuse a write regardless of which endpoint
+    # asks and regardless of whether a future edit relaxes the validator.
+    if is_database_read_only(request.database) and not _is_readonly_statement(request.query):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Database {request.database} is read-only. Cannot execute modifications.",
+        )
 
     # Get database path
     db_path = get_database_path(request.database)

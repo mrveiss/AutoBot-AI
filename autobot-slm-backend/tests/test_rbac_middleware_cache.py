@@ -20,6 +20,7 @@ via importlib — matching the approach used in other SLM unit tests that avoid 
 import asyncio
 import importlib.util
 import json
+import logging
 import sys
 import time
 import types
@@ -80,26 +81,50 @@ _fastapi_mock.HTTPException = type("HTTPException", (Exception,), {"__init__": l
 _fastapi_mock.Request = type("Request", (), {})
 _fastapi_mock.status = http.HTTPStatus
 
-# Load the module under test directly (bypasses __init__ import chain)
-_SPEC = importlib.util.spec_from_file_location(
-    "user_management.middleware.rbac_middleware",
-    _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
-)
-_rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
-_SPEC.loader.exec_module(_rbac_mod)
+# autobot_shared.logging_manager / .ssot_constants are imported by rbac_middleware
+# but were missing from _MOCK_NAMES (#13312): a bare MagicMock has no submodule
+# for either, so exec_module() below raised ModuleNotFoundError *before* the
+# restore block ran, permanently leaving sys.modules["autobot_shared"] as a
+# path-less MagicMock for the rest of the pytest session — every later test file
+# that does a real `from autobot_shared.X import Y` then failed the same way.
+# TTL_5_MINUTES must be the real int (not a MagicMock) because CACHE_TTL_SECONDS
+# is used in real arithmetic/comparisons (time.time() - CACHE_TTL_SECONDS).
+# get_logger must resolve to the real stdlib logging.getLogger (not a MagicMock):
+# rbac_middleware.py's module-level `logger = get_logger(__name__)` is then a
+# genuine stdlib Logger, so logger.error(...) reaches caplog. A MagicMock logger
+# swallows every call silently, which would make any test asserting on
+# caplog.records for this module unable to ever pass (#13312).
+_logging_manager_mod = MagicMock()
+_logging_manager_mod.get_logger = logging.getLogger
+sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
+_ssot_constants_mod = MagicMock()
+_ssot_constants_mod.TTL_5_MINUTES = 300
+sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 
-# Aliases for readability
-_CACHE_TTL = _rbac_mod.CACHE_TTL_SECONDS
-_REDIS_PREFIX = _rbac_mod._REDIS_KEY_PREFIX
-_PUBSUB_CHANNEL = _rbac_mod._PUBSUB_CHANNEL
+# Load the module under test directly (bypasses __init__ import chain).
+# The restore block MUST run even if exec_module() raises, or a bad stub here
+# (or a future import added to rbac_middleware.py) leaks these MagicMocks into
+# every test collected afterward (#13312).
+try:
+    _SPEC = importlib.util.spec_from_file_location(
+        "user_management.middleware.rbac_middleware",
+        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+    )
+    _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
+    _SPEC.loader.exec_module(_rbac_mod)
 
-# #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
-for _k in list(sys.modules):
-    if _k not in _PRE_BOOTSTRAP_MODULES:
-        del sys.modules[_k]
-    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
-        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
-del _PRE_BOOTSTRAP_MODULES
+    # Aliases for readability
+    _CACHE_TTL = _rbac_mod.CACHE_TTL_SECONDS
+    _REDIS_PREFIX = _rbac_mod._REDIS_KEY_PREFIX
+    _PUBSUB_CHANNEL = _rbac_mod._PUBSUB_CHANNEL
+finally:
+    # #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
+    for _k in list(sys.modules):
+        if _k not in _PRE_BOOTSTRAP_MODULES:
+            del sys.modules[_k]
+        elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+            sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+    del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +148,17 @@ def _make_redis(get_return=None):
         yield  # make it an async generator
 
     r.scan_iter = _empty_scan
+
+    # redis.asyncio.Redis.pipeline() is SYNCHRONOUS — it returns a Pipeline
+    # object immediately, whose .delete() buffers synchronously and whose
+    # .execute() is the only awaited call (rbac_middleware.py:299-302). `r`
+    # being a bare AsyncMock made `r.pipeline` auto-spec as an AsyncMock too,
+    # so `redis.pipeline()` returned an un-awaited coroutine instead of a
+    # pipeline object and `pipeline.delete(key)` raised AttributeError (#13312).
+    _pipe = MagicMock()
+    _pipe.delete = MagicMock()
+    _pipe.execute = AsyncMock()
+    r.pipeline = MagicMock(return_value=_pipe)
     return r
 
 

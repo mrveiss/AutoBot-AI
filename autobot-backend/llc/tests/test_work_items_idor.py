@@ -30,6 +30,7 @@ import uuid
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -245,10 +246,20 @@ def _make_idor_app(
 # ---------------------------------------------------------------------------
 
 
-class TestWorkItemsIdor:
-    def teardown_method(self, _method):
-        patch.stopall()
+@pytest.fixture(autouse=True)
+def _stop_patches():
+    """Undo every patch the app builder starts, for each test in this module.
 
+    Cleanup used to be restated as a ``teardown_method`` on each class, which is
+    cleanup a newly added class can silently omit — exactly how #13674 leaked
+    ``KbCollectionManager.ensure_collection`` into the rest of the session. A
+    module-level autouse fixture cannot be missed (#13678).
+    """
+    yield
+    patch.stopall()
+
+
+class TestWorkItemsIdor:
     # GET own company → 200
     def test_get_own_company_returns_200(self):
         org = str(uuid.uuid4())
@@ -324,11 +335,6 @@ class TestWorkItemsIdorM4:
     Each test follows the same pattern: own company → expected success status,
     cross-tenant → 404.
     """
-
-    def teardown_method(self, _method):
-        from unittest.mock import patch
-
-        patch.stopall()
 
     # --- checkout ---
 

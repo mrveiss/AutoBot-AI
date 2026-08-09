@@ -6,6 +6,12 @@
 
 set -e  # Exit on first error
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 echo "🧪 AutoBot Comprehensive Test Suite"
 echo "===================================="
 echo ""
@@ -23,7 +29,7 @@ FAILED=0
 START_TIME=$(date +%s)
 
 # Ensure we're in project root
-cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
+cd ${PROJECT_ROOT}
 
 # Phase 1: Unit Tests
 echo "╔════════════════════════════════════════╗"

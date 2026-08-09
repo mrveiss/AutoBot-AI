@@ -104,7 +104,7 @@ async def _cleanup_redis_client(client: redis.Redis | None) -> None:
     if client:
         try:
             await asyncio.to_thread(client.close)
-        except Exception:  # nosec B110 - cleanup errors are non-critical
+        except Exception:  # nosec B110  # cleanup errors are non-critical
             pass
 
 

@@ -44,26 +44,23 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, FrozenSet, List
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.paths import project_root
+from autobot_shared.secret_redaction import RedactedReprMixin
 
-
-# Determine project root for .env file location
-def _find_project_root() -> Path:
-    """Find the project root directory containing .env file."""
-    current = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
-        if (parent / ".env").exists():
-            return parent
-    # Fallback to runtime location (env var or /opt/autobot)
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
-
-
-PROJECT_ROOT = _find_project_root()
+# Determine project root for .env file location.
+#
+# The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
+# 50-odd standalone tooling scripts that also need the project root can ask for
+# it without importing this module, which builds every pydantic settings model.
+# Keeping one implementation is the point: the same defect was fixed in
+# isolation twice (#4945, #13092) and both times failed to propagate.
+PROJECT_ROOT = project_root()
 
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
@@ -116,7 +113,45 @@ SUBAGENT_REFLECTION_ENABLED: bool = (
 )
 
 
-class VMConfig(BaseSettings):
+# Service-auth failure rate limiting (#13326).
+# These mirror the values the service_auth Ansible role has always written to
+# .env; the Pydantic fields previously defaulted to 0, which made
+# ``len(failures) >= max_failures`` true on the very first request and rejected
+# every SERVICE_ONLY_PATHS call on a default install.
+SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
+SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
+
+# Service-auth enforcement gate (#13335) - the third drift in this same block.
+# The Ansible role has always written ``true``/``100``; the Pydantic fields
+# defaulted to ``""``/``0.0``, so every install that did not go through Ansible
+# ran the service-auth middleware in LOGGING MODE with the circuit breaker
+# sampling 0% of requests. Unlike #13326 (which failed closed and was loud),
+# this pair failed OPEN and was silent. ``tests/test_service_auth_default_parity``
+# now pins each of these to the Ansible role default.
+SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT = "true"
+SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT = 100.0
+
+# Replay window for HMAC-signed service requests (#13335). The Ansible role and
+# ``export_service_keys.py`` have always written ``AUTH_TIMESTAMP_WINDOW``, but
+# no Pydantic field claimed the alias, so ``ServiceAuthManager`` hard-coded 300
+# and the operator-facing knob did nothing. The default matches the role so
+# wiring it in cannot change behaviour on an existing install.
+SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
+
+
+class RedactedSettings(RedactedReprMixin, BaseSettings):
+    """Base for every SSOT settings model.
+
+    Adds credential-aware ``repr()`` redaction so a config dump — e.g. the
+    ``AttributeError`` ``unittest.mock.patch.object`` raises on a misspelled
+    attribute — can never carry secret values into pytest output or CI logs.
+    Field names stay visible; only populated credential values are masked.
+
+    Issue: #13325
+    """
+
+
+class VMConfig(RedactedSettings):
     """
     VM IP address configuration.
 
@@ -149,7 +184,7 @@ class VMConfig(BaseSettings):
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
 
-class PortConfig(BaseSettings):
+class PortConfig(RedactedSettings):
     """Service port configuration."""
 
     model_config = SettingsConfigDict(
@@ -174,7 +209,7 @@ class PortConfig(BaseSettings):
     chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
-class LLMConfig(BaseSettings):
+class LLMConfig(RedactedSettings):
     """
     LLM model configuration with multi-provider support.
 
@@ -509,7 +544,7 @@ class LLMConfig(BaseSettings):
         return self.get_endpoint_for_provider(provider)
 
 
-class TimeoutConfig(BaseSettings):
+class TimeoutConfig(RedactedSettings):
     """
     Timeout configuration — all values in seconds unless noted.
 
@@ -663,7 +698,7 @@ class TimeoutConfig(BaseSettings):
         return self.http
 
 
-class RedisConfig(BaseSettings):
+class RedisConfig(RedactedSettings):
     """Redis database configuration."""
 
     model_config = SettingsConfigDict(
@@ -709,7 +744,7 @@ class RedisConfig(BaseSettings):
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
-class CacheCoordinatorConfig(BaseSettings):
+class CacheCoordinatorConfig(RedactedSettings):
     """
     Cache coordinator configuration for memory pressure management.
 
@@ -743,7 +778,7 @@ class CacheCoordinatorConfig(BaseSettings):
     )
 
 
-class CacheRedisConfig(BaseSettings):
+class CacheRedisConfig(RedactedSettings):
     """
     Redis connection pool configuration for caching.
 
@@ -776,7 +811,7 @@ class CacheRedisConfig(BaseSettings):
     )
 
 
-class CacheL1Config(BaseSettings):
+class CacheL1Config(RedactedSettings):
     """
     L1 (in-memory) cache size configuration.
 
@@ -836,7 +871,7 @@ class CacheL1Config(BaseSettings):
     )
 
 
-class CacheL2Config(BaseSettings):
+class CacheL2Config(RedactedSettings):
     """
     L2 (Redis) cache TTL configuration.
 
@@ -898,7 +933,7 @@ class CacheL2Config(BaseSettings):
     )
 
 
-class CacheConfig(BaseSettings):
+class CacheConfig(RedactedSettings):
     """
     Master cache configuration for AutoBot.
 
@@ -930,7 +965,7 @@ class CacheConfig(BaseSettings):
     l2: CacheL2Config = Field(default_factory=CacheL2Config)
 
 
-class AuthConfig(BaseSettings):
+class AuthConfig(RedactedSettings):
     """Authentication domain configuration.
 
     Controls auth-level defaults that are shared across middleware and API layers.
@@ -1069,7 +1104,7 @@ class PermissionAction(str, Enum):
     DENY = "deny"  # Block matching commands
 
 
-class PermissionConfig(BaseSettings):
+class PermissionConfig(RedactedSettings):
     """
     Permission system configuration - Claude Code style.
 
@@ -1155,12 +1190,15 @@ class TLSMode(str, Enum):
     REQUIRED = "required"
 
 
-class TLSConfig(BaseSettings):
+class TLSConfig(RedactedSettings):
     """TLS/PKI Configuration for secure communications.
 
     Issue #164: Added frontend TLS support for HTTPS on the frontend VM.
     TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
+
+    # Path to a public CA certificate — not key material.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -1195,7 +1233,7 @@ class TLSConfig(BaseSettings):
         return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
-class DatabasePoolConfig(BaseSettings):
+class DatabasePoolConfig(RedactedSettings):
     """Database connection pool configuration (#2860).
 
     Centralizes SQLAlchemy and SQLite pool settings so all services use
@@ -1248,7 +1286,7 @@ class DatabasePoolConfig(BaseSettings):
     )
 
 
-class PathConfig(BaseSettings):
+class PathConfig(RedactedSettings):
     """
     File-system path configuration.
 
@@ -1356,13 +1394,16 @@ class PathConfig(BaseSettings):
         return f"{self.ssh_key_path}.pub"
 
 
-class MiscConfig(BaseSettings):
+class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
     Vars default to empty string ("") when not set in environment.
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
+
+    # Matches the ``tokens`` credential suffix but holds a count, not a secret.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"speculation_num_tokens"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -1419,6 +1460,17 @@ class MiscConfig(BaseSettings):
         default=300,
         alias="AUTOBOT_CACHE_L2_TTL",
         description="L2 Redis LLM response cache TTL in seconds",
+    )
+    call_graph_max_files: str = Field(
+        default="",
+        alias="AUTOBOT_CALL_GRAPH_MAX_FILES",
+        description=(
+            "Max Python files the call-graph endpoint AST-scans per request. Empty "
+            "(default) means unlimited -- Issue #13468: the previous hardcoded 300-file "
+            "cap silently analysed 8% of a 3,541-file backend and reported the result as "
+            "repo-wide statistics. Set only if a deployment's scan latency/memory forces "
+            "re-capping; the response always states files_scanned/files_total either way."
+        ),
     )
     celery_dead_letter_max: str = Field(default="", alias="AUTOBOT_CELERY_DEAD_LETTER_MAX")
     celery_dedup_ttl: str = Field(default="", alias="AUTOBOT_CELERY_DEDUP_TTL")
@@ -1479,7 +1531,15 @@ class MiscConfig(BaseSettings):
     desktop_max_sessions: str = Field(default="", alias="AUTOBOT_DESKTOP_MAX_SESSIONS")
     desktop_resolution: str = Field(default="", alias="AUTOBOT_DESKTOP_RESOLUTION")
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
-    encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
+    # #13162: this field used to be declared twice in MiscConfig — the later
+    # ``alias="ENCRYPTION_KEY"`` copy silently won, so the documented and
+    # deployed ``AUTOBOT_ENCRYPTION_KEY`` (docker-compose.yml, the ValueError
+    # raised by EncryptionService) was never read. Both spellings are now
+    # accepted, AUTOBOT_-prefixed first.
+    encryption_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
+    )
     env: str = Field(default="", alias="AUTOBOT_ENV")
     error_resolved_ttl_seconds: str = Field(
         default="",
@@ -1508,6 +1568,14 @@ class MiscConfig(BaseSettings):
     )
     hnsw_search_ef: str = Field(default="", alias="AUTOBOT_HNSW_SEARCH_EF")
     hnsw_space: str = Field(default="", alias="AUTOBOT_HNSW_SPACE")
+    impact_analysis_max_depth: str = Field(
+        default="",
+        alias="AUTOBOT_IMPACT_ANALYSIS_MAX_DEPTH",
+        description=(
+            "Reverse-BFS hop limit for code-graph impact analysis (#13471). "
+            "A truncated walk reports depth_capped=True rather than silently stopping."
+        ),
+    )
     inference_profiling: str = Field(default="", alias="AUTOBOT_INFERENCE_PROFILING")
     input_timeout: int = Field(default=0, alias="AUTOBOT_INPUT_TIMEOUT")
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
@@ -1544,7 +1612,30 @@ class MiscConfig(BaseSettings):
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
+    # working default credential is a vulnerability in its own right — the
+    # secret is the whole check, and "dev" is published in this repo, so any
+    # caller could present "dev:<scopes>" and pick their own privileges.
+    # Empty means unconfigured, and autobot_server._validate_token fails
+    # closed on it rather than authenticating everyone.
     mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
+    # #13268: pre-auth throttle limits for POST /api/mcp/tool. These are
+    # thresholds, not credentials — a default is safe and a missing one would
+    # disable the only brute-force brake on an endpoint whose sole boundary is
+    # the shared secret above.
+    mcp_auth_max_failures: int = Field(default=10, alias="AUTOBOT_MCP_AUTH_MAX_FAILURES")
+    mcp_auth_window_seconds: int = Field(default=300, alias="AUTOBOT_MCP_AUTH_WINDOW_SECONDS")
+    mcp_auth_lockout_seconds: int = Field(default=900, alias="AUTOBOT_MCP_AUTH_LOCKOUT_SECONDS")
+    # #13268: ceiling across ALL client IPs in one window. X-Forwarded-For is
+    # attacker-controlled behind an appending proxy, so a per-IP counter alone
+    # is defeated by rotating the header; this bound is not.
+    mcp_auth_global_max_failures: int = Field(default=100, alias="AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES")
+    # #13268: bounds the tracker dict so spoofed source IPs cannot exhaust memory.
+    mcp_auth_max_tracked_ips: int = Field(default=4096, alias="AUTOBOT_MCP_AUTH_MAX_TRACKED_IPS")
+    # #13266: scopes the stdio transport grants itself. AUTOBOT_MCP_TOKEN is the
+    # SECRET only; stdio composes "<secret>:<these scopes>" instead of reusing the
+    # secret as a whole bearer token. Scope names are not a credential.
+    mcp_stdio_scopes: str = Field(default="kb,memory,agents", alias="AUTOBOT_MCP_STDIO_SCOPES")
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
@@ -1695,6 +1786,16 @@ class MiscConfig(BaseSettings):
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
     trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
+    tts_stream_probe_ttl: str = Field(
+        default="",
+        alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
+        description=(
+            "Seconds the backend remembers that the TTS worker does not serve "
+            "/tts/synthesize/stream before probing again (#12886). Short enough "
+            "that an in-place worker update starts streaming without a backend "
+            "restart, long enough not to cost a 404 round trip per utterance."
+        ),
+    )
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
@@ -1731,7 +1832,13 @@ class MiscConfig(BaseSettings):
     content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
     context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
     context_model: str = Field(default="", alias="CONTEXT_MODEL")
-    context_summary_ttl_days: str = Field(default="", alias="CONTEXT_SUMMARY_TTL_DAYS")
+    # #13386: was ``str`` defaulting to "", and its only consumer does
+    # ``int(config.context_summary_ttl_days)`` — so with the variable unset the
+    # cognifier raised ``ValueError: invalid literal for int() with base 10: ''``
+    # on construction. That is every environment without a .env: a fresh clone, a
+    # container build, a git worktree, and CI. 30 is the value .env.example has
+    # documented all along.
+    context_summary_ttl_days: int = Field(default=30, alias="CONTEXT_SUMMARY_TTL_DAYS")
     cuda_cache_disable: bool = Field(default=False, alias="CUDA_CACHE_DISABLE")
     cuda_launch_blocking: str = Field(default="", alias="CUDA_LAUNCH_BLOCKING")
     custom_openai_api_key: str = Field(default="", alias="CUSTOM_OPENAI_API_KEY")
@@ -1741,7 +1848,9 @@ class MiscConfig(BaseSettings):
     display: str = Field(default="", alias="DISPLAY")
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
     display_width: str = Field(default="", alias="DISPLAY_WIDTH")
-    encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
+    # #13162: `encryption_key` is declared once, above, with an AliasChoices
+    # that already covers the bare ENCRYPTION_KEY spelling. Re-declaring it
+    # here shadowed the AUTOBOT_ENCRYPTION_KEY alias.
     # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
@@ -1767,9 +1876,23 @@ class MiscConfig(BaseSettings):
     log_level: str = Field(default="", alias="LOG_LEVEL")
     master_key: str = Field(default="", alias="MASTER_KEY")
     mcp_isolation_mode: str = Field(default="", alias="MCP_ISOLATION_MODE")
-    mcp_registry_cache_enabled: bool = Field(default=False, alias="MCP_REGISTRY_CACHE_ENABLED")
-    mcp_registry_cache_ttl: str = Field(default="", alias="MCP_REGISTRY_CACHE_TTL")
+    mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
+    mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
+    # #13265: run-JWT signing secret as an SSOT field, read by
+    # mcp_isolated_runtime._resolve_run_jwt_secret() when provisioning an
+    # isolated bridge worker. The worker's inherited environment is scrubbed to
+    # _WORKER_ENV_ALLOW, so without an explicitly provisioned secret it cannot
+    # verify the run JWT it is handed and enforcement can never be switched on.
+    # services/run_jwt._secret() deliberately does NOT read this: the shared
+    # resolver stays environment-only so the chain is not widened for every caller.
+    run_jwt_secret: str = Field(default="", alias="RUN_JWT_SECRET")
+    # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
+    # run-scoped JWT enforcement off in every bridge worker.
+    # #13265 cleared the blocker: mcp_dispatch now mints and forwards a run JWT
+    # on every isolated call, and mcp_isolated_runtime provisions the signing
+    # secret into the scrubbed worker environment so it can verify that token.
+    # Restoring the "1" default is #13263's call and is left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
@@ -1795,11 +1918,57 @@ class MiscConfig(BaseSettings):
     redis_node_id: str = Field(default="", alias="REDIS_NODE_ID")
     redis_port: int = Field(default=0, alias="REDIS_PORT")
     secret_key: str = Field(default="", alias="SECRET_KEY")
-    service_auth_circuit_breaker_percentage: float = Field(default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE")
-    service_auth_enforcement_mode: str = Field(default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE")
+    service_auth_circuit_breaker_percentage: float = Field(
+        default=SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
+        alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE",
+        description=(
+            "Percentage of service-auth-eligible requests the enforcement middleware "
+            "actually checks (0-100). 100 enforces every request; 0 explicitly "
+            "DISABLES the enforcement sampling entirely, so every request passes "
+            "through unchecked - it does not mean 'enforce a little'. Issue #13335."
+        ),
+    )
+    service_auth_enforcement_mode: str = Field(
+        default=SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
+        alias="SERVICE_AUTH_ENFORCEMENT_MODE",
+        description=(
+            "Master switch for service-auth enforcement, compared case-insensitively "
+            "against the literal 'true'. ANY other value - including the empty "
+            "string - explicitly DISABLES enforcement and selects LOGGING MODE: "
+            "unauthenticated service calls are logged and allowed through. "
+            "Issue #13335."
+        ),
+    )
     service_auth_override_token: str = Field(default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN")
-    service_auth_rate_limit_max_failures: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES")
-    service_auth_rate_limit_window: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_WINDOW")
+    service_auth_rate_limit_max_failures: int = Field(
+        default=SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+        alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES",
+        description=(
+            "Failed service-auth attempts tolerated per IP inside the rate-limit window "
+            "before further requests are rejected with HTTP 429. "
+            "0 explicitly DISABLES failure rate limiting (service auth itself still runs); "
+            "it does not mean 'tolerate nothing'. Issue #13326."
+        ),
+    )
+    service_auth_rate_limit_window: int = Field(
+        default=SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+        alias="SERVICE_AUTH_RATE_LIMIT_WINDOW",
+        description=(
+            "Sliding window in seconds over which service-auth failures are counted. "
+            "0 explicitly DISABLES failure rate limiting, since a zero-length window can "
+            "never retain a failure. Issue #13326."
+        ),
+    )
+    service_auth_timestamp_window: int = Field(
+        default=SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
+        alias="AUTH_TIMESTAMP_WINDOW",
+        description=(
+            "Seconds a signed service request stays valid, in either direction, "
+            "before it is rejected as a replay. 0 accepts no clock skew at all "
+            "and will reject essentially every request; it does not disable the "
+            "replay check. Issue #13335."
+        ),
+    )
     service_id: str = Field(default="", alias="SERVICE_ID")
     service_key: str = Field(default="", alias="SERVICE_KEY")
     service_key_file: str = Field(default="", alias="SERVICE_KEY_FILE")
@@ -1813,7 +1982,18 @@ class MiscConfig(BaseSettings):
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
     tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
-    tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")
+    # #13689: ON is a recorded decision, not a drift. The #5066 A/B ran on
+    # 2026-08-08 with all five layers live for the first time — L2 and L4 could
+    # not render at all until #13686/#13687. All five render; the cost is
+    # +14..45 tokens and +6..8 ms of assembly per turn.
+    # It stayed off until #13742 landed, because L3 duplicated the KB retrieval
+    # the chat path already performs — two vector searches and the same chunks
+    # twice in the prompt. That is fixed; there is now one retrieval per turn.
+    # NOT measured, and no claim is implied: answer quality. Recall quality is
+    # unmeasurable until #13251/#13243, so this decision rests on what the stack
+    # demonstrably puts in the prompt, its token cost, and its latency.
+    # Evidence: docs/research/tiered-context-ab-13689.md
+    tiered_context_enabled: bool = Field(default=True, alias="TIERED_CONTEXT_ENABLED")
     tokenizers_parallelism: str = Field(default="", alias="TOKENIZERS_PARALLELISM")
     transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
     travis: str = Field(default="", alias="TRAVIS")
@@ -1835,7 +2015,7 @@ class MiscConfig(BaseSettings):
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
-class FeatureConfig(BaseSettings):
+class FeatureConfig(RedactedSettings):
     """Feature flags configuration."""
 
     model_config = SettingsConfigDict(
@@ -1849,6 +2029,16 @@ class FeatureConfig(BaseSettings):
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
+
+    # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
+    # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
+    # private network. Default OFF — turning it on widens the egress surface.
+    #
+    # Scope is deliberately narrow: it applies to the operator-configured
+    # instance host only, NEVER to user-supplied content or download URLs.
+    # Loopback, link-local (incl. 169.254.169.254 cloud metadata), multicast,
+    # reserved and unspecified addresses stay blocked with the flag on.
+    connector_private_network_egress: bool = Field(default=False, alias="AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS")
 
     # Subsystem feature flags — issue #3017
     # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
@@ -1895,7 +2085,7 @@ class FeatureConfig(BaseSettings):
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
 
-class CostModelConfig(BaseSettings):
+class CostModelConfig(RedactedSettings):
     """Operator-supplied monthly cost estimates for hardware components.
 
     Issue #10720: Replaces hardcoded literals in business_intelligence_dashboard.py
@@ -1996,7 +2186,7 @@ class CostModelConfig(BaseSettings):
     )
 
 
-class TelemetryConfig(BaseSettings):
+class TelemetryConfig(RedactedSettings):
     """
     Telemetry and analytics opt-out configuration.
 
@@ -2037,7 +2227,7 @@ class TelemetryConfig(BaseSettings):
     )
 
 
-class AutoBotConfig(BaseSettings):
+class AutoBotConfig(RedactedSettings):
     """
     Master configuration - SINGLE SOURCE OF TRUTH.
 

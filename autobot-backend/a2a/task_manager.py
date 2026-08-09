@@ -140,6 +140,32 @@ class TaskManager:
     def __init__(self) -> None:
         self._redis = get_redis_client(database="main")
 
+    def _client(self):
+        """Return the Redis client, re-resolving if the first attempt gave ``None``.
+
+        #13339: ``get_redis_client`` documents ``None`` as a return value, and the
+        module-level singleton below is constructed at import. A backend that
+        started while Redis was unreachable therefore held ``None`` forever — every
+        task store, fetch and audit append raised ``AttributeError: 'NoneType' has
+        no attribute 'set'``, and nothing retried once Redis came back. The A2A
+        task store was permanently broken for the life of the process.
+
+        Re-resolution is attempted only while the client is ``None``, so the happy
+        path stays a single attribute read and construction-time injection (the
+        pattern the a2a tests use) is unaffected.
+        """
+        if self._redis is None:
+            self._redis = get_redis_client(database="main")
+        if self._redis is None:
+            # RuntimeError rather than a new exception type: no caller catches a
+            # bespoke class today, and the value here is a message that names the
+            # cause instead of "'NoneType' object has no attribute 'set'".
+            raise RuntimeError(
+                "A2A task store unavailable: no Redis client could be resolved. "
+                "Tasks cannot be persisted or retrieved until Redis is reachable."
+            )
+        return self._redis
+
     # ------------------------------------------------------------------
     # Internal Redis helpers
     # ------------------------------------------------------------------
@@ -151,20 +177,22 @@ class TaskManager:
         """Persist task JSON and register its ID in the task-set."""
         ttl = self._ttl()
         key = _KEY_TASK.format(task.id)
-        self._redis.set(key, _task_to_json(task), ex=ttl)
-        self._redis.sadd(_KEY_TASKS, task.id)
-        self._redis.expire(_KEY_TASKS, ttl)
+        client = self._client()
+        client.set(key, _task_to_json(task), ex=ttl)
+        client.sadd(_KEY_TASKS, task.id)
+        client.expire(_KEY_TASKS, ttl)
 
     def _load(self, task_id: str) -> Task | None:
-        raw = self._redis.get(_KEY_TASK.format(task_id))
+        raw = self._client().get(_KEY_TASK.format(task_id))
         if raw is None:
             return None
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def _append_audit(self, task_id: str, event: TraceEvent) -> None:
         key = _KEY_AUDIT.format(task_id)
-        self._redis.rpush(key, _audit_entry_to_json(event))
-        self._redis.expire(key, self._ttl())
+        client = self._client()
+        client.rpush(key, _audit_entry_to_json(event))
+        client.expire(key, self._ttl())
 
     # ------------------------------------------------------------------
     # Public API (same signatures as the old in-memory implementation)
@@ -212,13 +240,13 @@ class TaskManager:
         Issue #8162: Pipeline the three EXPIRE calls into one round-trip.
         """
         key = _KEY_TASK.format(task_id)
-        raw = self._redis.get(key)
+        raw = self._client().get(key)
         if raw is None:
             return None
         # Slide TTL — reset expiry from now so active pollers stay alive.
         # Slide the audit key too so it doesn't expire before the task does.
         ttl = self._ttl()
-        with self._redis.pipeline() as pipe:
+        with self._client().pipeline() as pipe:
             pipe.expire(key, ttl)
             pipe.expire(_KEY_AUDIT.format(task_id), ttl)
             pipe.expire(_KEY_TASKS, ttl)
@@ -231,13 +259,13 @@ class TaskManager:
         Issue #8162: Use MGET to batch all task fetches into one round-trip
         instead of issuing one GET per task ID (N+1 pattern).
         """
-        ids = self._redis.smembers(_KEY_TASKS)
+        ids = self._client().smembers(_KEY_TASKS)
         if not ids:
             return []
 
         id_strs = [tid if isinstance(tid, str) else tid.decode("utf-8") for tid in ids]
         keys = [_KEY_TASK.format(tid) for tid in id_strs]
-        raws = self._redis.mget(keys)
+        raws = self._client().mget(keys)
 
         tasks: List[Task] = []
         expired_ids = []
@@ -249,7 +277,7 @@ class TaskManager:
                 expired_ids.append(tid)
 
         if expired_ids:
-            with self._redis.pipeline() as pipe:
+            with self._client().pipeline() as pipe:
                 for expired in expired_ids:
                     pipe.srem(_KEY_TASKS, expired)
                 pipe.execute()
@@ -327,7 +355,7 @@ class TaskManager:
         """Return the full trace event log for a task, or None if not found."""
         if not self._load(task_id):
             return None
-        raw_entries = self._redis.lrange(_KEY_AUDIT.format(task_id), 0, -1)
+        raw_entries = self._client().lrange(_KEY_AUDIT.format(task_id), 0, -1)
         result: List[Dict[str, Any]] = []
         for raw in raw_entries:
             entry = raw if isinstance(raw, str) else raw.decode("utf-8")
@@ -350,7 +378,7 @@ class TaskManager:
         """
         try:
             channel = _KEY_EVENTS.format(task_id)
-            self._redis.publish(channel, json.dumps(payload))
+            self._client().publish(channel, json.dumps(payload))
         except Exception as exc:
             # Pub/sub is best-effort — never let it break task execution
             logger.warning("publish_event failed for task %s: %s", task_id, exc)

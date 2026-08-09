@@ -7,11 +7,17 @@
 
 set -e  # Exit on error
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 # Configuration
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-AUTOBOT_ROOT="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
+AUTOBOT_ROOT="${PROJECT_ROOT}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-i $SSH_KEY"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"

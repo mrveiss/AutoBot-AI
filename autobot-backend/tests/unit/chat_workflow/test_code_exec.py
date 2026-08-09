@@ -595,7 +595,7 @@ def test_shim_emits_monotonic_ids_and_correlates():
     from chat_workflow.code_exec.shim_codegen import generate_shim_module
 
     ns: dict = {}
-    exec(generate_shim_module(["web_search"]), ns)  # nosec B102 — generated trusted shim under test
+    exec(generate_shim_module(["web_search"]), ns)  # nosec B102  # generated trusted shim under test
     assert ns["_next_id"]() == 1
     assert ns["_next_id"]() == 2  # monotonic, not a constant tool-name id
     # Correlation: a reply keyed by id is retrievable by that id, out of arrival order.

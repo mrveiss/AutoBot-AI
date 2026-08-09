@@ -13,8 +13,15 @@ import json
 import uuid
 from typing import Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+
+# #13478: how long a session holding a pending approval survives in Redis.
+# Deliberately long: the thing it is waiting for is a person, and #13481
+# established that an approval does not expire on a timer. This bounds the
+# stored session, not the approval's validity.
+APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
@@ -320,8 +327,52 @@ class SessionManager:
             except Exception as e:
                 logger.error("Failed to load session from Redis: %s", e)
 
-        # Session not found in memory or Redis
-        return None
+        # #13478: last resort — the session record is gone, but it may have been
+        # holding a pending approval. `_restore_pending_approval` can rebuild
+        # that from chat history and is documented as surviving restarts, yet it
+        # only ran inside `create_session`, which mints a NEW session_id. The
+        # approve endpoint is addressed by the OLD id (it is what the persisted
+        # approval message and the GUI button carry), so the restore was
+        # unreachable from the one path that needed it.
+        return await self._rebuild_session_from_pending_approval(session_id)
+
+    async def _rebuild_session_from_pending_approval(self, session_id: str) -> AgentTerminalSession | None:
+        """Reconstruct a vanished session that still has an unanswered approval.
+
+        Returns None when the session simply does not exist — the ordinary case
+        for a bad id, and it must stay cheap and quiet.
+        """
+        conversation_id = await self._conversation_for_expired_session(session_id)
+        if not conversation_id or not self.chat_history_manager:
+            return None
+
+        session = AgentTerminalSession(
+            session_id=session_id,
+            agent_id="restored",
+            # Lowest privilege on purpose. The role the original session ran
+            # under is not recorded in the restored approval, and a rebuilt
+            # session exists only to let a human resolve a decision that was
+            # already gated — it must never be the thing that widens what the
+            # command is allowed to do.
+            agent_role=AgentRole.CHAT_AGENT,
+            conversation_id=conversation_id,
+        )
+        await self._restore_pending_approval(session, conversation_id)
+
+        if not session.has_pending_approval():
+            # Nothing outstanding: the approval was already answered, so there is
+            # no session worth resurrecting.
+            return None
+
+        async with self._sessions_lock:
+            self.sessions[session_id] = session
+
+        logger.info(
+            "Rebuilt session %s from its pending approval in conversation %s (#13478)",
+            session_id,
+            conversation_id,
+        )
+        return session
 
     async def list_sessions(
         self,
@@ -378,18 +429,65 @@ class SessionManager:
         return True
 
     async def _persist_session(self, session: AgentTerminalSession) -> None:
-        """Persist session to Redis"""
+        """Persist session to Redis.
+
+        #13478: the TTL depends on whether the session is *idle* or *waiting on a
+        human*. TTL_1_HOUR garbage-collects abandoned sessions, which is right —
+        but it was applied to a session holding a pending approval too, and
+        nothing refreshed it. `set_pending_approval` re-persists immediately
+        (service.py:213), so the clock started the moment the prompt was raised
+        and ran out an hour later. `_approve_command_internal` then hit
+        `if not session: return {"error": "Session not found"}` and the approval
+        was unrecoverable.
+
+        That was the real expiry behind #13216 — not the 30-minute poll budget,
+        which only bounds the turn, and not a restart, which the session
+        survives. A person taking longer than an hour to answer a prompt is the
+        normal case this feature exists for, so the wait must not be what kills
+        it (#13481: approval does not expire on a timer).
+        """
         try:
             key = f"agent_terminal:session:{session.session_id}"
             # Issue #372: Use model method to reduce feature envy
             session_data = session.to_persist_dict()
 
+            ttl = APPROVAL_PENDING_SESSION_TTL if session.has_pending_approval() else TTL_1_HOUR
             json_data = json.dumps(session_data)
-            await self.redis_client.setex(key, TTL_1_HOUR, json_data)  # 1 hour TTL
-            logger.debug(f"Persisted session {session.session_id} to Redis with key {key}")
+            await self.redis_client.setex(key, ttl, json_data)
+
+            # #13478: a companion pointer so the approve path can still find the
+            # conversation after the session itself is gone. `get_session` takes
+            # a session_id and `_restore_pending_approval` needs a
+            # conversation_id, so without this the chat-history restore — which
+            # exists and works — is unreachable from the approve endpoint.
+            if session.has_pending_approval() and session.conversation_id:
+                await self.redis_client.setex(
+                    f"agent_terminal:approval_conversation:{session.session_id}",
+                    APPROVAL_PENDING_SESSION_TTL,
+                    session.conversation_id,
+                )
+
+            logger.debug("Persisted session %s to Redis with key %s (ttl=%ds)", session.session_id, key, ttl)
 
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
+
+    async def _conversation_for_expired_session(self, session_id: str) -> str | None:
+        """The conversation a vanished session was serving, if it had an approval."""
+        if not self.redis_client:
+            return None
+        try:
+            raw = await asyncio.wait_for(
+                self.redis_client.get(f"agent_terminal:approval_conversation:{session_id}"),
+                timeout=2.0,
+            )
+        except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001
+            logger.warning("Could not read approval-conversation pointer for %s: %s", session_id, exc)
+            return None
+
+        if raw is None:
+            return None
+        return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
 
     async def _restore_pending_approval(self, session: AgentTerminalSession, conversation_id: str) -> None:
         """

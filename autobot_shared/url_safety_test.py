@@ -13,10 +13,12 @@ import-isolation contract that motivated the extraction.
 
 from __future__ import annotations
 
+import ipaddress
 from unittest.mock import patch
 
 import pytest
 
+from autobot_shared import url_safety
 from autobot_shared.url_safety import (
     host_matches,
     is_public_url,
@@ -269,18 +271,152 @@ def test_host_matches_false(host: str, domain: str) -> None:
     assert host_matches(host, domain) is False
 
 
+def _reimport_source(key: str) -> str:
+    """Import *key* from scratch and return its source, restoring sys.modules.
+
+    #13361: the re-import is the point of the test — it proves the module loads
+    with nothing but the stdlib behind it — but the replacement module object it
+    leaves under *key* is not. Anything that already imported from the original
+    keeps a symbol the live module no longer owns, which is the identity split
+    that silently made ``mock.patch`` inert in #13162. Install and restore in the
+    same ``try/finally``, so the fresh import lasts exactly one statement.
+    """
+    import importlib  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    cached = sys.modules.pop(key, None)
+    try:
+        module = importlib.import_module(key)
+        with open(module.__file__, encoding="utf-8") as handle:
+            return handle.read()
+    finally:
+        if cached is not None:
+            sys.modules[key] = cached
+
+
 def test_module_has_zero_autobot_dependencies() -> None:
     """The extracted module must NOT import from ``media.link``,
     ``web_fetch``, or anywhere else inside autobot — that's the cycle-
     breaking contract."""
-    import importlib
-    import sys
+    source = _reimport_source("autobot_shared.url_safety")
 
-    sys.modules.pop("autobot_shared.url_safety", None)
-    mod = importlib.import_module("autobot_shared.url_safety")
+    assert "from media" not in source
+    assert "from web_fetch" not in source
+    assert "from autobot_backend" not in source
+    assert "from autobot_shared" not in source  # no sibling cross-deps either
 
-    src = open(mod.__file__, encoding="utf-8").read()  # noqa: SIM115
-    assert "from media" not in src
-    assert "from web_fetch" not in src
-    assert "from autobot_backend" not in src
-    assert "from autobot_shared" not in src  # no sibling cross-deps either
+
+# ---------------------------------------------------------------------------
+# #13625: private-network opt-in, separable from the hard blocks
+# ---------------------------------------------------------------------------
+
+_HARD_BLOCKED = [
+    ("127.0.0.1", "loopback"),
+    # #13625: CPython reports these as is_private, so inheriting is_private
+    # wholesale let the opt-in re-open them.
+    ("0.1.2.3", "0.0.0.0/8 — not the same as 0.0.0.0"),
+    ("192.0.0.1", "192.0.0.0/29 IETF protocol assignments"),
+    ("198.18.0.1", "benchmarking range"),
+    ("2002:7f00:1::1", "6to4 embedding 127.0.0.1"),
+    ("::ffff:169.254.169.254", "IPv4-mapped cloud metadata"),
+    ("64:ff9b::7f00:1", "NAT64 embedding loopback"),
+    ("169.254.169.254", "cloud metadata"),
+    ("0.0.0.0", "unspecified"),
+    ("224.0.0.1", "multicast"),
+    ("240.0.0.1", "reserved"),
+    ("::1", "IPv6 loopback"),
+    ("fe80::1", "IPv6 link-local"),
+]
+
+_PRIVATE = [
+    ("10.0.0.5", "RFC1918"),
+    ("192.168.1.10", "RFC1918"),
+    ("172.16.0.1", "RFC1918"),
+    ("fd00::1", "IPv6 ULA"),
+    # #13625: CPython reports neither as is_private, so both were reachable in
+    # BOTH states. Private rather than hard-blocked — a self-hosted instance can
+    # legitimately sit on Tailscale or a site-local network.
+    ("100.64.1.1", "CGNAT / Tailscale"),
+    ("fec0::1", "IPv6 site-local"),
+]
+
+
+@pytest.mark.parametrize("addr,kind", _HARD_BLOCKED)
+def test_hard_blocked_addresses_stay_blocked_with_the_opt_in(addr, kind):
+    """#13625: the opt-in permits private ranges only — never these.
+
+    An operator hosting Confluence on an RFC-1918 address is a real deployment;
+    an operator hosting it on the cloud-metadata endpoint is not. If this ever
+    passes, the opt-in has become an SSRF bypass.
+    """
+    ip = ipaddress.ip_address(addr)
+    assert url_safety._ip_is_public(ip) is False, kind
+    assert url_safety._ip_is_public(ip, allow_private=True) is False, f"{kind} allowed by the opt-in"
+
+
+@pytest.mark.parametrize("addr,kind", _PRIVATE)
+def test_private_addresses_flip_with_the_opt_in(addr, kind):
+    """#13625: RFC-1918/ULA is the range the opt-in exists to permit."""
+    ip = ipaddress.ip_address(addr)
+    assert url_safety._ip_is_public(ip) is False, f"{kind} allowed by default"
+    assert url_safety._ip_is_public(ip, allow_private=True) is True, kind
+
+
+def test_public_address_is_unaffected_by_the_opt_in():
+    ip = ipaddress.ip_address("93.184.216.34")
+    assert url_safety._ip_is_public(ip) is True
+    assert url_safety._ip_is_public(ip, allow_private=True) is True
+
+
+def test_default_call_is_unchanged_by_the_new_parameter():
+    """#13625: every existing caller must keep public-only behaviour."""
+    for addr, _ in _HARD_BLOCKED + _PRIVATE:
+        assert url_safety._ip_is_public(ipaddress.ip_address(addr)) is False
+    assert url_safety._ip_is_public(ipaddress.ip_address("8.8.8.8")) is True
+
+
+def test_localhost_is_refused_even_with_the_opt_in():
+    """#13625: the hostname short-circuit must not become a loopback bypass."""
+    assert url_safety.is_public_url("http://localhost:8080/x") is False
+    assert url_safety.is_public_url("http://localhost:8080/x", allow_private=True) is False
+
+
+def test_private_ip_literal_url_honours_the_opt_in():
+    assert url_safety.is_public_url("https://10.0.0.5/api") is False
+    assert url_safety.is_public_url("https://10.0.0.5/api", allow_private=True) is True
+    # ...but the metadata endpoint stays refused either way.
+    assert url_safety.is_public_url("http://169.254.169.254/latest/meta-data/", allow_private=True) is False
+
+
+@pytest.mark.asyncio
+async def test_async_wrapper_keeps_the_one_argument_call_shape(monkeypatch):
+    """#13625: the default path must call ``is_public_url`` with url only.
+
+    Callers and tests substitute ``is_public_url`` with a one-argument callable
+    (see skills/external_importer_test.py). Forwarding ``allow_private`` to it
+    unconditionally raised ``TypeError: got an unexpected keyword argument`` in
+    every such seam — two tests in a file this change never touched.
+    """
+    seen = {}
+
+    def _one_arg_only(url):
+        seen["url"] = url
+        return True
+
+    monkeypatch.setattr(url_safety, "is_public_url", _one_arg_only)
+    assert await url_safety.is_public_url_async("https://example.com/x") is True
+    assert seen["url"] == "https://example.com/x"
+
+
+@pytest.mark.asyncio
+async def test_async_wrapper_forwards_the_opt_in_when_requested(monkeypatch):
+    """#13625: ...but the opt-in must still reach the underlying check."""
+    seen = {}
+
+    def _accepts_kwarg(url, *, allow_private=False):
+        seen["allow_private"] = allow_private
+        return True
+
+    monkeypatch.setattr(url_safety, "is_public_url", _accepts_kwarg)
+    await url_safety.is_public_url_async("https://example.com/x", allow_private=True)
+    assert seen["allow_private"] is True

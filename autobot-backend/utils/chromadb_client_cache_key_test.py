@@ -11,13 +11,68 @@ settings. These tests pin the corrected behaviour: differing settings build
 distinct clients, while a repeated identical call is still a cache hit.
 """
 
+import importlib
+import importlib.util
 import sys
+from pathlib import Path
+from types import ModuleType
+from typing import Tuple
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-import utils.async_chromadb_client as async_mod
-import utils.chromadb_client as sync_mod
+
+def _load_real_chromadb_modules() -> Tuple[ModuleType, ModuleType]:
+    """Return the real, file-backed sync and async ChromaDB client modules.
+
+    #13162: ``services/knowledge/test_analyzer_service.py`` and
+    ``services/knowledge/test_kb_synthesizer.py`` install permanent
+    ``types.ModuleType`` placeholders for ``utils.chromadb_client`` and
+    ``utils.async_chromadb_client`` into ``sys.modules`` at import time and never
+    remove them (``repo_tests/sys_modules_leak_guard.py`` reports both). They use
+    ``setdefault``, so whichever module pytest imports first wins: in a combined
+    run this file was handed the placeholder, whose ``get_async_chromadb_client``
+    is a bare ``AsyncMock``. ``test_async_allow_reset_returns_different_client``
+    then asserted that one AsyncMock return value ``is not`` itself -- it was
+    measuring the mock, never the cache key.
+
+    Load the real files under private names when that has happened. The
+    placeholder stays registered, so the modules that installed it keep the
+    object they captured at their own import time.
+    """
+    here = Path(__file__).resolve().parent
+
+    def _real(name: str) -> ModuleType:
+        module = sys.modules.get(f"utils.{name}") or importlib.import_module(f"utils.{name}")
+        if getattr(module, "__file__", None):
+            return module
+        private = f"_real_13162_{name}"
+        cached = sys.modules.get(private)
+        if cached is not None:
+            return cached
+        spec = importlib.util.spec_from_file_location(private, here / f"{name}.py")
+        loaded = importlib.util.module_from_spec(spec)
+        sys.modules[private] = loaded
+        spec.loader.exec_module(loaded)
+        return loaded
+
+    async_module = _real("async_chromadb_client")
+    placeholder = sys.modules.get("utils.async_chromadb_client")
+    # chromadb_client imports utils.async_chromadb_client at module level, so the
+    # real module has to answer that name while chromadb_client executes. Put the
+    # placeholder straight back afterwards.
+    sys.modules["utils.async_chromadb_client"] = async_module
+    try:
+        sync_module = _real("chromadb_client")
+    finally:
+        if placeholder is None:
+            sys.modules.pop("utils.async_chromadb_client", None)
+        else:
+            sys.modules["utils.async_chromadb_client"] = placeholder
+    return sync_module, async_module
+
+
+sync_mod, async_mod = _load_real_chromadb_modules()
 
 
 def _stub_chromadb():

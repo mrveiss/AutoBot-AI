@@ -1,0 +1,31 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The config that carries changes on an update: the nginx site. Split out of
+# main.yml (#13460) so the builtin updater can deliver nginx-config changes
+# without re-running provisioning (node install, npm ci, vite build).
+#
+# Deliberately NOT the frontend build. update-all-nodes.yml already deploys
+# frontend code and rebuilds it inline; adding a second build here would run it
+# twice per update.
+#
+# The co-location guard is preserved: when the frontend shares a host with the
+# SLM, SLM nginx serves both and this site must not be written (#2829).
+#
+# Handlers (`test nginx config`, `restart nginx`) live in the role, so this file
+# is only usable via include_role/import_role.
+
+- name: "Frontend | Configure nginx"
+  ansible.builtin.template:
+    src: nginx-frontend.conf.j2
+    dest: /etc/nginx/sites-available/autobot-frontend
+    mode: '0644'
+    backup: true
+  become: true
+  notify:
+    - test nginx config
+    - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']

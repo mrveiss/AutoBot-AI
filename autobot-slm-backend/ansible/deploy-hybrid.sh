@@ -8,6 +8,12 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/project_root.sh"
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
@@ -129,7 +135,7 @@ update_backend_config() {
     log "INFO" "🔧 Updating backend configuration for VM connections..."
 
     # Create environment file for backend with VM endpoints
-    local env_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.hybrid"
+    local env_file="${PROJECT_ROOT}/.env.hybrid"
 
     cat > "$env_file" << EOF
 # AutoBot Hybrid Configuration - Backend on Host, Services on VMs
@@ -283,7 +289,7 @@ show_summary() {
     log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
     log "INFO" ""
     log "INFO" "Next Steps:"
-    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.hybrid"
+    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${PROJECT_ROOT}/.env.hybrid"
     log "INFO" "  2. Restart backend: python backend/main.py"
     log "INFO" "  3. Access frontend: http://${AUTOBOT_FRONTEND_HOST:-localhost}:5173"
     log "INFO" ""

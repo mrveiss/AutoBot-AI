@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 
@@ -44,6 +44,7 @@ from autobot_shared.security.path_validator import (
     SANDBOX_INVALID_PATH_CHARACTERS,
     SandboxPathError,
     resolve_within_sandbox,
+    validate_relative_path,
 )
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,
@@ -284,6 +285,12 @@ def is_safe_file(filename: str) -> bool:
 
     # Check for dangerous characters (Issue #380: module-level constant)
     if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
+        return False
+
+    # An uploaded filename is a bare name, never a path (#13394). Backslash is
+    # checked explicitly because Path.name is platform-dependent — on POSIX
+    # "dir\\evil.py" is one valid component (#13162).
+    if "/" in filename or "\\" in filename or Path(filename).name != filename:
         return False
 
     if len(filename) > 255:
@@ -642,8 +649,13 @@ async def upload_file(
     # Issue #358: mkdir in thread to avoid blocking
     await run_in_file_executor(lambda: target_dir.mkdir(parents=True, exist_ok=True))
 
-    # Prepare target file path
-    target_file = target_dir / file.filename
+    # Not `target_dir / file.filename`: pathlib's join is hostile here, and an
+    # ABSOLUTE filename discards target_dir outright. Resolve via realpath so
+    # containment holds for symlinks too (#13394).
+    try:
+        target_file = validate_relative_path(file.filename, target_dir)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
@@ -1204,6 +1216,10 @@ _ADMIN_ALLOWED_DIRS = (
 )
 _ADMIN_MAX_READ_BYTES = 1 * 1024 * 1024  # 1 MB cap for inline reads
 
+#: Directory the admin browser opens on when the caller supplies no path.
+#: Referenced through a factory at the endpoint so it never reaches the schema.
+_ADMIN_DEFAULT_BROWSE_DIR = "/home/autobot"  # noqa: ssot-path
+
 
 def _validate_admin_path(path: str) -> Path:
     """Resolve and validate an absolute path for the SLM admin file browser.
@@ -1252,7 +1268,13 @@ def _entry_to_file_item(entry: Path) -> dict:
     operation="admin_list_directory",
     error_code_prefix="FILES",
 )
-async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
+async def admin_list_directory(
+    # #13572: default_factory keeps this out of the published OpenAPI schema.
+    # As a plain default it was dumped into the contract and shipped in the
+    # committed frontend types, disclosing the service account's home directory
+    # to every API consumer. Runtime behaviour is unchanged.
+    path: str = Query(default_factory=lambda: _ADMIN_DEFAULT_BROWSE_DIR),
+) -> dict:
     """List directory contents at an absolute path.
 
     No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
@@ -1270,7 +1292,11 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
+@router.get(
+    "/read",
+    summary="Read file content for SLM admin file browser",
+    response_model=AdminFileReadResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_read_file",

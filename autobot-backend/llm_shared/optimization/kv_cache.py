@@ -252,13 +252,23 @@ class LayerKVCache:
         )
 
     def trim_to_length(self, max_len: int) -> None:
-        """Trim all layer caches to at most max_len filled positions.
+        """Retain at most the ``max_len`` **most recent** positions per layer.
 
-        Useful for sliding-window attention or when sequence length exceeds
-        a target budget.  The underlying tensor allocation is unchanged —
-        only the filled_len pointer is moved back.
+        Useful for sliding-window attention or when sequence length exceeds a
+        target budget.  The underlying tensor allocation is unchanged — the
+        retained window is moved to offset 0 and ``filled_len`` follows it.
 
-        Issue #1964.
+        Issue #1964; corrected in #13033.
+
+        This used to set ``entry.filled_len = max_len`` and nothing else, which
+        keeps ``[0, max_len)``.  Storage here is linear and append-only —
+        :meth:`update` writes at ``[filled_len : filled_len + n]`` and
+        :meth:`get` returns ``k[:, :filled_len]`` — so index 0 is the *first*
+        token of the sequence and ``filled_len - 1`` is the most recent.
+        Truncating the pointer therefore discarded exactly the tokens a sliding
+        window exists to keep, and did so silently: the shape was right and the
+        content was the wrong end of the sequence.  No caller could implement a
+        working sliding window on that behaviour.
 
         Args:
             max_len: Maximum number of positions to retain per layer.
@@ -266,16 +276,33 @@ class LayerKVCache:
         if max_len < 0:
             raise ValueError(f"max_len must be >= 0, got {max_len}")
         trimmed_layers = 0
-        for layer_idx, entry in self._entries.items():
+        for entry in self._entries.values():
             if entry.filled_len > max_len:
-                entry.filled_len = max_len
+                self._retain_tail(entry, max_len)
                 trimmed_layers += 1
         if trimmed_layers > 0:
             logger.debug(
-                "LayerKVCache trimmed %d layers to max_len=%d",
+                "LayerKVCache trimmed %d layers to the newest max_len=%d",
                 trimmed_layers,
                 max_len,
             )
+
+    @staticmethod
+    def _retain_tail(entry: "_LayerEntry", max_len: int) -> None:
+        """Move the newest ``max_len`` positions of *entry* down to offset 0.
+
+        ``copy_`` on an explicit source clone rather than a plain slice
+        assignment: source and destination overlap whenever
+        ``max_len > filled_len / 2``, and copying a tensor onto an overlapping
+        view of itself is undefined.  ``max_len == 0`` is handled by the caller's
+        ``>`` comparison only when ``filled_len > 0``, so the slice is never
+        empty here.
+        """
+        start = entry.filled_len - max_len
+        if max_len > 0:
+            entry.k[:, :max_len, :, :].copy_(entry.k[:, start : entry.filled_len, :, :].clone())
+            entry.v[:, :max_len, :, :].copy_(entry.v[:, start : entry.filled_len, :, :].clone())
+        entry.filled_len = max_len
 
     def clear(self) -> None:
         """Release all cached tensors and reset filled lengths.

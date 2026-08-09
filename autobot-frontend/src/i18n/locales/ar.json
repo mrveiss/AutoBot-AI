@@ -872,6 +872,7 @@
       "loadFailed": "فشل تحميل الذكريات. قد تكون الخلفية غير متاحة.",
       "forgetFailed": "فشل نسيان عنصر الذاكرة.",
       "forgetEverywhereFailed": "فشل حذف عنصر الذاكرة بشكل متتالٍ.",
+      "forgetEverywhereAmbiguous": "هذه الذاكرة موجودة في أكثر من مخزن — استخدم الحذف لكل مخزن في الصف بدلاً من ذلك.",
       "exportDownloaded": "تم تنزيل تصدير الذاكرة.",
       "exportFailed": "فشل التصدير. يرجى المحاولة مرة أخرى."
     },
@@ -2824,7 +2825,8 @@
       "entitiesAndRelations": "{entities} entities, {relations} relations",
       "success": "نجاح",
       "failedStatus": "فشل",
-      "retry": "إعادة المحاولة"
+      "retry": "إعادة المحاولة",
+      "tabPath": "مسار الاتصال"
     },
     "failedVectorizations": {
       "title": "Failed Vectorizations",
@@ -4080,6 +4082,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "مسار الاتصال",
+      "description": "ابحث عن أقصر سلسلة من العلاقات تربط بين كيانين.",
+      "fromEntity": "من الكيان",
+      "fromEntityPlaceholder": "اسم كيان البداية...",
+      "toEntity": "إلى الكيان",
+      "toEntityPlaceholder": "اسم الكيان الهدف...",
+      "swap": "تبديل الكيانين",
+      "direction": "الاتجاه",
+      "directionBoth": "أي اتجاه",
+      "directionOutgoing": "تتبع العلاقات للأمام",
+      "directionIncoming": "تتبع العلاقات للخلف",
+      "directionHint": "غالبًا ما تُخزَّن العلاقات في اتجاه واحد فقط.",
+      "maxDepth": "أقصى عمق",
+      "hops": "{count} قفزات",
+      "relation": "العلاقة",
+      "relationHint": "(اختياري)",
+      "relationPlaceholder": "تتبع هذا النوع من العلاقات فقط...",
+      "findPath": "ابحث عن المسار",
+      "searching": "جارٍ البحث...",
+      "connectedIn": "متصلان خلال قفزة {count} | متصلان خلال {count} قفزات",
+      "sameEntity": "كلا الاسمين يشيران إلى الكيان نفسه: {name}",
+      "fuzzyMatch": "لا توجد كيان باسم {names} — المسار أدناه يخص أقرب تطابق بدلاً من ذلك. | لا توجد كيانات بأسماء {names} — المسار أدناه يخص أقرب التطابقات بدلاً من ذلك.",
+      "crossedForwards": "للأمام",
+      "crossedBackwards": "للخلف",
+      "unnamedRelation": "مرتبط بـ",
+      "noPathFound": "لم يتم العثور على اتصال بين هذين الكيانين.",
+      "noPathHint": "جرّب زيادة العمق، أو السماح بأي اتجاه، أو إزالة مرشّح العلاقة.",
+      "entityNotFound": "هذه الأسماء لا تطابق أي كيان:",
+      "entityNotFoundHint": "تحقق من الإملاء، أو استخرج الكيانات أولاً لتصبح موجودة في الرسم البياني.",
+      "errorEnterBoth": "يرجى إدخال كيان المصدر وكيان الهدف معًا.",
+      "notInGraph": "هذه الكيانات ليست بعد في رسم العلاقات البياني.",
+      "notInGraphHint": "إنها موجودة لكن بلا روابط في الرسم البياني، لذا لا يمكن تتبع أي اتصال. أعد تشغيل استخراج الكيانات."
     }
   },
   "workflow": {

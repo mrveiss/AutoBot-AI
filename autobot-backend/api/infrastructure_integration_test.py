@@ -4,17 +4,26 @@
 """
 Integration Test Suite for Infrastructure API
 Tests all endpoints, CRUD operations, and database performance features
+
+Every check here drives a *running* backend over HTTP (and, for the worker
+check, its on-disk log), so the whole module carries the ``integration``
+marker: the unit selection (``-m "not integration"``) must skip it rather
+than fail against a backend that is not up.
 """
 
 import sys
 from pathlib import Path
 
+import pytest
 import requests
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.paths import project_root
 from constants.network_constants import ServiceURLs
+
+pytestmark = pytest.mark.integration
 
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 
@@ -82,8 +91,14 @@ def test_create_host():
     return data["id"]
 
 
-def test_get_host_details(host_id):
-    """Test 6: Get Host Details (Relationship Loading)"""
+def check_host_details(host_id):
+    """Test 6: Get Host Details (Relationship Loading).
+
+    Takes the id produced by test_create_host, so it is a step of the main()
+    flow rather than a standalone test — collected as one, pytest read the
+    argument as a request for a "host_id" fixture that does not exist and
+    errored every run.
+    """
     response = requests.get(f"{BASE_URL}/hosts/{host_id}")  # nosec B113
     data = response.json()
     print("✅ Test 6: Get Host Details - PASSED")  # noqa: print
@@ -103,8 +118,8 @@ def test_list_hosts_after_create():
     return True
 
 
-def test_delete_host(host_id):
-    """Test 8: Delete Test Host"""
+def check_delete_host(host_id):
+    """Test 8: Delete Test Host (step of the main() flow — see check_host_details)."""
     response = requests.delete(f"{BASE_URL}/hosts/{host_id}")  # nosec B113
     print("✅ Test 8: Delete Host - PASSED")  # noqa: print
     print(f"   HTTP Status: {response.status_code}")  # noqa: print
@@ -121,7 +136,7 @@ def test_celery_worker_status():
     # Check if Celery worker is running by checking logs
     try:
         with open(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/celery-worker.log",
+            str(project_root() / "logs" / "celery-worker.log"),
             "r",
             encoding="utf-8",
         ) as f:
@@ -159,11 +174,11 @@ def main():
         host_id = test_create_host()
         if host_id:
             print()  # noqa: print
-            test_get_host_details(host_id)
+            check_host_details(host_id)
             print()  # noqa: print
             test_list_hosts_after_create()
             print()  # noqa: print
-            test_delete_host(host_id)
+            check_delete_host(host_id)
             print()  # noqa: print
 
         # Worker status

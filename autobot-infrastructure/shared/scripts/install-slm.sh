@@ -14,6 +14,13 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
 
@@ -352,7 +359,7 @@ setup_code() {
             --exclude '__pycache__/' \
             --exclude '.git/' \
             --exclude 'data/*.db' \
-            "autobot@$DEV_HOST:${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/" \
+            "autobot@$DEV_HOST:${PROJECT_ROOT}/" \
             "$INSTALL_DIR/"
         chown -R autobot:autobot "$INSTALL_DIR"
     fi

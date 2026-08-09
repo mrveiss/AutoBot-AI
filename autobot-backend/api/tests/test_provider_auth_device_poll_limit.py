@@ -23,8 +23,12 @@ from auth_middleware import check_admin_permission, get_current_user
 
 
 class _FakeResp:
-    def __init__(self, data):
+    def __init__(self, data, status=200):
         self._data = data
+        # #13311: the device-flow callers reject a 3xx outright (redirects are
+        # disabled to prevent SSRF), so every response fake must carry a status.
+        self.status = status
+        self.headers: dict[str, str] = {}
 
     async def __aenter__(self):
         return self

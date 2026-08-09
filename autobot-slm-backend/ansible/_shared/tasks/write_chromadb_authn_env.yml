@@ -1,0 +1,74 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #12513: render the env file the chroma systemd units actually read.
+#
+# History of the defect this closes. #12534 put the credential straight into the
+# unit as `Environment="CHROMA_SERVER_AUTHN_CREDENTIALS=..."`, wrapped in
+# `{% if chromadb_auth_token %}`. #13462 then generated the token. Both units
+# ALSO carried an `EnvironmentFile=` line, and on the database-role unit that
+# line was `-/opt/autobot/autobot-db-stack/.env` — a path nothing in this
+# repository has ever written, made optional by the leading `-`. The result on a
+# live host: the conditional block rendered empty (the read found no token), the
+# optional env file was absent, systemd tolerated both silently, and chroma came
+# up serving every collection unauthenticated with nothing reporting a failure.
+#
+# So the credential now travels one way only: this file writes it, and the units
+# load exactly this path with a MANDATORY `EnvironmentFile=`. Two properties
+# follow, and both are the point:
+#   * the token is no longer inlined into a 0644 unit, where any local user could
+#     read it — it lands 0600 root:root, and systemd (PID 1, root) reads
+#     EnvironmentFile before dropping to the service user, so the service user
+#     never needs access to it;
+#   * a missing credential file is now a visible start failure rather than a
+#     running-but-unauthenticated service.
+#
+# Callers MUST include `read_chromadb_auth_token.yml` first (it sets
+# `chromadb_auth_token` via their own adopt task) and MUST include this file
+# BEFORE the task that templates the unit and before any start/restart, so the
+# mandatory EnvironmentFile can never point at a file that does not exist yet.
+#
+# Requires from the including role:
+#   chromadb_authn_env_file  — absolute path, must equal the unit's EnvironmentFile
+#   a `restart chromadb` handler
+---
+
+- name: "Ensure the credential directory exists for the chroma authn env file (#12513)"
+  ansible.builtin.file:
+    path: "{{ chromadb_authn_env_file | dirname }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+
+# The keys are chromadb's own Settings field names uppercased
+# (chromadb/config.py: `chroma_server_authn_provider`,
+# `chroma_server_authn_credentials`), which is how its pydantic settings read the
+# environment. The provider class ships in chromadb.auth.token_authn alongside
+# the TokenAuthClientProvider that autobot-backend/utils/chromadb_auth.py sets on
+# the client, so both halves come from one module and cannot drift apart.
+#
+# The authn keys are emitted only when a token exists: chroma refuses to start
+# when a provider is configured with empty credentials, so an unset token must
+# leave the file valid-but-empty (dev/local, auth disabled) rather than absent.
+# The FILE is written unconditionally — that is what makes the unit's mandatory
+# EnvironmentFile safe on every path, including a host that has no token yet.
+- name: "Render the ChromaDB server-authn env file (#12513)"
+  ansible.builtin.copy:
+    dest: "{{ chromadb_authn_env_file }}"
+    content: |
+      # Managed by Ansible (#12513) — regenerate via the owning role, do not edit.
+      # Read by systemd (root) for autobot-chromadb before it drops privileges.
+      {% if (chromadb_auth_token | default('') | trim) | length > 0 %}
+      CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token_authn.TokenAuthenticationServerProvider
+      CHROMA_SERVER_AUTHN_CREDENTIALS={{ chromadb_auth_token | trim }}
+      {% endif %}
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+  notify: restart chromadb

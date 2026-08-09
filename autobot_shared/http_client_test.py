@@ -265,3 +265,50 @@ async def test_tracked_request_decrements_on_caller_exception():
                 assert client._active_requests == baseline + 1
                 raise RuntimeError("boom")
         assert client._active_requests == baseline
+
+
+# ---------------------------------------------------------------------------
+# #13625: opt-in egress guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url,allow_private,blocked",
+    [
+        ("https://10.0.0.5/api", False, True),
+        ("https://10.0.0.5/api", True, False),
+        ("https://192.168.1.10/api", True, False),
+        # Hard blocks stay blocked with the opt-in on — if any of these flip,
+        # the opt-in has become an SSRF bypass.
+        ("http://127.0.0.1:8080/x", True, True),
+        ("http://169.254.169.254/latest/meta-data/", True, True),
+        ("https://93.184.216.34/", False, False),
+    ],
+)
+async def test_egress_guard_permits_private_only_with_the_opt_in(url, allow_private, blocked):
+    from autobot_shared.http_client import EgressBlockedError, _assert_egress_allowed
+
+    if blocked:
+        with pytest.raises(EgressBlockedError):
+            await _assert_egress_allowed(url, allow_private=allow_private)
+    else:
+        await _assert_egress_allowed(url, allow_private=allow_private)
+
+
+def test_guard_defaults_to_off_so_existing_callers_are_unaffected():
+    """#13625: the guard must be opt-in.
+
+    This client is shared by ~103 call sites, most of them internal
+    service-to-service traffic that legitimately targets private addresses.
+    A default-on guard would break that traffic the moment it merged.
+    """
+    import inspect
+
+    from autobot_shared.http_client import HTTPClientManager
+
+    sig = inspect.signature(HTTPClientManager.request)
+    assert sig.parameters["guard_egress"].default is None, "guard_egress must default to no guarding"
+
+    src = inspect.getsource(HTTPClientManager.request)
+    assert "if guard_egress is not None:" in src, "guard call is not gated — every caller would be guarded"

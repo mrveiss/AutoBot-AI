@@ -41,6 +41,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.workflow import ExecutionStrategy
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
+from diagnostics import get_performance_diagnostics
 from memory import LongTermMemoryManager
 
 # Issue #5040 / #10666 B3: multi-agent imports (consolidated into orchestration)
@@ -95,9 +96,6 @@ from utils.agent_selection import reserve_agent as _reserve_agent
 
 logger = get_logger("orchestrator")
 
-# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
-config_manager = _get_config_manager()
-
 # Import KnowledgeBase for enhanced features
 try:
     from knowledge_base import KnowledgeBase
@@ -133,11 +131,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------------------------------ init
 
-    def _init_core_components(self, config_mgr) -> None:
-        self.config_manager = config_mgr or _get_config_manager()
+    def _init_core_components(self, config_manager, llm_service, diagnostics) -> None:
+        self.config_manager = config_manager or _get_config_manager()
         self.config = OrchestratorConfig(self.config_manager)
         # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
-        self.llm_service = get_llm_service()
+        self.llm_service = llm_service or get_llm_service()
+        # #13162: diagnostics is a first-class injectable collaborator; the
+        # default is the canonical lazy singleton rather than a fresh instance.
+        self.diagnostics = diagnostics or get_performance_diagnostics()
         self.memory_manager = LongTermMemoryManager()
         self.agent_manager = AgentManager()
 
@@ -155,7 +156,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             "average_response_time": 0,
         }
 
-    def _init_components(self) -> None:
+    def _init_components(self, knowledge_base) -> None:
         self.agent_registry: Dict[str, AgentProfile] = {}
         # GH #6820: AgentCapabilityRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
@@ -164,7 +165,15 @@ class Orchestrator(_DeprecatedRequestMixin):
         self._profile_registry = AgentCapabilityRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
-        self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
+        # #13162: honour an injected KnowledgeBase and hand the (possibly
+        # injected) ConfigManager to the default instance instead of letting it
+        # reach for the global singleton.
+        if knowledge_base is not None:
+            self.knowledge_base = knowledge_base
+        elif KNOWLEDGE_BASE_AVAILABLE:
+            self.knowledge_base = KnowledgeBase(config_manager=self.config_manager)
+        else:
+            self.knowledge_base = None
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
         self.auto_doc_enabled = True
         self.workflow_metrics = {
@@ -220,6 +229,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
         # Step planner — capability-to-agent mapping for single-workflow steps (GH #6820).
         # Populated after _initialize_default_agents so agent_registry is non-empty.
+        #
+        # #13751: constructed but never called — no method on this object is
+        # invoked anywhere. WorkflowPlanner is DEPRECATED (the planner half of
+        # the engine run_workflow left behind at #5058); the live equivalents are
+        # create_workflow_plan for planning and get_agent_recommendations_scored
+        # for capability-to-agent selection. The attribute is retained rather
+        # than dropped, per the never-delete policy; see
+        # orchestration/workflow_planner.py for the per-capability mapping.
         self._step_planner = WorkflowPlanner(
             base_orchestrator=self,
             agent_registry=self.agent_registry,
@@ -242,10 +259,22 @@ class Orchestrator(_DeprecatedRequestMixin):
             max_parallel_tasks=self.config.max_parallel_tasks,
         )
 
-    def __init__(self, config_mgr=None):
-        self._init_core_components(config_mgr)
+    def __init__(self, config_manager=None, llm_service=None, knowledge_base=None, diagnostics=None):
+        """Build an Orchestrator, optionally with injected collaborators (#13162).
+
+        Args:
+            config_manager: ConfigManager to read orchestrator settings from.
+                Falls back to the application-wide singleton.
+            llm_service: LLMService used for model calls. Falls back to the
+                shared singleton.
+            knowledge_base: KnowledgeBase used for auto-documentation. Falls
+                back to a new instance bound to ``config_manager``.
+            diagnostics: Diagnostics collaborator. Falls back to the canonical
+                lazy singleton.
+        """
+        self._init_core_components(config_manager, llm_service, diagnostics)
         self._init_task_state()
-        self._init_components()
+        self._init_components(knowledge_base)
         self._init_classification_agent()
         self._initialize_default_agents()
         self._init_strategy_components()
@@ -329,7 +358,10 @@ class Orchestrator(_DeprecatedRequestMixin):
             )
             return
         logger.warning("⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model)
-        fallback_model = config_manager.get_default_llm_model()
+        # #13162: was the module-level singleton, which silently ignored an
+        # injected ConfigManager — the fallback model came from global config
+        # even when the caller supplied its own.
+        fallback_model = self.config_manager.get_default_llm_model()
         if await self._validate_llm_model(fallback_model):
             logger.info("✅ Using fallback model: %s", fallback_model)
             self.config.orchestrator_llm_model = fallback_model
@@ -533,50 +565,57 @@ class Orchestrator(_DeprecatedRequestMixin):
             if complexity == TaskComplexity.SIMPLE:
                 return [
                     WorkflowStep(
-                        id="step_1",
+                        task_id="step_1",
                         agent_type="llm",
                         action="generate_response",
                         description="Generate direct response to user query",
                         requires_approval=False,
                         dependencies=[],
                         inputs={"query": user_request},
-                        expected_duration_ms=2000,
+                        estimated_duration_seconds=2.0,
                     )
                 ]
             return [
                 WorkflowStep(
-                    id="step_1",
+                    task_id="step_1",
                     agent_type="analyzer",
                     action="analyze_request",
                     description="Analyze user request",
                     requires_approval=False,
                     dependencies=[],
                     inputs={"query": user_request},
-                    expected_duration_ms=3000,
+                    estimated_duration_seconds=3.0,
                 ),
                 WorkflowStep(
-                    id="step_2",
+                    task_id="step_2",
                     agent_type="executor",
                     action="execute_plan",
                     description="Execute the planned actions",
                     requires_approval=True,
                     dependencies=["step_1"],
                     inputs={"query": user_request},
-                    expected_duration_ms=10000,
+                    estimated_duration_seconds=10.0,
                 ),
                 WorkflowStep(
-                    id="step_3",
+                    task_id="step_3",
                     agent_type="synthesizer",
                     action="synthesize_results",
                     description="Synthesize results",
                     requires_approval=False,
                     dependencies=["step_2"],
                     inputs={"query": user_request},
-                    expected_duration_ms=2000,
+                    estimated_duration_seconds=2.0,
                 ),
             ]
         except Exception as e:
-            logger.error("Failed to plan workflow steps: %s", e)
+            # #13699: this handler turned a constructor mismatch into a silent
+            # empty plan for every caller — `WorkflowStep` has aliased the
+            # canonical `WorkflowTask` since #6951 Phase 2A (`task_id` /
+            # `estimated_duration_seconds`), but the calls above still passed
+            # the retired `id` / `expected_duration_ms`, so every invocation
+            # raised TypeError and was logged as a one-line mystery. Keep the
+            # guard, but make the next such breakage diagnosable.
+            logger.error("Failed to plan workflow steps: %s", e, exc_info=True)
             return []
 
     # ------------------------------------------ workflow planning (canonical path)

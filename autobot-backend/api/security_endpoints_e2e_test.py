@@ -13,9 +13,20 @@ import sys
 from pathlib import Path
 
 import aiohttp
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from tests.test_helpers import get_test_backend_url
+
+# #13284: this module boots the whole backend — `subprocess.Popen([python,
+# "main.py"])` in its own process group — then polls /api/hello for up to 20
+# seconds before touching any endpoint. That startup budget is the 25.22s the
+# durations report attributes to `test_security_endpoints`; none of it is
+# verification. Like every other check here it carries no assertions (each
+# endpoint result is printed, failures included), so excluding it from the PR
+# gate loses no coverage. `integration` is already filtered by both pytest
+# invocations in .github/workflows/ci.yml.
+pytestmark = pytest.mark.integration
 
 
 async def _poll_server_ready(timeout: float = 2.0) -> bool:

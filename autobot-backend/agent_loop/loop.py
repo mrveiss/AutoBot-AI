@@ -29,6 +29,7 @@ from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.pre_action_verifier import PreActionVerifier, VerifierResult, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
+from agent_loop.tool_output_spill import spill_results as _spill_results
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
@@ -127,6 +128,23 @@ class AgentLoop:
     runtime effect until a production caller instantiates ``AgentLoop``. Treat
     this as a library of parts + a reference implementation, not a live code
     path, when reasoning about what actually runs.
+
+    MIRRORED IN PRODUCTION (#13590) — these guards now also run at the live
+    seam, so changing them here alone is no longer the whole story:
+
+    - ``max_identical_tool_calls`` → ``chat_workflow/tool_handler.py``
+      ``_enforce_repetition``, via ``autobot_shared/repetition_guard.py``. The
+      production counter keys on ``(call fingerprint, result hash)`` rather than
+      the call alone, so a polling loop whose result moves is not halted.
+    - ``halt_on_stagnation`` / ``stagnation_window`` /
+      ``min_observation_novelty`` → the same seam, same module, reusing
+      ``fingerprint.compute_novel_token_ratio``.
+    - ``AUTOBOT_GUARD_PROFILE`` and the per-guard env overrides in
+      ``guard_profile.py`` therefore now govern production for these fields.
+
+    STILL UNPORTED: everything else in the guard stack — schema self-correction
+    (``max_schema_retries``), the approval workflow fields, and the belief-state
+    and planning machinery — remains dormant here.
     """
 
     def __init__(
@@ -610,6 +628,12 @@ class AgentLoop:
 
         live_results = await self._execute_tools(tools_to_run) if tools_to_run else {}
         tool_results = {**cached_results, **live_results}
+
+        # #13692 step 1: an oversized observation is written aside and replaced
+        # by a bounded excerpt plus a resolvable anchor, so one large tool result
+        # cannot consume the window in a single step. Off by default (#12555
+        # precedent); a run under the threshold is byte-identical to before.
+        tool_results, _spilled = _spill_results(getattr(self._current_context, "task_id", "unknown"), tool_results)
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and

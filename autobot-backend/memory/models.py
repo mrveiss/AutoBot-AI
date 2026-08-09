@@ -122,6 +122,10 @@ class MemoryEntry:
     timestamp: datetime
     reference_path: str | None = None
     embedding: bytes | None = None
+    # #13688: owner scope as a first-class field, never buried in `metadata`.
+    # Defaulted so existing keyword construction stays valid, but GeneralStorage
+    # rejects a write without it — the write path cannot silently go unscoped.
+    user_id: str | None = None
 
 
 __all__ = [

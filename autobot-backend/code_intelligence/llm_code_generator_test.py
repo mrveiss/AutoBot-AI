@@ -39,10 +39,62 @@ from code_intelligence.llm_code_generator import (
 # =============================================================================
 
 
+class _StubLLMResponse:
+    """Minimal stand-in for the object ``LLMService.chat()`` returns."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _StubLLMClient:
+    """An awaitable ``chat()`` returning a fenced code block (#13237).
+
+    Without this the generator resolves ``get_llm_service()`` to the conftest
+    package stub's shared ``MagicMock``, so ``await self.llm_client.chat(...)``
+    raises ``TypeError: object MagicMock can't be used in 'await' expression``.
+    ``generator.py`` catches that and returns ``status=FAILED``, which made the
+    SUCCESS path unreachable *by construction* — every assertion guarded by
+    ``if result.status == SUCCESS`` was dead, and the cache, which is only
+    written in ``_build_success_result``, was never exercised.
+
+    An ``AsyncMock`` is not enough either: ``_extract_code`` would then run
+    ``CODE_BLOCK_RE.search()`` over a ``MagicMock`` and fail, still yielding
+    FAILED. The response has to be a real string with a real fenced block.
+    """
+
+    def __init__(self, content: str | None = None) -> None:
+        self.content = content or (
+            "Here is the refactored code:\n\n"
+            "```python\n"
+            "def foo():\n"
+            '    """Do nothing."""\n'
+            "    pass\n"
+            "```\n\n"
+            "The docstring documents the no-op behaviour."
+        )
+        self.calls: list[dict] = []
+
+    async def chat(self, **kwargs) -> _StubLLMResponse:
+        self.calls.append(kwargs)
+        return _StubLLMResponse(self.content)
+
+
+@pytest.fixture
+def stub_llm_client() -> _StubLLMClient:
+    """The injectable client that makes the SUCCESS path reachable."""
+    return _StubLLMClient()
+
+
 @pytest.fixture
 def llm_generator() -> LLMCodeGenerator:
     """Create an LLMCodeGenerator instance."""
     return LLMCodeGenerator()
+
+
+@pytest.fixture
+def working_generator(stub_llm_client) -> LLMCodeGenerator:
+    """A generator wired to a client that actually answers."""
+    return LLMCodeGenerator(llm_client=stub_llm_client)
 
 
 @pytest.fixture
@@ -600,7 +652,7 @@ class TestLLMCodeGenerator:
         assert isinstance(result, RefactoringResult)
 
     @pytest.mark.asyncio
-    async def test_generate_with_validation(self, llm_generator):
+    async def test_generate_with_validation(self, working_generator):
         """Test that generated code is validated."""
         context = CodeContext(
             file_path="/test/file.py",
@@ -610,13 +662,18 @@ class TestLLMCodeGenerator:
             refactoring_type=RefactoringType.ADD_DOCSTRING,
             context=context,
         )
-        result = await llm_generator.generate(request)
-        # If successful, generated code should be valid Python
-        if result.status == GenerationStatus.SUCCESS and result.generated_code:
-            assert result.generated_code.validation.is_valid is True
+        result = await working_generator.generate(request)
+
+        # #13237: previously this whole body sat behind `if status == SUCCESS`
+        # against a generator that could never succeed, so nothing ran. The
+        # status is now asserted first — a guarded assertion proves nothing.
+        assert result.status == GenerationStatus.SUCCESS
+        assert result.generated_code is not None
+        assert result.generated_code.validation.is_valid is True
+        assert "def foo" in result.generated_code.code
 
     @pytest.mark.asyncio
-    async def test_generate_with_caching(self, llm_generator):
+    async def test_generate_with_caching(self, working_generator, stub_llm_client):
         """Test that caching works."""
         context = CodeContext(
             file_path="/test/file.py",
@@ -626,19 +683,40 @@ class TestLLMCodeGenerator:
             refactoring_type=RefactoringType.ADD_DOCSTRING,
             context=context,
         )
-        # First call
-        result1 = await llm_generator.generate(request)
-        # Second call should hit cache
-        result2 = await llm_generator.generate(request)
-        # Both should return results
-        assert result1 is not None
-        assert result2 is not None
+        result1 = await working_generator.generate(request)
+        result2 = await working_generator.generate(request)
 
-    def test_clear_cache(self, llm_generator):
-        """Test clearing the cache."""
-        llm_generator.clear_cache()
-        # Should not raise an error
-        assert True
+        # #13237: the cache is written only in _build_success_result, which the
+        # FAILED path never reaches — so `assert result is not None` passed while
+        # caching was completely unexercised. Assert the actual behaviour: the
+        # second call is served from cache, so the client is called exactly once.
+        assert result1.status == GenerationStatus.SUCCESS
+        assert result2.status == GenerationStatus.SUCCESS
+        assert len(stub_llm_client.calls) == 1, (
+            f"expected the second generate() to hit the cache, "
+            f"but the client was called {len(stub_llm_client.calls)} times"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clear_cache(self, working_generator, stub_llm_client):
+        """Clearing the cache must make the next call reach the LLM again.
+
+        #13237: this ended in a literal ``assert True``, which is why it was one
+        of the seven tests that passed even while the whole module was a mock.
+        """
+        context = CodeContext(file_path="/test/file.py", code_snippet="def c():\n    pass")
+        request = RefactoringRequest(
+            refactoring_type=RefactoringType.ADD_DOCSTRING,
+            context=context,
+        )
+        await working_generator.generate(request)
+        await working_generator.generate(request)
+        assert len(stub_llm_client.calls) == 1
+
+        working_generator.clear_cache()
+        await working_generator.generate(request)
+
+        assert len(stub_llm_client.calls) == 2, "clear_cache() did not evict the entry"
 
 
 # =============================================================================

@@ -18,7 +18,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConstants
+from constants.model_constants import ModelConfig
 from dependencies import get_config
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
@@ -720,12 +720,69 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             session.metadata["used_knowledge"] = False
             return "", []
 
+    def _allocate_prompt_sections(
+        self,
+        knowledge_context: str,
+        trajectory_context: str,
+        conversation_context: str,
+        message: str,
+        model_name: str | None,
+    ) -> tuple[str, str, str]:
+        """Fit the prompt's competing sections into the model's window (#13640).
+
+        The user's message is **reserved out of the budget**, not entered into
+        the trimmable set. It is never truncated — truncating what the user
+        actually asked is a worse failure than dropping context — so counting
+        it as trimmable would both wipe every other section to make room for
+        text that is then restored in full, and report a token total the code
+        knows is not what it shipped.
+
+        Priorities encode what the turn cannot lose next: conversation history
+        outranks retrieved knowledge, which outranks the untrusted trajectory
+        reference block. ``max_share`` stops a large retrieval set from
+        crowding out history, and binds only when the sections actually
+        contend for the budget.
+
+        Non-fatal: any failure returns the sections unchanged, because a
+        budgeting error must never cost the user their turn.
+        """
+        try:
+            from context_window_manager import ContextSection, get_context_window_manager
+
+            cwm = get_context_window_manager()
+            sections = [
+                ContextSection("conversation", conversation_context, priority=70, max_share=0.5),
+                ContextSection("knowledge", knowledge_context, priority=40, max_share=0.5),
+                ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
+            ]
+            message_tokens = cwm.estimate_tokens(message)
+            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            result = cwm.allocate_sections(sections, budget_tokens=budget)
+        except Exception as exc:
+            logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
+            return knowledge_context, trajectory_context, conversation_context
+
+        if result.trimmed:
+            logger.info(
+                "[#13640] Prompt over budget: %d -> %d tokens (sections budget %d, message %d); "
+                "trimmed %s; dropped %s",
+                result.tokens_before + message_tokens,
+                result.tokens_after + message_tokens,
+                result.budget,
+                message_tokens,
+                ", ".join(result.trimmed),
+                ", ".join(result.dropped) or "none",
+            )
+        by_name = {s.name: s.content for s in result.sections}
+        return by_name["knowledge"], by_name["trajectory"], by_name["conversation"]
+
     def _build_full_prompt(
         self,
         knowledge_context: str,
         conversation_context: str,
         message: str,
         trajectory_context: str = "",
+        model_name: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -733,7 +790,15 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         to avoid double-injection and context-window waste. ``trajectory_context``
         (#11261) is an untrusted reference block of similar past turns, prepended
         so the model can reuse prior solutions without treating them as commands.
+
+        Issue #13640: this is the multi-section assembly point — four pieces
+        competing for one window, previously concatenated with no budget at all.
+        Allocation is priority-ordered so overflow sheds the least valuable
+        content first, and what was shed is logged instead of vanishing.
         """
+        knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
+            knowledge_context, trajectory_context, conversation_context, message, model_name
+        )
         prefix = ""
         if knowledge_context:
             prefix += knowledge_context + "\n"
@@ -773,6 +838,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
         Issue #11585: session.metadata["model_override"] (per-request/per-conversation
         choice) takes priority over the global config default.
+        #13687/#13704: L4's goal ancestry is resolved from the server-side
+        session binding, not from any parameter threaded through here — the
+        request context and session metadata are both client-influenced.
         """
         selected_model = self._get_selected_model(
             session.metadata.get("model_override") if session and session.metadata else None
@@ -797,7 +865,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             language=language,
             company_id=(session.metadata.get("company_id") if session and session.metadata else None),
         )
-        # Issue #5066: Tiered L0-L3 context wake-up (A/B against legacy path).
+        # Issue #5066: Tiered L0-L4 context wake-up.
+        # #13689: the A/B RAN (2026-08-08) — it is no longer an open intention.
+        # All five layers render; costs are +14..45 tokens and +6..8ms assembly.
+        # Result: ON. It stayed off until #13742 fixed L3 duplicating the
+        # retrieval performed below, which is why L3 is no longer handed a
+        # knowledge_service. Full record: docs/research/tiered-context-ab-13689.md
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
         # When false the pre-existing unconditional EssentialStory path is used.
@@ -807,12 +880,35 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
                 if TIERED_CONTEXT_ENABLED:
+                    # #13686: the memory graph was read off an object that never
+                    # had it, so L2 returned "" on every turn. #13687/#13704: the
+                    # goal ancestry comes from the *server-side* session binding,
+                    # never the request body, and both hops are company-scoped.
+                    # Both resolvers degrade to None rather than failing the turn.
+                    from chat_workflow.tiered_context_sources import (
+                        resolve_goal_ancestry,
+                        resolve_memory_graph,
+                    )
+
                     tiered_ctx = await TieredContextBuilder().build(
                         user_message=message,
                         model_name=selected_model,
                         session_id=session.session_id,
-                        memory_graph=getattr(self, "memory_graph", None),
-                        knowledge_service=self.knowledge_service if use_knowledge else None,
+                        memory_graph=await resolve_memory_graph(),
+                        # #13742: deliberately NOT self.knowledge_service. The RAG
+                        # path below (:914) retrieves for every use_knowledge turn
+                        # via the same conversation_aware_retrieve L3 would call,
+                        # then applies budget_grounded_context for trimming and
+                        # citation rebinding (#3770/#10837). Handing L3 the service
+                        # here bought a second identical vector search and the same
+                        # chunks twice in the prompt — with the copy inside the
+                        # tiered block escaping that budgeting entirely.
+                        #
+                        # L3 keeps its retrieval path for callers that have no
+                        # separate RAG stage; at this call site the main path owns
+                        # retrieval, so L3 correctly stays silent.
+                        knowledge_service=None,
+                        goal_ancestry=await resolve_goal_ancestry(session.session_id),
                     )
                     if tiered_ctx:
                         system_prompt = tiered_ctx + "\n\n" + system_prompt
@@ -857,7 +953,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 tenant_id=str(session.metadata.get("tenant_id") or ""),
             )
 
-        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message, trajectory_context)
+        full_prompt = self._build_full_prompt(
+            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+        )
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
         full_prompt = await _emit_after_prompt_build(
@@ -904,7 +1002,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         return {
             "temperature": 0.7,
             "top_p": 0.9,
-            "num_ctx": ModelConstants.DEFAULT_NUM_CTX,
+            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
         }
 
     async def _interpret_non_streaming(

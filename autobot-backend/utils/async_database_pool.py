@@ -11,7 +11,6 @@ Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import asyncio
-import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -21,6 +20,7 @@ from typing import Any, Dict
 import aiosqlite
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.sql_identifier import validate_sql_identifier
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
 from constants.threshold_constants import TimingConstants
@@ -413,31 +413,6 @@ async def async_transaction(pool: AsyncSQLiteConnectionPool):
             raise
 
 
-_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
-    """Validate a SQL identifier (table or column name) against an allowlist pattern.
-
-    Only permits names composed of ASCII letters, digits, and underscores, starting
-    with a letter or underscore. This prevents SQL injection via identifier interpolation
-    in f-string query construction. (#2845)
-
-    Args:
-        name: The identifier to validate.
-        label: Human-readable label used in the error message.
-
-    Returns:
-        The validated name unchanged.
-
-    Raises:
-        ValueError: If the name contains characters outside the allowed set.
-    """
-    if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
-    return name
-
-
 # Batch operation helpers
 class AsyncBatchOperations:
     """Helper class for efficient batch database operations."""
@@ -460,9 +435,9 @@ class AsyncBatchOperations:
             data: List of tuples with data to insert
             batch_size: Number of records per batch
         """
-        _validate_sql_identifier(table, "table name")
+        validate_sql_identifier(table, "table name")
         for col in columns:
-            _validate_sql_identifier(col, "column name")
+            validate_sql_identifier(col, "column name")
         placeholders = ", ".join(["?" for _ in columns])
         column_names = ", ".join(columns)
         query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # nosec B608
@@ -492,10 +467,10 @@ class AsyncBatchOperations:
             data: List of tuples with (set_values..., where_value)
             batch_size: Number of records per batch
         """
-        _validate_sql_identifier(table, "table name")
+        validate_sql_identifier(table, "table name")
         for col in set_columns:
-            _validate_sql_identifier(col, "column name")
-        _validate_sql_identifier(where_column, "column name")
+            validate_sql_identifier(col, "column name")
+        validate_sql_identifier(where_column, "column name")
         set_clause = ", ".join([f"{col} = ?" for col in set_columns])
         query = f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"  # nosec B608
 

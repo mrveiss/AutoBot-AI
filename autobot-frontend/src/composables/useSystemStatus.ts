@@ -25,6 +25,18 @@ const STATUS_POLL_INTERVAL_MS = 15000
 // long budget here would just re-add the delay the status probes already hit.
 const BACKEND_HEALTH_TIMEOUT_MS = 3000
 
+// GH#12866: budget for the two service-monitor probes. Was 5000, which sat
+// *inside* the backend's measured latency distribution rather than above it:
+// 40 samples on an idle single-box host gave p50=0.85s but p90=12s, so 11/40
+// polls (27.5%) blew the budget while the backend was healthy and merely
+// GIL-starved. A budget below p90 does not measure reachability, it measures
+// whether a stall happened to be in progress.
+//
+// 12s clears the measured p90 and still lands inside the 15s poll cadence, so a
+// slow poll cannot overlap the next one. It is not a fix for the stalls — that
+// is the backend half of #12866 — only for reading them as an outage.
+const STATUS_PROBE_TIMEOUT_MS = 12000
+
 // ---------------------------------------------------------------------------
 // Types & Interfaces
 // ---------------------------------------------------------------------------
@@ -221,7 +233,7 @@ async function fetchVmStatus(): Promise<[SystemService[], boolean]> {
     const vmResponse =
       await apiEndpointMapper.fetchWithFallback(
         `${getApiBase()}/service-monitor/vms/status`,
-        { timeout: 5000 },
+        { timeout: STATUS_PROBE_TIMEOUT_MS },
       ) as FallbackResponse
     const vmData: VmStatusResponse = await vmResponse.json()
 
@@ -271,7 +283,7 @@ async function fetchServiceStatus(): Promise<[SystemService[], boolean]> {
     const resp =
       await apiEndpointMapper.fetchWithFallback(
         `${getApiBase()}/service-monitor/services`,
-        { timeout: 5000 },
+        { timeout: STATUS_PROBE_TIMEOUT_MS },
       ) as FallbackResponse
     const data: ServicesResponse = await resp.json()
 
@@ -300,6 +312,47 @@ async function fetchServiceStatus(): Promise<[SystemService[], boolean]> {
   }
 
   return [services, hadError]
+}
+
+// ---------------------------------------------------------------------------
+// Helper: stale-state presentation (GH#12866)
+// ---------------------------------------------------------------------------
+
+/** `HH:MM` in the viewer's locale, for the "as of" stamp. */
+function asOf(at: Date): string {
+  return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * Wording for the Backend API row when a status probe failed.
+ *
+ * GH#12866: the original text asserted unreachability for every probe failure.
+ * On a single-box deployment there is no network to be unreachable across, so
+ * that reading was not merely imprecise, it was wrong — the honest states are
+ * "slow" and "stale", and only a failed /api/health means "down".
+ */
+function describeProbeFailure(reachable: boolean, at: Date | null): string {
+  const stamp = at ? ` — status as of ${asOf(at)}` : ''
+  return reachable
+    ? `Degraded — status checks timed out, backend responding${stamp}`
+    : `Unreachable — service status unknown${stamp}`
+}
+
+/**
+ * The last observed rows, re-labelled as stale rather than re-asserted as current.
+ *
+ * Status is downgraded to `warning` because a green row from four minutes ago
+ * must not read as a live green row; the text carries the reason.
+ */
+function staleCopyOf(previous: SystemService[] | null): SystemService[] {
+  if (!previous) return []
+  return previous
+    .filter((s) => s.name !== 'Backend API' && s.name !== 'Frontend' && s.name !== 'WebSocket')
+    .map((s) => ({
+      name: s.name,
+      status: 'warning' as const,
+      statusText: `${s.statusText} (last known)`,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +396,14 @@ export function useSystemStatus(): UseSystemStatusReturn {
   const systemServices = ref<SystemService[]>([...DEFAULT_SERVICES])
 
   const showSystemStatus = ref(false)
+
+  // GH#12866: the last per-service snapshot that came from a successful poll,
+  // and when it was taken. A stalled probe means the current state is UNKNOWN,
+  // not that seven services went down — so the panel keeps showing what it last
+  // actually observed, stamped, instead of replacing eight rows with three
+  // placeholders that read as "everything else disappeared".
+  const lastGoodServices = ref<SystemService[] | null>(null)
+  const lastGoodAt = ref<Date | null>(null)
 
   // ---- Computed-like getters ----
 
@@ -422,10 +483,13 @@ export function useSystemStatus(): UseSystemStatusReturn {
           {
             name: 'Backend API',
             status: 'warning',
-            statusText: reachable
-              ? 'Degraded — status checks timed out, backend responding'
-              : 'Unreachable — service status unknown',
+            statusText: describeProbeFailure(reachable, lastGoodAt.value),
           },
+          // GH#12866: keep the last observed rows rather than dropping to a
+          // three-row placeholder. The probe failing says nothing about Redis,
+          // Ollama or the NPU worker — their state is simply as of the stamp
+          // above. Dropping them made a slow poll look like a fleet outage.
+          ...staleCopyOf(lastGoodServices.value),
           { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
           { name: 'WebSocket', status: 'healthy', statusText: 'Connected' },
         ]
@@ -449,6 +513,11 @@ export function useSystemStatus(): UseSystemStatusReturn {
       ]
 
       systemServices.value = deduplicateServices(combined)
+
+      // GH#12866: this poll actually observed the fleet — remember it, so the
+      // next stalled poll can show it stamped instead of showing nothing.
+      lastGoodServices.value = systemServices.value.map((s) => ({ ...s }))
+      lastGoodAt.value = new Date()
 
       const hasErrors = systemServices.value.some(
         (s) => s.status === 'error',

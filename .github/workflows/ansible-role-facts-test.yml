@@ -27,6 +27,12 @@ on:
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
       - 'autobot-slm-backend/ansible/roles/_shared/tasks/**'
+      # #13746: the venv-producer guard reads every play and role task file,
+      # so it has to trigger on them — otherwise the check cannot fire on the
+      # change that breaks it.
+      - 'autobot-slm-backend/ansible/playbooks/**'
+      - 'autobot-slm-backend/ansible/roles/**'
+      - 'autobot-slm-backend/ansible/tests/**'
       - 'autobot-slm-backend/ansible/tests/**'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
@@ -42,6 +48,12 @@ on:
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
       - 'autobot-slm-backend/ansible/roles/_shared/tasks/**'
+      # #13746: the venv-producer guard reads every play and role task file,
+      # so it has to trigger on them — otherwise the check cannot fire on the
+      # change that breaks it.
+      - 'autobot-slm-backend/ansible/playbooks/**'
+      - 'autobot-slm-backend/ansible/roles/**'
+      - 'autobot-slm-backend/ansible/tests/**'
       - 'autobot-slm-backend/ansible/tests/**'
 
 jobs:
@@ -74,6 +86,14 @@ jobs:
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_role_facts_synced.py
+
+      # #13746: three producers built /opt/autobot/venv with two interpreters.
+      # Co-location puts them on one host, and the loser's site-packages
+      # survives — a native ImportError at startup, never a deploy error.
+      - name: Check no venv path has two interpreters
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_venv_producers.py
 
       - name: "Run clean.yml include_tasks loops test (#7058)"
         working-directory: autobot-slm-backend/ansible

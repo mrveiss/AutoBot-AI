@@ -65,7 +65,7 @@ SENSITIVE_PORTS: "dict[int, tuple[str, str]]" = {
 }
 
 _LOOPBACK_ADDRESSES = frozenset({"127.0.0.1", "::1", "localhost"})
-_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})  # nosec B104 - detection allowlist, not a bind
+_WILDCARD_ADDRESSES = frozenset({"0.0.0.0", "*", "::"})  # nosec B104  # detection allowlist, not a bind
 
 # Module-level background-task state (mirrors schedule_executor.py).
 _auditor_running = False

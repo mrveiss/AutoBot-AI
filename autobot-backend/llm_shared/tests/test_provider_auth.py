@@ -828,26 +828,12 @@ class TestProviderAuthSecurity:
             _validate_outbound_url("https://internal.corp/steal-metadata")
         assert exc_info.value.status_code == 400
 
-    def test_allow_redirects_false_in_device_initiate(self):
-        """Verify allow_redirects=False is wired into the aiohttp POST in device_initiate.
-
-        We inspect the source to confirm the argument is present, preventing
-        a 302-redirect SSRF bypass from an allowlisted host to an internal one.
-        """
-        import inspect
-
-        from api import provider_auth as _pa_module
-
-        src = inspect.getsource(_pa_module.device_initiate)
-        assert "allow_redirects=False" in src, "device_initiate must pass allow_redirects=False to aiohttp"
-
-    def test_allow_redirects_false_in_device_poll(self):
-        import inspect
-
-        from api import provider_auth as _pa_module
-
-        src = inspect.getsource(_pa_module.device_poll)
-        assert "allow_redirects=False" in src, "device_poll must pass allow_redirects=False to aiohttp"
+    # #13311: these two used to assert ``"allow_redirects=False" in
+    # inspect.getsource(...)``. That literal passes from a comment or a dead
+    # branch and breaks on any refactor, and it never established that the
+    # redirect is actually *not followed*. See
+    # ``TestRedirectsAreNotFollowedOnTheDeviceFlow`` below, which drives the
+    # endpoints against a session that follows redirects when told to.
 
     def test_malformed_port_returns_400_not_500(self):
         """#11066 audit: a malformed port raises ValueError on parsed.port access —
@@ -1051,3 +1037,151 @@ class TestVaultWriteCreatedByGuard:
         real = "11111111-2222-3333-4444-555555555555"
         created_by, _uuid = self._run(real)
         assert created_by == _uuid.UUID(real)
+
+
+# ---------------------------------------------------------------------------
+# #12278 / #13311: redirects on the device-code flow
+# ---------------------------------------------------------------------------
+
+
+class _FakeResponse:
+    """Minimal aiohttp response usable as an async context manager."""
+
+    def __init__(self, status: int, payload: dict | None, text: str = ""):
+        self.status = status
+        self.headers = {"Location": "https://internal.invalid/token"} if 300 <= status < 400 else {}
+        self._payload = payload
+        self._text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc):
+        return False
+
+    async def json(self, content_type=None):
+        if self._payload is None:
+            # A real 302 body is HTML; aiohttp raises rather than inventing a dict.
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        return self._payload
+
+    async def text(self):
+        return self._text
+
+
+class _RedirectFollowingSession:
+    """A session that follows a 302 exactly when ``allow_redirects`` says so.
+
+    Real ``aiohttp`` does this internally, so a fake that always returns the
+    302 could never tell a fixed caller from a broken one. Here the redirect
+    target stands in for the internal host an SSRF bypass would reach: if the
+    caller opts into following it, the endpoint receives a *successful* token
+    payload sourced from somewhere the allowlist never approved.
+    """
+
+    INTERNAL_PAYLOAD = {
+        "device_code": "leaked",
+        "user_code": "LEAKED",
+        "verification_uri": "https://internal.invalid/",
+        "access_token": "leaked-token",
+        "token_type": "bearer",
+    }
+
+    def __init__(self, **_kwargs):
+        self.calls: list[dict] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc):
+        return False
+
+    def post(self, url, **kwargs):
+        self.calls.append({"url": url, **kwargs})
+        if kwargs.get("allow_redirects"):
+            return _FakeResponse(200, dict(self.INTERNAL_PAYLOAD))
+        return _FakeResponse(302, None, text="<html>Found</html>")
+
+
+class TestRedirectsAreNotFollowedOnTheDeviceFlow:
+    """A 302 from an allowlisted host must not be chased to an internal one.
+
+    Replaces two ``inspect.getsource`` greps for the literal
+    ``allow_redirects=False`` (#13311) with the consequence a caller can see.
+    """
+
+    ALLOWED_DEVICE_URL = "https://accounts.google.com/o/oauth2/device/code"
+    ALLOWED_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+    @pytest.fixture
+    def session_spy(self, monkeypatch):
+        """Swap aiohttp's session and neuter the DNS-pinning connector."""
+        import aiohttp
+
+        from api import provider_auth as pa
+
+        created: list[_RedirectFollowingSession] = []
+
+        def _factory(**kwargs):
+            session = _RedirectFollowingSession(**kwargs)
+            created.append(session)
+            return session
+
+        monkeypatch.setattr(aiohttp, "ClientSession", _factory)
+        monkeypatch.setattr(pa, "_pinned_connector", AsyncMock(return_value=None))
+        return created
+
+    @pytest.mark.asyncio
+    async def test_device_initiate_surfaces_the_302_instead_of_following_it(self, session_spy):
+        from fastapi import HTTPException
+
+        from api.provider_auth import DeviceInitiateRequest, device_initiate
+
+        with pytest.raises(HTTPException) as exc_info:
+            await device_initiate(
+                req=DeviceInitiateRequest(
+                    provider_name="google",
+                    client_id="cid",
+                    device_authorization_url=self.ALLOWED_DEVICE_URL,
+                ),
+                user={"id": "u1"},
+                _admin=True,
+            )
+
+        assert exc_info.value.status_code == 502, "a followed redirect would have returned 200 and leaked a device code"
+        assert session_spy[0].calls[0]["allow_redirects"] is False
+
+    @pytest.mark.asyncio
+    async def test_device_poll_surfaces_the_302_instead_of_following_it(self, session_spy, monkeypatch):
+        from fastapi import HTTPException
+
+        from api import provider_auth as pa
+        from api.provider_auth import DevicePollRequest, device_poll
+
+        monkeypatch.setattr(pa, "get_redis_client", lambda database=None: None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await device_poll(
+                req=DevicePollRequest(
+                    provider_name="google",
+                    client_id="cid",
+                    device_code="dc",
+                    token_url=self.ALLOWED_TOKEN_URL,
+                ),
+                session=AsyncMock(),
+                user={"id": "u1"},
+                _admin=True,
+            )
+
+        assert exc_info.value.status_code == 502, "a followed redirect would have persisted an internally-sourced token"
+        assert session_spy[0].calls[0]["allow_redirects"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_spy_really_would_have_followed_a_redirect(self, session_spy):
+        """Guard the guard: prove the fake distinguishes the two settings."""
+        session = _RedirectFollowingSession()
+        async with session.post("https://x/", allow_redirects=True) as resp:
+            assert resp.status == 200
+            assert (await resp.json())["access_token"] == "leaked-token"
+        async with session.post("https://x/", allow_redirects=False) as resp:
+            assert resp.status == 302

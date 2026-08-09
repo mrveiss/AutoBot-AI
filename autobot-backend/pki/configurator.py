@@ -81,7 +81,7 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
         conn: AsyncSSH connection
         tls_config: TLS configuration content to write
     """
-    temp_config = "/tmp/redis-tls.conf"  # nosec B108 - Temp file for Redis TLS config
+    temp_config = "/tmp/redis-tls.conf"  # nosec B108  # Temp file for Redis TLS config
     async with conn.start_sftp_client() as sftp:
         async with sftp.open(temp_config, "w", encoding="utf-8") as f:
             await f.write(tls_config)

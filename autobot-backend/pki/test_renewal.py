@@ -90,7 +90,7 @@ def test_renew_no_certs_returns_true(tmp_path):
 def test_renew_ca_raises_value_error(tmp_path):
     manager = _make_manager(tmp_path)
 
-    with pytest.raises(ValueError, match="CA certificate renewal requires manual steps"):
+    with pytest.raises(ValueError, match="CA certificate renewal is a manual process"):
         asyncio.run(manager.renew(certificates=["ca"]))
 
     manager.generator._renew_service_cert.assert_not_called()

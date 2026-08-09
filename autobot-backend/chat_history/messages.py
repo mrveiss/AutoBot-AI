@@ -251,7 +251,11 @@ class MessagesMixin:
 
         Issue #620.
         """
-        msg_metadata = message.get("metadata", {})
+        # Issue #13220: messages are persisted with ``"metadata": None`` whenever
+        # ``add_message`` is called without ``raw_data``. ``.get(key, {})`` returns
+        # that explicit ``None`` — the default only applies when the key is absent —
+        # so test the *value*, not key presence.
+        msg_metadata = message.get("metadata") or {}
         return all(msg_metadata.get(key) == value for key, value in metadata_filter.items())
 
     def _apply_metadata_updates(self, message: Dict[str, Any], metadata_updates: Dict[str, Any]) -> None:
@@ -264,7 +268,10 @@ class MessagesMixin:
 
         Issue #620.
         """
-        if "metadata" not in message:
+        # Issue #13220: ``"metadata" not in message`` is False for a persisted
+        # ``"metadata": None``, so the guard passed and ``None.update()`` raised.
+        # Testing the value handles missing, ``None`` and ``{}`` uniformly.
+        if not message.get("metadata"):
             message["metadata"] = {}
         message["metadata"].update(metadata_updates)
 

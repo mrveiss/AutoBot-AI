@@ -1,4 +1,8 @@
-# CodeQL False-Positive Suppression — How It Actually Works
+# Static-Analysis False-Positive Suppression — How It Actually Works
+
+> Covers **CodeQL** (most of this file) and **Semgrep** (see the second-engine
+> section near the end). The filename stays `CODEQL_SUPPRESSION.md` because
+> `.github/codeql/codeql-config.yml` links to it by path.
 
 > **TL;DR:** Inline `# codeql[query-id]` / `# lgtm[query-id]` comments do **not**
 > dismiss GitHub code-scanning alerts in this repository. They are non-functional.
@@ -79,6 +83,57 @@ API in #12280. Treat them as historical human annotations only. **Do not add new
 ones.** Removing an existing one is a deliberate follow-up task, not a drive-by
 edit: altering or deleting a marked line changes the alert's location fingerprint
 and can transiently **re-open** the dismissed alert until it is re-dismissed.
+
+## Semgrep is a second engine, and it ignores CodeQL suppressions (#13519)
+
+The 2026-08-03 batch made this concrete. Six `filesystem_mcp.py` sites carried
+`# codeql[py/path-injection]` markers, and a **Semgrep** rule ("Path Manipulation
+with aiofiles via fastapi") reported them anyway.
+
+That is expected — CodeQL suppression syntax means nothing to Semgrep — but it
+means **a suppression strategy that covers only one engine looks like it is
+working while doing nothing.** Any decision to suppress must state which engine
+it applies to.
+
+Semgrep in CI runs **only** `.semgrep/rules.yaml`
+([`security.yml`](../../.github/workflows/security.yml)); the community and Pro
+configs need `SEMGREP_APP_TOKEN` and are unavailable there. So a batch citing
+rule names absent from that file did **not** come from this repo's CI, and cannot
+be tuned by editing anything in this repo. Tuning belongs in the platform policy
+that produced it.
+
+### Known systematic misfire: FastAPI SQL-injection rules vs SQLAlchemy Core
+
+**33 of 33 findings in the 2026-08-03 SQLi batch were false positives.** Every
+site executed a SQLAlchemy 2.0 Core/ORM construct — `select()` / `update()` /
+`delete()` assembled with `.where()`, `.order_by()`, `.offset()`, `.limit()`. No
+site built SQL by concatenation or f-string; all request-derived values arrive as
+**bound parameters** via the SQLAlchemy compiler.
+
+The rule fires on the shape `value_from_Query(...) → … → db.execute(var)`. Because
+the query is assembled across several statements (`query = select(...)`, then
+`query = query.where(...)`), the taint tracker loses the fact that the sink is a
+typed expression tree rather than a string, and reports the `db.execute(query)`
+line. **This codebase uses that idiom almost universally**, so the rule produces a
+full batch of false positives on every scan.
+
+The clearest evidence it matches on *shape* rather than on SQL construction:
+`autobot-backend/api/database_mcp.py` is the only file in either backend that
+genuinely builds SQL by string interpolation on a raw `sqlite3` cursor — and it
+was **absent** from the 33. 33 reports on safe ORM code, zero on the one
+string-SQL file.
+
+**Triage this rule family as a batch, not site by site.** A finding against it is
+only interesting if the sink receives a `str`/f-string rather than a construct —
+which is the one thing to check before spending time on it.
+
+### Point scans at `Dev_new_gui`, not `main`
+
+The same batch was scanned against `main`, then ~682 commits behind
+`Dev_new_gui`, so **every line number had to be re-located by content search**.
+Three `code_sync.py` findings landed on a function signature, a `return False`
+and a docstring — lines with no path expression at all. `main` is a strict
+ancestor of `Dev_new_gui`; scanning it reports on code no one is running.
 
 ## References
 

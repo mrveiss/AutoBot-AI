@@ -136,6 +136,14 @@ def encode_jwt(
 
     to_encode = payload.copy()
 
+    # #12924: every minted token carries ``iat`` so password-change revocation
+    # can tell which tokens predate the change. Without it there is no way to
+    # distinguish a token issued before a password change from one issued
+    # after, and revocation has to fall back to per-token bookkeeping.
+    # Callers that set their own ``iat`` are left alone.
+    if "iat" not in to_encode:
+        to_encode["iat"] = datetime.now(tz=timezone.utc)
+
     if "exp" not in to_encode:
         if expires_delta is not None:
             to_encode["exp"] = datetime.now(tz=timezone.utc) + expires_delta

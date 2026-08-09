@@ -178,6 +178,50 @@ class EntityOperationsMixin:
             logger.error("Failed to create entity: %s", e)
             raise RuntimeError("Entity creation failed") from e
 
+    # How many relevance hits to scan for an exact name before giving up (#13761).
+    # The query *is* the name, so an exact match ranks at or near the top; this is
+    # a ceiling for near-duplicate clusters ("Incident 7", "Incident 71", …), not
+    # a page size.
+    _NAME_RESOLUTION_CANDIDATES = 25
+
+    async def _resolve_entity_by_name(
+        self: AutoBotMemoryGraphCore,
+        entity_name: str,
+    ) -> Dict[str, Any] | None:
+        """Resolve a name to an entity, preferring an exact match (#13761).
+
+        This used to be ``search_entities(query=name, limit=1)`` — a
+        relevance-ranked search whose top hit was returned unconditionally, so a
+        name that does not exist still resolved, to whatever ranked first. Asking
+        how "Redis Config" connects to "Incident 7" would return a real, correct
+        path to "Incident 71": a confident answer to a question nobody asked.
+
+        Exact match wins. A case-insensitive match is accepted next, because
+        entity names are display strings and a case difference is not a different
+        entity. Only when neither exists does the relevance hit stand, and the
+        result carries ``_resolution`` so callers can tell the difference and warn
+        rather than render it silently.
+        """
+        results = await self.search_entities(query=entity_name, limit=self._NAME_RESOLUTION_CANDIDATES)
+        if not results:
+            return None
+
+        for candidate in results:
+            if candidate.get("name") == entity_name:
+                return {**candidate, "_resolution": "exact"}
+
+        folded = entity_name.casefold()
+        for candidate in results:
+            if str(candidate.get("name", "")).casefold() == folded:
+                return {**candidate, "_resolution": "exact"}
+
+        logger.info(
+            "Entity name %r has no exact match; falling back to the top relevance hit %r",
+            entity_name,
+            results[0].get("name"),
+        )
+        return {**results[0], "_resolution": "fuzzy"}
+
     async def get_entity(
         self: AutoBotMemoryGraphCore,
         entity_id: str | None = None,
@@ -193,7 +237,8 @@ class EntityOperationsMixin:
             include_relations: Include related entities in response
 
         Returns:
-            Entity data or None if not found
+            Entity data or None if not found. When resolved by name the dict
+            carries ``_resolution`` — ``"exact"`` or ``"fuzzy"`` (#13761).
         """
         self.ensure_initialized()
 
@@ -203,11 +248,9 @@ class EntityOperationsMixin:
                 entity_key = f"memory:entity:{entity_id}"
                 entity = await self.redis_client.json().get(entity_key)
             elif entity_name:
-                # Search by name
-                results = await self.search_entities(query=entity_name, limit=1)
-                if not results:
+                entity = await self._resolve_entity_by_name(entity_name)
+                if entity is None:
                     return None
-                entity = results[0]
                 entity_id = entity["id"]
             else:
                 raise ValueError("Either entity_id or entity_name must be provided")
@@ -284,6 +327,10 @@ class EntityOperationsMixin:
             entity = await self.get_entity(entity_name=entity_name)
             if not entity:
                 raise ValueError(f"Entity not found: {entity_name}")
+            if entity.get("_resolution") == "fuzzy":
+                # #13761: writing observations into a near-miss puts one entity's
+                # facts on another. A read can be qualified; a write cannot.
+                raise ValueError(f"Entity not found: {entity_name}")
 
             entity_id = entity["id"]
             entity_key = f"memory:entity:{entity_id}"
@@ -356,6 +403,11 @@ class EntityOperationsMixin:
         try:
             entity = await self.get_entity(entity_name=entity_name)
             if not entity:
+                return False
+            if entity.get("_resolution") == "fuzzy":
+                # #13761: "delete Incident 7" must never delete "Incident 71".
+                # Destructive by name requires the name to actually exist.
+                logger.warning("Refusing to delete %r — no entity by that exact name", entity_name)
                 return False
 
             entity_id = entity["id"]

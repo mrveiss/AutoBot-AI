@@ -10,11 +10,27 @@ import asyncio
 import os
 import sys
 
+import pytest
+
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from secure_command_executor import SecureCommandExecutor
 from security_layer import SecurityLayer
+
+# #13284: this module is an operator-facing e2e script, not a unit test. It
+# builds a live SecurityLayer and *actually executes* shell commands through it
+# (`sudo apt update`, `rm -rf /tmp/test`, `mkdir /tmp/secure_test`) and shells
+# out to the `docker` CLI. On a runner with no Docker daemon and no sudo those
+# calls sit on their timeouts — `test_security_layer` measured 600.01s, a flat
+# budget expiring rather than work being done, 15% of the whole suite.
+#
+# It carries no assertions, so the PR gate loses no verification by excluding
+# it; every branch prints its result and swallows the exception. The
+# `integration` marker matches the filename and is already excluded by the two
+# `-m "not integration and not slow and not distributed and not performance"`
+# invocations in .github/workflows/ci.yml.
+pytestmark = pytest.mark.integration
 
 
 async def test_security_layer():

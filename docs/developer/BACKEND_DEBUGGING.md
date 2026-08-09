@@ -212,13 +212,16 @@ source /opt/autobot/autobot-backend/venv/bin/activate
 python --version
 ```
 
-### Python 3.13 + aioredis compatibility
+### aioredis compatibility
 
 If you see `ModuleNotFoundError: No module named 'aioredis'`:
 
 ```bash
-# Create compatibility shim
-cat > /opt/autobot/venv/lib/python3.13/site-packages/aioredis.py << 'EOF'
+# Create compatibility shim. Resolve site-packages from the venv itself rather
+# than hardcoding the minor version — the backend runs 3.14, and a hardcoded
+# python3.13 path silently writes the shim where nothing will import it.
+SITE_PACKAGES=$(/opt/autobot/venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+cat > "$SITE_PACKAGES/aioredis.py" << 'EOF'
 """Compatibility shim: aioredis merged into redis package."""
 from redis import asyncio as aioredis  # noqa: F401
 EOF

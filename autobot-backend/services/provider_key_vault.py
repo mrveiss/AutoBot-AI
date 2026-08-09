@@ -131,7 +131,7 @@ async def capture_provider_key(
             session,
             owner_vault=_SYSTEM_VAULT,
             name=name,
-            secret_type="api_key",  # nosec B106 - SecretType label, not a credential
+            secret_type="api_key",  # nosec B106  # SecretType label, not a credential
             plaintext=plaintext.encode("utf-8"),
             created_by=created_by,
         )
