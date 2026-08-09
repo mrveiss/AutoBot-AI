@@ -45,6 +45,9 @@ BRIDGE_DEFAULT_PERMISSIONS: Dict[str, Permission] = {
     "http_client_mcp": Permission.MCP_HTTP_READ,
     "knowledge_mcp": Permission.KNOWLEDGE_READ,
     "prometheus_mcp": Permission.MCP_METRICS_READ,
+    # #13228: missed on the first pass, which made all 25 redis tools resolve to
+    # "undeclared" — including the seven the blocklist already knew about.
+    "redis_mcp": Permission.MCP_DATABASE_READ,
     "sequential_thinking_mcp": Permission.AGENT_EXECUTE,
     "structured_thinking_mcp": Permission.AGENT_EXECUTE,
     "vnc_mcp": Permission.MCP_DESKTOP_READ,
@@ -90,9 +93,28 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
     "desktop_mouse_click": Permission.MCP_DESKTOP_CONTROL,
     "desktop_keyboard_type": Permission.MCP_DESKTOP_CONTROL,
     "desktop_control_status": Permission.MCP_DESKTOP_CONTROL,
-    # --- redis: the seven names the old blocklist knew about, kept explicit ---
-    "client_list": Permission.MCP_MANAGE,
-    "slowlog": Permission.MCP_MANAGE,
+    # --- redis: reads are the baseline; these mutate or expose the server ---
+    #
+    # These keys are the tools' real names. The blocklist they replace matched by
+    # *substring* ("client_list" in "redis_client_list"), which hid the mismatch:
+    # exact lookup here found nothing, so every redis tool read as undeclared.
+    "redis_set": Permission.MCP_DATABASE_WRITE,
+    "redis_delete": Permission.MCP_DATABASE_WRITE,
+    "redis_hset": Permission.MCP_DATABASE_WRITE,
+    "redis_lpush": Permission.MCP_DATABASE_WRITE,
+    "redis_rpush": Permission.MCP_DATABASE_WRITE,
+    "redis_xadd": Permission.MCP_DATABASE_WRITE,
+    "redis_vector_create_index": Permission.MCP_DATABASE_WRITE,
+    "redis_client_list": Permission.MCP_MANAGE,
+    "redis_slowlog": Permission.MCP_MANAGE,
+    # Declared explicitly to state that it is a *read*: the mutating-verb guard
+    # reads "type" in `redis_type` as the input-driving verb from
+    # `desktop_keyboard_type`. It returns a key's type and changes nothing.
+    "redis_type": Permission.MCP_DATABASE_READ,
+    # The remaining blocklist patterns — config_set, config_rewrite, debug,
+    # flushdb, flushall — name no tool the redis bridge currently registers, so
+    # the old gate protected nothing. Declared anyway: if any of them is ever
+    # added, it arrives admin-only instead of arriving undeclared.
     "config_set": Permission.MCP_MANAGE,
     "config_rewrite": Permission.MCP_MANAGE,
     "debug": Permission.MCP_MANAGE,

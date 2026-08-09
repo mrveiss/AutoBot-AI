@@ -31,14 +31,29 @@ _KWARG_TOOL = re.compile(r'name="([a-z0-9_]+)"')
 
 
 def _bridge_files():
-    return sorted(p for p in _BRIDGE_DIR.glob("*_mcp.py") if p.stem != "manual_mcp")
+    """Every bridge's tool-declaring source, module- or package-shaped.
+
+    #13228: globbing only ``*_mcp.py`` silently omitted ``redis_mcp``, which is a
+    package (``api/redis_mcp/tools.py``). The omission was invisible precisely
+    because these guards iterate over whatever this function returns — a bridge it
+    cannot see is a bridge every coverage test below reports as fine. All 25 redis
+    tools were undeclared and no test said so.
+    """
+    modules = [p for p in _BRIDGE_DIR.glob("*_mcp.py") if p.stem != "manual_mcp"]
+    packages = [p / "tools.py" for p in _BRIDGE_DIR.glob("*_mcp") if p.is_dir() and (p / "tools.py").is_file()]
+    return sorted(modules + packages)
+
+
+def _bridge_name(path: pathlib.Path) -> str:
+    """The bridge a source file belongs to (``redis_mcp/tools.py`` → ``redis_mcp``)."""
+    return path.parent.name if path.stem == "tools" else path.stem
 
 
 def _declared_tools(path: pathlib.Path) -> set:
     """Tool names a bridge module declares, minus the bridge's own name."""
     src = path.read_text(encoding="utf-8")
     names = set(_TUPLE_TOOL.findall(src)) or set(_KWARG_TOOL.findall(src))
-    return {n for n in names if n != path.stem}
+    return {n for n in names if n != _bridge_name(path)}
 
 
 # ------------------------------------------------------- the declarations
@@ -68,7 +83,7 @@ def test_every_declared_permission_is_granted_to_some_role():
 
 def test_every_bridge_has_a_default():
     """A bridge with no default leaves its whole tool surface undeclared."""
-    bridges = {p.stem for p in _bridge_files()}
+    bridges = {_bridge_name(p) for p in _bridge_files()}
 
     assert not (
         bridges - set(BRIDGE_DEFAULT_PERMISSIONS)
@@ -77,7 +92,7 @@ def test_every_bridge_has_a_default():
 
 def test_the_bridge_sources_are_actually_being_read():
     """Guard the guard: a parser that finds nothing would pass everything."""
-    found = {p.stem: _declared_tools(p) for p in _bridge_files()}
+    found = {_bridge_name(p): _declared_tools(p) for p in _bridge_files()}
     total = sum(len(v) for v in found.values())
 
     assert total > 50, f"only {total} tool names extracted — the parser stopped matching: {found}"
@@ -109,7 +124,7 @@ _MUTATING = (
 )
 
 
-@pytest.mark.parametrize("bridge", [p.stem for p in _bridge_files()])
+@pytest.mark.parametrize("bridge", [_bridge_name(p) for p in _bridge_files()])
 def test_state_changing_tools_carry_an_explicit_declaration(bridge):
     """A mutating tool must not silently inherit a read-level bridge default.
 
@@ -117,7 +132,7 @@ def test_state_changing_tools_carry_an_explicit_declaration(bridge):
     known bridge has a default, so nothing on one can resolve to None. The real
     risk is a write tool quietly inheriting read, which is what this catches.
     """
-    path = _BRIDGE_DIR / f"{bridge}.py"
+    path = next(p for p in _bridge_files() if _bridge_name(p) == bridge)
     inheriting = [
         t for t in sorted(_declared_tools(path)) if any(verb in t for verb in _MUTATING) and t not in TOOL_PERMISSIONS
     ]
@@ -144,9 +159,27 @@ def test_an_undeclared_tool_on_a_known_bridge_inherits_the_least_privilege():
     assert required_permission("some_future_tool", "browser_mcp") == Permission.MCP_BROWSER_READ
 
 
-def test_the_old_blocklist_names_still_require_management():
-    """The seven Redis names the substring blocklist knew about keep their grant."""
-    for name in ("client_list", "slowlog", "config_set", "config_rewrite", "debug", "flushdb", "flushall"):
+def test_the_old_blocklist_tools_still_require_management():
+    """The blocklist's *real* targets keep their grant, under their real names.
+
+    The legacy gate matched by substring, so its pattern ``client_list`` covered the
+    tool actually named ``redis_client_list``. Declaring the pattern rather than the
+    tool left exact lookup finding nothing — the bug this asserts against.
+    """
+    for name in ("redis_client_list", "redis_slowlog"):
+        assert required_permission(name, "redis_mcp") == Permission.MCP_MANAGE, name
+
+
+def test_the_blocklist_patterns_that_name_no_tool_are_still_declared():
+    """``flushall`` and friends match nothing the redis bridge registers today.
+
+    So the old gate protected nothing. Kept declared anyway: if one is ever added,
+    it arrives admin-only rather than arriving undeclared.
+    """
+    registered = _declared_tools(_BRIDGE_DIR / "redis_mcp" / "tools.py")
+
+    for name in ("config_set", "config_rewrite", "debug", "flushdb", "flushall"):
+        assert name not in registered, f"{name} now exists — fold it into the real-name test above"
         assert required_permission(name, "redis_mcp") == Permission.MCP_MANAGE, name
 
 
