@@ -24,9 +24,9 @@ import pytest
 
 from services.knowledge.code_indexer import (
     _CACHE_VERSION_KEY,
+    _EXTRACTORS,
     _PROVENANCE_ID,
     EXTRACTOR_VERSION,
-    _EXTRACTORS,
     CodeIndexer,
     CodeIndexResult,
     GraphProvenance,
