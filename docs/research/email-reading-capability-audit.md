@@ -32,9 +32,11 @@ owns it — and back: each issue cites the section here that produced it.
 | 3 | [#13711](https://github.com/mrveiss/AutoBot-AI/issues/13711) | Agents have no write path to the vault; no provenance | 4.2, 4.4 |
 | 4 | [#13716](https://github.com/mrveiss/AutoBot-AI/issues/13716) | Company OS has zero email | 1.6, 2.1 |
 | 5 | [#13718](https://github.com/mrveiss/AutoBot-AI/issues/13718) | Agent cannot sign up for services | 3.4, 4.5 |
+| — | [#13845](https://github.com/mrveiss/AutoBot-AI/issues/13845) | `CommandRisk` vs `CommandRiskLevel` — same concept, divergent tails | 3.1 |
+| — | [#13846](https://github.com/mrveiss/AutoBot-AI/issues/13846) | `SecretType` vs `SecretRequirement` — duplicate taxonomy, no OAuth requirement | 4.2 |
 
 **Critical path:** #13708 → #13712 → #13715 → #13716 → #13718.
-#13710 and #13711 have no blockers inside the umbrella and may start at any time.
+Issues #13710 and #13711 have no blockers inside the umbrella and may start at any time.
 
 **Ordering constraint that drives the waves:** a credential copied into the vector store
 cannot be revoked, so #13708 ships *before* #13712 — see section 4.3.
@@ -260,7 +262,8 @@ The terminal permission stack, verified by reading:
 
 [`autobot-backend/secure_command_executor.py`](../../autobot-backend/secure_command_executor.py)
 
-- `class CommandRisk` (line 271): `SAFE` / `MODERATE` / `HIGH` / `FORBIDDEN`.
+- `class CommandRisk` (line 271): `SAFE` / `MODERATE` / `HIGH` / `CRITICAL` / `FORBIDDEN`
+  — **five** members, not four. `CRITICAL` sits between `HIGH` and `FORBIDDEN`.
 - `class SecurityPolicy` (line 281) — allowlists per risk tier.
 - `class SecureCommandExecutor` (line 343) supports **two** permission models, documented
   in its own docstring:
@@ -290,14 +293,23 @@ The terminal permission stack, verified by reading:
 - `rememberForProject` → `permissionStore.storeApproval` (line 286) — "Approval remembered
   for this project".
 
-**The mapping to email is direct.** A `MailRisk` tier set mirroring `CommandRisk`:
+**The mapping to email is direct** — but it must **reuse** `CommandRisk`, not introduce a
+parallel `MailRisk` enum. An earlier draft of this section proposed a new enum; that was
+wrong. `CommandRisk` already carries the exact semantics mail needs, and the codebase
+already has one unreconciled fork of it (`CommandRiskLevel` in `api/schemas_terminal.py:473`
+— `SAFE`/`MODERATE`/`HIGH`/`DANGEROUS`). A third definition would compound that, not solve
+it. See the enum-consolidation issue linked in *Tracking issues*.
 
-| Tier | Email action | Default |
+The tiers below are therefore a **mapping of mail actions onto the existing
+`CommandRisk` members**, not a new type:
+
+| `CommandRisk` tier | Email action | Default |
 | --- | --- | --- |
 | `SAFE` | Read / search / classify / label | Auto |
 | `MODERATE` | Reply within an existing thread to a known correspondent | Auto in full-autonomy, ASK in sign-off |
 | `HIGH` | New outbound mail to a new external address; attachments out | ASK always by default |
-| `FORBIDDEN` | Financial instruction, credential disclosure, bulk send | Never auto — explicit per-item sign-off |
+| `CRITICAL` | Bulk send; outbound to a large or undisclosed recipient set | Never auto — explicit per-item sign-off |
+| `FORBIDDEN` | Financial instruction, credential disclosure | Never permitted autonomously in any mode |
 
 **Reuse verdict:** the `require_approval_callback` seam, `ApprovalMemoryManager`, and the
 `ALLOW/ASK/DENY/DEFAULT` matcher are all domain-agnostic enough to serve mail. The correct
