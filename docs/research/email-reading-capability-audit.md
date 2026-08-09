@@ -427,7 +427,7 @@ mandatory regardless of autonomy mode, and per-service rather than global.
 | **2** | Mail connector under `knowledge/connectors/` (read-only, secrets via `ConnectorCredentialStore`) | Requirement 3.2 satisfied by construction |
 | **3** | `api/integration_microsoft365.py` router | 628 built lines become reachable |
 | **4** | `MailboxView.vue` — read, thread, sanitised render, compose; 11 locales | Requirement 3.3 |
-| **5** | Autonomy modes + `MailRisk` tiers wired to the Wave-1 seam | Requirement 3.1 |
+| **5** | Autonomy modes — mail actions mapped onto the existing `CommandRisk` members, no new enum (#13845) | Requirement 3.1 |
 | **6** | Inbound thread → work item; approval-by-reply gated on SPF/DKIM/DMARC | Original CEO-inbox value |
 | **7** | Agent self-signup: browser + mail + secrets + mandatory per-service approval | Requirement 3.4 — last, never full-autonomy |
 
@@ -569,7 +569,7 @@ credential back to the approval that authorised it.
 | **3** | Mail connector, read-only, secrets via `ConnectorCredentialStore` | Ingest passes through Wave 2 |
 | **4** | `api/integration_microsoft365.py` router | 628 built lines become reachable |
 | **5** | `MailboxView.vue` — read, thread, sanitised render, compose; 11 locales | |
-| **6** | Autonomy modes + `MailRisk` tiers on the Wave-1 seam | |
+| **6** | Autonomy modes — mail actions mapped onto existing `CommandRisk` members (#13845) | |
 | **7** | `store_secret_for_agent` write path + provenance fields (4.2, 4.4) | Prerequisite for signup |
 | **8** | Inbound thread → work item; approval-by-reply gated on SPF/DKIM/DMARC | |
 | **9** | Agent self-signup — browser + mail + vault deposit + per-service approval | Last; never full-autonomy |
