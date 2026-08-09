@@ -22,9 +22,8 @@ import ast
 import pytest
 
 from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
-from code_intelligence.fingerprinting.detector import CloneDetector
 from autobot_shared.code_graph.identity import _PROJECT_ROOT as PROJECT_ROOT
-from code_intelligence.fingerprinting.detector import CloneDetector as _CD  # noqa: F401
+from code_intelligence.fingerprinting.detector import CloneDetector  # noqa: F401
 from code_intelligence.fingerprinting.types import CodeFragment
 
 SOURCE = """
