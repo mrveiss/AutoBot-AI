@@ -71,9 +71,7 @@ def _load_real_drift_checker():
     backend_root = Path(__file__).resolve().parents[2]
     services_dir = backend_root / "services"
 
-    da_spec = importlib.util.spec_from_file_location(
-        "services.deploy_artifacts", services_dir / "deploy_artifacts.py"
-    )
+    da_spec = importlib.util.spec_from_file_location("services.deploy_artifacts", services_dir / "deploy_artifacts.py")
     da = importlib.util.module_from_spec(da_spec)
     da_spec.loader.exec_module(da)
 
@@ -218,9 +216,7 @@ def test_failed_preview_is_not_read_as_no_deletions() -> None:
         "_preview_rsync_deletions",
         AsyncMock(return_value=(False, [], "rsync: connection unexpectedly closed")),
     ):
-        allowed, blocked, message = _run(
-            _resolve_deletion_guard("autobot-slm-backend", "/src", [], "/src/c", "/dep/c")
-        )
+        allowed, blocked, message = _run(_resolve_deletion_guard("autobot-slm-backend", "/src", [], "/src/c", "/dep/c"))
     assert allowed is False
     assert blocked == []
     assert "could not preview deletions" in message
@@ -229,9 +225,7 @@ def test_failed_preview_is_not_read_as_no_deletions() -> None:
 def test_guard_blocks_and_reports_the_paths() -> None:
     doomed = ["plugins/core-plugins/hello/main.py", "logs/audit/audit_2026-08-03.jsonl"]
     with patch.object(code_sync, "_preview_rsync_deletions", AsyncMock(return_value=(True, doomed, ""))):
-        allowed, blocked, message = _run(
-            _resolve_deletion_guard("autobot-backend", "/src", [], "/src/c", "/dep/c")
-        )
+        allowed, blocked, message = _run(_resolve_deletion_guard("autobot-backend", "/src", [], "/src/c", "/dep/c"))
     assert allowed is False
     assert blocked == doomed
     assert "would be DELETED" in message
@@ -240,9 +234,7 @@ def test_guard_blocks_and_reports_the_paths() -> None:
 
 def test_guard_allows_a_resolve_that_deletes_nothing() -> None:
     with patch.object(code_sync, "_preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))):
-        allowed, blocked, message = _run(
-            _resolve_deletion_guard("autobot-backend", "/src", [], "/src/c", "/dep/c")
-        )
+        allowed, blocked, message = _run(_resolve_deletion_guard("autobot-backend", "/src", [], "/src/c", "/dep/c"))
     assert (allowed, blocked, message) == (True, [], "")
 
 

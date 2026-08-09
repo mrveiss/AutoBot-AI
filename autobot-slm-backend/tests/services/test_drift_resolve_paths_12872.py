@@ -165,6 +165,6 @@ def test_every_resolve_caller_passes_the_resolved_paths():
     explicit = [c for c in calls if "source_dir=" in c or "dest_dir=" in c]
 
     assert len(explicit) == 3, f"expected the three resolve callers to pass explicit paths, got {len(explicit)}"
-    assert all("source_dir=" in c and "dest_dir=" in c for c in explicit), (
-        "a caller passing only one explicit path still rebuilds the other"
-    )
+    assert all(
+        "source_dir=" in c and "dest_dir=" in c for c in explicit
+    ), "a caller passing only one explicit path still rebuilds the other"

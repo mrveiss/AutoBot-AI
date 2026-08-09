@@ -73,8 +73,8 @@ from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
-    get_default_deployed_dir,
     deploy_only_entries,
+    get_default_deployed_dir,
     get_default_source_dir,
     owned_subtrees,
 )
@@ -912,9 +912,7 @@ async def resolve_drift(
     # component's own rsync + restart so a newly-added `from autobot_shared.X`
     # import resolves at startup and the control plane cannot crash-loop on a
     # half-deployed shared tree. Fail the resolve if it cannot be synced.
-    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(
-        request.component, request.force
-    )
+    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
     if not shared_ok:
         return DriftResolveResponse(
             success=False,
@@ -2714,9 +2712,7 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
         steps.append(f"symlink: restore failed for {component}: {exc}")
 
 
-async def _ensure_autobot_shared_synced(
-    component: str, force: bool = False
-) -> Tuple[bool, str, List[str]]:
+async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> Tuple[bool, str, List[str]]:
     """Resync autobot_shared from code_source BEFORE a dependent backend deploys (#11611).
 
     #11611 root cause: autobot_shared is a component deployed by its OWN

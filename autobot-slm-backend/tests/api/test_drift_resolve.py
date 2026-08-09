@@ -535,9 +535,7 @@ def test_resolve_refuses_when_it_would_delete_and_never_rsyncs(stub_user):
     """
     src_patch, dep_patch = _setup_dir_mocks()
     doomed = ["plugins/core-plugins/hello/main.py", "logs/audit/audit_2026-08-03.jsonl"]
-    preview_patch = patch.object(
-        _CS, "_preview_rsync_deletions", AsyncMock(return_value=(True, doomed, ""))
-    )
+    preview_patch = patch.object(_CS, "_preview_rsync_deletions", AsyncMock(return_value=(True, doomed, "")))
     rsync_mock = AsyncMock(return_value=(True, ""))
     with src_patch, dep_patch, preview_patch, patch.object(_CS, "_rsync_component_local", rsync_mock):
         resp = _run(resolve_drift(DriftResolveRequest(component="autobot-slm-backend"), stub_user))

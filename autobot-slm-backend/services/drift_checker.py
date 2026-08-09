@@ -587,18 +587,14 @@ def _rendered_file_drift(rel_path: str, template_rel: str, deployed_path: Path) 
         # Nothing to substitute — the bytes SHOULD have matched, so they differ
         # for a real reason. Falling through to the AST comparison here would
         # forgive a hand-edit that changed only comments or formatting.
-        return _rendered_entry(
-            rel_path, _text_digest(template_src), _file_checksum(deployed_path), "modified"
-        )
+        return _rendered_entry(rel_path, _text_digest(template_src), _file_checksum(deployed_path), "modified")
 
     digests = _render_invariant_digests(template_src, deployed_src)
     if digests is None:
         # The template is pinned parseable by drift_checker_test, so a failure
         # here means the DEPLOYED file no longer parses — real drift. Report the
         # raw checksums, which cannot collide with an AST digest.
-        return _rendered_entry(
-            rel_path, _text_digest(template_src), _file_checksum(deployed_path), "modified"
-        )
+        return _rendered_entry(rel_path, _text_digest(template_src), _file_checksum(deployed_path), "modified")
 
     source_digest, deployed_digest = digests
     if deployed_digest == source_digest:
