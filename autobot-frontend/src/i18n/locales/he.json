@@ -3504,6 +3504,7 @@
       "searching": "מחפש...",
       "connectedIn": "מחוברות בקפיצה {count} | מחוברות ב-{count} קפיצות",
       "sameEntity": "שני השמות מפנים לאותה ישות: {name}",
+      "fuzzyMatch": "אין ישות בשם {names} — המסלול שלהלן מתייחס להתאמה הקרובה ביותר. | אין ישויות בשם {names} — המסלול שלהלן מתייחס להתאמות הקרובות ביותר.",
       "crossedForwards": "קדימה",
       "crossedBackwards": "אחורה",
       "unnamedRelation": "קשור ל",

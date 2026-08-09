@@ -4104,6 +4104,7 @@
       "searching": "Suche läuft...",
       "connectedIn": "Verbunden in {count} Sprung | Verbunden in {count} Sprüngen",
       "sameEntity": "Beide Namen verweisen auf dieselbe Entität: {name}",
+      "fuzzyMatch": "Keine Entität heißt {names} — der folgende Pfad bezieht sich stattdessen auf die nächstliegende Übereinstimmung. | Keine Entitäten heißen {names} — der folgende Pfad bezieht sich stattdessen auf die nächstliegenden Übereinstimmungen.",
       "crossedForwards": "vorwärts",
       "crossedBackwards": "rückwärts",
       "unnamedRelation": "verbunden mit",

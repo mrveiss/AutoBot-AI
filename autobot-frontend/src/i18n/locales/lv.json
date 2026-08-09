@@ -4104,6 +4104,7 @@
       "searching": "Meklē...",
       "connectedIn": "Savienotas {count} lēcienā | Savienotas {count} lēcienos",
       "sameEntity": "Abi nosaukumi atbilst vienai entītijai: {name}",
+      "fuzzyMatch": "Neviena entītija nesaucas {names} — zemāk redzamais ceļš attiecas uz tuvāko atbilsmi. | Nevienu entītiju nesauc {names} — zemāk redzamais ceļš attiecas uz tuvākajām atbilsmēm.",
       "crossedForwards": "uz priekšu",
       "crossedBackwards": "atpakaļ",
       "unnamedRelation": "saistīts ar",

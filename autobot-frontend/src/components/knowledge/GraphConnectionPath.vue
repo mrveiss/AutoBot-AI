@@ -116,6 +116,18 @@
           </span>
         </div>
 
+        <!--
+          #13761: a fuzzy endpoint means no entity carries the typed name and
+          the backend answered about the nearest one instead. The path below is
+          real and correct — just not about what was asked.
+        -->
+        <p v-if="fuzzyEndpoints.length > 0" class="fuzzy-match-warning" role="alert">
+          <Icon name="exclamation-triangle" />
+          <span>
+            {{ t('knowledge.graphPath.fuzzyMatch', { names: fuzzyEndpoints.join(', ') }, fuzzyEndpoints.length) }}
+          </span>
+        </p>
+
         <!-- A zero-hop path means both names resolved to the same entity. -->
         <p v-if="pathResult.hops === 0" class="same-entity-note">
           <Icon name="exclamation-circle" />
@@ -256,6 +268,22 @@ const canSubmit = computed(() => fromEntity.value.trim() !== '' && toEntity.valu
 const resolvedFromName = computed(
   () => pathResult.value?.from_entity?.name || fromEntity.value.trim(),
 )
+
+/**
+ * Names the user typed that no entity actually carries (#13761). Rendering the
+ * resolved name is not enough on its own — it looks like a successful lookup
+ * unless the near-miss is called out.
+ */
+const fuzzyEndpoints = computed<string[]>(() => {
+  const result = pathResult.value
+  if (!result?.found) return []
+  return [
+    { typed: fromEntity.value.trim(), entity: result.from_entity },
+    { typed: toEntity.value.trim(), entity: result.to_entity },
+  ]
+    .filter((e) => e.entity?.resolution === 'fuzzy')
+    .map((e) => e.typed)
+})
 
 // ============================================================================
 // Methods
@@ -494,6 +522,19 @@ async function executeFindPath(): Promise<void> {
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   color: var(--text-secondary);
+}
+
+.fuzzy-match-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin: var(--spacing-0);
 }
 
 .same-entity-note {

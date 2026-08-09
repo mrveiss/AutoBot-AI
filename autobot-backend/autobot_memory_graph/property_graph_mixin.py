@@ -38,8 +38,16 @@ logger = get_logger(__name__)
 
 
 def _endpoint_summary(entity: Dict[str, Any]) -> Dict[str, Any]:
-    """Reduce an entity to the fields a path response needs. #13474."""
-    return {"id": entity.get("id"), "name": entity.get("name"), "type": entity.get("type")}
+    """Reduce an entity to the fields a path response needs. #13474.
+
+    ``resolution`` (#13761) is only present for endpoints — a name the caller
+    typed, which may have resolved to a near-miss. Nodes along the path were
+    reached by id, so there is nothing to qualify.
+    """
+    summary = {"id": entity.get("id"), "name": entity.get("name"), "type": entity.get("type")}
+    if entity.get("_resolution"):
+        summary["resolution"] = entity["_resolution"]
+    return summary
 
 
 def _serialize_hop(hop: Dict[str, Any]) -> Dict[str, Any]:
