@@ -1186,7 +1186,12 @@ async def set_session_work_item(
         if item is None:
             raise HTTPException(status_code=404, detail="Work item not found")
 
-    await SessionWorkItemService().set_work_item(session_id, work_item_id, str(ctx.org_id))
+    # #13729: the authorised user is stored with the scope so the resolve path
+    # can confirm the authorisation still holds, instead of trusting it for the
+    # whole TTL after membership is revoked.
+    await SessionWorkItemService().set_work_item(
+        session_id, work_item_id, str(ctx.org_id), user_id=str(ctx.user_id) if ctx.user_id else None
+    )
     return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})
 
 

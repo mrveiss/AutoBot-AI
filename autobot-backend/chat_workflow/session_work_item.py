@@ -24,7 +24,7 @@ tenant predicates added alongside are defence in depth, not the only defence.
 
 import json
 import os
-from typing import Optional, Tuple
+from typing import NamedTuple, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -35,6 +35,20 @@ logger = get_logger(__name__)
 SESSION_WORK_ITEM_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_SESSION_WORK_ITEM_TTL_SECONDS", str(24 * 3600)))
 
 _KEY = "autobot:session:{session_id}:work_item"
+
+
+class SessionWorkItemBinding(NamedTuple):
+    """What the bind endpoint authorised, as stored (#13729).
+
+    ``user_id`` is carried so the resolve path can re-check membership rather
+    than trusting ``company_id`` for the rest of the TTL. A named tuple, not a
+    plain tuple: it grew a third field, and two-value unpacking at an unfixed
+    call site should fail loudly instead of silently binding the wrong name.
+    """
+
+    work_item_id: Optional[str] = None
+    company_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 def apply_work_item(context: "dict | None", work_item_id: Optional[str]) -> "dict | None":
@@ -60,7 +74,13 @@ class SessionWorkItemService(AsyncRedisClientMixin):
 
     _redis_database = "knowledge"
 
-    async def set_work_item(self, session_id: str, work_item_id: str, company_id: str) -> None:
+    async def set_work_item(
+        self,
+        session_id: str,
+        work_item_id: str,
+        company_id: str,
+        user_id: Optional[str] = None,
+    ) -> None:
         """Bind *session_id* to *work_item_id*, recording its verified company.
 
         The company is stored **with** the binding rather than read later from
@@ -72,18 +92,29 @@ class SessionWorkItemService(AsyncRedisClientMixin):
 
         The caller is responsible for having verified ownership of both the
         session and the work item; this stores an already-authorised decision.
+
+        ``user_id`` (#13729) is stored so the resolve path can confirm that
+        authorisation still holds. Without it the binding vouched for the
+        company for the full TTL, so a user removed from the company kept
+        receiving its goal chain for up to 24 hours after losing access.
         """
         if not work_item_id or not str(work_item_id).strip():
             raise ValueError("work_item_id is required")
         if not company_id or not str(company_id).strip():
             raise ValueError("company_id is required — an unscoped binding is not a binding")
-        payload = json.dumps({"work_item_id": str(work_item_id).strip(), "company_id": str(company_id).strip()})
+        payload = json.dumps(
+            {
+                "work_item_id": str(work_item_id).strip(),
+                "company_id": str(company_id).strip(),
+                "user_id": str(user_id).strip() if user_id else None,
+            }
+        )
         redis = await self._get_redis()
         await redis.set(_KEY.format(session_id=session_id), payload, ex=SESSION_WORK_ITEM_TTL_SECONDS)
         logger.info("session_work_item.set session=%s work_item=%s company=%s", session_id, work_item_id, company_id)
 
-    async def get_binding(self, session_id: str) -> Tuple[Optional[str], Optional[str]]:
-        """Return ``(work_item_id, company_id)`` for the session, or ``(None, None)``.
+    async def get_binding(self, session_id: str) -> SessionWorkItemBinding:
+        """Return the session's binding, or an all-``None`` one.
 
         Never raises into chat — a resolution failure leaves L4 silent.
         """
@@ -91,17 +122,20 @@ class SessionWorkItemService(AsyncRedisClientMixin):
             redis = await self._get_redis()
             raw = await redis.get(_KEY.format(session_id=session_id))
             if not raw:
-                return None, None
+                return SessionWorkItemBinding()
             data = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
-            return data.get("work_item_id"), data.get("company_id")
+            return SessionWorkItemBinding(
+                work_item_id=data.get("work_item_id"),
+                company_id=data.get("company_id"),
+                user_id=data.get("user_id"),
+            )
         except Exception as exc:  # defensive; resolution must never break chat
             logger.warning("session_work_item.get failed for session=%s: %s", session_id, exc)
-            return None, None
+            return SessionWorkItemBinding()
 
     async def get_work_item(self, session_id: str) -> Optional[str]:
         """Return just the bound work item id, or ``None``."""
-        work_item_id, _ = await self.get_binding(session_id)
-        return work_item_id
+        return (await self.get_binding(session_id)).work_item_id
 
     async def clear_work_item(self, session_id: str) -> None:
         """Remove the session's work-item binding."""
@@ -112,6 +146,7 @@ class SessionWorkItemService(AsyncRedisClientMixin):
 
 __all__ = [
     "SESSION_WORK_ITEM_TTL_SECONDS",
+    "SessionWorkItemBinding",
     "SessionWorkItemService",
     "apply_work_item",
 ]
