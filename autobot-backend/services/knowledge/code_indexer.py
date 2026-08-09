@@ -34,6 +34,13 @@ from typing import Any
 from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path_from_rel_path, resolve_call
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
+from utils.file_categorization import (
+    ALL_CODE_EXTENSIONS,
+    JS_EXTENSIONS,
+    PYTHON_EXTENSIONS,
+    TS_EXTENSIONS,
+    VUE_EXTENSIONS,
+)
 
 logger = get_logger(__name__)
 
@@ -57,6 +64,19 @@ class CodeIndexResult:
     failed: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    # #13510: extension -> count of code files this indexer has no grammar for.
+    # Reported rather than dropped at collection time, so a consumer can tell an
+    # under-covered graph from a complete one.
+    unsupported_extensions: dict[str, int] = field(default_factory=dict)
+
+
+def _count_by_extension(paths: "list[Path]") -> dict[str, int]:
+    """Tally *paths* by lowercased suffix (#13510)."""
+    counts: dict[str, int] = {}
+    for path in paths:
+        suffix = path.suffix.lower()
+        counts[suffix] = counts.get(suffix, 0) + 1
+    return counts
 
 
 def _make_node_id(name: str, module_path: str, parent_class: str | None = None) -> str:
@@ -280,14 +300,43 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
+# #13510: the grammars here cannot parse Cython, so the two Cython members of
+# PYTHON_EXTENSIONS are held back rather than mapped to the Python extractor.
+# Measured: on a file declaring ``cdef add``, ``cpdef scale`` and ``def normal``,
+# tree-sitter-python sees only ``normal`` — the cdef/cpdef definitions become
+# invisible while calls to them survive as unresolvable edges. That is worse than
+# not indexing the file, which is why this list exists instead of a blanket map.
+_NO_GRAMMAR_EXTENSIONS: "frozenset[str]" = frozenset({".pyx", ".pxd"})
+
+# #13510: a stub shares its implementation's module path — ``module_path_from_rel_path``
+# strips the suffix, so ``foo.py`` and ``foo.pyi`` compute the *same* node ids and the
+# stub's declarations would overwrite the real ones in the shared collection. Held back
+# until node identity carries the extension (#13824). Distinct from the set above: the
+# grammar reads these fine, the identity scheme cannot tell them apart.
+_COLLIDING_STUB_EXTENSIONS: "frozenset[str]" = frozenset({".pyi"})
+
+_HELD_BACK_EXTENSIONS: "frozenset[str]" = _NO_GRAMMAR_EXTENSIONS | _COLLIDING_STUB_EXTENSIONS
+
+# #13510: derived from the canonical registry in ``utils/file_categorization``
+# rather than restated here, so "what the platform calls source code" and "what the
+# indexer will read" cannot drift apart silently. ``.ts``/``.tsx`` were already
+# parsed with the JavaScript grammar; ``.mts``/``.cts`` join them on the same terms.
 _EXTRACTORS: dict[str, Any] = {
-    ".py": extract_python,
-    ".js": extract_javascript,
-    ".ts": extract_javascript,
-    ".jsx": extract_javascript,
-    ".tsx": extract_javascript,
-    ".vue": extract_javascript,
+    **{ext.lower(): extract_python for ext in PYTHON_EXTENSIONS - _HELD_BACK_EXTENSIONS},
+    **{ext.lower(): extract_javascript for ext in JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS},
 }
+
+# Extensions the canonical registry calls code but this indexer has no extractor
+# for. Files with these extensions are *counted* as skipped (#13510) — previously
+# they were dropped during collection, so they could not appear in any total and a
+# partially-covered graph reported itself as complete.
+#
+# Lowercased because the walk matches on ``suffix.lower()``. The registry carries
+# uppercase members (``.R``, ``.Rmd``, ``.S``) that would otherwise sit in this set
+# and never match anything — invisible again, which is the defect this issue fixes.
+UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ext.lower() for ext in ALL_CODE_EXTENSIONS) - frozenset(
+    _EXTRACTORS
+)
 
 
 _DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"
@@ -391,7 +440,18 @@ class CodeIndexer:
             self._known_ids = await self._seed_known_ids_from_collection()
 
             aggregate = CodeIndexResult()
-            for path in await self._collect_source_files(root_dir):
+            paths, unsupported = await self._collect_source_files(root_dir)
+            # #13510: code the registry recognises but no grammar here can read.
+            # Counted rather than dropped, so a partially covered graph says so.
+            aggregate.skipped += len(unsupported)
+            if unsupported:
+                aggregate.unsupported_extensions = _count_by_extension(unsupported)
+                logger.info(
+                    "code_indexer: %d code file(s) skipped — no extractor for %s (#13510)",
+                    len(unsupported),
+                    sorted(aggregate.unsupported_extensions),
+                )
+            for path in paths:
                 result = await self.index_file(str(path), root_dir=root_dir, force=force)
                 aggregate.success += result.success
                 aggregate.failed += result.failed
@@ -400,19 +460,34 @@ class CodeIndexer:
             return aggregate
 
     @staticmethod
-    async def _collect_source_files(root_dir: str) -> list[Path]:
-        """List indexable files under *root_dir*, skipping hidden/vendor dirs."""
+    async def _collect_source_files(root_dir: str) -> "tuple[list[Path], list[Path]]":
+        """Return ``(indexable, unsupported)`` files under *root_dir*.
+
+        *unsupported* are files the canonical registry classifies as code but for
+        which this indexer has no extractor (#13510). They are returned rather than
+        discarded so the caller can count them: dropping them here is what let the
+        indexer report full coverage of a corpus it had never fully seen.
+        """
         root = Path(root_dir)
         skip_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
 
-        def _walk() -> list[Path]:
-            found = []
+        def _walk() -> "tuple[list[Path], list[Path]]":
+            found: list[Path] = []
+            unsupported: list[Path] = []
             for path in sorted(root.rglob("*")):
-                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in path.parts):
+                # #13510: match against the path *below* root. Testing `path.parts`
+                # tested the absolute path, so any component above root — a checkout
+                # under `.worktrees/`, a home directory, a `.cache` — matched the
+                # hidden-directory rule and the walk silently collected nothing.
+                relative_parts = path.relative_to(root).parts
+                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in relative_parts):
                     continue
-                if path.suffix.lower() in _EXTRACTORS:
+                suffix = path.suffix.lower()
+                if suffix in _EXTRACTORS:
                     found.append(path)
-            return found
+                elif suffix in UNSUPPORTED_CODE_EXTENSIONS:
+                    unsupported.append(path)
+            return found, unsupported
 
         return await asyncio.to_thread(_walk)
 
