@@ -101,6 +101,7 @@ def test_a_resolved_id_logs_nothing(caplog):
         resolve_forbidden_tools("research_agent")
 
     assert not [r for r in caplog.records if "research_agent" in r.getMessage()]
+    assert "GH#13588" not in "\n".join(r.getMessage() for r in caplog.records)
 
 
 # ------------------------------------------------- "unbounded" is declared, not inferred
@@ -219,7 +220,7 @@ async def test_delegation_refuses_an_executor_agent_type():
 
 
 @pytest.mark.asyncio
-async def test_delegation_still_accepts_an_unregistered_agent_type():
+async def test_delegation_still_accepts_an_unregistered_agent_type(monkeypatch):
     """Unknown ids are already safe — they resolve to the default boundary.
 
     Refusing them too would turn a typo into a hard failure for no security gain, so
@@ -233,12 +234,8 @@ async def test_delegation_still_accepts_an_unregistered_agent_type():
         seen.update(task=task, agent_type=agent_type, depth=depth)
         return "ok"
 
-    original = delegation._ENGINES.get("claude_code")
-    delegation._ENGINES["claude_code"] = _fake_engine
-    try:
-        assert await delegation.run_delegated_subtask("t", agent_type="typo_agent") == "ok"
-    finally:
-        if original is not None:
-            delegation._ENGINES["claude_code"] = original
+    monkeypatch.setitem(delegation._ENGINES, "claude_code", _fake_engine)
+
+    assert await delegation.run_delegated_subtask("t", agent_type="typo_agent") == "ok"
 
     assert seen["agent_type"] == "typo_agent"
