@@ -131,3 +131,102 @@ def test_the_real_repository_passes():
     assert result.returncode == 0, result.stdout
     # And it must be checking something — "0 references" would be a guard that cannot fail.
     assert "0 deployed-src reference(s)" not in result.stdout
+
+
+# ------------------------------------------------- host patterns (#13745)
+
+
+def _inventory(tmp_path: pathlib.Path, body: str, name: str = "hosts.yml") -> None:
+    inv = tmp_path / "component" / "ansible" / "inventory"
+    inv.mkdir(parents=True, exist_ok=True)
+    (inv / name).write_text(body, encoding="utf-8")
+
+
+def test_a_group_no_inventory_defines_is_reported(tmp_path):
+    """A play targeting nothing is skipped silently — ok=0, exit 0, reads as success."""
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    _play(tmp_path, "- name: Deploy\n  hosts: browser\n  tasks: []\n")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 1
+    assert "hosts: browser" in result.stdout
+
+
+def test_a_group_defined_by_any_inventory_resolves(tmp_path):
+    """Several inventories ship, describing different topologies.
+
+    A play with no target in one of them is not a defect, so the rule is
+    "at least one", not "every".
+    """
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    _inventory(tmp_path, "all:\n  children:\n    browser:\n      hosts:\n        br-1: {}\n", name="production.yml")
+    _play(tmp_path, "- name: Deploy\n  hosts: browser\n  tasks: []\n")
+
+    assert _run(tmp_path).returncode == 0
+
+
+def test_an_alias_group_resolves(tmp_path):
+    """#2515 aliases exist so production.yml's names resolve in hosts.yml.
+
+    #13745 read only the `children:` block and reported these as undefined.
+    """
+    _inventory(
+        tmp_path,
+        "all:\n  children:\n    npu_workers:\n      hosts:\n        npu-1: {}\n\nnpu:\n  children:\n    npu_workers:\n",
+    )
+    _play(tmp_path, "- name: Deploy\n  hosts: npu\n  tasks: []\n")
+
+    assert _run(tmp_path).returncode == 0
+
+
+def test_a_host_name_is_a_valid_target(tmp_path):
+    """`hosts:` accepts a host as readily as a group.
+
+    Collecting only groups reported 13 host-targeted plays as broken — a guard
+    that cries wolf gets switched off.
+    """
+    _inventory(tmp_path, "all:\n  children:\n    backend:\n      hosts:\n        autobot-backend: {}\n")
+    _play(tmp_path, "- name: Diagnose\n  hosts: autobot-backend\n  tasks: []\n")
+
+    assert _run(tmp_path).returncode == 0
+
+
+def test_a_sibling_inventory_file_is_read(tmp_path):
+    """Both `ansible/inventory/hosts.yml` and `ansible/inventory.yml` are in use."""
+    ansible_dir = tmp_path / "component" / "ansible"
+    ansible_dir.mkdir(parents=True)
+    (ansible_dir / "inventory.yml").write_text(
+        "all:\n  children:\n    autobot:\n      hosts:\n        node-1: {}\n", encoding="utf-8"
+    )
+    _play(tmp_path, "- name: Logging\n  hosts: autobot\n  tasks: []\n")
+
+    assert _run(tmp_path).returncode == 0
+
+
+@pytest.mark.parametrize("pattern", ["all", "localhost", "{{ target_group }}", "$SOME_VAR"])
+def test_patterns_needing_no_inventory_group_are_skipped(pattern, tmp_path):
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    _play(tmp_path, f"- name: Play\n  hosts: {pattern}\n  tasks: []\n")
+
+    assert _run(tmp_path).returncode == 0
+
+
+def test_the_allowlist_is_documented_with_a_tracking_issue():
+    """An unexplained allowlist entry is indistinguishable from the bug it hides."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    block = source.split("_RUNTIME_SUPPLIED_PATTERNS")[0]
+    assert "#13786" in block, "each allowlisted pattern needs a tracking issue beside it"
+
+
+def test_deploy_native_services_resolves_everywhere_it_needs_to():
+    """#13745's own example: `npu` and `aiml` do resolve, via the #2515 aliases."""
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    play = repo_root / "autobot-slm-backend/ansible/playbooks/deploy-native-services.yml"
+    if not play.exists():  # pragma: no cover - repo layout guard
+        pytest.skip("playbook not present")
+
+    all_groups = set().union(*guard.inventory_groups(repo_root).values())
+    unresolved = guard._unresolvable_hosts(play.read_text(encoding="utf-8"), all_groups)
+
+    assert unresolved == [], f"deploy-native-services targets undefined groups: {unresolved}"

@@ -43,7 +43,9 @@ jobs:
       # and dependency install live in one place rather than 21 copies.
       - uses: ./.github/actions/setup-python-ci
         with:
-          extra-packages: pytest
+          # pytest.ini sets --asyncio-mode=auto, so the plugin is required even
+          # though these tests are synchronous.
+          extra-packages: pytest pytest-asyncio
 
       - name: Check ansible plays reference files that exist
         run: python3 scripts/check_ansible_file_references.py
