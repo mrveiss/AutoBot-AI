@@ -317,6 +317,11 @@
   hosts: npu
   become: true
 
+  vars:
+    # Matches roles/npu-worker's npu_install_dir (#13746) so the role-based and
+    # playbook-based NPU paths build the same venv rather than two.
+    npu_venv: /opt/autobot/autobot-npu-worker/venv
+
   tasks:
     # Python 3.11 pinned: OpenVINO/NPU runtime has no 3.14 wheels (do not bump with the rest of the fleet)
     - name: Install Python dependencies for NPU Worker
@@ -361,10 +366,26 @@
         group: autobot-service
         recurse: true
 
+    # #13746: this built /opt/autobot/venv — the same path the aiml play builds
+    # with python3.14 and roles/backend_services builds with python3.14. On a
+    # co-located host the last producer wins and rewrites pyvenv.cfg over
+    # site-packages built by the other interpreter; the failure is a native
+    # ImportError at worker startup, so the deploy still reports success.
+    # roles/npu-worker already uses its own {{ npu_install_dir }}/venv — this
+    # matches it. The 3.11 interpreter is deliberate and out of scope here;
+    # moving the NPU worker to 3.14 is #13747.
+    - name: Enforce the target interpreter on any existing NPU venv
+      ansible.builtin.include_role:
+        name: python314
+        tasks_from: ensure_venv_version
+      vars:
+        venv_path: "{{ npu_venv }}"
+        venv_python: python3.11
+
     - name: Create Python virtual environment for NPU Worker
-      shell: python3.11 -m venv /opt/autobot/venv
+      shell: "python3.11 -m venv {{ npu_venv }}"
       args:
-        creates: /opt/autobot/venv/bin/activate
+        creates: "{{ npu_venv }}/bin/activate"
       become_user: autobot-service
 
     # #13744: this read docker/npu-worker/requirements.txt, a path that has
@@ -378,7 +399,7 @@
     - name: Install Python dependencies for NPU Worker
       pip:
         requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
-        virtualenv: /opt/autobot/venv
+        virtualenv: "{{ npu_venv }}"
         virtualenv_python: python3.11
       become_user: autobot-service
       environment:
@@ -390,7 +411,7 @@
         name:
           - openvino[pytorch,tensorflow]
           - openvino-dev[pytorch,tensorflow]
-        virtualenv: /opt/autobot/venv
+        virtualenv: "{{ npu_venv }}"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
@@ -440,11 +461,11 @@
           User=autobot-service
           Group=autobot-service
           WorkingDirectory=/opt/autobot/src
-          Environment="PATH=/opt/autobot/venv/bin:$PATH"
+          Environment="PATH={{ npu_venv }}/bin:$PATH"
           Environment="PYTHONPATH=/opt/autobot/src"
           Environment="OPENVINO_LOG_LEVEL=ERROR"
           Environment="NPU_LOG_LEVEL=INFO"
-          ExecStart=/opt/autobot/venv/bin/python -m src.npu_worker.main
+          ExecStart={{ npu_venv }}/bin/python -m src.npu_worker.main
           Restart=always
           RestartSec=10
           StandardOutput=syslog
@@ -513,12 +534,26 @@
         group: autobot-service
         recurse: true
 
+    # #13746: a bare shell with no guard re-pointed an existing venv of a
+    # different minor version, leaving site-packages built by the old
+    # interpreter in place. ensure_venv_version removes a mismatched venv so
+    # this rebuilds it, and `creates:` makes the matching case a no-op.
+    - name: Enforce the target interpreter on any existing venv
+      ansible.builtin.include_role:
+        name: python314
+        tasks_from: ensure_venv_version
+      vars:
+        venv_path: /opt/autobot/venv
+        venv_python: python3.14
+
     - name: Create Python virtual environment
       shell: |
         cd /opt/autobot
         python3.14 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
+      args:
+        creates: /opt/autobot/venv/bin/activate
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
