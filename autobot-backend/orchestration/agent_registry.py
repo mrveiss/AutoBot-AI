@@ -77,6 +77,7 @@ def _create_system_agent() -> AgentProfile:
         max_concurrent_tasks=2,
         preferred_task_types=["system_operations", "command_execution"],
         allowed_work=list(_INFRA_AND_SHELL_TOOLS),
+        unbounded=True,
     )
 
 
@@ -175,6 +176,7 @@ def _create_routing_profiles() -> List[AgentProfile]:
             capabilities={AgentCapability.EXECUTION, AgentCapability.MONITORING},
             specializations=["command_execution", "system_monitoring"],
             allowed_work=list(_INFRA_AND_SHELL_TOOLS),
+            unbounded=True,
         )
     )
     return profiles
@@ -281,8 +283,11 @@ class AgentCapabilityRegistry:
         """Return the tool names *agent_id* is forbidden to invoke (GH#11139).
 
         Reads the declarative ``forbidden_work`` manifest off the agent's profile.
-        Unknown agents return an empty set (no boundary → falls back to the loop's
-        global SENSITIVE_TOOLS approval gate).
+
+        Raw accessor: unknown agents return an empty set. **Enforcement seams must
+        call ``resolve_forbidden_tools`` instead** (GH#13588) — it recognises the
+        other agent-id namespace and falls closed on an id neither namespace knows,
+        which this method cannot distinguish from a declared executor.
         """
         agent = self._agents.get(agent_id)
         return frozenset(agent.forbidden_work) if agent is not None else frozenset()
@@ -479,13 +484,83 @@ def get_default_capability_registry() -> AgentCapabilityRegistry:
     return _default_registry
 
 
+# GH#13588: the boundary an unrecognised agent id falls back to. Every bounded
+# profile in the registry declares exactly this manifest, so an unknown id lands on
+# the same restriction its intended profile would have imposed — a typo or a
+# wrong-namespace id costs precision, never containment.
+DEFAULT_FORBIDDEN_TOOLS: "frozenset[str]" = frozenset(_INFRA_AND_SHELL_TOOLS)
+
+_agent_type_aliases: "Dict[str, str] | None" = None
+
+
+def agent_type_aliases() -> "Dict[str, str]":
+    """``agent_type`` → ``agent_id`` for unambiguous **bounded** profiles (GH#13588).
+
+    AutoBot carries two agent-id namespaces: capability profiles here, and the DB
+    seed in ``api/agent_config.py``. Where they disagree they usually disagree by
+    *naming style only* — the DB's ``research`` is this registry's ``research_agent``,
+    whose ``agent_type`` is literally ``research``. Resolving through ``agent_type``
+    reconciles those pairs from data already in the profiles, so there is no
+    hand-written map to drift out of date.
+
+    Two exclusions keep this from becoming a privilege-escalation seam:
+
+    - an ``agent_type`` shared by more than one profile is dropped (ambiguous —
+      ``librarian`` names both ``documentation_agent`` and ``kb_librarian``);
+    - ``unbounded`` profiles never get an alias, so an executor's boundary-free
+      manifest is reachable only by naming that executor's exact ``agent_id``.
+    """
+    global _agent_type_aliases  # noqa: PLW0603
+    if _agent_type_aliases is None:
+        by_type: Dict[str, List[AgentProfile]] = {}
+        for profile in get_default_agents():
+            by_type.setdefault(profile.agent_type, []).append(profile)
+        _agent_type_aliases = {
+            agent_type: profiles[0].agent_id
+            for agent_type, profiles in by_type.items()
+            if len(profiles) == 1 and not profiles[0].unbounded
+        }
+    return _agent_type_aliases
+
+
+def resolve_agent_id(agent_id: str) -> "str | None":
+    """Return the registered profile id *agent_id* denotes, or ``None`` (GH#13588)."""
+    if agent_id in get_default_capability_registry():
+        return agent_id
+    return agent_type_aliases().get(agent_id)
+
+
 def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
     """Resolve *agent_id*'s ``forbidden_work`` manifest from the default profiles.
 
     Cached, read-only lookup reused by both the agent loop and the production tool
-    dispatch (GH#11145). An unknown or ``None`` ``agent_id`` returns an empty set —
-    no boundary — so callers no-op safely for the plain (profile-less) chat agent.
+    dispatch (GH#11145).
+
+    Three outcomes, deliberately distinct (GH#13588):
+
+    - ``None``/empty — the plain, ungoverned chat agent. No boundary, and that is
+      the documented intent: there is no agent identity to bound.
+    - a **registered** id — that profile's declared manifest, empty only when the
+      profile declares ``unbounded`` (the designated executors).
+    - anything else — ``DEFAULT_FORBIDDEN_TOOLS``, and a WARNING naming the id.
+
+    The third case used to return an empty set, which made a typo'd or
+    wrong-namespace id *indistinguishable from an executor grant* — the boundary
+    looked configured and was not. It now fails closed. Note this cannot strand a
+    correctly configured session: the trusted producer, ``session_role.set_role``,
+    already refuses any id outside this same registry, so every id it can pin
+    resolves here. Only the unvalidated producers — a client-supplied
+    ``context["agent_id"]`` and the ``delegate`` tool's LLM-chosen ``agent_type`` —
+    can reach this branch, and for those, restricting is the safe direction.
     """
     if not agent_id:
         return frozenset()
-    return get_default_capability_registry().forbidden_tools(agent_id)
+    resolved = resolve_agent_id(agent_id)
+    if resolved is None:
+        logger.warning(
+            "agent_registry: unregistered agent id %r — applying the default tool boundary "
+            "instead of running unbounded (GH#13588)",
+            agent_id,
+        )
+        return DEFAULT_FORBIDDEN_TOOLS
+    return get_default_capability_registry().forbidden_tools(resolved)

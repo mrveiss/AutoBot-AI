@@ -3024,8 +3024,12 @@ class ToolHandlerMixin:
         Resolves the acting agent id from ``ctx.agent_context`` and matches the tool
         against that agent's manifest via the shared ``match_forbidden_tool`` matcher.
         Records the failure in ``execution_results`` and returns an error
-        ``WorkflowMessage`` when the tool is forbidden, else ``None``. Profile-less
-        agents resolve to an empty manifest and are never blocked here.
+        ``WorkflowMessage`` when the tool is forbidden, else ``None``.
+
+        An empty manifest here means exactly one thing (GH#13588): there is no agent
+        identity on the ctx, i.e. the plain ungoverned chat agent, or the id names a
+        declared executor. An id the registry does not recognise resolves to the
+        default boundary rather than to nothing, so a typo cannot buy free rein.
         """
         from orchestration.agent_registry import match_forbidden_tool, resolve_forbidden_tools
 
