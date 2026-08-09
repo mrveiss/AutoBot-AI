@@ -8,6 +8,7 @@ Focus: the dedupe-against-existing-issues logic must not spam GitHub with
 duplicate issues when an audit task runs multiple times without new findings.
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from workers.audit_tasks import (
@@ -15,6 +16,7 @@ from workers.audit_tasks import (
     _dead_code_fingerprint,
     _dedupe_and_file,
     _find_test_file,
+    _gh_available,
     _persist_deferred,
     audit_claims,
     audit_dead_code,
@@ -96,15 +98,27 @@ class TestDedupeAndFile:
 # ---------------------------------------------------------------------------
 
 
-def _fake_redis_backing():
-    """Return (store, get_fn, set_fn) emulating the JSON Redis helpers."""
+def _fake_redis_backing(writes_succeed: bool = True):
+    """Return (store, get_fn, set_fn) emulating the JSON Redis helpers.
+
+    #13570: ``_redis_set`` returns True only when the write actually landed, so
+    the fake must too. Returning None here — as it used to — made every test
+    below run against a queue that silently accepted nothing, which is precisely
+    the production bug they were supposed to rule out.
+
+    ``writes_succeed=False`` models an unavailable Redis: the store stays empty
+    and the helper reports failure.
+    """
     store: dict = {}
 
     def _get(_redis, key):
         return store.get(key)
 
     def _set(_redis, key, value, **_kw):
+        if not writes_succeed:
+            return False
         store[key] = value
+        return True
 
     return store, _get, _set
 
@@ -490,3 +504,130 @@ class TestAuditClaims:
 
         assert "docs/verification.md" not in sources
         assert "docs/guide.md" in sources
+
+
+class TestDeferralIsObservedNotAssumed:
+    """#13570: the queue reported findings it never held.
+
+    On a live host the worker logged CRITICAL "N audit finding(s) deferred to
+    the Redis dead-letter queue (audit:deferred_findings) instead of being
+    filed" while `LLEN audit:deferred_findings` was 0 and no `audit:deferred*`
+    key existed at all. The message is the dangerous part: it reads as a safe
+    fallback and states the findings were preserved when they were not, so
+    nobody goes looking. Every automated audit since the credential lapsed
+    produced nothing, silently.
+
+    Root cause: `_redis_set` swallowed every failure and `_persist_deferred`
+    returned the count it *intended* to store.
+    """
+
+    def test_failed_persist_reports_zero_not_the_intended_count(self):
+        """The count must describe what landed, not what was handed over."""
+        _store, _get, _set = _fake_redis_backing(writes_succeed=False)
+        deferred = [{"title": "discovery: gone", "body": "b", "label": "l"}]
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            size = _persist_deferred(object(), deferred)
+
+        assert size == 0, "a queue that stored nothing must not report a queue depth"
+
+    def test_failed_persist_dumps_the_findings_to_the_log(self, caplog):
+        """When the queue cannot hold them, the log is the queue of last resort —
+        a bare count would leave nothing recoverable."""
+        _store, _get, _set = _fake_redis_backing(writes_succeed=False)
+        deferred = [{"title": "discovery: recover me", "body": "important detail", "label": "l"}]
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                _persist_deferred(object(), deferred)
+
+        dumped = caplog.text
+        assert "discovery: recover me" in dumped
+        assert "important detail" in dumped
+        assert "NOT" in dumped, "the log must say the findings were not queued"
+
+    def test_no_redis_client_is_a_failed_persist_not_a_silent_success(self):
+        """`_get_redis()` returns None whenever the client cannot be built, and
+        that path reported success — the shape that produced an empty queue
+        alongside a reassuring log line."""
+        assert _persist_deferred(None, [{"title": "t", "body": "b", "label": "l"}]) == 0
+
+    def test_unauthenticated_and_unqueueable_says_lost_not_deferred(self, caplog):
+        """Both failures at once must not read as the benign one."""
+        _store, _get, _set = _fake_redis_backing(writes_succeed=False)
+        findings = [{"title": "discovery: double fault", "body": "b"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                filed, deferred = _dedupe_and_file(findings, set(), "enh", object())
+
+        assert (filed, deferred) == (0, 0)
+        assert "LOST" in caplog.text
+        assert "instead of being filed or lost" not in caplog.text, (
+            "the reassuring deferral message must not be emitted when nothing was queued"
+        )
+
+    def test_successful_deferral_still_reports_the_reassuring_message(self, caplog):
+        """The fix must not turn a working fallback into an alarm."""
+        store, _get, _set = _fake_redis_backing()
+        findings = [{"title": "discovery: safely queued", "body": "b"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                filed, deferred = _dedupe_and_file(findings, set(), "enh", object())
+
+        assert (filed, deferred) == (0, 1)
+        assert "LOST" not in caplog.text
+        assert [f["title"] for f in store[_DEFERRED_FINDINGS_KEY]] == ["discovery: safely queued"]
+
+    def test_the_queue_is_stored_without_a_ttl(self):
+        """The queue carried the module's default 14-day TTL, so a credential
+        broken for a fortnight — the exact case it exists for — expired
+        everything in it."""
+        seen: dict = {}
+
+        def _set(_redis, key, value, **kwargs):
+            seen[key] = kwargs
+            return True
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            _persist_deferred(object(), [{"title": "t", "body": "b", "label": "l"}])
+
+        assert seen[_DEFERRED_FINDINGS_KEY]["ttl"] is None
+
+
+class TestMissingCredentialIsReportedEveryRun:
+    """#13570: there was no way to tell when filing broke.
+
+    `_gh_available` was silent, so a run with no findings looked identical to a
+    healthy one and the lapse only surfaced when an audit happened to produce
+    something. The log now names the failure on every run.
+    """
+
+    def test_unauthenticated_gh_logs_critical_even_with_no_findings(self, caplog):
+        with patch(
+            "workers.audit_tasks._run",
+            return_value=(1, "", "You are not logged into any GitHub hosts."),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                assert _gh_available() is False
+
+        assert "cannot file issues" in caplog.text
+        assert "not logged into any GitHub hosts" in caplog.text
+
+    def test_authenticated_gh_is_quiet(self, caplog):
+        with patch("workers.audit_tasks._run", return_value=(0, "Logged in", "")):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                assert _gh_available() is True
+
+        assert caplog.text == ""
