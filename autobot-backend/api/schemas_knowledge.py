@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Literal
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from autobot_memory_graph.core import (
+    ENTITY_TYPES,
     RELATION_TYPE_ALIASES,
     RELATION_TYPES,
     canonical_relation_type,
@@ -3800,20 +3801,16 @@ class MCPToolCallRequest(BaseModel):
 
 # memory.py schemas (#6042)
 
-_VALID_ENTITY_TYPES = frozenset(
-    {
-        "conversation",
-        "bug_fix",
-        "feature",
-        "decision",
-        "task",
-        "user_preference",
-        "context",
-        "learning",
-        "research",
-        "implementation",
-    }
-)
+# Issue #13795: the same defect #13452 fixed for relations, one field over.
+# EntityCreateRequest is the body of POST /api/memory/entities, which calls
+# AutoBotMemoryGraph.create_entity — so it must validate against the memory
+# graph's vocabulary, not the knowledge base's. The literal copy here was the
+# knowledge-base list ("decision", "bug_fix", …) while create_entity validates
+# against ENTITY_TYPES ("DECISION", "BUG", …). The two sets are **disjoint**, so
+# every value this schema accepted then raised ValueError inside create_entity —
+# entity creation was impossible through the API for any input at all. Derived
+# now, so it cannot drift again.
+_VALID_ENTITY_TYPES = frozenset(ENTITY_TYPES)
 # Issue #13452: RelationCreateRequest is the body of POST /api/memory/relations,
 # which calls AutoBotMemoryGraph.create_relation — so it must validate against
 # the memory graph's vocabulary, not the knowledge base's. The previous literal
@@ -3833,9 +3830,17 @@ class EntityCreateRequest(BaseModel):
     @field_validator("entity_type")
     @classmethod
     def validate_entity_type(cls, v):
-        if v not in _VALID_ENTITY_TYPES:
-            raise ValueError(f"entity_type must be one of: {_VALID_ENTITY_TYPES}")
-        return v
+        """Validate against the memory graph's vocabulary, case-insensitively.
+
+        #13795: ENTITY_TYPES is upper-case; every caller written against the old
+        lower-case schema sent "decision". Normalising rather than rejecting
+        keeps those callers working, and returning the canonical casing means
+        create_entity receives a value it accepts.
+        """
+        canonical = v.upper() if isinstance(v, str) else v
+        if canonical not in _VALID_ENTITY_TYPES:
+            raise ValueError(f"entity_type must be one of: {sorted(_VALID_ENTITY_TYPES)}")
+        return canonical
 
 
 class ObservationAddRequest(BaseModel):

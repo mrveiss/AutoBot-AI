@@ -181,6 +181,15 @@ jobs:
           tag_name: ${{ steps.check.outputs.version }}
           name: ${{ steps.check.outputs.version }}
           body_path: RELEASE_NOTES.md
+          # DELIBERATE, not an oversight: every release stays a prerelease
+          # until 1.0. The consequence is worth stating because it looks like a
+          # bug from the outside — GitHub's `releases/latest` excludes
+          # prereleases, so the "Latest release" badge pins to the newest
+          # *stable* tag (v0.2.0, 2026-03-26) no matter how many versions ship
+          # after it. Ten had shipped by 2026-08 without moving it.
+          #
+          # Do not flip this to make the badge move. At 1.0, drive it from the
+          # version instead — prerelease only for `-rc`/`-beta` suffixes.
           prerelease: true
           generate_release_notes: false
         env:

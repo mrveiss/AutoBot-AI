@@ -6,7 +6,7 @@
 # Provision the target Python interpreter on the LOCAL host (#11343).
 #
 # The SLM code-sync update path calls this when the target interpreter
-# (python3.14 for backends, python3.11 for NPU) is missing on the box it
+# (python3.14 fleet-wide, including the NPU worker since #13747) is missing on the box it
 # runs on. Applying roles/python314 to localhost installs the deadsnakes
 # interpreter so the subsequent venv recreation + pip install succeed.
 #

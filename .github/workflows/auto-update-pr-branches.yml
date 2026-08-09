@@ -54,7 +54,9 @@ jobs:
       # dance (apt keyring + sudo) is no longer needed (#13401).
       - name: Update out-of-date PR branches
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # #13791: see auto-fix-formatting.yml — a human-attributed token
+          # keeps the runs this update triggers out of action_required.
+          GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           # #13426: how many stale branches one sweep may refresh.
           #
@@ -205,7 +207,7 @@ jobs:
 
       - name: Approve parked runs and publish dispatch state
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           WATCHDOG_BASE_BRANCH: Dev_new_gui
         run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch

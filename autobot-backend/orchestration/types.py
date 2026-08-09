@@ -131,6 +131,10 @@ class AgentProfile:
     # not invoke. ``forbidden_work`` is hard-blocked before approval in the loop.
     allowed_work: List[str] = field(default_factory=list)
     forbidden_work: List[str] = field(default_factory=list)
+    # GH#13588: "this agent is deliberately unbounded" stated as a property, so it
+    # is distinguishable from a profile that merely forgot its ``forbidden_work``.
+    # Only designated executors set this; everything else inherits a boundary.
+    unbounded: bool = False
 
 
 @dataclass
