@@ -55,9 +55,7 @@ def _resolve(path: str, cwd: str | None) -> str:
 
 def _ansible_yaml(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(
-        p
-        for p in root.rglob("*.y*ml")
-        if not any(part in _EXCLUDE_DIRS for part in p.relative_to(root).parts)
+        p for p in root.rglob("*.y*ml") if not any(part in _EXCLUDE_DIRS for part in p.relative_to(root).parts)
     )
 
 
@@ -92,9 +90,7 @@ def main() -> int:
     root = pathlib.Path(".").resolve()
     producers = venv_producers(root)
 
-    conflicts = {
-        venv: sites for venv, sites in producers.items() if len({py for py, _ in sites}) > 1
-    }
+    conflicts = {venv: sites for venv, sites in producers.items() if len({py for py, _ in sites}) > 1}
 
     if conflicts:
         print("A venv path is built by more than one interpreter:")
