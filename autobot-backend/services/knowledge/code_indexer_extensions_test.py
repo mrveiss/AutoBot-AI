@@ -17,6 +17,17 @@ from pathlib import Path
 
 import pytest
 
+# The extraction measurements below need the grammar; the set-derivation tests do
+# not. Mirrors the probe in ``code_indexer_test.py`` — CI's python-suite venv does
+# not install tree-sitter, which is how the unmarked version of this file went red.
+tree_sitter_available = True
+try:
+    import tree_sitter_python  # noqa: F401
+except ImportError:
+    tree_sitter_available = False
+
+requires_tree_sitter = pytest.mark.skipif(not tree_sitter_available, reason="tree-sitter-python not installed")
+
 from autobot_shared.code_graph import module_path_from_rel_path
 from services.knowledge.code_indexer import (
     _COLLIDING_STUB_EXTENSIONS,
@@ -49,6 +60,7 @@ def test_every_parseable_python_extension_has_an_extractor(ext):
     assert _EXTRACTORS.get(ext) is extract_python
 
 
+@requires_tree_sitter
 def test_cython_is_held_back_deliberately():
     """Deriving blindly would map Cython onto the Python grammar.
 
@@ -62,9 +74,14 @@ def test_cython_is_held_back_deliberately():
 
     cython = b"cdef int add(int a, int b):\n    return a + b\n\ndef normal(y):\n    return add(y, 1)\n"
     extracted = extract_python("x.pyx", cython)
-    names = {n.get("name") for n in extracted["nodes"]}
 
-    assert names == {"normal"}, "tree-sitter-python now reads cdef — reconsider the holdback"
+    # Checked before the interesting assertion so its message cannot misdiagnose:
+    # with no grammar installed, extraction returns zero nodes, which would read as
+    # "the parser stopped seeing cdef" when the parser was never there.
+    assert not extracted.get("dep_error"), extracted.get("dep_error")
+
+    names = {n.get("name") for n in extracted["nodes"]}
+    assert names == {"normal"}, f"tree-sitter-python now reads cdef ({sorted(names)}) — reconsider the holdback"
     assert extracted["edges"], "the call to the invisible cdef survives as a dangling edge"
 
 
