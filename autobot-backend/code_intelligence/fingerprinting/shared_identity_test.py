@@ -18,13 +18,18 @@ that is not merely different from the graph's; it is *wrong*, and quietly so.
 """
 
 import ast
+from pathlib import Path
 
 import pytest
 
 from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
-from autobot_shared.code_graph.identity import _PROJECT_ROOT as PROJECT_ROOT
-from code_intelligence.fingerprinting.detector import CloneDetector  # noqa: F401
+from code_intelligence.fingerprinting.detector import CloneDetector
 from code_intelligence.fingerprinting.types import CodeFragment
+
+# This file is <root>/autobot-backend/code_intelligence/fingerprinting/, so the
+# project root is three levels up. Derived here rather than imported from the
+# module under test, so the test does not inherit the value it is checking.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 SOURCE = """
 def module_level(a):
