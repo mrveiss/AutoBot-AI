@@ -128,6 +128,23 @@ class AgentLoop:
     runtime effect until a production caller instantiates ``AgentLoop``. Treat
     this as a library of parts + a reference implementation, not a live code
     path, when reasoning about what actually runs.
+
+    MIRRORED IN PRODUCTION (#13590) — these guards now also run at the live
+    seam, so changing them here alone is no longer the whole story:
+
+    - ``max_identical_tool_calls`` → ``chat_workflow/tool_handler.py``
+      ``_enforce_repetition``, via ``autobot_shared/repetition_guard.py``. The
+      production counter keys on ``(call fingerprint, result hash)`` rather than
+      the call alone, so a polling loop whose result moves is not halted.
+    - ``halt_on_stagnation`` / ``stagnation_window`` /
+      ``min_observation_novelty`` → the same seam, same module, reusing
+      ``fingerprint.compute_novel_token_ratio``.
+    - ``AUTOBOT_GUARD_PROFILE`` and the per-guard env overrides in
+      ``guard_profile.py`` therefore now govern production for these fields.
+
+    STILL UNPORTED: everything else in the guard stack — schema self-correction
+    (``max_schema_retries``), the approval workflow fields, and the belief-state
+    and planning machinery — remains dormant here.
     """
 
     def __init__(
