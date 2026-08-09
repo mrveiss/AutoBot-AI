@@ -17,15 +17,32 @@ Features:
 - Evolution reports and visualizations
 """
 
+import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)
+
+# #13639: a commit touching more files than this is a bulk rename, a vendored-tree
+# import or a reformat — not a coupling signal. Left uncapped, one 400-file commit
+# contributes ~80k pair updates and drowns every real pair beneath it. Cost is
+# quadratic in files-per-commit, so the cap is what keeps the walk affordable.
+MAX_FILES_PER_COMMIT: int = env_int("AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT", default=50)
+
+# Bound on the history walk; never a literal at the call site.
+_GIT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS", default=120)
+
+# Paths that co-change because a tool wrote them, not because they depend on each
+# other. Lockfiles are the clearest case: every dependency bump touches all of them.
+_COCHANGE_SKIP_DIRS: frozenset = frozenset(
+    {"node_modules", "venv", ".venv", "dist", "build", "__pycache__", ".git", "vendor", "third_party"}
+)
 
 
 class PatternOccurrence:
@@ -73,6 +90,43 @@ class PatternLifecycle:
         if self.first_seen and self.last_seen:
             return (self.last_seen - self.first_seen).days
         return 0
+
+
+def _run_git(repo_path: str, *args: str) -> str:
+    """Run a read-only git command; empty string on any failure (#13639).
+
+    The git binary is present wherever the repository is, which GitPython is not.
+    """
+    try:
+        completed = subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option
+            # -c core.quotepath=false: without it git C-quotes any non-ASCII path
+            # ("lat\\303\\253le.py"), so the key depends on the reader's git config
+            # and can never match a filesystem-derived path. errors="replace"
+            # because a path byte that is not valid UTF-8 must not raise a
+            # ValueError that the except clause below does not even catch.
+            ["git", "-c", "core.quotepath=false", "-C", repo_path, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        logger.warning("git %s failed in %s: %s", args, repo_path, exc)
+        return ""
+    if completed.returncode != 0:
+        # Without this, a timeout, a non-repo path and a genuinely empty window
+        # are the same empty string to the caller — the silent-computes-nothing
+        # shape this method was written to get away from.
+        logger.warning("git %s exited %s in %s: %s", args, completed.returncode, repo_path, completed.stderr.strip())
+        return ""
+    return completed.stdout
+
+
+def _is_vendored_path(path: str) -> bool:
+    """True for paths whose co-changes come from tooling rather than from design."""
+    return any(part in _COCHANGE_SKIP_DIRS for part in PurePosixPath(path).parts)
 
 
 class GitHistoryCrawler:
@@ -127,6 +181,40 @@ class GitHistoryCrawler:
             logger.error("Failed to retrieve commits: %s", e)
 
         return commits
+
+    def get_commit_file_sets(self, since: "datetime | None" = None) -> "list[set[str]]":
+        """Return the changed-path set for **every** commit in the window (#13639).
+
+        Every commit, including single-file ones. That is not incidental: the
+        co-change denominator is "how often did this file change", and dropping
+        solo commits here would silently redefine it as "how often did it change
+        alongside something else". On this repository 32% of commits touch one
+        file, and excluding them inflated 44% of reported pairs past the
+        threshold — the precise noise the normalised formula exists to reject.
+
+        Deciding which commits are *too large to pair* is an analysis question,
+        so it belongs to ``CoChangeAnalyzer``, not here. This method reports
+        history; it does not judge it.
+
+        Reads the git binary rather than GitPython. The rest of this class goes
+        through ``self.repo``, which is **always ``None``** — GitPython appears
+        in no requirements file and is imported in exactly one place, the ``try``
+        block above, so every other method here returns ``[]`` in every
+        environment (#13832).
+        """
+        args = ["log", "--no-merges", "--pretty=format:%x00%H", "--name-only"]
+        if since is not None:
+            args.append(f"--since={since.isoformat()}")
+        output = _run_git(str(self.repo_path), *args)
+        if not output:
+            return []
+
+        file_sets: list[set[str]] = []
+        for block in output.split("\x00"):
+            paths = {line for line in block.splitlines()[1:] if line.strip() and not _is_vendored_path(line)}
+            if paths:
+                file_sets.append(paths)
+        return file_sets
 
     def get_file_history(self, file_path: str) -> List[Dict]:
         """Get commit history for a specific file"""
