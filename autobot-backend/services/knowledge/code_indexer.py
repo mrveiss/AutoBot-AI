@@ -27,7 +27,11 @@ Supported languages: Python, JavaScript/TypeScript.
 import asyncio
 import hashlib
 import json
-from dataclasses import dataclass, field
+import os
+import subprocess
+from dataclasses import asdict, dataclass, field
+from dataclasses import fields as dataclass_fields
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +72,66 @@ class CodeIndexResult:
     # Reported rather than dropped at collection time, so a consumer can tell an
     # under-covered graph from a complete one.
     unsupported_extensions: dict[str, int] = field(default_factory=dict)
+    # #13508: edge-resolution roll-up. Already computed per file to build the edge
+    # metadata; totalling it is what turns a resolver regression into a number
+    # that goes down, rather than something inferred from a wrong answer later.
+    nodes: int = 0
+    edges: int = 0
+    resolved_edges: int = 0
+    unresolved_edges: int = 0
+    files_indexed: int = 0
+    files_total: int = 0
+
+
+# #13508: bump when extraction, resolution or node identity changes in a way that
+# makes previously-indexed records wrong rather than merely stale. A bump
+# invalidates the whole hash cache on the next run, so every file is re-extracted
+# instead of being skipped on an unchanged content hash — a content hash cannot
+# notice that the *extractor* changed.
+EXTRACTOR_VERSION = 1
+
+# One provenance document per collection, at a fixed id so a run overwrites the
+# previous record instead of accumulating history.
+_PROVENANCE_ID = "code_graph::provenance"
+_PROVENANCE_RECORD_TYPE = "graph_provenance"
+
+# Key under which the hash cache carries the version that wrote it. Deliberately
+# not a valid relative path, so it can never collide with a cached file entry.
+_CACHE_VERSION_KEY = "::extractor_version"
+
+# Bound on the read-only git calls provenance makes; never hard-coded inline.
+_GIT_TIMEOUT_SECONDS = int(os.environ.get("AUTOBOT_CODE_INDEX_GIT_TIMEOUT_SECONDS", "10"))
+
+
+@dataclass
+class GraphProvenance:
+    """How and when the code graph was built (#13508).
+
+    Absence of this record means **unknown**, never fresh: a collection indexed
+    before provenance existed must not read as current, which is why every
+    consumer goes through ``load_graph_provenance`` returning ``None`` rather
+    than a zero-valued default.
+    """
+
+    indexed_at_commit: str
+    indexed_at: str
+    extractor_version: int
+    files_indexed: int
+    files_total: int
+    nodes: int
+    edges: int
+    resolved_edges: int
+    unresolved_edges: int
+
+    @property
+    def coverage(self) -> float:
+        """Fraction of collected files actually indexed; 0.0 when nothing was seen."""
+        return self.files_indexed / self.files_total if self.files_total else 0.0
+
+    @property
+    def resolution_rate(self) -> float:
+        """Fraction of edges that resolved to a known node; 0.0 when there were none."""
+        return self.resolved_edges / self.edges if self.edges else 0.0
 
 
 def _count_by_extension(paths: "list[Path]") -> dict[str, int]:
@@ -457,7 +521,54 @@ class CodeIndexer:
                 aggregate.failed += result.failed
                 aggregate.skipped += result.skipped
                 aggregate.errors.extend(result.errors)
+                aggregate.nodes += result.nodes
+                aggregate.edges += result.edges
+                aggregate.resolved_edges += result.resolved_edges
+                aggregate.unresolved_edges += result.unresolved_edges
+            aggregate.files_indexed = len(paths)
+            aggregate.files_total = len(paths) + len(unsupported)
+            await self._write_provenance(root_dir, aggregate)
             return aggregate
+
+    async def _write_provenance(self, root_dir: str, aggregate: CodeIndexResult) -> None:
+        """Persist how this run built the graph (#13508).
+
+        Best-effort: a graph that indexed correctly must not be reported as failed
+        because its provenance could not be stored. A missing record already means
+        "unknown" to every reader, which is the safe reading.
+        """
+        provenance = GraphProvenance(
+            indexed_at_commit=await asyncio.to_thread(_git_head_commit, root_dir),
+            indexed_at=datetime.now(timezone.utc).isoformat(),
+            extractor_version=EXTRACTOR_VERSION,
+            files_indexed=aggregate.files_indexed,
+            files_total=aggregate.files_total,
+            nodes=aggregate.nodes,
+            edges=aggregate.edges,
+            resolved_edges=aggregate.resolved_edges,
+            unresolved_edges=aggregate.unresolved_edges,
+        )
+        try:
+            await asyncio.to_thread(
+                self._collection.upsert,
+                ids=[_PROVENANCE_ID],
+                embeddings=[[0.0]],
+                documents=[f"code graph built at {provenance.indexed_at_commit or 'unknown commit'}"],
+                metadatas=[{"record_type": _PROVENANCE_RECORD_TYPE, **asdict(provenance)}],
+            )
+        except Exception as exc:
+            logger.warning("code_indexer: could not write graph provenance: %s (#13508)", exc)
+            return
+        logger.info(
+            "code_indexer: graph provenance commit=%s files=%d/%d nodes=%d edges=%d resolved=%d/%d",
+            provenance.indexed_at_commit[:12] or "unknown",
+            provenance.files_indexed,
+            provenance.files_total,
+            provenance.nodes,
+            provenance.edges,
+            provenance.resolved_edges,
+            provenance.edges,
+        )
 
     @staticmethod
     async def _collect_source_files(root_dir: str) -> "tuple[list[Path], list[Path]]":
@@ -540,7 +651,17 @@ class CodeIndexer:
             else:
                 result.failed += 1
 
+        result.nodes += len(nodes)
+
         resolved_by_source = self._resolve_edges(extracted["edges"])
+        # #13508: count what resolution achieved while the outcome is in hand.
+        for calls in resolved_by_source.values():
+            for _edge, resolved in calls:
+                result.edges += 1
+                if resolved.resolved:
+                    result.resolved_edges += 1
+                else:
+                    result.unresolved_edges += 1
         if not await self._upsert_edges(resolved_by_source, rel_path, node_embeddings):
             result.errors.append(f"{rel_path}: failed to upsert call edges")
 
@@ -608,19 +729,110 @@ class CodeIndexer:
             return ""
 
     def _load_cache(self) -> dict[str, str]:
-        if self._cache_file.exists():
-            try:
-                return json.loads(self._cache_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-        return {}
+        """Load the per-file content-hash cache, discarding it on a version bump.
+
+        #13508: a content hash answers "did this file change", never "did the
+        thing that reads it change". Without this gate, bumping
+        ``EXTRACTOR_VERSION`` would leave every unchanged file skipped and the
+        graph permanently built by the old extractor.
+        """
+        if not self._cache_file.exists():
+            return {}
+        try:
+            cached = json.loads(self._cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(cached, dict):
+            return {}
+        written_by = cached.pop(_CACHE_VERSION_KEY, None)
+        if written_by != EXTRACTOR_VERSION:
+            logger.info(
+                "code_indexer: hash cache was written by extractor version %s, now %s — "
+                "re-extracting every file (#13508)",
+                written_by,
+                EXTRACTOR_VERSION,
+            )
+            return {}
+        return cached
 
     def _save_cache(self) -> None:
         try:
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self._cache_file.write_text(json.dumps(self._hash_cache, indent=2), encoding="utf-8")
+            payload = {**self._hash_cache, _CACHE_VERSION_KEY: EXTRACTOR_VERSION}
+            self._cache_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError as e:
             logger.warning("Could not save code index cache: %s", e)
+
+
+def _git(root_dir: str, *args: str) -> str:
+    """Run a read-only git command in *root_dir*; empty string on any failure.
+
+    #13508: provenance must degrade to "unknown" rather than raise. A checkout
+    without git, a detached worktree, or a missing binary all mean the same thing
+    to a consumer — the commit could not be determined — and none of them should
+    fail an index run that otherwise succeeded.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", root_dir, *args],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug("code_indexer: git %s failed in %s: %s", args, root_dir, exc)
+        return ""
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def _git_head_commit(root_dir: str) -> str:
+    """Full SHA of *root_dir*'s HEAD, or "" when it cannot be determined."""
+    return _git(root_dir, "rev-parse", "HEAD")
+
+
+def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
+    """Return how the graph in *collection* was built, or ``None`` if unknown.
+
+    ``None`` covers every uncertain case — no record, an unreadable store, a
+    record written by a schema this build does not understand. A collection
+    indexed before #13508 has no record and therefore reads as unknown, never as
+    fresh, which is the constraint the issue is explicit about.
+    """
+    try:
+        found = collection.get(ids=[_PROVENANCE_ID], include=["metadatas"])
+    except Exception as exc:
+        logger.warning("code_indexer: could not read graph provenance: %s", exc)
+        return None
+    metadatas = (found or {}).get("metadatas") or []
+    if not metadatas or not isinstance(metadatas[0], dict):
+        return None
+    fields = {f.name for f in dataclass_fields(GraphProvenance)}
+    payload = {k: v for k, v in metadatas[0].items() if k in fields}
+    try:
+        return GraphProvenance(**payload)
+    except TypeError as exc:
+        logger.warning("code_indexer: graph provenance record is not readable: %s", exc)
+        return None
+
+
+def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
+    """How many commits *root_dir*'s HEAD is ahead of the indexed commit.
+
+    ``None`` means unanswerable — no provenance, no git, or the recorded commit is
+    not in this checkout's history (a rebase or a force-push, where a *number*
+    would be a fabrication). ``0`` means the graph is current.
+
+    Answers the question without re-walking the repo: one ``rev-list --count``,
+    no re-index, no file reads.
+    """
+    provenance = load_graph_provenance(collection)
+    if provenance is None or not provenance.indexed_at_commit:
+        return None
+    counted = _git(root_dir, "rev-list", "--count", f"{provenance.indexed_at_commit}..HEAD")
+    if not counted.isdigit():
+        return None
+    return int(counted)
 
 
 def _build_edge_batch(
