@@ -71,28 +71,25 @@ class WorkflowAutomationManager:
     async def create_workflow_from_chat_request(self, user_request: str, session_id: str) -> str | None:
         """Create automated workflow from natural language chat request"""
         try:
-            # Use orchestrator to analyze request and create workflow steps.
-            # #13730: both are coroutine functions — without await this bound
-            # coroutine objects, the enumerate() below raised TypeError, and the
-            # handler turned every chat request into a silent `return None`.
-            complexity = await self.orchestrator.classify_request_complexity(user_request)
-            base_steps = await self.orchestrator.plan_workflow_steps(user_request, complexity)
+            # #13809: route through the canonical LLM planner instead of the
+            # fixed skeleton in plan_workflow_steps. plan_workflow_steps returns
+            # hardcoded actions that _extract_command_from_step cannot match, so
+            # every request produced identical echo steps. create_workflow_plan
+            # is the canonical planner (per #13751 supersession record) and
+            # converges the two planning paths. When the LLM is unavailable the
+            # fallback in create_workflow_plan still produces a valid plan.
+            plan = await self.orchestrator.create_workflow_plan(user_request)
 
-            # Convert orchestrator steps to workflow steps
             workflow_steps = []
-            for i, step in enumerate(base_steps):
+            for task in plan.tasks:
+                command = task.command or self._extract_command_from_step(task)
                 workflow_step = WorkflowStep(
-                    step_id=f"step_{i+1}",
-                    command=self._extract_command_from_step(step),
-                    description=step.action,
+                    step_id=task.task_id,
+                    command=command,
+                    description=task.action or task.description,
                     explanation=f"This step is part of: {user_request}",
-                    # #13730: canonical WorkflowTask names — `requires_approval`
-                    # and `task_id`; the retired `user_approval_required` / `id`
-                    # would have raised AttributeError once the await landed.
-                    requires_confirmation=step.requires_approval,
-                    dependencies=[
-                        f"step_{j+1}" for j in range(i) if base_steps[j].task_id in (step.dependencies or [])
-                    ],
+                    requires_confirmation=task.requires_approval,
+                    dependencies=task.dependencies,
                 )
                 workflow_steps.append(workflow_step)
 
@@ -109,15 +106,17 @@ class WorkflowAutomationManager:
             return None
 
         except Exception as e:
-            # #13730: this handler is what made the un-awaited planning calls
-            # invisible — a TypeError became a plain `return None`, so both HTTP
-            # routes reported "no workflow" instead of an error. Contract keeps
-            # returning None, but the cause is now in the log.
             logger.error("Failed to create workflow from chat request: %s", e, exc_info=True)
             return None
 
     def _extract_command_from_step(self, step) -> str:
         """Extract executable command from workflow step"""
+        # #13809: check direct command field first (WorkflowTask.command
+        # set by the LLM planner via create_workflow_plan).
+        direct_command = getattr(step, "command", None)
+        if direct_command:
+            return direct_command
+
         if hasattr(step, "inputs") and step.inputs:
             command = step.inputs.get("command", "")
             if command:
