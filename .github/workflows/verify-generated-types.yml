@@ -43,7 +43,8 @@ on:
   # required-check context ("verify-generated-types") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked
   # on "Expected — Waiting for status". The real work is gated on the `changes`
-  # job below and self-skips (reporting success) when no relevant paths change.
+  # job below; #13862 made the required context a separate reporting job so that
+  # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
     branches: [ main, Dev_new_gui ]
 
@@ -58,12 +59,13 @@ jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       types: ${{ steps.filter.outputs.types }}
       slm_types: ${{ steps.filter.outputs.slm_types }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
@@ -84,11 +86,18 @@ jobs:
               - '**/requirements*.txt'
               - '.github/workflows/verify-generated-types.yml'
 
-  verify-generated-types:
+  verify-types-run:
     needs: changes
-    if: needs.changes.outputs.types == 'true'
-    name: verify-generated-types
+    # `!= 'false'` rather than `== 'true'`, matching migration-gate.yml: an
+    # unexpected or empty filter output then still RUNS the check instead of
+    # silently skipping it. With `== 'true'`, a paths-filter that succeeded but
+    # emitted nothing would skip this job and the verdict below would report a
+    # green "nothing to verify" — the fail-safe only bites when `changes` fails
+    # outright (#13862 review).
+    if: needs.changes.outputs.types != 'false'
+    name: verify-types-run
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7
@@ -237,3 +246,55 @@ jobs:
             exit 1
           fi
           echo "SLM generated types are fresh."
+
+  # #13862: the required check reports a VERDICT, never "skipped".
+  #
+  # `verify-generated-types` used to be the working job itself, so a PR touching
+  # only autobot-slm-backend (where the SLM sibling above does the real work)
+  # resolved the required context as `skipped`. Branch protection accepts that,
+  # but "skipped" reads identically to "never ran" on the PR page, and those are
+  # opposite facts — the distinction this workflow's own header calls out for the
+  # deadlock case. The context now always resolves and always says which it was.
+  #
+  # `verify-generated-types-slm` is deliberately NOT in this verdict: it is not a
+  # required context, and folding it in would silently widen what the required
+  # gate covers. It reports for itself, exactly as before.
+  #
+  # Fail-safe: only success-or-skipped passes, and a failed `changes` job fails
+  # this gate too. `always()` (not the repo's usual `!cancelled()`) is
+  # deliberate: `!cancelled()` would SKIP this job on a cancelled run and
+  # re-publish `skipped` on the required context — the exact bug being fixed.
+  # The cost is that a cancelled run reports this check red rather than absent,
+  # which is the safer direction for a required gate.
+  verify-generated-types:
+    name: verify-generated-types
+    needs: [changes, verify-types-run]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report generated-types verdict
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          RUN_RESULT: ${{ needs.verify-types-run.result }}
+        run: |
+          set -euo pipefail
+          echo "changes=$CHANGES_RESULT  verify-types-run=$RUN_RESULT"
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::path detection $CHANGES_RESULT — cannot tell whether generated types need checking"
+            exit 1
+          fi
+
+          case "$RUN_RESULT" in
+            success)
+              echo "autobot-frontend generated types are fresh"
+              ;;
+            skipped)
+              echo "no autobot-backend schema or autobot-frontend type path changed in this diff — nothing to verify"
+              ;;
+            *)
+              echo "::error::generated-types verification $RUN_RESULT"
+              exit 1
+              ;;
+          esac

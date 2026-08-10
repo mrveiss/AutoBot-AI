@@ -8407,7 +8407,8 @@
       "generating": "Generating QR code...",
       "expired": "Expired",
       "refresh": "Get New Code",
-      "retry": "Try Again"
+      "retry": "Try Again",
+      "manualCode": "Can't scan? Enter this code manually:"
     }
   },
   "code": {
@@ -8430,15 +8431,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {

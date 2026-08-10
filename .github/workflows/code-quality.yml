@@ -46,7 +46,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
@@ -73,6 +73,20 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
+      with:
+        # Required, not cosmetic (#13880). The default fetch-depth: 1 leaves the
+        # PR base commit out of the clone, so every changed-files step here
+        # diffed against a missing object, treated the fatal as "no changes",
+        # and went green having scanned nothing. Those steps now hard-fail on an
+        # unresolvable ref, so without this the job would fail outright.
+        #
+        # 2, not 0: on a pull_request the checkout is the merge commit, so depth
+        # 2 supplies both parents — HEAD^1 (base tip) and HEAD^2 (PR head) —
+        # which is all any step here needs. fetch-depth: 0 would clone 12k
+        # commits / ~511 MiB per run, and would also make `origin/<base>`
+        # resolvable, silently widening these scans to include whatever other
+        # PRs merged onto the base in the meantime.
+        fetch-depth: 2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v7
@@ -132,20 +146,42 @@ jobs:
         set -euo pipefail
         # Pre-commit covers local dev — this CI step closes the bypass gap
         # (devs without pre-commit installed, or `--no-verify` users).
-        # Changed-files-only mode mirrors pre-commit semantics: doesn't
-        # block on the 59 pre-existing violations tracked by #5263.
+        # Changed-files-only mode mirrors pre-commit semantics: doesn't block
+        # on the pre-existing violations tracked by #5263 (22 in 10 files as of
+        # #13880 — the "59" this comment used to claim was long stale).
         # After #5263 closes, swap to full-scan mode (no argv).
-        if [ -n "${BASE_SHA:-}" ]; then
-          # PR context — diff against the merge base
+        #
+        # Resolve through HEAD's parents, exactly as
+        # pipeline-scripts/check-pre-commit-hook-pr.sh does (#13880). The event
+        # payload's base.sha is NOT guaranteed to be in the clone under
+        # fetch-depth: 2, whereas HEAD^1 always is — and on a pull_request
+        # HEAD^1..HEAD is precisely this PR's changes.
+        if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
+          base="${HEAD_SHA}^1"
+        elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
           base="$BASE_SHA"
         else
-          # Push context — diff against the previous commit on the branch
           base="${HEAD_SHA}^"
         fi
+        # A guard that cannot compute its scope must FAIL, not report "no
+        # changed files" (#13880) — see the same fix in
+        # pipeline-scripts/check-pre-commit-hook-pr.sh.
+        for _ref in "$base" "$HEAD_SHA"; do
+          git cat-file -e "${_ref}^{commit}" 2>/dev/null || {
+            echo "::error::'${_ref}' does not resolve — shallow clone cannot diff against the base. Refusing to report no-changes for an uncomputed scope."
+            exit 1
+          }
+        done
         # `git diff --name-only` may return non-existent paths (deleted
         # files); filter to existing .py files before passing to the hook.
-        files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py' \
-          | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+        if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py'); then
+          echo "::error::git diff failed for ${base}..${HEAD_SHA} — refusing to report clean."
+          exit 1
+        fi
+        # `|| true` normalises the while-loop's EOF status under `set -e`; it is
+        # scoped to the filter only, since git's status is checked above.
+        files=$(printf '%s\n' "$raw_files" \
+          | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
           || true)
         if [ -z "$files" ]; then
           echo "No changed Python files — skipping #5178 regression check."
@@ -165,6 +201,73 @@ jobs:
 
     - name: Block print/console regressions (#1082, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
+
+    - name: Check repo conventions — third-party names, doc cross-links (#13876)
+      env:
+        CONVENTIONS_DENYLIST_CONTENT: ${{ secrets.CONVENTIONS_DENYLIST }}
+        # Bound through env rather than interpolated into the script body.
+        # These are GitHub-generated SHAs, but keeping every ${{ }} out of
+        # `run:` is the rule that does not need a per-field risk judgement.
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+        # The denylist of third-party product names is NOT stored in this repo:
+        # committing it would violate the anonymisation rule it enforces. It
+        # arrives as a masked secret and is written to a runner-local temp file.
+        #
+        # When the secret is absent the name check reports SKIPPED, never PASSED
+        # — a guard that silently no-ops is worse than no guard. The doc
+        # cross-link and commit-format checks need no secret and always run.
+        # Once the secret is configured this step hardens automatically.
+        # actions/checkout defaults to fetch-depth: 1, and on a pull_request
+        # event it checks out the MERGE commit — so neither base.sha nor
+        # head.sha from the event payload is present. Resolve through HEAD's
+        # own parents instead, which needs no payload and no merge-base:
+        #   HEAD^1 = base tip, HEAD^2 = PR head, HEAD = their merge.
+        # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
+        # whatever other PRs landed on the base meanwhile.
+        #
+        # The job now checks out with fetch-depth: 2 (#13880), so both parents
+        # of the merge commit are present and no fetching is needed here.
+        # No fetching here. A `git fetch --depth=N` against a complete clone
+        # makes the repository SHALLOW again (verified: 5 commits -> 1,
+        # is-shallow-repository false -> true), which would silently strip the
+        # history that later steps in this same job depend on. fetch-depth: 2
+        # on the checkout already provides both parents.
+        have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
+        if have 'HEAD^2' && have 'HEAD^1'; then
+          RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
+        elif have "${PR_BASE_SHA:-x}" && have "${PR_HEAD_SHA:-x}"; then
+          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+        elif have 'HEAD~1'; then
+          RANGE="HEAD~1..HEAD"
+        else
+          echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
+          git log --oneline -3 2>&1 | sed 's/^/  /' || true
+          exit 1
+        fi
+        # Anti-no-op guard. The original defect was a broken range yielding
+        # "0 file(s) in scope" and three green checks. Any change set reaches
+        # this job with at least one file, so 0 means the range is wrong —
+        # fail red rather than pass having scanned nothing.
+        CHANGED=$(git diff --name-only "$RANGE" | wc -l)
+        echo "conventions scope: $RANGE ($CHANGED file(s))"
+        if [ "$CHANGED" -eq 0 ]; then
+          echo "::error::0 files in scope for '$RANGE' — the range is wrong. Refusing to report clean on an unscanned tree."
+          exit 1
+        fi
+        if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
+          CONVENTIONS_DENYLIST=$(mktemp)
+          export CONVENTIONS_DENYLIST
+          printf '%s\n' "$CONVENTIONS_DENYLIST_CONTENT" > "$CONVENTIONS_DENYLIST"
+          trap 'rm -f "$CONVENTIONS_DENYLIST"' EXIT
+          scripts/lint-conventions.sh --range "$RANGE" --require-denylist
+        else
+          echo "::warning::CONVENTIONS_DENYLIST secret not configured — the third-party-name check is SKIPPED, not passed. Configure it to harden this gate."
+          scripts/lint-conventions.sh --range "$RANGE"
+        fi
 
     - name: Block developer absolute-path regressions (#13409, #13149)
       run: |

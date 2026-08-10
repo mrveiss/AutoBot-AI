@@ -8477,6 +8477,11 @@ export interface components {
         DriftResolveRequest: {
             /** Component */
             component: string;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -8485,6 +8490,11 @@ export interface components {
          * @description Result of a local rsync to resolve drift for a component (#7149, #9982).
          */
         DriftResolveResponse: {
+            /**
+             * Blocked Deletions
+             * @default []
+             */
+            blocked_deletions: string[];
             /** Component */
             component: string;
             /** Deployed Dir */
@@ -8511,6 +8521,11 @@ export interface components {
         /**
          * DriftedFile
          * @description A file whose checksum differs between code_source and deployed (Issue #2834).
+         *
+         *     ``untracked`` replaced ``deployed_only`` in #13851: a file present on the
+         *     host and absent from *this component's* source is foreign, not out of date,
+         *     and is reported in ``FileDriftReport.untracked_files`` rather than counted
+         *     as drift.
          */
         DriftedFile: {
             /** Deployed Checksum */
@@ -8523,7 +8538,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "modified" | "source_only" | "deployed_only";
+            status: "modified" | "source_only" | "untracked";
         } & {
             [key: string]: unknown;
         };
@@ -8736,6 +8751,11 @@ export interface components {
             source_dir: string;
             /** Total Compared */
             total_compared: number;
+            /**
+             * Untracked Files
+             * @default []
+             */
+            untracked_files: components["schemas"]["DriftedFile"][];
         } & {
             [key: string]: unknown;
         };

@@ -456,6 +456,7 @@ To add a new variable:
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
 | `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
+| `AUTOBOT_REQUIRE_CLASSIFICATION` | orchestrator | bool | false | Fail orchestrator construction when request classification is unavailable. Default (off) degrades gracefully: every request is defaulted to COMPLEX and the reason is reported in the orchestration status. Deployments that depend on classification set this so the failure is loud instead of silent (#13807). |
 | `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
 | `AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD` | voice | float | `0.8` | Decoder no-speech probability at or above which an STT transcript is discarded as a silence hallucination (#13104). Range: 0.0–1.0. |
 | `AUTOBOT_STT_SILENCE_RMS_THRESHOLD` | voice | float | `0.005` | Audio RMS below which the waveform is treated as silence, so any STT transcript over it is a hallucination rather than a user turn (#13104). Range: 0.0–1.0. |
@@ -466,5 +467,5 @@ To add a new variable:
 | `AUTOBOT_TRUSTED_PROXIES` | network | str | `""` | Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges for X-Forwarded-For header trust. |
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 
-*46 variables registered as of last generation.*
+*47 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

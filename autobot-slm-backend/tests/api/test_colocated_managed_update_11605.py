@@ -129,7 +129,7 @@ def test_resolves_full_procedure_for_each_colocated_role() -> None:
         return {"success": True, "role": role.name, "output": "ok"}
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value={"backend", "ai-stack"})),
         patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[backend_role, ai_stack_role])),
         patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure),
@@ -154,7 +154,7 @@ def test_role_without_playbook_is_skipped_not_run() -> None:
         return {"success": False, "role": role.name, "error": "no_playbook"}
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value={"autobot_shared"})),
         patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[no_playbook_role])),
         patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure) as proc_mock,
@@ -244,7 +244,9 @@ def test_shared_first_called_before_role_procedures() -> None:
 
     async def fake_shared(component: str):
         calls.append(("shared", component))
-        return True, "ok"
+        # (ok, message, blocked_deletions) — the third element carries the paths
+        # a guard refusal would have deleted (#13851).
+        return True, "ok", []
 
     async def fake_get_names(node_id):
         calls.append(("get_names", node_id))
@@ -275,7 +277,7 @@ def test_shared_sync_failure_aborts_before_any_role_procedure() -> None:
     stage = UpdateAllStage(name="slm_self_update")
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(False, "shared boom"))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(False, "shared boom", []))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock()) as names_mock,
         patch("api.code_sync._load_colocated_roles", AsyncMock()) as load_mock,
         patch("api.roles.run_role_full_procedure", AsyncMock()) as proc_mock,
@@ -292,7 +294,7 @@ def test_no_resolution_when_no_roles_assigned() -> None:
     stage = UpdateAllStage(name="slm_self_update")
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value=set())),
         patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[])) as load_mock,
         patch("api.roles.run_role_full_procedure", AsyncMock()) as proc_mock,
@@ -320,7 +322,7 @@ def test_role_procedure_failure_does_not_abort_other_roles() -> None:
         return {"success": True, "role": role.name}
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch(
             "api.code_sync._get_colocated_managed_role_names",
             AsyncMock(return_value={"backend", "frontend"}),
@@ -350,7 +352,7 @@ def test_role_procedure_unsuccessful_result_is_non_fatal() -> None:
         return {"success": True, "role": "frontend"}
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch(
             "api.code_sync._get_colocated_managed_role_names",
             AsyncMock(return_value={"backend", "frontend"}),
@@ -417,7 +419,7 @@ def test_dedupe_collapses_shared_ansible_deploys_to_one_run_each() -> None:
     _services_role_registry = importlib.import_module("services.role_registry")
 
     with (
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value=node_role_names)),
         patch.object(_services_database, "db_service", fake_db_service),
         patch.object(_services_role_registry, "get_role", side_effect=fake_get_role),

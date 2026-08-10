@@ -40,7 +40,9 @@ class TestLayer0Identity:
         result = await layer.render({})
         assert "## Identity" in result
         assert "Role" in result
-        assert "Owner" in result
+        # #13867: the owner line is gone deliberately. This assertion used to
+        # require it, which made the defect look like the specification.
+        assert "Owner" not in result
 
     @pytest.mark.asyncio
     async def test_token_estimate_is_100(self):
@@ -167,12 +169,22 @@ class TestLayer2OnDemand:
 
     @pytest.mark.asyncio
     async def test_render_with_memory_graph_returns_context(self):
+        from autobot_memory_graph.entities import EntityOperationsMixin
         from chat_history.layers import Layer2OnDemand
 
+        # Built by the function that defines the schema, not hand-written: the
+        # hand-written fixture agreed with the layer's own wrong assumption.
         fake_graph = MagicMock()
         fake_graph.search_entities = AsyncMock(
             return_value=[
-                {"name": "AutoBot", "description": "An AI automation platform"},
+                EntityOperationsMixin._build_entity_document(
+                    None,
+                    entity_id="ent-autobot",
+                    entity_type="platform",
+                    name="AutoBot",
+                    observations=["An AI automation platform"],
+                    entity_metadata={},
+                ),
             ]
         )
         layer = Layer2OnDemand()
@@ -324,11 +336,22 @@ class TestTieredContextBuilderFeatureFlag:
         try:
             layers_mod.TIERED_CONTEXT_ENABLED = True
 
+            from autobot_memory_graph.entities import EntityOperationsMixin
+
             mock_gen = MagicMock()
             mock_gen.generate = AsyncMock(return_value="")
             fake_graph = MagicMock()
             fake_graph.search_entities = AsyncMock(
-                return_value=[{"name": "Redis", "description": "In-memory data store"}]
+                return_value=[
+                    EntityOperationsMixin._build_entity_document(
+                        None,
+                        entity_id="ent-redis",
+                        entity_type="service",
+                        name="Redis",
+                        observations=["In-memory data store"],
+                        entity_metadata={},
+                    )
+                ]
             )
 
             with patch("memory.essential_story.EssentialStoryGenerator", return_value=mock_gen):
@@ -396,3 +419,151 @@ class TestTieredContextBuilderFeatureFlag:
                 assert "SHOULD NOT APPEAR" not in result
         finally:
             layers_mod.TIERED_CONTEXT_ENABLED = original
+
+
+# ---------------------------------------------------------------------------
+# L2 entity fact extraction (#13686)
+#
+# The layer used to read `description` then `content`. The canonical document
+# from EntityOperationsMixin._build_entity_document carries neither — so L2
+# found entities, produced an empty string for each, and rendered nothing on
+# every real turn. Reconnecting the graph (#13696) fixed the plumbing; this is
+# the half that made the layer still silent.
+# ---------------------------------------------------------------------------
+
+
+class TestEntityFacts:
+    def test_reads_observations_from_a_real_entity_document(self):
+        """Built by the function that defines the schema, not hand-written."""
+        from autobot_memory_graph.entities import EntityOperationsMixin
+        from chat_history.layers import _entity_facts
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["in-memory store", "used for sessions"],
+            entity_metadata={},
+        )
+
+        assert _entity_facts(doc) == "in-memory store; used for sessions"
+
+    def test_the_old_fields_are_absent_from_a_real_document(self):
+        """Pins why the previous read could never match."""
+        from autobot_memory_graph.entities import EntityOperationsMixin
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["anything"],
+            entity_metadata={},
+        )
+
+        assert "description" not in doc
+        assert "content" not in doc
+
+    def test_caps_the_number_of_observations(self):
+        from chat_history.layers import _entity_facts
+
+        facts = _entity_facts({"observations": [f"obs{i}" for i in range(10)]})
+
+        assert facts == "obs0; obs1; obs2"
+
+    def test_falls_back_to_description_then_content(self):
+        """Other callers may hand L2 a different mapping; do not regress them."""
+        from chat_history.layers import _entity_facts
+
+        assert _entity_facts({"description": "a description"}) == "a description"
+        assert _entity_facts({"content": "some content"}) == "some content"
+        assert _entity_facts({"observations": [], "content": "fallback"}) == "fallback"
+
+    def test_empty_entity_yields_nothing(self):
+        from chat_history.layers import _entity_facts
+
+        assert _entity_facts({}) == ""
+        assert _entity_facts({"observations": ["  ", ""]}) == ""
+
+    @pytest.mark.asyncio
+    async def test_layer2_renders_a_block_for_a_real_entity(self):
+        """End of the chain: a real document reaches the rendered prompt block."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from autobot_memory_graph.entities import EntityOperationsMixin
+        from chat_history.layers import Layer2OnDemand
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["in-memory store used for sessions"],
+            entity_metadata={},
+        )
+        graph = MagicMock()
+        graph.search_entities = AsyncMock(return_value=[doc])
+
+        out = await Layer2OnDemand().render({"user_message": "How does Redis work?", "memory_graph": graph})
+
+        assert out.startswith("## Related Context")
+        assert "**Redis**: in-memory store used for sessions" in out
+
+    @pytest.mark.asyncio
+    async def test_layer2_stays_silent_without_a_graph(self):
+        from chat_history.layers import Layer2OnDemand
+
+        assert await Layer2OnDemand().render({"user_message": "Redis?", "memory_graph": None}) == ""
+
+
+# ---------------------------------------------------------------------------
+# L0 identity must not name a person (#13867)
+#
+# The block used to end with `Owner: mrveiss`. Neither `owner` nor `agent` is an
+# attribute of AutoBotConfig, so the getattr chain guarding it always fell
+# through and the literal shipped on every deployment — into every tenant's
+# system prompt, on a platform whose standing rule is full multi-tenancy.
+# ---------------------------------------------------------------------------
+
+
+class TestLayer0CarriesNoPersonalName:
+    @pytest.mark.asyncio
+    async def test_render_names_no_individual(self):
+        from chat_history.layers import Layer0Identity
+
+        out = await Layer0Identity().render({})
+
+        assert "mrveiss" not in out
+        assert "Owner:" not in out
+        assert out == "## Identity\nRole: AutoBot AI assistant"
+
+    @pytest.mark.asyncio
+    async def test_render_is_independent_of_config(self):
+        """No config lookup means no chain that can silently fall through.
+
+        The previous implementation *looked* configurable. Rendering identically
+        with the config module unavailable is what proves it is not pretending.
+        """
+        import sys
+        from unittest.mock import patch
+
+        from chat_history.layers import Layer0Identity
+
+        with patch.dict(sys.modules, {"autobot_shared.ssot_config": None}):
+            out = await Layer0Identity().render({})
+
+        assert out == "## Identity\nRole: AutoBot AI assistant"
+
+    def test_the_config_attributes_it_used_to_read_do_not_exist(self):
+        """Pins why the old chain could never resolve, so the fix is not undone.
+
+        If AutoBotConfig ever grows a real `owner`, this fails and whoever adds
+        it has to decide deliberately whether identity should assert one — per
+        tenant — rather than reintroducing a global literal.
+        """
+        from autobot_shared.ssot_config import config as cfg
+
+        for attr in ("owner", "agent"):
+            with pytest.raises(AttributeError):
+                getattr(cfg, attr)
