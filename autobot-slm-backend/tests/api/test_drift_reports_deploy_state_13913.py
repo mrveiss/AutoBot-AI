@@ -206,18 +206,12 @@ def test_the_schema_declares_the_three_fields_as_optional():
     schemas_src = (Path(__file__).resolve().parents[2] / "models" / "schemas.py").read_text(encoding="utf-8")
     tree = ast.parse(schemas_src)
 
-    cls = next(
-        n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "FileDriftReport"
-    )
-    fields = {
-        n.target.id: n.value
-        for n in cls.body
-        if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)
-    }
+    cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "FileDriftReport")
+    fields = {n.target.id: n.value for n in cls.body if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)}
 
     for name in ("deploy_in_progress", "deploy_state_reason", "last_completed_play_at"):
         assert name in fields, f"FileDriftReport does not declare {name}"
         default = fields[name]
-        assert isinstance(default, ast.Constant) and default.value is None, (
-            f"{name} must default to None — a required field would break every existing caller"
-        )
+        assert (
+            isinstance(default, ast.Constant) and default.value is None
+        ), f"{name} must default to None — a required field would break every existing caller"
