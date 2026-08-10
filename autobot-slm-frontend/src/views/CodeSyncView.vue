@@ -74,6 +74,11 @@ const driftReport = ref<FileDriftReport | null>(null)
 const isDriftLoading = ref(false)
 const isResolvingDrift = ref(false) // #7149: separate from drift-check spinner
 const showDriftDetails = ref(false)
+// #13851: untracked files (present on the host, absent from this component's
+// source) are reported separately from drift and collapsed by default — they
+// are informational, and "Resync from source" would DELETE them.
+const showUntrackedDetails = ref(false)
+const untrackedFiles = computed(() => driftReport.value?.untracked_files ?? [])
 const selectedDriftComponent = ref('autobot-slm-backend')
 
 // Async drift/resolve job polling (#11303) — mirrors the update-all pattern so
@@ -85,12 +90,31 @@ const resolveDriftTransientErrors = ref(0)
 const RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS = 90 // ~3 min at 2s intervals
 const RESOLVE_DRIFT_LOST_CONTACT_ERRORS = 30 // ~1 min before "lost contact" banner
 const resolveDriftLostContact = ref(false)
+// #13851: the resolve refused because it would have deleted deployed paths that
+// source does not have. Keyed on the job's own terminal status rather than the
+// wording of its message — a string both sides had to keep in sync would drift
+// apart with no symptom except the override button silently never appearing.
+const RESOLVE_STATUS_BLOCKED = 'blocked'
+const resolveDriftBlocked = ref(false)
+// The full path list travels in post_steps; the message carries a capped
+// preview for text-only readers.
+const blockedDeletions = ref<string[]>([])
 let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // Clear stale results when the user switches to a different component (#3433)
 watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
+  showUntrackedDetails.value = false
+  // #13851: the refusal banner and the error holding its paths belong to the
+  // component that was refused. Left set, they re-appear over the NEXT
+  // component's drift report — pointing at the wrong paths — and its override
+  // button forces a delete for a component whose refusal was never shown. That
+  // is exactly the "force deletes what the operator wasn't shown" outcome the
+  // guard exists to prevent.
+  resolveDriftBlocked.value = false
+  blockedDeletions.value = []
+  codeSync.clearError()
 })
 
 // =============================================================================
@@ -592,9 +616,16 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   if (result.status === 'completed' && result.success) {
     successMessage.value = result.message || `Resynced ${result.component} from code_source`
     await handleCheckDrift()
-  } else {
-    codeSync.setError(result.message || 'Drift resolve job failed')
+    return
   }
+  // #13851: a refusal is not a failure — nothing ran and the host is untouched,
+  // whereas 'failed' means the run started and its outcome is unknown. It is
+  // also the one terminal state with a next step, so surfacing it as a plain
+  // error would leave the operator with no way forward inside the GUI, which is
+  // the only sanctioned updater.
+  resolveDriftBlocked.value = result.status === RESOLVE_STATUS_BLOCKED
+  blockedDeletions.value = resolveDriftBlocked.value ? result.post_steps || [] : []
+  codeSync.setError(result.message || 'Drift resolve job failed')
 }
 
 /**
@@ -642,13 +673,17 @@ function _scheduleResolveDriftPoll(jobId: string): void {
 // #7149/#11303: Resync the selected component from code_source/ as an async
 // job so the button returns immediately instead of blocking on the rsync +
 // post-sync steps (which can take 40-120s and may restart the component).
-async function handleResolveDrift(): Promise<void> {
+async function handleResolveDrift(force = false): Promise<void> {
   if (!driftReport.value?.drift_detected) return
   codeSync.clearError()
   resolveDriftLostContact.value = false
   resolveDriftJob.value = null
+  // #13851: a previous refusal is answered by this attempt — clear it so a
+  // stale "would delete N paths" banner cannot outlive the run it described.
+  resolveDriftBlocked.value = false
+  blockedDeletions.value = []
   isResolvingDrift.value = true
-  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value)
+  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value, force)
   if (!job) {
     isResolvingDrift.value = false
     return
@@ -1388,7 +1423,7 @@ onUnmounted(() => {
         <!-- Action row: Resync (#7149) + Toggle details -->
         <div v-if="driftReport.drift_detected" class="flex items-center gap-3 mb-3">
           <button
-            @click="handleResolveDrift"
+            @click="handleResolveDrift()"
             :disabled="isResolvingDrift || isDriftLoading"
             class="btn btn-primary flex items-center gap-2 text-sm"
             :title="$t('codeSyncView.runRsyncFromTo', { source: driftReport.source_dir, dest: driftReport.deployed_dir })"
@@ -1427,6 +1462,39 @@ onUnmounted(() => {
           {{ resolveDriftJob.post_steps[resolveDriftJob.post_steps.length - 1] || $t('codeSyncView.resyncing') }}
         </div>
 
+        <!--
+          #13851: the resolve refused rather than deleting. The message names
+          the paths; this offers the documented override so the operator is not
+          stuck — the builtin updater is the only sanctioned path.
+        -->
+        <div
+          v-if="resolveDriftBlocked"
+          class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3"
+        >
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
+              <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
+              <ul
+                v-if="blockedDeletions.length"
+                class="mt-2 text-xs font-mono text-red-800 space-y-0.5 max-h-40 overflow-y-auto"
+              >
+                <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
+              </ul>
+              <button
+                @click="handleResolveDrift(true)"
+                :disabled="isResolvingDrift"
+                class="mt-2 text-sm font-medium text-red-800 underline hover:text-red-900"
+              >
+                {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
         <div
           v-if="resolveDriftLostContact"
@@ -1463,10 +1531,10 @@ onUnmounted(() => {
                     :class="{
                       'text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded text-xs': file.status === 'modified',
                       'text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs': file.status === 'source_only',
-                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'deployed_only',
+                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'untracked',
                     }"
                   >
-                    {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.deployedOnly') }}
+                    {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.untracked') }}
                   </span>
                 </td>
                 <td class="py-2 pr-4 font-mono text-xs text-gray-700">{{ file.path }}</td>
@@ -1479,6 +1547,30 @@ onUnmounted(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!--
+          #13851: files present on the host with no counterpart in this
+          component's source. Reported separately because they are NOT drift —
+          folding them in made every healthy host look stale, and "Resync from
+          source" is a delete-style rsync, so acting on them removes them.
+        -->
+        <div v-if="untrackedFiles.length > 0" class="mt-4">
+          <button
+            @click="showUntrackedDetails = !showUntrackedDetails"
+            class="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length, plural: untrackedFiles.length !== 1 ? 's' : '' }) }}
+          </button>
+          <div v-if="showUntrackedDetails" class="mt-2">
+            <p class="text-xs text-gray-500 mb-2">{{ $t('codeSyncView.untrackedExplainer') }}</p>
+            <ul class="text-xs font-mono text-gray-700 space-y-1">
+              <li v-for="file in untrackedFiles" :key="file.path">{{ file.path }}</li>
+            </ul>
+          </div>
         </div>
       </div>
 

@@ -175,15 +175,22 @@ export type DriftResolveResponse = components['schemas']['DriftResolveResponse']
 export type DriftResolveJobResponse = components['schemas']['DriftResolveJobResponse']
 
 /**
- * The four states a component-resolve job row can hold.
+ * The states a component-resolve job row can hold.
  *
  * `ComponentSyncJobStatus.status` is `str` in the contract
- * (`autobot-slm-backend/models/schemas.py:1706`); the assignment sites are
- * enumerable — `code_sync.py:945` (running), `:191` (queued, the #11437
- * requeue path), `:298` (completed/failed) and `:182`/`:230`/`:265`/`:280`
- * (failed). `CodeSyncView.vue:566,605` branches on these literals.
+ * (`autobot-slm-backend/models/schemas.py`); the assignment sites are
+ * enumerable — running, queued (the #11437 requeue path), completed and
+ * failed. `CodeSyncView.vue` branches on these literals.
+ *
+ * #13851 adds `blocked`: the resolve refused because it would have deleted
+ * deployed paths that source does not have. Deliberately NOT folded into
+ * `failed` — nothing ran and the host is untouched, whereas failed means the
+ * run started and its outcome is unknown, and blocked is the one terminal state
+ * with a next step for the operator. Backend constant:
+ * `code_sync.RESOLVE_STATUS_BLOCKED`, pinned across both languages by
+ * `tests/api/test_resolve_deletion_guard_13851.py`.
  */
-export type ComponentSyncJobState = 'queued' | 'running' | 'completed' | 'failed'
+export type ComponentSyncJobState = 'queued' | 'running' | 'completed' | 'failed' | 'blocked'
 
 // GET /api/code-sync/drift/resolve/status/{job_id}
 // (autobot-slm-backend/models/schemas.py:1701)
@@ -792,13 +799,22 @@ export function useCodeSync() {
    *
    * Uses rawRequest so the 409 (restart in flight) detail is surfaced verbatim
    * in `error.value` (the convenience `post` would prefix "HTTP 409: ").
+   *
+   * #13851: `force` overrides the deletion guard. A resolve is a delete-style
+   * rsync, so the backend refuses when it would remove deployed paths that
+   * source does not have and names them in the job message. Without this
+   * parameter the GUI would have no way past a refusal — and updates must go
+   * through this builtin updater.
    */
-  async function startResolveDriftAsync(component: string): Promise<DriftResolveJobResponse | null> {
+  async function startResolveDriftAsync(
+    component: string,
+    force = false
+  ): Promise<DriftResolveJobResponse | null> {
     error.value = null
     try {
       const response = await slmApiClient.rawRequest('/code-sync/drift/resolve-async', {
         method: 'POST',
-        body: { component },
+        body: { component, force },
       })
       if (!response.ok) {
         const detail = await readDetail(response)
