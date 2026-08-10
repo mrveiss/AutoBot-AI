@@ -191,14 +191,22 @@ jobs:
         # here would redden this PR with unrelated pre-existing findings.
         # Tracked separately. lint-conventions.sh hard-fails on an unresolvable
         # ref, so a failed fetch surfaces loudly instead of scanning 0 files.
-        if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
-          git fetch --no-tags --quiet --depth=1 origin "$PR_BASE_SHA" 2>/dev/null || true
-          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
-        else
-          git fetch --no-tags --quiet --deepen=1 2>/dev/null || true
+        # On a pull_request event the checked-out commit is the MERGE commit,
+        # so neither base.sha nor head.sha is present at depth 1 — resolve
+        # through HEAD's parents instead of trusting the event payload:
+        #   HEAD^1 = base tip, HEAD^2 = PR head, HEAD = their merge.
+        # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
+        # what other PRs landed on the base (no merge-base lookup needed).
+        git fetch --no-tags --quiet --deepen=50 2>/dev/null || true
+        if git rev-parse --verify --quiet 'HEAD^2' >/dev/null 2>&1; then
+          RANGE="HEAD^1..HEAD"
+        elif git rev-parse --verify --quiet 'HEAD~1' >/dev/null 2>&1; then
           RANGE="HEAD~1..HEAD"
+        else
+          echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
+          exit 1
         fi
-        echo "conventions scope: $RANGE"
+        echo "conventions scope: $RANGE ($(git rev-list --count "$RANGE" 2>/dev/null || echo '?') commit(s))"
         if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
           CONVENTIONS_DENYLIST=$(mktemp)
           export CONVENTIONS_DENYLIST
