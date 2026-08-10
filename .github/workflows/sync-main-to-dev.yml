@@ -57,9 +57,29 @@ jobs:
           git fetch origin main
           AHEAD=$(git rev-list --count origin/main..origin/Dev_new_gui)
           BEHIND=$(git rev-list --count origin/Dev_new_gui..origin/main)
+
+          # #13974: BEHIND counts the merge commit this very workflow's release PR
+          # creates on main, so a successful promotion armed the guard against the
+          # next one. That is why main sat 41 commits behind for five days: the
+          # error blamed "divergence" for a commit the release process itself made.
+          #
+          # DIVERGENT counts only NON-merge commits on main that the trunk lacks —
+          # actual work committed to main directly, which is what the guard exists
+          # to protect. A merge commit carries no content of its own, so it is not
+          # divergence in any sense that matters to a fast-forward.
+          #
+          # Limitation, stated rather than hidden: an "evil merge" (a merge commit
+          # edited to carry content from neither parent) would not be counted. That
+          # cannot arise from the PR-merge path this workflow uses, and catching it
+          # needs `git merge-tree --write-tree` (git >= 2.38) comparing the merge
+          # result against the trunk tree — worth doing if direct pushes to main are
+          # ever allowed.
+          DIVERGENT=$(git rev-list --count --no-merges origin/Dev_new_gui..origin/main)
+
           echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
           echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
-          echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main"
+          echo "divergent=$DIVERGENT" >> "$GITHUB_OUTPUT"
+          echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main ($DIVERGENT non-merge commit(s) only on main)"
 
       - name: Open the release sync PR
         id: sync
@@ -68,10 +88,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AHEAD: ${{ steps.check.outputs.ahead }}
           BEHIND: ${{ steps.check.outputs.behind }}
+          DIVERGENT: ${{ steps.check.outputs.divergent }}
         run: |
-          if [ "$BEHIND" != "0" ]; then
-            echo "::error::main has $BEHIND commit(s) not in Dev_new_gui. Resolve divergence manually first."
+          if [ "$DIVERGENT" != "0" ]; then
+            echo "::error::main has $DIVERGENT non-merge commit(s) not in Dev_new_gui — work committed straight to main. Resolve manually first."
             exit 1
+          fi
+          if [ "$BEHIND" != "0" ]; then
+            echo "::notice::main carries $BEHIND merge commit(s) the trunk lacks (from previous promotions). No content of their own, so not a blocker — see #13974."
           fi
 
           # This step used to `git push origin origin/Dev_new_gui:main`, which
