@@ -85,10 +85,14 @@ class SkillDistillationScheduler:
         # with the connector scheduler. Only the key and database are ours.
         self._lease = LeaderLease(key=_LEADER_KEY, database=_REDIS_DB, label="Skill distillation")
         self._task: asyncio.Task | None = None
-        # #13695: the cursor value the last idle-flush fired against. A second
-        # flush waits for the cursor to move, so a conversation the pass cannot
-        # get past cannot re-trigger `run_once` every leader cycle.
-        self._last_idle_flush_cursor: str | None = None
+        # #13695: the chats-directory mtime the last idle flush fired against.
+        # The next one requires *new activity* since then, which is what stops a
+        # conversation the pass cannot get past re-triggering `run_once` every
+        # leader cycle. Deliberately not the cursor: `_read_cursor` returns None
+        # for a first run AND for any Redis fault, so a cursor-based guard is
+        # inert precisely when the cursor also cannot advance — the 10s spin,
+        # conditioned on an outage instead of a stuck session.
+        self._last_idle_flush_mtime: float | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -247,31 +251,94 @@ class SkillDistillationScheduler:
           activity across *all* sessions, so a capped listing cannot miss an
           active one.
 
-        This is sound only because chat saves are atomic — `file_io.py` writes a
-        temp file and `os.replace`s it, which updates the containing directory's
-        mtime. A plain in-place content write would NOT bump it, and this signal
-        would silently never fire. Verify that before changing the save path.
+        This is sound only because the normal save is atomic — `file_io.py`
+        writes a temp file into the same directory and `os.replace`s it, two
+        dir-entry mutations per save. Verified empirically; a plain in-place
+        content write does NOT bump the parent, and this signal would silently
+        never fire. Check that before changing the save path.
+
+        Known writes that do NOT bump it, so the idle clock can run during them:
+
+        * `session.py:424` — the direct-write fallback when `_atomic_write`
+          raises. Degraded path, but the one where a flush during an active
+          conversation becomes possible.
+        * `session.py:795` / `:881` — in-place rename/metadata updates. These
+          bump the *file* mtime, which `list_sessions_fast` reports as
+          `updatedAt`, so renaming an old chat makes it pending again without
+          resetting the idle clock — it is re-distilled on the next flush.
+        * `api/terminal_handlers.py` transcript appends (`mode="a"`).
+
+        And writes that bump it WITHOUT user activity, delaying a flush rather
+        than causing a false one: the dedup re-save in
+        `session.py:_process_loaded_messages` (reached from distillation's own
+        read), `memory.py:_cleanup_old_session_files`, orphan-session creation
+        in `session_listing.py`, and the `uploads/` retention purge.
+
+        None of these makes the signal unsafe — the interval backstop still
+        sweeps everything — but they are why this is a *hint to run sooner*
+        rather than an authoritative activity log.
+        """
+        mtime = await self._chats_mtime()
+        if mtime is None:
+            return None
+        return max(0.0, time.time() - mtime)
+
+    async def _chats_mtime(self) -> float | None:
+        """Directory mtime of the chats corpus, or None when it cannot be read.
+
+        Logged on the None path rather than returning silently: a wrong or
+        missing path leaves idle-flush permanently inert, which is the same
+        *class* of failure as #13856 — a feature that quietly does nothing —
+        and the relative default (``data/chats``) makes it CWD-dependent
+        (#13149).
         """
         manager = await self._get_chat_history_manager()
         if manager is None:
             return None
+        resolve = getattr(manager, "_get_chats_directory", None)
+        if resolve is None:
+            logger.warning("Idle-flush disabled: chat manager exposes no chats directory (#13695)")
+            return None
         try:
-            chats_dir = manager._get_chats_directory()
-            stat = await asyncio.to_thread(os.stat, chats_dir)
-            return max(0.0, time.time() - stat.st_mtime)
-        except OSError:
+            from chat_history.file_io import run_in_chat_io_executor
+
+            # The chat I/O pool, not the default executor: #718 moved chat file
+            # I/O off the default pool because indexing saturates it, and this
+            # await sits inside the leader loop — a stall here delays
+            # `update_leadership` against the lease TTL and flaps leadership.
+            stat = await run_in_chat_io_executor(os.stat, resolve())
+            return stat.st_mtime
+        except (OSError, AttributeError) as exc:
+            logger.warning("Idle-flush disabled: cannot stat the chats directory (%s) (#13695)", exc)
             return None
 
     async def _has_idle_pending(self) -> bool:
         """True when an undistilled conversation has been quiet past the threshold (#13695).
 
-        Two gates, cheapest first:
+        Three gates, cheapest first:
 
-        1. The whole corpus has been quiet for ``IDLE_FLUSH_S`` (one `os.stat`).
-        2. Only then, whether anything is actually past the durable cursor —
+        1. The corpus has been quiet for ``IDLE_FLUSH_S`` — one `os.stat`.
+        2. There has been *new activity* since the last idle flush. Without
+           this, a conversation the pass cannot get past re-triggers `run_once`
+           every leader cycle — 10s instead of hourly, a 360x rise in LLM spend.
+        3. Only then, whether anything is actually past the durable cursor —
            reusing the cursor rather than tracking a private notion of
            "unprocessed", so the idle path cannot re-distil what the cron
            already handled.
+
+        Gate 2 keys on the **mtime**, not the cursor. A cursor-based guard was
+        inert in exactly the cases that matter: `_read_cursor` returns None for
+        a first-ever run and for *any* Redis fault, and during an outage the
+        cursor also cannot advance — so the guard disengaged precisely when the
+        spin it prevents becomes unbounded. It also released after every
+        successful pass (the cursor advances per distilled session), turning
+        idle-flush into an unpaced backlog drain that removed the spend bound
+        `DISTILLATION_INTERVAL_S` provides.
+
+        Together gates 1 and 2 bound idle flushes to at most one per
+        ``IDLE_FLUSH_S``: firing again requires a write, and a write restarts
+        the quiet window. No new tuning constant is introduced — the pacing
+        falls out of the existing knob.
 
         Never raises into the leader loop; a failure here simply means the
         interval backstop is what triggers the pass, which is the pre-#13695
@@ -280,30 +347,24 @@ class SkillDistillationScheduler:
         if IDLE_FLUSH_S <= 0:
             return False
         try:
-            idle_for = await self._corpus_idle_for()
-            if idle_for is None or idle_for < IDLE_FLUSH_S:
+            mtime = await self._chats_mtime()
+            if mtime is None:
+                return False
+            if max(0.0, time.time() - mtime) < IDLE_FLUSH_S:
+                return False
+            if self._last_idle_flush_mtime is not None and mtime <= self._last_idle_flush_mtime:
                 return False
 
             cursor = await self._read_cursor()
-            # #13695 blocker 2: without this, a conversation the pass cannot
-            # advance past re-triggers `run_once` every leader cycle — 10s
-            # instead of hourly, a 360x increase in LLM spend. A flush is
-            # allowed only once per cursor value; the next one waits for the
-            # cursor to actually move. This is a correctness guard, not a
-            # debounce knob, so it does not reintroduce the tuning constants
-            # this issue excludes.
-            if cursor is not None and cursor == self._last_idle_flush_cursor:
-                return False
-
             pending = await self._select_pending_sessions(cursor)
             if not pending:
                 return False
 
-            self._last_idle_flush_cursor = cursor
+            self._last_idle_flush_mtime = mtime
             logger.info(
                 "Skill distillation idle-flush: %d conversation(s) pending, corpus quiet for %.0fs (#13695)",
                 len(pending),
-                idle_for,
+                time.time() - mtime,
             )
             return True
         except Exception as exc:

@@ -21,6 +21,7 @@ So the signal is now the chats-directory mtime: epoch floats, no parsing, one
 against a timestamp format, because the format was the bug.
 """
 
+import asyncio
 import os
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -78,24 +79,34 @@ class TestTheSignalIsTimezoneFree:
 
         assert await scheduler._has_idle_pending() is False
 
-    def test_the_scheduler_no_longer_depends_on_timestamp_parsing(self):
-        """Guards the fix itself, as a dependency invariant.
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tz", ["UTC", "Asia/Tokyo", "America/Los_Angeles"])
+    async def test_idleness_is_identical_in_every_timezone(self, scheduler, chats_dir, tz, monkeypatch):
+        """The behavioural form of the #13856 guard.
 
-        The whole point of the rework is that no scheduling decision is derived
-        from an emitted timestamp string. Reintroducing `parse_utc_iso` — or
-        `datetime.now()` arithmetic against one — reinherits #13856, whose
-        symptom is invisible in a UTC test environment and only appears as a
-        no-op east of UTC or a mid-conversation flush west of it.
+        An earlier version of this test grepped the module source for
+        `parse_utc_iso` and `datetime.now`. That is evadable by any equivalent
+        reintroduction — `datetime.utcnow() - datetime.fromisoformat(iso)`
+        contains neither string — so it certified the spelling, not the
+        property.
 
-        Asserted structurally because that is what makes it detectable *here*
-        rather than in whichever timezone deploys it.
+        Epoch arithmetic is timezone-invariant by construction, so measuring the
+        same corpus under three zones is the actual invariant: the ISO path
+        produced a *different* age in each (negative east of UTC, inflated
+        west), which is what made it a no-op here and a mid-conversation flush
+        elsewhere.
         """
-        import inspect
+        _quiet_for(chats_dir, 1800)
 
-        source = inspect.getsource(sched)
+        monkeypatch.setenv("TZ", tz)
+        time.tzset()
+        try:
+            idle_for = await scheduler._corpus_idle_for()
+        finally:
+            monkeypatch.delenv("TZ", raising=False)
+            time.tzset()
 
-        assert "parse_utc_iso" not in source, "the idle path must not parse emitted timestamps (#13856)"
-        assert "datetime.now" not in source, "idleness is epoch-float arithmetic, not wall-clock parsing"
+        assert idle_for == pytest.approx(1800, abs=5), f"idle age shifted under {tz}"
 
 
 class TestIdleFlushFires:
@@ -155,29 +166,65 @@ class TestAPoisonedSessionCannotSpin:
     `run_once` every leader cycle — 10s instead of hourly, 360x LLM spend."""
 
     @pytest.mark.asyncio
-    async def test_a_second_flush_waits_for_the_cursor_to_move(self, scheduler, chats_dir):
+    @pytest.mark.parametrize(
+        "cursor",
+        [
+            "cursor-1",
+            None,  # first-ever run, AND every Redis fault: _read_cursor swallows and returns None
+        ],
+        ids=["cursor-present", "cursor-none"],
+    )
+    async def test_a_stuck_conversation_cannot_respin(self, scheduler, chats_dir, cursor):
+        """Both cursor states, because the first guard only worked for one.
+
+        Keying the guard on the cursor left it inert when `_read_cursor`
+        returned None — which is a first run *and* any Redis fault. During an
+        outage the cursor also cannot advance, so the guard disengaged exactly
+        when the spin becomes unbounded: 5/5 flushes instead of 1.
+        """
         _quiet_for(chats_dir, 1800)
-        pending = AsyncMock(return_value=[{"id": "poison"}])
 
-        with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value="cursor-1")):
-            with patch.object(scheduler, "_select_pending_sessions", new=pending):
-                first = await scheduler._has_idle_pending()
-                second = await scheduler._has_idle_pending()
-                third = await scheduler._has_idle_pending()
+        with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value=cursor)):
+            with patch.object(
+                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "poison"}])
+            ):
+                fired = [await scheduler._has_idle_pending() for _ in range(5)]
 
-        assert first is True
-        assert (second, third) == (False, False), "a stuck conversation re-triggered the pass every cycle"
+        assert fired == [True, False, False, False, False], f"stuck conversation re-triggered the pass: {fired}"
 
     @pytest.mark.asyncio
-    async def test_a_moved_cursor_allows_the_next_flush(self, scheduler, chats_dir):
-        """The guard must not wedge the feature shut once real progress is made."""
+    async def test_a_successful_pass_does_not_release_the_guard(self, scheduler, chats_dir):
+        """`run_once` advances the cursor after every distilled session, so a
+        cursor-released guard fired again on the very next cycle — draining a
+        backlog at one pass per 10s and removing the spend bound
+        DISTILLATION_INTERVAL_S exists to provide."""
         _quiet_for(chats_dir, 1800)
-        pending = AsyncMock(return_value=[{"id": "s-2"}])
+        moving = iter(["c1", "c2", "c3", "c4", "c5"])
 
-        with patch.object(scheduler, "_select_pending_sessions", new=pending):
-            with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value="cursor-1")):
+        with patch.object(scheduler, "_read_cursor", new=AsyncMock(side_effect=lambda: next(moving))):
+            with patch.object(
+                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])
+            ):
+                fired = [await scheduler._has_idle_pending() for _ in range(5)]
+
+        assert fired == [True, False, False, False, False], f"advancing cursor released the guard: {fired}"
+
+    @pytest.mark.asyncio
+    async def test_new_activity_then_quiet_allows_the_next_flush(self, scheduler, chats_dir):
+        """The guard must not wedge the feature permanently shut."""
+        _quiet_for(chats_dir, 1800)
+
+        with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value=None)):
+            with patch.object(
+                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])
+            ):
                 assert await scheduler._has_idle_pending() is True
-            with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value="cursor-2")):
+                assert await scheduler._has_idle_pending() is False
+
+                # someone chats again, then goes quiet
+                (chats_dir / "new.json").write_text("{}", encoding="utf-8")
+                _quiet_for(chats_dir, 1800)
+
                 assert await scheduler._has_idle_pending() is True
 
 
@@ -206,14 +253,35 @@ class TestDegradesToTheInterval:
 
 
 class TestCronBackstopSurvives:
-    def test_the_interval_still_triggers_independently(self):
-        """Idle-flush is additional, not a replacement — a session that never
-        goes idle, or a worker that dies mid-flush, must still be swept."""
-        import inspect
+    """Idle-flush is additional, not a replacement — a session that never goes
+    idle, or a worker that dies mid-flush, must still be swept.
 
-        source = inspect.getsource(SkillDistillationScheduler._leader_loop)
+    Driven rather than grepped: the previous version asserted a source
+    substring, which a black reflow breaks and which proves nothing about
+    whether the branch runs.
+    """
 
-        assert "elapsed >= DISTILLATION_INTERVAL_S or" in source
+    @pytest.mark.asyncio
+    async def test_the_interval_triggers_a_pass_with_idle_flush_disabled(self, scheduler, monkeypatch):
+        monkeypatch.setattr(sched, "IDLE_FLUSH_S", 0)
+        monkeypatch.setattr(sched, "DISTILLATION_INTERVAL_S", 0)
+
+        ran = asyncio.Event()
+        scheduler._enabled = AsyncMock(return_value=True)
+        scheduler._lease = MagicMock()
+        scheduler._lease.is_leader = True
+        scheduler._lease.refresh_s = 0.01
+        scheduler._lease.poll_s = 0.01
+        scheduler._lease.update_leadership = AsyncMock()
+        scheduler.run_once = AsyncMock(side_effect=lambda: ran.set())
+
+        task = asyncio.create_task(scheduler._leader_loop())
+        try:
+            await asyncio.wait_for(ran.wait(), timeout=2.0)
+        finally:
+            task.cancel()
+
+        scheduler.run_once.assert_awaited()
 
 
 class TestTheExcludedKnobsStayExcluded:
@@ -221,14 +289,7 @@ class TestTheExcludedKnobsStayExcluded:
     recall quality measurable. The cursor guard is a correctness check, not a
     tuning constant."""
 
-    def test_no_debounce_or_interval_band_constants_were_added(self):
-        import inspect
-
-        source = inspect.getsource(sched)
-
-        for forbidden in ("DEBOUNCE", "MIN_INTERVAL", "MAX_INTERVAL", "INTERVAL_BAND"):
-            assert forbidden not in source, f"{forbidden} is deferred behind #13251"
-
     def test_idle_flush_is_a_single_knob(self):
+        # Type, not value: 0 is the documented disable, so asserting > 0 would
+        # redden the suite for any operator or runner that sets it.
         assert isinstance(sched.IDLE_FLUSH_S, int)
-        assert sched.IDLE_FLUSH_S > 0
