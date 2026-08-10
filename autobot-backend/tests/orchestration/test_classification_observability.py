@@ -18,7 +18,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from autobot_types import ClassificationState, ComplexityVerdict, TaskComplexity
+from autobot_types import (
+    ClassificationAvailability,
+    ClassificationState,
+    TaskComplexity,
+)
 
 
 class _StubOrchestrator:
@@ -29,16 +33,21 @@ class _StubOrchestrator:
     methods onto a bare object keeps the test about classification.
     """
 
-    def __init__(self, agent, state, detail=None):
+    def __init__(self, agent, availability, detail=None):
         from orchestrator import Orchestrator
 
         self.classification_agent = agent
-        self.classification_state = state
+        self.classification_availability = availability
         self.classification_detail = detail
+        self.last_classification_state = None
         self._classification_fallback_logged = False
-        self.classify_request_complexity_verdict = Orchestrator.classify_request_complexity_verdict.__get__(self)
-        self.classify_request_complexity = Orchestrator.classify_request_complexity.__get__(self)
-        self._log_classification_fallback = Orchestrator._log_classification_fallback.__get__(self)
+        for name in (
+            "classify_request_complexity_verdict",
+            "classify_request_complexity",
+            "_classify",
+            "_log_classification_fallback",
+        ):
+            setattr(self, name, getattr(Orchestrator, name).__get__(self))
 
 
 def _verdict(orch, request="List files"):
@@ -47,13 +56,13 @@ def _verdict(orch, request="List files"):
 
 def test_unavailable_classifier_reports_unavailable_not_a_verdict():
     """The AC: an absent classifier must not answer as if it judged the request."""
-    orch = _StubOrchestrator(None, ClassificationState.UNAVAILABLE_INIT, "AgentConfigurationError: no provider")
+    orch = _StubOrchestrator(None, ClassificationAvailability.UNAVAILABLE_INIT, "AgentConfigurationError")
 
     verdict = _verdict(orch)
 
     assert verdict.classified is False
     assert verdict.state is ClassificationState.UNAVAILABLE_INIT
-    assert "no provider" in verdict.detail
+    assert verdict.detail == "AgentConfigurationError"
     # The routing value is unchanged — this is about knowing it is a default.
     assert verdict.complexity is TaskComplexity.COMPLEX
 
@@ -63,12 +72,11 @@ def test_a_real_complex_verdict_is_distinguishable_from_the_fallback():
     agent = SimpleNamespace(
         classify_user_request=lambda _r: _completed(SimpleNamespace(complexity=TaskComplexity.COMPLEX))
     )
-    judged = _verdict(_StubOrchestrator(agent, ClassificationState.CLASSIFIED))
-    defaulted = _verdict(_StubOrchestrator(None, ClassificationState.UNAVAILABLE_IMPORT, "not importable"))
+    judged = _verdict(_StubOrchestrator(agent, ClassificationAvailability.AVAILABLE))
+    defaulted = _verdict(_StubOrchestrator(None, ClassificationAvailability.UNAVAILABLE_IMPORT, "not importable"))
 
     assert judged.complexity == defaulted.complexity  # the old signal
     assert judged.classified is True and defaulted.classified is False  # the new one
-    assert judged != defaulted
 
 
 def test_classifier_raising_is_its_own_state():
@@ -77,13 +85,16 @@ def test_classifier_raising_is_its_own_state():
     def _boom(_request):
         raise RuntimeError("model timeout")
 
-    orch = _StubOrchestrator(SimpleNamespace(classify_user_request=_boom), ClassificationState.CLASSIFIED)
+    orch = _StubOrchestrator(SimpleNamespace(classify_user_request=_boom), ClassificationAvailability.AVAILABLE)
 
     verdict = _verdict(orch)
 
     assert verdict.state is ClassificationState.FAILED
     assert verdict.classified is False
-    assert "model timeout" in verdict.detail
+    # Type only: this value reaches an API payload, and provider errors carry
+    # endpoints and paths. The message stays in the log.
+    assert verdict.detail == "RuntimeError"
+    assert "model timeout" not in (verdict.detail or "")
 
 
 def test_a_simple_request_is_still_classified_simple():
@@ -92,7 +103,7 @@ def test_a_simple_request_is_still_classified_simple():
         classify_user_request=lambda _r: _completed(SimpleNamespace(complexity=TaskComplexity.SIMPLE))
     )
 
-    verdict = _verdict(_StubOrchestrator(agent, ClassificationState.CLASSIFIED))
+    verdict = _verdict(_StubOrchestrator(agent, ClassificationAvailability.AVAILABLE))
 
     assert verdict.complexity is TaskComplexity.SIMPLE
     assert verdict.classified is True
@@ -100,23 +111,22 @@ def test_a_simple_request_is_still_classified_simple():
 
 def test_legacy_callers_still_get_a_bare_complexity():
     """classify_request_complexity keeps its contract for existing callers."""
-    orch = _StubOrchestrator(None, ClassificationState.UNAVAILABLE_INIT, "boom")
+    orch = _StubOrchestrator(None, ClassificationAvailability.UNAVAILABLE_INIT, "boom")
 
     result = asyncio.run(orch.classify_request_complexity("List files"))
 
     assert result is TaskComplexity.COMPLEX
-    assert not isinstance(result, ComplexityVerdict)
 
 
 def test_fallback_warns_once_not_per_request(caplog):
     """Per-request logging would bury the signal; silence is what hid it before."""
-    orch = _StubOrchestrator(None, ClassificationState.UNAVAILABLE_INIT, "boom")
+    orch = _StubOrchestrator(None, ClassificationAvailability.UNAVAILABLE_INIT, "boom")
 
     with caplog.at_level("WARNING"):
         for _ in range(5):
             _verdict(orch)
 
-    hits = [r for r in caplog.records if "every request is being defaulted" in r.getMessage()]
+    hits = [r for r in caplog.records if "being defaulted to COMPLEX" in r.getMessage()]
     assert len(hits) == 1
 
 
@@ -134,7 +144,7 @@ def test_require_classification_env_decides_fail_fast(monkeypatch, env_value, sh
     from orchestrator import Orchestrator
 
     monkeypatch.setenv("AUTOBOT_REQUIRE_CLASSIFICATION", env_value)
-    orch = _StubOrchestrator(None, ClassificationState.UNAVAILABLE_INIT, "no provider")
+    orch = _StubOrchestrator(None, ClassificationAvailability.UNAVAILABLE_INIT, "no provider")
     enforce = Orchestrator._enforce_classification_requirement.__get__(orch)
 
     if should_raise:
@@ -151,3 +161,122 @@ def _completed(value):
         return value
 
     return _coro()
+
+
+# ---------------------------------------------------------------------------
+# _init_classification_agent — the state machine itself.
+#
+# The stub above exercises the request path but hands the availability in
+# pre-made, so it never proved that init records the right thing, nor that init
+# calls the fail-fast guard at all. These drive the real method.
+# ---------------------------------------------------------------------------
+
+
+class _BareOrchestrator:
+    """An object with only what _init_classification_agent touches."""
+
+    def __init__(self):
+        import orchestrator as orch_mod
+
+        self._init_classification_agent = orch_mod.Orchestrator._init_classification_agent.__get__(self)
+        self._enforce_classification_requirement = orch_mod.Orchestrator._enforce_classification_requirement.__get__(
+            self
+        )
+
+
+def test_init_records_why_the_module_is_unavailable(monkeypatch):
+    """The UNAVAILABLE_IMPORT branch — previously uncovered entirely."""
+    import orchestrator as orch_mod
+
+    monkeypatch.setattr(orch_mod, "CLASSIFICATION_AVAILABLE", False)
+    orch = _BareOrchestrator()
+
+    orch._init_classification_agent()
+
+    assert orch.classification_agent is None
+    assert orch.classification_availability is ClassificationAvailability.UNAVAILABLE_IMPORT
+    assert orch.last_classification_state is None  # nothing has been classified yet
+
+
+def test_init_records_why_construction_failed(monkeypatch):
+    """A construction failure must name itself, not just log and vanish."""
+    import orchestrator as orch_mod
+
+    def _explode():
+        raise RuntimeError("no provider configured")
+
+    monkeypatch.setattr(orch_mod, "CLASSIFICATION_AVAILABLE", True)
+    monkeypatch.setattr(orch_mod, "GemmaClassificationAgent", _explode)
+    orch = _BareOrchestrator()
+
+    orch._init_classification_agent()
+
+    assert orch.classification_agent is None
+    assert orch.classification_availability is ClassificationAvailability.UNAVAILABLE_INIT
+    # The type only — provider errors carry endpoints and paths, and this value
+    # reaches an API payload. The full text stays in the log.
+    assert orch.classification_detail == "RuntimeError"
+    assert "no provider configured" not in (orch.classification_detail or "")
+
+
+def test_init_marks_a_working_classifier_available(monkeypatch):
+    import orchestrator as orch_mod
+
+    monkeypatch.setattr(orch_mod, "CLASSIFICATION_AVAILABLE", True)
+    monkeypatch.setattr(orch_mod, "GemmaClassificationAgent", lambda: SimpleNamespace())
+    orch = _BareOrchestrator()
+
+    orch._init_classification_agent()
+
+    assert orch.classification_agent is not None
+    assert orch.classification_availability is ClassificationAvailability.AVAILABLE
+
+
+def test_init_actually_calls_the_fail_fast_guard(monkeypatch):
+    """Deleting the guard's call sites must fail a test, not pass quietly."""
+    import orchestrator as orch_mod
+
+    monkeypatch.setenv("AUTOBOT_REQUIRE_CLASSIFICATION", "true")
+    monkeypatch.setattr(orch_mod, "CLASSIFICATION_AVAILABLE", False)
+    orch = _BareOrchestrator()
+
+    with pytest.raises(RuntimeError, match="AUTOBOT_REQUIRE_CLASSIFICATION"):
+        orch._init_classification_agent()
+
+
+def test_a_classifier_that_builds_then_always_raises_is_visible():
+    """The degradation the first cut still hid.
+
+    Availability says AVAILABLE and classification_enabled is True, so a status
+    reader looking only at those calls this healthy. last_classification_state
+    is what shows that nothing is actually being classified.
+    """
+
+    def _boom(_request):
+        raise RuntimeError("model timeout")
+
+    orch = _StubOrchestrator(SimpleNamespace(classify_user_request=_boom), ClassificationAvailability.AVAILABLE)
+
+    _verdict(orch)
+
+    assert orch.classification_availability is ClassificationAvailability.AVAILABLE
+    assert orch.last_classification_state is ClassificationState.FAILED
+
+
+def test_last_state_tracks_the_most_recent_request():
+    """A recovered classifier must stop reporting the old failure."""
+    calls = {"n": 0}
+
+    def _flaky(_request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("transient")
+        return _completed(SimpleNamespace(complexity=TaskComplexity.SIMPLE))
+
+    orch = _StubOrchestrator(SimpleNamespace(classify_user_request=_flaky), ClassificationAvailability.AVAILABLE)
+
+    _verdict(orch)
+    assert orch.last_classification_state is ClassificationState.FAILED
+
+    _verdict(orch)
+    assert orch.last_classification_state is ClassificationState.CLASSIFIED

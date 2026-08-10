@@ -2693,6 +2693,9 @@ class OrchestrationStatusResponse(BaseModel):
     max_parallel_tasks: int = 0
     total_agents: int = 0
     capabilities: Dict[str, Any] = Field(default_factory=dict)
+    # #13807: request classification degrades silently — declared here so the
+    # schema (and the generated client types) describe what the route returns.
+    classification: Dict[str, Any] = Field(default_factory=dict)
 
 
 class OrchestrationExamplesResponse(BaseModel):

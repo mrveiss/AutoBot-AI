@@ -264,12 +264,8 @@ class WorkflowPlanner:
         """
         context = context or {}
 
-        # Classify complexity. #13807: the verdict carries whether anything
-        # actually judged this request — a plan built on a defaulted COMPLEX is
-        # not the same artefact as one built on a real classification, and the
-        # summary is where a reader would otherwise have no way to tell.
-        verdict = await self.base_orchestrator.classify_request_complexity_verdict(user_request)
-        complexity = verdict.complexity
+        # Classify complexity
+        complexity = await self.base_orchestrator.classify_request_complexity(user_request)
 
         # Get base steps (no agent assignment yet)
         base_steps = await self.base_orchestrator.plan_workflow_steps(user_request, complexity)
@@ -277,8 +273,6 @@ class WorkflowPlanner:
         return {
             "request": user_request,
             "complexity": complexity.value,
-            "complexity_classified": verdict.classified,
-            "classification_state": verdict.state.value,
             "total_steps": len(base_steps),
             "steps": [
                 {

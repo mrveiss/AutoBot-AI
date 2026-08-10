@@ -21,8 +21,22 @@ class TaskComplexity(Enum):
     SECURITY_SCAN = "complex"
 
 
-class ClassificationState(str, Enum):
-    """Why a complexity value has the value it does (#13807).
+class ClassificationAvailability(Enum):
+    """Whether a classifier could be built at all — an init-time fact (#13807).
+
+    Deliberately separate from :class:`ClassificationState`: "could we build a
+    classifier" and "did this request get classified" are different questions,
+    and answering both from one field made a classifier that builds fine but
+    raises on every request report itself as healthy.
+    """
+
+    AVAILABLE = "available"
+    UNAVAILABLE_IMPORT = "unavailable_import"  # classification module not importable
+    UNAVAILABLE_INIT = "unavailable_init"  # agent could not be constructed
+
+
+class ClassificationState(Enum):
+    """Why a single complexity value has the value it does (#13807).
 
     ``COMPLEX`` used to be the answer to four different questions: the request
     really is complex, the classifier is not importable, it failed to build, or
