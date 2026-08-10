@@ -147,7 +147,13 @@ Owner decisions, recorded 2026-08-10:
    Company OS functionality that already exists, or it is not built.
 2. **Extension, never replacement.** All 17 nav entries in `components/llc/LlcSidebar.vue` stay. No
    current Company OS screen is removed or rebuilt.
-3. **People are polymorphic — employee · human · agent.**
+3. **People are polymorphic — agent · user · contact.** An *agent* is a hired executor; a *user* is
+   a human with an account; a *contact* is a human who appears in a process (the supplier you email,
+   the customer you call) with **no account, who must never be able to log in**. A contact is a
+   separate entity, never a `users` row — `users` is the authentication boundary, and putting
+   non-authenticating identities inside it makes every auth column one that needs a special
+   exclusion. Audit found no contact entity exists today; the only `PERSON` concept in the codebase
+   is NLP entity extraction over documents, which is not an operational actor.
 4. **Company OS absorbs the automation module.**
 5. **The canvas is built inside the Org Chart**, which already exists per company and is not fully
    built. It is the native place to display teams and people. Not a new nav entry.
@@ -160,7 +166,8 @@ Owner decisions, recorded 2026-08-10:
 |---|---|---|
 | [#13936](https://github.com/mrveiss/AutoBot-AI/issues/13936) | org chart reports `is_human` honestly | 1 |
 | [#13937](https://github.com/mrveiss/AutoBot-AI/issues/13937) | `AssigneeType` in the enum SSOT | 1 |
-| [#13938](https://github.com/mrveiss/AutoBot-AI/issues/13938) | one People surface: employee · human · agent | 1 |
+| [#13969](https://github.com/mrveiss/AutoBot-AI/issues/13969) | contact entity — a process human with no account | 1 |
+| [#13938](https://github.com/mrveiss/AutoBot-AI/issues/13938) | one People surface: agent · user · contact | 1 |
 | [#13939](https://github.com/mrveiss/AutoBot-AI/issues/13939) | canvas as a view mode inside Org Chart | 2 |
 | [#13940](https://github.com/mrveiss/AutoBot-AI/issues/13940) | node sidebar: fixed slot order + icon rail | 3 |
 | [#13941](https://github.com/mrveiss/AutoBot-AI/issues/13941) | rule-based colouring + legend | 3 |
@@ -191,3 +198,12 @@ attributes" plane). No claim is made either way; grep and read before filing any
 Separately noted but unverified: both `autobot-frontend/src/design-system/tokens.ts` and
 `autobot-frontend/src/design-tokens/tokens.ts` exist. If that is genuine canonical-source
 duplication it belongs to the #13916 umbrella — read both before claiming it.
+
+## 6. Vocabulary hazard
+
+`CoWorkerType {agent, human}` and `AssigneeType {user, agent}` (`llc/models/enums.py`) answer the
+same question with different member names. A same-name sweep cannot see this — only comparing member
+sets does, which is the #13845/#13846 lesson. It has already produced a live bug: #13954, a Kanban
+swimlane filtering on `'human'` against a backend that only ever writes `'user'`, so the column never
+matched a row. The axis is about to become three-valued (agent / user / contact), so it is tracked as
+#13970 and must be settled rather than mechanically renamed.
