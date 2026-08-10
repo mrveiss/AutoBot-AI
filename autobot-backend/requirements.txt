@@ -105,6 +105,12 @@ httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.4.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
 Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
+# OCR binding (#13885). MUST stay paired with the tesseract-ocr / libtesseract-dev
+# system packages installed by ansible (roles/backend/tasks/main.yml). Without this
+# line the binary ships on every host and no Python caller can reach it: /api/vision/ocr,
+# vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
+# guard-import it and degrade to "pytesseract not installed" with no alert.
+pytesseract>=0.3.13
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):
