@@ -165,14 +165,28 @@ class TestLayer2OnDemand:
         result = await layer.render({"user_message": "Tell me about AutoBot", "memory_graph": None})
         assert result == ""
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#13686: L2 reads description/content; entity documents carry observations (#13866)",
+    )
     @pytest.mark.asyncio
     async def test_render_with_memory_graph_returns_context(self):
+        from autobot_memory_graph.entities import EntityOperationsMixin
         from chat_history.layers import Layer2OnDemand
 
+        # Built by the function that defines the schema, not hand-written: the
+        # hand-written fixture agreed with the layer's own wrong assumption.
         fake_graph = MagicMock()
         fake_graph.search_entities = AsyncMock(
             return_value=[
-                {"name": "AutoBot", "description": "An AI automation platform"},
+                EntityOperationsMixin._build_entity_document(
+                    None,
+                    entity_id="ent-autobot",
+                    entity_type="platform",
+                    name="AutoBot",
+                    observations=["An AI automation platform"],
+                    entity_metadata={},
+                ),
             ]
         )
         layer = Layer2OnDemand()
@@ -315,6 +329,10 @@ class TestTieredContextBuilderFeatureFlag:
         finally:
             layers_mod.TIERED_CONTEXT_ENABLED = original
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#13686: L2 reads description/content; entity documents carry observations (#13866)",
+    )
     @pytest.mark.asyncio
     async def test_l2_fires_when_entity_in_message_and_flag_on(self):
         """L2 fires when entity detected and flag is on."""
@@ -324,11 +342,22 @@ class TestTieredContextBuilderFeatureFlag:
         try:
             layers_mod.TIERED_CONTEXT_ENABLED = True
 
+            from autobot_memory_graph.entities import EntityOperationsMixin
+
             mock_gen = MagicMock()
             mock_gen.generate = AsyncMock(return_value="")
             fake_graph = MagicMock()
             fake_graph.search_entities = AsyncMock(
-                return_value=[{"name": "Redis", "description": "In-memory data store"}]
+                return_value=[
+                    EntityOperationsMixin._build_entity_document(
+                        None,
+                        entity_id="ent-redis",
+                        entity_type="service",
+                        name="Redis",
+                        observations=["In-memory data store"],
+                        entity_metadata={},
+                    )
+                ]
             )
 
             with patch("memory.essential_story.EssentialStoryGenerator", return_value=mock_gen):
