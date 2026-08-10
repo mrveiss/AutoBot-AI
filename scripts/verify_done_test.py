@@ -184,6 +184,42 @@ class TestNeverDeletesUnlandedWork:
         assert "cannot be verified" in res.stdout, res.stdout
         assert (wt / "merge-only.txt").exists()
 
+    def test_root_commit_content_is_not_skipped_as_empty(self, repo: Path) -> None:
+        """`git diff-tree` prints NOTHING for a parentless commit without --root.
+
+        The empty-commit filter would then treat an unlanded root commit as
+        "no evidence" and skip it, leaving `unlanded` at zero while
+        `substantive` stays positive from the landed commits — so the branch
+        reads as fully landed. Root commits arrive via unrelated-history
+        merges (subtree/vendored imports) and shallow-clone boundaries.
+        `git cherry` judges them with full-tree semantics, so the two must agree.
+        """
+        wt = repo / ".worktrees" / "issue-root"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-root", "base")
+        _commit(wt, "landed.txt", "landed\n", "fix(a): landed work (#20)")
+        sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
+        _git(repo, "cherry-pick", "--no-commit", sha)
+        _git(repo, "commit", "-q", "-m", "fix(a): landed work (#20) (squashed)")
+        # An orphan branch: its first commit has NO parent.
+        _git(wt, "checkout", "-q", "--orphan", "vendor")
+        _git(wt, "rm", "-q", "-rf", ".")
+        (wt / "vendored.py").write_text("VENDORED = 1\n", encoding="utf-8")
+        _git(wt, "add", "vendored.py")
+        _git(wt, "commit", "-q", "-m", "chore(vendor): import (#21)")
+        _git(wt, "checkout", "-q", "issue-root")
+        _git(wt, "merge", "-q", "--allow-unrelated-histories", "--no-edit", "vendor")
+        res = run(repo, "--base", "base")
+        assert "remove it" not in res.stdout, (
+            "the vendored root commit is unlanded; deleting this worktree "
+            f"destroys it\n{res.stdout}"
+        )
+        # The safety property above also holds when the merged-PR signal is
+        # simply absent, so pin the patch-id verdict itself: the root commit
+        # must be SEEN as unlanded. Without --root the pre-fix script reports
+        # "looks landed by patch-id" here — safe only because signal 2 was
+        # missing, which is not a guarantee.
+        assert "unlanded commits" in res.stdout, res.stdout
+
     def test_fast_forwarded_branch_is_kept_not_deleted(self, repo: Path) -> None:
         """`ahead == 0` is ambiguous, so the conservative answer is KEEP.
 

@@ -63,7 +63,7 @@ echo "verify-done: branch '${BRANCH:-<none>}' against '$BASE'"
 # ── landed? ──────────────────────────────────────────────────────────────────
 # Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
 branch_state() {
-  local dir="$1" br="$2" ahead cherry rc line mark sha substantive=0 unlanded=0 wt_dirty
+  local dir="$1" br="refs/heads/$2" ahead cherry rc line mark sha substantive=0 unlanded=0 wt_dirty
   ahead=$(git -C "$dir" rev-list --count "${BASE}..${br}" 2>/dev/null) || return 3
   [ -n "$ahead" ] || return 3
   # "Nothing ahead of base" is NOT landed. A freshly created worktree and a
@@ -80,8 +80,9 @@ branch_state() {
   # line below and cannot be judged. A live branch here carries 5 such files.
   # Unjudgeable is not landed: report "cannot verify" rather than authorize a
   # deletion of work no signal has looked at.
-  local m mfiles
-  for m in $(git -C "$dir" rev-list --merges "${BASE}..${br}" 2>/dev/null); do
+  local m mfiles mlist
+  mlist=$(git -C "$dir" rev-list --merges "${BASE}..${br}" 2>/dev/null) || return 3
+  for m in $mlist; do
     mfiles=$(git -C "$dir" diff-tree -c -r --no-commit-id --name-only "$m" 2>/dev/null) || return 3
     [ -z "$mfiles" ] || return 3
   done
@@ -107,7 +108,13 @@ branch_state() {
     # Status-checked: a FAILED diff-tree is otherwise indistinguishable from an
     # empty commit, and skipping a `+` commit on that basis drops `unlanded` to
     # zero and authorizes a deletion.
-    names=$(git -C "$dir" diff-tree -r --no-commit-id --name-only "$sha" 2>/dev/null) || return 3
+    # --root is load-bearing: without it `diff-tree` prints NOTHING for a
+    # parentless commit and exits 0, so the empty-commit filter below would
+    # skip a genuinely unlanded root commit (unrelated-history merge, subtree
+    # import, shallow-clone boundary) and the branch would read as landed.
+    # `git cherry` judges root commits with full-tree semantics, so this makes
+    # the two agree.
+    names=$(git -C "$dir" diff-tree --root -r --no-commit-id --name-only "$sha" 2>/dev/null) || return 3
     [ -n "$names" ] || continue
     substantive=$((substantive + 1))
     [ "$mark" = "+" ] && unlanded=$((unlanded + 1))
@@ -211,7 +218,15 @@ else
         # heuristic: patch-ids say the work is in the base, AND GitHub says a
         # PR for this branch merged. Either alone has produced a false verdict
         # before (#13879), and the cost of being wrong is destroyed work.
+        # --ignored=matching, not plain --porcelain. `git worktree remove`
+        # without --force refuses on tracked/untracked changes but DELETES
+        # ignored files silently — and ignored is where the valuable
+        # unreproducible state lives: .env, local config, key material. Two
+        # worktrees flagged here today hold 187 and 27 ignored files, one of
+        # them `data/.slm_keys`. A delete instruction must never be issued
+        # without naming what it destroys.
         wt_dirty=$(git -C "$dir" status --porcelain 2>&1)
+        wt_ignored=$(git -C "$dir" status --porcelain --ignored=matching 2>/dev/null | grep -c '^!!')
         if ! command -v gh >/dev/null 2>&1; then
           ok "'$wb' looks landed by patch-id, but gh is unavailable to confirm a merged PR — keep"
         elif [ -n "$wt_dirty" ]; then
@@ -221,7 +236,13 @@ else
           ok "'$wb' has landed but holds uncommitted work — keep until it is committed or discarded"
         elif merged_pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
           if [ -n "$merged_pr" ]; then
-            fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it"
+            if [ "${wt_ignored:-0}" -gt 0 ]; then
+              fail "worktree '$wb' has landed (PR #$merged_pr merged) at $dir — remove it, but it holds ${wt_ignored} IGNORED file(s) that 'git worktree remove' deletes silently; inspect them first:"
+              git -C "$dir" status --porcelain --ignored=matching 2>/dev/null \
+                | grep '^!!' | head -5 | sed 's/^!! /            /'
+            else
+              fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it"
+            fi
             STRANDED=$((STRANDED+1))
           else
             ok "'$wb' looks landed by patch-id but has no merged PR — keep, and investigate"
