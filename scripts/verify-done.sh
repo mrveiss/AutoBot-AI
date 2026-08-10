@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
     --branch)         BRANCH="${2:-}"; [ -n "$BRANCH" ] || { echo "--branch needs a value" >&2; exit 2; }; shift ;;
     --base)           BASE="${2:-}";   [ -n "$BASE" ]   || { echo "--base needs a value" >&2; exit 2; }; shift ;;
     --leftovers-only) LEFTOVERS_ONLY=1 ;;
-    -h|--help)        sed -n '5,26p' "$0"; exit 0 ;;
+    -h|--help)        sed -n '5,24p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -63,7 +63,7 @@ echo "verify-done: branch '${BRANCH:-<none>}' against '$BASE'"
 # ── landed? ──────────────────────────────────────────────────────────────────
 # Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
 branch_state() {
-  local dir="$1" br="$2" ahead cherry rc line mark sha substantive=0 unlanded=0
+  local dir="$1" br="$2" ahead cherry rc line mark sha substantive=0 unlanded=0 wt_dirty
   ahead=$(git -C "$dir" rev-list --count "${BASE}..${br}" 2>/dev/null) || return 3
   [ -n "$ahead" ] || return 3
   # "Nothing ahead of base" is NOT landed. A freshly created worktree and a
@@ -73,6 +73,18 @@ branch_state() {
   # Squash merges (how this repo lands) leave the branch ahead with matching
   # patch-ids, so the real landed case is still detected below.
   [ "$ahead" -eq 0 ] && return 2
+
+  # MERGE COMMITS ARE INVISIBLE TO `git cherry` (#13879). It omits them
+  # entirely, so content that exists ONLY in a merge — a conflict resolution
+  # when a branch is updated off base, or an evil merge — is represented by no
+  # line below and cannot be judged. A live branch here carries 5 such files.
+  # Unjudgeable is not landed: report "cannot verify" rather than authorize a
+  # deletion of work no signal has looked at.
+  local m mfiles
+  for m in $(git -C "$dir" rev-list --merges "${BASE}..${br}" 2>/dev/null); do
+    mfiles=$(git -C "$dir" diff-tree -c -r --no-commit-id --name-only "$m" 2>/dev/null) || return 3
+    [ -z "$mfiles" ] || return 3
+  done
 
   # Patch-id equivalence per commit. `+` = no equivalent upstream, `-` = present.
   # Subject text is never consulted: a generic `docs:`/`chore:` subject collides
@@ -88,10 +100,15 @@ branch_state() {
   # claim commit). Counting those as "landed" reports a just-claimed worktree
   # as deletable: the precise failure this script exists to prevent, reborn.
   # Only commits that actually change something can testify either way.
+  local names
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     mark=${line%% *}; sha=${line##* }
-    [ -n "$(git -C "$dir" diff-tree -r --no-commit-id --name-only "$sha" 2>/dev/null)" ] || continue
+    # Status-checked: a FAILED diff-tree is otherwise indistinguishable from an
+    # empty commit, and skipping a `+` commit on that basis drops `unlanded` to
+    # zero and authorizes a deletion.
+    names=$(git -C "$dir" diff-tree -r --no-commit-id --name-only "$sha" 2>/dev/null) || return 3
+    [ -n "$names" ] || continue
     substantive=$((substantive + 1))
     [ "$mark" = "+" ] && unlanded=$((unlanded + 1))
   done <<< "$cherry"
@@ -127,8 +144,8 @@ if [ "$LEFTOVERS_ONLY" -eq 0 ]; then
   echo
   echo "[3] pull request state"
   PR_STATE=""
-  if ! command -v gh >/dev/null 2>&1; then
-    fail "gh unavailable — PR state cannot be verified, so 'done' cannot be claimed"
+  if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    fail "gh or jq unavailable — PR state cannot be verified, so 'done' cannot be claimed"
   else
     PR=$(gh pr list --head "$BRANCH" --state all --limit 1 --json number,state 2>/dev/null)
     if [ -z "$PR" ] || [ "$PR" = "[]" ]; then
@@ -179,7 +196,12 @@ else
     [ -n "$dir" ] || continue
     [ "$dir" = "$SELF" ] && continue          # never audit the tree we stand in
     wb=$(git -C "$dir" branch --show-current 2>/dev/null) || continue
-    [ -n "$wb" ] || continue
+    if [ -z "$wb" ]; then
+      # Detached HEAD: no branch to compare, so it can hold unlanded work the
+      # audit cannot see. Report it rather than pass silently.
+      SEEN=$((SEEN+1)); ok "detached HEAD at $dir — cannot audit; keep"
+      continue
+    fi
     case "$wb" in main|master|Dev_new_gui) continue ;; esac
     SEEN=$((SEEN+1))
     branch_state "$dir" "$wb"
@@ -189,13 +211,25 @@ else
         # heuristic: patch-ids say the work is in the base, AND GitHub says a
         # PR for this branch merged. Either alone has produced a false verdict
         # before (#13879), and the cost of being wrong is destroyed work.
+        wt_dirty=$(git -C "$dir" status --porcelain 2>&1)
         if ! command -v gh >/dev/null 2>&1; then
           ok "'$wb' looks landed by patch-id, but gh is unavailable to confirm a merged PR — keep"
-        elif [ -n "$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null)" ]; then
-          fail "worktree '$wb' has landed but still exists at $dir — remove it"
-          STRANDED=$((STRANDED+1))
+        elif [ -n "$wt_dirty" ]; then
+          # `git worktree remove` refuses on a dirty tree and --force is
+          # forbidden, so a delete instruction here just sends the operator
+          # into a wall. The uncommitted work is the point.
+          ok "'$wb' has landed but holds uncommitted work — keep until it is committed or discarded"
+        elif merged_pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
+          if [ -n "$merged_pr" ]; then
+            fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it"
+            STRANDED=$((STRANDED+1))
+          else
+            ok "'$wb' looks landed by patch-id but has no merged PR — keep, and investigate"
+          fi
         else
-          ok "'$wb' looks landed by patch-id but has no merged PR — keep, and investigate"
+          # gh present but failing (401, rate limit, network). Distinguish it
+          # from "no merged PR" so the investigation points somewhere useful.
+          ok "'$wb' looks landed by patch-id but gh could not be queried — keep"
         fi ;;
       1) ok "'$wb' has unlanded commits — keep" ;;
       2) ok "'$wb' has no commits yet (or only empty claim commits) — keep" ;;

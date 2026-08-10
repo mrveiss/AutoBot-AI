@@ -151,6 +151,39 @@ class TestNeverDeletesUnlandedWork:
         assert "has landed" not in res.stdout, res.stdout
         assert "unlanded commits" in res.stdout
 
+    def test_merge_unique_content_is_never_reported_landed(self, repo: Path) -> None:
+        """`git cherry` OMITS merge commits, so merge-only content is unjudgeable.
+
+        A conflict resolution made while updating a branch off base lives only
+        in the merge commit. With every non-merge commit landed, the branch
+        would otherwise read as fully landed and be marked for deletion while
+        carrying work that exists nowhere else. A live branch in this repo
+        carries 5 such files today.
+        """
+        wt = repo / ".worktrees" / "wt-evil"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-evil", "base")
+        _commit(wt, "shared.txt", "branch work\n", "fix(a): work (#10)")
+        # That commit lands on base as a squash.
+        sha = _git(repo, "rev-parse", "wt-evil").stdout.strip()
+        _git(repo, "cherry-pick", "--no-commit", sha)
+        _git(repo, "commit", "-q", "-m", "fix(a): work (#10) (squashed)")
+        # Branch merges base back in, and the merge introduces unique content.
+        _git(wt, "merge", "--no-commit", "--no-ff", "base")
+        (wt / "merge-only.txt").write_text("resolution work\n", encoding="utf-8")
+        _git(wt, "add", "merge-only.txt")
+        _git(wt, "commit", "-q", "-m", "merge base into wt-evil")
+        res = run(repo, "--base", "base")
+        assert "remove it" not in res.stdout, (
+            "merge-unique content is invisible to git cherry; a delete "
+            f"instruction here destroys it\n{res.stdout}"
+        )
+        # The safety property above holds for more than one reason, so pin the
+        # specific behaviour: the merge must be RECOGNISED as unjudgeable
+        # rather than judged on the non-merge commits alone. The pre-fix script
+        # reports "unlanded commits" here — safe by luck, not by reasoning.
+        assert "cannot be verified" in res.stdout, res.stdout
+        assert (wt / "merge-only.txt").exists()
+
     def test_fast_forwarded_branch_is_kept_not_deleted(self, repo: Path) -> None:
         """`ahead == 0` is ambiguous, so the conservative answer is KEEP.
 
