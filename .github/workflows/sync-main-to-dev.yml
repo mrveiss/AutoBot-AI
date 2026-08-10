@@ -107,10 +107,30 @@ jobs:
           EOF
           sed -i 's/^          //' /tmp/sync-pr-body.md
 
-          URL=$(gh pr create \
+          # Creating the PR can be refused by a repository setting:
+          #   GraphQL: GitHub Actions is not permitted to create or approve pull requests
+          # ("Allow GitHub Actions to create and approve pull requests", Settings →
+          # Actions → General). The branch push above is the part that matters and
+          # has already succeeded, so a refusal here must not read as "the sync
+          # failed" — it means one click is left. Observed 2026-08-10.
+          if URL=$(gh pr create \
             --base main \
             --head "$SYNC_BRANCH" \
             --title "release: sync Dev_new_gui into main ($AHEAD commits)" \
-            --body-file /tmp/sync-pr-body.md)
-          echo "Opened $URL"
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+            --body-file /tmp/sync-pr-body.md 2>/tmp/pr-create.err); then
+            echo "Opened $URL"
+            echo "url=$URL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          cat /tmp/pr-create.err
+          if grep -q "not permitted to create or approve pull requests" /tmp/pr-create.err; then
+            COMPARE="https://github.com/$GITHUB_REPOSITORY/compare/main...$SYNC_BRANCH?expand=1"
+            echo "::warning::Actions may not open PRs in this repository, so the release PR was not created."
+            echo "::warning::The branch is pushed and ready — open it here: $COMPARE"
+            echo "url=$COMPARE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::Failed to open the release PR for a reason other than the Actions PR restriction."
+          exit 1
