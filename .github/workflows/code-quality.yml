@@ -146,14 +146,21 @@ jobs:
         set -euo pipefail
         # Pre-commit covers local dev — this CI step closes the bypass gap
         # (devs without pre-commit installed, or `--no-verify` users).
-        # Changed-files-only mode mirrors pre-commit semantics: doesn't
-        # block on the 59 pre-existing violations tracked by #5263.
+        # Changed-files-only mode mirrors pre-commit semantics: doesn't block
+        # on the pre-existing violations tracked by #5263 (22 in 10 files as of
+        # #13880 — the "59" this comment used to claim was long stale).
         # After #5263 closes, swap to full-scan mode (no argv).
-        if [ -n "${BASE_SHA:-}" ]; then
-          # PR context — diff against the merge base
+        #
+        # Resolve through HEAD's parents, exactly as
+        # pipeline-scripts/check-pre-commit-hook-pr.sh does (#13880). The event
+        # payload's base.sha is NOT guaranteed to be in the clone under
+        # fetch-depth: 2, whereas HEAD^1 always is — and on a pull_request
+        # HEAD^1..HEAD is precisely this PR's changes.
+        if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
+          base="${HEAD_SHA}^1"
+        elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
           base="$BASE_SHA"
         else
-          # Push context — diff against the previous commit on the branch
           base="${HEAD_SHA}^"
         fi
         # A guard that cannot compute its scope must FAIL, not report "no
