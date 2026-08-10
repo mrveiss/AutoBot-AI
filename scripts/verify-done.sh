@@ -140,12 +140,31 @@ branch_state() {
   #
   # So confirm the content actually is in the base tree before saying landed.
   local -a touched=()
-  local rl
+  local rl c tf
   rl=$(git -C "$dir" rev-list "${BASE}..${br}" 2>/dev/null) || return 3
   if [ -n "$rl" ]; then
+    # ONE COMMIT PER CALL. `git diff-tree` accepts at most two tree-ishes: with
+    # three or more it exits 0 and prints NOTHING (verified), so passing the
+    # whole rev-list left `touched` empty and skipped this guard entirely —
+    # inert on 8 of 18 live worktrees and wrong on 12, including the branch
+    # that introduced it (ahead=9). Two revs is just as bad: it diffs the two
+    # trees and reports only the tip. -m makes merges contribute their own diff.
+    tf=$(mktemp) || return 3
+    for c in $rl; do
+      if ! git -C "$dir" diff-tree -r --root -m --no-commit-id --name-only -z "$c" >>"$tf" 2>/dev/null; then
+        rm -f "$tf"; return 3
+      fi
+    done
     while IFS= read -r -d '' f; do
-      [ -n "$f" ] && touched+=("$f")
-    done < <(git -C "$dir" diff-tree -r --root --no-commit-id --name-only -z $rl 2>/dev/null)
+      # :(literal) — a path beginning with ':' is otherwise parsed as pathspec
+      # magic even after --, and silently compares equal.
+      [ -n "$f" ] && touched+=(":(literal)$f")
+    done < "$tf"
+    rm -f "$tf"
+    # The function has already proven substantive > 0, so a non-empty rev-list
+    # with nothing touched is impossible unless a git call misbehaved. Treat it
+    # as unverifiable rather than letting it fall through to "landed".
+    [ "${#touched[@]}" -eq 0 ] && return 3
   fi
   # Verdict stays conservative (never delete), but the REASON must be accurate:
   # "has unlanded commits" would be a false statement about a branch whose work

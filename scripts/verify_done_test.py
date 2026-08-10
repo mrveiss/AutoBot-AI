@@ -292,6 +292,50 @@ class TestDeletePath:
         assert "IGNORED file" in res.stdout, res.stdout
         assert ".env" in res.stdout
 
+    def test_multi_commit_branch_with_reverted_work_is_not_landed(self, repo: Path) -> None:
+        """`git diff-tree` takes at most TWO tree-ishes.
+
+        Passing a whole rev-list made it exit 0 printing nothing for 3+ commits,
+        so the content guard was skipped and the branch fell through to landed.
+        Every landed fixture in this suite was single-commit, which is exactly
+        why that shipped green. 12 of 18 live worktrees are 2+ commits ahead.
+        """
+        wt = repo / ".worktrees" / "wt-multi"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-multi", "base")
+        for n in ("one", "two", "three"):
+            _commit(wt, f"{n}.txt", f"{n}\n", f"fix({n}): work (#50)")
+        # Base moves first so the picks create NEW commits instead of
+        # fast-forwarding (which would leave the branch 0 ahead and never
+        # reach the content guard at all).
+        _commit(repo, "unrelated2.txt", "y\n", "chore: unrelated (#54)")
+        # All three land on base as individual patches...
+        for sha in reversed(_git(wt, "rev-list", "base..wt-multi").stdout.split()):
+            _git(repo, "cherry-pick", sha)
+        # ...then one of them is reverted, so the branch is its only copy.
+        _git(repo, "rm", "-q", "two.txt")
+        _git(repo, "commit", "-q", "-m", "revert: back out two (#51)")
+        res = run(repo, "--base", "base", merged_pr="4250")
+        assert "remove it" not in res.stdout, (
+            "two.txt was reverted out of base; this worktree is its only copy\n"
+            + res.stdout
+        )
+        assert (wt / "two.txt").exists()
+
+    def test_multi_commit_fully_landed_branch_is_still_removable(self, repo: Path) -> None:
+        """Positive control: the multi-commit fix must not just return 'keep' always."""
+        wt = repo / ".worktrees" / "wt-multi-ok"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-multi-ok", "base")
+        for n in ("p", "q", "r"):
+            _commit(wt, f"{n}.txt", f"{n}\n", f"fix({n}): work (#52)")
+        # Base moves first, so the picks below create NEW commits rather than
+        # fast-forwarding base onto the branch (which would leave it 0 ahead
+        # and correctly read as "no commits yet" instead of landed).
+        _commit(repo, "unrelated.txt", "x\n", "chore: unrelated (#53)")
+        for sha in reversed(_git(wt, "rev-list", "base..wt-multi-ok").stdout.split()):
+            _git(repo, "cherry-pick", sha)
+        res = run(repo, "--base", "base", merged_pr="4251")
+        assert "remove it" in res.stdout, res.stdout
+
     def test_whitespace_only_fix_is_not_landed_by_patch_id_collision(self, repo: Path) -> None:
         """`git patch-id` STRIPS whitespace, so unrelated whitespace edits collide.
 
