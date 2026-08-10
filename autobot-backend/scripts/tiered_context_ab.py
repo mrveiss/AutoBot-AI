@@ -72,7 +72,22 @@ CASES = [
 ]
 
 ESSENTIAL_STORY = "## Essential Story\n- the deploy ran at 09:00\n- the owner is mrveiss"
-ENTITY_FACTS = [{"name": "Redis", "description": "in-memory store backing session state"}]
+# #13866: this was `{"name": ..., "description": ...}` — a shape no production
+# write path produces. The double agreed with the layer's own wrong assumption,
+# so the A/B reported L2 rendering when it cannot. The fixture now matches what
+# `_build_entity_document` actually stores; L2 will render nothing here until
+# #13686 teaches it to read `observations`, and that is the honest result.
+ENTITY_FACTS = [
+    {
+        "id": "ent-redis",
+        "type": "service",
+        "name": "Redis",
+        "created_at": 0,
+        "updated_at": 0,
+        "observations": ["in-memory store backing session state"],
+        "metadata": {},
+    }
+]
 # L3 returns whatever the knowledge service hands back — it adds no heading of
 # its own — so the double emits a recognisable grounded-context block.
 KB_CONTEXT = "## Knowledge Base\nDeploy runbook: run code-sync from the maintenance page."
@@ -123,7 +138,11 @@ async def _build_tiered(case: Dict[str, Any]) -> str:
                 model_name="default",
                 session_id="ab-session",
                 memory_graph=_memory_graph(),
-                knowledge_service=_knowledge_service(),
+                # #13866: None, mirroring the production call site
+                # (llm_handler.py) since #13742. Passing a mock here reported L3
+                # as rendering while production could not render it at all —
+                # the same divergence that made the ENTITY_FACTS result false.
+                knowledge_service=None,
                 goal_ancestry=case.get("goal_ancestry"),
             )
 
