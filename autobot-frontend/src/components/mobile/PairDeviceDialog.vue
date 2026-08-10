@@ -26,6 +26,7 @@ const {
   loading,
   error,
   qrDataUrl,
+  challengeToken,
   isExpired,
   formattedTime,
   isPaired,
@@ -96,6 +97,13 @@ watch(isPaired, (paired) => {
             class="w-64 h-64"
           />
         </div>
+
+        <!-- Manual fallback: the QR is unusable with a broken camera, and a
+             screen reader cannot read the code out of an image. -->
+        <p v-if="challengeToken" class="text-center text-sm text-autobot-text-secondary">
+          {{ $t('mobile.pairing.manualCode') }}
+          <code class="font-mono break-all select-all">{{ challengeToken }}</code>
+        </p>
 
         <!-- Countdown Timer -->
         <div class="flex justify-center">
