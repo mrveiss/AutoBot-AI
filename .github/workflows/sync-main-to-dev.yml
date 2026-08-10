@@ -76,9 +76,11 @@ jobs:
           # ever allowed.
           DIVERGENT=$(git rev-list --count --no-merges origin/Dev_new_gui..origin/main)
 
-          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
-          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
-          echo "divergent=$DIVERGENT" >> "$GITHUB_OUTPUT"
+          {
+            echo "ahead=$AHEAD"
+            echo "behind=$BEHIND"
+            echo "divergent=$DIVERGENT"
+          } >> "$GITHUB_OUTPUT"
           echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main ($DIVERGENT non-merge commit(s) only on main)"
 
       - name: Open the release sync PR
