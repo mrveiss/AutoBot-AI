@@ -395,9 +395,15 @@ class PluginLoader:
         # Candidate file paths, most-canonical first.
         candidates: List[Path] = []
 
+        # The module filename is the entry point's LAST segment, not always
+        # "main". telemetry-prompt-middleware declares
+        # `...telemetry_prompt_middleware.plugin` and ships plugin.py, so a
+        # hardcoded main.py could never find it (#10294).
+        module_filename = f"{entry_point.rsplit('.', 1)[-1]}.py"
+
         # 1. Use the stored manifest directory directly (most reliable).
         if plugin_dir is not None:
-            candidates.append(plugin_dir / "main.py")
+            candidates.append(plugin_dir / module_filename)
 
         # 2. Derive the path from the entry_point by mapping underscores -> hyphens
         #    for each segment, then looking inside every configured plugin_dir.
@@ -408,7 +414,7 @@ class PluginLoader:
         # Drop the leading "plugins" segment and the trailing "main" module name.
         inner_parts = parts[1:-1] if len(parts) >= 3 else parts[:-1]
         hyphenated_parts = [p.replace("_", "-") for p in inner_parts]
-        rel_path = Path(*hyphenated_parts) / "main.py" if hyphenated_parts else None
+        rel_path = Path(*hyphenated_parts) / module_filename if hyphenated_parts else None
 
         for base_dir in self.plugin_dirs:
             if rel_path is not None:
@@ -417,11 +423,18 @@ class PluginLoader:
         for path in candidates:
             if not path.exists():
                 continue
+            synthesised: List[str] = []
             try:
                 spec = importlib.util.spec_from_file_location(entry_point, path)
                 if spec is None or spec.loader is None:
                     continue
                 module = importlib.util.module_from_spec(spec)
+                # #10294: locating the file was never the whole problem. The
+                # module's OWN imports reference `plugins.core_plugins.*`, and
+                # those parent packages exist in no sys.modules, so exec_module
+                # raised ModuleNotFoundError even though the right file had been
+                # found — which read as "the fallback failed to load the file".
+                synthesised = self._synthesise_parent_packages(entry_point, path)
                 # Register before exec so intra-plugin dataclasses/relative refs resolve.
                 sys.modules[entry_point] = module
                 spec.loader.exec_module(module)  # type: ignore[union-attr]
@@ -430,9 +443,57 @@ class PluginLoader:
             except Exception as exc:
                 logger.warning("File-path fallback failed for %r at %s: %s", entry_point, path, exc)
                 sys.modules.pop(entry_point, None)
+                for name in synthesised:
+                    sys.modules.pop(name, None)
                 continue
 
         return None
+
+    def _synthesise_parent_packages(self, entry_point: str, module_path: Path) -> List[str]:
+        """Make `plugins.core_plugins.<name>` importable for the plugin's own imports.
+
+        The entry point is a dotted path whose packages do not exist on disk
+        under those names — `core_plugins` is the directory `core-plugins`, and
+        neither carries an ``__init__.py``. A plugin that imports its own
+        siblings by absolute path therefore fails at ``exec_module`` even when
+        the loader has located exactly the right file (#10294).
+
+        Each parent gets a namespace module whose ``__path__`` points at the
+        matching real directory, walked up from the module file so the hyphen /
+        underscore mapping never has to be guessed.
+
+        Returns the names created, so a failed exec can withdraw them rather
+        than leave half a package tree behind for the next import to trip on.
+        """
+        import sys
+
+        parents = entry_point.split(".")[:-1]
+        if not parents:
+            return []
+
+        # Walk up from the module's own directory: the innermost package is the
+        # plugin dir, its parent is core-plugins, and so on.
+        directories: List[Path] = []
+        current = module_path.parent
+        for _ in parents:
+            directories.append(current)
+            current = current.parent
+        directories.reverse()
+
+        created: List[str] = []
+        for depth, _part in enumerate(parents):
+            name = ".".join(parents[: depth + 1])
+            if name in sys.modules:
+                continue
+            package = ModuleType(name)
+            package.__path__ = [str(directories[depth])]  # type: ignore[attr-defined]
+            package.__package__ = name
+            sys.modules[name] = package
+            created.append(name)
+
+        if created:
+            logger.debug("Synthesised namespace packages for %s: %s", entry_point, created)
+        return created
 
     def get_loaded_plugins(self) -> Dict[str, BasePlugin]:
         """Get all loaded plugins."""
