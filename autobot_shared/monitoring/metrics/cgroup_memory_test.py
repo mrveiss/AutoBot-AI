@@ -265,6 +265,38 @@ class TestReadFailuresAreNeverReassuring:
 
         assert events[(("event", "high"), ("unit", _UNIT))] == 21052
 
+    def test_a_property_that_is_not_a_limit_does_not_flag_drift(self, tmp_path):
+        """MemoryAccounting=yes is the single most likely drop-in an operator
+        adds — it is what makes these very metrics exist — and
+        MemoryDenyWriteExecute is already set by this repo's own unit templates.
+        Flagging either would page about config drift on a unit under no limit
+        at all, which is how an alert gets ignored."""
+        d = tmp_path / f"{_UNIT}.d"
+        d.mkdir(parents=True)
+        (d / "50-accounting.conf").write_text(
+            "[Service]\nMemoryAccounting=yes\nMemoryDenyWriteExecute=true\n", encoding="utf-8"
+        )
+        assert has_out_of_band_limits(_UNIT, control_roots=(tmp_path,)) is False
+
+    def test_an_empty_assignment_is_a_reset_not_a_limit(self, tmp_path):
+        """`MemoryMax=` resets the property to its default — explicitly NO
+        limit, the opposite of drift."""
+        d = tmp_path / f"{_UNIT}.d"
+        d.mkdir(parents=True)
+        (d / "50-reset.conf").write_text("[Service]\nMemoryMax=\n", encoding="utf-8")
+        assert has_out_of_band_limits(_UNIT, control_roots=(tmp_path,)) is False
+
+    def test_an_ansible_rendered_drop_in_is_not_out_of_band(self, tmp_path):
+        """The redis role renders MemoryLimit= into
+        /etc/systemd/system/redis-stack-server.service.d/override.conf. Scanning
+        that tree made ServiceMemoryLimitsOutOfBand fire permanently on every
+        host, for a limit that IS in a role, advising removal of an
+        ansible-managed file. Only the set-property trees are in scope."""
+        from autobot_shared.monitoring.metrics.cgroup_memory import SYSTEMD_CONTROL_ROOTS
+
+        assert Path("/etc/systemd/system") not in SYSTEMD_CONTROL_ROOTS
+        assert all(root.name == "system.control" for root in SYSTEMD_CONTROL_ROOTS)
+
 
 class TestAlertRules:
     """Structure only. BEHAVIOUR lives in cgroup-memory.promtool-test.yml.
@@ -351,6 +383,28 @@ class TestItIsActuallyWired:
         text = manager.get_metrics().decode()
 
         assert 'autobot_cgroup_memory_events{event="high",unit="autobot-backend.service"} 21052' in text
+
+    def test_describe_registers_the_family_names(self):
+        """Without describe(), CollectorRegistry(auto_describe=False) records no
+        names for this collector — so it is invisible to a name-restricted
+        scrape and gets no duplicate-name checking. Deleting the method left the
+        whole suite green, which made it one refactor from silently reverting."""
+        from prometheus_client import CollectorRegistry
+
+        from autobot_shared.monitoring.metrics.cgroup_memory import CgroupMemoryCollector
+
+        registry = CollectorRegistry()
+        collector = CgroupMemoryCollector(cgroup_root=Path("/nonexistent"), control_roots=())
+        registry.register(collector)
+
+        assert set(registry._collector_to_names[collector]) == {
+            "autobot_cgroup_memory_events",
+            "autobot_cgroup_memory_current_bytes",
+            "autobot_cgroup_memory_high_bytes",
+            "autobot_cgroup_memory_max_bytes",
+            "autobot_cgroup_memory_limits_out_of_band",
+            "autobot_cgroup_memory_read_errors",
+        }
 
     def test_the_default_unit_glob_would_find_the_incident_unit(self, tmp_path):
         """Discovery, not a hardcoded list: a static list could not cover

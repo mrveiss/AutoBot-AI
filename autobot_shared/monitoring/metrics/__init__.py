@@ -36,8 +36,10 @@ Package Structure:
 from .api_requests import ApiRequestsMetricsRecorder
 from .base import BaseMetricsRecorder
 
-# Phase 4 (#7590): Chat SSOT observability recorder
+# Issue #13765: cgroup memory-throttling pressure collector
 from .cgroup_memory import CgroupMemoryCollector
+
+# Phase 4 (#7590): Chat SSOT observability recorder
 from .chat import ChatMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
 

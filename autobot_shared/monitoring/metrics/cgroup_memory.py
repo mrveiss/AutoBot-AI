@@ -38,6 +38,7 @@ staleness window.
 from __future__ import annotations
 
 import re
+from fnmatch import fnmatch
 from pathlib import Path
 
 from prometheus_client.core import GaugeMetricFamily
@@ -53,12 +54,22 @@ DEFAULT_CGROUP_ROOT = Path("/sys/fs/cgroup")
 # Where systemd writes property drop-ins that no repo artifact records.
 # `systemctl set-property` uses the first; `--runtime` uses the second and is
 # lost on reboot, which makes it *more* confusing rather than less (#13765).
+# ONLY the set-property trees. `/etc/systemd/system/<unit>.d/` was added here in
+# an earlier pass on the reasoning that a hand-written override is equally
+# undeclared — but that tree is also where ANSIBLE renders drop-ins, and the
+# redis role puts `MemoryLimit=` in exactly
+# `/etc/systemd/system/redis-stack-server.service.d/override.conf`
+# (roles/redis/tasks/code_only.yml + redis-stack-override.conf.j2). Including it
+# made ServiceMemoryLimitsOutOfBand fire permanently on every host, for a limit
+# that IS in a role, with remediation advice ("remove the drop-in") that would
+# revert an ansible-managed file on the next play.
+#
+# A permanent false warning is the failure this whole issue is about, so the
+# scope is the two trees `systemctl set-property` actually writes: those are
+# undeclared by construction, and nothing in the repo renders into them.
 SYSTEMD_CONTROL_ROOTS: tuple[Path, ...] = (
     Path("/etc/systemd/system.control"),
     Path("/run/systemd/system.control"),
-    # Hand-written drop-ins are equally undeclared. Same tree systemd reads for
-    # unit overrides, and equally absent from the ansible roles.
-    Path("/etc/systemd/system"),
 )
 
 # Only a drop-in that actually sets a memory property counts. The directory is
@@ -203,16 +214,21 @@ class CgroupMemoryCollector(Collector):
 
     def discover_units(self) -> dict[str, Path]:
         """Map unit name -> cgroup dir, wherever in the slice tree it sits."""
+        # ONE traversal, filtered in memory. Walking once per glob multiplied the
+        # cost of a scrape-path filesystem walk by len(UNIT_GLOBS) for no gain.
+        try:
+            candidates = [p for p in self.cgroup_root.rglob("*.service") if p.is_dir()]
+        except OSError as exc:
+            logger.warning("cgroup: cannot walk %s: %s", self.cgroup_root, exc)
+            return {}
+
+        # Shallowest path wins. `sorted()` alone is lexicographic over the whole
+        # path, so a deeply nested unit in an alphabetically-earlier slice would
+        # beat the real one in system.slice.
         found: dict[str, Path] = {}
-        for glob in self.unit_globs:
-            try:
-                for path in sorted(self.cgroup_root.rglob(glob)):
-                    if path.is_dir():
-                        # sorted() first, so a parent slice always wins over a
-                        # nested delegated sub-cgroup of the same name.
-                        found.setdefault(path.name, path)
-            except OSError as exc:
-                logger.warning("cgroup: cannot walk %s for %s: %s", self.cgroup_root, glob, exc)
+        for path in sorted(candidates, key=lambda p: (len(p.parts), str(p))):
+            if any(fnmatch(path.name, glob) for glob in self.unit_globs):
+                found.setdefault(path.name, path)
         return found
 
     def _families(self) -> dict[str, GaugeMetricFamily]:
