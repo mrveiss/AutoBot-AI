@@ -352,19 +352,33 @@ class SkillDistillationScheduler:
                 return False
             if max(0.0, time.time() - mtime) < IDLE_FLUSH_S:
                 return False
+            idle_for = time.time() - mtime
             if self._last_idle_flush_mtime is not None and mtime <= self._last_idle_flush_mtime:
                 return False
+
+            # Recorded BEFORE the pending check, not after. The guard means
+            # "this activity generation has been evaluated", not "it produced a
+            # flush" — recording it only on a flush left it permanently unarmed
+            # on a quiet deployment whose cursor is caught up, so gates 1 and 2
+            # passed every cycle and gate 3 read and JSON-parsed the entire
+            # corpus every 10s forever. Measured: 20 listings in 20 cycles with
+            # nothing pending. That is the exact cost this rework claims to have
+            # removed, reintroduced one gate later.
+            #
+            # A transient listing failure therefore consumes the generation and
+            # costs one early flush; the interval backstop still sweeps. That is
+            # strictly better than polling the whole corpus indefinitely.
+            self._last_idle_flush_mtime = mtime
 
             cursor = await self._read_cursor()
             pending = await self._select_pending_sessions(cursor)
             if not pending:
                 return False
 
-            self._last_idle_flush_mtime = mtime
             logger.info(
                 "Skill distillation idle-flush: %d conversation(s) pending, corpus quiet for %.0fs (#13695)",
                 len(pending),
-                time.time() - mtime,
+                idle_for,
             )
             return True
         except Exception as exc:

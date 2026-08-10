@@ -80,35 +80,20 @@ class TestTheSignalIsTimezoneFree:
         assert await scheduler._has_idle_pending() is False
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("tz", ["UTC", "Asia/Tokyo", "America/Los_Angeles"])
-    async def test_idleness_is_identical_in_every_timezone(self, scheduler, chats_dir, tz, monkeypatch):
-        """The behavioural form of the #13856 guard.
+    async def test_idleness_is_epoch_arithmetic(self, scheduler, chats_dir):
+        """Idleness is `time.time() - st_mtime` — no zone is consulted.
 
-        An earlier version of this test grepped the module source for the names
-        of the two functions the old code called. That is evadable by any
-        equivalent reintroduction spelled differently — a naive-UTC helper
-        subtracted from a parsed ISO string matches neither name — so it
-        certified the spelling, not the property. (The #5178 CI guard rejects
-        that spelling anyway, which is how this docstring first broke the
-        build: naming the construct is enough to trip it.)
-
-        Epoch arithmetic is timezone-invariant by construction, so measuring the
-        same corpus under three zones is the actual invariant: the ISO path
-        produced a *different* age in each (negative east of UTC, inflated
-        west), which is what made it a no-op here and a mid-conversation flush
-        elsewhere.
+        An earlier version of this parametrised over three timezones with
+        `tzset()`. It had **zero** discriminating power (stripping the tz
+        manipulation left all three passing) and it leaked: `delenv("TZ")` +
+        `tzset()` drops the C-level zone, and monkeypatch restores the env var
+        without a second `tzset()`, so every later test in that worker sees a
+        different `time.localtime()`. On a runner that sets TZ that is #13856's
+        own failure mode, manufactured by its own regression test.
         """
         _quiet_for(chats_dir, 1800)
 
-        monkeypatch.setenv("TZ", tz)
-        time.tzset()
-        try:
-            idle_for = await scheduler._corpus_idle_for()
-        finally:
-            monkeypatch.delenv("TZ", raising=False)
-            time.tzset()
-
-        assert idle_for == pytest.approx(1800, abs=5), f"idle age shifted under {tz}"
+        assert await scheduler._corpus_idle_for() == pytest.approx(1800, abs=5)
 
 
 class TestIdleFlushFires:
@@ -117,9 +102,7 @@ class TestIdleFlushFires:
         _quiet_for(chats_dir, 1800)
 
         with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value=None)):
-            with patch.object(
-                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s-1"}])
-            ):
+            with patch.object(scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s-1"}])):
                 assert await scheduler._has_idle_pending() is True
 
     @pytest.mark.asyncio
@@ -140,7 +123,34 @@ class TestIdleFlushFires:
 
 class TestTheCheapGateComesFirst:
     """Blocker 3: the first version read and parsed every chat file on every
-    leader cycle — 1.5s at 1000 conversations, every 10s."""
+    leader cycle — 1.5s at 1000 conversations, every 10s.
+
+    `list_sessions_fast` is not cheap despite the name: it opens and
+    `json.loads` every chat file.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_quiet_deployment_stops_listing_after_the_first_cycle(self, scheduler, chats_dir):
+        """The steady state, which is the state idle-flush exists for.
+
+        Recording the guard only on a *flush* left it unarmed whenever the
+        cursor was caught up, so gates 1 and 2 passed forever and gate 3 read
+        the whole corpus every 10s — measured at 20 listings in 20 cycles. The
+        expensive path was the untested one.
+        """
+        _quiet_for(chats_dir, 1800)
+        listings = {"n": 0}
+
+        async def _select(cursor):
+            listings["n"] += 1
+            return []  # nothing pending: the normal state of an idle deployment
+
+        with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value="c1")):
+            with patch.object(scheduler, "_select_pending_sessions", new=_select):
+                for _ in range(20):
+                    await scheduler._has_idle_pending()
+
+        assert listings["n"] == 1, f"corpus was listed {listings['n']}x in 20 cycles"
 
     @pytest.mark.asyncio
     async def test_an_active_corpus_never_lists_sessions(self, scheduler, chats_dir):
@@ -187,9 +197,7 @@ class TestAPoisonedSessionCannotSpin:
         _quiet_for(chats_dir, 1800)
 
         with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value=cursor)):
-            with patch.object(
-                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "poison"}])
-            ):
+            with patch.object(scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "poison"}])):
                 fired = [await scheduler._has_idle_pending() for _ in range(5)]
 
         assert fired == [True, False, False, False, False], f"stuck conversation re-triggered the pass: {fired}"
@@ -204,9 +212,7 @@ class TestAPoisonedSessionCannotSpin:
         moving = iter(["c1", "c2", "c3", "c4", "c5"])
 
         with patch.object(scheduler, "_read_cursor", new=AsyncMock(side_effect=lambda: next(moving))):
-            with patch.object(
-                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])
-            ):
+            with patch.object(scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])):
                 fired = [await scheduler._has_idle_pending() for _ in range(5)]
 
         assert fired == [True, False, False, False, False], f"advancing cursor released the guard: {fired}"
@@ -217,9 +223,7 @@ class TestAPoisonedSessionCannotSpin:
         _quiet_for(chats_dir, 1800)
 
         with patch.object(scheduler, "_read_cursor", new=AsyncMock(return_value=None)):
-            with patch.object(
-                scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])
-            ):
+            with patch.object(scheduler, "_select_pending_sessions", new=AsyncMock(return_value=[{"id": "s"}])):
                 assert await scheduler._has_idle_pending() is True
                 assert await scheduler._has_idle_pending() is False
 
