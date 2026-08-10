@@ -174,6 +174,7 @@ jobs:
         # `run:` is the rule that does not need a per-field risk judgement.
         PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
         set -euo pipefail
         # The denylist of third-party product names is NOT stored in this repo:
@@ -196,13 +197,27 @@ jobs:
         # steps are already dead for this same reason, and reviving them all
         # here would redden this PR with unrelated pre-existing findings.
         # Tracked separately in #13880.
-        git fetch --no-tags --quiet --deepen=50 2>/dev/null || true
-        if git rev-parse --verify --quiet 'HEAD^2' >/dev/null 2>&1; then
-          RANGE="HEAD^1..HEAD"
-        elif git rev-parse --verify --quiet 'HEAD~1' >/dev/null 2>&1; then
+        # A bare `--deepen` deepens the DEFAULT refspec, not the checked-out
+        # PR merge ref, so it resolved only by luck. Fetch the specific objects
+        # instead, then pick the first range that actually resolves.
+        if [ -n "${PR_NUMBER:-}" ]; then
+          git fetch --no-tags --quiet --depth=2 origin "+refs/pull/${PR_NUMBER}/merge" 2>/dev/null || true
+        fi
+        if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
+          git fetch --no-tags --quiet --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA" 2>/dev/null || true
+        fi
+        git fetch --no-tags --quiet --deepen=10 2>/dev/null || true
+
+        have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
+        if have 'HEAD^2' && have 'HEAD^1'; then
+          RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
+        elif have "${PR_BASE_SHA:-x}" && have "${PR_HEAD_SHA:-x}"; then
+          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+        elif have 'HEAD~1'; then
           RANGE="HEAD~1..HEAD"
         else
           echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
+          git log --oneline -3 2>&1 | sed 's/^/  /' || true
           exit 1
         fi
         # Anti-no-op guard. The original defect was a broken range yielding
