@@ -91,6 +91,58 @@ def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_sche
     _validate_config_against_schema(plugin_name, config, config_schema)
 
 
+def canonicalise_plugin_sdk() -> List[str]:
+    """Make ``plugin_sdk.*`` and ``autobot_shared.plugin_sdk.*`` the SAME modules (#13677).
+
+    `docs/developer/PLUGIN_SDK.md` tells plugin authors to write
+    ``from plugin_sdk.base import BasePlugin``, and every core plugin does. That
+    bare name resolves — autobot_shared is installed editable and exposes
+    ``plugin_sdk`` as a second top-level package over the same source — but it
+    resolves to a SECOND set of module objects, so
+    ``plugin_sdk.base.BasePlugin`` and ``autobot_shared.plugin_sdk.base.BasePlugin``
+    are different classes.
+
+    The loader checks ``issubclass(attr, BasePlugin)`` against the canonical one,
+    so a plugin subclassing the documented one fails the check and the loader
+    reports "No plugin class found in module" — for a class sitting right there
+    in the module it just imported. Six of seven core plugins failed this way,
+    and the message sends the reader hunting for the wrong thing.
+
+    Aliasing the parent alone is not enough: a later ``import plugin_sdk.base``
+    would load a fresh module object from the canonical path and reintroduce the
+    split. Every submodule is aliased too.
+
+    Returns the names bound, for logging.
+    """
+    import pkgutil
+    import sys
+
+    import autobot_shared.plugin_sdk as canonical
+
+    bound: List[str] = []
+    if sys.modules.get("plugin_sdk") is not canonical:
+        sys.modules["plugin_sdk"] = canonical
+        bound.append("plugin_sdk")
+
+    prefix = "autobot_shared.plugin_sdk."
+    for _finder, name, _ispkg in pkgutil.iter_modules(canonical.__path__):
+        alias = f"plugin_sdk.{name}"
+        full = f"{prefix}{name}"
+        existing = sys.modules.get(alias)
+        module = sys.modules.get(full)
+        if module is None:
+            try:
+                module = importlib.import_module(full)
+            except Exception as exc:  # noqa: BLE001 - a broken submodule must not stop the rest
+                logger.debug("plugin_sdk canonicalisation skipped %s: %s", full, exc)
+                continue
+        if existing is not module:
+            sys.modules[alias] = module
+            bound.append(alias)
+
+    return bound
+
+
 class PluginLoader:
     """
     Plugin discovery and loading system.
@@ -353,6 +405,13 @@ class PluginLoader:
         Returns:
             Plugin class or None on failure
         """
+        # #13677: bind the documented `plugin_sdk.*` names to the canonical
+        # modules BEFORE the plugin imports them, so the class it subclasses is
+        # the one this loader will test against.
+        bound = canonicalise_plugin_sdk()
+        if bound:
+            logger.debug("Canonicalised plugin_sdk aliases: %s", bound)
+
         module = None
 
         try:

@@ -43,6 +43,10 @@ class PluginManager:
         self._registry = PluginRegistry()
         self._hook_registry = HookRegistry()
         self._started = False
+        # #13677: the load tally, so "is the plugin subsystem working?" is a
+        # QUERY and not a log-reading exercise. A stream of per-plugin lines
+        # nobody totals is why 0-of-7 and "no plugins installed" looked the same.
+        self._load_report: Dict[str, object] = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -65,23 +69,41 @@ class PluginManager:
         manifests = self._loader.discover_plugins()
         logger.info("PluginManager: discovered %d plugin(s)", len(manifests))
 
+        loaded: List[str] = []
+        failed: List[str] = []
+
         for manifest in manifests:
             try:
                 plugin = await self._loader.load_plugin(manifest)
                 if plugin:
                     await plugin.enable()
+                    loaded.append(manifest.name)
                     logger.info(
                         "PluginManager: loaded and enabled '%s' v%s",
                         manifest.name,
                         manifest.version,
                     )
+                else:
+                    # #13677: load_plugin returns None far more often than it
+                    # raises, and this branch logged NOTHING — the loader's own
+                    # error was the only trace, and it names a module rather than
+                    # a plugin. Six of seven core plugins failed exactly here.
+                    failed.append(manifest.name)
+                    logger.error(
+                        "PluginManager: plugin '%s' did not load (entry point %s)",
+                        manifest.name,
+                        manifest.entry_point,
+                    )
             except Exception as exc:  # noqa: BLE001
+                failed.append(manifest.name)
                 logger.error(
                     "PluginManager: failed to load plugin '%s': %s",
                     manifest.name,
                     exc,
                     exc_info=True,
                 )
+
+        self._record_load_report(manifests, loaded, failed)
 
         await self._hook_registry.call_hook("on_startup")
         logger.info(
@@ -110,6 +132,10 @@ class PluginManager:
                 )
 
         self._started = False
+        # #13677: the load tally, so "is the plugin subsystem working?" is a
+        # QUERY and not a log-reading exercise. A stream of per-plugin lines
+        # nobody totals is why 0-of-7 and "no plugins installed" looked the same.
+        self._load_report: Dict[str, object] = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
         logger.info("PluginManager: shutdown complete")
 
     # ------------------------------------------------------------------
@@ -125,6 +151,54 @@ class PluginManager:
     def plugin_registry(self) -> PluginRegistry:
         """Return the shared PluginRegistry."""
         return self._registry
+
+    def _record_load_report(self, manifests: List, loaded: List[str], failed: List[str]) -> None:
+        """Emit the `loaded N of M` summary and store it for querying (#13677).
+
+        The per-plugin lines above are necessary and not sufficient: nothing
+        totalled them, so a run where every plugin failed produced the same
+        shape of output as a healthy one — and a host with no plugins installed
+        produced the same shape as a host where all seven were broken.
+
+        Total failure is logged at CRITICAL rather than ERROR because it is a
+        different condition: not "a plugin is broken" but "the plugin subsystem
+        delivered nothing", which is invisible in every other signal.
+        """
+        self._load_report = {
+            "discovered": len(manifests),
+            "loaded": len(loaded),
+            "failed": sorted(failed),
+            "started": True,
+        }
+
+        if not manifests:
+            logger.info("PluginManager: no plugins discovered — nothing to load")
+            return
+
+        if not loaded:
+            logger.critical(
+                "PluginManager: loaded 0 of %d plugin(s) — the plugin subsystem is " "delivering nothing. Failed: %s",
+                len(manifests),
+                ", ".join(sorted(failed)) or "unknown",
+            )
+            return
+
+        level = logger.warning if failed else logger.info
+        level(
+            "PluginManager: loaded %d of %d plugin(s)%s",
+            len(loaded),
+            len(manifests),
+            f" — failed: {', '.join(sorted(failed))}" if failed else "",
+        )
+
+    def get_load_report(self) -> Dict[str, object]:
+        """Return the startup load tally.
+
+        The umbrella (#13852) asks that a service which is running but not
+        working be distinguishable by something a check can QUERY. A log line
+        does not satisfy that; this does.
+        """
+        return dict(self._load_report)
 
     def get_plugin_status(self) -> Dict[str, str]:
         """Return a mapping of plugin name → status string."""
