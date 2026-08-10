@@ -31,11 +31,12 @@ Issue #10666 B3: enhanced_orchestration package fully merged into orchestration.
 
 import asyncio
 import json
+import os
 import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.workflow import ExecutionStrategy
@@ -108,7 +109,7 @@ except ImportError:
 from agents.agent_client import AgentHealthRegistry as _AgentClientRegistry
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
-from autobot_types import TaskComplexity
+from autobot_types import ClassificationState, ComplexityVerdict, TaskComplexity
 
 
 class OrchestrationMode(Enum):
@@ -183,13 +184,51 @@ class Orchestrator(_DeprecatedRequestMixin):
         }
 
     def _init_classification_agent(self) -> None:
+        """Build the classifier, recording *why* if it cannot be built (#13807).
+
+        The reason is kept on the instance rather than only logged at boot: a
+        warning emitted once at startup is not observable afterwards, so a
+        permanently disabled classifier looked identical to a working one.
+        """
         self.classification_agent = None
-        if CLASSIFICATION_AVAILABLE:
-            try:
-                self.classification_agent = GemmaClassificationAgent()
-                logger.info("Classification agent initialized successfully")
-            except Exception as e:
-                logger.warning("Failed to initialize classification agent: %s", e)
+        self.classification_state = ClassificationState.CLASSIFIED
+        self.classification_detail: Optional[str] = None
+
+        if not CLASSIFICATION_AVAILABLE:
+            self.classification_state = ClassificationState.UNAVAILABLE_IMPORT
+            self.classification_detail = "classification module is not importable"
+            logger.warning("Classification disabled: %s", self.classification_detail)
+            self._enforce_classification_requirement()
+            return
+
+        try:
+            self.classification_agent = GemmaClassificationAgent()
+            logger.info("Classification agent initialized successfully")
+        except Exception as e:
+            self.classification_state = ClassificationState.UNAVAILABLE_INIT
+            self.classification_detail = f"{type(e).__name__}: {e}"
+            logger.warning("Failed to initialize classification agent: %s", e)
+            self._enforce_classification_requirement()
+
+    def _enforce_classification_requirement(self) -> None:
+        """Fail fast only when the deployment says classification is required.
+
+        #13807 decision: a missing optional provider stays non-fatal by default,
+        so local and test runs keep working without one. Deployments that depend
+        on classification set AUTOBOT_REQUIRE_CLASSIFICATION=true and get a
+        startup failure instead of silent degradation.
+        """
+        if os.getenv("AUTOBOT_REQUIRE_CLASSIFICATION", "").strip().lower() not in ("1", "true", "yes"):
+            return
+        raise RuntimeError(
+            f"AUTOBOT_REQUIRE_CLASSIFICATION is set but classification is unavailable "
+            f"({self.classification_state.value}: {self.classification_detail})"
+        )
+
+    @property
+    def classification_enabled(self) -> bool:
+        """Whether a request will actually be classified rather than defaulted."""
+        return self.classification_agent is not None
 
     def _init_strategy_components(self) -> None:
         """Initialize multi-agent strategy components. Renamed from _init_multi_agent_state (#5058)."""
@@ -542,16 +581,51 @@ class Orchestrator(_DeprecatedRequestMixin):
 
         Retained for callers in orchestration/workflow_planner.py,
         services/workflow_automation/, services/advanced_workflow/, and tests.
+        Callers that need to know whether the value was *judged* or merely
+        defaulted should use :meth:`classify_request_complexity_verdict`.
         """
-        if not CLASSIFICATION_AVAILABLE:
-            return TaskComplexity.COMPLEX
+        return (await self.classify_request_complexity_verdict(user_request)).complexity
+
+    async def classify_request_complexity_verdict(self, user_request: str) -> ComplexityVerdict:
+        """Classify, reporting whether classification actually happened (#13807).
+
+        The bare complexity value cannot express "nothing classified this" —
+        COMPLEX is both a legitimate verdict and the fallback for three distinct
+        failures. The verdict carries the distinction so a caller, a metric or a
+        health check can see a disabled classifier instead of inferring it.
+        """
+        if self.classification_agent is None:
+            self._log_classification_fallback()
+            return ComplexityVerdict(
+                complexity=TaskComplexity.COMPLEX,
+                state=self.classification_state,
+                detail=self.classification_detail,
+            )
         try:
-            if self.classification_agent:
-                result = await self.classification_agent.classify_user_request(user_request)
-                return result.complexity
+            result = await self.classification_agent.classify_user_request(user_request)
+            return ComplexityVerdict(complexity=result.complexity, state=ClassificationState.CLASSIFIED)
         except Exception as e:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
-        return TaskComplexity.COMPLEX
+            return ComplexityVerdict(
+                complexity=TaskComplexity.COMPLEX,
+                state=ClassificationState.FAILED,
+                detail=f"{type(e).__name__}: {e}",
+            )
+
+    def _log_classification_fallback(self) -> None:
+        """Warn once per process that verdicts are defaults, not judgements.
+
+        Per-request logging would bury the signal; staying silent after boot is
+        what made the degradation invisible in the first place.
+        """
+        if getattr(self, "_classification_fallback_logged", False):
+            return
+        self._classification_fallback_logged = True
+        logger.warning(
+            "Classification unavailable (%s: %s) — every request is being defaulted to COMPLEX, see #13807",
+            self.classification_state.value,
+            self.classification_detail,
+        )
 
     async def plan_workflow_steps(self, user_request: str, complexity: TaskComplexity) -> List[WorkflowStep]:
         """Plan WorkflowStep objects based on complexity.
@@ -883,7 +957,12 @@ class Orchestrator(_DeprecatedRequestMixin):
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
                 "max_parallel_tasks": self.config.max_parallel_tasks,
-                "classification_enabled": self.classification_agent is not None,
+                "classification_enabled": self.classification_enabled,
+                # #13807: the boolean alone said "off" without saying why, so a
+                # missing provider was indistinguishable from a deliberate
+                # disable once the boot log had scrolled away.
+                "classification_state": self.classification_state.value,
+                "classification_detail": self.classification_detail,
                 "knowledge_extraction_enabled": self.knowledge_extraction_enabled,
                 "auto_doc_enabled": self.auto_doc_enabled,
             },
