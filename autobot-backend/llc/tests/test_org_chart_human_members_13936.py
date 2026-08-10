@@ -26,12 +26,13 @@ import pytest
 from llc.models.enums import MembershipRole, WorkItemStatus
 from llc.models.membership import LLCCompanyMembership
 from llc.tests.test_org_chart_enrichment import (  # noqa: F401 — pytest fixtures
+    _seed_org_node,
+    _seed_work_item,
     app,
     client,
     engine,
     session_factory,
 )
-from llc.tests.test_org_chart_enrichment import _seed_org_node, _seed_work_item
 from user_management.models.user import User
 
 

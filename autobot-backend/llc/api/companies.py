@@ -957,11 +957,7 @@ async def get_org_chart(
     from user_management.models.user import User  # noqa: PLC0415
 
     member_rows = (
-        (
-            await session.execute(
-                select(LLCCompanyMembership).where(LLCCompanyMembership.company_id == company_id)
-            )
-        )
+        (await session.execute(select(LLCCompanyMembership).where(LLCCompanyMembership.company_id == company_id)))
         .scalars()
         .all()
     )
@@ -972,9 +968,7 @@ async def get_org_chart(
     if member_rows:
         name_rows = (
             await session.execute(
-                select(User.id, User.display_name, User.username).where(
-                    User.id.in_([m.user_id for m in member_rows])
-                )
+                select(User.id, User.display_name, User.username).where(User.id.in_([m.user_id for m in member_rows]))
             )
         ).all()
         member_names = {uid: (dn or un) for uid, dn, un in name_rows}
