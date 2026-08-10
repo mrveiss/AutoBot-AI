@@ -82,13 +82,33 @@ def _session():
 
 
 class TestL2RendersInPrompt:
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#13686: L2 reads description/content; entity documents carry observations. "
+        "This AC was green against an invented fixture shape (#13866).",
+    )
     @pytest.mark.asyncio
     async def test_known_entity_renders_related_context_block(self):
-        """AC #13686: flag on + a known entity -> '## Related Context' in the prompt."""
-        graph = MagicMock()
-        graph.search_entities = AsyncMock(
-            return_value=[{"name": "Redis", "description": "in-memory store used for sessions"}]
+        """AC #13686: flag on + a known entity -> '## Related Context' in the prompt.
+
+        The fixture is built by ``_build_entity_document`` — the function that
+        defines what an entity document is — rather than hand-written. The
+        hand-written version of this test passed while L2 rendered "" on every
+        real turn, because the fixture and the layer shared the same wrong
+        assumption about the schema.
+        """
+        from autobot_memory_graph.entities import EntityOperationsMixin
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-redis",
+            entity_type="service",
+            name="Redis",
+            observations=["in-memory store used for sessions"],
+            entity_metadata={},
         )
+        graph = MagicMock()
+        graph.search_entities = AsyncMock(return_value=[doc])
         chm = MagicMock()
         chm.memory_graph = graph
 
