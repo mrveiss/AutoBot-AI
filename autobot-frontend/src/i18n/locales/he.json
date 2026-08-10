@@ -3674,7 +3674,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "פותח את האוטומציה של החברה שלך…",
+      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה."
     },
     "runner": {
       "completed": "Completed",
@@ -8205,7 +8207,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "מצב תצוגה",
+      "viewTree": "עץ",
+      "viewCanvas": "קנבס",
+      "canvasTabAll": "כל היחידות",
+      "canvasUnit": "יחידת {name}",
+      "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים."
     },
     "goals": {
       "title": "Goal Tree",

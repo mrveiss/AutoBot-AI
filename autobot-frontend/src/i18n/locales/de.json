@@ -4239,7 +4239,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8205,7 +8207,13 @@
       "pauseAgent": "Agent pausieren",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Ansicht",
+      "viewTree": "Baum",
+      "viewCanvas": "Leinwand",
+      "canvasTabAll": "Alle Einheiten",
+      "canvasUnit": "Einheit {name}",
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
     },
     "goals": {
       "title": "Zielbaum",

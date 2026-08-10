@@ -3674,7 +3674,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "آپ کی کمپنی کی آٹومیشن کھولی جا رہی ہے…",
+      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔"
     },
     "runner": {
       "completed": "Completed",
@@ -8205,7 +8207,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "منظر کا انداز",
+      "viewTree": "درخت",
+      "viewCanvas": "کینوس",
+      "canvasTabAll": "تمام یونٹس",
+      "canvasUnit": "{name} یونٹ",
+      "canvasHint": "پین کرنے کے لیے Shift دبا کر گھسیٹیں، زوم کے لیے اسکرول کریں، تفصیلات کے لیے نوڈ پر کلک کریں۔"
     },
     "goals": {
       "title": "Goal Tree",

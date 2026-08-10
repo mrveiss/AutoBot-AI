@@ -4239,7 +4239,9 @@
       "liveDashboardAriaLabel": "View live workflow execution dashboard",
       "sectionTitleLiveDashboard": "Live Execution Dashboard",
       "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Opening automation for your company…",
+      "companyRequired": "Select a company to open automation."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8193,7 +8195,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "View mode",
+      "viewTree": "Tree",
+      "viewCanvas": "Canvas",
+      "canvasTabAll": "All units",
+      "canvasUnit": "{name} unit",
+      "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details."
     },
     "goals": {
       "title": "Goal Tree",
