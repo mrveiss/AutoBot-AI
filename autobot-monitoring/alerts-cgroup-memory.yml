@@ -1,0 +1,114 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Issue #13765: memory-throttling alerts.
+#
+# On 2026-08-03 autobot-backend sat pinned at an 8 GiB MemoryHigh watermark with
+# memory.events high at 21,052, the process in STAT=D, and /health timing out —
+# while systemctl reported `active` throughout. MemoryHigh does not kill; it
+# applies escalating reclaim pressure, so the service never crashed, never
+# restarted and never entered `failed`. Recovery needed an explicit restart.
+#
+# Every conventional signal was clean, and that is the point of these rules:
+#
+#   systemctl is-active   -> active         (Restart never triggered)
+#   memory usage          -> ~8 GiB, steady (held AT the watermark, by design)
+#   /health               -> timing out     (looks like a slow dependency)
+#
+# Usage cannot distinguish throttled from healthy — a throttled cgroup is
+# *supposed* to sit at its watermark. The reclaim counter is the only signal
+# that separates them, so these alert on its RATE, never on a usage threshold.
+---
+
+groups:
+  - name: cgroup_memory_recording
+    interval: 1m
+    rules:
+      # Reclaim events per second, per unit. The headline number: nonzero means
+      # the kernel is actively throttling this cgroup right now.
+      - record: autobot_cgroup_memory_high_rate
+        expr: rate(autobot_cgroup_memory_events{event="high"}[5m])
+
+      # Headroom left before throttling starts. Excludes unlimited cgroups,
+      # which report -1 and would otherwise produce a nonsense ratio.
+      - record: autobot_cgroup_memory_headroom_ratio
+        expr: >
+          (autobot_cgroup_memory_high_bytes > 0)
+          and on(unit)
+          (
+            (autobot_cgroup_memory_high_bytes - autobot_cgroup_memory_current_bytes)
+            /
+            clamp_min(autobot_cgroup_memory_high_bytes, 1)
+          )
+
+  - name: cgroup_memory_alerts
+    rules:
+      # THE alert. Sustained reclaim means the service is being throttled — it
+      # will look healthy by every other measure for as long as it lasts.
+      - alert: ServiceMemoryThrottled
+        expr: autobot_cgroup_memory_high_rate > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.unit }} is being memory-throttled"
+          description: >-
+            memory.events high has been rising for 10 minutes, so the kernel is
+            applying reclaim pressure to {{ $labels.unit }}. The unit will report
+            `active`, its memory usage will look steady at the watermark, and its
+            health endpoint may still answer — none of those distinguish this
+            state from healthy. In #13765 this ran for hours with the process in
+            STAT=D and /health timing out, and needed an explicit restart.
+
+      # Escalation: hitting MemoryMax is allocation failure, not just pressure.
+      - alert: ServiceMemoryHardLimitHit
+        expr: rate(autobot_cgroup_memory_events{event="max"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.unit }} is hitting its MemoryMax hard limit"
+          description: >-
+            Allocations in {{ $labels.unit }} are failing against MemoryMax.
+            Unlike MemoryHigh throttling this can OOM-kill the process.
+
+      # Leading indicator: close enough to the watermark that throttling is next.
+      - alert: ServiceMemoryHeadroomLow
+        expr: autobot_cgroup_memory_headroom_ratio < 0.15
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.unit }} is within 15% of its throttling watermark"
+          description: >-
+            {{ $labels.unit }} is approaching MemoryHigh. This fires BEFORE
+            throttling starts; once it starts, the service stops making progress
+            while continuing to report healthy.
+
+      # The second half of #13765: limits nothing in the repo records.
+      #
+      # `systemctl set-property` writes to /etc/systemd/system.control/, which no
+      # unit template, role, or artifact mentions. Those limits survive deploys —
+      # nothing in the update path touches that tree — so they outlive any fix
+      # made in the role, and a fresh install of the same commit gets different
+      # limits. The 8 GiB cap that caused the incident had been in place for over
+      # two months and was found only by reading the filesystem.
+      #
+      # Warning, not critical: an out-of-band limit is not itself an outage, and
+      # somebody set it deliberately. It is a config-drift signal.
+      - alert: ServiceMemoryLimitsOutOfBand
+        expr: autobot_cgroup_memory_limits_out_of_band > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.unit }} runs under limits no repo artifact declares"
+          description: >-
+            {{ $labels.unit }} has a systemctl set-property drop-in under
+            /etc/systemd/system.control/. Its effective memory limits are not in
+            the unit template or any ansible role, so this host behaves
+            differently from a clean deployment of the same commit and no review
+            of the repo would reveal it. Move the intended values into the unit
+            template, then remove the drop-in — in that order, or the host loses
+            a protection someone added deliberately.

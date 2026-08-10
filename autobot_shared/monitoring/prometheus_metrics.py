@@ -34,6 +34,7 @@ from prometheus_client import (
 # Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
 # GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
 # Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
+from .metrics.cgroup_memory import CgroupMemoryCollector
 from .metrics import (
     ApiRequestsMetricsRecorder,
     ChatMetricsRecorder,
@@ -58,6 +59,22 @@ from .metrics import (
 
 # Issue #380: Module-level dicts for state value mapping (avoid repeated dict creation)
 _CIRCUIT_BREAKER_STATE_VALUES = {"closed": 0, "open": 1, "half_open": 2}
+
+
+# Units whose cgroup memory pressure is exported (#13765). autobot-backend is
+# the one that was throttled into STAT=D while reporting `active`; the others are
+# the long-running services on the same host, all of which can reach the same
+# state and none of which would show it any other way.
+THROTTLE_WATCHED_UNITS: list[str] = [
+    "autobot-backend.service",
+    "autobot-slm-backend.service",
+    "autobot-celery.service",
+    "autobot-celery-beat.service",
+    "autobot-tts-worker.service",
+    "autobot-npu-worker.service",
+    "autobot-ai-stack.service",
+    "autobot-chromadb.service",
+]
 
 
 class PrometheusMetricsManager:
@@ -134,6 +151,11 @@ class PrometheusMetricsManager:
         self._api_requests = ApiRequestsMetricsRecorder(self.registry)
         # Issue #12460: Initialize TTS synthesis throughput recorder
         self._tts = TTSMetricsRecorder(self.registry)
+        # Issue #13765: cgroup memory pressure. Registered as a COLLECTOR, not a
+        # recorder — there is no event to hook, the kernel updates these counters
+        # continuously, so it samples at scrape time and cannot go stale.
+        self._cgroup_memory = CgroupMemoryCollector(THROTTLE_WATCHED_UNITS)
+        self.registry.register(self._cgroup_memory)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
