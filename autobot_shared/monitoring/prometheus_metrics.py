@@ -34,8 +34,10 @@ from prometheus_client import (
 # Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
 # GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
 # Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
+# Issue #13765: Added CgroupMemoryCollector for cgroup memory-throttling pressure
 from .metrics import (
     ApiRequestsMetricsRecorder,
+    CgroupMemoryCollector,
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
@@ -134,6 +136,15 @@ class PrometheusMetricsManager:
         self._api_requests = ApiRequestsMetricsRecorder(self.registry)
         # Issue #12460: Initialize TTS synthesis throughput recorder
         self._tts = TTSMetricsRecorder(self.registry)
+        # Issue #13765: cgroup memory pressure. Registered as a COLLECTOR, not a
+        # recorder — there is no event to hook, the kernel updates these counters
+        # continuously, so it samples at scrape time and cannot go stale.
+        # Units are DISCOVERED, not listed: a static list could not cover
+        # instance units such as autobot-mcp-bridge@.service — the only unit in
+        # the tree with a repo-declared MemoryMax — and needed editing per new
+        # service (#13765 review).
+        self._cgroup_memory = CgroupMemoryCollector()
+        self.registry.register(self._cgroup_memory)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
