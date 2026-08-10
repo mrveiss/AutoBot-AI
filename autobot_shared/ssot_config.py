@@ -1990,7 +1990,9 @@ class MiscConfig(RedactedSettings):
     #   L0  renders a compile-time constant. AutoBotConfig has no `owner` and no
     #       `agent` attribute, so both getattr chains fall through to literals —
     #       every tenant's prompt gets the same hardcoded owner name (#13867).
-    #   L1  already rendered before the flip, via the legacy path. Zero delta.
+    #   L1  already rendered before the flip, via the legacy path — no new
+    #       content, and a small net cost (it now also routes through
+    #       _fit_l0_l1, which can only shrink it).
     #   L2  cannot render. Entity documents carry `observations`; the layer
     #       reads `description`/`content`, which no write path produces. It
     #       returns "" on every turn after up to 20 Redis round-trips (#13686,
@@ -1998,8 +2000,9 @@ class MiscConfig(RedactedSettings):
     #   L3  cannot render: knowledge_service is None since #13742.
     #   L4  renders, for sessions with a work-item binding only.
     # So the measured +14..45 tokens described mocks, not a deployment. The
-    # latency figure is also stale: #13729 added a Redis GET and two DB sessions
-    # to this path after the measurement was taken.
+    # latency figure is also stale: #13729 added two indexed DB queries on bound
+    # sessions after the measurement was taken. (The per-turn Redis GET for the
+    # binding is not new — it predates #13729, from #13704.)
     # Re-enabling needs #13686 and #13867 fixed and the A/B re-run against a
     # live backend — not another mock-based pass.
     # Evidence: docs/research/tiered-context-ab-13689.md (corrected in #13866)

@@ -27,23 +27,54 @@ from typing import Any, Dict, Set
 import pytest
 
 
-def _real_entity_keys() -> Set[str]:
-    """The keys an entity document actually carries, from the builder itself.
+def _real_entity_doc() -> Dict[str, Any]:
+    """A genuine entity document, from the builder itself.
 
     Derived, never hardcoded: a hardcoded copy would drift the same way the
     fixtures did.
+
+    ``self`` is None deliberately. ``_build_entity_document``
+    (``autobot_memory_graph/entities.py:68``) is annotated as a method but
+    touches no attribute. If someone adds one, this raises ``AttributeError:
+    'NoneType'`` naming the exact access — loud, and at the right line. A
+    ``MagicMock()`` would instead succeed silently and bake a mock into a field
+    value, which is the same class of lie these tests exist to catch.
     """
     from autobot_memory_graph.entities import EntityOperationsMixin
 
-    doc: Dict[str, Any] = EntityOperationsMixin._build_entity_document(
-        None,  # unbound: the builder is pure and does not touch self
+    return EntityOperationsMixin._build_entity_document(
+        None,
         entity_id="e1",
         entity_type="service",
         name="Redis",
         observations=["an observation"],
         entity_metadata={},
     )
-    return set(doc.keys())
+
+
+def _real_entity_keys() -> Set[str]:
+    return set(_real_entity_doc().keys())
+
+
+def _assert_is_entity_document(fixture: Dict[str, Any]) -> None:
+    """Fail unless *fixture* is shaped like something the graph would store.
+
+    Whole-document equality, not a subset: a partial fixture passes a subset
+    check and still renders nothing, which reads as a layer bug rather than a
+    fixture bug. Types are compared field-by-field against the real document
+    because ``observations`` being a str instead of a list is silent — a later
+    ``join`` over it yields characters.
+    """
+    real = _real_entity_doc()
+
+    assert set(fixture) == set(real), (
+        f"not an entity document — missing {sorted(set(real) - set(fixture))}, "
+        f"invented {sorted(set(fixture) - set(real))}"
+    )
+    for key, value in fixture.items():
+        assert isinstance(value, type(real[key])), f"{key}: expected {type(real[key]).__name__}, got {type(value).__name__}"
+    assert fixture["observations"], "an entity with no observations renders nothing"
+    assert fixture["name"], "L2 requires a name to render a line"
 
 
 class TestTheBuilderDefinesTheShape:
@@ -68,44 +99,53 @@ class TestFixturesMatchProduction:
         a layer that cannot render was measured as rendering."""
         from scripts.tiered_context_ab import ENTITY_FACTS
 
-        real = _real_entity_keys()
-
         assert ENTITY_FACTS, "the harness needs at least one entity to exercise L2"
         for fact in ENTITY_FACTS:
-            unknown = set(fact) - real
-            assert not unknown, f"fixture invents keys production never writes: {sorted(unknown)}"
-            assert "observations" in fact, "a real entity carries its text in observations"
+            _assert_is_entity_document(fact)
+
+    def test_a_subset_of_the_right_keys_is_not_enough(self):
+        """Guards the guard.
+
+        A key-subset check passes for `{"observations": "a string"}` and for
+        `{"observations": []}` — both of which render nothing, and the second of
+        which would send someone chasing a phantom L2 bug. Whole-document
+        equality plus per-field types is what actually constrains a fixture.
+        """
+        real = _real_entity_doc()
+
+        with pytest.raises(AssertionError):
+            _assert_is_entity_document({"observations": ["x"]})  # incomplete
+        with pytest.raises(AssertionError):
+            _assert_is_entity_document({**real, "observations": "not a list"})  # wrong type
 
 
 class TestTheLayerReadsAFieldThatExists:
     """Guards the fix itself, not just the fixtures.
 
-    #13686 is what teaches L2 to read ``observations``. Until it lands this test
-    records the defect rather than asserting it away — a passing test here must
-    mean the layer works, never merely that it was called.
+    ``strict=True`` is the point. A conditional ``pytest.xfail()`` would go
+    quietly green when #13686 lands and then silently re-arm — any later
+    regression that empties L2 would read as an expected failure, which is the
+    "green tick means nothing" property this whole change exists to remove.
+    Strict makes the fix XPASS, which *fails*, forcing the marker's removal in
+    the PR that does the fixing.
     """
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#13686: L2 reads description/content; entity documents carry observations",
+    )
     @pytest.mark.asyncio
     async def test_l2_renders_from_a_document_the_graph_would_store(self):
         from unittest.mock import AsyncMock
 
-        from autobot_memory_graph.entities import EntityOperationsMixin
         from chat_history.layers import Layer2OnDemand
 
-        doc = EntityOperationsMixin._build_entity_document(
-            None,
-            entity_id="e1",
-            entity_type="service",
-            name="Redis",
-            observations=["in-memory store backing session state"],
-            entity_metadata={},
-        )
+        doc = _real_entity_doc()
+        doc["observations"] = ["in-memory store backing session state"]
         graph = AsyncMock()
         graph.search_entities = AsyncMock(return_value=[doc])
 
         rendered = await Layer2OnDemand().render({"user_message": "How is Redis configured?", "memory_graph": graph})
 
-        if not rendered:
-            pytest.xfail("#13686: L2 reads description/content, which entity documents do not carry")
         assert "Redis" in rendered
         assert "in-memory store" in rendered

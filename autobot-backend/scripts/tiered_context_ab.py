@@ -138,7 +138,11 @@ async def _build_tiered(case: Dict[str, Any]) -> str:
                 model_name="default",
                 session_id="ab-session",
                 memory_graph=_memory_graph(),
-                knowledge_service=_knowledge_service(),
+                # #13866: None, mirroring the production call site
+                # (llm_handler.py) since #13742. Passing a mock here reported L3
+                # as rendering while production could not render it at all —
+                # the same divergence that made the ENTITY_FACTS result false.
+                knowledge_service=None,
                 goal_ancestry=case.get("goal_ancestry"),
             )
 
