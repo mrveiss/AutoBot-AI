@@ -40,7 +40,9 @@ class TestLayer0Identity:
         result = await layer.render({})
         assert "## Identity" in result
         assert "Role" in result
-        assert "Owner" in result
+        # #13867: the owner line is gone deliberately. This assertion used to
+        # require it, which made the defect look like the specification.
+        assert "Owner" not in result
 
     @pytest.mark.asyncio
     async def test_token_estimate_is_100(self):
@@ -513,3 +515,55 @@ class TestEntityFacts:
         from chat_history.layers import Layer2OnDemand
 
         assert await Layer2OnDemand().render({"user_message": "Redis?", "memory_graph": None}) == ""
+
+
+# ---------------------------------------------------------------------------
+# L0 identity must not name a person (#13867)
+#
+# The block used to end with `Owner: mrveiss`. Neither `owner` nor `agent` is an
+# attribute of AutoBotConfig, so the getattr chain guarding it always fell
+# through and the literal shipped on every deployment — into every tenant's
+# system prompt, on a platform whose standing rule is full multi-tenancy.
+# ---------------------------------------------------------------------------
+
+
+class TestLayer0CarriesNoPersonalName:
+    @pytest.mark.asyncio
+    async def test_render_names_no_individual(self):
+        from chat_history.layers import Layer0Identity
+
+        out = await Layer0Identity().render({})
+
+        assert "mrveiss" not in out
+        assert "Owner:" not in out
+        assert out == "## Identity\nRole: AutoBot AI assistant"
+
+    @pytest.mark.asyncio
+    async def test_render_is_independent_of_config(self):
+        """No config lookup means no chain that can silently fall through.
+
+        The previous implementation *looked* configurable. Rendering identically
+        with the config module unavailable is what proves it is not pretending.
+        """
+        import sys
+        from unittest.mock import patch
+
+        from chat_history.layers import Layer0Identity
+
+        with patch.dict(sys.modules, {"autobot_shared.ssot_config": None}):
+            out = await Layer0Identity().render({})
+
+        assert out == "## Identity\nRole: AutoBot AI assistant"
+
+    def test_the_config_attributes_it_used_to_read_do_not_exist(self):
+        """Pins why the old chain could never resolve, so the fix is not undone.
+
+        If AutoBotConfig ever grows a real `owner`, this fails and whoever adds
+        it has to decide deliberately whether identity should assert one — per
+        tenant — rather than reintroducing a global literal.
+        """
+        from autobot_shared.ssot_config import config as cfg
+
+        for attr in ("owner", "agent"):
+            with pytest.raises(AttributeError):
+                getattr(cfg, attr)
