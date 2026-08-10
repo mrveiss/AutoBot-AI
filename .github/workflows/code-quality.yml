@@ -73,6 +73,13 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
+      with:
+        # Required, not cosmetic (#13880). The default fetch-depth: 1 leaves the
+        # PR base commit out of the clone, so every changed-files step here
+        # diffed against a missing object, treated the fatal as "no changes",
+        # and went green having scanned nothing. Those steps now hard-fail on an
+        # unresolvable ref, so without full history the job would fail outright.
+        fetch-depth: 0
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v7
@@ -142,10 +149,25 @@ jobs:
           # Push context — diff against the previous commit on the branch
           base="${HEAD_SHA}^"
         fi
+        # A guard that cannot compute its scope must FAIL, not report "no
+        # changed files" (#13880) — see the same fix in
+        # pipeline-scripts/check-pre-commit-hook-pr.sh.
+        for _ref in "$base" "$HEAD_SHA"; do
+          git cat-file -e "${_ref}^{commit}" 2>/dev/null || {
+            echo "::error::'${_ref}' does not resolve — shallow clone cannot diff against the base. Refusing to report no-changes for an uncomputed scope."
+            exit 1
+          }
+        done
         # `git diff --name-only` may return non-existent paths (deleted
         # files); filter to existing .py files before passing to the hook.
-        files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py' \
-          | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+        if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py'); then
+          echo "::error::git diff failed for ${base}..${HEAD_SHA} — refusing to report clean."
+          exit 1
+        fi
+        # `|| true` normalises the while-loop's EOF status under `set -e`; it is
+        # scoped to the filter only, since git's status is checked above.
+        files=$(printf '%s\n' "$raw_files" \
+          | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
           || true)
         if [ -z "$files" ]; then
           echo "No changed Python files — skipping #5178 regression check."

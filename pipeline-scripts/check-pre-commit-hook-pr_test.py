@@ -117,6 +117,39 @@ class TestNoChangedFiles:
 
 
 @pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
+class TestUncomputableScopeFailsLoudly:
+    """#13880 — an unresolvable ref must FAIL, never read as 'no changed files'.
+
+    A shallow checkout leaves the PR base commit out of the clone. `git diff`
+    then fatals, and the old `|| true` turned that into an empty file list —
+    so four CI steps reported success having scanned nothing.
+    """
+
+    def test_missing_base_sha_exits_nonzero(self, tmp_path: Path) -> None:
+        _, head = _make_pr(tmp_path, {"src/worker.py": 'print("hi")\n'})
+        absent = "0" * 40  # well-formed but not in this repo, as in a shallow clone
+        result = _run_wrapper(tmp_path, "pre-commit-no-print-console", absent, head)
+        assert result.returncode != 0, result.stdout
+        assert "does not resolve" in result.stderr
+        # The dangerous outcome is the one that must NOT appear.
+        assert "No changed source files" not in result.stdout
+
+    def test_missing_head_sha_exits_nonzero(self, tmp_path: Path) -> None:
+        base, _ = _make_pr(tmp_path, {"src/worker.py": 'print("hi")\n'})
+        absent = "0" * 40
+        result = _run_wrapper(tmp_path, "pre-commit-no-print-console", base, absent)
+        assert result.returncode != 0
+        assert "No changed source files" not in result.stdout
+
+    def test_violation_is_still_caught_when_refs_resolve(self, tmp_path: Path) -> None:
+        """The guard must not become so strict it stops catching real violations."""
+        base, head = _make_pr(tmp_path, {"src/worker.py": 'print("hi")\n'})
+        result = _run_wrapper(tmp_path, "pre-commit-no-print-console", base, head)
+        assert result.returncode != 0
+        assert "does not resolve" not in result.stderr
+
+
+@pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
 class TestForwardsArgvToHooks:
     """End-to-end: wrapper passes argv to hooks correctly."""
 
