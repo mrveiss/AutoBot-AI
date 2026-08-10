@@ -23,7 +23,30 @@ from code_intelligence.code_evolution_miner import GitHistoryCrawler
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    """Run git, surfacing its stderr when it fails.
+
+    #13882: ``check=True`` with ``capture_output=True`` raises
+    ``CalledProcessError``, whose message carries only the exit status — the
+    captured stderr is on the exception but never printed. A CI failure here
+    therefore read as a bare "exit status 128" with no indication of the cause,
+    which is what made the intermittent failure undiagnosable from the log.
+    """
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
+            f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
+        )
+
+
+def _git_init(path: Path) -> None:
+    """git init with the same stderr-surfacing contract as _git (#13882)."""
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"git init failed in {path} with exit {result.returncode}\n"
+            f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
+        )
 
 
 def _commit(repo: Path, files: dict, message: str) -> None:
@@ -38,7 +61,7 @@ def _commit(repo: Path, files: dict, message: str) -> None:
 @pytest.fixture
 def repo(tmp_path):
     """A repo whose history contains one genuinely coupled pair and one busy file."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
 
@@ -99,7 +122,7 @@ def test_a_file_that_usually_changes_alone_is_not_coupled(tmp_path):
     reported pairs past the threshold — the exact noise the normalised formula
     exists to reject, arriving by a different route.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     for i in range(20):
@@ -114,7 +137,7 @@ def test_a_file_that_usually_changes_alone_is_not_coupled(tmp_path):
 
 def test_solo_commits_reach_the_change_counter(tmp_path):
     """Directly: the count is history, not the paired subset."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"a.py": "1\n"}, "solo")
@@ -209,7 +232,7 @@ def test_an_over_cap_commit_is_counted_but_never_paired(tmp_path):
     Truncating to the first N would invent pairs no author ever related — worse
     than declining to pair the commit and saying so.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"a.py": "1\n", "b.py": "1\n"}, "small")
@@ -224,7 +247,7 @@ def test_an_over_cap_commit_is_counted_but_never_paired(tmp_path):
 
 def test_vendored_paths_never_enter_the_analysis(tmp_path):
     """They co-change because a tool wrote them, not because they depend on each other."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     for i in range(5):
@@ -240,7 +263,7 @@ def test_vendored_paths_never_enter_the_analysis(tmp_path):
 
 
 def test_a_single_file_commit_contributes_no_pair(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"only.py": "1\n"}, "solo")
@@ -308,7 +331,7 @@ def test_non_ascii_paths_are_not_c_quoted(tmp_path):
     ``core.quotepath`` setting, so the same repository yields different identities
     for different people.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"lätïn.py": "1\n", "plain.py": "1\n"}, "unicode")
@@ -321,7 +344,7 @@ def test_non_ascii_paths_are_not_c_quoted(tmp_path):
 
 def test_a_quoted_vendored_path_cannot_slip_past_the_filter(tmp_path):
     """The filter splits on path segments, so a leading quote would defeat it."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     _commit(tmp_path, {"node_modules/pkg/ä.js": "1\n", "app.py": "1\n"}, "vendored unicode")
