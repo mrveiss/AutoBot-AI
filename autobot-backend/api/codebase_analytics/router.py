@@ -27,6 +27,7 @@ from .endpoints import (
     indexing,
     pattern_analysis,
 )
+from .endpoints import impact  # Issue #13506: impact analysis (REST/GUI path)
 from .endpoints import queue as queue_router
 from .endpoints import (
     report,
@@ -61,3 +62,4 @@ router.include_router(pattern_analysis.router)  # Issue #208: Code Pattern Detec
 router.include_router(ownership.router)  # Issue #248: Code Ownership and Expertise Map
 router.include_router(sources.router)  # Issue #1133: Code Source Registry
 router.include_router(queue_router.router)  # Issue #1133: Index job queue
+router.include_router(impact.router)  # Issue #13506: what transitively calls a node
