@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from llc.models.enums import AssigneeType, WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_service import (
     InvalidTransition,
@@ -190,6 +190,41 @@ class TestStatusTransitions:
         mock_session._db_result.scalar_one_or_none.return_value = item
         await service.transition_status(mock_session, str(item.id), WorkItemStatus.READY)
         assert item.version == 4
+
+
+class TestUpdateAssigneeType:
+    """GH#13937: ``assignee_type`` must be validated through ``AssigneeType`` —
+    an invalid discriminator is rejected rather than silently stored.
+    """
+
+    async def test_valid_assignee_type_is_stored(self, service, mock_session):
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+        result = await service.update(mock_session, str(item.id), assignee_type="agent")
+        assert result.assignee_type == AssigneeType.AGENT.value
+
+    async def test_invalid_assignee_type_is_rejected(self, service, mock_session):
+        """A typo'd/unknown discriminator must raise, not land in the DB."""
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+        with pytest.raises(ValueError, match="not a valid AssigneeType"):
+            await service.update(mock_session, str(item.id), assignee_type="bogus")
+        # The bad value must never have reached the model instance.
+        assert item.assignee_type is None
+
+    async def test_assignee_type_derived_from_assignee_user_id(self, service, mock_session):
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+        user_id = str(uuid.uuid4())
+        result = await service.update(mock_session, str(item.id), assignee_user_id=user_id)
+        assert result.assignee_type == AssigneeType.USER.value
+
+    async def test_assignee_type_derived_from_assignee_agent_id(self, service, mock_session):
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+        agent_id = str(uuid.uuid4())
+        result = await service.update(mock_session, str(item.id), assignee_agent_id=agent_id)
+        assert result.assignee_type == AssigneeType.AGENT.value
 
 
 class TestListByProject:

@@ -36,7 +36,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 
-from ..models.enums import ActivityEventType, CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import (
+    ActivityEventType,
+    AssigneeType,
+    CoWorkerType,
+    WorkItemPriority,
+    WorkItemStatus,
+    WorkItemType,
+)
 from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
@@ -357,14 +364,18 @@ class WorkItemService(LLCServiceBase):
         # party clears the other and fixes assignee_type.
         if fields.get("assignee_user_id"):
             item.assignee_agent_id = None
-            fields.setdefault("assignee_type", "user")
+            fields.setdefault("assignee_type", AssigneeType.USER.value)
         elif fields.get("assignee_agent_id"):
             item.assignee_user_id = None
-            fields.setdefault("assignee_type", "agent")
+            fields.setdefault("assignee_type", AssigneeType.AGENT.value)
         if "requires_approval_before" in fields:
             fields["requires_approval_before"] = _validated_approval_categories(
                 fields["requires_approval_before"], existing=item.requires_approval_before or []
             )
+        # GH#13937: reject an invalid discriminator instead of silently storing
+        # it — mirrors the CoWorkerType(co_worker_type) validation below.
+        if fields.get("assignee_type") is not None:
+            fields["assignee_type"] = AssigneeType(fields["assignee_type"]).value
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
@@ -475,7 +486,7 @@ class WorkItemService(LLCServiceBase):
         item.checkout_run_id = run_id or str(uuid.uuid4())
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
-        item.assignee_type = "agent"
+        item.assignee_type = AssigneeType.AGENT.value
         # GH#9532 — persist intent for audit trail.  Clearing prior intent when
         # work_intent is absent is deliberate: stale intent must not survive a
         # new checkout.
@@ -573,7 +584,7 @@ class WorkItemService(LLCServiceBase):
 
         item.assignee_user_id = uuid.UUID(user_id)
         item.assignee_agent_id = None
-        item.assignee_type = "user"
+        item.assignee_type = AssigneeType.USER.value
         item.checkout_run_id = None
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.version += 1
@@ -592,7 +603,7 @@ class WorkItemService(LLCServiceBase):
                     event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
                     entity_type="work_item",
                     entity_id=work_item_id,
-                    after={"assignee_user_id": user_id, "assignee_type": "user"},
+                    after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
                 )
             except Exception:
                 logger.warning("Activity log failed for claim_human %s", work_item_id)

@@ -47,6 +47,7 @@ from user_management.services import TenantContext
 from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
+    AssigneeType,
     WorkItemPriority,
     WorkItemRelationType,
     WorkItemStatus,
@@ -260,24 +261,24 @@ class RelationDelete(BaseModel):
 
 async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info resolved from user_management.users (GH#8476)."""
-    if item.assignee_type == "user" and item.assignee_user_id:
+    if item.assignee_type == AssigneeType.USER.value and item.assignee_user_id:
         row = (
             await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
         ).one_or_none()
         name = (row.display_name or row.username) if row else None
         return {
-            "type": "user",
+            "type": AssigneeType.USER.value,
             "id": str(item.assignee_user_id),
             "display_name": name,
             "name": name,
         }
-    if item.assignee_type == "agent" and item.assignee_agent_id:
+    if item.assignee_type == AssigneeType.AGENT.value and item.assignee_agent_id:
         row = (
             await session.execute(select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id))
         ).one_or_none()
         name = row.name if row else None
         return {
-            "type": "agent",
+            "type": AssigneeType.AGENT.value,
             "id": str(item.assignee_agent_id),
             "display_name": name,
             "name": name,

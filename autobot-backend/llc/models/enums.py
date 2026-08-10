@@ -207,6 +207,22 @@ class CoWorkerType(str, Enum):
     HUMAN = "human"
 
 
+class AssigneeType(str, Enum):
+    """Discriminator for the primary assignee of a work item (GH#13937).
+
+    Selects between ``assignee_agent_id`` and ``assignee_user_id`` on
+    ``LLCWorkItem``. Values match the string literals already persisted by
+    existing rows ("user" / "agent") — additive only, no data migration.
+    The column itself stays ``String(16)`` (same pattern as ``co_worker_type``
+    / ``CoWorkerType`` above); every write site must construct/compare through
+    this enum instead of a bare string literal so an invalid value raises at
+    write time rather than being silently stored.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 
