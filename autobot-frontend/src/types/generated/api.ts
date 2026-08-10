@@ -84184,6 +84184,10 @@ export interface components {
             capabilities?: {
                 [key: string]: unknown;
             };
+            /** Classification */
+            classification?: {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
