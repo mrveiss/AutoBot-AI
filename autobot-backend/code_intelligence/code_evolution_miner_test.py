@@ -288,7 +288,11 @@ class TestCodeEvolutionMiner:
         with tempfile.TemporaryDirectory() as tmpdir:
             miner = CodeEvolutionMiner(tmpdir)
 
-            assert miner.repo_path == tmpdir
+            # #13832: repo_path is a Path — `self.repo_path / item` is a Path
+            # operation, and holding a str made every commit fail once history
+            # became real. The sibling assertion at test_init_without_git already
+            # expected Path(tmpdir); these two disagreed.
+            assert miner.repo_path == Path(tmpdir)
             assert miner.crawler is not None
             assert miner.tracker is not None
             assert miner.refactoring_detector is not None
