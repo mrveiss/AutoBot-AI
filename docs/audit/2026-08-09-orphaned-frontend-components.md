@@ -37,6 +37,16 @@ whatever issue the source cites; for this row that is provenance of a repair, no
 **Transcriber (4 components, one design.)** `AiAnalysisPanel`, `ExportMenu`, `KbPushButton` and `SpeakerLabel` all trace to
 `docs/superpowers/specs/2026-05-30-transcriber-module-design.md`. A whole feature area shipped its parts and never mounted them.
 
+**Device pairing — RESOLVED (#13869).** Consolidated onto one flow: `usePairingQR` owns the challenge,
+`PairDeviceDialog` is the only pairing UI, and `DeviceManagementPanel` (the sole mounted device surface) opens it.
+`DevicePairingSettingsPanel.vue` was retired — every capability it held now lives in one of those three. The audit
+below records the state that prompted the fix; the four transcriber components remain unresolved.
+
+Investigating it turned up a live defect the orphan count did not predict: **pairing was impossible through the GUI.**
+The mounted panel's button opened a static instruction list ending in "scan the QR code shown on your desktop" while
+nothing on the desktop rendered a QR. The two copies had also drifted — the settings panel encoded the bare challenge
+token, the composable the `autobot://pair?token=` deep link the design specifies. At most one could ever have worked.
+
 **Device pairing (2 components, built twice.)** `PairDeviceDialog.vue` (+ `usePairingQR.ts`) and
 `settings/DevicePairingSettingsPanel.vue` are **independent implementations of the same feature**, and neither is reachable.
 The panel does not use the dialog — it re-implements the QR flow, calling `GET /api/devices/pair-qr` and rendering with its own

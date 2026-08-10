@@ -7816,7 +7816,8 @@
       "generating": "QR کوڈ بنایا جا رہا ہے...",
       "expired": "ختم شدہ",
       "refresh": "نیا کوڈ حاصل کریں",
-      "retry": "دوبارہ کوشش کریں"
+      "retry": "دوبارہ کوشش کریں",
+      "manualCode": "اسکین نہیں کر سکتے؟ یہ کوڈ دستی طور پر درج کریں:"
     }
   },
   "llmKeys": {
@@ -8430,15 +8431,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {
