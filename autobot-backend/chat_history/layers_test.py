@@ -165,10 +165,6 @@ class TestLayer2OnDemand:
         result = await layer.render({"user_message": "Tell me about AutoBot", "memory_graph": None})
         assert result == ""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#13686: L2 reads description/content; entity documents carry observations (#13866)",
-    )
     @pytest.mark.asyncio
     async def test_render_with_memory_graph_returns_context(self):
         from autobot_memory_graph.entities import EntityOperationsMixin
@@ -329,10 +325,6 @@ class TestTieredContextBuilderFeatureFlag:
         finally:
             layers_mod.TIERED_CONTEXT_ENABLED = original
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#13686: L2 reads description/content; entity documents carry observations (#13866)",
-    )
     @pytest.mark.asyncio
     async def test_l2_fires_when_entity_in_message_and_flag_on(self):
         """L2 fires when entity detected and flag is on."""
@@ -425,3 +417,99 @@ class TestTieredContextBuilderFeatureFlag:
                 assert "SHOULD NOT APPEAR" not in result
         finally:
             layers_mod.TIERED_CONTEXT_ENABLED = original
+
+
+# ---------------------------------------------------------------------------
+# L2 entity fact extraction (#13686)
+#
+# The layer used to read `description` then `content`. The canonical document
+# from EntityOperationsMixin._build_entity_document carries neither — so L2
+# found entities, produced an empty string for each, and rendered nothing on
+# every real turn. Reconnecting the graph (#13696) fixed the plumbing; this is
+# the half that made the layer still silent.
+# ---------------------------------------------------------------------------
+
+
+class TestEntityFacts:
+    def test_reads_observations_from_a_real_entity_document(self):
+        """Built by the function that defines the schema, not hand-written."""
+        from autobot_memory_graph.entities import EntityOperationsMixin
+        from chat_history.layers import _entity_facts
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["in-memory store", "used for sessions"],
+            entity_metadata={},
+        )
+
+        assert _entity_facts(doc) == "in-memory store; used for sessions"
+
+    def test_the_old_fields_are_absent_from_a_real_document(self):
+        """Pins why the previous read could never match."""
+        from autobot_memory_graph.entities import EntityOperationsMixin
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["anything"],
+            entity_metadata={},
+        )
+
+        assert "description" not in doc
+        assert "content" not in doc
+
+    def test_caps_the_number_of_observations(self):
+        from chat_history.layers import _entity_facts
+
+        facts = _entity_facts({"observations": [f"obs{i}" for i in range(10)]})
+
+        assert facts == "obs0; obs1; obs2"
+
+    def test_falls_back_to_description_then_content(self):
+        """Other callers may hand L2 a different mapping; do not regress them."""
+        from chat_history.layers import _entity_facts
+
+        assert _entity_facts({"description": "a description"}) == "a description"
+        assert _entity_facts({"content": "some content"}) == "some content"
+        assert _entity_facts({"observations": [], "content": "fallback"}) == "fallback"
+
+    def test_empty_entity_yields_nothing(self):
+        from chat_history.layers import _entity_facts
+
+        assert _entity_facts({}) == ""
+        assert _entity_facts({"observations": ["  ", ""]}) == ""
+
+    @pytest.mark.asyncio
+    async def test_layer2_renders_a_block_for_a_real_entity(self):
+        """End of the chain: a real document reaches the rendered prompt block."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from autobot_memory_graph.entities import EntityOperationsMixin
+        from chat_history.layers import Layer2OnDemand
+
+        doc = EntityOperationsMixin._build_entity_document(
+            None,
+            entity_id="ent-1",
+            entity_type="service",
+            name="Redis",
+            observations=["in-memory store used for sessions"],
+            entity_metadata={},
+        )
+        graph = MagicMock()
+        graph.search_entities = AsyncMock(return_value=[doc])
+
+        out = await Layer2OnDemand().render({"user_message": "How does Redis work?", "memory_graph": graph})
+
+        assert out.startswith("## Related Context")
+        assert "**Redis**: in-memory store used for sessions" in out
+
+    @pytest.mark.asyncio
+    async def test_layer2_stays_silent_without_a_graph(self):
+        from chat_history.layers import Layer2OnDemand
+
+        assert await Layer2OnDemand().render({"user_message": "Redis?", "memory_graph": None}) == ""
