@@ -131,10 +131,6 @@ class TestTheLayerReadsAFieldThatExists:
     the PR that does the fixing.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#13686: L2 reads description/content; entity documents carry observations",
-    )
     @pytest.mark.asyncio
     async def test_l2_renders_from_a_document_the_graph_would_store(self):
         from unittest.mock import AsyncMock
