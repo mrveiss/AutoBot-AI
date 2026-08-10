@@ -45,11 +45,28 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def run(repo: Path, *args: str) -> subprocess.CompletedProcess:
+def run(repo: Path, *args: str, merged_pr: str | None = None) -> subprocess.CompletedProcess:
+    """Run the audit.
+
+    ``merged_pr`` installs a ``gh`` stub reporting that PR number as merged.
+    Without it the real ``gh`` finds no GitHub remote for a tmp repo, so every
+    landed case exits early through "gh could not be queried — keep" and the
+    ENTIRE delete path — the merged-PR gate, the dirty gate, the ignored-file
+    listing and the instruction itself — is unreachable by any test. That gap
+    is how the tag-shadowing and ignored-file fixes originally shipped with no
+    coverage at all.
+    """
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(repo)}
+    if merged_pr is not None:
+        bindir = repo / ".stub-bin"
+        bindir.mkdir(exist_ok=True)
+        stub = bindir / "gh"
+        stub.write_text(f'#!/bin/sh\necho "{merged_pr}"\n', encoding="utf-8")
+        stub.chmod(0o755)
+        env["PATH"] = f"{bindir}:{env['PATH']}"
     return subprocess.run(
         ["bash", str(SCRIPT), "--leftovers-only", *args],
-        cwd=repo, capture_output=True, text=True,
-        env={"PATH": "/usr/bin:/bin", "HOME": str(repo)},
+        cwd=repo, capture_output=True, text=True, env=env,
     )
 
 
@@ -233,6 +250,108 @@ class TestNeverDeletesUnlandedWork:
         res = run(repo, "--base", "base")
         assert "has landed" not in res.stdout, res.stdout
         assert res.returncode == 0
+
+
+@pytest.mark.skipif(not SCRIPT.exists(), reason="verify-done.sh not present")
+class TestDeletePath:
+    """The delete instruction itself — previously unreachable by any test.
+
+    Every other test asserts "remove it" is ABSENT. Without a positive control
+    a regression that stopped the script deleting anything would pass the whole
+    suite while quietly doing nothing.
+    """
+
+    def _landed(self, repo: Path, name: str) -> Path:
+        wt = repo / ".worktrees" / name
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", name, "base")
+        _commit(wt, f"{name}.txt", "work\n", f"fix(x): work in {name} (#30)")
+        sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
+        _git(repo, "cherry-pick", "--no-commit", sha)
+        _git(repo, "commit", "-q", "-m", f"fix(x): work in {name} (#30) (squashed)")
+        return wt
+
+    def test_genuinely_landed_worktree_is_marked_for_removal(self, repo: Path) -> None:
+        """Positive control: the script must still delete when it should."""
+        self._landed(repo, "wt-gone")
+        res = run(repo, "--base", "base", merged_pr="4242")
+        assert "remove it" in res.stdout, res.stdout
+        assert "PR #4242 merged" in res.stdout
+        assert res.returncode != 0
+
+    def test_ignored_files_are_named_before_the_instruction(self, repo: Path) -> None:
+        """R4c: `git worktree remove` deletes ignored files silently."""
+        # .gitignore must exist on base BEFORE the worktree branches from it,
+        # or the worktree's checkout lacks it and `.env` reads as untracked —
+        # which routes to the dirty-tree branch instead of the ignored one.
+        (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+        _git(repo, "add", ".gitignore")
+        _git(repo, "commit", "-q", "-m", "chore: ignore .env (#31)")
+        wt = self._landed(repo, "wt-secrets")
+        (wt / ".env").write_text("TOKEN=xyz\n", encoding="utf-8")
+        res = run(repo, "--base", "base", merged_pr="4243")
+        assert "IGNORED file" in res.stdout, res.stdout
+        assert ".env" in res.stdout
+
+    def test_whitespace_only_fix_is_not_landed_by_patch_id_collision(self, repo: Path) -> None:
+        """`git patch-id` STRIPS whitespace, so unrelated whitespace edits collide.
+
+        A dedent that changes behaviour in Python hashes identically to an
+        unrelated retab of the same line, and `git cherry` marks it landed
+        while the base still holds the bug.
+        """
+        _commit(repo, "loop.py", "def f(items):\n    acc = 0\n  return acc\n", "chore: seed (#40)")
+        wt = repo / ".worktrees" / "wt-ws"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-ws", "base")
+        (wt / "loop.py").write_text("def f(items):\n    acc = 0\n    return acc\n", encoding="utf-8")
+        _git(wt, "commit", "-q", "-am", "fix(loop): dedent so it returns after the loop (#40)")
+        # Base independently retabs the same line — different content, same patch-id.
+        (repo / "loop.py").write_text("def f(items):\n    acc = 0\n\treturn acc\n", encoding="utf-8")
+        _git(repo, "commit", "-q", "-am", "style: retab (#41)")
+        res = run(repo, "--base", "base", merged_pr="4245")
+        assert "remove it" not in res.stdout, (
+            "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n"
+            + res.stdout
+        )
+
+    def test_reverted_work_is_not_still_landed(self, repo: Path) -> None:
+        """`git cherry` answers "was it ever applied", not "is it in base now"."""
+        wt = self._landed(repo, "wt-reverted")
+        _git(repo, "rm", "-q", "wt-reverted.txt")
+        _git(repo, "commit", "-q", "-m", "revert: back out #30 (#42)")
+        res = run(repo, "--base", "base", merged_pr="4246")
+        assert "remove it" not in res.stdout, (
+            "the work was reverted out of base; the branch is its only copy\n" + res.stdout
+        )
+        assert (wt / "wt-reverted.txt").exists()
+
+    def test_locked_worktree_removal_names_the_unlock_step(self, repo: Path) -> None:
+        """`git worktree remove` REFUSES on a locked worktree — 15 of 19 are locked.
+
+        Without saying so, the shortest path for the operator is `remove -f -f`,
+        which the worktree rules forbid and which destroys ignored files.
+        """
+        wt = self._landed(repo, "wt-locked")
+        _git(repo, "worktree", "lock", str(wt), "--reason", "in use")
+        res = run(repo, "--base", "base", merged_pr="4247")
+        assert "remove it" in res.stdout, res.stdout
+        assert "LOCKED" in res.stdout and "unlock" in res.stdout, res.stdout
+        _git(repo, "worktree", "unlock", str(wt))
+
+    def test_tag_shadowing_a_branch_does_not_authorize_deletion(self, repo: Path) -> None:
+        """R4b: refs/tags resolves before refs/heads, and the warning is discarded."""
+        wt = repo / ".worktrees" / "issue-7"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-7", "base")
+        _commit(wt, "landed.txt", "landed\n", "fix(a): landed (#7)")
+        sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
+        _git(repo, "tag", "issue-7", sha)          # tag shadows the branch name
+        _git(repo, "cherry-pick", "--no-commit", sha)
+        _git(repo, "commit", "-q", "-m", "fix(a): landed (#7) (squashed)")
+        _commit(wt, "unlanded.txt", "NOT landed\n", "fix(b): still open (#7)")
+        res = run(repo, "--base", "base", merged_pr="4244")
+        assert "remove it" not in res.stdout, (
+            "the tag points at the old tip; the BRANCH holds unlanded work\n" + res.stdout
+        )
+        assert (wt / "unlanded.txt").exists()
 
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="verify-done.sh not present")

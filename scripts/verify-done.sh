@@ -80,7 +80,7 @@ branch_state() {
   # line below and cannot be judged. A live branch here carries 5 such files.
   # Unjudgeable is not landed: report "cannot verify" rather than authorize a
   # deletion of work no signal has looked at.
-  local m mfiles mlist
+  local m mfiles mlist unlock_hint
   mlist=$(git -C "$dir" rev-list --merges "${BASE}..${br}" 2>/dev/null) || return 3
   for m in $mlist; do
     mfiles=$(git -C "$dir" diff-tree -c -r --no-commit-id --name-only "$m" 2>/dev/null) || return 3
@@ -123,6 +123,31 @@ branch_state() {
   # Only empty commits ahead of base — a claimed but unworked worktree.
   [ "$substantive" -eq 0 ] && return 2
   [ "$unlanded" -gt 0 ] && return 1
+
+  # PATCH-ID EQUIVALENCE IS NOT CONTENT EQUIVALENCE (#13879). Two failures:
+  #
+  #   * `git patch-id` STRIPS WHITESPACE, so a whitespace-only fix — semantic
+  #     in Python, YAML, Makefiles — collides with any upstream commit whose
+  #     stripped diff matches. Verified: a 4-space dedent and an unrelated
+  #     retab of the same line share patch-id 04e3cb9a…, and `git cherry`
+  #     calls the branch commit landed while base still holds the bug.
+  #   * `git cherry` answers "was this patch ever applied", not "is it in the
+  #     base NOW". Work that merged and was later reverted reads as landed
+  #     forever — and the merged-PR signal is true then too, so the two
+  #     signals are not independent for that case.
+  #
+  # So confirm the content actually is in the base tree before saying landed.
+  local -a touched=()
+  local rl
+  rl=$(git -C "$dir" rev-list "${BASE}..${br}" 2>/dev/null) || return 3
+  if [ -n "$rl" ]; then
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] && touched+=("$f")
+    done < <(git -C "$dir" diff-tree -r --root --no-commit-id --name-only -z $rl 2>/dev/null)
+  fi
+  if [ "${#touched[@]}" -gt 0 ]; then
+    git -C "$dir" diff --quiet "$BASE" "$br" -- "${touched[@]}" 2>/dev/null || return 1
+  fi
   return 0
 }
 
@@ -236,12 +261,22 @@ else
           ok "'$wb' has landed but holds uncommitted work — keep until it is committed or discarded"
         elif merged_pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
           if [ -n "$merged_pr" ]; then
+            # `git worktree remove` REFUSES on a locked worktree, and the
+            # worktree rules mandate locking on creation — 15 of 19 here are
+            # locked. Without saying so, the operator's shortest path is
+            # `remove -f -f`, which both violates the never-force rule and
+            # deletes exactly the ignored files the next line warns about.
+            unlock_hint=""
+            grep -qxF "worktree $dir" <<< "$WT_LIST" && \
+              awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
+                <<< "$WT_LIST" | grep -q . && \
+              unlock_hint=" It is LOCKED — 'git worktree unlock $dir' first; never -f -f."
             if [ "${wt_ignored:-0}" -gt 0 ]; then
-              fail "worktree '$wb' has landed (PR #$merged_pr merged) at $dir — remove it, but it holds ${wt_ignored} IGNORED file(s) that 'git worktree remove' deletes silently; inspect them first:"
+              fail "worktree '$wb' has landed (PR #$merged_pr merged) at $dir — remove it, but it holds ${wt_ignored} IGNORED file(s) that 'git worktree remove' deletes silently; inspect them first:${unlock_hint}"
               git -C "$dir" status --porcelain --ignored=matching 2>/dev/null \
                 | grep '^!!' | head -5 | sed 's/^!! /            /'
             else
-              fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it"
+              fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it.${unlock_hint}"
             fi
             STRANDED=$((STRANDED+1))
           else
