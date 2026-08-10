@@ -26,8 +26,6 @@ behaviour the source reads as.
 import ast
 import pathlib
 
-import pytest
-
 from autobot_types import TaskComplexity
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -86,9 +84,7 @@ def _dicts_keyed_on_complexity(tree: ast.AST):
         names = [
             k.attr
             for k in node.keys
-            if isinstance(k, ast.Attribute)
-            and isinstance(k.value, ast.Name)
-            and k.value.id == "TaskComplexity"
+            if isinstance(k, ast.Attribute) and isinstance(k.value, ast.Name) and k.value.id == "TaskComplexity"
         ]
         if names:
             yield node, names
