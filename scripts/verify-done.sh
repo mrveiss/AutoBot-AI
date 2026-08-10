@@ -62,6 +62,8 @@ echo "verify-done: branch '${BRANCH:-<none>}' against '$BASE'"
 
 # ── landed? ──────────────────────────────────────────────────────────────────
 # Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
+#          4 patch-ids say landed, but the base has since changed the same
+#            files, so content equality cannot confirm it — keep, verify by hand
 branch_state() {
   local dir="$1" br="refs/heads/$2" ahead cherry rc line mark sha substantive=0 unlanded=0 wt_dirty
   ahead=$(git -C "$dir" rev-list --count "${BASE}..${br}" 2>/dev/null) || return 3
@@ -145,8 +147,11 @@ branch_state() {
       [ -n "$f" ] && touched+=("$f")
     done < <(git -C "$dir" diff-tree -r --root --no-commit-id --name-only -z $rl 2>/dev/null)
   fi
+  # Verdict stays conservative (never delete), but the REASON must be accurate:
+  # "has unlanded commits" would be a false statement about a branch whose work
+  # landed and whose files the base has simply moved on in. Distinct code 4.
   if [ "${#touched[@]}" -gt 0 ]; then
-    git -C "$dir" diff --quiet "$BASE" "$br" -- "${touched[@]}" 2>/dev/null || return 1
+    git -C "$dir" diff --quiet "$BASE" "$br" -- "${touched[@]}" 2>/dev/null || return 4
   fi
   return 0
 }
@@ -202,6 +207,7 @@ if [ "$LEFTOVERS_ONLY" -eq 0 ]; then
     case "$(branch_state . "$BRANCH"; echo $?)" in
       0) ok "every commit is present in $BASE" ;;
       1) fail "PR is merged but commits are still missing from $BASE — fetch, or the merge did not include them" ;;
+      4) info "commits match by patch-id; the base has since changed the same files, so exact content equality cannot be confirmed" ;;
       2) info "no commits ahead of $BASE (already fast-forwarded or squashed in)" ;;
       *) fail "cannot compare '$BRANCH' against '$BASE' — refusing to call it done" ;;
     esac
@@ -289,6 +295,7 @@ else
         fi ;;
       1) ok "'$wb' has unlanded commits — keep" ;;
       2) ok "'$wb' has no commits yet (or only empty claim commits) — keep" ;;
+      4) ok "'$wb' landed by patch-id, but the base has since changed the same files so content equality cannot confirm it — keep; verify by hand before removing" ;;
       *) fail "'$wb' cannot be verified against $BASE — investigate, do not delete" ;;
     esac
   done < <(printf '%s\n' "$WT_LIST" | sed -n 's/^worktree //p')
