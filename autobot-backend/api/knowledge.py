@@ -61,7 +61,7 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -196,7 +196,7 @@ def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
         "content": fact.get("content", ""),
         "title": metadata.get("title", "Untitled"),
         "source": metadata.get("source", "unknown"),
-        "category": metadata.get("category", "general"),
+        "category": metadata.get("category", CategoryDefaults.GENERAL),
         "type": metadata.get("type", "document"),
         "created_at": metadata.get("created_at"),
         "metadata": metadata,
@@ -555,7 +555,7 @@ def _extract_add_text_fields(request: dict) -> tuple:
     text = request.get("text", "")
     title = request.get("title", "")
     source = request.get("source", "manual")
-    category = request.get("category", "general")
+    category = request.get("category", CategoryDefaults.GENERAL)
     # Issue #685: hierarchical access fields
     access_level = request.get("access_level", "user")
     visibility = request.get("visibility", "private")
@@ -980,8 +980,14 @@ async def _fetch_and_extract_url(url: str, fallback_title: str) -> "tuple[str, s
 
     from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
 
+    # Imported locally rather than at module scope: `config` is already a local
+    # name in add_watch_folder (a WatchFolderConfig), so a module-level import
+    # would be silently shadowed there. Kept outside the try so an ImportError
+    # surfaces as itself instead of as a fetch failure.
+    from autobot_shared.ssot_config import config
+
     try:
-        status, body_bytes, _ = await fetch_safe_url(url, timeout=30.0)
+        status, body_bytes, _ = await fetch_safe_url(url, timeout=config.timeout.default_request)
     except SSRFError:
         raise HTTPException(status_code=400, detail="Request failed")
     except aiohttp.ClientError:
@@ -1912,7 +1918,7 @@ async def search_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     query: str = None,
-    limit: int = 10,
+    limit: int = QueryDefaults.DEFAULT_SEARCH_LIMIT,
 ):
     """Search specifically for man pages in knowledge base
 
@@ -2351,7 +2357,7 @@ def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> tup
         content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
         content = _decode_bytes(content_raw)
         source = metadata.get("source", "")
-        category = get_category_for_source(source).value if source else "general"
+        category = get_category_for_source(source).value if source else CategoryDefaults.GENERAL
         title = metadata.get("title", metadata.get("command", "Untitled"))
         fact_type = metadata.get("type", "unknown")
         return (fact_key, category, title, content, fact_type, metadata)
@@ -2753,9 +2759,9 @@ async def get_documentation_categories(
             try:
                 category = detect_category(Path(file_path))
             except Exception:
-                category = "general"
+                category = CategoryDefaults.GENERAL
         else:
-            category = "general"
+            category = CategoryDefaults.GENERAL
 
         category_counts[category] = category_counts.get(category, 0) + 1
 
@@ -2826,7 +2832,7 @@ async def get_documentation_stats(
             "total_indexed_entries": len(all_docs),
             "total_chunks": total_chunks,
             "latest_indexed": latest_indexed,
-            "categories_count": len(set(doc.get("category", "general") for doc in all_docs)),
+            "categories_count": len(set(doc.get("category", CategoryDefaults.GENERAL) for doc in all_docs)),
         },
     }
 
