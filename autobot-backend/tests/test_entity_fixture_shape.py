@@ -72,7 +72,8 @@ def _assert_is_entity_document(fixture: Dict[str, Any]) -> None:
         f"invented {sorted(set(fixture) - set(real))}"
     )
     for key, value in fixture.items():
-        assert isinstance(value, type(real[key])), f"{key}: expected {type(real[key]).__name__}, got {type(value).__name__}"
+        expected = type(real[key])
+        assert isinstance(value, expected), f"{key}: expected {expected.__name__}, got {type(value).__name__}"
     assert fixture["observations"], "an entity with no observations renders nothing"
     assert fixture["name"], "L2 requires a name to render a line"
 
