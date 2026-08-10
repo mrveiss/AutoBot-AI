@@ -41,6 +41,15 @@ class AutoBotServiceType(str, Enum):
     BROWSER = "browser"
     SLM_BACKEND = "slm-backend"
     SLM_AGENT = "slm-agent"
+    # #13915: seven running services were absent from this enum, including
+    # autobot-backend itself. Nothing failed, because the orchestration API falls
+    # back to runtime discovery — "discovered service", not "defined" — so the
+    # canonical list could be missing most of the platform without a single error.
+    CELERY = "celery"
+    CELERY_BEAT = "celery-beat"
+    CHROMADB = "chromadb"
+    TTS_WORKER = "tts-worker"
+    COORDINATOR = "coordinator"
 
 
 @dataclass
@@ -83,6 +92,7 @@ _SERVICE_DEFINITIONS = {
         stop_command="pkill -f 'python.*backend/main.py'",
         health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
+        systemd_service="autobot-backend",  # #13915: was unnamed, so no query could find it
         requires_sudo=False,
         working_dir="/opt/autobot/autobot-backend",
         description="FastAPI backend API server",
@@ -202,6 +212,105 @@ _SERVICE_DEFINITIONS = {
         health_check_type="ssh",
         requires_sudo=True,
         description="SLM node agent for heartbeats",
+    ),
+    # #13915: the seven entries below were missing. Ports come from the ansible
+    # role defaults that render each unit, not from guesses — a registry that
+    # invents its own values is the divergence this issue is about.
+    #
+    # The backend entry above deliberately keeps its process-based start/stop
+    # commands; `systemd_service` is added so the unit is nameable, which is what
+    # a restart-set query needs (#13539).
+    "celery": ServiceDefinition(
+        name="celery",
+        service_type=AutoBotServiceType.CELERY,
+        default_host_env="",
+        default_port_env="",
+        default_host="",
+        default_port=0,  # A worker, not a listener — it has no port to probe.
+        systemd_service="autobot-celery",
+        health_check_type="systemd",
+        requires_sudo=True,
+        description="Celery worker — imports the deployed backend tree",
+        # #13539: celery served 7-day-old code across ten deploys because the
+        # updater had no authoritative "what imports the synced tree".
+        dependencies=["backend", "redis"],
+    ),
+    "celery-beat": ServiceDefinition(
+        name="celery-beat",
+        service_type=AutoBotServiceType.CELERY_BEAT,
+        default_host_env="",
+        default_port_env="",
+        default_host="",
+        default_port=0,
+        systemd_service="autobot-celery-beat",
+        health_check_type="systemd",
+        requires_sudo=True,
+        description="Celery beat scheduler — imports the deployed backend tree",
+        dependencies=["backend", "redis"],
+    ),
+    "chromadb": ServiceDefinition(
+        name="chromadb",
+        service_type=AutoBotServiceType.CHROMADB,
+        default_host_env="AUTOBOT_CHROMADB_HOST",
+        default_port_env="AUTOBOT_CHROMADB_PORT",
+        default_host=os.environ.get("AUTOBOT_CHROMADB_HOST", ""),  # noqa: ssot-fallback
+        default_port=8100,  # roles/ai-stack/defaults/main.yml: chromadb_port
+        systemd_service="autobot-chromadb",
+        health_check_type="http",
+        requires_sudo=True,
+        # #4090: crash-looped 1681 times over ~4h45m with no alert, in part
+        # because no registry-driven sweep knew it existed.
+        description="ChromaDB vector store",
+    ),
+    "tts-worker": ServiceDefinition(
+        name="tts-worker",
+        service_type=AutoBotServiceType.TTS_WORKER,
+        default_host_env="AUTOBOT_TTS_HOST",
+        default_port_env="AUTOBOT_TTS_PORT",
+        default_host=os.environ.get("AUTOBOT_TTS_HOST", ""),  # noqa: ssot-fallback
+        default_port=8083,  # roles/tts-worker/defaults/main.yml: tts_port
+        systemd_service="autobot-tts-worker",
+        health_check_type="http",
+        requires_sudo=True,
+        description="Text-to-speech worker",
+    ),
+    "ai-stack-service": ServiceDefinition(
+        name="ai-stack-service",
+        service_type=AutoBotServiceType.AI_STACK,
+        default_host_env="AUTOBOT_AI_STACK_HOST",
+        default_port_env="AUTOBOT_AI_STACK_PORT",
+        default_host=os.environ.get("AUTOBOT_AI_STACK_HOST", ""),  # noqa: ssot-fallback
+        default_port=8080,  # roles/backend/defaults/main.yml: backend_ai_stack_port
+        systemd_service="autobot-ai-stack",
+        health_check_type="http",
+        requires_sudo=True,
+        description="AI stack service (uvicorn)",
+    ),
+    "coordinator": ServiceDefinition(
+        name="coordinator",
+        service_type=AutoBotServiceType.COORDINATOR,
+        default_host_env="",
+        default_port_env="",
+        default_host="",
+        default_port=0,
+        systemd_service="autobot-coordinator",
+        health_check_type="systemd",
+        requires_sudo=True,
+        description="User-backend coordinator",
+    ),
+    "frontend-dev": ServiceDefinition(
+        name="frontend-dev",
+        service_type=AutoBotServiceType.FRONTEND,
+        default_host_env="AUTOBOT_FRONTEND_HOST",
+        default_port_env="AUTOBOT_FRONTEND_PORT",
+        default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
+        default_port=5173,
+        systemd_service="autobot-frontend",
+        health_check_type="http",
+        requires_sudo=True,
+        # Distinct from the "frontend" entry above, which is the nginx-served
+        # production surface. This is the unit the frontend role ships.
+        description="Frontend dev server unit (autobot-frontend.service)",
     ),
 }
 
