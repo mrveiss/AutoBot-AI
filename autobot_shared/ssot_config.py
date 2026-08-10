@@ -1982,18 +1982,28 @@ class MiscConfig(RedactedSettings):
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
     tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
-    # #13689: ON is a recorded decision, not a drift. The #5066 A/B ran on
-    # 2026-08-08 with all five layers live for the first time — L2 and L4 could
-    # not render at all until #13686/#13687. All five render; the cost is
-    # +14..45 tokens and +6..8 ms of assembly per turn.
-    # It stayed off until #13742 landed, because L3 duplicated the KB retrieval
-    # the chat path already performs — two vector searches and the same chunks
-    # twice in the prompt. That is fixed; there is now one retrieval per turn.
-    # NOT measured, and no claim is implied: answer quality. Recall quality is
-    # unmeasurable until #13251/#13243, so this decision rests on what the stack
-    # demonstrably puts in the prompt, its token cost, and its latency.
-    # Evidence: docs/research/tiered-context-ab-13689.md
-    tiered_context_enabled: bool = Field(default=True, alias="TIERED_CONTEXT_ENABLED")
+    # #13866: OFF. This was flipped ON by #13689 and is reverted here, because
+    # the evidence it rested on was measured entirely against test doubles.
+    # The #5066 A/B concluded "all five layers render". Against production code
+    # that is false, and the two layers whose fixtures diverged most from
+    # production are exactly the two that do not work:
+    #   L0  renders a compile-time constant. AutoBotConfig has no `owner` and no
+    #       `agent` attribute, so both getattr chains fall through to literals —
+    #       every tenant's prompt gets the same hardcoded owner name (#13867).
+    #   L1  already rendered before the flip, via the legacy path. Zero delta.
+    #   L2  cannot render. Entity documents carry `observations`; the layer
+    #       reads `description`/`content`, which no write path produces. It
+    #       returns "" on every turn after up to 20 Redis round-trips (#13686,
+    #       reopened — the wiring was fixed, the schema mismatch was not).
+    #   L3  cannot render: knowledge_service is None since #13742.
+    #   L4  renders, for sessions with a work-item binding only.
+    # So the measured +14..45 tokens described mocks, not a deployment. The
+    # latency figure is also stale: #13729 added a Redis GET and two DB sessions
+    # to this path after the measurement was taken.
+    # Re-enabling needs #13686 and #13867 fixed and the A/B re-run against a
+    # live backend — not another mock-based pass.
+    # Evidence: docs/research/tiered-context-ab-13689.md (corrected in #13866)
+    tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")
     tokenizers_parallelism: str = Field(default="", alias="TOKENIZERS_PARALLELISM")
     transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
     travis: str = Field(default="", alias="TRAVIS")

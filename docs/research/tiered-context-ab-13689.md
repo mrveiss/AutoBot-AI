@@ -3,11 +3,48 @@
 **Date:** 2026-08-08
 **Issue:** #13689 · umbrella #13685 · original experiment #5066
 **Harness:** `autobot-backend/scripts/tiered_context_ab.py` (committed; re-run to reproduce)
-**Decision:** **`tiered_context_enabled` is now ON.**
+**Decision:** ~~**`tiered_context_enabled` is now ON.**~~ **CORRECTED 2026-08-10 — reverted to OFF (#13866).**
 
 It was measured OFF and stayed off until the one blocker below was fixed. That sequence is kept
 rather than rewritten — a decision record that only shows its final state teaches nothing about
-how it was reached.
+how it was reached. The correction below is appended for the same reason.
+
+---
+
+## CORRECTION (2026-08-10, #13866) — this result was measured against test doubles
+
+**The headline below ("all five layers render") is false against production code.** The flag has
+been reverted to OFF. Read the correction before the result.
+
+The harness mocks the memory graph and the knowledge service. Both mocks diverge from production
+in exactly the way that hides a defect, and the two layers whose fixtures diverge most are the two
+that do not work:
+
+| Layer | Result below | Against production code |
+|---|---|---|
+| L0 | renders | renders a **compile-time constant** — `AutoBotConfig` has no `owner`/`agent` attribute, so both getattr chains always fall through to literals (#13867) |
+| L1 | renders | already rendered before the flip, via the legacy path — **zero delta** |
+| L2 | renders | **cannot render** — entities carry `observations`; the layer reads `description`/`content`, which no write path produces (#13686, reopened) |
+| L3 | renders | **cannot render** — `knowledge_service=None` since #13742, which landed in the same PR as this measurement |
+| L4 | renders | renders, for work-item-bound sessions only |
+
+Specifically, `scripts/tiered_context_ab.py:75` supplies `ENTITY_FACTS = [{"name": "Redis",
+"description": "..."}]`. No production code produces an entity document with a `description` key.
+Line 96 mocks the knowledge service that the sibling commit in the *same PR* then removed.
+
+So "+14 to +45 tokens" describes the mocks. One of five layers contributes anything new in a real
+deployment, and L2 pays up to 20 Redis round-trips per turn to return an empty string.
+
+The latency figure is stale for a second reason: #13729 added a Redis GET and two DB sessions to
+this path *after* this measurement was taken, and the number here was never revised.
+
+**What this record got wrong methodologically:** it correctly noted "real retrieval latency is not
+measured here" as an open caveat, then drew a default-changing conclusion as if the caveat were
+closed. A layer that has never rendered in production cannot be certified by a fixture written
+alongside it — the fixture and the layer share the same wrong assumption, so they agree.
+
+**Re-enabling requires:** #13686 and #13867 fixed, and this A/B re-run against a live backend with
+entity documents built by `_build_entity_document`. Not another mock-based pass.
 
 ---
 
