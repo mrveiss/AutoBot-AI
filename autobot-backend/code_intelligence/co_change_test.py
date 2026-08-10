@@ -22,7 +22,6 @@ import pytest
 from code_intelligence.co_change import CoChangeAnalyzer, CoChangePair
 from code_intelligence.code_evolution_miner import GitHistoryCrawler
 
-
 #: Git environment variables that redirect git away from the repository named
 #: on the command line. Inherited from the CI job, they make every worker's
 #: ``git`` operate on shared state instead of its own tmpdir (#13948).
@@ -86,9 +85,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _git_init(path: Path) -> None:
     """git init with the same stderr-surfacing contract as _git (#13882)."""
-    result = subprocess.run(
-        ["git", "init", "-q", str(path)], capture_output=True, text=True, env=_hermetic_git_env()
-    )
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_hermetic_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
