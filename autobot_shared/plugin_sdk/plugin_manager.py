@@ -132,10 +132,10 @@ class PluginManager:
                 )
 
         self._started = False
-        # #13677: the load tally, so "is the plugin subsystem working?" is a
-        # QUERY and not a log-reading exercise. A stream of per-plugin lines
-        # nobody totals is why 0-of-7 and "no plugins installed" looked the same.
-        self._load_report: Dict[str, object] = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
+        # #13677: reset the tally too — after shutdown the previous run's counts would
+        # describe a subsystem that is no longer running, and "loaded 5 of 7"
+        # from a dead manager is worse than no answer.
+        self._load_report = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
         logger.info("PluginManager: shutdown complete")
 
     # ------------------------------------------------------------------
