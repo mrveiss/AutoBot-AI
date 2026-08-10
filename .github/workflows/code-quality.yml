@@ -184,10 +184,18 @@ jobs:
         # — a guard that silently no-ops is worse than no guard. The doc
         # cross-link and commit-format checks need no secret and always run.
         # Once the secret is configured this step hardens automatically.
-        # This workflow also runs on push, where there is no PR context.
+        # actions/checkout defaults to fetch-depth: 1, so the PR base commit is
+        # NOT in this clone and any range diff against it fatals. Fetch just
+        # that object rather than setting fetch-depth: 0 on the job: several
+        # sibling steps are already dead for this reason and reviving them all
+        # here would redden this PR with unrelated pre-existing findings.
+        # Tracked separately. lint-conventions.sh hard-fails on an unresolvable
+        # ref, so a failed fetch surfaces loudly instead of scanning 0 files.
         if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
+          git fetch --no-tags --quiet --depth=1 origin "$PR_BASE_SHA" 2>/dev/null || true
           RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
         else
+          git fetch --no-tags --quiet --deepen=1 2>/dev/null || true
           RANGE="HEAD~1..HEAD"
         fi
         echo "conventions scope: $RANGE"
