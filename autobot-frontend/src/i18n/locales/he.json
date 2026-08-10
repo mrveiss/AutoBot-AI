@@ -7816,7 +7816,8 @@
       "generating": "יוצר קוד QR...",
       "expired": "פג תוקף",
       "refresh": "קבל קוד חדש",
-      "retry": "נסה שוב"
+      "retry": "נסה שוב",
+      "manualCode": "לא מצליח לסרוק? הזן קוד זה באופן ידני:"
     }
   },
   "llmKeys": {
@@ -8430,15 +8431,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {
