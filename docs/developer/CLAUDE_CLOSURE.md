@@ -15,6 +15,15 @@ These compare the delivery against the ORIGINAL ISSUE BODY — implementation he
 3. **No partial close.** A bundled/multi-issue PR's `Closes #N` requires the FULL AC set of N. If a PR delivers a subset: check off the delivered subtask on the issue and either leave it open or name the follow-up issue number in the same comment. Riding along on a bundle's momentum never closes an issue.
 4. **Merged ≠ delivered (#12959).** A fix whose only home is a file the runtime never applies is not delivered. Before closing an issue whose fix lands in `autobot-slm-backend/ansible/roles/`, name the task in `playbooks/update-all-nodes.yml` that applies it — `include_role` (with `tasks_from` if partial) or a bare `roles:` entry. No such task ⇒ the builtin updater cannot deliver it and the issue stays open. #12777, #12886 and #12907 were each closed against a green merge and were still absent from every host weeks later; the playbook's `[PLAY 2] Verify | …` assertions now fail such a run instead of reporting success.
 
+5. **No stranded worktree (#13879).** Before `gh issue close N`, run:
+   ```bash
+   scripts/verify-done.sh --branch <branch>        # full gate
+   scripts/verify-done.sh --leftovers-only         # audit only
+   ```
+   Exit 0 or the work is not done. It checks the tree is clean, the branch is not an integration branch, the PR is merged, its commits are in the base, and that no landed worktree was left behind. Branch-existence is deliberately **not** a signal — `delete_branch_on_merge` is on, so the remote ref is gone the moment a PR merges.
+
+   It reports `has landed — remove it` only when the base resolves **and** the branch is ahead **and** every commit's patch-id is already in the base. Any comparison it cannot run is a FAILURE, never a verdict: an earlier version OR-ed two weak signals, and a one-character typo in the base ref reported 17 worktrees as deletable where 3 were. A branch with nothing ahead of base is reported `no commits yet — keep`, because a fresh worktree and a fast-forwarded one are indistinguishable and deleting the wrong one costs work.
+
 ## Before Closing an Issue
 
 1. **Read the issue description fully** — identify ALL acceptance criteria (stated and implicit)
