@@ -175,7 +175,11 @@ echo "[3] commit subject format"
 if [ "$MODE" != "--range" ]; then
   note "subjects are checked at the commit-msg stage, not here"
 else
-  LOGLINES=$(git log --format='%h%x1f%s' "${BASE_REF}..${HEAD_REF}") \
+  # Author is carried alongside the subject so bot-authored commits can be
+  # exempted: this repo's own auto-fix workflows (generated types, formatting)
+  # push commits with no issue number, and without this every PR that touches
+  # an OpenAPI schema fails a required check on a commit no human wrote.
+  LOGLINES=$(git log --format='%h%x1f%s%x1f%an' "${BASE_REF}..${HEAD_REF}") \
     || die "git log failed for $RANGE"
   if [ -z "$LOGLINES" ]; then
     ok "no commits in range"
@@ -184,9 +188,15 @@ else
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       SEEN=$((SEEN+1))
-      sha=${line%%$'\x1f'*}; subj=${line#*$'\x1f'}
+      sha=${line%%$'\x1f'*}
+      rest=${line#*$'\x1f'}
+      subj=${rest%%$'\x1f'*}
+      author=${rest#*$'\x1f'}
       case "$subj" in
         "Merge "*|"Revert "*|chore:\ claim\ worktree*) continue ;;
+      esac
+      case "$author" in
+        *'[bot]') continue ;;
       esac
       if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
         fail "commit $sha: subject is not '<type>(scope): <description>'"; BAD=1
