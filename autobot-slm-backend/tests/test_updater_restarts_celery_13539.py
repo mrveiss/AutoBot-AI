@@ -69,9 +69,18 @@ def _playbook_tasks():
 def _systemd_restart_targets(tasks):
     """Return the service names every ``systemd: state=restarted`` task targets.
 
-    Covers both the literal ``name:`` form and the ``loop`` form used for celery,
-    where the name is templated from the loop item.
+    #13539: a templated ``name:`` is resolved through the task's ``loop``, and for
+    celery that loop is a **Jinja string** referencing a registered variable
+    (``"{{ celery_unit_files.results | default([]) }}"``), not a literal list.
+    Storing that string as the target meant the celery units were never in this
+    set, and the assertion fell through to ``_loop_literals`` — which any ``loop:``
+    anywhere in the play could satisfy, including the ``stat`` task's. Deleting
+    the restart entirely left the suite green.
+
+    Resolving through the register binds the assertion to the restart task: the
+    unit names come from the task that *registered* the variable this loop reads.
     """
+    registered = _registered_loops(tasks)
     targets = set()
     for task in tasks:
         spec = task.get("systemd") or task.get("ansible.builtin.systemd")
@@ -79,15 +88,38 @@ def _systemd_restart_targets(tasks):
             continue
         name = spec.get("name", "")
         if "{{" in str(name):
-            # Templated name — resolve from the loop this task iterates.
             loop = task.get("loop")
             if isinstance(loop, list):
                 targets.update(str(entry) for entry in loop)
             elif isinstance(loop, str):
-                targets.add(loop)
+                targets.update(_resolve_registered_loop(loop, registered))
         else:
             targets.add(str(name))
     return targets
+
+
+def _registered_loops(tasks):
+    """``register:`` name -> the literal loop entries of the task that registered it."""
+    registered = {}
+    for task in tasks:
+        name = task.get("register")
+        loop = task.get("loop")
+        if isinstance(name, str) and isinstance(loop, list):
+            registered[name] = {str(entry) for entry in loop if isinstance(entry, str)}
+    return registered
+
+
+def _resolve_registered_loop(loop_expression, registered):
+    """Unit names a templated loop refers to, via the variable it reads.
+
+    Returns nothing when the expression names no registered variable — an
+    unresolvable loop must contribute no targets, or this helper starts inventing
+    the evidence it exists to check.
+    """
+    for register_name, entries in registered.items():
+        if register_name in loop_expression:
+            return entries
+    return set()
 
 
 def _loop_literals(tasks):
@@ -118,9 +150,13 @@ def test_updater_restarts_celery_units(unit):
     """
     tasks = _playbook_tasks()
     restarted = _systemd_restart_targets(tasks)
-    if unit in restarted:
-        return
-    assert unit in _loop_literals(tasks), (
+
+    # #13539: previously this fell back to `unit in _loop_literals(tasks)` — every
+    # literal string in **any** `loop:` anywhere in the play, which the `stat`
+    # task's loop satisfies on its own. Deleting the restart task entirely, or
+    # changing `state: restarted` to `started`, left the suite green. The
+    # assertion now rests on the restart tasks alone.
+    assert unit in restarted, (
         f"{unit} is never restarted by update-all-nodes.yml. It imports the backend "
         f"tree this play syncs, so leaving it running serves pre-deploy modules "
         f"until someone restarts it by hand — the #13539 condition. Restart it "
