@@ -26,14 +26,14 @@ turn latency.
 """
 
 import asyncio
-from datetime import datetime, timezone
+import os
+import time
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.time_utils import parse_utc_iso
 
 from .skill_extractor import SkillExtractor
 from .skill_proposer import SkillProposer
@@ -85,6 +85,10 @@ class SkillDistillationScheduler:
         # with the connector scheduler. Only the key and database are ours.
         self._lease = LeaderLease(key=_LEADER_KEY, database=_REDIS_DB, label="Skill distillation")
         self._task: asyncio.Task | None = None
+        # #13695: the cursor value the last idle-flush fired against. A second
+        # flush waits for the cursor to move, so a conversation the pass cannot
+        # get past cannot re-trigger `run_once` every leader cycle.
+        self._last_idle_flush_cursor: str | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -227,13 +231,47 @@ class SkillDistillationScheduler:
             logger.error("Skill distillation failed for conversation %s: %s", session_id, exc)
             return None
 
+    async def _corpus_idle_for(self) -> float | None:
+        """Seconds since any conversation was last written, or None if unknown.
+
+        Deliberately the **directory mtime**, not a parsed timestamp:
+
+        * Timezone-free. `session_listing.py` emits naive local time (#13856),
+          which read back as UTC makes an ISO-derived idle age negative east of
+          UTC and — worse — inverts west of it, reporting a session someone is
+          actively typing into as long-idle. Epoch floats cannot express that
+          bug.
+        * O(1). One `os.stat` per leader cycle instead of reading and parsing
+          every chat file (measured 1.5s at 1000 conversations).
+        * Cannot be hidden by truncation. The directory mtime is the newest
+          activity across *all* sessions, so a capped listing cannot miss an
+          active one.
+
+        This is sound only because chat saves are atomic — `file_io.py` writes a
+        temp file and `os.replace`s it, which updates the containing directory's
+        mtime. A plain in-place content write would NOT bump it, and this signal
+        would silently never fire. Verify that before changing the save path.
+        """
+        manager = await self._get_chat_history_manager()
+        if manager is None:
+            return None
+        try:
+            chats_dir = manager._get_chats_directory()
+            stat = await asyncio.to_thread(os.stat, chats_dir)
+            return max(0.0, time.time() - stat.st_mtime)
+        except OSError:
+            return None
+
     async def _has_idle_pending(self) -> bool:
         """True when an undistilled conversation has been quiet past the threshold (#13695).
 
-        Reuses the durable cursor rather than tracking its own idea of
-        "unprocessed": a conversation counts only if it is past the cursor *and*
-        has not been touched for ``IDLE_FLUSH_S``. Cheap enough to run each
-        leader cycle — it is the same listing the pass already performs.
+        Two gates, cheapest first:
+
+        1. The whole corpus has been quiet for ``IDLE_FLUSH_S`` (one `os.stat`).
+        2. Only then, whether anything is actually past the durable cursor —
+           reusing the cursor rather than tracking a private notion of
+           "unprocessed", so the idle path cannot re-distil what the cron
+           already handled.
 
         Never raises into the leader loop; a failure here simply means the
         interval backstop is what triggers the pass, which is the pre-#13695
@@ -242,15 +280,28 @@ class SkillDistillationScheduler:
         if IDLE_FLUSH_S <= 0:
             return False
         try:
-            pending = await self._select_pending_sessions(await self._read_cursor())
+            idle_for = await self._corpus_idle_for()
+            if idle_for is None or idle_for < IDLE_FLUSH_S:
+                return False
+
+            cursor = await self._read_cursor()
+            # #13695 blocker 2: without this, a conversation the pass cannot
+            # advance past re-triggers `run_once` every leader cycle — 10s
+            # instead of hourly, a 360x increase in LLM spend. A flush is
+            # allowed only once per cursor value; the next one waits for the
+            # cursor to actually move. This is a correctness guard, not a
+            # debounce knob, so it does not reintroduce the tuning constants
+            # this issue excludes.
+            if cursor is not None and cursor == self._last_idle_flush_cursor:
+                return False
+
+            pending = await self._select_pending_sessions(cursor)
             if not pending:
                 return False
-            newest = max(item["updated_at"] for item in pending)
-            idle_for = (datetime.now(tz=timezone.utc) - parse_utc_iso(newest)).total_seconds()
-            if idle_for < IDLE_FLUSH_S:
-                return False
+
+            self._last_idle_flush_cursor = cursor
             logger.info(
-                "Skill distillation idle-flush: %d conversation(s) pending, quiet for %.0fs (#13695)",
+                "Skill distillation idle-flush: %d conversation(s) pending, corpus quiet for %.0fs (#13695)",
                 len(pending),
                 idle_for,
             )
