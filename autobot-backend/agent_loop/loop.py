@@ -29,7 +29,8 @@ from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.pre_action_verifier import PreActionVerifier, VerifierResult, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
-from agent_loop.tool_output_spill import spill_results as _spill_results
+from agent_loop.tool_output_spill import bind_task as _bind_spill_task
+from agent_loop.tool_output_spill import spill_results_async as _spill_results_async
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
@@ -633,7 +634,20 @@ class AgentLoop:
         # by a bounded excerpt plus a resolvable anchor, so one large tool result
         # cannot consume the window in a single step. Off by default (#12555
         # precedent); a run under the threshold is byte-identical to before.
-        tool_results, _spilled = _spill_results(getattr(self._current_context, "task_id", "unknown"), tool_results)
+        # #13865: skip entirely when there is no run to scope artifacts to.
+        # The previous "unknown" fallback put every context-less run in one
+        # shared namespace, so anchors collided across runs and the read-side
+        # run check became a no-op.
+        _task_id = self._current_context.task_id if self._current_context else None
+        if _task_id:
+            _bind_spill_task(_task_id)
+            tool_results, _spilled = await _spill_results_async(_task_id, tool_results)
+            if _spilled:
+                logger.info(
+                    "Offloaded %d oversized tool result(s) for task %s (#13692)",
+                    _spilled,
+                    _task_id,
+                )
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and

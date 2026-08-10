@@ -123,25 +123,25 @@ class ToolRegistry:
             "status": result.get("status", "success"),
         }
 
-    async def read_spilled_output(
-        self, anchor: str, task_id: str, offset: int = 0, limit: int | None = None
-    ) -> Dict[str, Any]:
+    async def read_spilled_output(self, anchor: str, offset: int = 0, limit: int | None = None) -> Dict[str, Any]:
         """Read a window of a tool output that was spilled out of context (#13754).
 
         #13692 step 1 writes oversized tool results aside and leaves a bounded
         excerpt plus an anchor in context. The excerpt's note tells the model to
-        call this tool — so until it existed, the instruction named a capability
-        the agent could not invoke, which is worse than saying nothing.
+        call this tool — so until it is *dispatchable*, the instruction names a
+        capability the agent cannot invoke, which is worse than saying nothing.
 
-        Scoped to *task_id*: an anchor is a bearer token, so one leaked into a
-        different run must not read that run's observations.
+        Scoped to the run bound by the agent loop, never to an argument. The
+        anchor carries its owning run id in plaintext, so a ``task_id``
+        parameter let any holder of an anchor read the run it came from by
+        echoing back the id inside it (#13865).
 
         Returns a window rather than the whole artifact — handing back the full
         output would undo the offload. Page with *offset* while ``has_more``.
         """
         from agent_loop.tool_output_spill import read_spilled_window
 
-        window = read_spilled_window(anchor, task_id, offset=offset, limit=limit)
+        window = read_spilled_window(anchor, offset=offset, limit=limit)
         return {
             "tool_name": "read_spilled_output",
             "tool_args": {"anchor": anchor, "offset": offset, "limit": limit},
@@ -698,6 +698,13 @@ class ToolRegistry:
 
         # Single-name tools dispatch table
         dispatch = {
+            # #13754: without this entry execute_tool returns "Unknown tool",
+            # while the spill excerpt still instructs the model to call it.
+            "readspilledoutput": lambda args: self.read_spilled_output(
+                args.get("anchor", ""),
+                args.get("offset", 0),
+                args.get("limit"),
+            ),
             "webfetch": lambda args: self.web_fetch(args.get("url", "")),
             "searchknowledgebase": lambda args: self.search_knowledge_base(
                 args.get("query", ""), args.get("n_results", 5)
@@ -909,6 +916,9 @@ class ToolRegistry:
             "extract_structured_data",
             # #10932: Unified content_reach gateway
             "content_reach",
+            # #13754: the spill excerpt names this tool, so the model must be
+            # offered it. Listing it here is what makes the note actionable.
+            "read_spilled_output",
         ]
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.

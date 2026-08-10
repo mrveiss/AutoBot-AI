@@ -689,6 +689,11 @@ def _resolve_cache_directories() -> list:
     candidates = [
         PATH.DATA_DIR / "cache",
         PATH.TEMP_DIR,
+        # #13865: spilled tool-output artifacts (#13692). These are written in
+        # full, deduped per run only, and nothing else deletes them — without
+        # this entry the directory grows without bound for the life of the
+        # install. It is neither `cache` nor `temp`, so the sweep above missed it.
+        PATH.DATA_DIR / "tool_output_spill",
     ]
     return [p for p in candidates if isinstance(p, Path) and p.exists()]
 
