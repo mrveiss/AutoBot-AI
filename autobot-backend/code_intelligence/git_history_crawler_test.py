@@ -24,7 +24,30 @@ from code_intelligence.code_evolution_miner import GitHistoryCrawler, _parse_num
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    """Run git, surfacing its stderr when it fails.
+
+    #13882: ``check=True`` with ``capture_output=True`` raises
+    ``CalledProcessError``, whose message carries only the exit status — the
+    captured stderr is on the exception but never printed. A CI failure here
+    therefore read as a bare "exit status 128" with no indication of the cause,
+    which is what made the intermittent failure undiagnosable from the log.
+    """
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
+            f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
+        )
+
+
+def _git_init(path: Path) -> None:
+    """git init with the same stderr-surfacing contract as _git (#13882)."""
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"git init failed in {path} with exit {result.returncode}\n"
+            f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
+        )
 
 
 def _commit(repo: Path, files: dict, message: str) -> None:
@@ -41,7 +64,7 @@ def _commit(repo: Path, files: dict, message: str) -> None:
 
 @pytest.fixture
 def repo(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _git_init(tmp_path)
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "Test Author")
     _commit(tmp_path, {"a.py": "one\n"}, "feat: add a")

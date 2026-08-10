@@ -175,7 +175,21 @@ echo "[3] commit subject format"
 if [ "$MODE" != "--range" ]; then
   note "subjects are checked at the commit-msg stage, not here"
 else
-  LOGLINES=$(git log --format='%h%x1f%s' "${BASE_REF}..${HEAD_REF}") \
+  # Author is carried alongside the subject so bot-authored commits can be
+  # exempted: this repo's own auto-fix workflows (generated types, formatting)
+  # push commits with no issue number, and without this every PR that touches
+  # an OpenAPI schema fails a required check on a commit no human wrote.
+  # #13921: the subject goes LAST. It is the only free-text field, so with it in
+  # the middle every later field depends on it containing no separator — and when
+  # the bot exemption failed to fire in CI on a commit whose %an really was
+  # `dependabot[bot]`, a field-split fault was the only remaining explanation that
+  # fitted. Ordering the free-text field last removes the class rather than
+  # guessing which member of it occurred.
+  #
+  # %ae is carried too: a bot's *email* ends in `[bot]@users.noreply.github.com`
+  # even where its display name is rewritten (a .mailmap entry would do exactly
+  # that), so two independent signals have to fail before a bot commit is judged.
+  LOGLINES=$(git log --format='%h%x1f%an%x1f%ae%x1f%s' "${BASE_REF}..${HEAD_REF}") \
     || die "git log failed for $RANGE"
   if [ -z "$LOGLINES" ]; then
     ok "no commits in range"
@@ -184,14 +198,27 @@ else
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       SEEN=$((SEEN+1))
-      sha=${line%%$'\x1f'*}; subj=${line#*$'\x1f'}
+      sha=${line%%$'\x1f'*}
+      rest=${line#*$'\x1f'}
+      author=${rest%%$'\x1f'*}
+      rest=${rest#*$'\x1f'}
+      email=${rest%%$'\x1f'*}
+      subj=${rest#*$'\x1f'}
       case "$subj" in
         "Merge "*|"Revert "*|chore:\ claim\ worktree*) continue ;;
       esac
+      # #13921: name OR email. A dependency bump has no issue by nature, and the
+      # commit is not written by a human who could add one.
+      case "$author$email" in
+        *'[bot]'*) continue ;;
+      esac
       if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
-        fail "commit $sha: subject is not '<type>(scope): <description>'"; BAD=1
+        # #13921: the parsed author is echoed on failure. The previous version
+        # rejected commits without saying who it thought wrote them, so a
+        # non-firing exemption could only be diagnosed by inference.
+        fail "commit $sha (author='$author' <$email>): subject is not '<type>(scope): <description>'"; BAD=1
       elif ! printf '%s' "$subj" | grep -qE '#[0-9]{3,}'; then
-        fail "commit $sha: no issue reference"; BAD=1
+        fail "commit $sha (author='$author' <$email>): no issue reference"; BAD=1
       fi
     done <<< "$LOGLINES"
     [ "$BAD" -eq 0 ] && ok "$SEEN commit(s) conform"

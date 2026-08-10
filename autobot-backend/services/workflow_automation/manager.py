@@ -75,7 +75,18 @@ class WorkflowAutomationManager:
             # #13730: both are coroutine functions — without await this bound
             # coroutine objects, the enumerate() below raised TypeError, and the
             # handler turned every chat request into a silent `return None`.
-            complexity = await self.orchestrator.classify_request_complexity(user_request)
+            # #13807: the verdict says whether anything actually judged this
+            # request. Every chat request being COMPLEX is a legitimate outcome
+            # and also what a dead classifier produces, so the workflow records
+            # which one it was instead of leaving the two indistinguishable.
+            verdict = await self.orchestrator.classify_request_complexity_verdict(user_request)
+            complexity = verdict.complexity
+            if not verdict.classified:
+                logger.warning(
+                    "Workflow for session %s built on an unclassified request (%s) — complexity defaulted",
+                    session_id,
+                    verdict.state.value,
+                )
             base_steps = await self.orchestrator.plan_workflow_steps(user_request, complexity)
 
             # Convert orchestrator steps to workflow steps
