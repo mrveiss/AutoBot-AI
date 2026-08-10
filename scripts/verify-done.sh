@@ -63,7 +63,7 @@ echo "verify-done: branch '${BRANCH:-<none>}' against '$BASE'"
 # ── landed? ──────────────────────────────────────────────────────────────────
 # Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
 branch_state() {
-  local dir="$1" br="$2" ahead cherry rc
+  local dir="$1" br="$2" ahead cherry rc line mark sha substantive=0 unlanded=0
   ahead=$(git -C "$dir" rev-list --count "${BASE}..${br}" 2>/dev/null) || return 3
   [ -n "$ahead" ] || return 3
   # "Nothing ahead of base" is NOT landed. A freshly created worktree and a
@@ -73,22 +73,45 @@ branch_state() {
   # Squash merges (how this repo lands) leave the branch ahead with matching
   # patch-ids, so the real landed case is still detected below.
   [ "$ahead" -eq 0 ] && return 2
-  # Patch-id equivalence for EVERY commit. `+` marks one with no equivalent in
-  # base. Subject text is never consulted: a generic `docs:`/`chore:` tip
-  # subject collides across branches and is not evidence of anything.
+
+  # Patch-id equivalence per commit. `+` = no equivalent upstream, `-` = present.
+  # Subject text is never consulted: a generic `docs:`/`chore:` subject collides
+  # across branches and is not evidence of anything.
   cherry=$(git -C "$dir" cherry "$BASE" "$br" 2>/dev/null); rc=$?
   [ "$rc" -eq 0 ] || return 3
   [ -z "$cherry" ] && return 3          # no output at all is unverifiable
-  printf '%s\n' "$cherry" | grep -q '^+' && return 1
+
+  # EMPTY COMMITS ARE NOT EVIDENCE (#13879). An empty commit has an empty
+  # patch, so `git cherry` marks it `-` against ANY empty commit upstream —
+  # and the worktree rules mandate an empty claim commit on creation, while
+  # empty commits reach the base routinely (3 of the last 300, one of them a
+  # claim commit). Counting those as "landed" reports a just-claimed worktree
+  # as deletable: the precise failure this script exists to prevent, reborn.
+  # Only commits that actually change something can testify either way.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    mark=${line%% *}; sha=${line##* }
+    [ -n "$(git -C "$dir" diff-tree -r --no-commit-id --name-only "$sha" 2>/dev/null)" ] || continue
+    substantive=$((substantive + 1))
+    [ "$mark" = "+" ] && unlanded=$((unlanded + 1))
+  done <<< "$cherry"
+
+  # Only empty commits ahead of base — a claimed but unworked worktree.
+  [ "$substantive" -eq 0 ] && return 2
+  [ "$unlanded" -gt 0 ] && return 1
   return 0
 }
 
 if [ "$LEFTOVERS_ONLY" -eq 0 ]; then
   echo
   echo "[1] working tree"
-  if [ -n "$(git status --porcelain)" ]; then
+  # Status-checked like every other git call here: if this fails, empty output
+  # would read as "clean" and mask uncommitted work behind a VERIFIED.
+  if ! WT_STATUS=$(git status --porcelain 2>&1); then
+    fail "git status failed — cannot confirm the tree is clean: $WT_STATUS"
+  elif [ -n "$WT_STATUS" ]; then
     fail "uncommitted changes present:"
-    git status --porcelain | head -10 | sed 's/^/          /'
+    printf '%s\n' "$WT_STATUS" | head -10 | sed 's/^/          /'
   else
     ok "clean"
   fi
@@ -161,9 +184,21 @@ else
     SEEN=$((SEEN+1))
     branch_state "$dir" "$wb"
     case $? in
-      0) fail "worktree '$wb' has landed but still exists at $dir — remove it"; STRANDED=$((STRANDED+1)) ;;
+      0)
+        # A delete instruction needs TWO independent signals, never one git
+        # heuristic: patch-ids say the work is in the base, AND GitHub says a
+        # PR for this branch merged. Either alone has produced a false verdict
+        # before (#13879), and the cost of being wrong is destroyed work.
+        if ! command -v gh >/dev/null 2>&1; then
+          ok "'$wb' looks landed by patch-id, but gh is unavailable to confirm a merged PR — keep"
+        elif [ -n "$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null)" ]; then
+          fail "worktree '$wb' has landed but still exists at $dir — remove it"
+          STRANDED=$((STRANDED+1))
+        else
+          ok "'$wb' looks landed by patch-id but has no merged PR — keep, and investigate"
+        fi ;;
       1) ok "'$wb' has unlanded commits — keep" ;;
-      2) ok "'$wb' has no commits yet — a session may just have started; keep" ;;
+      2) ok "'$wb' has no commits yet (or only empty claim commits) — keep" ;;
       *) fail "'$wb' cannot be verified against $BASE — investigate, do not delete" ;;
     esac
   done < <(printf '%s\n' "$WT_LIST" | sed -n 's/^worktree //p')

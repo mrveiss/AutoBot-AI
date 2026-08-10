@@ -114,7 +114,42 @@ class TestNeverDeletesUnlandedWork:
         _git(repo, "commit", "-q", "-m", "fix(x): landed work (#7) (squashed)")
         res = run(repo, "--base", "base")
         assert "wt-done" in res.stdout
-        assert "has landed" in res.stdout, res.stdout
+        # The patch-id signal must fire...
+        assert "landed by patch-id" in res.stdout or "has landed" in res.stdout, res.stdout
+        # ...but on its own it must NOT authorize deletion. There is no merged
+        # PR for this throwaway branch, so the second signal is absent and the
+        # verdict must stay on the safe side.
+        assert "remove it" not in res.stdout, (
+            "a single git heuristic must never produce a delete instruction\n" + res.stdout
+        )
+
+    def test_claimed_worktree_with_only_an_empty_commit_is_not_landed(self, repo: Path) -> None:
+        """Trigger (b) in the shape the repo actually produces.
+
+        The worktree rules mandate an empty claim commit on creation. An empty
+        commit has an empty patch-id, so `git cherry` marks it "already
+        upstream" against ANY empty commit in base — and empty commits reach
+        this base routinely (3 of the last 300, one of them a claim commit).
+        The zero-commit test above does not cover this: here `ahead == 1`.
+        """
+        wt = repo / ".worktrees" / "issue-9999"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-9999", "base")
+        _git(wt, "commit", "-q", "--allow-empty", "-m", "chore: claim worktree issue-9999")
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "chore(deps): bump npm_and_yarn (#13503)")
+        res = run(repo, "--base", "base")
+        assert "has landed" not in res.stdout, res.stdout
+        assert wt.exists()
+
+    def test_empty_commits_alongside_real_work_do_not_mask_it(self, repo: Path) -> None:
+        """A claim commit plus genuine unlanded work must still read as unlanded."""
+        wt = repo / ".worktrees" / "issue-8888"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-8888", "base")
+        _git(wt, "commit", "-q", "--allow-empty", "-m", "chore: claim worktree issue-8888")
+        _commit(wt, "real.txt", "real work\n", "fix(z): genuine work (#9)")
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "chore: an empty commit on base")
+        res = run(repo, "--base", "base")
+        assert "has landed" not in res.stdout, res.stdout
+        assert "unlanded commits" in res.stdout
 
     def test_fast_forwarded_branch_is_kept_not_deleted(self, repo: Path) -> None:
         """`ahead == 0` is ambiguous, so the conservative answer is KEEP.
