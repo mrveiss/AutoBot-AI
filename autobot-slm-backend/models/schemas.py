@@ -1653,12 +1653,18 @@ class CodeSyncRefreshResponse(BaseModel):
 
 
 class DriftedFile(BaseModel):
-    """A file whose checksum differs between code_source and deployed (Issue #2834)."""
+    """A file whose checksum differs between code_source and deployed (Issue #2834).
+
+    ``untracked`` replaced ``deployed_only`` in #13851: a file present on the
+    host and absent from *this component's* source is foreign, not out of date,
+    and is reported in ``FileDriftReport.untracked_files`` rather than counted
+    as drift.
+    """
 
     path: str
     source_checksum: str | None = None
     deployed_checksum: str | None = None
-    status: Literal["modified", "source_only", "deployed_only"]
+    status: Literal["modified", "source_only", "untracked"]
 
 
 class FileDriftReport(BaseModel):
@@ -1667,6 +1673,10 @@ class FileDriftReport(BaseModel):
     source_dir: str
     deployed_dir: str
     drifted_files: list[DriftedFile]
+    # #13851: files present on the host with no counterpart in this component's
+    # source. Visible, but excluded from drift_detected — a delete-style resolve
+    # is the wrong remedy for a file source never owned.
+    untracked_files: list[DriftedFile] = []
     total_compared: int
     drift_detected: bool
     checked_at: str
@@ -1676,6 +1686,10 @@ class DriftResolveRequest(BaseModel):
     """Resync a component from code_source to /opt/autobot/<component>/ (#7149)."""
 
     component: str
+    # #13851: a resolve is a delete-style rsync. When it would remove deployed
+    # paths that source does not have, it refuses and reports them instead of
+    # proceeding — set force=True to delete them anyway.
+    force: bool = False
 
 
 class DriftResolveResponse(BaseModel):
@@ -1688,6 +1702,10 @@ class DriftResolveResponse(BaseModel):
     deployed_dir: str
     deps_changed: bool = False
     post_steps: List[str] = []
+    # #13851: deployed paths the resolve would have deleted because source does
+    # not have them. Populated only when the resolve REFUSED (success=False and
+    # force was not set) — the operator sees exactly what is at stake.
+    blocked_deletions: List[str] = []
 
 
 class DriftResolveJobResponse(BaseModel):

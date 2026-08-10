@@ -71,6 +71,10 @@ _BACKEND_EXTENSIONS = _dc._BACKEND_EXTENSIONS
 _FRONTEND_EXTENSIONS = _dc._FRONTEND_EXTENSIONS
 _FRONTEND_COMPONENTS = _dc._FRONTEND_COMPONENTS
 comparable_extensions = _dc.comparable_extensions
+owned_subtrees = _dc.owned_subtrees
+deploy_only_entries = _dc.deploy_only_entries
+_RENDERED_FILES = _dc._RENDERED_FILES
+_DEPLOY_ONLY_ENTRIES = _dc._DEPLOY_ONLY_ENTRIES
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +240,12 @@ class TestComputeDrift:
         assert entry["source_checksum"] is not None
         assert entry["deployed_checksum"] is None
 
-    def test_deployed_only_file(self, tmp_path):
-        """A file that exists only in deployed dir → 'deployed_only'."""
+    def test_file_present_only_on_the_host_is_untracked(self, tmp_path):
+        """A file that exists only in deployed dir → 'untracked' (#13851).
+
+        It was 'deployed_only' and counted as drift, which made a delete-style
+        resolve look like the remedy for a file source never owned.
+        """
         src = tmp_path / "src"
         dep = tmp_path / "dep"
         src.mkdir()
@@ -246,7 +254,7 @@ class TestComputeDrift:
         assert total == 1
         assert len(drifted) == 1
         entry = drifted[0]
-        assert entry["status"] == "deployed_only"
+        assert entry["status"] == "untracked"
         assert entry["source_checksum"] is None
         assert entry["deployed_checksum"] is not None
 
@@ -265,7 +273,7 @@ class TestComputeDrift:
         statuses = {e["path"]: e["status"] for e in drifted}
         assert statuses["changed.py"] == "modified"
         assert statuses["src_only.py"] == "source_only"
-        assert statuses["dep_only.py"] == "deployed_only"
+        assert statuses["dep_only.py"] == "untracked"
         assert "same.py" not in statuses
 
     def test_results_sorted_by_path(self, tmp_path):
@@ -960,3 +968,292 @@ class TestNonstandardComponentPathMap:
         assert total == 1
         assert drifted[0]["path"] == "ai_api_server.py"
         assert drifted[0]["status"] == "modified"
+
+
+class TestForeignFilesAreNotDrift:
+    """#13851: the three false-positive classes seen on a fully-synced host.
+
+    `GET /api/code-sync/status` reported autobot-backend, autobot-npu-worker and
+    autobot-slm-agent stale on a host where every deployed file matched its real
+    source. 18 of the 21 reported entries had `source_checksum: null` — present
+    on the host, absent from *this component's* source. Not out of date. Foreign.
+    """
+
+    def test_plugins_subtree_is_not_backend_drift(self, tmp_path):
+        """17 of the 18: plugins/ is its own component deployed INTO the backend.
+
+        Its source is <repo>/plugins, never code_source/autobot-backend/plugins,
+        so the backend's own walk found the files and could not explain them.
+        """
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "main.py", b"same")
+        _write(dep / "main.py", b"same")
+        _write(dep / "plugins" / "core-plugins" / "hello" / "main.py", b"plugin code")
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-backend")
+        assert drifted == []
+
+    def test_plugins_subtree_is_still_drift_for_the_plugins_component(self, tmp_path):
+        """Excluding the subtree from the BACKEND must not blind the component
+        that owns it — otherwise the fix trades false drift for no signal."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "core-plugins" / "hello" / "main.py", b"new plugin code")
+        _write(dep / "core-plugins" / "hello" / "main.py", b"stale plugin code")
+        drifted, _ = compute_drift(str(src), str(dep), "plugins")
+        assert [e["path"] for e in drifted] == ["core-plugins/hello/main.py"]
+        assert drifted[0]["status"] == "modified"
+
+    def test_owned_subtrees_is_derived_not_hardcoded(self):
+        """The backend owns exactly one foreign subtree today, derived from the
+        deployed-path map rather than restated — so a future component that
+        deploys inside another is handled without a second edit."""
+        assert owned_subtrees("autobot-backend") == frozenset({"plugins"})
+        assert owned_subtrees("plugins") == frozenset()
+        assert owned_subtrees("autobot-slm-backend") == frozenset()
+
+    def test_similar_prefix_is_not_treated_as_owned(self, tmp_path):
+        """`pluginsfoo.py` shares a prefix with the `plugins` subtree but is a
+        backend file — a substring match here would hide real drift."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "pluginsfoo.py", b"old")
+        _write(dep / "pluginsfoo.py", b"new")
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-backend")
+        assert [e["path"] for e in drifted] == ["pluginsfoo.py"]
+
+    def test_runtime_written_registry_is_not_backend_drift(self, tmp_path):
+        """1 of the 18: config/npu_workers.yaml is written by NPUWorkerManager
+        on every worker change. The repo ships only the example under
+        autobot-infrastructure — the live file is state, and resolving its
+        "drift" would delete the worker registry."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-backend")
+        assert drifted == []
+        assert "config/npu_workers.yaml" in _DEPLOY_ONLY_ENTRIES["autobot-backend"]
+
+    def test_runtime_exclusion_is_component_scoped(self, tmp_path):
+        """The same relative path under a different component is ordinary
+        source and must still be compared."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-slm-backend")
+        assert [e["path"] for e in drifted] == ["config/npu_workers.yaml"]
+        assert drifted[0]["status"] == "untracked"
+
+
+class TestRenderedFileDrift:
+    """#13851: one rendered file inside an otherwise 1:1 component tree.
+
+    npu-worker.py is rendered from npu-worker.py.j2 (roles/npu-worker/tasks/
+    code_only.yml:25-26), so it can never checksum-match — permanent drift.
+    Compared render-invariantly instead, the same way #12886 handles a whole
+    templated component.
+    """
+
+    TEMPLATE_REL = "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2"
+
+    def test_the_mapping_points_at_the_real_template(self):
+        assert _RENDERED_FILES["autobot-npu-worker"] == {"npu-worker.py": self.TEMPLATE_REL}
+
+    def _repo(self, tmp_path, template_body):
+        repo = tmp_path / "repo"
+        _write(repo / self.TEMPLATE_REL, template_body)
+        return repo
+
+    def test_substituted_value_is_not_drift(self, tmp_path, monkeypatch):
+        """A rendered install dir differs byte-for-byte and must read as clean."""
+        repo = self._repo(tmp_path, b'INSTALL = "{{ npu_install_dir }}"\nROUTE = "/infer"\n')
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", b'INSTALL = "/opt/autobot/autobot-npu-worker"\nROUTE = "/infer"\n')
+        drifted, total = compute_drift(str(src), str(dep), "autobot-npu-worker")
+        assert total == 1
+        assert drifted == []
+
+    def test_changed_route_is_still_drift(self, tmp_path, monkeypatch):
+        """The skew class #12886 exists to catch — a renamed route — survives."""
+        repo = self._repo(tmp_path, b'INSTALL = "{{ npu_install_dir }}"\nROUTE = "/infer"\n')
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", b'INSTALL = "/opt/autobot/autobot-npu-worker"\nROUTE = "/predict"\n')
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-npu-worker")
+        assert [e["path"] for e in drifted] == ["npu-worker.py"]
+        assert drifted[0]["status"] == "modified"
+
+    def test_missing_rendered_file_is_drift(self, tmp_path, monkeypatch):
+        """An absent rendered artifact means the deploy never ran, so the file
+        is compared even though neither tree's walk lists it."""
+        repo = self._repo(tmp_path, b'ROUTE = "/infer"\n')
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        dep.mkdir()
+        drifted, total = compute_drift(str(src), str(dep), "autobot-npu-worker")
+        assert total == 1
+        assert [e["path"] for e in drifted] == ["npu-worker.py"]
+        assert drifted[0]["status"] == "source_only"
+
+    def test_real_repo_template_parses_as_python(self):
+        """Pins the assumption the render-invariant comparison rests on: a
+        template that stops parsing would silently downgrade to no signal."""
+        import ast
+
+        repo_root = Path(__file__).resolve().parents[2]
+        template = repo_root / self.TEMPLATE_REL
+        assert template.is_file(), f"template moved: {template}"
+        ast.parse(template.read_text(encoding="utf-8"))
+
+
+class TestUntrackedIsNotDrift:
+    """#13851 fix 3: `source_checksum: null` is its own state.
+
+    Folded into drift_detected it made stale_components non-empty on a healthy
+    host — so the signal could not answer "is this deployment current?" and was
+    either ignored permanently or acted on destructively.
+    """
+
+    def test_report_partitions_untracked_out_of_drift(self, tmp_path):
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "changed.py", b"old")
+        _write(dep / "changed.py", b"new")
+        _write(dep / "foreign.py", b"not ours")
+        report = build_drift_report(str(src), str(dep))
+        assert [e["path"] for e in report["drifted_files"]] == ["changed.py"]
+        assert [e["path"] for e in report["untracked_files"]] == ["foreign.py"]
+        assert report["drift_detected"] is True
+
+    def test_untracked_alone_does_not_set_drift_detected(self, tmp_path):
+        """The exact healthy-host shape: files the component's source never
+        owned, and nothing else. drift_detected must be False so the component
+        does not appear in stale_components."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "foreign.py", b"not ours")
+        report = build_drift_report(str(src), str(dep))
+        assert report["drift_detected"] is False
+        assert report["drifted_files"] == []
+        assert [e["path"] for e in report["untracked_files"]] == ["foreign.py"]
+
+    def test_source_only_is_still_drift(self, tmp_path):
+        """A file in source that never reached the host is a failed deploy —
+        it must stay drift, or this fix would hide the opposite failure."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        dep.mkdir()
+        _write(src / "new_module.py", b"shipped")
+        report = build_drift_report(str(src), str(dep))
+        assert report["drift_detected"] is True
+        assert [e["path"] for e in report["drifted_files"]] == ["new_module.py"]
+        assert report["untracked_files"] == []
+
+
+class TestDeployOnlyEntriesAreProtectedFromDeletion:
+    """#13851 review: what the drift walk skips and what the sync must not
+    delete are two different sets, and both have to be right.
+
+    A resolve refuses on ANY would-be deletion, so an entry the deploy itself
+    creates — and that source therefore never has — makes the guard fire on
+    every unforced run. That trains operators to pass force, which turns the
+    guard off for the deletions it exists to catch.
+    """
+
+    def test_backend_trees_protect_the_autobot_shared_symlink(self):
+        """_ensure_autobot_shared_symlink creates <backend>/autobot_shared and
+        the deploy sync used to remove it every time (#10912). It is absent
+        from code_source, so an unprotected resolve refuses forever."""
+        for component in ("autobot-backend", "autobot-slm-backend"):
+            assert "autobot_shared" in deploy_only_entries(component), component
+
+    def test_rendered_artifacts_are_protected_but_still_compared(self, tmp_path, monkeypatch):
+        """npu-worker.py has no counterpart in the component's source dir, so a
+        deleting sync would remove the running worker script — but the drift
+        walk must still compare it against its template."""
+        assert "npu-worker.py" in deploy_only_entries("autobot-npu-worker")
+
+        repo = tmp_path / "repo"
+        template = "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2"
+        _write(repo / template, b'ROUTE = "/infer"\n')
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", b'ROUTE = "/predict"\n')
+        drifted, _ = compute_drift(str(src), str(dep), "autobot-npu-worker")
+        assert [e["path"] for e in drifted] == ["npu-worker.py"], "protection must not silence the walk"
+
+    def test_deploy_only_entries_are_not_compared(self, tmp_path):
+        """The symlink and the runtime registry are skipped by the walk itself,
+        so they never reach the untracked list either."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "config" / "npu_workers.yaml", b"workers: []\n")
+        report = build_drift_report(str(src), str(dep), "autobot-backend")
+        assert report["drifted_files"] == []
+        assert report["untracked_files"] == []
+
+
+class TestRenderedComparisonPrefersChecksum:
+    """#13851 review: npu-worker.py.j2 contains ZERO Jinja expressions, so it
+    renders byte-identically. A raw checksum is the stronger check there — the
+    AST digest discards comment-only and formatting drift in a file that runs
+    on the host."""
+
+    TEMPLATE_REL = "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.py.j2"
+
+    def _setup(self, tmp_path, monkeypatch, template_body, deployed_body):
+        repo = tmp_path / "repo"
+        _write(repo / self.TEMPLATE_REL, template_body)
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(repo))
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        src.mkdir()
+        _write(dep / "npu-worker.py", deployed_body)
+        return compute_drift(str(src), str(dep), "autobot-npu-worker")
+
+    def test_comment_only_drift_is_reported(self, tmp_path, monkeypatch):
+        """An AST-only comparison calls these identical. For a template with no
+        Jinja expressions they are genuinely different bytes on the host."""
+        drifted, _ = self._setup(
+            tmp_path,
+            monkeypatch,
+            b'ROUTE = "/infer"  # canonical\n',
+            b'ROUTE = "/infer"  # hand-edited on the box\n',
+        )
+        assert [e["path"] for e in drifted] == ["npu-worker.py"]
+
+    def test_identical_bytes_are_clean(self, tmp_path, monkeypatch):
+        body = b'ROUTE = "/infer"\n'
+        drifted, total = self._setup(tmp_path, monkeypatch, body, body)
+        assert (drifted, total) == ([], 1)
+
+    def test_substituted_value_still_reads_clean(self, tmp_path, monkeypatch):
+        """The bytes differ, so the render-invariant fallback decides — and a
+        substituted install dir is not drift (#12886)."""
+        drifted, _ = self._setup(
+            tmp_path,
+            monkeypatch,
+            b'INSTALL = "{{ npu_install_dir }}"\nROUTE = "/infer"\n',
+            b'INSTALL = "/opt/autobot/autobot-npu-worker"\nROUTE = "/infer"\n',
+        )
+        assert drifted == []
+
+    def test_real_template_has_no_jinja_expressions_today(self):
+        """Pins the premise of the checksum-first order. If a `{{ }}` is added,
+        the fallback takes over and this assertion is the place to say so."""
+        repo_root = Path(__file__).resolve().parents[2]
+        text = (repo_root / self.TEMPLATE_REL).read_text(encoding="utf-8")
+        assert "{{" not in text and "{%" not in text
