@@ -7,7 +7,7 @@
 Replaces unconditional prompt injection (#4811) with a 5-tier context
 pipeline that is budget-aware and selectively loaded:
 
-  L0 Identity     (~100 tok, always) — agent role + owner
+  L0 Identity     (~100 tok, always) — agent role
   L1 EssentialStory (~500-800 tok, always) — compact memory summary
   L2 OnDemand     (~200-500 tok, conditional) — entity/topic lookup
   L3 DeepSearch   (unlimited, conditional) — hybrid KB search + rerank
@@ -76,19 +76,29 @@ _UPPER_TOKEN_RE = re.compile(r"\b[A-Z][a-zA-Z]{1,}\b")
 
 
 class Layer0Identity:
-    """Agent role + owner block. Always loaded. Estimated ~100 tokens."""
+    """Agent role block. Always loaded. Estimated ~100 tokens.
+
+    #13867: this used to assert an owner as well —
+    ``getattr(getattr(_cfg, "owner", None), "name", None) or "mrveiss"``. Neither
+    ``owner`` nor ``agent`` is an attribute of ``AutoBotConfig``; its
+    ``__getattr__`` walks the sub-configs and raises, so both lookups always fell
+    through and the block was a compile-time constant naming one individual. On a
+    platform whose standing rule is full multi-tenant management, that put a
+    specific person's name into every tenant's system prompt.
+
+    The owner line is gone rather than made configurable: a role is defensible
+    context for the model, an owner is an assertion about who the deployment
+    belongs to, and nothing consumes it. Resolving identity per tenant is a
+    product decision, recorded on #13867 rather than assumed here.
+    """
+
+    #: Kept as a module-level constant so the test that guards against a
+    #: personal name reappearing has something stable to assert against.
+    DEFAULT_ROLE = "AutoBot AI assistant"
 
     async def render(self, context: dict) -> str:  # noqa: ARG002
-        """Return a short identity block from config or safe defaults."""
-        try:
-            from autobot_shared.ssot_config import config as _cfg
-
-            owner = getattr(getattr(_cfg, "owner", None), "name", None) or "mrveiss"
-            role = getattr(getattr(_cfg, "agent", None), "role", None) or "AutoBot AI assistant"
-        except Exception:
-            owner = "mrveiss"
-            role = "AutoBot AI assistant"
-        return f"## Identity\nRole: {role}\nOwner: {owner}"
+        """Return a short identity block."""
+        return f"## Identity\nRole: {self.DEFAULT_ROLE}"
 
     async def token_estimate(self, context: dict) -> int:  # noqa: ARG002
         return 100
