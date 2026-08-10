@@ -155,6 +155,10 @@ branch_state() {
         rm -f "$tf"; return 3
       fi
     done
+    # sort -zu: `-m` emits a merge's paths once per parent, and a long-lived
+    # branch that merges base repeatedly accumulates thousands of duplicates —
+    # enough to cross ARG_MAX and degrade the guard to "keep" permanently.
+    sort -zu "$tf" -o "$tf" 2>/dev/null || true
     while IFS= read -r -d '' f; do
       # :(literal) — a path beginning with ':' is otherwise parsed as pathspec
       # magic even after --, and silently compares equal.
@@ -237,88 +241,87 @@ fi
 
 # ── stranded worktree audit ─────────────────────────────────────────────────
 echo
-echo "[5] stranded worktrees"
-STRANDED=0; SEEN=0
+echo "[5] worktree evidence"
+# REPORT ONLY — this section never emits a delete instruction (#13879).
+#
+# Seven review rounds found thirteen defects here, and every one of them was a
+# defect of the IMPERATIVE: a wrong "keep" costs disk, a wrong "remove it"
+# costs work that exists nowhere else. The imperative also bought nothing —
+# nobody pipes this into `xargs git worktree remove`; a human or an agent makes
+# the call either way — so it carried all of the residual risk for none of the
+# capability.
+#
+# Worse, the question is not answerable from git alone. `git status` is
+# SPECIFIED to ignore assume-unchanged/skip-worktree entries, and
+# `git worktree remove` uses the same blind check — so both blind spots
+# compose: a worktree can hold hours of uncommitted work, report clean, and be
+# removed with rc=0. Ignored files (.env, data/.slm_keys) are invisible to it
+# too. A tool that cannot see what deletion destroys must not order deletion.
+#
+# So: print the evidence, mark candidates, and let the operator decide.
+CANDIDATES=0; SEEN=0
 SELF=$(git rev-parse --show-toplevel)
 
-# `git worktree list --porcelain` (no -z; this git does not support it) emits
-# `worktree <path>` lines. Stripping that fixed prefix keeps paths containing
-# spaces intact — verified. The listing is captured with its status checked:
-# an enumeration that fails must not read as "no worktrees", which is how the
-# original produced a clean bill of health for a tree it never looked at.
 if ! WT_LIST=$(git worktree list --porcelain 2>&1); then
   fail "cannot enumerate worktrees: $WT_LIST"
 else
   while IFS= read -r dir; do
     [ -n "$dir" ] || continue
-    [ "$dir" = "$SELF" ] && continue          # never audit the tree we stand in
+    [ "$dir" = "$SELF" ] && continue
     wb=$(git -C "$dir" branch --show-current 2>/dev/null) || continue
     if [ -z "$wb" ]; then
-      # Detached HEAD: no branch to compare, so it can hold unlanded work the
-      # audit cannot see. Report it rather than pass silently.
-      SEEN=$((SEEN+1)); ok "detached HEAD at $dir — cannot audit; keep"
+      SEEN=$((SEEN+1)); info "detached HEAD at $dir — no branch to compare; cannot audit"
       continue
     fi
     case "$wb" in main|master|Dev_new_gui) continue ;; esac
     SEEN=$((SEEN+1))
-    branch_state "$dir" "$wb"
-    case $? in
-      0)
-        # A delete instruction needs TWO independent signals, never one git
-        # heuristic: patch-ids say the work is in the base, AND GitHub says a
-        # PR for this branch merged. Either alone has produced a false verdict
-        # before (#13879), and the cost of being wrong is destroyed work.
-        # --ignored=matching, not plain --porcelain. `git worktree remove`
-        # without --force refuses on tracked/untracked changes but DELETES
-        # ignored files silently — and ignored is where the valuable
-        # unreproducible state lives: .env, local config, key material. Two
-        # worktrees flagged here today hold 187 and 27 ignored files, one of
-        # them `data/.slm_keys`. A delete instruction must never be issued
-        # without naming what it destroys.
-        wt_dirty=$(git -C "$dir" status --porcelain 2>&1)
-        wt_ignored=$(git -C "$dir" status --porcelain --ignored=matching 2>/dev/null | grep -c '^!!')
-        if ! command -v gh >/dev/null 2>&1; then
-          ok "'$wb' looks landed by patch-id, but gh is unavailable to confirm a merged PR — keep"
-        elif [ -n "$wt_dirty" ]; then
-          # `git worktree remove` refuses on a dirty tree and --force is
-          # forbidden, so a delete instruction here just sends the operator
-          # into a wall. The uncommitted work is the point.
-          ok "'$wb' has landed but holds uncommitted work — keep until it is committed or discarded"
-        elif merged_pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
-          if [ -n "$merged_pr" ]; then
-            # `git worktree remove` REFUSES on a locked worktree, and the
-            # worktree rules mandate locking on creation — 15 of 19 here are
-            # locked. Without saying so, the operator's shortest path is
-            # `remove -f -f`, which both violates the never-force rule and
-            # deletes exactly the ignored files the next line warns about.
-            unlock_hint=""
-            grep -qxF "worktree $dir" <<< "$WT_LIST" && \
-              awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
-                <<< "$WT_LIST" | grep -q . && \
-              unlock_hint=" It is LOCKED — 'git worktree unlock $dir' first; never -f -f."
-            if [ "${wt_ignored:-0}" -gt 0 ]; then
-              fail "worktree '$wb' has landed (PR #$merged_pr merged) at $dir — remove it, but it holds ${wt_ignored} IGNORED file(s) that 'git worktree remove' deletes silently; inspect them first:${unlock_hint}"
-              git -C "$dir" status --porcelain --ignored=matching 2>/dev/null \
-                | grep '^!!' | head -5 | sed 's/^!! /            /'
-            else
-              fail "worktree '$wb' has landed (PR #$merged_pr merged) but still exists at $dir — remove it.${unlock_hint}"
-            fi
-            STRANDED=$((STRANDED+1))
-          else
-            ok "'$wb' looks landed by patch-id but has no merged PR — keep, and investigate"
-          fi
-        else
-          # gh present but failing (401, rate limit, network). Distinguish it
-          # from "no merged PR" so the investigation points somewhere useful.
-          ok "'$wb' looks landed by patch-id but gh could not be queried — keep"
-        fi ;;
-      1) ok "'$wb' has unlanded commits — keep" ;;
-      2) ok "'$wb' has no commits yet (or only empty claim commits) — keep" ;;
-      4) ok "'$wb' landed by patch-id, but the base has since changed the same files so content equality cannot confirm it — keep; verify by hand before removing" ;;
-      *) fail "'$wb' cannot be verified against $BASE — investigate, do not delete" ;;
+
+    branch_state "$dir" "$wb"; bs=$?
+    case $bs in
+      0) verdict="every commit present in $BASE (patch-id AND tree content)" ;;
+      1) verdict="has unlanded commits" ;;
+      2) verdict="no commits yet, or only empty claim commits" ;;
+      3) verdict="CANNOT BE VERIFIED — investigate" ;;
+      4) verdict="landed by patch-id, but $BASE has since changed the same paths" ;;
     esac
+
+    wt_dirty=$(git -C "$dir" status --porcelain 2>/dev/null | wc -l)
+    wt_ignored=$(git -C "$dir" status --porcelain --ignored=matching 2>/dev/null | grep -c '^!!')
+    # `git status` cannot see these by design, and neither can
+    # `git worktree remove` — the pair that composes into silent data loss.
+    idx_bits=$(git -C "$dir" ls-files -v 2>/dev/null | grep -c '^[a-zS]')
+    locked=no
+    awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
+      <<< "$WT_LIST" | grep -q . && locked=yes
+    merged_pr="(not queried)"
+    if command -v gh >/dev/null 2>&1; then
+      if pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then
+        merged_pr="${pr:-none}"
+      else
+        merged_pr="(gh failed)"
+      fi
+    fi
+
+    printf '\n  %s\n' "$wb"
+    printf '    landed        : %s\n' "$verdict"
+    printf '    merged PR     : %s\n' "$merged_pr"
+    printf '    uncommitted   : %s\n' "$wt_dirty"
+    printf '    ignored       : %s%s\n' "$wt_ignored" \
+      "$([ "${wt_ignored:-0}" -gt 0 ] && echo '  (deleted silently by git worktree remove)')"
+    printf '    index bits    : %s assume-unchanged/skip-worktree%s\n' "$idx_bits" \
+      "$([ "${idx_bits:-0}" -gt 0 ] && echo '  (invisible to git status AND to worktree remove)')"
+    printf '    locked        : %s\n' "$locked"
+    printf '    path          : %s\n' "$dir"
+
+    if [ "$bs" -eq 0 ] && [ "$merged_pr" != "none" ] && [ "$merged_pr" != "(gh failed)" ] \
+       && [ "$merged_pr" != "(not queried)" ]; then
+      CANDIDATES=$((CANDIDATES+1))
+      printf '    => CANDIDATE for removal — operator decision. Inspect the counts above first.\n'
+    fi
   done < <(printf '%s\n' "$WT_LIST" | sed -n 's/^worktree //p')
+  echo
   [ "$SEEN" -eq 0 ] && ok "no feature worktrees present"
+  info "$SEEN worktree(s) examined, $CANDIDATES candidate(s) for removal — nothing was instructed"
 fi
 
 echo

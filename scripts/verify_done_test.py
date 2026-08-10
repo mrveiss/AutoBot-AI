@@ -12,6 +12,7 @@ The governing property: a check that cannot run is a FAILURE, never a verdict.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -87,14 +88,14 @@ class TestNeverDeletesUnlandedWork:
         add_worktree(repo, "wt-b", [("b.txt", "feat(b): thing (#3)")])
         res = run(repo, "--base", "no-such-ref")
         assert res.returncode != 0, res.stdout
-        assert "has landed" not in res.stdout
+        assert "CANDIDATE" not in res.stdout
         assert "does not resolve" in (res.stdout + res.stderr).lower()
 
     def test_zero_commit_worktree_is_not_landed(self, repo: Path) -> None:
         """Trigger (b): a session that just started looked finished."""
         add_worktree(repo, "wt-fresh", [])
         res = run(repo, "--base", "base")
-        assert "has landed" not in res.stdout, res.stdout
+        assert "CANDIDATE" not in res.stdout, res.stdout
         assert "no commits" in res.stdout.lower()
 
     def test_tip_subject_collision_does_not_mark_unlanded_work_landed(self, repo: Path) -> None:
@@ -110,7 +111,7 @@ class TestNeverDeletesUnlandedWork:
         # The SAME subject lands on base via a different patch.
         _commit(repo, "other.txt", "unrelated\n", "docs: update the changelog (#6)")
         res = run(repo, "--base", "base")
-        assert "has landed" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "three unlanded commits must never be reported landed because the "
             f"tip subject collides\n{res.stdout}"
         )
@@ -132,11 +133,11 @@ class TestNeverDeletesUnlandedWork:
         res = run(repo, "--base", "base")
         assert "wt-done" in res.stdout
         # The patch-id signal must fire...
-        assert "landed by patch-id" in res.stdout or "has landed" in res.stdout, res.stdout
+        assert "every commit present" in res.stdout, res.stdout
         # ...but on its own it must NOT authorize deletion. There is no merged
         # PR for this throwaway branch, so the second signal is absent and the
         # verdict must stay on the safe side.
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "a single git heuristic must never produce a delete instruction\n" + res.stdout
         )
 
@@ -154,7 +155,7 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "commit", "-q", "--allow-empty", "-m", "chore: claim worktree issue-9999")
         _git(repo, "commit", "-q", "--allow-empty", "-m", "chore(deps): bump npm_and_yarn (#13503)")
         res = run(repo, "--base", "base")
-        assert "has landed" not in res.stdout, res.stdout
+        assert "CANDIDATE" not in res.stdout, res.stdout
         assert wt.exists()
 
     def test_empty_commits_alongside_real_work_do_not_mask_it(self, repo: Path) -> None:
@@ -165,7 +166,7 @@ class TestNeverDeletesUnlandedWork:
         _commit(wt, "real.txt", "real work\n", "fix(z): genuine work (#9)")
         _git(repo, "commit", "-q", "--allow-empty", "-m", "chore: an empty commit on base")
         res = run(repo, "--base", "base")
-        assert "has landed" not in res.stdout, res.stdout
+        assert "CANDIDATE" not in res.stdout, res.stdout
         assert "unlanded commits" in res.stdout
 
     def test_merge_unique_content_is_never_reported_landed(self, repo: Path) -> None:
@@ -190,7 +191,7 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "add", "merge-only.txt")
         _git(wt, "commit", "-q", "-m", "merge base into wt-evil")
         res = run(repo, "--base", "base")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "merge-unique content is invisible to git cherry; a delete "
             f"instruction here destroys it\n{res.stdout}"
         )
@@ -198,7 +199,7 @@ class TestNeverDeletesUnlandedWork:
         # specific behaviour: the merge must be RECOGNISED as unjudgeable
         # rather than judged on the non-merge commits alone. The pre-fix script
         # reports "unlanded commits" here — safe by luck, not by reasoning.
-        assert "cannot be verified" in res.stdout, res.stdout
+        assert "CANNOT BE VERIFIED" in res.stdout, res.stdout
         assert (wt / "merge-only.txt").exists()
 
     def test_root_commit_content_is_not_skipped_as_empty(self, repo: Path) -> None:
@@ -226,7 +227,7 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "checkout", "-q", "issue-root")
         _git(wt, "merge", "-q", "--allow-unrelated-histories", "--no-edit", "vendor")
         res = run(repo, "--base", "base")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "the vendored root commit is unlanded; deleting this worktree "
             f"destroys it\n{res.stdout}"
         )
@@ -248,7 +249,7 @@ class TestNeverDeletesUnlandedWork:
         sha = _git(repo, "rev-parse", "wt-ff").stdout.strip()
         _git(repo, "cherry-pick", sha)  # fast-forwards base onto that commit
         res = run(repo, "--base", "base")
-        assert "has landed" not in res.stdout, res.stdout
+        assert "CANDIDATE" not in res.stdout, res.stdout
         assert res.returncode == 0
 
 
@@ -274,9 +275,9 @@ class TestDeletePath:
         """Positive control: the script must still delete when it should."""
         self._landed(repo, "wt-gone")
         res = run(repo, "--base", "base", merged_pr="4242")
-        assert "remove it" in res.stdout, res.stdout
-        assert "PR #4242 merged" in res.stdout
-        assert res.returncode != 0
+        assert "CANDIDATE" in res.stdout, res.stdout
+        assert "merged PR     : 4242" in res.stdout
+        assert "operator decision" in res.stdout
 
     def test_ignored_files_are_named_before_the_instruction(self, repo: Path) -> None:
         """R4c: `git worktree remove` deletes ignored files silently."""
@@ -289,8 +290,8 @@ class TestDeletePath:
         wt = self._landed(repo, "wt-secrets")
         (wt / ".env").write_text("TOKEN=xyz\n", encoding="utf-8")
         res = run(repo, "--base", "base", merged_pr="4243")
-        assert "IGNORED file" in res.stdout, res.stdout
-        assert ".env" in res.stdout
+        assert "deleted silently by git worktree remove" in res.stdout, res.stdout
+        assert re.search(r"ignored\s+:\s+[1-9]", res.stdout), res.stdout
 
     def test_multi_commit_branch_with_reverted_work_is_not_landed(self, repo: Path) -> None:
         """`git diff-tree` takes at most TWO tree-ishes.
@@ -315,7 +316,7 @@ class TestDeletePath:
         _git(repo, "rm", "-q", "two.txt")
         _git(repo, "commit", "-q", "-m", "revert: back out two (#51)")
         res = run(repo, "--base", "base", merged_pr="4250")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "two.txt was reverted out of base; this worktree is its only copy\n"
             + res.stdout
         )
@@ -334,7 +335,7 @@ class TestDeletePath:
         for sha in reversed(_git(wt, "rev-list", "base..wt-multi-ok").stdout.split()):
             _git(repo, "cherry-pick", sha)
         res = run(repo, "--base", "base", merged_pr="4251")
-        assert "remove it" in res.stdout, res.stdout
+        assert "CANDIDATE" in res.stdout, res.stdout
 
     def test_whitespace_only_fix_is_not_landed_by_patch_id_collision(self, repo: Path) -> None:
         """`git patch-id` STRIPS whitespace, so unrelated whitespace edits collide.
@@ -352,7 +353,7 @@ class TestDeletePath:
         (repo / "loop.py").write_text("def f(items):\n    acc = 0\n\treturn acc\n", encoding="utf-8")
         _git(repo, "commit", "-q", "-am", "style: retab (#41)")
         res = run(repo, "--base", "base", merged_pr="4245")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "base holds a tab, the branch holds 4 spaces — the fix is NOT in base\n"
             + res.stdout
         )
@@ -363,7 +364,7 @@ class TestDeletePath:
         _git(repo, "rm", "-q", "wt-reverted.txt")
         _git(repo, "commit", "-q", "-m", "revert: back out #30 (#42)")
         res = run(repo, "--base", "base", merged_pr="4246")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "the work was reverted out of base; the branch is its only copy\n" + res.stdout
         )
         assert (wt / "wt-reverted.txt").exists()
@@ -377,8 +378,8 @@ class TestDeletePath:
         wt = self._landed(repo, "wt-locked")
         _git(repo, "worktree", "lock", str(wt), "--reason", "in use")
         res = run(repo, "--base", "base", merged_pr="4247")
-        assert "remove it" in res.stdout, res.stdout
-        assert "LOCKED" in res.stdout and "unlock" in res.stdout, res.stdout
+        assert "CANDIDATE" in res.stdout, res.stdout
+        assert re.search(r"locked\s+:\s+yes", res.stdout), res.stdout
         _git(repo, "worktree", "unlock", str(wt))
 
     def test_tag_shadowing_a_branch_does_not_authorize_deletion(self, repo: Path) -> None:
@@ -392,7 +393,7 @@ class TestDeletePath:
         _git(repo, "commit", "-q", "-m", "fix(a): landed (#7) (squashed)")
         _commit(wt, "unlanded.txt", "NOT landed\n", "fix(b): still open (#7)")
         res = run(repo, "--base", "base", merged_pr="4244")
-        assert "remove it" not in res.stdout, (
+        assert "CANDIDATE" not in res.stdout, (
             "the tag points at the old tip; the BRANCH holds unlanded work\n" + res.stdout
         )
         assert (wt / "unlanded.txt").exists()
@@ -407,3 +408,37 @@ class TestFailsRatherThanGuesses:
     def test_clean_repo_with_no_worktrees_passes(self, repo: Path) -> None:
         res = run(repo, "--base", "base")
         assert res.returncode == 0, res.stdout
+
+
+@pytest.mark.skipif(not SCRIPT.exists(), reason="verify-done.sh not present")
+class TestReportsWhatGitCannotSee:
+    """Round 7: `git status` is SPECIFIED to ignore assume-unchanged /
+    skip-worktree entries, and `git worktree remove` uses the same blind check.
+    The two blind spots compose: a worktree can hold hours of uncommitted work,
+    report clean, and be removed with rc=0. Verified. The report must surface
+    the index bits so a human can see what git will not tell them."""
+
+    def test_assume_unchanged_edits_are_surfaced(self, repo: Path) -> None:
+        wt = repo / ".worktrees" / "wt-hidden"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-hidden", "base")
+        _commit(wt, "w.txt", "committed\n", "fix(w): work (#60)")
+        (wt / "w.txt").write_text("HOURS OF UNCOMMITTED WORK\n", encoding="utf-8")
+        _git(wt, "update-index", "--assume-unchanged", "w.txt")
+        assert _git(wt, "status", "--porcelain").stdout == "", "precondition: git reports clean"
+        res = run(repo, "--base", "base", merged_pr="4260")
+        assert re.search(r"index bits\s+:\s+[1-9]", res.stdout), res.stdout
+        assert "invisible to git status" in res.stdout
+
+    def test_report_never_emits_an_imperative(self, repo: Path) -> None:
+        """The whole point of narrowing: no output line orders a deletion."""
+        wt = repo / ".worktrees" / "wt-cand"
+        _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt-cand", "base")
+        _commit(wt, "c.txt", "c\n", "fix(c): work (#61)")
+        sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
+        _git(repo, "cherry-pick", "--no-commit", sha)
+        _git(repo, "commit", "-q", "-m", "fix(c): work (#61) (squashed)")
+        res = run(repo, "--base", "base", merged_pr="4261")
+        assert "CANDIDATE" in res.stdout, res.stdout
+        for imperative in ("remove it", "rm -rf", "worktree remove"):
+            assert imperative not in res.stdout, f"{imperative!r} in output:\n{res.stdout}"
+        assert "operator decision" in res.stdout
