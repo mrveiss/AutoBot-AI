@@ -191,7 +191,12 @@ jobs:
         echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
 
     - name: Block hardcoded value regressions (#694, #6725)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-hardcoded-values
+      # --changed-lines-only (#13950): this hook reads each changed file whole,
+      # so editing one line of a legacy module made the PR answerable for that
+      # file's entire backlog — four PRs in one session failed on violations
+      # blame attributes to other commits. Scoped to added lines here; the
+      # pre-commit stage and a direct run still scan whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-hardcoded-values
 
     - name: Block hardcoded-IP fallback regressions (#6783, #6991)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_hardcoded_ip_fallbacks.py --ext py
