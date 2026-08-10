@@ -3,11 +3,52 @@
 **Date:** 2026-08-08
 **Issue:** #13689 · umbrella #13685 · original experiment #5066
 **Harness:** `autobot-backend/scripts/tiered_context_ab.py` (committed; re-run to reproduce)
-**Decision:** **`tiered_context_enabled` is now ON.**
+**Decision:** ~~**`tiered_context_enabled` is now ON.**~~ **CORRECTED 2026-08-10 — reverted to OFF (#13866).**
 
 It was measured OFF and stayed off until the one blocker below was fixed. That sequence is kept
 rather than rewritten — a decision record that only shows its final state teaches nothing about
-how it was reached.
+how it was reached. The correction below is appended for the same reason.
+
+---
+
+## CORRECTION (2026-08-10, #13866) — this result was measured against test doubles
+
+**The headline below ("all five layers render") is false against production code.** The flag has
+been reverted to OFF. Read the correction before the result.
+
+The harness mocks the memory graph and the knowledge service. Both mocks diverge from production
+in exactly the way that hides a defect, and the two layers whose fixtures diverge most are the two
+that do not work:
+
+| Layer | Result below | Against production code |
+|---|---|---|
+| L0 | renders | renders a **compile-time constant** — `AutoBotConfig` has no `owner`/`agent` attribute, so both getattr chains always fall through to literals (#13867) |
+| L1 | renders | already rendered before the flip, via the legacy path — **no new content**, and a small net cost: the tiered path additionally routes it through `_fit_l0_l1`, which can only shrink it |
+| L2 | renders | **cannot render** — entities carry `observations`; the layer reads `description`/`content`, which no write path produces (#13686, reopened) |
+| L3 | renders | **cannot render** — `knowledge_service=None` since #13742 (`29eeb904b`), merged in a *sibling* PR earlier the same day, **before** this measurement ran |
+| L4 | renders | renders for work-item-bound sessions, and since #13729 only when the binding also passes a membership re-check — narrower still |
+
+Specifically, before this correction the harness supplied `ENTITY_FACTS = [{"name": "Redis",
+"description": "..."}]`. No production code produces an entity document with a `description` key.
+The harness also mocked the knowledge service — while `29eeb904b`, already merged on this branch,
+had removed it from the production call site. The mock contradicted merged code at the moment the
+A/B ran.
+
+So "+14 to +45 tokens" describes the mocks. Only **L4** contributes anything that varies with the
+turn; L0 adds a fixed block, L1 was already there, and L2 pays up to 20 Redis round-trips per turn
+to return an empty string.
+
+The latency figure is stale for a second reason: #13729 added two indexed DB queries on *bound*
+sessions after this measurement was taken, and the number here was never revised. (The per-turn
+Redis GET for the binding is **not** new — it predates #13729, from #13704.)
+
+**What this record got wrong methodologically:** it correctly noted "real retrieval latency is not
+measured here" as an open caveat, then drew a default-changing conclusion as if the caveat were
+closed. A layer that has never rendered in production cannot be certified by a fixture written
+alongside it — the fixture and the layer share the same wrong assumption, so they agree.
+
+**Re-enabling requires:** #13686 and #13867 fixed, and this A/B re-run against a live backend with
+entity documents built by `_build_entity_document`. Not another mock-based pass.
 
 ---
 
@@ -18,10 +59,13 @@ how it was reached.
 the five layers were structurally unable to render (#13686, #13687), so the flag compared the
 legacy path against the legacy path plus a static identity block.
 
-Both are now fixed and merged. This is the first run where all five layers can render, and this
+Both are now fixed and merged. ~~This is the first run where all five layers can render~~ (**false — three of five cannot; #13866**), and this
 file exists so the next person does not have to re-derive the outcome from an unexplained default.
 
-## Result — all five layers render
+## Result — all five layers render (SUPERSEDED)
+
+> **SUPERSEDED (2026-08-10, #13866)** — see the correction at the top of this file.
+
 
 | Case | Path | Tokens | ms | Layers rendered |
 |---|---|---|---|---|
@@ -35,9 +79,9 @@ file exists so the next person does not have to re-derive the outcome from an un
 | | legacy | 16 | 1.1 | essential_story |
 
 L0 and L1 always; L2 on an entity mention; L3 on a retrieval keyword; L4 on a bound session.
-**AC 1 satisfied** — the first time it could be.
+~~**AC 1 satisfied** — the first time it could be.~~ **Not satisfied: L2 and L3 cannot render (#13866).**
 
-Cost: **+14 to +45 tokens** and **+6 to +8 ms** of assembly per turn.
+~~Cost: **+14 to +45 tokens** and **+6 to +8 ms** of assembly per turn.~~ **Retracted — measured against mocks (#13866).**
 
 ## The blocker that held it off — now fixed (#13742, merged `29eeb904b`)
 
@@ -61,7 +105,7 @@ is the first run where L3 could fire at all.
 through `budget_grounded_context` for trimming and citation rebinding — and the tiered builder is
 no longer handed a `knowledge_service`. Verified by call count: one retrieval per turn.
 
-With that resolved, every criterion this issue set is met, and the flag is on.
+~~With that resolved, every criterion this issue set is met, and the flag is on.~~ **False — see the correction (#13866).**
 
 ## What was NOT measured, stated plainly
 
@@ -96,19 +140,21 @@ cache, so there is now one parser of that file. Tracked as **#13741**.
 The table above is measured **after** that fix. Reporting the pre-fix numbers as the tiered
 path's cost would have made the flag look far worse than it is.
 
-## Decision
+## Decision (SUPERSEDED)
 
-**On.**
+> **SUPERSEDED (2026-08-10, #13866)** — see the correction at the top of this file.
+
+
+~~**On.**~~ **Reverted to OFF on 2026-08-10 (#13866).**
 
 - All five layers work; the stack does what #5066 intended.
 - Token and latency costs are modest and acceptable: +14–45 tokens, +6–8 ms assembly.
 - The single blocker — L3's duplicate retrieval — is fixed (#13742), so enabling no longer
   doubles retrieval cost.
 
-**What would reverse this:** evidence that the added context hurts answer quality. None exists in
-either direction, because quality is unmeasurable until #13251/#13243. If that measurement later
-shows the tiered path is worse, this decision should be revisited on that evidence — the flag is
-one line and this file is the record of why it moved.
+~~**What would reverse this:** evidence that the added context hurts answer quality.~~
+**This got it wrong.** The decision was reversed on entirely different grounds: the layers it
+credited were never rendering, so there was no added context to evaluate (#13866).
 
 `autobot_shared/ssot_config.py` links this file from the `tiered_context_enabled` field so the
 default is explained where it is defined, not only here.
