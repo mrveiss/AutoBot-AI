@@ -166,6 +166,42 @@ jobs:
     - name: Block print/console regressions (#1082, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
 
+    - name: Check repo conventions — third-party names, doc cross-links (#13876)
+      env:
+        CONVENTIONS_DENYLIST_CONTENT: ${{ secrets.CONVENTIONS_DENYLIST }}
+        # Bound through env rather than interpolated into the script body.
+        # These are GitHub-generated SHAs, but keeping every ${{ }} out of
+        # `run:` is the rule that does not need a per-field risk judgement.
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+        # The denylist of third-party product names is NOT stored in this repo:
+        # committing it would violate the anonymisation rule it enforces. It
+        # arrives as a masked secret and is written to a runner-local temp file.
+        #
+        # When the secret is absent the name check reports SKIPPED, never PASSED
+        # — a guard that silently no-ops is worse than no guard. The doc
+        # cross-link and commit-format checks need no secret and always run.
+        # Once the secret is configured this step hardens automatically.
+        # This workflow also runs on push, where there is no PR context.
+        if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
+          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+        else
+          RANGE="HEAD~1..HEAD"
+        fi
+        echo "conventions scope: $RANGE"
+        if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
+          CONVENTIONS_DENYLIST=$(mktemp)
+          export CONVENTIONS_DENYLIST
+          printf '%s\n' "$CONVENTIONS_DENYLIST_CONTENT" > "$CONVENTIONS_DENYLIST"
+          trap 'rm -f "$CONVENTIONS_DENYLIST"' EXIT
+          scripts/lint-conventions.sh --range "$RANGE" --require-denylist
+        else
+          echo "::warning::CONVENTIONS_DENYLIST secret not configured — the third-party-name check is SKIPPED, not passed. Configure it to harden this gate."
+          scripts/lint-conventions.sh --range "$RANGE"
+        fi
+
     - name: Block developer absolute-path regressions (#13409, #13149)
       run: |
         set -euo pipefail
