@@ -65,7 +65,7 @@ needs_promtool = pytest.mark.skipif(
 
 
 def _run(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(  # nosec B603 - fixed binary, repo-local paths
+    return subprocess.run(  # nosec B603  # fixed binary, repo-local paths
         [_PROMTOOL, *args],
         cwd=_MONITORING,
         capture_output=True,
