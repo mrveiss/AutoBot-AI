@@ -1,13 +1,25 @@
+---
+tags: [type/architecture, status/stale, component/frontend]
+date: 2026-06-04
+issue: 4463
+---
+
 # PairDeviceDialog Component Design
 
 **Issue:** https://github.com/mrveiss/AutoBot-AI/issues/4463 (originating feature)
 **Wiring gap:** https://github.com/mrveiss/AutoBot-AI/issues/13794
+**Originally:** `MVA-2993` — the ticket id still cited in `usePairingQR.ts`, kept here because
+the filename no longer carries it and it is the only trail from that code back to this doc.
 
 > **Status: implemented but not wired.** Both files below were built to this spec,
 > and the backend endpoint is registered — but `PairDeviceDialog.vue` is imported
 > by nothing, so no user can reach it. This design names the files to create and
 > never names a parent view or entry point, which is the gap #13794 closes.
 > Read it as a component spec, not as a description of shipped behaviour.
+>
+> Tagged `status/stale` for that reason. When the wiring lands, the accurate
+> description of the shipped flow is that `DeviceManagementPanel` opens this
+> dialog — a detail this design never specified.
 
 ## Overview
 
