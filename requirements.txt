@@ -44,7 +44,7 @@ opentelemetry-instrumentation-aiohttp-client>=0.65b0
 # Provides efficient vector similarity search operations
 # Using CPU version for Python 3.14 compatibility (GPU version requires conda)
 # For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.14)
-faiss-cpu>=1.14.3
+faiss-cpu>=1.15.0
 aiosqlite>=0.22.1
 
 # Security - XML parsing protection (Issue #67)
