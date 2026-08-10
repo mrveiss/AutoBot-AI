@@ -184,6 +184,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REQUIRE_CLASSIFICATION",
+        type=bool,
+        default=False,
+        description=(
+            "Fail orchestrator construction when request classification is unavailable. "
+            "Default (off) degrades gracefully: every request is defaulted to COMPLEX and "
+            "the reason is reported in the orchestration status. Deployments that depend on "
+            "classification set this so the failure is loud instead of silent (#13807)."
+        ),
+        component="orchestrator",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_SHOW_DEPRECATION_WARNINGS",
         type=bool,
         default=False,

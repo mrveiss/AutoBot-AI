@@ -82,11 +82,6 @@ def _session():
 
 
 class TestL2RendersInPrompt:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#13686: L2 reads description/content; entity documents carry observations. "
-        "This AC was green against an invented fixture shape (#13866).",
-    )
     @pytest.mark.asyncio
     async def test_known_entity_renders_related_context_block(self):
         """AC #13686: flag on + a known entity -> '## Related Context' in the prompt.

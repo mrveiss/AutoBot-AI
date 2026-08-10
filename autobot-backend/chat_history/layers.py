@@ -7,7 +7,7 @@
 Replaces unconditional prompt injection (#4811) with a 5-tier context
 pipeline that is budget-aware and selectively loaded:
 
-  L0 Identity     (~100 tok, always) — agent role + owner
+  L0 Identity     (~100 tok, always) — agent role
   L1 EssentialStory (~500-800 tok, always) — compact memory summary
   L2 OnDemand     (~200-500 tok, conditional) — entity/topic lookup
   L3 DeepSearch   (unlimited, conditional) — hybrid KB search + rerank
@@ -76,19 +76,29 @@ _UPPER_TOKEN_RE = re.compile(r"\b[A-Z][a-zA-Z]{1,}\b")
 
 
 class Layer0Identity:
-    """Agent role + owner block. Always loaded. Estimated ~100 tokens."""
+    """Agent role block. Always loaded. Estimated ~100 tokens.
+
+    #13867: this used to assert an owner as well —
+    ``getattr(getattr(_cfg, "owner", None), "name", None) or "mrveiss"``. Neither
+    ``owner`` nor ``agent`` is an attribute of ``AutoBotConfig``; its
+    ``__getattr__`` walks the sub-configs and raises, so both lookups always fell
+    through and the block was a compile-time constant naming one individual. On a
+    platform whose standing rule is full multi-tenant management, that put a
+    specific person's name into every tenant's system prompt.
+
+    The owner line is gone rather than made configurable: a role is defensible
+    context for the model, an owner is an assertion about who the deployment
+    belongs to, and nothing consumes it. Resolving identity per tenant is a
+    product decision, recorded on #13867 rather than assumed here.
+    """
+
+    #: Kept as a module-level constant so the test that guards against a
+    #: personal name reappearing has something stable to assert against.
+    DEFAULT_ROLE = "AutoBot AI assistant"
 
     async def render(self, context: dict) -> str:  # noqa: ARG002
-        """Return a short identity block from config or safe defaults."""
-        try:
-            from autobot_shared.ssot_config import config as _cfg
-
-            owner = getattr(getattr(_cfg, "owner", None), "name", None) or "mrveiss"
-            role = getattr(getattr(_cfg, "agent", None), "role", None) or "AutoBot AI assistant"
-        except Exception:
-            owner = "mrveiss"
-            role = "AutoBot AI assistant"
-        return f"## Identity\nRole: {role}\nOwner: {owner}"
+        """Return a short identity block."""
+        return f"## Identity\nRole: {self.DEFAULT_ROLE}"
 
     async def token_estimate(self, context: dict) -> int:  # noqa: ARG002
         return 100
@@ -142,6 +152,32 @@ class Layer1EssentialStory:
 # ---------------------------------------------------------------------------
 
 
+def _entity_facts(entity: dict, max_observations: int = 3) -> str:
+    """Render an entity's facts from the shape the memory graph actually stores.
+
+    #13686: L2 previously read ``description`` then ``content``. The canonical
+    document built by ``EntityOperationsMixin._build_entity_document`` carries
+    neither — it is ``{id, type, name, created_at, updated_at, observations,
+    metadata}``. So the lookup found an entity, produced an empty string for it,
+    and the layer rendered nothing on every real turn. Reconnecting the graph
+    (#13696) fixed the plumbing but not this: L2 was still reading fields no
+    entity has.
+
+    ``description``/``content`` stay as fallbacks — other callers may hand L2 a
+    differently-shaped mapping, and dropping them would trade one silent
+    mismatch for another.
+    """
+    observations = entity.get("observations")
+    if isinstance(observations, list):
+        facts = [str(o).strip() for o in observations[:max_observations] if str(o).strip()]
+        if facts:
+            return "; ".join(facts)
+    elif isinstance(observations, str) and observations.strip():
+        return observations.strip()
+
+    return str(entity.get("description") or entity.get("content") or "").strip()
+
+
 class Layer2OnDemand:
     """Entity/topic context. Loaded when the user message mentions named entities."""
 
@@ -175,9 +211,9 @@ class Layer2OnDemand:
                 entities = await memory_graph.search_entities(query=candidate, limit=3)
                 for ent in entities:
                     name = ent.get("name", "")
-                    description = ent.get("description", "") or ent.get("content", "")
-                    if name and description:
-                        parts.append(f"- **{name}**: {description}")
+                    facts = _entity_facts(ent)
+                    if name and facts:
+                        parts.append(f"- **{name}**: {facts}")
 
             if not parts:
                 return ""
