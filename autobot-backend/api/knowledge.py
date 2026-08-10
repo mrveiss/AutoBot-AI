@@ -1078,16 +1078,14 @@ def _extract_pdf_content(filename: str, file_content: bytes) -> str:
     Raises:
         HTTPException: If pypdf library is missing or parsing fails
     """
-    import io
+    from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_pdf
 
     try:
-        import pypdf
-
-        pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
-        return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
-    except ImportError:
+        return extract_pdf(file_content).text
+    except DocumentDependencyError as e:
+        logger.error("PDF support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
-    except Exception as e:
+    except DocumentExtractionError as e:
         logger.error("PDF parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse PDF file")
 
@@ -1108,16 +1106,14 @@ def _extract_docx_content(filename: str, file_content: bytes) -> str:
     Raises:
         HTTPException: If python-docx library is missing or parsing fails
     """
-    import io
+    from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_docx
 
     try:
-        import docx
-
-        doc = docx.Document(io.BytesIO(file_content))
-        return "\n".join(para.text for para in doc.paragraphs)
-    except ImportError:
+        return extract_docx(file_content).text
+    except DocumentDependencyError as e:
+        logger.error("DOCX support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
-    except Exception as e:
+    except DocumentExtractionError as e:
         logger.error("DOCX parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
 
