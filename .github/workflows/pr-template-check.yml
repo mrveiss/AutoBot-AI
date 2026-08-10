@@ -35,8 +35,31 @@ jobs:
       run: |
         set -euo pipefail
 
-        # Fetch PR body via CLI (avoids direct expression injection)
-        PR_BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body' 2>/dev/null || echo "")
+        # Fetch PR body via CLI (avoids direct expression injection).
+        #
+        # #13929: this used to end in `2>/dev/null || echo ""`, which turned a
+        # failed fetch into an *empty body* — and an empty body extracts to empty
+        # sections, so the job reported the author's mistake instead of its own.
+        # Observed on a PR whose body was complete: three sections reported empty,
+        # a re-run with no change passed. The `opened` trigger races PR creation,
+        # so a transient miss is expected and must not read as a violation.
+        PR_BODY=""
+        for attempt in 1 2 3; do
+          if PR_BODY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body'); then
+            break
+          fi
+          echo "::notice::PR body fetch attempt ${attempt} failed; retrying"
+          PR_BODY=""
+          sleep 5
+        done
+
+        if [ -z "${PR_BODY//[[:space:]]/}" ]; then
+          # Two distinct causes, neither of which is "the sections are empty":
+          # the fetch never succeeded, or the author opened a PR with no body.
+          echo "::error::PR body is empty or could not be read after 3 attempts."
+          echo "If the description is filled in, this is a fetch failure (#13929) — re-run the job."
+          exit 1
+        fi
 
         FAILED=0
 

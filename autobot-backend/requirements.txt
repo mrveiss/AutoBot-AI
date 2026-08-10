@@ -25,7 +25,9 @@ asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (sin
 # Document Generation (MVA-2174)
 python-docx>=1.2.0  # DOCX export for transcripts
 reportlab>=5.0.0    # PDF export for transcripts
-PyPDF2>=3.0.1       # PDF testing for transcript export
+# PyPDF2 removed (#13893): unmaintained, and it was the PDF reader behind the
+# Drive/OneDrive connectors while the repo pinned pypdf as a security update
+# (requirements.txt:23). All PDF reading now goes through media/document/extraction.py.
 openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
 python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
@@ -105,6 +107,12 @@ httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.4.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
 Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
+# OCR binding (#13885). MUST stay paired with the tesseract-ocr / libtesseract-dev
+# system packages installed by ansible (roles/backend/tasks/main.yml). Without this
+# line the binary ships on every host and no Python caller can reach it: /api/vision/ocr,
+# vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
+# guard-import it and degrade to "pytesseract not installed" with no alert.
+pytesseract>=0.3.13
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):

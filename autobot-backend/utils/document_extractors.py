@@ -35,10 +35,9 @@ from typing import Dict, List
 
 import aiofiles
 import numpy as np
-from docx import Document as DocxDocument
-from pypdf import PdfReader
 
 from autobot_shared.logging_manager import get_logger
+from media.document.extraction import DocumentExtractionError, extract_docx, extract_pdf
 
 logger = get_logger(__name__)
 
@@ -121,22 +120,15 @@ class DocumentExtractor:
             raise ValueError(f"File is not a PDF: {file_path}")
 
         def extract_sync():
-            """Synchronous PDF extraction wrapped for async execution"""
+            """Synchronous PDF extraction wrapped for async execution.
+
+            Delegates to the canonical extractor (#13893) rather than carrying a
+            fourth copy of the pypdf loop; the ValueError contract is preserved
+            for existing callers.
+            """
             try:
-                reader = PdfReader(file_path)
-                pages = []
-
-                for page_num, page in enumerate(reader.pages):
-                    try:
-                        text = page.extract_text()
-                        if text and text.strip():
-                            pages.append(text)
-                    except Exception as e:
-                        logger.warning(f"Failed to extract page {page_num} from {file_path.name}: {e}")
-                        continue
-
-                return "\n\n".join(pages)
-            except Exception as e:
+                return extract_pdf(file_path.read_bytes()).text
+            except DocumentExtractionError as e:
                 logger.error("Failed to read PDF %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted PDF file: {file_path}") from e
 
@@ -171,18 +163,15 @@ class DocumentExtractor:
             raise ValueError(f"File is not a DOCX: {file_path}")
 
         def extract_sync():
-            """Synchronous DOCX extraction wrapped for async execution"""
+            """Synchronous DOCX extraction wrapped for async execution.
+
+            Delegates to the canonical extractor (#13893); the ValueError
+            contract is preserved for existing callers.
+            """
             try:
-                doc = DocxDocument(file_path)
-                paragraphs = []
-
-                for para in doc.paragraphs:
-                    text = para.text.strip()
-                    if text:
-                        paragraphs.append(text)
-
+                paragraphs = [line for line in extract_docx(file_path.read_bytes()).text.split("\n") if line.strip()]
                 return "\n\n".join(paragraphs)
-            except Exception as e:
+            except DocumentExtractionError as e:
                 logger.error("Failed to read DOCX %s: %s", file_path, e)
                 raise ValueError(f"Invalid or corrupted DOCX file: {file_path}") from e
 

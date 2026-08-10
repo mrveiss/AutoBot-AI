@@ -21,10 +21,16 @@ TASK = "task-42"
 
 @pytest.fixture(autouse=True)
 def _spill_root(tmp_path, monkeypatch):
-    monkeypatch.setattr(spill, "SPILL_ROOT", str(tmp_path / "spill"))
+    # #13865: the root is resolved through the canonical data path rather than a
+    # module constant, so the env override is what a test sets.
+    monkeypatch.setenv("AUTOBOT_TOOL_OUTPUT_SPILL_ROOT", str(tmp_path / "spill"))
     monkeypatch.setattr(spill, "SPILL_ENABLED", True)
     monkeypatch.setattr(spill, "SPILL_THRESHOLD_CHARS", 100)
     monkeypatch.setattr(spill, "SPILL_EXCERPT_CHARS", 20)
+    # The run is bound by the agent loop, never passed as a tool argument.
+    spill.bind_task(TASK)
+    yield
+    spill.bind_task(None)
 
 
 class TestOffDefault:
@@ -114,9 +120,11 @@ class TestAnchorSafety:
         value, spilled = spill.spill_if_oversized(TASK, "../../etc/passwd", "F" * 500)
 
         assert spilled is True
-        path = spill._artifact_path(value["anchor"])
+        path = spill._artifact_path(value["anchor"]).resolve()
         assert ".." not in str(path)
-        assert str(path).startswith(spill.SPILL_ROOT)
+        # Resolved containment, not a string prefix: "/tmp/spillEVIL" satisfies
+        # startswith("/tmp/spill") while sitting outside the root entirely.
+        assert spill._spill_root().resolve() in path.parents
 
     def test_an_unknown_anchor_returns_none(self):
         assert spill.read_spilled("autobot:spill:nope:nope:deadbeef") is None
@@ -168,7 +176,7 @@ class TestRunScopedWindowedRead:
         big = "I" * 500
 
         value, _ = spill.spill_if_oversized(TASK, "bash", big)
-        window = spill.read_spilled_window(value["anchor"], TASK, offset=0, limit=50)
+        window = spill.read_spilled_window(value["anchor"], offset=0, limit=50)
 
         assert window["found"] is True
         assert len(window["content"]) == 50
@@ -179,8 +187,8 @@ class TestRunScopedWindowedRead:
         big = "".join(str(i % 10) for i in range(300))
 
         value, _ = spill.spill_if_oversized(TASK, "bash", big)
-        first = spill.read_spilled_window(value["anchor"], TASK, offset=0, limit=200)
-        second = spill.read_spilled_window(value["anchor"], TASK, offset=200, limit=200)
+        first = spill.read_spilled_window(value["anchor"], offset=0, limit=200)
+        second = spill.read_spilled_window(value["anchor"], offset=200, limit=200)
 
         assert first["content"] + second["content"] == big
         assert second["has_more"] is False
@@ -192,7 +200,8 @@ class TestRunScopedWindowedRead:
         value, _ = spill.spill_if_oversized(TASK, "bash", big)
 
         assert spill.read_spilled(value["anchor"], task_id="someone-elses-run") is None
-        assert spill.read_spilled_window(value["anchor"], "someone-elses-run")["found"] is False
+        spill.bind_task("someone-elses-run")
+        assert spill.read_spilled_window(value["anchor"])["found"] is False
 
     def test_the_owning_run_still_reads_it(self):
         big = "K" * 500
@@ -202,7 +211,7 @@ class TestRunScopedWindowedRead:
         assert spill.read_spilled(value["anchor"], task_id=TASK) == big
 
     def test_a_missing_anchor_reports_not_found_rather_than_raising(self):
-        window = spill.read_spilled_window("autobot:spill:x:y:deadbeef", TASK)
+        window = spill.read_spilled_window("autobot:spill:x:y:deadbeef")
 
         assert window["found"] is False
 
@@ -219,4 +228,28 @@ class TestTheExcerptNamesARealTool:
         value, _ = spill.spill_if_oversized(TASK, "bash", "L" * 500)
 
         assert "read_spilled_output" in value["note"]
-        assert hasattr(ToolRegistry, "read_spilled_output")
+        # #13865: `hasattr` was the original assertion here, and it passes for
+        # any unwired method — the tool was undispatchable for the whole life of
+        # #13763 while this test stayed green. Membership in the list the model
+        # is actually offered is the property that matters.
+        assert "read_spilled_output" in ToolRegistry().get_available_tools()
+
+    @pytest.mark.asyncio
+    async def test_the_named_tool_is_dispatchable(self, tmp_path, monkeypatch):
+        """The note is only actionable if `execute_tool` can route the call.
+
+        Dispatch normalises `read_spilled_output` to `readspilledoutput`; with no
+        entry in the table the call fell through to `Unknown tool`.
+        """
+        from tools.tool_registry import ToolRegistry
+
+        monkeypatch.setattr(spill, "SPILL_ENABLED", True)
+        monkeypatch.setenv("AUTOBOT_TOOL_OUTPUT_SPILL_ROOT", str(tmp_path))
+        spill.bind_task(TASK)
+        value, _ = spill.spill_if_oversized(TASK, "bash", "PAYLOAD" * 2000)
+
+        result = await ToolRegistry().execute_tool("read_spilled_output", {"anchor": value["anchor"]})
+
+        assert result.get("status") != "error", result
+        assert "Unknown tool" not in str(result.get("result", ""))
+        assert result["result"]["found"] is True
