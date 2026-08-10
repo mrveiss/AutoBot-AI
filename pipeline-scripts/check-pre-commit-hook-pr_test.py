@@ -150,6 +150,37 @@ class TestUncomputableScopeFailsLoudly:
 
 
 @pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
+class TestPathspecIsNotShellExpanded:
+    """#13880 — the extension pathspec must reach git verbatim.
+
+    As an unquoted string, the SHELL expanded `*.py` against the cwd first. In
+    CI the cwd is the repo root, where `*.py` matched only root-level files, so
+    the pathspec collapsed onto those and every nested change went unscanned.
+    """
+
+    def test_nested_violation_found_despite_root_level_decoy(self, tmp_path: Path) -> None:
+        base, head = _make_pr(tmp_path, {"src/worker.py": 'print("hi")\n'})
+        # A root-level .py on disk is exactly what `*.py` used to collapse onto.
+        # Untracked, so diffing it yields nothing — reproducing the CI shape.
+        (tmp_path / "decoy.py").write_text("x = 1\n", encoding="utf-8")
+        result = _run_wrapper(tmp_path, "pre-commit-no-print-console", base, head)
+        assert "No changed source files" not in result.stdout, result.stdout
+        assert result.returncode != 0, "nested violation must still be caught"
+
+    @pytest.mark.parametrize("bad_ext", [".py", " py", "py!", "p y"])
+    def test_malformed_ext_exits_2_rather_than_matching_nothing(
+        self, tmp_path: Path, bad_ext: str
+    ) -> None:
+        """A pathspec like `*..py` matches nothing and would read as 'clean'."""
+        validator = tmp_path / "check_always_fail.py"
+        validator.write_text("import sys; sys.exit(1)\n", encoding="utf-8")
+        base, head = _make_pr(tmp_path, {"src/foo.py": "x = 1\n"})
+        result = _run_wrapper_python(tmp_path, validator, base, head, ext=bad_ext)
+        assert result.returncode == 2, result.stdout
+        assert "No changed source files" not in result.stdout
+
+
+@pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
 class TestForwardsArgvToHooks:
     """End-to-end: wrapper passes argv to hooks correctly."""
 

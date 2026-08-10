@@ -79,7 +79,19 @@ if [ "$1" = "--python" ]; then
         # `|| [ -n "$_ext" ]` catches the final field: tr leaves no trailing
         # newline, so a plain `read` drops the last (or only) extension.
         while IFS= read -r _ext || [ -n "$_ext" ]; do
-            [ -n "$_ext" ] && EXT_PATHSPEC+=("*.${_ext}")
+            [ -n "$_ext" ] || continue
+            # Reject anything that is not a bare extension. `--ext .py` would
+            # build the pathspec `*..py` and `--ext " py"` builds `*. py`;
+            # both match nothing, so the run would report "no changed source
+            # files" and exit 0 — the exact silent pass this script exists to
+            # prevent, reached by a different route (#13880).
+            case "$_ext" in
+                *[!A-Za-z0-9]*|"")
+                    echo "--ext: '$_ext' is not a bare extension (expected e.g. py,ts)" >&2
+                    exit 2
+                    ;;
+            esac
+            EXT_PATHSPEC+=("*.${_ext}")
         done < <(printf '%s' "$2" | tr ',' '\n')
         if [ "${#EXT_PATHSPEC[@]}" -eq 0 ]; then
             echo "--ext produced no usable extensions" >&2
@@ -105,8 +117,19 @@ fi
 BASE_SHA="${BASE_SHA:-}"
 HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
 
-if [ -z "$BASE_SHA" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
-    BASE_SHA=$(git rev-parse "origin/${GITHUB_BASE_REF}" 2>/dev/null || true)
+if [ -z "$BASE_SHA" ]; then
+    # On a pull_request event HEAD_SHA is the MERGE commit: ^1 is the base tip
+    # as of the event and ^2 is the PR head, so ^1..HEAD is exactly this PR's
+    # changes. Resolving origin/<base> instead uses the base's CURRENT tip, so
+    # every PR merged in between shows up as a changed file here — worst on a
+    # re-run, where HEAD_SHA is frozen but origin/<base> is fetched fresh
+    # (#13880). This path was dead under fetch-depth: 1 and would have become
+    # live the moment full history arrived.
+    if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
+        BASE_SHA="${HEAD_SHA}^1"
+    elif [ -n "${GITHUB_BASE_REF:-}" ]; then
+        BASE_SHA=$(git rev-parse "origin/${GITHUB_BASE_REF}" 2>/dev/null || true)
+    fi
 fi
 
 if [ -n "$BASE_SHA" ]; then

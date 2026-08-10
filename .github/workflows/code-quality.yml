@@ -78,8 +78,15 @@ jobs:
         # PR base commit out of the clone, so every changed-files step here
         # diffed against a missing object, treated the fatal as "no changes",
         # and went green having scanned nothing. Those steps now hard-fail on an
-        # unresolvable ref, so without full history the job would fail outright.
-        fetch-depth: 0
+        # unresolvable ref, so without this the job would fail outright.
+        #
+        # 2, not 0: on a pull_request the checkout is the merge commit, so depth
+        # 2 supplies both parents — HEAD^1 (base tip) and HEAD^2 (PR head) —
+        # which is all any step here needs. fetch-depth: 0 would clone 12k
+        # commits / ~511 MiB per run, and would also make `origin/<base>`
+        # resolvable, silently widening these scans to include whatever other
+        # PRs merged onto the base in the meantime.
+        fetch-depth: 2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v7
@@ -215,21 +222,13 @@ jobs:
         # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
         # whatever other PRs landed on the base meanwhile.
         #
-        # Deliberately NOT setting fetch-depth: 0 on the job — several sibling
-        # steps are already dead for this same reason, and reviving them all
-        # here would redden this PR with unrelated pre-existing findings.
-        # Tracked separately in #13880.
-        # A bare `--deepen` deepens the DEFAULT refspec, not the checked-out
-        # PR merge ref, so it resolved only by luck. Fetch the specific objects
-        # instead, then pick the first range that actually resolves.
-        if [ -n "${PR_NUMBER:-}" ]; then
-          git fetch --no-tags --quiet --depth=2 origin "+refs/pull/${PR_NUMBER}/merge" 2>/dev/null || true
-        fi
-        if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
-          git fetch --no-tags --quiet --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA" 2>/dev/null || true
-        fi
-        git fetch --no-tags --quiet --deepen=10 2>/dev/null || true
-
+        # The job now checks out with fetch-depth: 2 (#13880), so both parents
+        # of the merge commit are present and no fetching is needed here.
+        # No fetching here. A `git fetch --depth=N` against a complete clone
+        # makes the repository SHALLOW again (verified: 5 commits -> 1,
+        # is-shallow-repository false -> true), which would silently strip the
+        # history that later steps in this same job depend on. fetch-depth: 2
+        # on the checkout already provides both parents.
         have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
         if have 'HEAD^2' && have 'HEAD^1'; then
           RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
