@@ -49,6 +49,7 @@ jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       migrations: ${{ steps.filter.outputs.migrations }}
     steps:
@@ -152,6 +153,12 @@ jobs:
   # Fail-safe: anything other than success-or-skipped fails this gate, and a
   # failed `changes` job fails it too — otherwise a broken paths filter would
   # skip the matrix and read as "nothing to verify".
+  #
+  # `always()` rather than the repo's usual `!cancelled()` is deliberate:
+  # `!cancelled()` would SKIP this job on a cancelled run and re-publish
+  # `skipped` on the required context, which is the bug being fixed. The cost
+  # is that a cancelled run reports this check red rather than absent — the
+  # safer direction for a required gate, and self-clearing on the next run.
   migration-matrix:
     name: migration-matrix
     needs: [changes, migration-tests]
