@@ -73,6 +73,20 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
+      with:
+        # Required, not cosmetic (#13880). The default fetch-depth: 1 leaves the
+        # PR base commit out of the clone, so every changed-files step here
+        # diffed against a missing object, treated the fatal as "no changes",
+        # and went green having scanned nothing. Those steps now hard-fail on an
+        # unresolvable ref, so without this the job would fail outright.
+        #
+        # 2, not 0: on a pull_request the checkout is the merge commit, so depth
+        # 2 supplies both parents — HEAD^1 (base tip) and HEAD^2 (PR head) —
+        # which is all any step here needs. fetch-depth: 0 would clone 12k
+        # commits / ~511 MiB per run, and would also make `origin/<base>`
+        # resolvable, silently widening these scans to include whatever other
+        # PRs merged onto the base in the meantime.
+        fetch-depth: 2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v7
@@ -132,20 +146,42 @@ jobs:
         set -euo pipefail
         # Pre-commit covers local dev — this CI step closes the bypass gap
         # (devs without pre-commit installed, or `--no-verify` users).
-        # Changed-files-only mode mirrors pre-commit semantics: doesn't
-        # block on the 59 pre-existing violations tracked by #5263.
+        # Changed-files-only mode mirrors pre-commit semantics: doesn't block
+        # on the pre-existing violations tracked by #5263 (22 in 10 files as of
+        # #13880 — the "59" this comment used to claim was long stale).
         # After #5263 closes, swap to full-scan mode (no argv).
-        if [ -n "${BASE_SHA:-}" ]; then
-          # PR context — diff against the merge base
+        #
+        # Resolve through HEAD's parents, exactly as
+        # pipeline-scripts/check-pre-commit-hook-pr.sh does (#13880). The event
+        # payload's base.sha is NOT guaranteed to be in the clone under
+        # fetch-depth: 2, whereas HEAD^1 always is — and on a pull_request
+        # HEAD^1..HEAD is precisely this PR's changes.
+        if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
+          base="${HEAD_SHA}^1"
+        elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
           base="$BASE_SHA"
         else
-          # Push context — diff against the previous commit on the branch
           base="${HEAD_SHA}^"
         fi
+        # A guard that cannot compute its scope must FAIL, not report "no
+        # changed files" (#13880) — see the same fix in
+        # pipeline-scripts/check-pre-commit-hook-pr.sh.
+        for _ref in "$base" "$HEAD_SHA"; do
+          git cat-file -e "${_ref}^{commit}" 2>/dev/null || {
+            echo "::error::'${_ref}' does not resolve — shallow clone cannot diff against the base. Refusing to report no-changes for an uncomputed scope."
+            exit 1
+          }
+        done
         # `git diff --name-only` may return non-existent paths (deleted
         # files); filter to existing .py files before passing to the hook.
-        files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py' \
-          | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+        if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py'); then
+          echo "::error::git diff failed for ${base}..${HEAD_SHA} — refusing to report clean."
+          exit 1
+        fi
+        # `|| true` normalises the while-loop's EOF status under `set -e`; it is
+        # scoped to the filter only, since git's status is checked above.
+        files=$(printf '%s\n' "$raw_files" \
+          | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
           || true)
         if [ -z "$files" ]; then
           echo "No changed Python files — skipping #5178 regression check."
@@ -193,21 +229,13 @@ jobs:
         # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
         # whatever other PRs landed on the base meanwhile.
         #
-        # Deliberately NOT setting fetch-depth: 0 on the job — several sibling
-        # steps are already dead for this same reason, and reviving them all
-        # here would redden this PR with unrelated pre-existing findings.
-        # Tracked separately in #13880.
-        # A bare `--deepen` deepens the DEFAULT refspec, not the checked-out
-        # PR merge ref, so it resolved only by luck. Fetch the specific objects
-        # instead, then pick the first range that actually resolves.
-        if [ -n "${PR_NUMBER:-}" ]; then
-          git fetch --no-tags --quiet --depth=2 origin "+refs/pull/${PR_NUMBER}/merge" 2>/dev/null || true
-        fi
-        if [ -n "${PR_BASE_SHA:-}" ] && [ -n "${PR_HEAD_SHA:-}" ]; then
-          git fetch --no-tags --quiet --depth=1 origin "$PR_BASE_SHA" "$PR_HEAD_SHA" 2>/dev/null || true
-        fi
-        git fetch --no-tags --quiet --deepen=10 2>/dev/null || true
-
+        # The job now checks out with fetch-depth: 2 (#13880), so both parents
+        # of the merge commit are present and no fetching is needed here.
+        # No fetching here. A `git fetch --depth=N` against a complete clone
+        # makes the repository SHALLOW again (verified: 5 commits -> 1,
+        # is-shallow-repository false -> true), which would silently strip the
+        # history that later steps in this same job depend on. fetch-depth: 2
+        # on the checkout already provides both parents.
         have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
         if have 'HEAD^2' && have 'HEAD^1'; then
           RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
