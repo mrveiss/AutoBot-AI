@@ -17,6 +17,7 @@ Builds on #8990 (token usage tracking) and #3770 (compression service).
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.token_count import estimate_fast
@@ -177,7 +178,7 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
                 cleaned.append(m)
             # else: orphan — drop silently
             continue
-        if role == "assistant" and m.get("tool_calls"):
+        if role == CategoryDefaults.ROLE_ASSISTANT and m.get("tool_calls"):
             in_batch = True
         else:
             in_batch = False
@@ -255,7 +256,7 @@ class ConversationSummarizer:
 
             # Generate summary via LLM
             response = await gateway.chat_completion(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
                 model=model_name,
                 temperature=0.3,  # Low temp for consistent summaries
                 max_tokens=500,  # Cap summary length

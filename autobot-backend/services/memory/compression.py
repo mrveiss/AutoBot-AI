@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
@@ -164,7 +165,7 @@ class ContextCompressionService:
             return messages
 
         summary = {
-            "role": "assistant",
+            "role": CategoryDefaults.ROLE_ASSISTANT,
             "content": (
                 f"[Summary: {dropped_count} earlier message(s) were omitted to fit"
                 f" the {target_tokens}-token history budget.]"
