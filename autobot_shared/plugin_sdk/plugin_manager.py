@@ -66,7 +66,14 @@ class PluginManager:
         self._started = True
         logger.info("PluginManager: starting plugin discovery")
 
-        manifests = self._loader.discover_plugins()
+        # Dedupe by name. lifespan.py passes BOTH the deployed plugin root and
+        # the dev fallback, which overlap — this issue's own title says
+        # "discovery runs twice". Undeduped, the second registration of a
+        # HEALTHY plugin raises "Plugin already registered", is swallowed, and
+        # lands in `failed`: the live config reported discovered=14 with five
+        # perfectly-loaded plugins named as casualties. A signal built to end a
+        # misdiagnosis must not manufacture one (#13677 review).
+        manifests = self._dedupe_manifests(self._loader.discover_plugins())
         logger.info("PluginManager: discovered %d plugin(s)", len(manifests))
 
         loaded: List[str] = []
@@ -152,6 +159,20 @@ class PluginManager:
         """Return the shared PluginRegistry."""
         return self._registry
 
+    @staticmethod
+    def _dedupe_manifests(manifests: List) -> List:
+        """First manifest wins per name, preserving discovery order."""
+        seen: Dict[str, object] = {}
+        for manifest in manifests:
+            seen.setdefault(manifest.name, manifest)
+        duplicates = len(manifests) - len(seen)
+        if duplicates:
+            logger.info(
+                "PluginManager: ignored %d duplicate manifest(s) from overlapping plugin dirs",
+                duplicates,
+            )
+        return list(seen.values())
+
     def _record_load_report(self, manifests: List, loaded: List[str], failed: List[str]) -> None:
         """Emit the `loaded N of M` summary and store it for querying (#13677).
 
@@ -198,7 +219,16 @@ class PluginManager:
         working be distinguishable by something a check can QUERY. A log line
         does not satisfy that; this does.
         """
-        return dict(self._load_report)
+        report = dict(self._load_report)
+        # Copy the list too: `dict()` is shallow, so a caller appending to
+        # report["failed"] was mutating the manager's own tally.
+        failed = self._load_report.get("failed", [])
+        report["failed"] = list(failed) if isinstance(failed, list) else []
+        # Derived, not stored: the stored flag only flips at the END of startup,
+        # so a manager mid-load — or one whose discovery raised — would have
+        # reported started=False while running.
+        report["started"] = self._started
+        return report
 
     def get_plugin_status(self) -> Dict[str, str]:
         """Return a mapping of plugin name → status string."""

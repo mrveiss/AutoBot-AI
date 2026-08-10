@@ -120,15 +120,25 @@ def canonicalise_plugin_sdk() -> List[str]:
     import autobot_shared.plugin_sdk as canonical
 
     bound: List[str] = []
-    if sys.modules.get("plugin_sdk") is not canonical:
-        sys.modules["plugin_sdk"] = canonical
-        bound.append("plugin_sdk")
-
     prefix = "autobot_shared.plugin_sdk."
+
+    # Submodules FIRST, parent last. Binding the parent first means any submodule
+    # imported during this loop that does `from plugin_sdk.X import ...` loads a
+    # fresh X from the canonical path AND sets it as an attribute on the parent —
+    # which is by then the canonical package. Repairing sys.modules afterwards
+    # does not repair that attribute, so `autobot_shared.plugin_sdk.registry`
+    # ended up holding a SECOND Registry class with its own singleton, undoing
+    # what #11636 fixed (#13677 review).
     for _finder, name, _ispkg in pkgutil.iter_modules(canonical.__path__):
+        # Never import the package's own tests: it drags pytest into the
+        # production process (~100ms), and where pytest is absent the import
+        # fails, is swallowed, and — because failed imports are not cached —
+        # retries on every plugin, every startup.
+        if name.endswith("_test") or name.startswith("test_"):
+            continue
+
         alias = f"plugin_sdk.{name}"
         full = f"{prefix}{name}"
-        existing = sys.modules.get(alias)
         module = sys.modules.get(full)
         if module is None:
             try:
@@ -136,9 +146,16 @@ def canonicalise_plugin_sdk() -> List[str]:
             except Exception as exc:  # noqa: BLE001 - a broken submodule must not stop the rest
                 logger.debug("plugin_sdk canonicalisation skipped %s: %s", full, exc)
                 continue
-        if existing is not module:
+        if sys.modules.get(alias) is not module:
             sys.modules[alias] = module
             bound.append(alias)
+        # Re-assert the parent attribute: an import during this loop may have
+        # replaced it with a duplicate module object.
+        setattr(canonical, name, module)
+
+    if sys.modules.get("plugin_sdk") is not canonical:
+        sys.modules["plugin_sdk"] = canonical
+        bound.append("plugin_sdk")
 
     return bound
 

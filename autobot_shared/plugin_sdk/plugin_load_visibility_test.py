@@ -241,3 +241,84 @@ class TestLoadedNOfM:
         """Otherwise "0 loaded" before startup is indistinguishable from
         "0 loaded, everything failed" — the same conflation one level up."""
         assert PluginManager([tmp_path]).get_load_report()["started"] is False
+
+
+class TestTheSignalDoesNotManufactureFailures:
+    """#13677 review: the live backend passes TWO overlapping plugin dirs.
+
+    `lifespan.py` passes the deployed root AND the dev fallback — this issue's
+    own title says "discovery runs twice". Undeduped, the second registration of
+    a HEALTHY plugin raises "Plugin already registered", is swallowed by the
+    loader, returns None, and lands in `failed`. The live config reported
+    discovered=14 with five perfectly-loaded plugins named as casualties.
+
+    A signal built to end a misdiagnosis must not manufacture one.
+    """
+
+    @pytest.mark.asyncio
+    async def test_overlapping_plugin_dirs_do_not_invent_casualties(self, tmp_path, caplog):
+        _make_plugin(tmp_path, "dedupe-good-plugin")
+
+        manager = PluginManager([tmp_path, tmp_path])  # the shape lifespan.py uses
+        with caplog.at_level("WARNING", logger="autobot_shared.plugin_sdk.plugin_manager"):
+            await manager.startup()
+
+        report = manager.get_load_report()
+        assert report["discovered"] == 1, "the same plugin found twice is one plugin"
+        assert report["loaded"] == 1
+        assert report["failed"] == [], "a healthy plugin must never be named a casualty"
+        assert "dedupe-good-plugin" not in caplog.text
+
+
+class TestCanonicalisationDoesNotSplitTheRegistry:
+    """#13677 review: binding the parent first re-created the #11636 split.
+
+    A submodule imported during the alias loop that does `from plugin_sdk.X
+    import ...` loads a fresh X from the canonical path AND sets it as an
+    attribute on the parent — which is by then the canonical package. Repairing
+    sys.modules does not repair that attribute, so
+    `autobot_shared.plugin_sdk.registry` held a SECOND Registry class with its
+    own singleton.
+    """
+
+    def test_parent_attributes_still_point_at_the_canonical_submodules(self):
+        import autobot_shared.plugin_sdk as canonical
+
+        canonicalise_plugin_sdk()
+
+        clobbered = [
+            name
+            for name in ("base", "registry", "hooks", "loader")
+            if f"autobot_shared.plugin_sdk.{name}" in sys.modules
+            and getattr(canonical, name, None) is not sys.modules[f"autobot_shared.plugin_sdk.{name}"]
+        ]
+        assert not clobbered, f"canonicalisation replaced parent attributes: {clobbered} (#11636 regression)"
+
+    def test_a_clobbered_parent_attribute_is_repaired(self):
+        """The `setattr` is belt-and-braces and needs its own trigger.
+
+        Filtering out the package's own tests removes TODAY's only clobber
+        source, so without constructing the condition this guard passes whatever
+        the loader does. Any future submodule doing `from plugin_sdk.X import
+        ...` during the alias loop reintroduces it.
+        """
+        import autobot_shared.plugin_sdk as canonical
+
+        real = sys.modules["autobot_shared.plugin_sdk.base"]
+        impostor = type(sys)("autobot_shared.plugin_sdk.base")
+        canonical.base = impostor  # what a mid-loop import does
+        try:
+            canonicalise_plugin_sdk()
+            assert canonical.base is real, (
+                "canonicalisation must re-assert the parent attribute, or "
+                "autobot_shared.plugin_sdk.base holds a duplicate module (#11636)"
+            )
+        finally:
+            canonical.base = real
+
+    def test_the_package_tests_are_not_imported_into_the_process(self):
+        """Importing them drags pytest into production (~100ms), and where
+        pytest is absent the import fails and retries on every plugin."""
+        canonicalise_plugin_sdk()
+
+        assert not [m for m in sys.modules if m.startswith("plugin_sdk.") and m.endswith("_test")]
