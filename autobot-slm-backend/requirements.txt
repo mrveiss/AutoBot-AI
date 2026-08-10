@@ -10,9 +10,9 @@
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.3.1
-starlette>=1.3.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
-uvicorn[standard]>=0.52.0
+fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.4.1
+starlette>=1.4.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
+uvicorn[standard]>=0.52.1
 
 # Database - PostgreSQL (Issue #786)
 sqlalchemy>=2.0.51
@@ -21,7 +21,7 @@ psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.13.4
-pydantic-settings>=2.14.2
+pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
