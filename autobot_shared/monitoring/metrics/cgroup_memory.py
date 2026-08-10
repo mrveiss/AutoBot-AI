@@ -12,26 +12,32 @@ crashed, never restarted, never entered `failed`, and every liveness signal kept
 saying it was fine while it stopped making progress.
 
 Memory *usage* cannot distinguish that state from a healthy one: a throttled
-cgroup reports normal-looking `memory.current` (it is held at the watermark by
-design) and its health endpoint either answers slowly or not at all. The one
-signal that separates them is the **reclaim counter** — `memory.events high`
-increments every time the kernel throttles the cgroup, and it is monotonic. That
-is what these metrics export and what the alert rules fire on.
+cgroup is held at its watermark by design. The one signal that separates them is
+the **reclaim counter** — `memory.events high` increments every time the kernel
+throttles the cgroup, and it is monotonic.
 
 The limits themselves are exported too, because the second half of #13765 is that
 nobody knew they were there: they came from `systemctl set-property`, which
-writes to `/etc/systemd/system.control/`, and nothing in the unit template, the
-ansible role, or the repo mentions them. A limit no artifact records is a limit
-that behaves differently on every host, so it needs to be visible in the same
-place the pressure is.
+writes drop-ins no unit template, role, or repo artifact mentions.
 
-Sampled at scrape time via a custom collector rather than recorded at event time:
-there is no event to hook — the kernel updates these files continuously — and a
-polling task would add a staleness window for no benefit.
+Two rules this module follows, both learned from the incident it exists for:
+
+* **Never fabricate a reassuring value.** A unit that cannot be read emits no
+  sample rather than a `0` reclaim count (which reads as "healthy") or a `-1`
+  limit (which reads as "unlimited"). Absence is visible in a query; a wrong
+  number is not.
+* **Never let the scrape die.** Everything is best-effort per unit, and read
+  failures are themselves exported as a metric — monitoring for a silent failure
+  must not fail silently.
+
+Sampled at scrape time via a custom collector: there is no event to hook, the
+kernel updates these files continuously, and a polling task would only add a
+staleness window.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from prometheus_client.core import GaugeMetricFamily
@@ -44,47 +50,83 @@ logger = get_logger(__name__)
 # cgroup v2 mount point. Overridable so tests can point at a fixture tree.
 DEFAULT_CGROUP_ROOT = Path("/sys/fs/cgroup")
 
-# Where `systemctl set-property` writes runtime overrides. A drop-in here is
-# invisible to the repo: it is not in the unit template and not in any role, so a
-# fresh install of the same commit gets different limits (#13765).
-SYSTEMD_CONTROL_ROOT = Path("/etc/systemd/system.control")
+# Where systemd writes property drop-ins that no repo artifact records.
+# `systemctl set-property` uses the first; `--runtime` uses the second and is
+# lost on reboot, which makes it *more* confusing rather than less (#13765).
+SYSTEMD_CONTROL_ROOTS: tuple[Path, ...] = (
+    Path("/etc/systemd/system.control"),
+    Path("/run/systemd/system.control"),
+    # Hand-written drop-ins are equally undeclared. Same tree systemd reads for
+    # unit overrides, and equally absent from the ansible roles.
+    Path("/etc/systemd/system"),
+)
 
-# memory.events keys worth exporting. `high` is the reclaim counter — the signal
-# this module exists for. `max` counts hard-cap hits (allocation failures /
-# OOM-kill territory), `oom` and `oom_kill` are the terminal cases.
-_EVENT_KEYS = ("low", "high", "max", "oom", "oom_kill")
+# Only a drop-in that actually sets a memory property counts. The directory is
+# created for ANY property (CPUQuota, Restart, …), so keying on its existence
+# alone made the alert text — "its effective memory limits are not in the unit
+# template" — false whenever someone had set something unrelated.
+_MEMORY_PROPERTY = re.compile(r"^\s*Memory[A-Za-z]*\s*=", re.MULTILINE)
 
-# memory.high / memory.max hold the literal string "max" when unlimited. Exported
-# as -1 rather than +Inf so a "limit is set" query is a simple `>= 0` and does not
-# depend on how the scraper renders infinity.
-_UNLIMITED = -1.0
+# Prefix of the units this collector discovers. A static list could not cover
+# instance units such as autobot-mcp-bridge@.service — the only unit in the tree
+# carrying a repo-declared MemoryMax — and needed editing per new service.
+UNIT_GLOB = "autobot-*.service"
 
+# `max` in memory.high / memory.max means unlimited. Exported as -1 so a
+# "limit is set" query is `>= 0`. An UNREADABLE file is NOT this — it emits no
+# sample at all, because reporting "unlimited" for a file we could not read is
+# the reassuring-wrong-answer failure this whole issue is about.
+UNLIMITED = -1.0
 
-def _read_int(path: Path) -> int | None:
-    """Read a single-integer cgroup file, or None when absent/unreadable."""
-    try:
-        raw = path.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    if raw == "max":
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning("cgroup: %s holds %r, not an integer", path, raw[:40])
-        return None
+_LIMIT_FILES = ("memory.high", "memory.max")
 
 
-def read_memory_events(cgroup_dir: Path) -> dict[str, int]:
-    """Parse `memory.events` into a dict, empty when the file is unavailable.
+class _Unreadable:
+    """Sentinel: the file exists in principle but could not be parsed."""
 
-    Format is one `key value` pair per line. Unknown keys are kept: a future
-    kernel adding a counter should not need a change here to be visible.
+
+UNREADABLE = _Unreadable()
+
+
+def _read_text(path: Path) -> str | None:
+    """Read *path*, or None on any failure.
+
+    ``UnicodeDecodeError`` is a ``ValueError``, not an ``OSError`` — catching
+    only the latter let a single non-UTF-8 byte in one cgroup file propagate out
+    of ``collect()`` and 500 the whole ``/metrics`` endpoint, taking every other
+    metric with it.
     """
     try:
-        raw = (cgroup_dir / "memory.events").read_text(encoding="utf-8")
-    except OSError:
-        return {}
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _read_limit(path: Path) -> float | _Unreadable:
+    """Return bytes, ``UNLIMITED`` for the literal ``max``, or ``UNREADABLE``."""
+    raw = _read_text(path)
+    if raw is None:
+        return UNREADABLE
+    raw = raw.strip()
+    if raw == "max":
+        return UNLIMITED
+    try:
+        return float(int(raw))
+    except ValueError:
+        logger.warning("cgroup: %s holds %r, not an integer", path, raw[:40])
+        return UNREADABLE
+
+
+def read_memory_events(cgroup_dir: Path) -> dict[str, int] | None:
+    """Parse `memory.events`, or None when it cannot be read.
+
+    None rather than ``{}``: an empty dict would silently mean "no counters",
+    and a unit with no `high` counter cannot trip ServiceMemoryThrottled — which
+    would look exactly like a healthy unit.
+    """
+    raw = _read_text(cgroup_dir / "memory.events")
+    if raw is None:
+        return None
 
     events: dict[str, int] = {}
     for line in raw.splitlines():
@@ -98,98 +140,139 @@ def read_memory_events(cgroup_dir: Path) -> dict[str, int]:
     return events
 
 
-def has_out_of_band_limits(unit: str, control_root: Path = SYSTEMD_CONTROL_ROOT) -> bool:
-    """True when *unit* carries a `systemctl set-property` drop-in (#13765).
+def has_out_of_band_limits(unit: str, control_roots: tuple[Path, ...] = SYSTEMD_CONTROL_ROOTS) -> bool:
+    """True when a drop-in outside the repo sets a memory property on *unit*.
 
-    These survive deploys — nothing in the update path touches
-    `system.control/` — so they outlive any attempt to fix the problem in the
-    ansible role, and they make this host behave unlike a clean install of the
-    same commit.
+    Checks the persistent and `--runtime` set-property trees plus hand-written
+    overrides, and requires an actual ``Memory*=`` assignment rather than merely
+    the directory's existence.
     """
-    try:
-        return (control_root / f"{unit}.d").is_dir()
-    except OSError:
-        return False
+    for root in control_roots:
+        drop_in = root / f"{unit}.d"
+        try:
+            confs = sorted(drop_in.glob("*.conf"))
+        except OSError:
+            continue
+        for conf in confs:
+            text = _read_text(conf)
+            if text and _MEMORY_PROPERTY.search(text):
+                return True
+    return False
 
 
 class CgroupMemoryCollector(Collector):
-    """Export cgroup v2 memory pressure for a set of systemd units.
+    """Export cgroup v2 memory pressure for the platform's systemd units.
 
-    Registered as a custom collector, so every scrape reads the live kernel
-    counters. No background task, and no window in which the exported value and
-    the cgroup disagree.
+    Units are DISCOVERED under the cgroup root rather than listed, so a service
+    moved by `Slice=` is still found. That matters here specifically: `systemctl
+    set-property <unit> Slice=…` is the same out-of-band mechanism this collector
+    exists to detect, and a hardcoded `system.slice` path would have been
+    defeated by it — silently.
     """
 
     def __init__(
         self,
-        units: list[str],
         cgroup_root: Path = DEFAULT_CGROUP_ROOT,
-        control_root: Path = SYSTEMD_CONTROL_ROOT,
+        control_roots: tuple[Path, ...] = SYSTEMD_CONTROL_ROOTS,
+        unit_glob: str = UNIT_GLOB,
     ) -> None:
-        self.units = units
         self.cgroup_root = cgroup_root
-        self.control_root = control_root
+        self.control_roots = control_roots
+        self.unit_glob = unit_glob
 
-    def _unit_dir(self, unit: str) -> Path:
-        """cgroup path for a systemd system-slice service."""
-        return self.cgroup_root / "system.slice" / unit
+    def discover_units(self) -> dict[str, Path]:
+        """Map unit name -> cgroup dir, wherever in the slice tree it sits."""
+        found: dict[str, Path] = {}
+        try:
+            for path in sorted(self.cgroup_root.rglob(self.unit_glob)):
+                if path.is_dir():
+                    found.setdefault(path.name, path)
+        except OSError as exc:
+            logger.warning("cgroup: cannot walk %s: %s", self.cgroup_root, exc)
+        return found
 
-    def collect(self):  # noqa: C901 - one branch per exported metric, flat
-        events = GaugeMetricFamily(
-            "autobot_cgroup_memory_events",
-            "cgroup v2 memory.events counters; `high` is the reclaim counter that "
-            "rises while a cgroup is throttled but still reports active (#13765)",
-            labels=["unit", "event"],
-        )
-        current = GaugeMetricFamily(
-            "autobot_cgroup_memory_current_bytes",
-            "Current cgroup memory usage in bytes",
-            labels=["unit"],
-        )
-        high = GaugeMetricFamily(
-            "autobot_cgroup_memory_high_bytes",
-            "MemoryHigh throttling watermark in bytes; -1 when unlimited",
-            labels=["unit"],
-        )
-        maximum = GaugeMetricFamily(
-            "autobot_cgroup_memory_max_bytes",
-            "MemoryMax hard limit in bytes; -1 when unlimited",
-            labels=["unit"],
-        )
-        undeclared = GaugeMetricFamily(
-            "autobot_cgroup_memory_limits_out_of_band",
-            "1 when the unit has a systemctl set-property drop-in, i.e. limits no "
-            "repo artifact records and a fresh install would not reproduce (#13765)",
-            labels=["unit"],
-        )
+    def _families(self) -> dict[str, GaugeMetricFamily]:
+        return {
+            "events": GaugeMetricFamily(
+                "autobot_cgroup_memory_events",
+                "cgroup v2 memory.events counters; `high` is the reclaim counter that "
+                "rises while a cgroup is throttled but still reports active (#13765). "
+                "Monotonic despite the gauge type — see the module docstring.",
+                labels=["unit", "event"],
+            ),
+            "current": GaugeMetricFamily(
+                "autobot_cgroup_memory_current_bytes",
+                "Current cgroup memory usage in bytes",
+                labels=["unit"],
+            ),
+            "high": GaugeMetricFamily(
+                "autobot_cgroup_memory_high_bytes",
+                f"MemoryHigh throttling watermark in bytes; {UNLIMITED:.0f} when unlimited. "
+                "Absent when the file could not be read — never guessed.",
+                labels=["unit"],
+            ),
+            "max": GaugeMetricFamily(
+                "autobot_cgroup_memory_max_bytes",
+                f"MemoryMax hard limit in bytes; {UNLIMITED:.0f} when unlimited",
+                labels=["unit"],
+            ),
+            "out_of_band": GaugeMetricFamily(
+                "autobot_cgroup_memory_limits_out_of_band",
+                "1 when a drop-in outside the repo sets a memory property on this unit, "
+                "i.e. limits no artifact records and a fresh install would not reproduce",
+                labels=["unit"],
+            ),
+            "errors": GaugeMetricFamily(
+                "autobot_cgroup_memory_read_errors",
+                "1 when a cgroup file for this unit could not be read. Exported so the "
+                "monitoring for a silent failure cannot itself fail silently (#13765).",
+                labels=["unit", "file"],
+            ),
+        }
 
-        for unit in self.units:
-            unit_dir = self._unit_dir(unit)
-            if not unit_dir.is_dir():
-                # Not running here, or not cgroup v2 — nothing to say, and saying
-                # something would be worse than silence.
+    def _collect_unit(self, unit: str, unit_dir: Path, fam: dict[str, GaugeMetricFamily]) -> None:
+        events = read_memory_events(unit_dir)
+        if events is None:
+            fam["errors"].add_metric([unit, "memory.events"], 1.0)
+        else:
+            for key, value in events.items():
+                fam["events"].add_metric([unit, key], value)
+
+        current = _read_limit(unit_dir / "memory.current")
+        if isinstance(current, _Unreadable):
+            fam["errors"].add_metric([unit, "memory.current"], 1.0)
+        else:
+            fam["current"].add_metric([unit], current)
+
+        for filename in _LIMIT_FILES:
+            value = _read_limit(unit_dir / filename)
+            if isinstance(value, _Unreadable):
+                # No sample. A -1 here would read as "unlimited" and silently
+                # drop the unit out of the headroom rule (#13765 review).
+                fam["errors"].add_metric([unit, filename], 1.0)
                 continue
+            fam[filename.split(".")[1]].add_metric([unit], value)
 
-            for key, value in read_memory_events(unit_dir).items():
-                events.add_metric([unit, key], value)
+        fam["out_of_band"].add_metric([unit], 1.0 if has_out_of_band_limits(unit, self.control_roots) else 0.0)
 
-            for metric, filename in (
-                (current, "memory.current"),
-                (high, "memory.high"),
-                (maximum, "memory.max"),
-            ):
-                value = _read_int(unit_dir / filename)
-                if value is None and filename == "memory.current":
-                    continue
-                metric.add_metric([unit], _UNLIMITED if value is None else value)
+    def describe(self):
+        """Declare the families without touching the filesystem.
 
-            undeclared.add_metric([unit], 1.0 if has_out_of_band_limits(unit, self.control_root) else 0.0)
+        Without this, `register()` records no names for the collector, so these
+        series are invisible to a name-restricted scrape (`?name[]=`) and get no
+        duplicate-registration checking.
+        """
+        return list(self._families().values())
 
-        yield events
-        yield current
-        yield high
-        yield maximum
-        yield undeclared
+    def collect(self):
+        fam = self._families()
+        for unit, unit_dir in self.discover_units().items():
+            try:
+                self._collect_unit(unit, unit_dir, fam)
+            except Exception as exc:  # noqa: BLE001 - one bad unit must not end the scrape
+                logger.warning("cgroup: collecting %s failed: %s", unit, exc)
+                fam["errors"].add_metric([unit, "collect"], 1.0)
+        yield from fam.values()
 
 
 __all__ = [
@@ -197,5 +280,7 @@ __all__ = [
     "read_memory_events",
     "has_out_of_band_limits",
     "DEFAULT_CGROUP_ROOT",
-    "SYSTEMD_CONTROL_ROOT",
+    "SYSTEMD_CONTROL_ROOTS",
+    "UNIT_GLOB",
+    "UNLIMITED",
 ]

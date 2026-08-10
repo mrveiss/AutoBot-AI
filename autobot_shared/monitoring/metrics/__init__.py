@@ -37,6 +37,7 @@ from .api_requests import ApiRequestsMetricsRecorder
 from .base import BaseMetricsRecorder
 
 # Phase 4 (#7590): Chat SSOT observability recorder
+from .cgroup_memory import CgroupMemoryCollector
 from .chat import ChatMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
 
@@ -73,6 +74,7 @@ __all__ = [
     # Issue #10778: HTTP API request counter
     "ApiRequestsMetricsRecorder",
     # Phase 4 (#7590): Chat SSOT observability
+    "CgroupMemoryCollector",
     "ChatMetricsRecorder",
     "WorkflowMetricsRecorder",
     "GitHubMetricsRecorder",

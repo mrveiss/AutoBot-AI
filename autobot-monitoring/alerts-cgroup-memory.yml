@@ -22,28 +22,43 @@
 ---
 
 groups:
-  - name: cgroup_memory_recording
+  # ONE group: rules within a group evaluate in order, so the alerts below always
+  # read the recording rules from this same evaluation. Split across two groups
+  # they evaluate independently and an alert can fire on a stale recorded series.
+  - name: cgroup_memory
     interval: 1m
     rules:
       # Reclaim events per second, per unit. The headline number: nonzero means
       # the kernel is actively throttling this cgroup right now.
+      #
+      # `sum without(event)` drops the event="high" label so alerts carry only
+      # the unit, and so a future kernel counter cannot fan this out.
       - record: autobot_cgroup_memory_high_rate
-        expr: rate(autobot_cgroup_memory_events{event="high"}[5m])
+        expr: sum without(event) (rate(autobot_cgroup_memory_events{event="high"}[5m]))
 
-      # Headroom left before throttling starts. Excludes unlimited cgroups,
-      # which report -1 and would otherwise produce a nonsense ratio.
+      - record: autobot_cgroup_memory_oom_kill_rate
+        expr: sum without(event) (rate(autobot_cgroup_memory_events{event="oom_kill"}[5m]))
+
+      # Headroom left before throttling starts.
+      #
+      # The arithmetic must be on the LEFT of `and`: `a and b` returns the
+      # elements of `a`, using `b` only as a set filter. Written the other way
+      # round this recorded the raw byte count instead of a ratio, and the
+      # ServiceMemoryHeadroomLow alert below — comparing it to 0.15 — could
+      # never fire for any unit. Caught by the promtool rule test, not by
+      # reading it (#13765 review).
+      #
+      # The `> 0` filter on the right excludes the -1 unlimited sentinel; drop
+      # it and (-1 - current)/1 goes hugely negative and fires immediately.
       - record: autobot_cgroup_memory_headroom_ratio
         expr: >
-          (autobot_cgroup_memory_high_bytes > 0)
-          and on(unit)
           (
             (autobot_cgroup_memory_high_bytes - autobot_cgroup_memory_current_bytes)
             /
             clamp_min(autobot_cgroup_memory_high_bytes, 1)
           )
+          and (autobot_cgroup_memory_high_bytes > 0)
 
-  - name: cgroup_memory_alerts
-    rules:
       # THE alert. Sustained reclaim means the service is being throttled — it
       # will look healthy by every other measure for as long as it lasts.
       - alert: ServiceMemoryThrottled
@@ -70,8 +85,10 @@ groups:
         annotations:
           summary: "{{ $labels.unit }} is hitting its MemoryMax hard limit"
           description: >-
-            Allocations in {{ $labels.unit }} are failing against MemoryMax.
-            Unlike MemoryHigh throttling this can OOM-kill the process.
+            {{ $labels.unit }} is reaching MemoryMax: the kernel is invoking
+            reclaim at the hard cap rather than the MemoryHigh watermark. This is
+            the step before allocations actually fail — see
+            ServiceMemoryOOMKilled for that.
 
       # Leading indicator: close enough to the watermark that throttling is next.
       - alert: ServiceMemoryHeadroomLow
@@ -112,3 +129,32 @@ groups:
             of the repo would reveal it. Move the intended values into the unit
             template, then remove the drop-in — in that order, or the host loses
             a protection someone added deliberately.
+
+      # The terminal case. memory.events oom_kill counts processes the kernel
+      # actually killed — collected since the first version of this file and,
+      # until now, alerted on by nothing.
+      - alert: ServiceMemoryOOMKilled
+        expr: autobot_cgroup_memory_oom_kill_rate > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.unit }} had a process OOM-killed"
+          description: >-
+            The kernel killed a process in {{ $labels.unit }}'s cgroup. Unlike
+            MemoryHigh throttling this is immediate and visible — but the unit
+            may restart and return to `active`, so the counter is the record.
+
+      # A cgroup file could not be read, so this unit's pressure is UNKNOWN.
+      # Without this, an unreadable memory.events looks identical to a healthy
+      # one: no `high` counter, so ServiceMemoryThrottled cannot fire for it.
+      - alert: ServiceMemoryMetricsUnreadable
+        expr: autobot_cgroup_memory_read_errors > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cgroup memory metrics unreadable for {{ $labels.unit }}"
+          description: >-
+            {{ $labels.file }} could not be read for {{ $labels.unit }}, so its
+            throttling state is unknown and ServiceMemoryThrottled cannot fire
+            for it. Monitoring for a silent failure must not fail silently.

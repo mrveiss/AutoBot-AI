@@ -57,8 +57,9 @@ class TestReadMemoryEvents:
         assert read_memory_events(d)["high"] == 21052
 
     def test_absent_file_is_empty_not_an_error(self, tmp_path):
-        """A metrics read must never break the scrape on a non-cgroup-v2 host."""
-        assert read_memory_events(tmp_path) == {}
+        """None, not {} — an empty dict reads as "no counters", and a unit with no
+        `high` counter cannot trip the throttle alert, i.e. it looks healthy."""
+        assert read_memory_events(tmp_path) is None
 
     def test_unknown_keys_survive(self, tmp_path):
         """A future kernel counter should be visible without a code change."""
@@ -79,7 +80,7 @@ class TestCollector:
         """The whole point: `high` is the only signal that separates a throttled
         service from a healthy one."""
         _make_cgroup(tmp_path, _UNIT, _INCIDENT_EVENTS, _INCIDENT_CURRENT, str(_INCIDENT_HIGH), str(_INCIDENT_MAX))
-        c = CgroupMemoryCollector([_UNIT], cgroup_root=tmp_path, control_root=tmp_path / "none")
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=(tmp_path / "none",))
 
         events = _samples(c, "autobot_cgroup_memory_events")
         assert events[(("event", "high"), ("unit", _UNIT))] == 21052
@@ -97,7 +98,7 @@ class TestCollector:
         _make_cgroup(tmp_path, throttled, _INCIDENT_EVENTS, _INCIDENT_CURRENT, str(_INCIDENT_HIGH), str(_INCIDENT_MAX))
         _make_cgroup(tmp_path, healthy, "low 0\nhigh 0\nmax 0\n", _INCIDENT_CURRENT, "max", "max")
 
-        c = CgroupMemoryCollector([throttled, healthy], cgroup_root=tmp_path, control_root=tmp_path / "none")
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=(tmp_path / "none",))
         events = _samples(c, "autobot_cgroup_memory_events")
         current = _samples(c, "autobot_cgroup_memory_current_bytes")
 
@@ -108,7 +109,7 @@ class TestCollector:
     def test_unlimited_reports_minus_one_not_a_huge_number(self, tmp_path):
         """`max` must not read as a real limit, or headroom maths goes nonsense."""
         _make_cgroup(tmp_path, _UNIT, "high 0\n", 1024, "max", "max")
-        c = CgroupMemoryCollector([_UNIT], cgroup_root=tmp_path, control_root=tmp_path / "none")
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=(tmp_path / "none",))
 
         assert _samples(c, "autobot_cgroup_memory_high_bytes")[(("unit", _UNIT),)] == -1
         assert _samples(c, "autobot_cgroup_memory_max_bytes")[(("unit", _UNIT),)] == -1
@@ -116,7 +117,7 @@ class TestCollector:
     def test_a_unit_that_is_not_running_here_is_silent(self, tmp_path):
         """Better no metric than a fabricated zero — a 0 reclaim count for an
         absent unit reads as 'healthy', which is a claim we cannot make."""
-        c = CgroupMemoryCollector(["not-deployed.service"], cgroup_root=tmp_path, control_root=tmp_path / "none")
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=(tmp_path / "none",))
         assert _samples(c, "autobot_cgroup_memory_events") == {}
         assert _samples(c, "autobot_cgroup_memory_current_bytes") == {}
 
@@ -124,7 +125,7 @@ class TestCollector:
         """A scrape must not raise because one file is missing."""
         d = tmp_path / "system.slice" / _UNIT
         d.mkdir(parents=True)  # directory exists, every file absent
-        c = CgroupMemoryCollector([_UNIT], cgroup_root=tmp_path, control_root=tmp_path / "none")
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=(tmp_path / "none",))
         list(c.collect())
 
 
@@ -137,67 +138,144 @@ class TestOutOfBandLimits:
     """
 
     def test_detects_a_set_property_dropin(self, tmp_path):
-        (tmp_path / f"{_UNIT}.d").mkdir(parents=True)
-        assert has_out_of_band_limits(_UNIT, control_root=tmp_path) is True
+        d = tmp_path / f"{_UNIT}.d"
+        d.mkdir(parents=True)
+        (d / "50-MemoryHigh.conf").write_text("[Service]\nMemoryHigh=8589934592\n", encoding="utf-8")
+        assert has_out_of_band_limits(_UNIT, control_roots=(tmp_path,)) is True
 
     def test_absent_tree_is_not_a_false_positive(self, tmp_path):
-        assert has_out_of_band_limits(_UNIT, control_root=tmp_path / "nope") is False
+        assert has_out_of_band_limits(_UNIT, control_roots=(tmp_path / "nope",)) is False
 
     def test_a_dropin_for_another_unit_does_not_flag_this_one(self, tmp_path):
         """The issue notes paperclip.service.d exists on the same host — a
         per-unit check must not smear that across the fleet."""
-        (tmp_path / "paperclip.service.d").mkdir(parents=True)
-        assert has_out_of_band_limits(_UNIT, control_root=tmp_path) is False
+        d = tmp_path / "paperclip.service.d"
+        d.mkdir(parents=True)
+        (d / "50-MemoryHigh.conf").write_text("[Service]\nMemoryHigh=1\n", encoding="utf-8")
+        assert has_out_of_band_limits(_UNIT, control_roots=(tmp_path,)) is False
 
     def test_the_flag_is_exported_per_unit(self, tmp_path):
         control = tmp_path / "control"
-        (control / f"{_UNIT}.d").mkdir(parents=True)
+        d = control / f"{_UNIT}.d"
+        d.mkdir(parents=True)
+        (d / "50-MemoryMax.conf").write_text("[Service]\nMemoryMax=12884901888\n", encoding="utf-8")
         other = "autobot-celery.service"
         _make_cgroup(tmp_path / "cg", _UNIT, "high 0\n", 1, "max", "max")
         _make_cgroup(tmp_path / "cg", other, "high 0\n", 1, "max", "max")
 
-        c = CgroupMemoryCollector([_UNIT, other], cgroup_root=tmp_path / "cg", control_root=control)
+        c = CgroupMemoryCollector(cgroup_root=tmp_path / "cg", control_roots=(control,))
         flags = _samples(c, "autobot_cgroup_memory_limits_out_of_band")
 
         assert flags[(("unit", _UNIT),)] == 1.0
         assert flags[(("unit", other),)] == 0.0
 
 
+class TestReadFailuresAreNeverReassuring:
+    """#13765 review: three untested paths, each of which faked a healthy state.
+
+    The module's rule is that a value we could not read is reported as absent,
+    never as a comfortable number. `-1` on an unreadable limit meant "unlimited",
+    which also silently dropped the unit out of the headroom rule — a wrong
+    answer that looks like a working one.
+    """
+
+    def test_a_non_utf8_byte_does_not_kill_the_scrape(self, tmp_path):
+        """UnicodeDecodeError is a ValueError, not an OSError. Catching only the
+        latter let one bad byte propagate out of collect() and 500 the whole
+        /metrics endpoint, taking every other metric with it."""
+        d = tmp_path / "system.slice" / _UNIT
+        d.mkdir(parents=True)
+        (d / "memory.events").write_bytes(b"high 5\n\xff\xfe\n")
+        (d / "memory.current").write_bytes(b"\xff\xfe")
+
+        families = list(CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=()).collect())
+
+        assert families, "the scrape must still produce output"
+
+    def test_an_unreadable_limit_is_absent_not_unlimited(self, tmp_path):
+        """-1 means 'no limit set'. Reporting it for a file we could not read is
+        the reassuring-wrong-answer failure this whole issue is about."""
+        d = _make_cgroup(tmp_path, _UNIT, "high 0\n", 1024, str(_INCIDENT_HIGH), "max")
+        (d / "memory.high").chmod(0o000)
+        try:
+            c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=())
+            highs = _samples(c, "autobot_cgroup_memory_high_bytes")
+            errors = _samples(c, "autobot_cgroup_memory_read_errors")
+        finally:
+            (d / "memory.high").chmod(0o644)
+
+        assert (("unit", _UNIT),) not in highs, "an unreadable limit must emit no sample"
+        assert errors[(("file", "memory.high"), ("unit", _UNIT))] == 1.0
+
+    def test_an_unreadable_events_file_is_reported_as_an_error(self, tmp_path):
+        """Otherwise it is indistinguishable from a healthy unit: no `high`
+        counter means ServiceMemoryThrottled can never fire for it."""
+        d = _make_cgroup(tmp_path, _UNIT, "high 0\n", 1024, "max", "max")
+        (d / "memory.events").unlink()
+
+        errors = _samples(
+            CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=()), "autobot_cgroup_memory_read_errors"
+        )
+
+        assert errors[(("file", "memory.events"), ("unit", _UNIT))] == 1.0
+
+    def test_a_unit_outside_system_slice_is_still_found(self, tmp_path):
+        """`systemctl set-property <unit> Slice=…` is the SAME out-of-band
+        mechanism this collector detects. A hardcoded system.slice path would be
+        defeated by it, silently — the detector beaten by the thing it detects."""
+        nested = tmp_path / "machine.slice" / "custom.slice" / _UNIT
+        nested.mkdir(parents=True)
+        (nested / "memory.events").write_text(_INCIDENT_EVENTS, encoding="utf-8")
+
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=())
+        events = _samples(c, "autobot_cgroup_memory_events")
+
+        assert events[(("event", "high"), ("unit", _UNIT))] == 21052
+
+
 class TestAlertRules:
-    """The rules must fire on the reclaim RATE, never on a usage threshold."""
+    """Structure only. BEHAVIOUR lives in alerts-cgroup-memory.test.yml.
+
+    The previous version asserted substrings of the expr strings — that
+    `"autobot_cgroup_memory_high_rate"` appeared, and that
+    `"autobot_cgroup_memory_current_bytes >"` did not. Both passed while the
+    headroom alert was structurally dead, because a substring says nothing about
+    what the PromQL evaluates to. What is kept here is only what promtool cannot
+    express.
+    """
 
     @pytest.fixture
-    def rules(self):
+    def monitoring_dir(self):
+        return Path(__file__).resolve().parents[3] / "autobot-monitoring"
+
+    @pytest.fixture
+    def rules(self, monitoring_dir):
         yaml = pytest.importorskip("yaml")
-        path = Path(__file__).resolve().parents[3] / "autobot-monitoring" / "alerts-cgroup-memory.yml"
-        return yaml.safe_load(path.read_text(encoding="utf-8"))
+        return yaml.safe_load((monitoring_dir / "alerts-cgroup-memory.yml").read_text(encoding="utf-8"))
 
-    def test_the_throttle_alert_fires_on_the_reclaim_counter(self, rules):
+    def test_every_alert_is_exercised_by_the_promtool_suite(self, rules, monitoring_dir):
+        """An alert with no rule test is exactly how the dead one shipped."""
+        yaml = pytest.importorskip("yaml")
+        suite = yaml.safe_load((monitoring_dir / "alerts-cgroup-memory.test.yml").read_text(encoding="utf-8"))
+
+        declared = {r["alert"] for g in rules["groups"] for r in g["rules"] if "alert" in r}
+        exercised = {case["alertname"] for t in suite["tests"] for case in t.get("alert_rule_test", [])}
+
+        assert declared <= exercised, f"alerts with no promtool test: {sorted(declared - exercised)}"
+
+    def test_the_out_of_band_alert_is_not_critical(self, rules):
         alerts = {r["alert"]: r for g in rules["groups"] for r in g["rules"] if "alert" in r}
-        expr = alerts["ServiceMemoryThrottled"]["expr"]
-        assert "autobot_cgroup_memory_high_rate" in expr
-
-    def test_no_alert_keys_off_absolute_memory_usage(self, rules):
-        """A usage threshold cannot see this failure — the cgroup is *held* at
-        its watermark, so 'high memory' is the normal state of a throttled
-        service and of a healthy one near its cap alike."""
-        for group in rules["groups"]:
-            for rule in group["rules"]:
-                if "alert" not in rule:
-                    continue
-                expr = rule["expr"]
-                assert "autobot_cgroup_memory_current_bytes >" not in expr, (
-                    f"{rule['alert']} thresholds on raw usage, which cannot "
-                    "distinguish throttled from healthy (#13765)"
-                )
-
-    def test_the_out_of_band_alert_exists_and_is_not_critical(self, rules):
-        alerts = {r["alert"]: r for g in rules["groups"] for r in g["rules"] if "alert" in r}
-        rule = alerts["ServiceMemoryLimitsOutOfBand"]
-        assert rule["labels"]["severity"] == "warning", (
+        assert alerts["ServiceMemoryLimitsOutOfBand"]["labels"]["severity"] == "warning", (
             "an out-of-band limit is config drift, not an outage — someone set it "
-            "deliberately and paging on it would train people to ignore it"
+            "deliberately, and paging on it would train people to ignore it"
         )
+
+    def test_recording_and_alerting_rules_share_one_group(self, rules):
+        """Rules evaluate in order within a group but independently across
+        groups, so a split lets an alert read a stale recorded series."""
+        with_records = {g["name"] for g in rules["groups"] if any("record" in r for r in g["rules"])}
+        with_alerts = {g["name"] for g in rules["groups"] if any("alert" in r for r in g["rules"])}
+        assert with_records == with_alerts
 
 
 class TestItIsActuallyWired:
@@ -217,19 +295,31 @@ class TestItIsActuallyWired:
             type(c).__name__ == "CgroupMemoryCollector" for c in manager.registry._collector_to_names
         ), "CgroupMemoryCollector is not registered — the metrics would never be scraped"
 
-    def test_the_families_appear_in_scrape_output(self):
-        """Registration alone is not enough; the families must render."""
+    def test_real_samples_render_through_the_manager(self, tmp_path):
+        """`# HELP` alone proves nothing — prometheus_client emits it for EMPTY
+        families, so the previous version of this test passed with zero samples
+        and merely duplicated the registration check."""
         from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
 
-        text = PrometheusMetricsManager().get_metrics().decode()
-        for family in (
-            "autobot_cgroup_memory_events",
-            "autobot_cgroup_memory_current_bytes",
-            "autobot_cgroup_memory_limits_out_of_band",
-        ):
-            assert f"# HELP {family}" in text, f"{family} missing from /metrics"
+        _make_cgroup(tmp_path, _UNIT, _INCIDENT_EVENTS, _INCIDENT_CURRENT, str(_INCIDENT_HIGH), str(_INCIDENT_MAX))
+        manager = PrometheusMetricsManager()
+        manager._cgroup_memory.cgroup_root = tmp_path
+        manager._cgroup_memory.control_roots = (tmp_path / "none",)
 
-    def test_the_watched_list_includes_the_unit_from_the_incident(self):
-        from autobot_shared.monitoring.prometheus_metrics import THROTTLE_WATCHED_UNITS
+        text = manager.get_metrics().decode()
 
-        assert "autobot-backend.service" in THROTTLE_WATCHED_UNITS
+        assert 'autobot_cgroup_memory_events{event="high",unit="autobot-backend.service"} 21052' in text
+
+    def test_the_default_unit_glob_would_find_the_incident_unit(self, tmp_path):
+        """Discovery, not a hardcoded list: a static list could not cover
+        instance units (autobot-mcp-bridge@.service is the only unit in the tree
+        with a repo-declared MemoryMax) and needed editing per new service."""
+        _make_cgroup(tmp_path, "autobot-backend.service", "high 1\n", 1, "max", "max")
+        _make_cgroup(tmp_path, "autobot-mcp-bridge@0.service", "high 0\n", 1, "max", "max")
+        _make_cgroup(tmp_path, "unrelated-thing.service", "high 0\n", 1, "max", "max")
+
+        found = CgroupMemoryCollector(cgroup_root=tmp_path).discover_units()
+
+        assert "autobot-backend.service" in found
+        assert "autobot-mcp-bridge@0.service" in found, "instance units must be discovered"
+        assert "unrelated-thing.service" not in found

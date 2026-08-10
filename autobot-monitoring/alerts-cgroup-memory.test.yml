@@ -1,0 +1,195 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# promtool rule tests for alerts-cgroup-memory.yml (#13765).
+#
+# Written because the first version of these rules shipped an alert that could
+# never fire: `autobot_cgroup_memory_headroom_ratio` was `(limit > 0) and (…)`,
+# and `a and b` returns the elements of `a` — so the recorded series held a byte
+# count and `ServiceMemoryHeadroomLow`, comparing it to 0.15, was structurally
+# dead. Every unit test passed, because they asserted substrings of the expr
+# rather than evaluating it.
+#
+# That is the umbrella's own failure mode (#13852) inside its own fix: an alert
+# that cannot fire is indistinguishable from one that has nothing to report.
+#
+#   run:  promtool test rules autobot-monitoring/alerts-cgroup-memory.test.yml
+---
+
+rule_files:
+  - alerts-cgroup-memory.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ---------------------------------------------------------------------------
+  # The incident: reclaim counter climbing while usage sits at the watermark.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_events{unit="autobot-backend.service",event="high"}'
+        values: "0+50x60"
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-backend.service"}'
+        values: "8588886016x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-backend.service"}'
+        values: "8589934592x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryThrottled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              unit: autobot-backend.service
+            exp_annotations:
+              summary: "autobot-backend.service is being memory-throttled"
+              description: >-
+                memory.events high has been rising for 10 minutes, so the kernel is applying reclaim
+                pressure to autobot-backend.service. The unit will report `active`, its memory usage
+                will look steady at the watermark, and its health endpoint may still answer — none of
+                those distinguish this state from healthy. In #13765 this ran for hours with the
+                process in STAT=D and /health timing out, and needed an explicit restart.
+
+  # ---------------------------------------------------------------------------
+  # THE regression: 1% headroom must fire. This is the case that was dead.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-backend.service"}'
+        values: "8504076697x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-backend.service"}'
+        values: "8589934592x60"
+    promql_expr_test:
+      # ~1% headroom — a RATIO, not a byte count. Under the old `and` ordering
+      # this evaluated to 8589934592 and the alert below could never fire.
+      - expr: autobot_cgroup_memory_headroom_ratio
+        eval_time: 20m
+        exp_samples:
+          - labels: 'autobot_cgroup_memory_headroom_ratio{unit="autobot-backend.service"}'
+            value: 9.995174477808177e-03
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryHeadroomLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              unit: autobot-backend.service
+            exp_annotations:
+              summary: "autobot-backend.service is within 15% of its throttling watermark"
+              description: >-
+                autobot-backend.service is approaching MemoryHigh. This fires BEFORE throttling
+                starts; once it starts, the service stops making progress while continuing to report
+                healthy.
+
+  # ---------------------------------------------------------------------------
+  # Healthy, and unlimited: neither may produce an alert or a headroom series.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      # Plenty of headroom under a real limit.
+      - series: 'autobot_cgroup_memory_events{unit="autobot-celery.service",event="high"}'
+        values: "0x60"
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-celery.service"}'
+        values: "846598144x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-celery.service"}'
+        values: "8589934592x60"
+      # Unlimited: -1 sentinel must be filtered OUT, not treated as a 1-byte cap.
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-tts-worker.service"}'
+        values: "756400128x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-tts-worker.service"}'
+        values: "-1x60"
+    promql_expr_test:
+      - expr: 'autobot_cgroup_memory_headroom_ratio{unit="autobot-tts-worker.service"}'
+        eval_time: 20m
+        exp_samples: []
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryHeadroomLow
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: ServiceMemoryThrottled
+        exp_alerts: []
+
+  # ---------------------------------------------------------------------------
+  # Unreadable metrics must not read as healthy.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_read_errors{unit="autobot-npu-worker.service",file="memory.events"}'
+        values: "1x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryMetricsUnreadable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              unit: autobot-npu-worker.service
+              file: memory.events
+            exp_annotations:
+              summary: "cgroup memory metrics unreadable for autobot-npu-worker.service"
+              description: >-
+                memory.events could not be read for autobot-npu-worker.service, so its throttling
+                state is unknown and ServiceMemoryThrottled cannot fire for it. Monitoring for a
+                silent failure must not fail silently.
+
+  # ---------------------------------------------------------------------------
+  # The terminal case, previously collected and unalerted.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_events{unit="autobot-ai-stack.service",event="oom_kill"}'
+        values: "0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ServiceMemoryOOMKilled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              unit: autobot-ai-stack.service
+            exp_annotations:
+              summary: "autobot-ai-stack.service had a process OOM-killed"
+              description: >-
+                The kernel killed a process in autobot-ai-stack.service's cgroup. Unlike MemoryHigh
+                throttling this is immediate and visible — but the unit may restart and return to
+                `active`, so the counter is the record.
+
+  # ---------------------------------------------------------------------------
+  # Hard-cap reclaim, and the out-of-band drop-in. Added because the coverage
+  # guard in cgroup_memory_test.py refused a rules file with untested alerts —
+  # an alert nobody exercises is how the dead headroom rule shipped.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_events{unit="autobot-chromadb.service",event="max"}'
+        values: "0+3x60"
+      - series: 'autobot_cgroup_memory_limits_out_of_band{unit="autobot-backend.service"}'
+        values: "1x60"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ServiceMemoryHardLimitHit
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              unit: autobot-chromadb.service
+              event: max
+            exp_annotations:
+              summary: "autobot-chromadb.service is hitting its MemoryMax hard limit"
+              description: >-
+                autobot-chromadb.service is reaching MemoryMax: the kernel is invoking reclaim at the
+                hard cap rather than the MemoryHigh watermark. This is the step before allocations
+                actually fail — see ServiceMemoryOOMKilled for that.
+      - eval_time: 45m
+        alertname: ServiceMemoryLimitsOutOfBand
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              unit: autobot-backend.service
+            exp_annotations:
+              summary: "autobot-backend.service runs under limits no repo artifact declares"
+              description: >-
+                autobot-backend.service has a systemctl set-property drop-in under
+                /etc/systemd/system.control/. Its effective memory limits are not in the unit template
+                or any ansible role, so this host behaves differently from a clean deployment of the
+                same commit and no review of the repo would reveal it. Move the intended values into
+                the unit template, then remove the drop-in — in that order, or the host loses a
+                protection someone added deliberately.

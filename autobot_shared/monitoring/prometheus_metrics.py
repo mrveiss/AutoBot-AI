@@ -27,6 +27,7 @@ from prometheus_client import (
 
 from .metrics import (
     ApiRequestsMetricsRecorder,
+    CgroupMemoryCollector,
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
@@ -60,22 +61,6 @@ from .metrics.cgroup_memory import CgroupMemoryCollector
 
 # Issue #380: Module-level dicts for state value mapping (avoid repeated dict creation)
 _CIRCUIT_BREAKER_STATE_VALUES = {"closed": 0, "open": 1, "half_open": 2}
-
-
-# Units whose cgroup memory pressure is exported (#13765). autobot-backend is
-# the one that was throttled into STAT=D while reporting `active`; the others are
-# the long-running services on the same host, all of which can reach the same
-# state and none of which would show it any other way.
-THROTTLE_WATCHED_UNITS: list[str] = [
-    "autobot-backend.service",
-    "autobot-slm-backend.service",
-    "autobot-celery.service",
-    "autobot-celery-beat.service",
-    "autobot-tts-worker.service",
-    "autobot-npu-worker.service",
-    "autobot-ai-stack.service",
-    "autobot-chromadb.service",
-]
 
 
 class PrometheusMetricsManager:
@@ -155,7 +140,11 @@ class PrometheusMetricsManager:
         # Issue #13765: cgroup memory pressure. Registered as a COLLECTOR, not a
         # recorder — there is no event to hook, the kernel updates these counters
         # continuously, so it samples at scrape time and cannot go stale.
-        self._cgroup_memory = CgroupMemoryCollector(THROTTLE_WATCHED_UNITS)
+        # Units are DISCOVERED, not listed: a static list could not cover
+        # instance units such as autobot-mcp-bridge@.service — the only unit in
+        # the tree with a repo-declared MemoryMax — and needed editing per new
+        # service (#13765 review).
+        self._cgroup_memory = CgroupMemoryCollector()
         self.registry.register(self._cgroup_memory)
 
     # =========================================================================
