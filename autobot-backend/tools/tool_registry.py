@@ -22,6 +22,7 @@ from tools.code_interpreter import execute_code
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
+from autobot_shared.auth.permissions import Role
 from autobot_shared.logging_manager import get_logger
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
@@ -84,7 +85,12 @@ class ToolRegistry:
         return {
             "task_id": self._generate_task_id(),
             "type": task_type,
-            "user_role": "user",
+            # RBAC role, not a chat message role: worker_node reads this in
+            # _validate_user_role / _check_task_permission. The guard suggests
+            # CategoryDefaults.ROLE_USER, which is the chat vocabulary and
+            # happens to hold the same string — using it here would tie an
+            # authorization decision to a presentation constant.
+            "user_role": Role.USER.value,
             "timestamp": time.time(),
         }
 

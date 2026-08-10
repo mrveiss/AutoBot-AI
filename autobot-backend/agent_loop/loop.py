@@ -51,6 +51,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
 from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
@@ -1032,7 +1033,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )
@@ -1064,7 +1065,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )
