@@ -5,20 +5,20 @@
 apscheduler>=3.11.3             # Issue #6590: hourly LLM key rotation job
 croniter>=6.2.4                 # GH#9027: required by LLC RoutineScheduler and routines API
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn>=0.52.0
+uvicorn>=0.52.1
 websockets>=15.0.1,<16       # Issue #3098 + #10386: CAP <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16, so >=16 makes langgraph unresolvable (ResolutionImpossible). Dependabot #10997 wrongly bumped this to >=16,<17 (bypassing the <16 cap in dependabot.yml) and broke every PR's Docker build. desktop_streaming_manager + slm_client use only legacy-compat API present in 15.x; CI pins 15.0.1. DO NOT bump past <16 until langgraph-sdk widens its cap.
 python-dotenv>=1.2.2
 aiofiles>=25.1.0
 pydantic>=2.13.4
 email-validator>=2.3.0  # Issue #2953: required by pydantic for EmailStr validation
-cachetools>=7.1.6
+cachetools>=7.1.7
 celery>=5.6.3  # Issue #892: Background task processing
 vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
 psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
 sqlalchemy>=2.0.51
-alembic>=1.18.5
+alembic>=1.19.0
 aiosqlite>=0.22.1
 asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
 
@@ -30,12 +30,12 @@ openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
 python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
 # AI/ML
-openai>=2.51.0
+openai>=2.53.0
 anthropic>=0.120.2
-boto3>=1.43.61                       # GH#9010: AWS Bedrock provider
+boto3>=1.43.66                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=7.35.1,<8.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
-sentence-transformers>=5.6.1
+sentence-transformers>=5.7.0
 torch==2.13.0  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
 torchvision==0.28.0  # paired with torch 2.12.1; CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
@@ -82,7 +82,7 @@ PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 praw>=8.0.2             # Reddit OAuth API for CommunityGrowthSkill
 
 # Web push notifications (GH#4459)
-pywebpush>=2.3.0        # VAPID/RFC8291 browser push delivery
+pywebpush>=2.4.0        # VAPID/RFC8291 browser push delivery
 
 # NLP / Neural Mesh RAG (Issue #1994)
 # spaCy moved to the optional requirements-nlp.txt extra (#9825): its build deps
@@ -102,9 +102,15 @@ watchdog>=6.0.0
 # Media processing pipelines (Issue #932)
 aiohttp>=3.14.3         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
-pywebpush>=2.3.0        # VAPID/RFC8291 browser push delivery (GH#4459)
+pywebpush>=2.4.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
 Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
+# OCR binding (#13885). MUST stay paired with the tesseract-ocr / libtesseract-dev
+# system packages installed by ansible (roles/backend/tasks/main.yml). Without this
+# line the binary ships on every host and no Python caller can reach it: /api/vision/ocr,
+# vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
+# guard-import it and degrade to "pytesseract not installed" with no alert.
+pytesseract>=0.3.13
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):
@@ -118,5 +124,5 @@ defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 
 # Content Reach optional source backends (#10932) — lazy-imported; backend starts without them
 ddgs>=9.14.4               # #10932 content-reach: keyless web search (optional, lazy)
-trafilatura>=2.1.0        # #10932 content-reach: readable article extraction (optional, lazy)
+trafilatura>=2.2.0        # #10932 content-reach: readable article extraction (optional, lazy)
 yt-dlp>=2026.7.4        # #10932 content-reach: YouTube caption extraction (optional, lazy)

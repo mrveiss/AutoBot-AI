@@ -33,7 +33,8 @@ on:
   # so its required-check context ("migration-matrix") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked on
   # "Expected — Waiting for status". The real matrix is gated on the `changes` job
-  # below and self-skips (reporting success) when no migration-relevant path changes.
+  # below; #13862 made the required context a separate reporting job so that
+  # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
     branches: [ main, Dev_new_gui ]
 
@@ -48,11 +49,12 @@ jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       migrations: ${{ steps.filter.outputs.migrations }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
@@ -68,13 +70,13 @@ jobs:
               - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
               - '.github/workflows/migration-gate.yml'
 
-  migration-matrix:
+  migration-tests:
     needs: changes
     # Run the full matrix whenever a migration-relevant path changed. Using
     # `!= 'false'` (rather than `== 'true'`) is fail-safe: any unexpected/empty
     # filter output still runs the gate instead of silently skipping it. On PRs
-    # that touch no migration paths the job is skipped and reports success, so the
-    # required "migration-matrix" context always resolves.
+    # that touch no migration paths this job is skipped, and the
+    # `migration-matrix` job below turns that into an explicit verdict.
     if: needs.changes.outputs.migrations != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -131,3 +133,61 @@ jobs:
             autobot-backend/tests/migrations/test_schema_authority.py \
             autobot-backend/tests/migrations/test_ansible_migration_contract.py \
             -v --tb=short -p no:cacheprovider
+
+  # #13862: the required check reports a VERDICT, never "skipped".
+  #
+  # `migration-matrix` used to be the heavy job itself, so on a PR that touches
+  # no migration paths the required context resolved as `skipped`. Branch
+  # protection accepts that — but "skipped" cannot be read off the PR page as
+  # either "this diff has nothing to verify" or "the check never ran", and those
+  # are opposite facts. The same ambiguity is why the `pull_request` trigger
+  # above deliberately carries no paths filter (see the note there): a required
+  # context that never resolves deadlocks the PR on "Expected — Waiting for
+  # status". This finishes that job — the context now always resolves, and it
+  # always says which of the two happened.
+  #
+  # Kept separate from `migration-tests` rather than un-gating it: that job
+  # starts a postgres:16 service container, and spinning one up on every PR
+  # that changes no migration would be a real cost for a message.
+  #
+  # Fail-safe: anything other than success-or-skipped fails this gate, and a
+  # failed `changes` job fails it too — otherwise a broken paths filter would
+  # skip the matrix and read as "nothing to verify".
+  #
+  # `always()` rather than the repo's usual `!cancelled()` is deliberate:
+  # `!cancelled()` would SKIP this job on a cancelled run and re-publish
+  # `skipped` on the required context, which is the bug being fixed. The cost
+  # is that a cancelled run reports this check red rather than absent — the
+  # safer direction for a required gate, and self-clearing on the next run.
+  migration-matrix:
+    name: migration-matrix
+    needs: [changes, migration-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report migration gate verdict
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TESTS_RESULT: ${{ needs.migration-tests.result }}
+        run: |
+          set -euo pipefail
+          echo "changes=$CHANGES_RESULT  migration-tests=$TESTS_RESULT"
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::path detection $CHANGES_RESULT — cannot tell whether migrations changed, so this gate cannot pass"
+            exit 1
+          fi
+
+          case "$TESTS_RESULT" in
+            success)
+              echo "migration matrix passed"
+              ;;
+            skipped)
+              echo "no migration-relevant path changed in this diff — nothing to verify"
+              ;;
+            *)
+              echo "::error::migration matrix $TESTS_RESULT"
+              exit 1
+              ;;
+          esac

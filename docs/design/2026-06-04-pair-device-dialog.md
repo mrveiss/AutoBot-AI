@@ -1,4 +1,24 @@
+---
+tags: [type/architecture, status/current, component/frontend]
+date: 2026-06-04
+issue: 4463
+---
+
 # PairDeviceDialog Component Design
+
+**Issue:** https://github.com/mrveiss/AutoBot-AI/issues/4463 (originating feature)
+**Wiring gap:** https://github.com/mrveiss/AutoBot-AI/issues/13794
+**Originally:** `MVA-2993` — the ticket id still cited in `usePairingQR.ts`, kept here because
+the filename no longer carries it and it is the only trail from that code back to this doc.
+
+> **Status: shipped and reachable as of #13869.** The design below names the
+> files to create and never names a parent view or entry point, which is why
+> both files existed for two months while no user could reach either. The
+> missing piece, added by #13869: `DeviceManagementPanel` — the only device
+> surface the GUI mounts — opens this dialog and refreshes its list on `paired`.
+>
+> Read the sections below as the component spec they are; the entry point is
+> the part they do not cover.
 
 ## Overview
 

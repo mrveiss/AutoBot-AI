@@ -3569,6 +3569,11 @@
           "component": {
             "title": "Component",
             "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3580,6 +3585,14 @@
       "DriftResolveResponse": {
         "description": "Result of a local rsync to resolve drift for a component (#7149, #9982).",
         "properties": {
+          "blocked_deletions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked Deletions",
+            "type": "array"
+          },
           "component": {
             "title": "Component",
             "type": "string"
@@ -3625,7 +3638,7 @@
         "type": "object"
       },
       "DriftedFile": {
-        "description": "A file whose checksum differs between code_source and deployed (Issue #2834).",
+        "description": "A file whose checksum differs between code_source and deployed (Issue #2834).\n\n``untracked`` replaced ``deployed_only`` in #13851: a file present on the\nhost and absent from *this component's* source is foreign, not out of date,\nand is reported in ``FileDriftReport.untracked_files`` rather than counted\nas drift.",
         "properties": {
           "deployed_checksum": {
             "anyOf": [
@@ -3657,7 +3670,7 @@
             "enum": [
               "modified",
               "source_only",
-              "deployed_only"
+              "untracked"
             ],
             "title": "Status",
             "type": "string"
@@ -4093,6 +4106,14 @@
           "total_compared": {
             "title": "Total Compared",
             "type": "integer"
+          },
+          "untracked_files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DriftedFile"
+            },
+            "title": "Untracked Files",
+            "type": "array"
           }
         },
         "required": [

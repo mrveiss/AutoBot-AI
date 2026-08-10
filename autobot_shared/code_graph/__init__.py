@@ -9,7 +9,11 @@ Single-sourced so ``services/knowledge/code_indexer.py`` (#13469) and
 name nodes the same way instead of maintaining incompatible schemes.
 """
 
-from autobot_shared.code_graph.identity import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph.identity import (
+    compute_node_id,
+    module_path_from_rel_path,
+    project_relative_path,
+)
 from autobot_shared.code_graph.resolver import (
     COMMON_THIRD_PARTY,
     INTERNAL_MODULE_PREFIXES,
@@ -25,6 +29,7 @@ from autobot_shared.code_graph.resolver import (
 __all__ = [
     "compute_node_id",
     "module_path_from_rel_path",
+    "project_relative_path",
     "COMMON_THIRD_PARTY",
     "INTERNAL_MODULE_PREFIXES",
     "STDLIB_MODULES",

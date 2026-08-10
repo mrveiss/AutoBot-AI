@@ -191,7 +191,18 @@ async def test_index_directory_unsupported_extension_skipped(tmp_path) -> None:
     result = await indexer.index_directory(str(tmp_path))
     assert result.success == 0
     assert result.skipped == 0  # skipped only counts supported-but-hash-match; unsupported = 0
-    assert not indexer._collection.upsert.called
+
+    # #13508: a completed run always writes one provenance record, so "nothing was
+    # upserted" is no longer the right question — "no graph content was upserted"
+    # is. Asserted by record_type rather than by call count, which keeps the
+    # original intent and stops a future extra bookkeeping record breaking it again.
+    content_records = [
+        metadata
+        for call in indexer._collection.upsert.call_args_list
+        for metadata in (call.kwargs.get("metadatas") or [])
+        if metadata.get("record_type") != "graph_provenance"
+    ]
+    assert content_records == []
 
 
 # ---------------------------------------------------------------------------
