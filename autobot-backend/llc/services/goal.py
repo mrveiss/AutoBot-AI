@@ -349,7 +349,12 @@ class GoalService(LLCServiceBase):
             from utils.async_chromadb_client import get_async_chromadb_client
 
             client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(_goal_collection_name(company_id))
+            # #13920: deleting from a collection that does not exist is already
+            # a no-op — creating one so the delete has somewhere to go leaves an
+            # empty collection behind forever.
+            collection = await client.get_collection_or_none(_goal_collection_name(company_id))
+            if collection is None:
+                return
             await collection.delete(ids=ids)
         except Exception:
             logger.exception("Failed to remove goals %s from KB — non-fatal", ids)

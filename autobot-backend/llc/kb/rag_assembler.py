@@ -200,7 +200,12 @@ class LLCRAGAssembler:
             Dict with chunks and sources from collection.
         """
         try:
-            collection = await client.get_or_create_collection(collection_name)
+            # #13920: a query must not create the collection. Merely asking an
+            # entity KB that never had anything ingested was leaving a permanent
+            # empty collection behind — 32 of 37 on one deployment.
+            collection = await client.get_collection_or_none(collection_name)
+            if collection is None:
+                return {"chunks": [], "sources": []}
             results = await collection.query(
                 query_texts=[query_text],
                 n_results=n_results,
