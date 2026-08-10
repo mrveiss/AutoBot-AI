@@ -198,11 +198,17 @@ class TestRunScopedWindowedRead:
         assert window["has_more"] is True
 
     def test_paging_reaches_the_end(self):
-        big = "".join(str(i % 10) for i in range(300))
+        # 1200 chars, not 300: the spill now measures its replacement and
+        # declines when the excerpt plus its note would not be smaller. At this
+        # fixture's excerpt size that overhead is ~300 chars, so a 300-char
+        # payload is correctly left alone and has no anchor to page.
+        big = "".join(str(i % 10) for i in range(1200))
 
-        value, _ = spill.spill_if_oversized(TASK, "bash", big)
-        first = spill.read_spilled_window(value["anchor"], offset=0, limit=200)
-        second = spill.read_spilled_window(value["anchor"], offset=200, limit=200)
+        value, spilled = spill.spill_if_oversized(TASK, "bash", big)
+        assert spilled is True, "precondition: the payload must be worth spilling"
+
+        first = spill.read_spilled_window(value["anchor"], offset=0, limit=800)
+        second = spill.read_spilled_window(value["anchor"], offset=800, limit=800)
 
         assert first["content"] + second["content"] == big
         assert second["has_more"] is False

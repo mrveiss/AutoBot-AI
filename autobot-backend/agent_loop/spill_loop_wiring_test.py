@@ -72,12 +72,48 @@ class TestTheSpillAlwaysShrinks:
     def test_what_enters_context_is_smaller_than_what_it_replaces(self, original):
         """The one property the module exists to provide.
 
+        Stated as "spilled OR smaller", because declining to spill is a valid
+        outcome — the module measures its own replacement and keeps the original
+        when the swap would not help. Asserting "always spills" would force back
+        the bug this guards.
+
         Measured with `_serialise`, which is what actually enters context —
         `json.dumps` escapes non-ASCII and would flatter the assertion.
         """
-        spilled = _spill_one(original)
+        rewritten, count = spill.spill_results(TASK, {"bash": original})
+        spilled = rewritten["bash"]
 
-        assert len(spill._serialise(spilled)) < len(spill._serialise(original))
+        assert count == 0 or len(spill._serialise(spilled)) < len(spill._serialise(original))
+
+    @pytest.mark.parametrize(
+        ("threshold", "payload"),
+        [
+            # Control-char density: `_serialise` returns a str raw, but the
+            # excerpt slice is JSON-escaped, so a dense payload inverted at the
+            # DEFAULT configuration (8,001 -> 12,282 chars).
+            (8000, "\x01" * 8001),
+            (8000, ("\x01" * 6 + "abcd") * 801),
+            # Small thresholds, where the hardcoded overhead estimate is wrong by
+            # 2-6x once the classification markers are re-escaped.
+            (1500, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+            (2000, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+            (3000, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+        ],
+    )
+    def test_the_invariant_holds_across_configurations(self, threshold, payload, tmp_path, monkeypatch):
+        """No constant can be right, so the module must measure.
+
+        Overhead ranges 286-1710 chars with tool-name length and escaping, and
+        an estimate that is low turns every threshold in a band into a growth
+        case — which is how this defect survived three fixes.
+        """
+        monkeypatch.setattr(spill, "SPILL_THRESHOLD_CHARS", threshold)
+        monkeypatch.setattr(spill, "SPILL_EXCERPT_CHARS", max(1, threshold - 1000))
+
+        rewritten, count = spill.spill_results(TASK, {"bash": payload})
+        spilled = rewritten["bash"]
+
+        assert count == 0 or len(spill._serialise(spilled)) < len(spill._serialise(payload))
 
     @pytest.mark.parametrize(
         "falsy",
@@ -202,6 +238,29 @@ class TestTheLoopActuallyCallsIt:
                     out = await loop._execute_iteration_phases(IterationResult(iteration_number=1))
 
         assert out.tool_results["bash"]["spilled"] is True, "the iteration did not route results through the spill"
+
+    @pytest.mark.asyncio
+    async def test_a_resumed_run_also_releases_its_binding(self, loop):
+        """The mirror of `test_a_finished_run_releases_its_binding`.
+
+        `resume_run` bound the run and never released it, reopening the
+        cross-run read on the resume path. Deleting the bind left all 44 tests
+        green — it had no coverage in either direction.
+        """
+        from agent_loop.types import TaskContext
+
+        # Built by the real serialiser, not hand-written: a hand-made dict fails
+        # the version check and the test then passes for the wrong reason.
+        source = TaskContext(task_id="run-R", description="x", metadata={})
+        source.iteration_count = 1
+        snapshot = source.to_snapshot()
+
+        with patch.object(loop, "load_run_snapshot", new=AsyncMock(return_value=snapshot)):
+            with patch.object(loop, "_execute_main_loop", new=AsyncMock(side_effect=RuntimeError("boom"))):
+                with contextlib.suppress(Exception):
+                    await loop.resume_run("run-R")
+
+        assert spill.current_task_id() is None, "a resumed run's binding outlived it"
 
     @pytest.mark.asyncio
     async def test_no_run_context_means_no_spill(self, loop):

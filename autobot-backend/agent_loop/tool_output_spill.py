@@ -62,13 +62,13 @@ def _int_env(name: str, default: int) -> int:
 # Env-tunable, never hard-coded (CLAUDE.md).
 SPILL_ENABLED: bool = os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL", "").lower() in ("1", "true", "yes")
 SPILL_THRESHOLD_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000))
-# Fixed cost of an excerpt payload: the keys, the note, and up to three bounded
-# classification markers. The excerpt must leave room for it or the replacement
-# is larger than what it replaced.
+# Rough fixed cost of an excerpt payload. Deliberately an ESTIMATE and
+# deliberately NOT the safety mechanism: measured overhead ranges 286-1710 chars
+# depending on tool-name length and how much JSON re-escapes the classification
+# markers, so no constant can be correct. `spill_if_oversized` measures the real
+# replacement and declines to spill if it would not be smaller — this clamp only
+# keeps the default configuration sensible so that check rarely has to fire.
 _EXCERPT_OVERHEAD_CHARS = 400 + 3 * 200
-# Clamped against the threshold, not just against 1. `EXCERPT >= THRESHOLD` is
-# otherwise a legal configuration that inverts the module's whole purpose —
-# measured at 1,001 -> 1,281 chars with excerpt=20000, threshold=1000.
 SPILL_EXCERPT_CHARS: int = max(
     1,
     min(
@@ -123,11 +123,6 @@ def _spill_root() -> Path:
     from constants.path_constants import PATH
 
     return PATH.get_data_path("tool_output_spill")
-
-
-def spill_root() -> Path:
-    """Public accessor for the spill directory."""
-    return _spill_root()
 
 
 def sweepable_spill_root() -> Path | None:
@@ -196,11 +191,33 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
     if len(payload) <= SPILL_THRESHOLD_CHARS:
         return result, False
 
+    anchor = _anchor(task_id, tool_name, payload)
+
+    # MEASURE the replacement; never estimate it. This module's whole purpose is
+    # "what enters context is smaller than what it replaced", and that property
+    # was broken three times running because each fix reasoned about the *shape*
+    # in the last bug report instead of checking the result: the value was copied
+    # verbatim, then only `str` was bounded, then the overhead was estimated by a
+    # hardcoded constant that is 2-6x too low once JSON re-escapes the markers.
+    #
+    # A control-char-dense string still inverted at the default configuration
+    # (8,001 -> 12,282 chars), because `_serialise` returns a str raw while the
+    # excerpt slice gets escaped. One comparison makes every value type, shape,
+    # escaping mode and env configuration safe by construction, so there is no
+    # round five.
+    excerpt = _excerpt_payload(anchor, tool_name, payload, result)
+    if len(_serialise(excerpt)) >= len(payload):
+        logger.debug(
+            "Not spilling %s: the excerpt would not be smaller than the output (%d chars)",
+            tool_name,
+            len(payload),
+        )
+        return result, False
+
     # Marked, not silently sliced: the excerpt's note quotes the *original*
     # length, so an unmarked truncation makes the artifact contradict it.
     truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
     stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
-    anchor = _anchor(task_id, tool_name, payload)
     try:
         path = _artifact_path(anchor)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -393,6 +410,7 @@ __all__ = [
     "bind_task",
     "current_task_id",
     "read_spilled",
+    "sweepable_spill_root",
     "read_spilled_window",
     "spill_if_oversized",
     "spill_results",
