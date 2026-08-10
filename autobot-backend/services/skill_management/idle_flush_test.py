@@ -84,11 +84,13 @@ class TestTheSignalIsTimezoneFree:
     async def test_idleness_is_identical_in_every_timezone(self, scheduler, chats_dir, tz, monkeypatch):
         """The behavioural form of the #13856 guard.
 
-        An earlier version of this test grepped the module source for
-        `parse_utc_iso` and `datetime.now`. That is evadable by any equivalent
-        reintroduction — `datetime.utcnow() - datetime.fromisoformat(iso)`
-        contains neither string — so it certified the spelling, not the
-        property.
+        An earlier version of this test grepped the module source for the names
+        of the two functions the old code called. That is evadable by any
+        equivalent reintroduction spelled differently — a naive-UTC helper
+        subtracted from a parsed ISO string matches neither name — so it
+        certified the spelling, not the property. (The #5178 CI guard rejects
+        that spelling anyway, which is how this docstring first broke the
+        build: naming the construct is enough to trip it.)
 
         Epoch arithmetic is timezone-invariant by construction, so measuring the
         same corpus under three zones is the actual invariant: the ISO path
