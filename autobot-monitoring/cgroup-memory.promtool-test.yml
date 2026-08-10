@@ -14,7 +14,13 @@
 # That is the umbrella's own failure mode (#13852) inside its own fix: an alert
 # that cannot fire is indistinguishable from one that has nothing to report.
 #
-#   run:  promtool test rules autobot-monitoring/alerts-cgroup-memory.test.yml
+#   run:  promtool test rules autobot-monitoring/cgroup-memory.promtool-test.yml
+#
+# NAMING: deliberately NOT alerts-*.yml. That glob is what the monitoring role
+# copies into Prometheus rules/ (roles/monitoring/tasks/prometheus.yml) and what
+# prometheus.yml loads. A promtool TEST file is not a valid rule file, so a name
+# inside that glob makes Prometheus refuse to start or reload — taking down all
+# alerting, including these alerts. Caught in review before it shipped.
 ---
 
 rule_files:

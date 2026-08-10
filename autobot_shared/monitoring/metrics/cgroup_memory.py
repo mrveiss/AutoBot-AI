@@ -65,12 +65,33 @@ SYSTEMD_CONTROL_ROOTS: tuple[Path, ...] = (
 # created for ANY property (CPUQuota, Restart, …), so keying on its existence
 # alone made the alert text — "its effective memory limits are not in the unit
 # template" — false whenever someone had set something unrelated.
-_MEMORY_PROPERTY = re.compile(r"^\s*Memory[A-Za-z]*\s*=", re.MULTILINE)
+# Only the properties that actually CAP memory. `Memory[A-Za-z]*=` also matched
+# MemoryAccounting=yes — the single most likely thing an operator adds by
+# drop-in, since it is what makes these metrics exist at all — and
+# MemoryDenyWriteExecute, which this repo's own unit templates already set
+# (autobot-mcp-bridge@.service.j2, slm-agent.service.j2). Both would have raised
+# a config-drift alert for a unit under no limit whatsoever.
+#
+# `\S` after the `=` excludes `MemoryMax=` with an empty value, which RESETS the
+# property to its default — i.e. explicitly no limit, the opposite of drift.
+_MEMORY_PROPERTY = re.compile(r"^\s*Memory(Max|High|Low|Min|SwapMax|ZSwapMax|Limit)\s*=\s*\S", re.MULTILINE)
 
-# Prefix of the units this collector discovers. A static list could not cover
-# instance units such as autobot-mcp-bridge@.service — the only unit in the tree
-# carrying a repo-declared MemoryMax — and needed editing per new service.
-UNIT_GLOB = "autobot-*.service"
+# Unit globs this collector discovers. Globs rather than a list so instance units
+# (autobot-mcp-bridge@.service) are covered without editing code per service.
+#
+# `slm-agent.service` is named explicitly because it does not carry the autobot-
+# prefix and declares `MemoryHigh=200M` + `MemoryMax=256M`
+# (roles/slm_agent/templates/slm-agent.service.j2) — the only unit besides
+# autobot-backend with a MemoryHigh watermark, and therefore the only other one
+# that can enter the exact throttled-but-`active` state this issue is about.
+# An `autobot-*` glob alone silently excluded it (#13765 review).
+UNIT_GLOBS: tuple[str, ...] = (
+    "autobot-*.service",
+    "slm-agent.service",
+    "redis-stack-server.service",
+    "ollama.service",
+    "playwright.service",
+)
 
 # `max` in memory.high / memory.max means unlimited. Exported as -1 so a
 # "limit is set" query is `>= 0`. An UNREADABLE file is NOT this — it emits no
@@ -174,21 +195,24 @@ class CgroupMemoryCollector(Collector):
         self,
         cgroup_root: Path = DEFAULT_CGROUP_ROOT,
         control_roots: tuple[Path, ...] = SYSTEMD_CONTROL_ROOTS,
-        unit_glob: str = UNIT_GLOB,
+        unit_globs: tuple[str, ...] = UNIT_GLOBS,
     ) -> None:
         self.cgroup_root = cgroup_root
         self.control_roots = control_roots
-        self.unit_glob = unit_glob
+        self.unit_globs = unit_globs
 
     def discover_units(self) -> dict[str, Path]:
         """Map unit name -> cgroup dir, wherever in the slice tree it sits."""
         found: dict[str, Path] = {}
-        try:
-            for path in sorted(self.cgroup_root.rglob(self.unit_glob)):
-                if path.is_dir():
-                    found.setdefault(path.name, path)
-        except OSError as exc:
-            logger.warning("cgroup: cannot walk %s: %s", self.cgroup_root, exc)
+        for glob in self.unit_globs:
+            try:
+                for path in sorted(self.cgroup_root.rglob(glob)):
+                    if path.is_dir():
+                        # sorted() first, so a parent slice always wins over a
+                        # nested delegated sub-cgroup of the same name.
+                        found.setdefault(path.name, path)
+            except OSError as exc:
+                logger.warning("cgroup: cannot walk %s for %s: %s", self.cgroup_root, glob, exc)
         return found
 
     def _families(self) -> dict[str, GaugeMetricFamily]:
@@ -238,6 +262,8 @@ class CgroupMemoryCollector(Collector):
             for key, value in events.items():
                 fam["events"].add_metric([unit, key], value)
 
+        # _read_limit despite the name: same parse, and a literal "max" here would
+        # be nonsense usage that -1 flags rather than hides.
         current = _read_limit(unit_dir / "memory.current")
         if isinstance(current, _Unreadable):
             fam["errors"].add_metric([unit, "memory.current"], 1.0)
@@ -281,6 +307,6 @@ __all__ = [
     "has_out_of_band_limits",
     "DEFAULT_CGROUP_ROOT",
     "SYSTEMD_CONTROL_ROOTS",
-    "UNIT_GLOB",
+    "UNIT_GLOBS",
     "UNLIMITED",
 ]

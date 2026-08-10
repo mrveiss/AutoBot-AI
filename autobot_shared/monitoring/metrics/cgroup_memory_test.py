@@ -13,6 +13,7 @@ every conventional signal looks fine.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -179,19 +180,38 @@ class TestReadFailuresAreNeverReassuring:
     answer that looks like a working one.
     """
 
-    def test_a_non_utf8_byte_does_not_kill_the_scrape(self, tmp_path):
+    def test_a_non_utf8_byte_is_handled_where_it_happens(self, tmp_path):
         """UnicodeDecodeError is a ValueError, not an OSError. Catching only the
         latter let one bad byte propagate out of collect() and 500 the whole
-        /metrics endpoint, taking every other metric with it."""
+        /metrics endpoint, taking every other metric with it.
+
+        Asserting merely that the scrape survives is NOT enough — the blanket
+        `except Exception` around each unit would satisfy that on its own, so the
+        first version of this test passed even with the fix reverted. What
+        distinguishes the two is WHERE the failure is attributed and what
+        survives it: handled at the read, the error is labelled with the file and
+        the unit's other samples are still collected; handled by the outer net,
+        the label is `collect` and everything else for that unit is lost.
+        """
         d = tmp_path / "system.slice" / _UNIT
         d.mkdir(parents=True)
         (d / "memory.events").write_bytes(b"high 5\n\xff\xfe\n")
-        (d / "memory.current").write_bytes(b"\xff\xfe")
+        (d / "memory.current").write_text("4096\n", encoding="utf-8")
+        (d / "memory.high").write_text("8589934592\n", encoding="utf-8")
 
-        families = list(CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=()).collect())
+        c = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=())
+        errors = _samples(c, "autobot_cgroup_memory_read_errors")
+        current = _samples(c, "autobot_cgroup_memory_current_bytes")
+        highs = _samples(c, "autobot_cgroup_memory_high_bytes")
 
-        assert families, "the scrape must still produce output"
+        assert errors.get((("file", "memory.events"), ("unit", _UNIT))) == 1.0, (
+            "the bad read must be attributed to the file, not swallowed by the " "per-unit safety net"
+        )
+        assert (("file", "collect"), ("unit", _UNIT)) not in errors
+        assert current[(("unit", _UNIT),)] == 4096, "sibling samples must survive"
+        assert highs[(("unit", _UNIT),)] == 8589934592
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000, so the file stays readable")
     def test_an_unreadable_limit_is_absent_not_unlimited(self, tmp_path):
         """-1 means 'no limit set'. Reporting it for a file we could not read is
         the reassuring-wrong-answer failure this whole issue is about."""
@@ -219,6 +239,19 @@ class TestReadFailuresAreNeverReassuring:
 
         assert errors[(("file", "memory.events"), ("unit", _UNIT))] == 1.0
 
+    def test_memory_current_read_failure_is_reported(self, tmp_path):
+        """Usage is the context every other number is read against; losing it
+        silently leaves the unit half-described."""
+        d = _make_cgroup(tmp_path, _UNIT, "high 0\n", 1024, "max", "max")
+        (d / "memory.current").unlink()
+
+        errors = _samples(
+            CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=()),
+            "autobot_cgroup_memory_read_errors",
+        )
+
+        assert errors[(("file", "memory.current"), ("unit", _UNIT))] == 1.0
+
     def test_a_unit_outside_system_slice_is_still_found(self, tmp_path):
         """`systemctl set-property <unit> Slice=…` is the SAME out-of-band
         mechanism this collector detects. A hardcoded system.slice path would be
@@ -234,7 +267,7 @@ class TestReadFailuresAreNeverReassuring:
 
 
 class TestAlertRules:
-    """Structure only. BEHAVIOUR lives in alerts-cgroup-memory.test.yml.
+    """Structure only. BEHAVIOUR lives in cgroup-memory.promtool-test.yml.
 
     The previous version asserted substrings of the expr strings — that
     `"autobot_cgroup_memory_high_rate"` appeared, and that
@@ -256,12 +289,21 @@ class TestAlertRules:
     def test_every_alert_is_exercised_by_the_promtool_suite(self, rules, monitoring_dir):
         """An alert with no rule test is exactly how the dead one shipped."""
         yaml = pytest.importorskip("yaml")
-        suite = yaml.safe_load((monitoring_dir / "alerts-cgroup-memory.test.yml").read_text(encoding="utf-8"))
+        suite = yaml.safe_load((monitoring_dir / "cgroup-memory.promtool-test.yml").read_text(encoding="utf-8"))
 
         declared = {r["alert"] for g in rules["groups"] for r in g["rules"] if "alert" in r}
-        exercised = {case["alertname"] for t in suite["tests"] for case in t.get("alert_rule_test", [])}
 
-        assert declared <= exercised, f"alerts with no promtool test: {sorted(declared - exercised)}"
+        # Non-empty exp_alerts only. Keying on alertname alone accepted a suite
+        # of `exp_alerts: []` entries — asserting each alert NEVER fires — which
+        # the original dead headroom rule would have sailed through, since the
+        # healthy/unlimited case already lists it with an empty expectation.
+        proven_to_fire = {
+            case["alertname"] for t in suite["tests"] for case in t.get("alert_rule_test", []) if case.get("exp_alerts")
+        }
+
+        assert declared <= proven_to_fire, (
+            "alerts with no promtool case that actually FIRES: " f"{sorted(declared - proven_to_fire)}"
+        )
 
     def test_the_out_of_band_alert_is_not_critical(self, rules):
         alerts = {r["alert"]: r for g in rules["groups"] for r in g["rules"] if "alert" in r}
@@ -318,8 +360,15 @@ class TestItIsActuallyWired:
         _make_cgroup(tmp_path, "autobot-mcp-bridge@0.service", "high 0\n", 1, "max", "max")
         _make_cgroup(tmp_path, "unrelated-thing.service", "high 0\n", 1, "max", "max")
 
+        _make_cgroup(tmp_path, "slm-agent.service", "high 0\n", 1, "max", "max")
+
         found = CgroupMemoryCollector(cgroup_root=tmp_path).discover_units()
 
         assert "autobot-backend.service" in found
         assert "autobot-mcp-bridge@0.service" in found, "instance units must be discovered"
+        assert "slm-agent.service" in found, (
+            "slm-agent declares MemoryHigh=200M — the only unit besides the backend "
+            "that can enter the throttled-but-active state, and an autobot-* glob "
+            "alone silently excluded it"
+        )
         assert "unrelated-thing.service" not in found

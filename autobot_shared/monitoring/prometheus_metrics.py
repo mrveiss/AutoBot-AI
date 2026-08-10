@@ -25,6 +25,16 @@ from prometheus_client import (
     generate_latest,
 )
 
+# Issue #394: Import domain-specific recorder classes
+# Issue #469: Added PerformanceMetricsRecorder for GPU/NPU metrics
+# Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
+# Issue #476: Added FrontendMetricsRecorder for RUM metrics
+# Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
+# Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
+# Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
+# GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
+# Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
+# Issue #13765: Added CgroupMemoryCollector for cgroup memory-throttling pressure
 from .metrics import (
     ApiRequestsMetricsRecorder,
     CgroupMemoryCollector,
@@ -47,17 +57,6 @@ from .metrics import (
     WebSocketMetricsRecorder,
     WorkflowMetricsRecorder,
 )
-
-# Issue #394: Import domain-specific recorder classes
-# Issue #469: Added PerformanceMetricsRecorder for GPU/NPU metrics
-# Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
-# Issue #476: Added FrontendMetricsRecorder for RUM metrics
-# Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
-# Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
-# Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
-# GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
-# Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
-from .metrics.cgroup_memory import CgroupMemoryCollector
 
 # Issue #380: Module-level dicts for state value mapping (avoid repeated dict creation)
 _CIRCUIT_BREAKER_STATE_VALUES = {"closed": 0, "open": 1, "half_open": 2}
