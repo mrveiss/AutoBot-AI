@@ -184,19 +184,18 @@ jobs:
         # — a guard that silently no-ops is worse than no guard. The doc
         # cross-link and commit-format checks need no secret and always run.
         # Once the secret is configured this step hardens automatically.
-        # actions/checkout defaults to fetch-depth: 1, so the PR base commit is
-        # NOT in this clone and any range diff against it fatals. Fetch just
-        # that object rather than setting fetch-depth: 0 on the job: several
-        # sibling steps are already dead for this reason and reviving them all
-        # here would redden this PR with unrelated pre-existing findings.
-        # Tracked separately. lint-conventions.sh hard-fails on an unresolvable
-        # ref, so a failed fetch surfaces loudly instead of scanning 0 files.
-        # On a pull_request event the checked-out commit is the MERGE commit,
-        # so neither base.sha nor head.sha is present at depth 1 — resolve
-        # through HEAD's parents instead of trusting the event payload:
+        # actions/checkout defaults to fetch-depth: 1, and on a pull_request
+        # event it checks out the MERGE commit — so neither base.sha nor
+        # head.sha from the event payload is present. Resolve through HEAD's
+        # own parents instead, which needs no payload and no merge-base:
         #   HEAD^1 = base tip, HEAD^2 = PR head, HEAD = their merge.
         # HEAD^1..HEAD is therefore exactly this PR's changes, and excludes
-        # what other PRs landed on the base (no merge-base lookup needed).
+        # whatever other PRs landed on the base meanwhile.
+        #
+        # Deliberately NOT setting fetch-depth: 0 on the job — several sibling
+        # steps are already dead for this same reason, and reviving them all
+        # here would redden this PR with unrelated pre-existing findings.
+        # Tracked separately in #13880.
         git fetch --no-tags --quiet --deepen=50 2>/dev/null || true
         if git rev-parse --verify --quiet 'HEAD^2' >/dev/null 2>&1; then
           RANGE="HEAD^1..HEAD"
