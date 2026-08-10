@@ -916,10 +916,15 @@ class ToolRegistry:
             "extract_structured_data",
             # #10932: Unified content_reach gateway
             "content_reach",
-            # #13754: the spill excerpt names this tool, so the model must be
-            # offered it. Listing it here is what makes the note actionable.
-            "read_spilled_output",
         ]
+        # #13754: the spill excerpt names this tool, so the model must be
+        # offered it. Gated on the spill flag (#13865): this list reaches the
+        # system prompt of every modality agent via llm_service.chat_optimized,
+        # and an off-by-default feature must not change live prompt content.
+        from agent_loop.tool_output_spill import SPILL_ENABLED
+
+        if SPILL_ENABLED:
+            registry_tools.append("read_spilled_output")
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.
         # Lazy import breaks the circular dependency:

@@ -273,6 +273,10 @@ class AgentLoop:
             description=task_description,
             metadata=initial_context or {},
         )
+        # #13865: bind the spill run here, before any tool executes. Binding it
+        # later left the first iteration's reads scoped to whatever run ran
+        # previously in this asyncio context.
+        _bind_spill_task(task_id)
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
         self._reset_run_flags()
@@ -460,6 +464,10 @@ class AgentLoop:
 
         finally:
             self._current_phase = LoopPhase.STANDBY
+            # #13865: drop the spill run binding on every terminal path. Without
+            # this, a second run awaited in the same asyncio task inherits the
+            # previous run's binding and can read its artifacts.
+            _bind_spill_task(None)
             # GH#11175: clear the resume checkpoint on any terminal path
             # (success/failure/cancel). A hard process crash skips finally, so its
             # checkpoint survives for resume_run() — which is the intended behaviour.
@@ -480,6 +488,7 @@ class AgentLoop:
         self._current_context = TaskContext.from_snapshot(snapshot)
         self._iteration_count = self._current_context.iteration_count
         self._reset_run_flags()  # start from a clean halt/error latch (GH#11175)
+        _bind_spill_task(task_id)  # #13865: a resumed run scopes its own reads
         logger.info(
             "AgentLoop: resuming task %s from iteration %d",
             task_id,
@@ -556,6 +565,31 @@ class AgentLoop:
     # Iteration Logic
     # =========================================================================
 
+    async def _offload_oversized_results(self, tool_results: dict[str, Any]) -> dict[str, Any]:
+        """Write oversized tool output aside, leaving an excerpt plus an anchor.
+
+        #13692 step 1: one large tool result cannot consume the window in a
+        single step. Off by default (#12555 precedent); a run under the
+        threshold is byte-identical to a run without this.
+
+        #13865: skipped entirely when there is no run to scope artifacts to.
+        The previous ``"unknown"`` fallback put every context-less run into one
+        shared namespace, so anchors collided across runs and the read-side run
+        check became a no-op.
+        """
+        task_id = self._current_context.task_id if self._current_context else None
+        if not task_id:
+            return tool_results
+
+        tool_results, spilled = await _spill_results_async(task_id, tool_results)
+        if spilled:
+            logger.info(
+                "Offloaded %d oversized tool result(s) for task %s (#13692)",
+                spilled,
+                task_id,
+            )
+        return tool_results
+
     async def _execute_iteration_phases(self, result: IterationResult) -> IterationResult:
         """
         Execute all phases of an iteration.
@@ -630,24 +664,7 @@ class AgentLoop:
         live_results = await self._execute_tools(tools_to_run) if tools_to_run else {}
         tool_results = {**cached_results, **live_results}
 
-        # #13692 step 1: an oversized observation is written aside and replaced
-        # by a bounded excerpt plus a resolvable anchor, so one large tool result
-        # cannot consume the window in a single step. Off by default (#12555
-        # precedent); a run under the threshold is byte-identical to before.
-        # #13865: skip entirely when there is no run to scope artifacts to.
-        # The previous "unknown" fallback put every context-less run in one
-        # shared namespace, so anchors collided across runs and the read-side
-        # run check became a no-op.
-        _task_id = self._current_context.task_id if self._current_context else None
-        if _task_id:
-            _bind_spill_task(_task_id)
-            tool_results, _spilled = await _spill_results_async(_task_id, tool_results)
-            if _spilled:
-                logger.info(
-                    "Offloaded %d oversized tool result(s) for task %s (#13692)",
-                    _spilled,
-                    _task_id,
-                )
+        tool_results = await self._offload_oversized_results(tool_results)
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and

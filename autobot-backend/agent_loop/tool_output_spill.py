@@ -61,12 +61,13 @@ def _int_env(name: str, default: int) -> int:
 
 # Env-tunable, never hard-coded (CLAUDE.md).
 SPILL_ENABLED: bool = os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL", "").lower() in ("1", "true", "yes")
-SPILL_THRESHOLD_CHARS: int = _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000)
+SPILL_THRESHOLD_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000))
 SPILL_EXCERPT_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT", 2000))
-# Largest payload written to disk. Above this the output is truncated with a
-# note rather than materialised — serialise + json.dumps + utf-8 encode peaks at
-# roughly 3-4x the payload, so an unbounded result was an unbounded allocation.
-SPILL_MAX_ARTIFACT_CHARS: int = _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_MAX", 5_000_000)
+# Largest payload written to disk. Above this the stored copy is truncated and
+# marked — serialise + json.dumps + utf-8 encode peaks at roughly 3-4x the
+# payload, so an unbounded result was an unbounded allocation.
+SPILL_MAX_ARTIFACT_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_MAX", 5_000_000))
+_TRUNCATION_MARKER = "\n[artifact truncated: output exceeded AUTOBOT_TOOL_OUTPUT_SPILL_MAX]"
 # Ceiling on a single re-read. Without it `limit=99999999` hands the whole
 # artifact straight back into context, undoing the offload.
 SPILL_MAX_WINDOW_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_MAX_WINDOW", 8000))
@@ -103,7 +104,9 @@ def _spill_root() -> Path:
     """
     override = os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL_ROOT")
     if override:
-        return Path(override)
+        # Resolved: a relative override would reintroduce the CWD dependency
+        # this function exists to remove.
+        return Path(override).expanduser().resolve()
     from constants.path_constants import PATH
 
     return PATH.get_data_path("tool_output_spill")
@@ -154,7 +157,10 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
     if len(payload) <= SPILL_THRESHOLD_CHARS:
         return result, False
 
-    stored = payload[:SPILL_MAX_ARTIFACT_CHARS]
+    # Marked, not silently sliced: the excerpt's note quotes the *original*
+    # length, so an unmarked truncation makes the artifact contradict it.
+    truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
+    stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
     anchor = _anchor(task_id, tool_name, payload)
     try:
         path = _artifact_path(anchor)
@@ -185,11 +191,39 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
 # record an observation (`_record_observation_fingerprints`) by looking for
 # exactly these, so dropping them turned a large tool *failure* into a success
 # and fed it into the novelty window (#13865).
+#
+# Only `error` is read by the loop today; `status`/`success` are carried for
+# consumers that may key on them. Whatever is carried must be BOUNDED — see
+# `_classification_marker`.
 _CLASSIFYING_KEYS = ("error", "status", "success")
 
 
+def _classification_marker(value: Any) -> Any:
+    """Preserve what a value *means*, never how big it is.
+
+    The first version of this fix copied the value verbatim. For the shape it
+    was written for — ``{"error": <26KB traceback>}`` — that put the whole
+    traceback back into context beside the excerpt, so a spilled failure was
+    *larger* than not spilling at all (27,649 -> 30,023 chars measured) while
+    the note claimed the output had been truncated.
+
+    `_should_iterate` tests key presence and `_record_observation_fingerprints`
+    tests truthiness, so a bounded prefix satisfies both.
+    """
+    if isinstance(value, str):
+        return value[:_CLASSIFICATION_MARKER_CHARS]
+    return value
+
+
+_CLASSIFICATION_MARKER_CHARS = 200
+
+
 def _excerpt_payload(anchor: str, tool_name: str, payload: str, original: Any = None) -> Dict[str, Any]:
-    """What enters context in place of the full output."""
+    """What enters context in place of the full output.
+
+    Invariant: this must always be smaller than what it replaces. That is the
+    one property the module exists to provide, and it is asserted in the tests.
+    """
     excerpt: Dict[str, Any] = {
         "spilled": True,
         "tool": tool_name,
@@ -204,7 +238,7 @@ def _excerpt_payload(anchor: str, tool_name: str, payload: str, original: Any = 
     if isinstance(original, dict):
         for key in _CLASSIFYING_KEYS:
             if key in original:
-                excerpt[key] = original[key]
+                excerpt[key] = _classification_marker(original[key])
     return excerpt
 
 

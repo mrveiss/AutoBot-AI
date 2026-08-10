@@ -13,7 +13,9 @@ Module-only tests could not catch that, because both sides were individually
 correct. These test the seam.
 """
 
+import contextlib
 from typing import Any, Dict
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -38,6 +40,32 @@ def _spill_one(result: Any) -> Dict[str, Any]:
     return rewritten["bash"]
 
 
+class TestTheSpillAlwaysShrinks:
+    """The one property the module exists to provide.
+
+    Nothing asserted it, and the first version of the error-classification fix
+    copied the error value verbatim — so a spilled `{"error": <26KB traceback>}`
+    entered context at 30,023 chars where not spilling was 27,649, while the
+    note claimed the output had been truncated.
+    """
+
+    @pytest.mark.parametrize(
+        "original",
+        [
+            {"error": BIG_ERROR},
+            {"status": "success", "output": "K" * 40000},
+            {"success": True, "rows": ["R" * 100] * 400},
+            "K" * 40000,
+        ],
+    )
+    def test_what_enters_context_is_smaller_than_what_it_replaces(self, original):
+        import json
+
+        spilled = _spill_one(original)
+
+        assert len(json.dumps(spilled)) < len(json.dumps(original))
+
+
 class TestAFailureStaysAFailure:
     """`_should_iterate` decides success with `"error" not in result`.
 
@@ -53,23 +81,12 @@ class TestAFailureStaysAFailure:
         assert spilled["spilled"] is True
         assert "error" in spilled, "a spilled failure must still read as a failure"
 
-    def test_the_loop_success_predicate_still_reports_failure(self):
-        """The exact expression from `_should_iterate`."""
+    def test_the_preserved_error_is_a_marker_not_the_payload(self):
+        """Preserving the classification must not re-import the payload."""
         spilled = _spill_one({"error": BIG_ERROR})
 
-        all_succeeded = all("error" not in r for r in {"bash": spilled}.values() if isinstance(r, dict))
-
-        assert all_succeeded is False
-
-    def test_the_observation_filter_still_skips_it(self):
-        """The exact predicate from `_record_observation_fingerprints`.
-
-        A failed result entering the novelty window corrupts the stagnation
-        signal it feeds.
-        """
-        spilled = _spill_one({"error": BIG_ERROR})
-
-        assert bool(spilled.get("error")) is True
+        assert len(spilled["error"]) < len(BIG_ERROR)
+        assert len(spilled["error"]) <= spill._CLASSIFICATION_MARKER_CHARS
 
     def test_a_large_success_is_not_turned_into_a_failure(self):
         """The mirror case — the fix must not invent an error key."""
@@ -84,6 +101,88 @@ class TestAFailureStaysAFailure:
 
         assert spilled["spilled"] is True
         assert "error" not in spilled
+
+
+class TestTheLoopActuallyCallsIt:
+    """Drives `AgentLoop`, rather than copying its predicates.
+
+    The first version of this file asserted against expressions *transcribed*
+    from `loop.py`. Deleting the spill from the loop entirely left all 36 tests
+    green — the file claimed to test the seam and tested neither side of it.
+    These fail if the wiring is removed.
+    """
+
+    @pytest.fixture
+    def loop(self):
+        from agent_loop.loop import AgentLoop
+
+        return AgentLoop(event_stream=AsyncMock())
+
+    @pytest.mark.asyncio
+    async def test_the_loop_binds_the_run_before_tools_execute(self, loop):
+        """Binding after execution left iteration 1 scoped to the previous run."""
+        spill.bind_task(None)
+
+        loop._init_task_context("run-A", "do a thing", {})
+
+        assert spill.current_task_id() == "run-A"
+
+    @pytest.mark.asyncio
+    async def test_a_finished_run_releases_its_binding(self, loop):
+        """Without this, a second run in the same asyncio context inherits the
+        first run's binding and can read its artifacts."""
+        loop._init_task_context("run-A", "x", {})
+        assert spill.current_task_id() == "run-A"
+
+        with patch.object(loop, "_execute_main_loop", new=AsyncMock(return_value={"status": "completed"})):
+            with patch.object(loop, "_clear_run_checkpoint", new=AsyncMock()):
+                with contextlib.suppress(Exception):
+                    await loop.run_task("run-A", "x")
+
+        # Asserted on every terminal path, including failure — the `finally`
+        # is what makes a second run in this context safe.
+        assert spill.current_task_id() is None, "the run binding outlived the run"
+
+    @pytest.mark.asyncio
+    async def test_oversized_results_are_offloaded_by_the_loop(self, loop):
+        """The seam itself: the loop must route results through the spill."""
+        loop._init_task_context("run-A", "x", {})
+
+        out = await loop._offload_oversized_results({"bash": "K" * 40000})
+
+        assert out["bash"]["spilled"] is True
+        assert out["bash"]["anchor"].startswith("autobot:spill:run-A:")
+
+    @pytest.mark.asyncio
+    async def test_the_iteration_routes_its_results_through_the_spill(self, loop):
+        """Drives `_execute_iteration_phases` itself.
+
+        The direct `_offload_oversized_results` test above cannot see the *call
+        site* being deleted — only this one can, which is the difference
+        between testing a helper and testing the wiring.
+        """
+        from agent_loop.types import IterationResult
+
+        loop._init_task_context("run-A", "x", {})
+        loop._iteration_count = 1
+
+        with patch.object(loop, "_analyze_events", new=AsyncMock(return_value={"events": []})):
+            with patch.object(loop, "_select_tools", new=AsyncMock(return_value=[{"name": "bash", "args": {}}])):
+                with patch.object(loop, "_execute_tools", new=AsyncMock(return_value={"bash": "K" * 40000})):
+                    out = await loop._execute_iteration_phases(IterationResult(iteration_number=1))
+
+        assert out.tool_results["bash"]["spilled"] is True, "the iteration did not route results through the spill"
+
+    @pytest.mark.asyncio
+    async def test_no_run_context_means_no_spill(self, loop):
+        """The removed "unknown" fallback put every context-less run into one
+        shared namespace, collapsing the read-side run check."""
+        loop._current_context = None
+        original = {"bash": "K" * 40000}
+
+        out = await loop._offload_oversized_results(original)
+
+        assert out is original
 
 
 class TestRunScopingIsServerSide:
@@ -155,15 +254,10 @@ class TestArtifactsAreSwept:
         The nightly sweep covers `data/cache` and `data/temp`; the spill root is
         neither, so it grew for the life of the install.
         """
-        import constants.path_constants as path_constants
         from tasks.knowledge_tasks import _resolve_cache_directories
 
-        (tmp_path / "tool_output_spill").mkdir()
-        (tmp_path / "cache").mkdir()
-
-        # PATH is a frozen dataclass, so the module attribute is swapped rather
-        # than a field assigned.
-        stub = type("PathStub", (), {"DATA_DIR": tmp_path, "TEMP_DIR": tmp_path / "cache"})()
-        monkeypatch.setattr(path_constants, "PATH", stub)
-
-        assert tmp_path / "tool_output_spill" in _resolve_cache_directories()
+        # The autouse fixture points the writer at tmp_path via the env
+        # override. The sweep must follow the *writer's* resolution — a
+        # hardcoded DATA_DIR/"tool_output_spill" would clean an empty directory
+        # forever while the real root grew.
+        assert spill._spill_root() in _resolve_cache_directories()
