@@ -13,7 +13,6 @@ the HTTP boundary rather than asserting the walk itself (which
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any
 from unittest.mock import patch
 
 import pytest
