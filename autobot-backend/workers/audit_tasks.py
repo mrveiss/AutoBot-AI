@@ -57,6 +57,12 @@ _AUDIT_LABELS = "enhancement,observability,priority: medium"
 # Max characters of gh output kept in logs on failure
 _MAX_LOG_CHARS = 500
 
+# Cap on the full-findings dump written when the dead-letter queue itself cannot
+# be persisted (#13570). Generous: at that point the log IS the queue, and a
+# truncated finding is still better than none — but an unbounded dump could
+# itself take out the log.
+_MAX_DEFERRED_LOG_CHARS = 100_000
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -84,14 +90,25 @@ def _redis_get(redis, key: str) -> Any | None:
         return None
 
 
-def _redis_set(redis, key: str, value: Any, ttl: int = 86400 * 14) -> None:
-    """Persist JSON-serialisable value in Redis with a 14-day TTL."""
+def _redis_set(redis, key: str, value: Any, ttl: int | None = 86400 * 14) -> bool:
+    """Persist a JSON-serialisable value in Redis. Returns True when it landed.
+
+    #13570: this used to swallow every failure and return None, so a caller had
+    no way to tell a successful write from a no-op. The dead-letter queue then
+    reported findings as "deferred ... instead of being filed or lost" while
+    nothing had been stored — a reassuring message about preservation that did
+    not happen, which is worse than an error.
+
+    ``ttl=None`` stores the key without expiry.
+    """
     if redis is None:
-        return
+        return False
     try:
         redis.set(key, json.dumps(value, default=str), ex=ttl)
-    except Exception:
-        pass
+        return True
+    except Exception as exc:  # noqa: BLE001 - a telemetry write must not kill the task
+        logger.error("audit: Redis write to %s failed: %s", key, exc)
+        return False
 
 
 def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
@@ -145,8 +162,25 @@ def _gh_available() -> bool:
 
     Checked once per task run so a missing credential produces a single CRITICAL
     log instead of one ERROR per lost finding (#12319).
+
+    #13570: reported unconditionally, not only when there are findings to lose.
+    The credential lapsed for the service account and the first symptom was a
+    run that happened to produce findings — every clean run in between looked
+    identical to a healthy one, so there was no way to tell when filing broke or
+    how much had been deferred since.
     """
-    code, _, _ = _run(["gh", "auth", "status"])
+    code, out, err = _run(["gh", "auth", "status"])
+    if code != 0:
+        logger.critical(
+            "audit worker cannot file issues: `gh auth status` failed for this "
+            "service account (%s). Every finding this run produces will be queued "
+            "instead of filed. Fix: authenticate gh for the service account, or "
+            "give the worker a GH_TOKEN. gh said: %s",
+            _GH_REPO,
+            # stdout as well as stderr: gh routes this message to stderr today,
+            # but a build that changed that would gut the diagnostic silently.
+            ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
+        )
     return code == 0
 
 
@@ -173,10 +207,40 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     return True
 
 
-def _load_deferred(redis) -> list[dict]:
-    """Return the dead-letter queue of findings awaiting a retry."""
+def _load_deferred(redis) -> tuple[list[dict], bool]:
+    """Return (queued findings, read_was_observed) for the dead-letter queue.
+
+    #13570 review: a failed GET and an empty queue were indistinguishable, and
+    the caller then overwrote the key with whatever it had. A GET timing out
+    while the SET succeeds — or a value that is not a list — therefore WIPED the
+    queue, silently, and reported ``issues_deferred: 0`` as a success. Same
+    defect class as the incident this issue is about: acting on an outcome that
+    was never observed. Removing the TTL made it worse, because the key now
+    holds more.
+
+    ``read_was_observed`` is False when the queue could not be read; the caller
+    must not persist over a queue it could not see.
+    """
+    if redis is None:
+        return [], False
     queued = _redis_get(redis, _DEFERRED_FINDINGS_KEY)
-    return queued if isinstance(queued, list) else []
+    if queued is None:
+        # Genuinely absent (never written) reads the same as unreachable, so a
+        # missing key is checked explicitly before assuming the worst.
+        try:
+            if not redis.exists(_DEFERRED_FINDINGS_KEY):
+                return [], True
+        except Exception as exc:  # noqa: BLE001 - fall through to "unobserved"
+            logger.error("audit: cannot determine whether %s exists: %s", _DEFERRED_FINDINGS_KEY, exc)
+        return [], False
+    if not isinstance(queued, list):
+        logger.error(
+            "audit: %s holds a %s, not a list — refusing to overwrite it",
+            _DEFERRED_FINDINGS_KEY,
+            type(queued).__name__,
+        )
+        return [], False
+    return queued, True
 
 
 def _persist_deferred(redis, deferred: list[dict]) -> int:
@@ -201,8 +265,45 @@ def _persist_deferred(redis, deferred: list[dict]) -> int:
             [f["title"] for f in dropped],
         )
 
-    _redis_set(redis, _DEFERRED_FINDINGS_KEY, unique)
+    # #13570: no TTL on the dead-letter queue. It carried the module's default
+    # 14 days, so a filing credential that stayed broken for a fortnight — the
+    # exact situation the queue exists for — silently expired everything in it.
+    # Note this does NOT make the key durable: every deployment runs
+    # maxmemory-policy allkeys-lru, which evicts untimed keys too. It removes a
+    # guaranteed fortnightly loss, not the possibility of loss.
+    if not _redis_set(redis, _DEFERRED_FINDINGS_KEY, unique, ttl=None):
+        _log_unwritable_queue(unique, "Redis is unavailable or the write was rejected")
+        return 0
+
     return len(unique)
+
+
+def _log_unwritable_queue(findings: list[dict], why: str) -> None:
+    """Dump findings that could not be queued, so the log is the queue (#13570).
+
+    A bare count would leave nothing recoverable. Emits nothing when there is
+    nothing to lose — an empty write is the normal drain path, and paging
+    someone about zero lost findings is its own false alarm.
+    """
+    if not findings:
+        return
+    dump = json.dumps(findings, default=str)
+    truncated = ""
+    if len(dump) > _MAX_DEFERRED_LOG_CHARS:
+        # Say so explicitly: a message promising "full findings" that silently
+        # cuts off mid-JSON is the same lie this issue is about.
+        truncated = f" [TRUNCATED at {_MAX_DEFERRED_LOG_CHARS} chars — not all of the {len(findings)} shown]"
+        dump = dump[:_MAX_DEFERRED_LOG_CHARS]
+    logger.critical(
+        "audit: FAILED to persist %d deferred finding(s) to %s — they are NOT queued "
+        "and will not be retried (%s). Findings follow so they are recoverable from "
+        "this log%s: %s",
+        len(findings),
+        _DEFERRED_FINDINGS_KEY,
+        why,
+        truncated,
+        dump,
+    )
 
 
 def _dedupe_and_file(
@@ -223,7 +324,7 @@ def _dedupe_and_file(
     non-duplicate finding drawn from both the queue and *findings*.
     """
     gh_ok = _gh_available()
-    pending = _load_deferred(redis)
+    pending, queue_readable = _load_deferred(redis)
 
     filed = 0
     still_deferred: list[dict] = []
@@ -243,18 +344,44 @@ def _dedupe_and_file(
     for finding in findings:
         _attempt(finding["title"], finding["body"], label)
 
-    if not gh_ok and still_deferred:
+    # #13570: persist FIRST, then report what actually happened. The old order
+    # logged "deferred to the Redis dead-letter queue instead of being filed or
+    # lost" before the write was attempted, so the reassuring message stood even
+    # when the queue was empty — `LLEN audit:deferred_findings` was 0 on a host
+    # whose logs claimed findings were preserved. A message about preservation
+    # must be emitted only by the code path that observed it succeed.
+    if queue_readable:
+        deferred_count = _persist_deferred(redis, still_deferred)
+    else:
+        deferred_count = 0
+        _log_unwritable_queue(still_deferred, "the existing queue could not be read")
+
+    _report_deferral_outcome(gh_ok, still_deferred, deferred_count)
+    return filed, deferred_count
+
+
+def _report_deferral_outcome(gh_ok: bool, still_deferred: list[dict], deferred_count: int) -> None:
+    """Say what actually happened to unfileable findings (#13570)."""
+    if gh_ok or not still_deferred:
+        return
+    if deferred_count:
         logger.critical(
-            "gh CLI unauthenticated — %d audit finding(s) deferred to the Redis "
+            "gh CLI unauthenticated — %d audit finding(s) queued to the Redis "
             "dead-letter queue (%s) instead of being filed or lost. Configure a "
-            "GH_TOKEN for the worker to restore issue filing; deferred findings "
+            "GH_TOKEN for the worker to restore issue filing; queued findings "
             "are retried automatically once it is available.",
-            len(still_deferred),
+            deferred_count,
             _DEFERRED_FINDINGS_KEY,
         )
-
-    deferred_count = _persist_deferred(redis, still_deferred)
-    return filed, deferred_count
+        return
+    # The findings have already been dumped; this names the consequence so the
+    # two failures are not read as one bad Redis blip.
+    logger.critical(
+        "gh CLI unauthenticated AND the dead-letter queue could not be written — "
+        "%d audit finding(s) are LOST except for the dump above. Both the filing "
+        "credential and Redis need attention.",
+        len(still_deferred),
+    )
 
 
 # ---------------------------------------------------------------------------

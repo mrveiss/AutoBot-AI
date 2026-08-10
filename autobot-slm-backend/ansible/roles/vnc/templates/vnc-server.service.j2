@@ -25,6 +25,17 @@ ExecStop=/usr/bin/vncserver -kill :{{ vnc_display }}
 
 Restart=on-failure
 RestartSec=5
+# #4090: without these, a unit whose ExecStart can never succeed restarts forever
+# and stays out of `systemctl --failed`, so the one thing an operator checks
+# cannot see it (chromadb: 1681 restarts over ~4h45m, invisible). `on-failure`
+# is no safer than `always` here — an exec that never succeeds never exits
+# cleanly, so it reschedules just as indefinitely. systemd's OWN defaults do not
+# help: DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
+# restarts inside 10s, and RestartSec spaces them further apart, so the rate
+# never reaches the limit. The window must exceed RestartSec * StartLimitBurst
+# for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

@@ -73,8 +73,10 @@ from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
+    deploy_only_entries,
     get_default_deployed_dir,
     get_default_source_dir,
+    owned_subtrees,
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
@@ -202,13 +204,75 @@ async def reconcile_stale_component_sync_jobs() -> Tuple[int, List[Tuple[str, st
     return count, requeued
 
 
-async def _run_component_resolve_job(job_id: str, component: str) -> None:
+# #13851: a resolve the guard refused is NOT a failed resolve — nothing ran and
+# the host is untouched, whereas "failed" means the run started and its outcome
+# is unknown. It is also the one terminal state that has a next step for the
+# operator (review the paths, then force), so the GUI needs to tell them apart
+# without pattern-matching on message text. Fits the status column's String(20),
+# so no migration; the poll loop already treats anything that is not
+# pending/running as terminal.
+RESOLVE_STATUS_BLOCKED: str = "blocked"
+
+
+async def _fail_resolve_job(
+    job_id: str,
+    message: str,
+    status: str = "failed",
+    post_steps: List[str] | None = None,
+) -> None:
+    """Mark a component-resolve job terminal with *message* (#13851).
+
+    The three inline copies of this block had already diverged only in their
+    message; a fourth would be a fourth chance to forget ``completed_at`` and
+    leave a poller waiting on a job that ended.
+    """
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row:
+            job_row.status = status
+            job_row.success = False
+            job_row.message = message
+            if post_steps:
+                job_row.post_steps = "\n".join(post_steps)
+            job_row.completed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+
+# Cap on paths inlined into an async job's refusal message — the full list is
+# in the log and in the sync endpoint's blocked_deletions (#13851).
+_BLOCKED_DELETION_PREVIEW: int = 20
+
+
+def _with_blocked_paths(message: str, blocked: List[str]) -> str:
+    """Append the would-be-deleted paths to a refusal message (#13851).
+
+    The async job row carries only a message, so the paths at stake must travel
+    inside it or the operator polling job status is told a resolve refused
+    without being told what it was protecting.
+    """
+    if not blocked:
+        return message
+    shown = blocked[:_BLOCKED_DELETION_PREVIEW]
+    suffix = f" (+{len(blocked) - len(shown)} more)" if len(blocked) > len(shown) else ""
+    return f"{message} Paths: {', '.join(shown)}{suffix}"
+
+
+async def _run_component_resolve_job(job_id: str, component: str, force: bool = False) -> None:
     """Background executor for an async component drift/resolve job (#11303).
 
     Runs rsync + post-sync steps (pip/build/alembic) then commits the job row
     to DB BEFORE triggering the service restart.  This guarantees the status is
     durable even if the restart kills this process (the autobot-slm-backend
     self-resolve case).
+
+    #13851: *force* is not persisted on the job row, so a job requeued after a
+    server restart (main.py) resumes UNFORCED and will refuse again if it would
+    delete anything. That is the safe direction — the operator sees the refusal
+    and the paths at stake rather than a restart silently completing a delete
+    they approved for a different moment.
     """
     from services.database import db_service
 
@@ -223,15 +287,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
         try:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
-            async with db_service.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.success = False
-                    job_row.message = f"Failed to determine source path: {exc}"
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
+            await _fail_resolve_job(job_id, f"Failed to determine source path: {exc}")
             logger.error("component resolve job %s: source path error: %s", job_id, exc)
             return
 
@@ -252,36 +308,54 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
             deployed_dir,
         )
 
+        # #13851: same delete guard as the sync endpoint, before anything is
+        # touched. This path ALSO rebuilt the rsync paths from the component
+        # name, discarding the #12872 fix — for a path-overridden component
+        # (ai-stack, slm-agent) that pointed the delete-style sync at a
+        # directory that is not the component's source.
+        if not force:
+            allowed, blocked, guard_msg = await _resolve_deletion_guard(
+                component, source_root, excludes, source_dir, deployed_dir
+            )
+            if not allowed:
+                # post_steps carries the FULL path list; the message inlines a
+                # capped preview so a text-only reader still sees what is at stake.
+                await _fail_resolve_job(
+                    job_id,
+                    _with_blocked_paths(guard_msg, blocked),
+                    status=RESOLVE_STATUS_BLOCKED,
+                    post_steps=blocked,
+                )
+                logger.error("component resolve job %s: %s", job_id, guard_msg)
+                return
+
         # #11611: autobot_shared-first — sync the shared library BEFORE this
         # component's own rsync + restart so a newly-added `from autobot_shared.X`
         # import resolves at startup and the control plane cannot crash-loop on a
         # half-deployed shared tree. Fail the job if it cannot be synced.
-        shared_ok, shared_msg = await _ensure_autobot_shared_synced(component)
+        shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(component, force)
         if not shared_ok:
-            async with db_service.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.success = False
-                    job_row.message = shared_msg
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
+            # A refused shared sync is the same terminal state as a refused
+            # component sync — the operator's next step is the same too.
+            await _fail_resolve_job(
+                job_id,
+                shared_msg,
+                status=RESOLVE_STATUS_BLOCKED if shared_blocked else "failed",
+                post_steps=shared_blocked,
+            )
             logger.error("component resolve job %s: %s", job_id, shared_msg)
             return
 
-        ok, msg = await _rsync_component_local(source_root, component, excludes)
+        ok, msg = await _rsync_component_local(
+            source_root,
+            component,
+            excludes,
+            source_dir=source_dir,
+            dest_dir=deployed_dir,
+        )
 
         if not ok:
-            async with db_service.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.success = False
-                    job_row.message = msg or "rsync failed"
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
+            await _fail_resolve_job(job_id, msg or "rsync failed")
             logger.error("component resolve job %s: rsync failed: %s", job_id, msg)
             return
 
@@ -847,11 +921,29 @@ async def resolve_drift(
         deployed_dir,
     )
 
+    # #13851: a resolve deletes. Preview what it would remove and refuse unless
+    # the caller explicitly forced it — the drift signal that prompts a resolve
+    # has itself reported foreign files as stale. This runs BEFORE the shared
+    # sync below so a refusal leaves the host untouched.
+    if not request.force:
+        allowed, blocked, guard_msg = await _resolve_deletion_guard(
+            request.component, source_root, excludes, source_dir, deployed_dir
+        )
+        if not allowed:
+            return DriftResolveResponse(
+                success=False,
+                component=request.component,
+                message=guard_msg,
+                source_dir=source_dir,
+                deployed_dir=deployed_dir,
+                blocked_deletions=blocked,
+            )
+
     # #11611: autobot_shared-first — sync the shared library BEFORE this
     # component's own rsync + restart so a newly-added `from autobot_shared.X`
     # import resolves at startup and the control plane cannot crash-loop on a
     # half-deployed shared tree. Fail the resolve if it cannot be synced.
-    shared_ok, shared_msg = await _ensure_autobot_shared_synced(request.component)
+    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
     if not shared_ok:
         return DriftResolveResponse(
             success=False,
@@ -859,6 +951,7 @@ async def resolve_drift(
             message=shared_msg,
             source_dir=source_dir,
             deployed_dir=deployed_dir,
+            blocked_deletions=shared_blocked,
         )
 
     # #12872: pass the resolved paths verbatim. source_dir/deployed_dir already
@@ -951,7 +1044,7 @@ async def resolve_drift_async(
         )
         await db.commit()
 
-    task = asyncio.create_task(_run_component_resolve_job(job_id, request.component))
+    task = asyncio.create_task(_run_component_resolve_job(job_id, request.component, request.force))
     _running_tasks[job_id] = task
 
     logger.info(
@@ -1122,12 +1215,18 @@ _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
 # start ("Failed to load environment files"). `data` holds per-service runtime
 # state with the same property. Applied at the rsync chokepoint so no caller
 # or future component list can forget them.
-_PROTECTED_EXCLUDES: List[str] = [".env", "data"]
+#
+# #13851: `logs` joins them. A dry run of the autobot-backend resolve on a live
+# host listed logs/audit/*.jsonl among 55 deletions — the audit trail, removed
+# by the remediation for what turned out to be a false drift signal. No
+# component in the repo tracks a `logs/` directory, so excluding it cannot
+# suppress a legitimate source file.
+_PROTECTED_EXCLUDES: List[str] = [".env", "data", "logs"]
 
 
-def _rsync_exclude_args(excludes: List[str]) -> List[str]:
+def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> List[str]:
     """Build --exclude args from caller excludes, canonical build/deploy
-    artifacts, and protected runtime paths.
+    artifacts, protected runtime paths, and other components' subtrees.
 
     Canonical artifact excludes (#11459) are injected here — the single rsync
     chokepoint — so every sync ignores exactly what the drift checker skips
@@ -1135,9 +1234,86 @@ def _rsync_exclude_args(excludes: List[str]) -> List[str]:
     lockstep: previously ``*.egg-info`` etc. were drift-skipped (#11440) but
     still deleted-and-resynced, churning the deployed tree. Protected paths
     (#9970) must survive every delete-style sync.
+
+    #13851: when *component* is given, subtrees owned by ANOTHER component and
+    the component's deploy-only entries are excluded too, anchored at the
+    transfer root so a same-named directory deeper in the tree is unaffected.
+    Defence in depth against the same class of bug that made this necessary: the
+    backend's delete-style resolve would have removed 34 files under
+    ``autobot-backend/plugins`` — deployed there by the ``plugins`` component,
+    perfectly in sync with their real source, and invisible to a walk that only
+    knows about ``code_source/autobot-backend``.
+
+    Subtrees get a trailing slash (they are directories); deploy-only entries do
+    not, because the set holds files (``config/npu_workers.yaml``), symlinks
+    (``autobot_shared``) and rendered artifacts (``npu-worker.py``) alike, and
+    an anchored pattern without a trailing slash matches all three.
     """
-    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *_PROTECTED_EXCLUDES]))
+    foreign: List[str] = []
+    if component is not None:
+        foreign = [f"/{sub}/" for sub in sorted(owned_subtrees(component))]
+        foreign += [f"/{path}" for path in sorted(deploy_only_entries(component))]
+    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *_PROTECTED_EXCLUDES, *foreign]))
     return [f"--exclude={exc}" for exc in merged]
+
+
+# #13851: rsync itemize marker for a delete. `--dry-run --delete --itemize-changes`
+# prints one `*deleting   <path>` line per path that WOULD be removed.
+_RSYNC_DELETE_MARKER: str = "*deleting"
+
+
+def _parse_rsync_deletions(output: str) -> List[str]:
+    """Extract the paths a `--dry-run --delete` rsync reported it would remove.
+
+    rsync prints ``*deleting`` followed by column padding and the path. Only the
+    leading padding is stripped: a trailing space is a legal filename character
+    and removing it would misreport the path. Note that a removed directory is
+    itemized once per level, so the list can be longer than the file count —
+    which is the safe direction for a guard.
+    """
+    deletions: List[str] = []
+    for line in output.splitlines():
+        if line.startswith(_RSYNC_DELETE_MARKER):
+            path = line[len(_RSYNC_DELETE_MARKER) :].lstrip(" ")
+            if path:
+                deletions.append(path)
+    return deletions
+
+
+async def _preview_rsync_deletions(cmd: List[str]) -> Tuple[bool, List[str], str]:
+    """Run *cmd* as a dry run and return the paths it would delete (#13851).
+
+    A resolve is a delete-style rsync, so anything on the host that source does
+    not have is removed. That is correct for a genuinely stale file and
+    catastrophic for a file source never owned — and the drift signal that
+    prompts a resolve was itself reporting the second kind as the first. This
+    turns the destructive half of the operation into something the caller can
+    inspect before it happens.
+
+    Args:
+        cmd: The exact rsync argv the real sync will run.
+
+    Returns:
+        Tuple of (dry_run_succeeded, deleted_paths, raw_output). A failed dry run
+        returns ``(False, [], output)`` — the caller must not treat "no deletions
+        parsed" from a failed run as "nothing would be deleted".
+    """
+    dry_cmd = [cmd[0], "--dry-run", "--itemize-changes", *cmd[1:]]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *dry_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        output = stdout.decode("utf-8", errors="replace")
+        if proc.returncode != 0:
+            return False, [], output
+        return True, _parse_rsync_deletions(output), output
+    except asyncio.TimeoutError:
+        return False, [], "rsync dry run timed out"
+    except Exception as exc:  # noqa: BLE001 - a failed preview must not delete anything
+        return False, [], f"rsync dry run error: {exc}"
 
 
 async def _rsync_component(
@@ -1161,7 +1337,7 @@ async def _rsync_component(
         ssh_opts,
         "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/${USER:-autobot}/  # noqa
     ]
-    cmd.extend(_rsync_exclude_args(excludes))
+    cmd.extend(_rsync_exclude_args(excludes, component))
     cmd.append(f"{source_user}@{source_ip}:{source_path}/{component}/")
     cmd.append(f"/opt/autobot/{component}/")
 
@@ -1182,6 +1358,65 @@ async def _rsync_component(
         return False, f"rsync timed out for {component}"
     except Exception as exc:
         return False, f"rsync error for {component}: {exc}"
+
+
+def _rsync_local_cmd(
+    source_path: str,
+    component: str,
+    excludes: List[str],
+    *,
+    source_dir: str | None = None,
+    dest_dir: str | None = None,
+) -> List[str]:
+    """Build the local delete-style rsync argv for *component* (#13851).
+
+    Extracted so the dry-run deletion preview and the real sync are guaranteed
+    to run the *same* command — a preview built from a slightly different
+    exclude list would clear a resolve that then deletes something the operator
+    was never shown.
+    """
+    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
+    cmd.extend(_rsync_exclude_args(excludes, component))
+    cmd.append(f"{source_dir or f'{source_path}/{component}'}/")
+    cmd.append(f"{dest_dir or f'/opt/autobot/{component}'}/")
+    return cmd
+
+
+async def _resolve_deletion_guard(
+    component: str,
+    source_root: str,
+    excludes: List[str],
+    source_dir: str,
+    deployed_dir: str,
+) -> Tuple[bool, List[str], str]:
+    """Refuse a resolve that would delete deployed paths absent from source.
+
+    Returns ``(allowed, blocked_paths, message)``. ``allowed`` is False both
+    when deletions were found and when the dry run itself failed — a preview
+    that could not be taken is not evidence that nothing would be deleted
+    (#13851).
+    """
+    cmd = _rsync_local_cmd(source_root, component, excludes, source_dir=source_dir, dest_dir=deployed_dir)
+    ok, deletions, output = await _preview_rsync_deletions(cmd)
+    if not ok:
+        logger.error("drift resolve: deletion preview failed for %s: %s", component, output[:500])
+        return False, [], f"Refusing to resolve {component}: could not preview deletions ({output[:200]})"
+    if deletions:
+        logger.warning(
+            "drift resolve: refusing %s — %d path(s) would be deleted: %s",
+            component,
+            len(deletions),
+            ", ".join(deletions[:10]),
+        )
+        return (
+            False,
+            deletions,
+            (
+                f"Refusing to resolve {component}: {len(deletions)} deployed path(s) are absent from source "
+                "and would be DELETED. Review blocked_deletions, then retry with force=true to proceed."
+            ),
+        )
+    return True, [], ""
 
 
 async def _rsync_component_local(
@@ -1205,10 +1440,7 @@ async def _rsync_component_local(
     name silently pointed rsync at a directory that does not exist, and drift
     for those components could never be cleared.
     """
-    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
-    cmd.extend(_rsync_exclude_args(excludes))
-    cmd.append(f"{source_dir or f'{source_path}/{component}'}/")
-    cmd.append(f"{dest_dir or f'/opt/autobot/{component}'}/")
+    cmd = _rsync_local_cmd(source_path, component, excludes, source_dir=source_dir, dest_dir=dest_dir)
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -2511,7 +2743,7 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
         steps.append(f"symlink: restore failed for {component}: {exc}")
 
 
-async def _ensure_autobot_shared_synced(component: str) -> Tuple[bool, str]:
+async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> Tuple[bool, str, List[str]]:
     """Resync autobot_shared from code_source BEFORE a dependent backend deploys (#11611).
 
     #11611 root cause: autobot_shared is a component deployed by its OWN
@@ -2529,26 +2761,49 @@ async def _ensure_autobot_shared_synced(component: str) -> Tuple[bool, str]:
     (returns success) for autobot_shared itself and for frontends — they either ARE
     the shared component or do not import it at start.
 
-    Returns (ok, message). On rsync failure the caller must fail-safe (do NOT
-    restart the backend onto a half-deployed shared tree).
+    Returns (ok, message, blocked_deletions). On rsync failure the caller must
+    fail-safe (do NOT restart the backend onto a half-deployed shared tree), and
+    on a guard refusal it must surface ``blocked_deletions`` — the paths are the
+    whole point of refusing, so returning only prose would leave the caller's
+    structured field empty next to a message naming N paths.
+
+    #13851: this is a delete-style rsync like any other resolve, and it runs on
+    every backend resolve without the caller asking for it — so it gets the same
+    deletion guard. Unguarded it was the one RESOLVE path that could still
+    remove a deployed file the source tree does not have. (``_deploy_constraints_dir``
+    and ``_sync_slm_from_code_source`` also delete, but neither is reachable
+    from a drift resolve.)
     """
     if component not in _BACKEND_COMPONENTS:
-        return True, ""
+        return True, "", []
     try:
         shared_source = get_default_source_dir("autobot_shared")
     except ValueError:
         # code_source layout unavailable — leave the existing tree in place rather
         # than blocking the resolve; the symlink restore still runs downstream.
-        return True, "autobot_shared source path unavailable — left as-is"
+        return True, "autobot_shared source path unavailable — left as-is", []
     source_root = str(Path(shared_source).parent)
     excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
     excludes = excludes_map.get("autobot_shared", [])
-    ok, msg = await _rsync_component_local(source_root, "autobot_shared", excludes)
+    shared_deployed = get_default_deployed_dir("autobot_shared")
+    if not force:
+        allowed, blocked, guard_msg = await _resolve_deletion_guard(
+            "autobot_shared", source_root, excludes, shared_source, shared_deployed
+        )
+        if not allowed:
+            return False, _with_blocked_paths(f"autobot_shared-first: {guard_msg}", blocked), blocked
+    ok, msg = await _rsync_component_local(
+        source_root,
+        "autobot_shared",
+        excludes,
+        source_dir=shared_source,
+        dest_dir=shared_deployed,
+    )
     if ok:
         logger.info("autobot_shared-first: resynced ahead of %s (#11611)", component)
-        return True, f"autobot_shared-first: resynced ahead of {component} (#11611)"
+        return True, f"autobot_shared-first: resynced ahead of {component} (#11611)", []
     logger.error("autobot_shared-first: resync FAILED before %s: %s (#11611)", component, msg)
-    return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)"
+    return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)", []
 
 
 async def _run_post_sync_steps(
@@ -4705,7 +4960,7 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id
 
     Per-role failures are logged and do NOT abort the pipeline (fail-safe).
     """
-    shared_ok, shared_msg = await _ensure_autobot_shared_synced("autobot-backend")
+    shared_ok, shared_msg, _blocked = await _ensure_autobot_shared_synced("autobot-backend")
     if not shared_ok:
         _stage_log(stage, f"co-located roles: {shared_msg} — aborting role procedures (#11611)")
         return
