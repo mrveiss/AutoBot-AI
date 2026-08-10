@@ -495,10 +495,17 @@ class AgentLoop:
             self._iteration_count,
         )
 
-        results = await self._execute_main_loop()
-        result = await self._finalize_task(results)
-        await self._clear_run_checkpoint(task_id)
-        return result
+        try:
+            results = await self._execute_main_loop()
+            result = await self._finalize_task(results)
+            await self._clear_run_checkpoint(task_id)
+            return result
+        finally:
+            # #13865: same release as `run_task`. Without it a resumed run left
+            # its binding live, so the next run in this asyncio context
+            # inherited it and could read the resumed run's artifacts — the hole
+            # the run_task fix closes, reopened on the resume path.
+            _bind_spill_task(None)
 
     async def cancel(self) -> None:
         """Cancel the current task."""

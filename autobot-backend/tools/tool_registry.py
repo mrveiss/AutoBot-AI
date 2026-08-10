@@ -921,10 +921,18 @@ class ToolRegistry:
         # offered it. Gated on the spill flag (#13865): this list reaches the
         # system prompt of every modality agent via llm_service.chat_optimized,
         # and an off-by-default feature must not change live prompt content.
-        from agent_loop.tool_output_spill import SPILL_ENABLED
+        #
+        # Guarded: importing the leaf module pulls in the whole `agent_loop`
+        # package (its __init__ imports AgentLoop). This method is on the
+        # prompt-building path, where it could not previously fail, so an
+        # import error must not propagate out of it.
+        try:
+            from agent_loop.tool_output_spill import SPILL_ENABLED
 
-        if SPILL_ENABLED:
-            registry_tools.append("read_spilled_output")
+            if SPILL_ENABLED:
+                registry_tools.append("read_spilled_output")
+        except Exception:  # pragma: no cover - never break prompt building
+            logger.warning("Could not resolve the tool-output spill flag; omitting its read tool", exc_info=True)
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.
         # Lazy import breaks the circular dependency:
