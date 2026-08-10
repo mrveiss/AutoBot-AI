@@ -430,12 +430,26 @@ MCP_BRIDGES = discover_bridges()
 
 
 def _build_tool_entry(tool: dict, bridge_name: str, bridge_desc: str, endpoint: str, features: List[str]) -> dict:
-    """Build a tool entry with bridge info. (Issue #315 - extracted)"""
+    """Build a tool entry with bridge info. (Issue #315 - extracted)
+
+    #13228: attaches ``required_permission`` here because this is the single
+    point every tool crosses on both consumer paths — ``MCPDispatcher.dispatch``
+    and ``get_tool_definitions`` both read the cache this populates, so one
+    declaration governs execution and advertisement alike.
+
+    ``None`` means the tool is undeclared. Stage 1 records that without acting
+    on it; enforcement (denying the undeclared) is a later, separately
+    revertible step, so this change cannot break a working agent flow.
+    """
+    from autobot_shared.auth.mcp_tool_permissions import required_permission  # noqa: PLC0415
+
+    permission = required_permission(tool["name"], bridge_name)
     return {
         "name": tool["name"],
         "description": tool["description"],
         "input_schema": tool["input_schema"],
         "bridge": bridge_name,
+        "required_permission": permission.value if permission else None,
         "bridge_description": bridge_desc,
         "endpoint": f"{endpoint.replace('/tools', '')}/{tool['name']}",
         "features": features,

@@ -27,13 +27,25 @@ Supported languages: Python, JavaScript/TypeScript.
 import asyncio
 import hashlib
 import json
-from dataclasses import dataclass, field
+import os
+import re
+import subprocess  # nosec B404  # read-only git queries for graph provenance (#13508)
+from dataclasses import asdict, dataclass, field
+from dataclasses import fields as dataclass_fields
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path_from_rel_path, resolve_call
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
+from utils.file_categorization import (
+    ALL_CODE_EXTENSIONS,
+    JS_EXTENSIONS,
+    PYTHON_EXTENSIONS,
+    TS_EXTENSIONS,
+    VUE_EXTENSIONS,
+)
 
 logger = get_logger(__name__)
 
@@ -57,6 +69,100 @@ class CodeIndexResult:
     failed: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    # #13510: extension -> count of code files this indexer has no grammar for.
+    # Reported rather than dropped at collection time, so a consumer can tell an
+    # under-covered graph from a complete one.
+    unsupported_extensions: dict[str, int] = field(default_factory=dict)
+    # #13508: edge-resolution roll-up. Already computed per file to build the edge
+    # metadata; totalling it is what turns a resolver regression into a number
+    # that goes down, rather than something inferred from a wrong answer later.
+    nodes: int = 0
+    edges: int = 0
+    resolved_edges: int = 0
+    unresolved_edges: int = 0
+    files_with_extractor: int = 0
+    files_total: int = 0
+
+
+# #13508: bump when extraction, resolution or node identity changes in a way that
+# makes previously-indexed records wrong rather than merely stale. A bump
+# invalidates the whole hash cache on the next run, so every file is re-extracted
+# instead of being skipped on an unchanged content hash — a content hash cannot
+# notice that the *extractor* changed.
+EXTRACTOR_VERSION = 1
+
+# One provenance document per collection, at a fixed id so a run overwrites the
+# previous record instead of accumulating history.
+_PROVENANCE_ID = "code_graph::provenance"
+_PROVENANCE_RECORD_TYPE = "graph_provenance"
+
+# Key under which the hash cache carries the version that wrote it. Deliberately
+# not a valid relative path, so it can never collide with a cached file entry.
+_CACHE_VERSION_KEY = "::extractor_version"
+
+# Bound on the read-only git calls provenance makes; never hard-coded inline.
+_GIT_TIMEOUT_SECONDS = int(os.environ.get("AUTOBOT_CODE_INDEX_GIT_TIMEOUT_SECONDS", "10"))
+
+
+@dataclass
+class GraphProvenance:
+    """How and when the code graph was built (#13508).
+
+    Absence of this record means **unknown**, never fresh: a collection indexed
+    before provenance existed must not read as current, which is why every
+    consumer goes through ``load_graph_provenance`` returning ``None`` rather
+    than a zero-valued default.
+
+    ``nodes``/``edges``/``resolved_edges`` describe **the graph**, counted from the
+    collection. ``last_run_*`` describe the run that wrote this record. Keeping
+    them apart is the point: an incremental run extracts nothing, and per-run
+    totals would report a healthy graph as empty.
+
+    Every field carries a default so a record written by an older version stays
+    readable — a missing field must degrade one value, not the whole record.
+    """
+
+    root_dir: str = ""
+    indexed_at_commit: str = ""
+    indexed_at: str = ""
+    extractor_version: int = 0
+    files_with_extractor: int = 0
+    files_total: int = 0
+    nodes: int = 0
+    edges: int = 0
+    resolved_edges: int = 0
+    unresolved_edges: int = 0
+    last_run_nodes_stored: int = 0
+    last_run_failures: int = 0
+
+    @property
+    def extractor_coverage(self) -> float:
+        """Fraction of the code the registry recognises that this indexer can read.
+
+        Deliberately not called "coverage": it says nothing about whether those
+        files were successfully extracted on any given run, only that a grammar
+        exists for them (#13510).
+        """
+        return self.files_with_extractor / self.files_total if self.files_total else 0.0
+
+    @property
+    def resolution_rate(self) -> float:
+        """Fraction of edges in the graph that resolved to a known node."""
+        return self.resolved_edges / self.edges if self.edges else 0.0
+
+    @property
+    def is_current_extractor(self) -> bool:
+        """Whether the graph was built by the extractor this process is running."""
+        return self.extractor_version == EXTRACTOR_VERSION
+
+
+def _count_by_extension(paths: "list[Path]") -> dict[str, int]:
+    """Tally *paths* by lowercased suffix (#13510)."""
+    counts: dict[str, int] = {}
+    for path in paths:
+        suffix = path.suffix.lower()
+        counts[suffix] = counts.get(suffix, 0) + 1
+    return counts
 
 
 def _make_node_id(name: str, module_path: str, parent_class: str | None = None) -> str:
@@ -280,14 +386,43 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
+# #13510: the grammars here cannot parse Cython, so the two Cython members of
+# PYTHON_EXTENSIONS are held back rather than mapped to the Python extractor.
+# Measured: on a file declaring ``cdef add``, ``cpdef scale`` and ``def normal``,
+# tree-sitter-python sees only ``normal`` — the cdef/cpdef definitions become
+# invisible while calls to them survive as unresolvable edges. That is worse than
+# not indexing the file, which is why this list exists instead of a blanket map.
+_NO_GRAMMAR_EXTENSIONS: "frozenset[str]" = frozenset({".pyx", ".pxd"})
+
+# #13510: a stub shares its implementation's module path — ``module_path_from_rel_path``
+# strips the suffix, so ``foo.py`` and ``foo.pyi`` compute the *same* node ids and the
+# stub's declarations would overwrite the real ones in the shared collection. Held back
+# until node identity carries the extension (#13824). Distinct from the set above: the
+# grammar reads these fine, the identity scheme cannot tell them apart.
+_COLLIDING_STUB_EXTENSIONS: "frozenset[str]" = frozenset({".pyi"})
+
+_HELD_BACK_EXTENSIONS: "frozenset[str]" = _NO_GRAMMAR_EXTENSIONS | _COLLIDING_STUB_EXTENSIONS
+
+# #13510: derived from the canonical registry in ``utils/file_categorization``
+# rather than restated here, so "what the platform calls source code" and "what the
+# indexer will read" cannot drift apart silently. ``.ts``/``.tsx`` were already
+# parsed with the JavaScript grammar; ``.mts``/``.cts`` join them on the same terms.
 _EXTRACTORS: dict[str, Any] = {
-    ".py": extract_python,
-    ".js": extract_javascript,
-    ".ts": extract_javascript,
-    ".jsx": extract_javascript,
-    ".tsx": extract_javascript,
-    ".vue": extract_javascript,
+    **{ext.lower(): extract_python for ext in PYTHON_EXTENSIONS - _HELD_BACK_EXTENSIONS},
+    **{ext.lower(): extract_javascript for ext in JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS},
 }
+
+# Extensions the canonical registry calls code but this indexer has no extractor
+# for. Files with these extensions are *counted* as skipped (#13510) — previously
+# they were dropped during collection, so they could not appear in any total and a
+# partially-covered graph reported itself as complete.
+#
+# Lowercased because the walk matches on ``suffix.lower()``. The registry carries
+# uppercase members (``.R``, ``.Rmd``, ``.S``) that would otherwise sit in this set
+# and never match anything — invisible again, which is the defect this issue fixes.
+UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ext.lower() for ext in ALL_CODE_EXTENSIONS) - frozenset(
+    _EXTRACTORS
+)
 
 
 _DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"
@@ -391,28 +526,157 @@ class CodeIndexer:
             self._known_ids = await self._seed_known_ids_from_collection()
 
             aggregate = CodeIndexResult()
-            for path in await self._collect_source_files(root_dir):
+            paths, unsupported = await self._collect_source_files(root_dir)
+            # #13510: code the registry recognises but no grammar here can read.
+            # Counted rather than dropped, so a partially covered graph says so.
+            aggregate.skipped += len(unsupported)
+            if unsupported:
+                aggregate.unsupported_extensions = _count_by_extension(unsupported)
+                logger.info(
+                    "code_indexer: %d code file(s) skipped — no extractor for %s (#13510)",
+                    len(unsupported),
+                    sorted(aggregate.unsupported_extensions),
+                )
+            for path in paths:
                 result = await self.index_file(str(path), root_dir=root_dir, force=force)
                 aggregate.success += result.success
                 aggregate.failed += result.failed
                 aggregate.skipped += result.skipped
                 aggregate.errors.extend(result.errors)
+                aggregate.nodes += result.nodes
+                aggregate.edges += result.edges
+                aggregate.resolved_edges += result.resolved_edges
+                aggregate.unresolved_edges += result.unresolved_edges
+            aggregate.files_with_extractor = len(paths)
+            aggregate.files_total = len(paths) + len(unsupported)
+            await self._write_provenance(root_dir, aggregate)
             return aggregate
 
+    async def _write_provenance(self, root_dir: str, aggregate: CodeIndexResult) -> None:
+        """Persist how this run built the graph (#13508).
+
+        Best-effort: a graph that indexed correctly must not be reported as failed
+        because its provenance could not be stored. A missing record already means
+        "unknown" to every reader, which is the safe reading.
+        """
+        provenance = await self._build_provenance(root_dir, aggregate)
+        if provenance is None:
+            return
+        document = f"code graph built at {provenance.indexed_at_commit or 'unknown commit'} from {provenance.root_dir}"
+        # The provenance record shares the docs collection, whose vector dimension
+        # is fixed by its first insert. A placeholder vector would be rejected on a
+        # populated collection and — far worse — *accepted* on an empty one,
+        # pinning it to that dimension and permanently breaking every later real
+        # upsert. So it is embedded with the same model as every other record.
+        try:
+            embedding = await asyncio.to_thread(self._embed_model.get_text_embedding, document)
+        except Exception as exc:
+            logger.warning("code_indexer: could not embed graph provenance, not recording it: %s (#13508)", exc)
+            return
+        try:
+            await asyncio.to_thread(
+                self._collection.upsert,
+                ids=[_PROVENANCE_ID],
+                embeddings=[embedding],
+                documents=[document],
+                metadatas=[{"record_type": _PROVENANCE_RECORD_TYPE, **asdict(provenance)}],
+            )
+        except Exception as exc:
+            logger.warning("code_indexer: could not write graph provenance: %s (#13508)", exc)
+            return
+        logger.info(
+            "code_indexer: graph provenance commit=%s coverage=%d/%d nodes=%d edges=%d "
+            "resolved=%d run(stored=%d failed=%d)",
+            provenance.indexed_at_commit[:12] or "unknown",
+            provenance.files_with_extractor,
+            provenance.files_total,
+            provenance.nodes,
+            provenance.edges,
+            provenance.resolved_edges,
+            provenance.last_run_nodes_stored,
+            provenance.last_run_failures,
+        )
+
+    async def _build_provenance(self, root_dir: str, aggregate: CodeIndexResult) -> "GraphProvenance | None":
+        """Assemble the record, counting the graph rather than the run (#13508).
+
+        The distinction matters and was wrong in the first draft of this feature:
+        an incremental run hash-skips every unchanged file and therefore extracts
+        nothing, so per-run counters would overwrite a healthy record with
+        ``nodes=0, resolution_rate=0.0``. The stated purpose of these numbers is
+        that a resolver regression shows up as a value going *down* — a value that
+        drops to zero on every no-op nightly run can never do that.
+
+        So the graph totals are read back from the collection, which is the graph,
+        and the run's own outcome is recorded beside them under ``last_run_*``.
+        """
+        totals = await self._count_graph_records()
+        if totals is None:
+            return None
+        nodes, edges, resolved = totals
+        return GraphProvenance(
+            root_dir=str(Path(root_dir).resolve()),
+            indexed_at_commit=await asyncio.to_thread(_git_head_commit, root_dir),
+            indexed_at=datetime.now(timezone.utc).isoformat(),
+            extractor_version=EXTRACTOR_VERSION,
+            files_with_extractor=aggregate.files_with_extractor,
+            files_total=aggregate.files_total,
+            nodes=nodes,
+            edges=edges,
+            resolved_edges=resolved,
+            unresolved_edges=edges - resolved,
+            last_run_nodes_stored=aggregate.success,
+            last_run_failures=aggregate.failed,
+        )
+
+    async def _count_graph_records(self) -> "tuple[int, int, int] | None":
+        """Return ``(nodes, edges, resolved_edges)`` held in the collection, or None.
+
+        None means the store could not be counted, and the caller then writes no
+        record at all — leaving the previous one in place rather than replacing it
+        with numbers this run could not verify.
+        """
+        try:
+            node_ids = await asyncio.to_thread(self._collection.get, where={"record_type": {"$eq": "node"}}, include=[])
+            edge_records = await asyncio.to_thread(
+                self._collection.get, where={"record_type": {"$eq": "edge"}}, include=["metadatas"]
+            )
+        except Exception as exc:
+            logger.warning("code_indexer: could not count graph records: %s (#13508)", exc)
+            return None
+        edge_metadatas = (edge_records or {}).get("metadatas") or []
+        resolved = sum(1 for m in edge_metadatas if isinstance(m, dict) and str(m.get("resolved")).lower() == "true")
+        return len((node_ids or {}).get("ids") or []), len(edge_metadatas), resolved
+
     @staticmethod
-    async def _collect_source_files(root_dir: str) -> list[Path]:
-        """List indexable files under *root_dir*, skipping hidden/vendor dirs."""
+    async def _collect_source_files(root_dir: str) -> "tuple[list[Path], list[Path]]":
+        """Return ``(indexable, unsupported)`` files under *root_dir*.
+
+        *unsupported* are files the canonical registry classifies as code but for
+        which this indexer has no extractor (#13510). They are returned rather than
+        discarded so the caller can count them: dropping them here is what let the
+        indexer report full coverage of a corpus it had never fully seen.
+        """
         root = Path(root_dir)
         skip_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
 
-        def _walk() -> list[Path]:
-            found = []
+        def _walk() -> "tuple[list[Path], list[Path]]":
+            found: list[Path] = []
+            unsupported: list[Path] = []
             for path in sorted(root.rglob("*")):
-                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in path.parts):
+                # #13510: match against the path *below* root. Testing `path.parts`
+                # tested the absolute path, so any component above root — a checkout
+                # under `.worktrees/`, a home directory, a `.cache` — matched the
+                # hidden-directory rule and the walk silently collected nothing.
+                relative_parts = path.relative_to(root).parts
+                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in relative_parts):
                     continue
-                if path.suffix.lower() in _EXTRACTORS:
+                suffix = path.suffix.lower()
+                if suffix in _EXTRACTORS:
                     found.append(path)
-            return found
+                elif suffix in UNSUPPORTED_CODE_EXTENSIONS:
+                    unsupported.append(path)
+            return found, unsupported
 
         return await asyncio.to_thread(_walk)
 
@@ -465,7 +729,17 @@ class CodeIndexer:
             else:
                 result.failed += 1
 
+        result.nodes += len(nodes)
+
         resolved_by_source = self._resolve_edges(extracted["edges"])
+        # #13508: count what resolution achieved while the outcome is in hand.
+        for calls in resolved_by_source.values():
+            for _edge, resolved in calls:
+                result.edges += 1
+                if resolved.resolved:
+                    result.resolved_edges += 1
+                else:
+                    result.unresolved_edges += 1
         if not await self._upsert_edges(resolved_by_source, rel_path, node_embeddings):
             result.errors.append(f"{rel_path}: failed to upsert call edges")
 
@@ -533,19 +807,137 @@ class CodeIndexer:
             return ""
 
     def _load_cache(self) -> dict[str, str]:
-        if self._cache_file.exists():
-            try:
-                return json.loads(self._cache_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-        return {}
+        """Load the per-file content-hash cache, discarding it on a version bump.
+
+        #13508: a content hash answers "did this file change", never "did the
+        thing that reads it change". Without this gate, bumping
+        ``EXTRACTOR_VERSION`` would leave every unchanged file skipped and the
+        graph permanently built by the old extractor.
+        """
+        if not self._cache_file.exists():
+            return {}
+        try:
+            cached = json.loads(self._cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(cached, dict):
+            return {}
+        written_by = cached.pop(_CACHE_VERSION_KEY, None)
+        if written_by != EXTRACTOR_VERSION:
+            logger.info(
+                "code_indexer: hash cache was written by extractor version %s, now %s — "
+                "re-extracting every file (#13508)",
+                written_by,
+                EXTRACTOR_VERSION,
+            )
+            return {}
+        return cached
 
     def _save_cache(self) -> None:
         try:
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self._cache_file.write_text(json.dumps(self._hash_cache, indent=2), encoding="utf-8")
+            payload = {**self._hash_cache, _CACHE_VERSION_KEY: EXTRACTOR_VERSION}
+            self._cache_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError as e:
             logger.warning("Could not save code index cache: %s", e)
+
+
+def _git(root_dir: str, *args: str) -> str:
+    """Run a read-only git command in *root_dir*; empty string on any failure.
+
+    #13508: provenance must degrade to "unknown" rather than raise. A checkout
+    without git, a detached worktree, or a missing binary all mean the same thing
+    to a consumer — the commit could not be determined — and none of them should
+    fail an index run that otherwise succeeded.
+    """
+    try:
+        completed = (
+            subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option can be injected
+                ["git", "-C", root_dir, *args],
+                capture_output=True,
+                text=True,
+                timeout=_GIT_TIMEOUT_SECONDS,
+                check=False,
+            )
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug("code_indexer: git %s failed in %s: %s", args, root_dir, exc)
+        return ""
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def _git_head_commit(root_dir: str) -> str:
+    """Full SHA of *root_dir*'s HEAD, or "" when it cannot be determined."""
+    return _git(root_dir, "rev-parse", "HEAD")
+
+
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+async def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
+    """Return how the graph in *collection* was built, or ``None`` if unknown.
+
+    ``None`` covers every uncertain case — no record, an unreadable store, a
+    record this build cannot parse. A collection indexed before #13508 has no
+    record and therefore reads as unknown, never as fresh, which is the
+    constraint the issue is explicit about.
+
+    Async because the read is blocking store I/O; the first caller on an event
+    loop would otherwise stall it.
+    """
+    try:
+        found = await asyncio.to_thread(collection.get, ids=[_PROVENANCE_ID], include=["metadatas"])
+    except Exception as exc:
+        logger.warning("code_indexer: could not read graph provenance: %s", exc)
+        return None
+    metadatas = (found or {}).get("metadatas") or []
+    if not metadatas or not isinstance(metadatas[0], dict):
+        return None
+    known = {f.name for f in dataclass_fields(GraphProvenance)}
+    payload = {k: v for k, v in metadatas[0].items() if k in known}
+    try:
+        return GraphProvenance(**payload)
+    except TypeError as exc:
+        logger.warning("code_indexer: graph provenance record is not readable: %s", exc)
+        return None
+
+
+async def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
+    """How many commits *root_dir*'s HEAD is ahead of the indexed commit.
+
+    ``None`` means unanswerable, and it is deliberately returned in more cases
+    than "no record":
+
+    - the graph was built by a **different extractor version**, so a commit
+      distance of 0 would read as "current" for a graph this build cannot trust;
+    - the record describes a **different tree** than the one being asked about;
+    - the recorded commit is **not in this history** — after a rebase or a
+      force-push it is gone, and ``0`` would be the worst possible answer, since
+      it reads as current for a graph built on a commit that no longer exists.
+
+    ``0`` therefore means current, and only that. Answered without re-walking the
+    repo: one ``rev-list --count``.
+    """
+    provenance = await load_graph_provenance(collection)
+    if provenance is None or not provenance.indexed_at_commit:
+        return None
+    if not provenance.is_current_extractor:
+        logger.info(
+            "code_indexer: graph was built by extractor version %s, running %s — staleness unanswerable (#13508)",
+            provenance.extractor_version,
+            EXTRACTOR_VERSION,
+        )
+        return None
+    if provenance.root_dir and provenance.root_dir != str(Path(root_dir).resolve()):
+        return None
+    # Validated before reaching a subprocess: this value came back out of the
+    # store, and a commit id is the one untrusted string in this path.
+    if not _SHA_RE.match(provenance.indexed_at_commit):
+        return None
+    counted = await asyncio.to_thread(_git, root_dir, "rev-list", "--count", f"{provenance.indexed_at_commit}..HEAD")
+    if not counted.isdigit():
+        return None
+    return int(counted)
 
 
 def _build_edge_batch(

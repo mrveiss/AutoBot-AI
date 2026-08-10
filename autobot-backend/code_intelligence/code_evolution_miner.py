@@ -17,15 +17,32 @@ Features:
 - Evolution reports and visualizations
 """
 
+import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)
+
+# #13639: a commit touching more files than this is a bulk rename, a vendored-tree
+# import or a reformat — not a coupling signal. Left uncapped, one 400-file commit
+# contributes ~80k pair updates and drowns every real pair beneath it. Cost is
+# quadratic in files-per-commit, so the cap is what keeps the walk affordable.
+MAX_FILES_PER_COMMIT: int = env_int("AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT", default=50)
+
+# Bound on the history walk; never a literal at the call site.
+_GIT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS", default=120)
+
+# Paths that co-change because a tool wrote them, not because they depend on each
+# other. Lockfiles are the clearest case: every dependency bump touches all of them.
+_COCHANGE_SKIP_DIRS: frozenset = frozenset(
+    {"node_modules", "venv", ".venv", "dist", "build", "__pycache__", ".git", "vendor", "third_party"}
+)
 
 
 class PatternOccurrence:
@@ -75,79 +92,181 @@ class PatternLifecycle:
         return 0
 
 
+def _run_git(repo_path: str, *args: str) -> str:
+    """Run a read-only git command; empty string on any failure (#13639).
+
+    The git binary is present wherever the repository is, which GitPython is not.
+    """
+    try:
+        completed = subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option
+            # -c core.quotepath=false: without it git C-quotes any non-ASCII path
+            # ("lat\\303\\253le.py"), so the key depends on the reader's git config
+            # and can never match a filesystem-derived path. errors="replace"
+            # because a path byte that is not valid UTF-8 must not raise a
+            # ValueError that the except clause below does not even catch.
+            ["git", "-c", "core.quotepath=false", "-C", repo_path, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        logger.warning("git %s failed in %s: %s", args, repo_path, exc)
+        return ""
+    if completed.returncode != 0:
+        # Without this, a timeout, a non-repo path and a genuinely empty window
+        # are the same empty string to the caller — the silent-computes-nothing
+        # shape this method was written to get away from.
+        logger.warning("git %s exited %s in %s: %s", args, completed.returncode, repo_path, completed.stderr.strip())
+        return ""
+    return completed.stdout
+
+
+# #13832: NUL separates commits, RS separates fields. RS (0x1e) cannot appear in a
+# commit message in practice, and putting the raw body last keeps a multi-line
+# message from being mistaken for the numstat block that follows it.
+_COMMIT_FORMAT = "--pretty=format:%x00%H%x1e%at%x1e%an%x1e%B%x1e"
+
+
+def _parse_commit_block(block: str) -> "dict | None":
+    """Turn one ``git log`` block into the dict shape callers already expect.
+
+    Returns None for a block that is not a commit — notably the empty leading
+    one produced by the NUL that precedes the first record.
+    """
+    if not block.strip():
+        return None
+    parts = block.split("\x1e")
+    if len(parts) < 5:
+        return None
+    commit_hash, timestamp, author, message = parts[0], parts[1], parts[2], parts[3]
+    if not commit_hash.strip() or not timestamp.strip().isdigit():
+        return None
+    return {
+        "hash": commit_hash.strip(),
+        "message": message.strip(),
+        "author": author.strip(),
+        # #13162: tz-aware UTC. A naive datetime here crashed calculate_trend,
+        # which compares against datetime.now(tz=timezone.utc), and made month
+        # bucketing depend on the server's local timezone.
+        "timestamp": datetime.fromtimestamp(int(timestamp.strip()), tz=timezone.utc),
+        "stats": _parse_numstat(parts[4]),
+    }
+
+
+def _parse_numstat(numstat: str) -> Dict[str, int]:
+    """Totals from ``--numstat`` lines, matching GitPython's ``stats.total`` keys.
+
+    A binary file is reported by git as ``-\t-\tpath``; it counts as a changed
+    file with zero line changes rather than being dropped or crashing the parse.
+    """
+    files = insertions = deletions = 0
+    for line in numstat.splitlines():
+        columns = line.split("\t")
+        if len(columns) < 3:
+            continue
+        files += 1
+        added, removed = columns[0], columns[1]
+        insertions += int(added) if added.isdigit() else 0
+        deletions += int(removed) if removed.isdigit() else 0
+    return {"files": files, "insertions": insertions, "deletions": deletions, "lines": insertions + deletions}
+
+
+def _is_vendored_path(path: str) -> bool:
+    """True for paths whose co-changes come from tooling rather than from design."""
+    return any(part in _COCHANGE_SKIP_DIRS for part in PurePosixPath(path).parts)
+
+
 class GitHistoryCrawler:
     """Crawls git history to extract code changes"""
 
     def __init__(self, repo_path: str):
+        """#13832: reads the git binary. GitPython was imported here and nowhere
+        else, and appeared in no requirements file, so ``self.repo`` was always
+        ``None`` and every method returned ``[]`` in every environment since this
+        class was written. The ``except ImportError`` even logged "Using fallback
+        git commands" — there were none, which is how a wholly inert subsystem
+        read as a handled degradation.
+        """
         self.repo_path = Path(repo_path)
-        try:
-            import git
-
-            self.repo = git.Repo(repo_path)
-        except ImportError:
-            logger.warning("GitPython not installed. Using fallback git commands.")
-            self.repo = None
-        except Exception as e:
-            logger.error("Failed to initialize git repository: %s", e)
-            self.repo = None
+        self.available = _run_git(str(self.repo_path), "rev-parse", "--git-dir") != ""
+        if not self.available:
+            logger.warning("GitHistoryCrawler: %s is not a git repository — history is unavailable", repo_path)
 
     def get_commits_in_range(self, start_date: datetime | None = None, end_date: datetime | None = None) -> List[Dict]:
-        """Get commits within a date range"""
-        if self.repo is None:
+        """Get commits within a date range (#13832: via the git binary)."""
+        if not self.available:
             return []
 
-        commits = []
-        try:
-            all_commits = list(self.repo.iter_commits("HEAD"))
-
-            for commit in all_commits:
-                # #13162: tz-aware UTC. A naive datetime here crashed
-                # calculate_trend, which compares against
-                # datetime.now(tz=timezone.utc), and made month bucketing
-                # depend on the server's local timezone.
-                commit_date = datetime.fromtimestamp(commit.committed_date, tz=timezone.utc)
-
-                # Filter by date range
-                if start_date and commit_date < start_date:
-                    continue
-                if end_date and commit_date > end_date:
-                    continue
-
-                commits.append(
-                    {
-                        "hash": commit.hexsha,
-                        "message": commit.message.strip(),
-                        "author": commit.author.name,
-                        "timestamp": commit_date,
-                        "stats": commit.stats.total,
-                    }
-                )
-
-        except Exception as e:
-            logger.error("Failed to retrieve commits: %s", e)
-
-        return commits
+        args = ["log", _COMMIT_FORMAT, "--numstat"]
+        if start_date:
+            args.append(f"--since={start_date.isoformat()}")
+        if end_date:
+            args.append(f"--until={end_date.isoformat()}")
+        output = _run_git(str(self.repo_path), *args)
+        return [c for block in output.split("\x00") if (c := _parse_commit_block(block)) is not None]
 
     def get_file_history(self, file_path: str) -> List[Dict]:
-        """Get commit history for a specific file"""
-        if self.repo is None:
+        """Get commit history for a specific file (#13832: via the git binary)."""
+        if not self.available:
             return []
 
-        commits = []
-        try:
-            for commit in self.repo.iter_commits(paths=file_path):
-                commits.append(
-                    {
-                        "hash": commit.hexsha,
-                        "message": commit.message.strip(),
-                        # #13162: tz-aware UTC — see the note above.
-                        "timestamp": datetime.fromtimestamp(commit.committed_date, tz=timezone.utc),
-                    }
-                )
-        except Exception as e:
-            logger.error("Failed to get file history for %s: %s", file_path, e)
+        # `--` separates revisions from paths, so a path that looks like a flag
+        # or a ref cannot be reinterpreted as one.
+        output = _run_git(str(self.repo_path), "log", _COMMIT_FORMAT, "--numstat", "--", file_path)
+        return [
+            {"hash": c["hash"], "message": c["message"], "timestamp": c["timestamp"]}
+            for block in output.split("\x00")
+            if (c := _parse_commit_block(block)) is not None
+        ]
 
-        return commits
+    def get_commit_file_sets(self, since: "datetime | None" = None) -> "list[set[str]]":
+        """Return the changed-path set for **every** commit in the window (#13639).
+
+        Every commit, including single-file ones. That is not incidental: the
+        co-change denominator is "how often did this file change", and dropping
+        solo commits here would silently redefine it as "how often did it change
+        alongside something else". On this repository 32% of commits touch one
+        file, and excluding them inflated 44% of reported pairs past the
+        threshold — the precise noise the normalised formula exists to reject.
+
+        Deciding which commits are *too large to pair* is an analysis question,
+        so it belongs to ``CoChangeAnalyzer``, not here. This method reports
+        history; it does not judge it.
+
+        Reads the git binary rather than GitPython. The rest of this class goes
+        through ``self.repo``, which is **always ``None``** — GitPython appears
+        in no requirements file and is imported in exactly one place, the ``try``
+        block above, so every other method here returns ``[]`` in every
+        environment (#13832).
+        """
+        args = ["log", "--no-merges", "--pretty=format:%x00%H", "--name-only"]
+        if since is not None:
+            args.append(f"--since={since.isoformat()}")
+        output = _run_git(str(self.repo_path), *args)
+        if not output:
+            return []
+
+        file_sets: list[set[str]] = []
+        for block in output.split("\x00"):
+            paths = {line for line in block.splitlines()[1:] if line.strip() and not _is_vendored_path(line)}
+            if paths:
+                file_sets.append(paths)
+        return file_sets
+
+    def get_commit_files(self, commit_hash: str) -> List[str]:
+        """Paths changed by one commit (#13832).
+
+        Replaces ``crawler.repo.commit(hash).stats.files`` — the GitPython call
+        that could never run.
+        """
+        if not self.available:
+            return []
+        # `--` guards against a hash-shaped string being read as a path.
+        output = _run_git(str(self.repo_path), "show", "--pretty=format:", "--name-only", commit_hash, "--")
+        return [line for line in output.splitlines() if line.strip()]
 
     def detect_refactoring_commits(self) -> List[Dict]:
         """Detect commits that likely contain refactorings"""
@@ -360,7 +479,11 @@ class CodeEvolutionMiner:
     """Main class for code evolution mining"""
 
     def __init__(self, repo_path: str):
-        self.repo_path = repo_path
+        # #13832: was a bare str, and `self.repo_path / item` below is a Path
+        # operation. It never raised because the guard above it short-circuited
+        # on an attribute that was always None — the moment history became real,
+        # every commit failed with "unsupported operand type(s) for /".
+        self.repo_path = Path(repo_path)
         self.crawler = GitHistoryCrawler(repo_path)
         self.tracker = PatternEvolutionTracker()
         self.refactoring_detector = RefactoringDetector(self.crawler)
@@ -400,15 +523,19 @@ class CodeEvolutionMiner:
 
     def _analyze_commit_patterns(self, commit: Dict):
         """Analyze patterns in a commit"""
-        if self.repo is None or self.crawler.repo is None:
+        # #13832: was `self.repo is None or self.crawler.repo is None` — an
+        # attribute this class never had (`AttributeError` the moment the crawler
+        # returned anything) guarded by one that was always None, so the guard
+        # short-circuited before the broken half could raise. Now that history is
+        # real, both go through the crawler's own availability flag.
+        if not self.crawler.available:
             return
 
         try:
-            # Get the commit object
-            commit_obj = self.crawler.repo.commit(commit["hash"])
+            changed_files = self.crawler.get_commit_files(commit["hash"])
 
             # Analyze each changed file
-            for item in commit_obj.stats.files.keys():
+            for item in changed_files:
                 # Only analyze Python files
                 if not item.endswith(".py"):
                     continue

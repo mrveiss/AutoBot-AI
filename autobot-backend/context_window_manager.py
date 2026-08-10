@@ -348,22 +348,76 @@ class ContextWindowManager:
             trimmed.add(i)
         return allocated, tokens
 
+    @staticmethod
+    def _tier_keeps(sizes: "dict[int, int]", tier_keep: int) -> "dict[int, int]":
+        """Split *tier_keep* tokens across peers in proportion to their sizes (#13717).
+
+        Peers must share, not queue. Draining a tier in name order makes the
+        trim total, so the last section by name keeps everything and the rest
+        are zeroed — deterministic, and wrong for sections that genuinely rank
+        equally (N retrieved chunks, N file contents, N tool results).
+
+        Rounding is the interesting part: proportional shares rarely land on
+        integers, so each keep is floored and the remainder handed out one token
+        at a time by largest fractional part, ties broken by index. That is
+        deterministic for any input order and never exceeds *tier_keep*.
+        """
+        total = sum(sizes.values())
+        if tier_keep <= 0 or total <= 0:
+            return {i: 0 for i in sizes}
+
+        exact = {i: size * tier_keep / total for i, size in sizes.items()}
+        keeps = {i: int(value) for i, value in exact.items()}
+        # A section never keeps more than it had, whatever the arithmetic says.
+        keeps = {i: min(keeps[i], sizes[i]) for i in sizes}
+
+        remainder = tier_keep - sum(keeps.values())
+        if remainder > 0:
+            # Largest fractional part first; index breaks ties so the result is
+            # independent of dict iteration order.
+            candidates = sorted(sizes, key=lambda i: (-(exact[i] - int(exact[i])), i))
+            for i in candidates:
+                if remainder <= 0:
+                    break
+                if keeps[i] < sizes[i]:
+                    keeps[i] += 1
+                    remainder -= 1
+        return keeps
+
     def _trim_by_priority(
         self, allocated: List[ContextSection], tokens: List[int], budget: int, trimmed: set
     ) -> "tuple[List[ContextSection], List[int]]":
-        """Phase 2: reduce lowest-priority sections until the total fits."""
-        # Ascending priority = pruned first; name breaks ties deterministically.
-        order = sorted(range(len(allocated)), key=lambda i: (allocated[i].priority, allocated[i].name))
-        for i in order:
+        """Phase 2: reduce lowest-priority sections until the total fits.
+
+        Tiers are still pruned strictly lowest-priority-first — a section that
+        genuinely outranks another must not lose tokens to it. Within a tier the
+        share is proportional (#13717) rather than name-ordered.
+        """
+        tiers: "dict[object, list[int]]" = {}
+        for i in range(len(allocated)):
+            tiers.setdefault(allocated[i].priority, []).append(i)
+
+        for priority in sorted(tiers):
             overflow = sum(tokens) - budget
             if overflow <= 0:
                 break
-            if tokens[i] <= 0:
+            indices = [i for i in tiers[priority] if tokens[i] > 0]
+            if not indices:
                 continue
-            keep = max(0, tokens[i] - overflow)
-            allocated[i] = self._shrink(allocated[i], keep)
-            tokens[i] = self.estimate_tokens(allocated[i].content)
-            trimmed.add(i)
+
+            sizes = {i: tokens[i] for i in indices}
+            tier_total = sum(sizes.values())
+            # This tier absorbs as much of the overflow as it can hold; whatever
+            # is left falls through to the next tier up.
+            tier_keep = max(0, tier_total - overflow)
+            keeps = self._tier_keeps(sizes, tier_keep)
+
+            for i in indices:
+                if keeps[i] >= tokens[i]:
+                    continue
+                allocated[i] = self._shrink(allocated[i], keeps[i])
+                tokens[i] = self.estimate_tokens(allocated[i].content)
+                trimmed.add(i)
         return allocated, tokens
 
     def get_prompt_budget(self, model_name: str | None = None) -> int:

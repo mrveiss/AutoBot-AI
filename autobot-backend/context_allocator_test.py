@@ -108,8 +108,15 @@ class TestPriorityTrim:
         assert "shed" in result.trimmed
         assert "keep" not in result.trimmed
 
-    def test_priority_ties_break_deterministically(self, manager):
-        """AC: ties in priority are broken deterministically (by name)."""
+    def test_priority_ties_are_resolved_deterministically(self, manager):
+        """AC: ties in priority resolve deterministically, whatever the input order.
+
+        #13717 changed *how*, not *whether*. This used to assert that "alpha"
+        sorts first and is therefore drained first — deterministic, but it made
+        the trim order total, so one peer absorbed the whole overflow and the
+        other kept everything. Peers now share; determinism is still the
+        property under test.
+        """
         first = [
             ContextSection(name="alpha", content=_text(400), priority=5),
             ContextSection(name="beta", content=_text(400), priority=5),
@@ -122,8 +129,11 @@ class TestPriorityTrim:
         a = manager.allocate_sections(first, budget_tokens=500)
         b = manager.allocate_sections(second, budget_tokens=500)
 
-        # "alpha" sorts first, so it is pruned first regardless of input order.
-        assert a.trimmed == b.trimmed == ["alpha"]
+        by_name_a = {s.name: len(s.content) for s in a.sections}
+        by_name_b = {s.name: len(s.content) for s in b.sections}
+
+        assert by_name_a == by_name_b, "input order changed the allocation"
+        assert sorted(a.trimmed) == sorted(b.trimmed) == ["alpha", "beta"]
 
     def test_result_fits_the_budget(self, manager):
         sections = [
@@ -318,3 +328,105 @@ class TestPromptBudgetReservesRoomToAnswer:
 
         assert budget < window, "a prompt filling the window leaves nowhere to generate"
         assert budget > 0
+
+
+class TestEqualPrioritySectionsShare:
+    """Peers share the tier's budget instead of queueing (#13717).
+
+    Trimming lowest-priority-first with `name` as a tie-break made the order
+    *total*, so the first peers by name absorbed the whole overflow and the last
+    kept everything. Correct for sections that genuinely rank; wrong for peers —
+    N retrieved chunks, N file contents, N tool results.
+    """
+
+    def test_four_peers_each_retain_a_share(self, manager):
+        """AC 1. The reported failure was alpha=0 bravo=0 charlie=0 delta=100."""
+        sections = [
+            ContextSection(name=n, content=_text(100), priority=5) for n in ("alpha", "bravo", "charlie", "delta")
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=100)
+
+        kept = {s.name: manager.estimate_tokens(s.content) for s in result.sections}
+        assert all(v > 0 for v in kept.values()), f"a peer was zeroed: {kept}"
+        assert sum(kept.values()) <= 100
+
+    def test_twenty_peers_do_not_collapse_onto_one(self, manager):
+        """The reported case where s9 kept everything because it sorts last."""
+        sections = [ContextSection(name=f"s{i}", content=_text(50), priority=5) for i in range(20)]
+
+        result = manager.allocate_sections(sections, budget_tokens=100)
+
+        kept = {s.name: manager.estimate_tokens(s.content) for s in result.sections}
+        assert max(kept.values()) < 100, f"one section took the whole budget: {kept}"
+
+    def test_a_larger_peer_keeps_proportionally_more(self, manager):
+        """Sharing is proportional to size, not a flat split."""
+        sections = [
+            ContextSection(name="big", content=_text(300), priority=5),
+            ContextSection(name="small", content=_text(100), priority=5),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=200)
+
+        kept = {s.name: manager.estimate_tokens(s.content) for s in result.sections}
+        assert kept["big"] > kept["small"]
+
+    def test_the_allocation_is_independent_of_input_order(self, manager):
+        """AC 2. Same inputs in any order produce the same allocation."""
+        names = ["a", "b", "c", "d", "e"]
+        forward = [ContextSection(name=n, content=_text(80), priority=5) for n in names]
+        backward = [ContextSection(name=n, content=_text(80), priority=5) for n in reversed(names)]
+
+        a = {s.name: s.content for s in manager.allocate_sections(forward, budget_tokens=150).sections}
+        b = {s.name: s.content for s in manager.allocate_sections(backward, budget_tokens=150).sections}
+
+        assert a == b
+
+    def test_rounding_leftovers_never_exceed_the_budget(self, manager):
+        """AC 3. Proportional shares rarely land on integers."""
+        for count in (3, 7, 11, 13):
+            sections = [ContextSection(name=f"s{i}", content=_text(37), priority=5) for i in range(count)]
+
+            result = manager.allocate_sections(sections, budget_tokens=100)
+
+            assert result.tokens_after <= 100, f"{count} peers overflowed to {result.tokens_after}"
+            assert result.fits
+
+    def test_distinct_tiers_still_prune_lowest_first(self, manager):
+        """AC 4. A section that genuinely outranks another must not lose tokens to it."""
+        sections = [
+            ContextSection(name="low", content=_text(400), priority=1),
+            ContextSection(name="high", content=_text(400), priority=9),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=400)
+
+        kept = {s.name: manager.estimate_tokens(s.content) for s in result.sections}
+        assert kept["high"] == 400, "a higher tier paid for the lower one"
+        assert kept["low"] == 0
+
+    def test_a_share_that_rounds_to_zero_is_reported_as_dropped(self, manager):
+        """AC 5. A section emptied by the split must not vanish silently."""
+        sections = [ContextSection(name=f"s{i}", content=_text(40), priority=5) for i in range(40)]
+
+        result = manager.allocate_sections(sections, budget_tokens=10)
+
+        emptied = [s.name for s in result.sections if not s.content]
+        assert emptied, "the budget cannot seat 40 peers; some must be emptied"
+        assert set(emptied) <= set(result.dropped), "an emptied section was not reported in dropped"
+
+    def test_peers_within_each_of_several_tiers_share(self, manager):
+        """Tier ordering and intra-tier sharing compose."""
+        sections = [
+            ContextSection(name="lo1", content=_text(200), priority=1),
+            ContextSection(name="lo2", content=_text(200), priority=1),
+            ContextSection(name="hi1", content=_text(200), priority=9),
+            ContextSection(name="hi2", content=_text(200), priority=9),
+        ]
+
+        result = manager.allocate_sections(sections, budget_tokens=600)
+
+        kept = {s.name: manager.estimate_tokens(s.content) for s in result.sections}
+        assert kept["hi1"] == kept["hi2"] == 200, "the untouched tier was trimmed"
+        assert kept["lo1"] > 0 and kept["lo2"] > 0, "the trimmed tier collapsed onto one peer"

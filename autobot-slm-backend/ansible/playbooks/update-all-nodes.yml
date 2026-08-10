@@ -887,6 +887,64 @@
       when: "'backend' in group_names"
       tags: [backend, restart]
 
+    # #13539: celery and celery-beat import the same tree this play just synced,
+    # but they were never restarted. The role DOES define `restart celery` /
+    # `restart celery beat` handlers (roles/backend/handlers/main.yml) and
+    # main.yml notifies them — and this play never includes main.yml, only
+    # env_only/unit_only/code_only, none of which contain a single `notify:`.
+    # So the handlers are present, correct and unreachable, and the workers
+    # served pre-deploy modules until someone restarted them by hand. Measured
+    # on a live host: celery ran 7 days behind the code, and any task lazily
+    # importing a symbol added in that window raised ImportError naming a file
+    # that visibly contained it.
+    #
+    # Restarting explicitly rather than notifying the handlers, for the same
+    # reason #13144 replaced the #13143 flush_handlers attempt: a handler only
+    # fires when its task reports `changed`, so once a file is already current
+    # the notify never happens and the restart silently does not occur.
+    - name: "[PLAY 2] Backend | Check which celery units are installed (#13539)"
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ item }}.service"
+      loop:
+        - autobot-celery
+        - autobot-celery-beat
+      register: celery_unit_files
+      when: "'backend' in group_names"
+      tags: [backend, restart, celery]
+
+    - name: "[PLAY 2] Backend | Restart celery workers so they run the synced code (#13539)"
+      systemd:
+        name: "{{ item.item }}"
+        state: restarted
+        daemon_reload: true
+      become: true
+      loop: "{{ celery_unit_files.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - "'backend' in group_names"
+        - item.stat is defined
+        - item.stat.exists
+      tags: [backend, restart, celery]
+
+    # A host that carries the backend but no celery unit is a real deployment
+    # shape, not an error — but it must be visible, because "celery was never
+    # restarted" is exactly the silent condition #13539 is about.
+    - name: "[PLAY 2] Backend | Report celery units that are absent (#13539)"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}.service is not installed on this host; nothing to restart.
+          If this host is expected to run it, the backend role never applied its
+          unit template.
+      loop: "{{ celery_unit_files.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - "'backend' in group_names"
+        - item.stat is defined
+        - not item.stat.exists
+      tags: [backend, restart, celery]
+
     - name: "[PLAY 2] Backend | Wait for API to be ready"
       uri:
         # uvicorn binds plain HTTP on localhost:8001 (backend_port); nginx holds

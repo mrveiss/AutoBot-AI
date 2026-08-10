@@ -18,6 +18,7 @@ import pytest
 
 from agent_loop.guard_profile import (
     DEFAULT_PROFILE,
+    GUARD_PROFILES,
     resolve_guard_config_overrides,
     resolve_profile_name,
 )
@@ -135,3 +136,49 @@ class TestLoopWiring:
         default = AgentLoopConfig()
         for field_name in _GUARD_FIELDS:
             assert getattr(loop.config, field_name) == getattr(default, field_name)
+
+
+class TestIdenticalCallDefault:
+    """The dataclass default is 2 (#13764), and `standard` must not shadow it."""
+
+    def test_the_default_is_two(self) -> None:
+        """Pinned so a silent revert to 3 fails here rather than in production.
+
+        Safe at 2 only because #13590 made the production counter key on
+        (call fingerprint, result hash): a repeat counts only when the result is
+        unchanged, so polling resets and is unaffected by this number.
+        """
+        assert AgentLoopConfig().max_identical_tool_calls == 2
+
+    def test_standard_carries_no_overrides_at_all(self) -> None:
+        """The invariant from #13590: `standard` reproduces the dataclass exactly.
+
+        An override here — even one spelling the same value — would mean the
+        dataclass default silently stops governing the default profile.
+        """
+        assert GUARD_PROFILES["standard"] == {}
+
+    def test_standard_mirrors_every_dataclass_default(self) -> None:
+        """AC: `standard` still mirrors the dataclass, field for field."""
+        profiled = AgentLoopConfig.with_guard_profile()
+        default = AgentLoopConfig()
+
+        for field_name in _GUARD_FIELDS:
+            assert getattr(profiled, field_name) == getattr(default, field_name), field_name
+
+    def test_strict_is_no_longer_stricter_on_this_field(self) -> None:
+        """`strict` keeps its explicit 2 for readability; it is now redundant.
+
+        Recorded rather than removed — if the dataclass default moves again,
+        this is where the redundancy stops being true.
+        """
+        assert GUARD_PROFILES["strict"]["max_identical_tool_calls"] == AgentLoopConfig().max_identical_tool_calls
+
+    def test_minimal_still_relaxes_it(self) -> None:
+        assert GUARD_PROFILES["minimal"]["max_identical_tool_calls"] > AgentLoopConfig().max_identical_tool_calls
+
+    def test_the_env_escape_hatch_restores_the_old_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Deployments wanting 3 back need no code change (#13764's blast radius)."""
+        monkeypatch.setenv("AUTOBOT_GUARD_MAX_IDENTICAL", "3")
+
+        assert AgentLoopConfig.with_guard_profile().max_identical_tool_calls == 3

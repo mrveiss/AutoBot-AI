@@ -43,12 +43,17 @@ on:
     # github-actions[bot] as a contributor, so this workflow itself is never
     # subject to the approval policy it repairs.
     #
-    # NOT YET LIVE: GitHub only dispatches `schedule` from the DEFAULT branch,
-    # which is `main`, and this file exists only on Dev_new_gui. Every run of
-    # this workflow to date came from `push` or `pull_request`; none from
-    # `schedule`. The cron starts working the moment Dev_new_gui reaches main —
-    # until then the push and pull_request hooks below are the only coverage,
-    # so neither is redundant with it.
+    # LIVE as of #13791. GitHub only dispatches `schedule` from the DEFAULT
+    # branch, so for the first 100 runs of this workflow — 73 `pull_request`,
+    # 27 `push`, zero `schedule` — the cron did nothing: the file existed only
+    # on Dev_new_gui. It is now also on `main`, which is what makes the sweep
+    # periodic rather than incidental.
+    #
+    # This file exists on both `main` and `Dev_new_gui` and the two copies must
+    # stay byte-identical — a direction-specific note here makes them permanently
+    # conflict on every release sync. The push and
+    # pull_request hooks below are still not redundant: they catch a PR head
+    # parking within seconds rather than up to 15 minutes later.
     - cron: '*/15 * * * *'
   push:
     branches: [Dev_new_gui]
