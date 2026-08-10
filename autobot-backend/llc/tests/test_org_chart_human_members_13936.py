@@ -131,8 +131,73 @@ async def test_people_and_agents_coexist(client, session_factory):  # noqa: ANN0
 
     nodes = _flatten((await client.get(f"/api/llc/companies/{company_id}/org-chart")).json()["nodes"])
 
-    assert sorted(n["name"] for n in nodes) == ["Grace Hopper", "worker-1"]
-    assert [n["is_human"] for n in sorted(nodes, key=lambda n: n["name"])] == [True, False]
+    # Keyed by is_human rather than by sort order: an assertion that relies on
+    # "Grace Hopper" < "worker-1" only holds because of ASCII case ordering, and
+    # would flip on a renamed fixture for reasons unrelated to the behaviour.
+    by_kind = {n["is_human"]: n["name"] for n in nodes}
+    assert by_kind == {True: "Grace Hopper", False: "worker-1"}
+
+
+@pytest.mark.asyncio
+async def test_people_of_another_company_never_leak(client, session_factory):  # noqa: ANN001
+    """Row-level company scoping on the membership query.
+
+    The route-level tenant gate is covered in ``test_llc_org_chart``; this pins
+    the ``WHERE company_id`` predicate itself. Dropping it leaves every other
+    test in this file green while leaking every user of every company into every
+    org chart the caller can reach — so it needs its own two-company case.
+    """
+    company_a = uuid.uuid4()
+    company_b = uuid.uuid4()
+
+    await _seed_human(session_factory, company_a, username="ada", display_name="Ada Lovelace")
+    await _seed_human(session_factory, company_b, username="brian", display_name="Brian Kernighan")
+
+    nodes = _flatten((await client.get(f"/api/llc/companies/{company_a}/org-chart")).json()["nodes"])
+
+    names = [n["name"] for n in nodes]
+    assert names == ["Ada Lovelace"], f"company B's person leaked into company A: {names}"
+
+
+@pytest.mark.asyncio
+async def test_work_items_of_another_company_never_inflate_counts(client, session_factory):  # noqa: ANN001
+    """Row-level company scoping on the assigned-count query.
+
+    Same shape as above for the second new query: the same person may hold
+    memberships in two companies, and company A's chart must not count company
+    B's work.
+    """
+    company_a = uuid.uuid4()
+    company_b = uuid.uuid4()
+
+    user_id = await _seed_human(session_factory, company_a, username="ada")
+    # Same human, also a member of company B.
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyMembership(
+                id=uuid.uuid4(),
+                company_id=company_b,
+                user_id=user_id,
+                role=MembershipRole.MEMBER.value,
+            )
+        )
+        await session.commit()
+
+    await _seed_work_item(session_factory, company_a, status=WorkItemStatus.IN_PROGRESS.value)
+    await _seed_work_item(session_factory, company_b, status=WorkItemStatus.IN_PROGRESS.value)
+    await _seed_work_item(session_factory, company_b, status=WorkItemStatus.IN_PROGRESS.value)
+
+    from sqlalchemy import update
+
+    from llc.models.work_item import LLCWorkItem
+
+    async with session_factory() as session:
+        await session.execute(update(LLCWorkItem).values(assignee_user_id=user_id))
+        await session.commit()
+
+    nodes = _flatten((await client.get(f"/api/llc/companies/{company_a}/org-chart")).json()["nodes"])
+    human = next(n for n in nodes if n["is_human"])
+    assert human["assigned_item_count"] == 1, "company B's work items inflated company A's count"
 
 
 @pytest.mark.asyncio

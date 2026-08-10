@@ -8199,6 +8199,7 @@
       "aiAgent": "KI-Agent",
       "never": "Nie",
       "adapter": "Adapter",
+      "role": "Rolle",
       "type": "Typ",
       "lastHeartbeat": "Letzter Heartbeat",
       "budget": "Budget",

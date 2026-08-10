@@ -8187,6 +8187,7 @@
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "Role",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",

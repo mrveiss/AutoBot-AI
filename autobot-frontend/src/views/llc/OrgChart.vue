@@ -170,9 +170,15 @@ onMounted(fetchTree)
           </div>
 
           <dl class="space-y-2 text-sm">
-            <div class="flex justify-between">
+            <!-- "Adapter: lead" is nonsense for a person — the Type row below
+                 already says Human, so the adapter row is agent-only. -->
+            <div v-if="!selectedNode.is_human" class="flex justify-between">
               <dt class="text-autobot-text-muted">{{ t('llc.orgChart.adapter') }}</dt>
               <dd class="text-autobot-text-primary font-medium">{{ selectedNode.adapter_type }}</dd>
+            </div>
+            <div v-if="selectedNode.is_human" class="flex justify-between">
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.role') }}</dt>
+              <dd class="text-autobot-text-primary font-medium">{{ selectedNode.title }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-autobot-text-muted">{{ t('llc.orgChart.type') }}</dt>
