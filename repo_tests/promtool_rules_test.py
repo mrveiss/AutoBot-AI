@@ -104,8 +104,11 @@ def test_no_promtool_test_file_is_inside_the_deployment_glob():
     for path in _deployed_rule_files():
         try:
             doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError:
-            continue
+        except yaml.YAMLError as exc:
+            # Not `continue`: unparseable YAML in this glob stops Prometheus
+            # loading its whole config, and the only other check that would
+            # catch it (promtool) skips wherever promtool is absent (#13927).
+            pytest.fail(f"{path.name} is in the deployed rule glob and is not valid YAML: {exc}")
         if isinstance(doc, dict) and ("tests" in doc or "rule_files" in doc):
             misnamed.append(path.name)
 
@@ -149,13 +152,30 @@ _RULE_FILES_WITHOUT_A_SUITE: frozenset[str] = frozenset(
 )
 
 
-@pytest.mark.parametrize("rule_file", _deployed_rule_files(), ids=lambda p: p.name)
+def _suite_param(path: Path):
+    """Mark the known-uncovered rule files with a STRICT declarative xfail.
+
+    Not `pytest.xfail()` inside the body: that is imperative — it raises before
+    the assertion runs, so XPASS is unreachable and the entry can never be
+    reported as obsolete. Someone adding chat-ssot.promtool-test.yml and
+    forgetting to delete the frozenset line would see the gap reported as
+    still-open forever. A guard that cannot report success is the exact defect
+    this file exists to catch, so it must not be one.
+
+    strict=True makes the XPASS a FAILURE that names the line to delete.
+    """
+    marks = (
+        [pytest.mark.xfail(strict=True, reason="predates the promtool convention — see #13927")]
+        if path.name in _RULE_FILES_WITHOUT_A_SUITE
+        else []
+    )
+    return pytest.param(path, marks=marks, id=path.name)
+
+
+@pytest.mark.parametrize("rule_file", [_suite_param(p) for p in _deployed_rule_files()])
 def test_rule_file_has_a_behavioural_suite(rule_file: Path):
     """Validity is not behaviour. `promtool check rules` passes happily on an
     alert that can never fire — that is exactly what shipped here."""
-    if rule_file.name in _RULE_FILES_WITHOUT_A_SUITE:
-        pytest.xfail(f"{rule_file.name} predates the promtool convention — see the issue")
-
     expected = rule_file.name.removeprefix("alerts-").removesuffix(".yml")
     suites = {p.name for p in _test_suites()}
     assert (

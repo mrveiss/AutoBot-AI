@@ -252,6 +252,25 @@ class TestReadFailuresAreNeverReassuring:
 
         assert errors[(("file", "memory.current"), ("unit", _UNIT))] == 1.0
 
+    def test_the_shallowest_path_wins_when_a_name_appears_twice(self, tmp_path):
+        """Precedence is by DEPTH, not lexicographic order over the full path.
+
+        Sorting strings put `/a.slice/deep/deep/deep/autobot-backend.service`
+        ahead of `/system.slice/autobot-backend.service` — so a nested delegated
+        cgroup in an alphabetically earlier slice silently became the source of
+        truth for the unit, and the real one was never read.
+        """
+        _make_cgroup(tmp_path, _UNIT, "high 0\n", 1, "max", "max")
+        deep = tmp_path / "a.slice" / "d1" / "d2" / _UNIT
+        deep.mkdir(parents=True)
+        (deep / "memory.events").write_text(_INCIDENT_EVENTS, encoding="utf-8")
+
+        found = CgroupMemoryCollector(cgroup_root=tmp_path).discover_units()
+
+        assert (
+            found[_UNIT] == tmp_path / "system.slice" / _UNIT
+        ), "the shallow, real cgroup must win over a deeply nested namesake"
+
     def test_a_unit_outside_system_slice_is_still_found(self, tmp_path):
         """`systemctl set-property <unit> Slice=…` is the SAME out-of-band
         mechanism this collector detects. A hardcoded system.slice path would be
@@ -384,18 +403,27 @@ class TestItIsActuallyWired:
 
         assert 'autobot_cgroup_memory_events{event="high",unit="autobot-backend.service"} 21052' in text
 
-    def test_describe_registers_the_family_names(self):
+    def test_describe_registers_the_family_names(self, tmp_path):
         """Without describe(), CollectorRegistry(auto_describe=False) records no
         names for this collector — so it is invisible to a name-restricted
         scrape and gets no duplicate-name checking. Deleting the method left the
         whole suite green, which made it one refactor from silently reverting."""
-        from prometheus_client import CollectorRegistry
+        from prometheus_client import CollectorRegistry, generate_latest
 
         from autobot_shared.monitoring.metrics.cgroup_memory import CgroupMemoryCollector
 
+        _make_cgroup(tmp_path, _UNIT, _INCIDENT_EVENTS, _INCIDENT_CURRENT, str(_INCIDENT_HIGH), "max")
         registry = CollectorRegistry()
-        collector = CgroupMemoryCollector(cgroup_root=Path("/nonexistent"), control_roots=())
+        collector = CgroupMemoryCollector(cgroup_root=tmp_path, control_roots=())
         registry.register(collector)
+
+        # restricted_registry() is the public surface that DEPENDS on describe():
+        # without it the registry records no names for this collector, so a
+        # `?name[]=` scrape renders nothing at all. Asserted with real samples —
+        # an empty family renders empty either way and would prove nothing.
+        rendered = generate_latest(registry.restricted_registry(["autobot_cgroup_memory_events"])).decode()
+        assert "autobot_cgroup_memory_events" in rendered
+        assert "autobot_cgroup_memory_current_bytes" not in rendered, "restriction must exclude the rest"
 
         assert set(registry._collector_to_names[collector]) == {
             "autobot_cgroup_memory_events",
