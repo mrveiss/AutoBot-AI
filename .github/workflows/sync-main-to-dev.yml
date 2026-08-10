@@ -1,8 +1,11 @@
 # Sync Dev_new_gui → main (manual release trigger only)
 #
-# Dev_new_gui is the working branch. This workflow pushes it to main
-# when explicitly triggered for a release. It never runs automatically
-# to prevent untested code from landing on main.
+# Dev_new_gui is the working branch. This workflow opens a release PR from it
+# into main when explicitly triggered. It never runs automatically, to prevent
+# untested code from landing on main.
+#
+# It opens a PR rather than pushing: main requires status checks, so a direct
+# push is declined by the protected-branch hook (GH006). Detail at the step.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/2445
 
@@ -23,6 +26,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      SYNC_BRANCH: release-sync-main
     permissions:
       contents: write
       pull-requests: write
@@ -56,16 +61,56 @@ jobs:
           echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
           echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main"
 
-      - name: Sync main to Dev_new_gui
+      - name: Open the release sync PR
+        id: sync
         if: steps.check.outputs.ahead != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AHEAD: ${{ steps.check.outputs.ahead }}
+          BEHIND: ${{ steps.check.outputs.behind }}
         run: |
-          if [ "${{ steps.check.outputs.behind }}" != "0" ]; then
-            echo "::error::main has ${{ steps.check.outputs.behind }} commit(s) not in Dev_new_gui. Resolve divergence manually first."
+          if [ "$BEHIND" != "0" ]; then
+            echo "::error::main has $BEHIND commit(s) not in Dev_new_gui. Resolve divergence manually first."
             exit 1
           fi
 
-          # Safe fast-forward push (no --force)
-          git push origin origin/Dev_new_gui:main
-          echo "main fast-forwarded to Dev_new_gui successfully."
+          # This step used to `git push origin origin/Dev_new_gui:main`, which
+          # can never succeed: `main` requires two status checks ("No open
+          # blocks-merge issues reference this PR", "No commit trailers"), and a
+          # direct push moves the branch to a commit that has neither, so the
+          # protected-branch hook declines it:
+          #
+          #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+          #   ! [remote rejected] origin/Dev_new_gui -> main (protected branch hook declined)
+          #
+          # Routing through a PR lets those checks run against the release head,
+          # which is what the protection is for. Precedent: #13816 synced this
+          # way by hand.
+          git push --force origin "origin/Dev_new_gui:refs/heads/$SYNC_BRANCH"
+
+          EXISTING=$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Release sync PR already open: #$EXISTING (refreshed to the current trunk)."
+            echo "url=$(gh pr view "$EXISTING" --json url --jq .url)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Body written to a file so it carries no leading indentation.
+          cat > /tmp/sync-pr-body.md <<EOF
+          Opened by the \`Sync Dev_new_gui → main\` workflow.
+
+          \`main\` is $AHEAD commit(s) behind \`Dev_new_gui\` and holds none the trunk lacks.
+
+          Merging this is the release. The checks \`main\` requires run against this head,
+          which a direct push could not satisfy — see the comment in
+          \`.github/workflows/sync-main-to-dev.yml\`.
+          EOF
+          sed -i 's/^          //' /tmp/sync-pr-body.md
+
+          URL=$(gh pr create \
+            --base main \
+            --head "$SYNC_BRANCH" \
+            --title "release: sync Dev_new_gui into main ($AHEAD commits)" \
+            --body-file /tmp/sync-pr-body.md)
+          echo "Opened $URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
