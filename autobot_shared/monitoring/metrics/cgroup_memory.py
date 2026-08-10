@@ -287,13 +287,16 @@ class CgroupMemoryCollector(Collector):
             fam["current"].add_metric([unit], current)
 
         for filename in _LIMIT_FILES:
-            value = _read_limit(unit_dir / filename)
-            if isinstance(value, _Unreadable):
+            # `limit`, not `value`: the events loop above binds `value` as an
+            # int, so reusing the name makes mypy read this float|_Unreadable as
+            # an int assignment.
+            limit = _read_limit(unit_dir / filename)
+            if isinstance(limit, _Unreadable):
                 # No sample. A -1 here would read as "unlimited" and silently
                 # drop the unit out of the headroom rule (#13765 review).
                 fam["errors"].add_metric([unit, filename], 1.0)
                 continue
-            fam[filename.split(".")[1]].add_metric([unit], value)
+            fam[filename.split(".")[1]].add_metric([unit], limit)
 
         fam["out_of_band"].add_metric([unit], 1.0 if has_out_of_band_limits(unit, self.control_roots) else 0.0)
 
