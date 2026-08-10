@@ -138,7 +138,12 @@ def test_prepare_self_update_log_file_creates_and_truncates(tmp_path):
         result = _pe.PlaybookExecutor._prepare_self_update_log_file()
 
     assert result == log_path
-    assert log_path.read_text(encoding="utf-8") == ""
+    # #13125: truncation means "the prior run's content is gone", not "byte
+    # empty" — the file now carries a run-start stamp so the completion verdict
+    # can tell a started run from a log logrotate emptied overnight.
+    written = log_path.read_text(encoding="utf-8")
+    assert "stale prior run content" not in written
+    assert written.startswith(_pe.SELF_UPDATE_RUN_HEADER)
     # Ansible output can contain sensitive paths/values — 0600, not the
     # world-readable default umask (#11492 hardening).
     assert oct(log_path.stat().st_mode & 0o777) == "0o600"
@@ -270,7 +275,8 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
     # The log file was truncated fresh for this run and locked to 0600.
-    assert log_path.read_text(encoding="utf-8") == ""
+    # #13125: "fresh" is the run-start stamp alone, not zero bytes.
+    assert log_path.read_text(encoding="utf-8").startswith(_pe.SELF_UPDATE_RUN_HEADER)
     assert oct(log_path.stat().st_mode & 0o777) == "0o600"
 
 
@@ -365,7 +371,7 @@ async def test_run_subprocess_still_detaches_via_fallback_log_path(tmp_path):
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
     # The fallback log file was actually created, truncated, and locked down.
-    assert fallback_log_path.read_text(encoding="utf-8") == ""
+    assert fallback_log_path.read_text(encoding="utf-8").startswith(_pe.SELF_UPDATE_RUN_HEADER)
     assert oct(fallback_log_path.stat().st_mode & 0o777) == "0o600"
 
 
@@ -377,7 +383,12 @@ def test_write_fresh_log_file_creates_truncates_and_chmods(tmp_path):
     result = _pe.PlaybookExecutor._write_fresh_log_file(log_path)
 
     assert result == log_path
-    assert log_path.read_text(encoding="utf-8") == ""
+    written = log_path.read_text(encoding="utf-8")
+    assert "stale prior run content" not in written, "a prior run must not replay as this one"
+    # #13125: truncation means "the prior run's content is gone", not "byte
+    # empty" — the file now carries a run-start stamp so the completion verdict
+    # can tell a started run from a log logrotate emptied overnight.
+    assert written.startswith(_pe.SELF_UPDATE_RUN_HEADER)
     assert oct(log_path.stat().st_mode & 0o777) == "0o600"
 
 
