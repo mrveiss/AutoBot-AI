@@ -206,7 +206,16 @@ jobs:
           echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
           exit 1
         fi
-        echo "conventions scope: $RANGE ($(git rev-list --count "$RANGE" 2>/dev/null || echo '?') commit(s))"
+        # Anti-no-op guard. The original defect was a broken range yielding
+        # "0 file(s) in scope" and three green checks. Any change set reaches
+        # this job with at least one file, so 0 means the range is wrong —
+        # fail red rather than pass having scanned nothing.
+        CHANGED=$(git diff --name-only "$RANGE" | wc -l)
+        echo "conventions scope: $RANGE ($CHANGED file(s))"
+        if [ "$CHANGED" -eq 0 ]; then
+          echo "::error::0 files in scope for '$RANGE' — the range is wrong. Refusing to report clean on an unscanned tree."
+          exit 1
+        fi
         if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
           CONVENTIONS_DENYLIST=$(mktemp)
           export CONVENTIONS_DENYLIST
