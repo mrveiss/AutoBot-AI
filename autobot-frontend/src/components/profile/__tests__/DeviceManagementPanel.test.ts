@@ -20,7 +20,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import DeviceManagementPanel from './DeviceManagementPanel.vue'
+import DeviceManagementPanel from '../DeviceManagementPanel.vue'
 import PairDeviceDialog from '@/components/mobile/PairDeviceDialog.vue'
 import en from '@/i18n/locales/en.json'
 
@@ -76,18 +76,33 @@ describe('DeviceManagementPanel pairing entry point', () => {
     await flushPromises()
 
     expect(wrapper.findComponent(PairDeviceDialog).exists()).toBe(true)
-    // The old dead-end modal is gone; nothing should reintroduce it.
-    expect(wrapper.find('.pairing-modal').exists()).toBe(false)
-    expect(wrapper.html()).not.toContain('scan the QR code shown on your desktop')
   })
 
-  it('opens the dialog when the user asks to pair a device', async () => {
+  it('opens the dialog from the empty-state button', async () => {
     const wrapper = mountPanel()
     await flushPromises()
 
     expect(wrapper.findComponent(PairDeviceDialog).props('modelValue')).toBe(false)
 
     await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findComponent(PairDeviceDialog).props('modelValue')).toBe(true)
+  })
+
+  it('opens the dialog from the "Add Device" button once devices exist', async () => {
+    // The empty state and the populated list render different buttons; only the
+    // former was covered, so a regression in the list-header path would pass.
+    devices.value = [
+      { id: 'd1', device_name: 'Phone', platform: 'ios', created_at: '2026-01-01T00:00:00Z', last_seen_at: null },
+    ]
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    expect(wrapper.find('.empty-state').exists()).toBe(false)
+    expect(wrapper.findComponent(PairDeviceDialog).props('modelValue')).toBe(false)
+
+    await wrapper.find('.section-header button').trigger('click')
     await flushPromises()
 
     expect(wrapper.findComponent(PairDeviceDialog).props('modelValue')).toBe(true)

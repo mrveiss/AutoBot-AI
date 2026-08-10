@@ -15,6 +15,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { usePairingQR } from '../usePairingQR'
 
+const OLD = '2026-01-01T00:00:00.000Z'
+
 const mockGet = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({
   default: {
@@ -34,11 +36,22 @@ vi.mock('@/config/ssot-config', () => ({
 }))
 
 describe('usePairingQR', () => {
+  // fetchChallenge() snapshots the existing devices first, then asks for the
+  // challenge, so the mock has to answer both in order.
+  function primeFetch(opts: { existing?: unknown[]; ttl?: number; token?: string } = {}) {
+    mockGet
+      .mockResolvedValueOnce({ devices: opts.existing ?? [] })
+      .mockResolvedValueOnce({
+        challenge_token: opts.token ?? 'tok-abc',
+        expires_in_seconds: opts.ttl ?? 300,
+      })
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     mockToDataURL.mockResolvedValue('data:image/png;base64,STUB')
-    mockGet.mockResolvedValue({ challenge_token: 'tok-abc', expires_in_seconds: 300 })
+    mockGet.mockResolvedValue({ devices: [] })
   })
 
   afterEach(() => {
@@ -46,6 +59,7 @@ describe('usePairingQR', () => {
   })
 
   it('encodes the pairing deep link, not the bare challenge token', async () => {
+    primeFetch()
     const { fetchChallenge, qrDataUrl } = usePairingQR()
 
     await fetchChallenge()
@@ -59,7 +73,7 @@ describe('usePairingQR', () => {
   })
 
   it('drives the countdown from the backend TTL rather than a fixed value', async () => {
-    mockGet.mockResolvedValue({ challenge_token: 't', expires_in_seconds: 90 })
+    primeFetch({ token: 't', ttl: 90 })
     const { fetchChallenge, formattedTime, isExpired } = usePairingQR()
 
     await fetchChallenge()
@@ -74,32 +88,56 @@ describe('usePairingQR', () => {
     expect(formattedTime.value).toBe('0:00')
   })
 
-  it('reports paired once a freshly created device appears', async () => {
+  it('reports paired when a device id appears that was not there before', async () => {
+    primeFetch({ existing: [{ id: 'd0', device_name: 'Old', created_at: OLD }] })
     const { fetchChallenge, isPaired } = usePairingQR()
     await fetchChallenge()
     expect(isPaired.value).toBe(false)
 
     mockGet.mockResolvedValue({
-      devices: [{ id: 'd1', device_name: 'Phone', created_at: new Date().toISOString() }],
+      devices: [
+        { id: 'd0', device_name: 'Old', created_at: OLD },
+        { id: 'd1', device_name: 'Phone', created_at: new Date().toISOString() },
+      ],
     })
     await vi.advanceTimersByTimeAsync(2_000)
 
     expect(isPaired.value).toBe(true)
   })
 
-  it('ignores devices that were already paired long ago', async () => {
+  it('does not re-report a device that was already paired before this challenge', async () => {
+    // The bug this replaces: matching on "created less than 10s ago" meant that
+    // opening the dialog again right after a successful pair auto-reported
+    // success without anything being scanned.
+    const justPaired = new Date().toISOString()
+    primeFetch({ existing: [{ id: 'd1', device_name: 'Phone', created_at: justPaired }] })
     const { fetchChallenge, isPaired } = usePairingQR()
     await fetchChallenge()
 
-    const old = new Date(Date.now() - 60_000).toISOString()
-    mockGet.mockResolvedValue({ devices: [{ id: 'd0', device_name: 'Old', created_at: old }] })
-    await vi.advanceTimersByTimeAsync(4_000)
+    mockGet.mockResolvedValue({
+      devices: [{ id: 'd1', device_name: 'Phone', created_at: justPaired }],
+    })
+    await vi.advanceTimersByTimeAsync(6_000)
 
-    // A pre-existing device must not be mistaken for the one just paired.
     expect(isPaired.value).toBe(false)
   })
 
+  it('stops polling once the challenge expires', async () => {
+    primeFetch({ ttl: 3 })
+    const { fetchChallenge, isExpired } = usePairingQR()
+    await fetchChallenge()
+
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(isExpired.value).toBe(true)
+
+    const callsAtExpiry = mockGet.mock.calls.length
+    await vi.advanceTimersByTimeAsync(20_000)
+    // An expired challenge can never be redeemed; polling on is pure noise.
+    expect(mockGet.mock.calls.length).toBe(callsAtExpiry)
+  })
+
   it('stops the countdown and the pairing poll on reset', async () => {
+    primeFetch()
     const { fetchChallenge, reset, qrDataUrl } = usePairingQR()
     await fetchChallenge()
 
@@ -113,6 +151,7 @@ describe('usePairingQR', () => {
   })
 
   it('surfaces an error instead of a half-built QR when the challenge fails', async () => {
+    mockGet.mockReset()
     mockGet.mockRejectedValue(new Error('boom'))
     const { fetchChallenge, error, qrDataUrl, loading } = usePairingQR()
 

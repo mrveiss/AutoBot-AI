@@ -268,6 +268,83 @@ function formatRelativeTime(dateStr: string): string {
   min-width: 0;
 }
 
+.device-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-platform {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.device-meta {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.meta-label {
+  font-weight: 500;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.spinner-tiny {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error State */
+.error-alert {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-error);
+  border-radius: 6px;
+  background: var(--color-danger-bg);
+  color: var(--color-error);
+}
+
+.error-alert strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.error-alert p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -294,6 +371,31 @@ function formatRelativeTime(dateStr: string): string {
 
 .btn-primary:hover {
   background: var(--color-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--color-bg-secondary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--color-bg-hover);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.btn-danger:hover {
+  background: var(--color-danger-bg);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 </style>

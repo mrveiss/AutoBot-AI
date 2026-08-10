@@ -7816,7 +7816,8 @@
       "generating": "Generando código QR...",
       "expired": "Expirado",
       "refresh": "Obtener nuevo código",
-      "retry": "Intentar de nuevo"
+      "retry": "Intentar de nuevo",
+      "manualCode": "¿No puedes escanear? Introduce este código manualmente:"
     }
   },
   "llmKeys": {
@@ -8430,15 +8431,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {
