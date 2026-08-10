@@ -8,12 +8,55 @@
 - **Main session stays on `Dev_new_gui`** — never check out feature branches
 - **Why:** Switching branches in main session breaks all active worktrees that depend on that branch
 
+**Preflight — REQUIRED before creating (#13964):**
+
+`.worktrees/issue-XXXX` is derived from the issue number, so two sessions pointed
+at one issue compute the **same path**. This clone is shared, so every session's
+trees are visible — check before writing.
+
+```bash
+git worktree list                                   # every session's trees, not just yours
+git show-ref --verify --quiet refs/heads/issue-XXXX && echo "BRANCH TAKEN"
+git -C .worktrees/issue-XXXX status --short         # if it exists: any output = ACTIVE session
+git -C .worktrees/issue-XXXX log --oneline -3       # commits you did not write = not yours
+```
+
+Three rules, each from a real collision:
+
+- **Never pipe a command whose exit code gates the next step.**
+  `git worktree add ... 2>&1 | tail -1` returns *tail's* status, so `&&` proceeds
+  past `fatal: A branch named 'issue-N' already exists` — straight into another
+  session's tree. Verified: piped `0`, unpiped `255`.
+- **Uncommitted changes mean an ACTIVE session**, whatever the commit count says.
+  A clean zero-commit tree is ambiguous; a dirty one is not. One collision was a
+  tree that looked abandoned by every heuristic and held 83 uncommitted lines.
+- **A lock reason is not proof of ownership.** A lock string can match your own
+  task description because the tree *used to be* yours before another session
+  took it over. Trust `git log`, not the lock.
+
+**Backing out cleanly** if you claimed someone's tree — never `--force`:
+
+```bash
+git reset --soft HEAD~1        # drops YOUR empty claim commit, leaves their work untouched
+git worktree unlock <path>     # restore the state you found
+```
+
 **Worktree Creation:**
 ```bash
-git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui
+git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui   # do NOT pipe this
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 # Commit and push from here. Do NOT switch branches.
 ```
+
+**Before `--force-with-lease`,** confirm the remote already contains your commit:
+
+```bash
+git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force"
+```
+
+The `auto-update-pr-branches` workflow merges base into PR branches, so "my local
+is behind my own branch" is normal. Force-pushing over it discards the bot's
+merge.
 
 ---
 
