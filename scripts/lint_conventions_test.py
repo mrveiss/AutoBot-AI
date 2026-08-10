@@ -44,7 +44,10 @@ def run(repo: Path, *args: str, denylist: str | None = None) -> subprocess.Compl
         env["CONVENTIONS_DENYLIST"] = str(p)
     return subprocess.run(
         ["bash", "scripts/lint-conventions.sh", *args],
-        cwd=repo, capture_output=True, text=True, env=env,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
@@ -139,3 +142,93 @@ def test_commit_msg_mode(repo: Path, subject: str, expected: int) -> None:
     msg = repo / "msg.txt"
     msg.write_text(subject + "\n", encoding="utf-8")
     assert run(repo, "--commit-msg", str(msg)).returncode == expected
+
+
+# --------------------------- bot-authored commits are exempt (#13921)
+
+
+def _bot_commit(repo: Path, subject: str, name: str, email: str) -> None:
+    """Commit as a bot identity, the way dependabot and the auto-fix workflows do."""
+    (repo / f"f{abs(hash(subject)) % 9999}.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "-m", subject],
+        check=True,
+        capture_output=True,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(repo),
+            "GIT_AUTHOR_NAME": name,
+            "GIT_AUTHOR_EMAIL": email,
+            "GIT_COMMITTER_NAME": name,
+            "GIT_COMMITTER_EMAIL": email,
+        },
+    )
+
+
+def test_a_dependabot_commit_without_an_issue_is_exempt(repo: Path) -> None:
+    """The regression: this failed every dependency PR (#13921).
+
+    Dependabot subjects are well-formed and carry no issue number because none
+    exists. The exemption was present and did not fire in CI; there was no test
+    covering a bot-authored commit at all, which is how that shipped.
+    """
+    _bot_commit(
+        repo,
+        "build(deps): bump the all-dependencies group",
+        "dependabot[bot]",
+        "49699333+dependabot[bot]@users.noreply.github.com",
+    )
+
+    result = run(repo, "--range", "HEAD~1..HEAD")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_bot_identified_only_by_email_is_exempt(repo: Path) -> None:
+    """A .mailmap rewriting the display name must not un-exempt the commit.
+
+    Matching on name alone is one signal; the email keeps the exemption working
+    when that signal is rewritten.
+    """
+    _bot_commit(repo, "build(deps): bump something", "Renamed By Mailmap", "x[bot]@users.noreply.github.com")
+
+    assert run(repo, "--range", "HEAD~1..HEAD").returncode == 0
+
+
+def test_a_human_commit_without_an_issue_still_fails(repo: Path) -> None:
+    """The exemption must not become a hole — this is the rule being enforced."""
+    (repo / "human.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fix(thing): no issue number here")
+
+    result = run(repo, "--range", "HEAD~1..HEAD")
+
+    assert result.returncode != 0
+    assert "no issue reference" in result.stdout
+
+
+def test_a_rejected_commit_names_the_author_it_parsed(repo: Path) -> None:
+    """So a non-firing exemption is one log line to diagnose, not an inference.
+
+    The previous version rejected commits without saying who it thought wrote
+    them, which is why #13921 took a reproduction attempt rather than a glance.
+    """
+    (repo / "human2.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fix(thing): still no issue")
+
+    result = run(repo, "--range", "HEAD~1..HEAD")
+
+    assert "author='t'" in result.stdout, result.stdout
+
+
+def test_a_subject_containing_the_field_separator_cannot_shift_the_parse(repo: Path) -> None:
+    """The free-text field is last, so nothing after it can be displaced.
+
+    With the subject in the middle, every later field depended on it containing
+    no separator — the fault class that best fitted #13921's CI-only failure.
+    """
+    _bot_commit(repo, "build(deps): bump a\x1fb group", "dependabot[bot]", "d[bot]@users.noreply.github.com")
+
+    assert run(repo, "--range", "HEAD~1..HEAD").returncode == 0
