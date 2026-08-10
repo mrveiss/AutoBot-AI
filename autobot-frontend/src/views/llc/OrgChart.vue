@@ -146,7 +146,9 @@ onMounted(fetchTree)
         class="fixed inset-y-0 right-0 w-80 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50 flex flex-col"
       >
         <div class="flex items-center justify-between px-5 py-4 border-b border-autobot-border">
-          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ t('llc.orgChart.agentDetail') }}</h2>
+          <h2 class="text-lg font-semibold text-autobot-text-primary">
+            {{ selectedNode.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail') }}
+          </h2>
           <button class="text-autobot-text-muted hover:text-autobot-text-secondary" @click="closeDrawer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -192,7 +194,13 @@ onMounted(fetchTree)
             </div>
           </dl>
         </div>
-        <div v-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
+        <!-- Agent lifecycle controls. Gated on !is_human (#13936): people are not
+             hired agents — /controls/agents/{id} has no meaning for a membership,
+             so the buttons must not be offered for a human node. -->
+        <div v-if="selectedNode.is_human" class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
+          {{ t('llc.orgChart.humanNoAgentControls') }}
+        </div>
+        <div v-else-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
             :class="selectedNode.status === 'paused'
