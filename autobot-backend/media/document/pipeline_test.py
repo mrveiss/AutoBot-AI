@@ -9,12 +9,33 @@
 """Unit tests for DocumentPipeline."""
 
 import base64
-from unittest.mock import MagicMock, patch
+import io
+from unittest.mock import patch
 
 import pytest
 
 from media.core.types import MediaInput, MediaType, ProcessingIntent
+from media.document.extraction import (
+    DocumentDependencyError,
+    DocumentExtractionError,
+    ExtractedDocument,
+    detect_format,
+)
 from media.document.pipeline import DocumentPipeline
+
+
+def _make_pdf(pages: list[str]) -> bytes:
+    """Build a real PDF with a text layer, so extraction is exercised end to end."""
+    reportlab = pytest.importorskip("reportlab", reason="reportlab needed to synthesize a PDF fixture")
+    from reportlab.pdfgen import canvas  # noqa: F401  (import validated by importorskip)
+
+    buffer = io.BytesIO()
+    pdf = reportlab.pdfgen.canvas.Canvas(buffer)
+    for text in pages:
+        pdf.drawString(72, 720, text)
+        pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
 
 
 def _make_input(data, mime_type="text/plain", intent=None):
@@ -49,136 +70,135 @@ class TestDocumentPipelineDecoding:
 
 
 class TestDocumentPipelineFormatDetection:
-    """Tests for _detect_format."""
+    """Format detection moved to the canonical core (#13893); assert via the pipeline result."""
 
-    def test_pdf_magic_bytes(self):
+    @pytest.mark.asyncio
+    async def test_pdf_magic_bytes_beat_a_wrong_mime_type(self):
         pipe = DocumentPipeline()
-        assert pipe._detect_format(b"%PDF-1.4 content", "") == "pdf"
+        result = await pipe._process_impl(_make_input(_make_pdf(["body"]), "text/plain"))
+        assert result.result_data["format"] == "pdf"
 
-    def test_docx_magic_bytes(self):
+    @pytest.mark.asyncio
+    async def test_text_fallback(self):
         pipe = DocumentPipeline()
-        raw = b"PK" + b"\x00" * 100 + b"word/document.xml"
-        assert pipe._detect_format(raw, "") == "docx"
+        result = await pipe._process_impl(_make_input(b"just text", "text/plain"))
+        assert result.result_data["format"] == "text"
 
-    def test_pdf_via_mime(self):
-        pipe = DocumentPipeline()
-        assert pipe._detect_format(b"plaintext", "application/pdf") == "pdf"
-
-    def test_docx_via_mime(self):
-        pipe = DocumentPipeline()
-        raw = b"not real docx bytes"
+    def test_detection_helpers_live_in_the_canonical_core(self):
+        """The pipeline must not grow its own detector back."""
+        assert detect_format(b"%PDF-1.4 content", "") == "pdf"
+        assert detect_format(b"PK" + b"\x00" * 100 + b"word/document.xml", "") == "docx"
+        assert detect_format(b"plaintext", "application/pdf") == "pdf"
         assert (
-            pipe._detect_format(
-                raw,
+            detect_format(
+                b"not real docx bytes",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
             == "docx"
         )
 
-    def test_text_fallback(self):
-        pipe = DocumentPipeline()
-        assert pipe._detect_format(b"just text", "text/plain") == "text"
-
 
 class TestDocumentPipelineTextExtraction:
-    """Tests for plain text extraction."""
+    """Plain-text extraction, asserted through the public pipeline entry point."""
 
-    def test_utf8_text(self):
+    @pytest.mark.asyncio
+    async def test_utf8_text(self):
         pipe = DocumentPipeline()
-        content = b"Hello UTF-8 world"
-        result = pipe._extract_text(content, "text/plain", {})
-        assert result["format"] == "text"
-        assert result["extracted_text"] == "Hello UTF-8 world"
-        assert result["confidence"] == 1.0
+        result = await pipe._process_impl(_make_input(b"Hello UTF-8 world", "text/plain"))
+        data = result.result_data
+        assert data["format"] == "text"
+        assert data["extracted_text"] == "Hello UTF-8 world"
+        assert data["confidence"] == 1.0
 
-    def test_latin1_fallback(self):
+    @pytest.mark.asyncio
+    async def test_latin1_fallback(self):
         pipe = DocumentPipeline()
-        content = b"caf\xe9"  # café in latin-1
-        result = pipe._extract_text(content, "text/plain", {})
-        assert "caf" in result["extracted_text"]
-        assert result["confidence"] == 1.0
+        result = await pipe._process_impl(_make_input(b"caf\xe9", "text/plain"))
+        assert "caf" in result.result_data["extracted_text"]
+        assert result.result_data["confidence"] == 1.0
 
-    def test_line_and_char_count(self):
+    @pytest.mark.asyncio
+    async def test_line_and_char_count(self):
         pipe = DocumentPipeline()
         content = b"line1\nline2\nline3"
-        result = pipe._extract_text(content, "text/plain", {})
-        assert result["line_count"] == 3
-        assert result["char_count"] == len("line1\nline2\nline3")
+        result = await pipe._process_impl(_make_input(content, "text/plain"))
+        assert result.result_data["line_count"] == 3
+        assert result.result_data["char_count"] == len(content.decode())
 
 
 class TestDocumentPipelinePdf:
-    """Tests for PDF extraction."""
+    """PDF extraction against real PDFs rather than a mocked reader."""
 
-    def test_pdf_unavailable_result(self):
+    @pytest.mark.asyncio
+    async def test_pdf_extraction_success(self):
         pipe = DocumentPipeline()
-        with patch("media.document.pipeline._PYPDF_AVAILABLE", False):
-            result = pipe._extract_pdf(b"%PDF-1.4", {})
-        assert result["processing_status"] == "unavailable"
-        assert result["confidence"] == 0.0
+        result = await pipe._process_impl(_make_input(_make_pdf(["page content"]), "application/pdf"))
+        data = result.result_data
 
-    def test_pdf_extraction_success(self):
+        assert data["format"] == "pdf"
+        assert "page content" in data["extracted_text"]
+        assert data["page_count"] == 1
+        assert data["confidence"] == 0.95
+
+    @pytest.mark.asyncio
+    async def test_pdf_extraction_error_is_reported_as_error(self):
         pipe = DocumentPipeline()
-        mock_page = MagicMock()
-        mock_page.extract_text.return_value = "page content"
-        mock_reader = MagicMock()
-        mock_reader.pages = [mock_page]
-        mock_reader.metadata = {"/Title": "Test Doc", "/Author": "Author"}
-
-        with (
-            patch("media.document.pipeline._PYPDF_AVAILABLE", True),
-            patch("media.document.pipeline.PdfReader", return_value=mock_reader),
+        with patch(
+            "media.document.pipeline.extract_document",
+            side_effect=DocumentExtractionError("bad pdf"),
         ):
-            result = pipe._extract_pdf(b"%PDF-1.4", {"source": "test"})
+            result = await pipe._process_impl(_make_input(b"%PDF-1.4 garbage", "application/pdf"))
 
-        assert result["format"] == "pdf"
-        assert result["extracted_text"] == "page content"
-        assert result["page_count"] == 1
-        assert result["document_info"]["title"] == "Test Doc"
-        assert result["confidence"] == 0.95
+        assert result.result_data["processing_status"] == "error"
+        assert "bad pdf" in result.result_data["error"]
 
-    def test_pdf_extraction_error(self):
+    @pytest.mark.asyncio
+    async def test_missing_library_is_unavailable_not_error(self):
+        """A deployment gap must stay distinguishable from a corrupt upload (#13893)."""
         pipe = DocumentPipeline()
-        with (
-            patch("media.document.pipeline._PYPDF_AVAILABLE", True),
-            patch("media.document.pipeline.PdfReader", side_effect=Exception("bad pdf")),
+        with patch(
+            "media.document.pipeline.extract_document",
+            side_effect=DocumentDependencyError("PDF support requires the pypdf library"),
         ):
-            result = pipe._extract_pdf(b"garbage", {})
-        assert result["processing_status"] == "error"
-        assert "bad pdf" in result["error"]
+            result = await pipe._process_impl(_make_input(b"%PDF-1.4", "application/pdf"))
+
+        data = result.result_data
+        assert data["processing_status"] == "unavailable"
+        assert data["confidence"] == 0.0
+        assert "pypdf" in data["unavailability_reason"]
 
 
 class TestDocumentPipelineDocx:
-    """Tests for DOCX extraction."""
+    """DOCX extraction, asserted through the pipeline seam."""
 
-    def test_docx_unavailable_result(self):
+    @pytest.mark.asyncio
+    async def test_docx_unavailable_result(self):
         pipe = DocumentPipeline()
-        with patch("media.document.pipeline._DOCX_AVAILABLE", False):
-            result = pipe._extract_docx(b"PK data", {})
-        assert result["processing_status"] == "unavailable"
-
-    def test_docx_extraction_success(self):
-        pipe = DocumentPipeline()
-        mock_para = MagicMock()
-        mock_para.text = "Paragraph text"
-        mock_doc = MagicMock()
-        mock_doc.paragraphs = [mock_para]
-        mock_doc.tables = []
-        mock_doc.core_properties.title = "Doc Title"
-        mock_doc.core_properties.author = "Author"
-        mock_doc.core_properties.subject = ""
-        mock_doc.core_properties.keywords = ""
-
-        with (
-            patch("media.document.pipeline._DOCX_AVAILABLE", True),
-            patch("media.document.pipeline.DocxDocument", return_value=mock_doc),
+        with patch(
+            "media.document.pipeline.extract_document",
+            side_effect=DocumentDependencyError("DOCX support requires the python-docx library"),
         ):
-            result = pipe._extract_docx(b"PK data", {})
+            result = await pipe._process_impl(_make_input(b"PK data", "application/vnd.openxmlformats"))
+        assert result.result_data["processing_status"] == "unavailable"
 
-        assert result["format"] == "docx"
-        assert result["extracted_text"] == "Paragraph text"
-        assert result["paragraph_count"] == 1
-        assert result["document_info"]["title"] == "Doc Title"
-        assert result["confidence"] == 0.95
+    @pytest.mark.asyncio
+    async def test_docx_extraction_success(self):
+        pipe = DocumentPipeline()
+        extracted = ExtractedDocument(
+            format="docx",
+            text="Paragraph text",
+            tables=(),
+            info={"title": "Doc Title", "author": "Author", "subject": "", "keywords": ""},
+        )
+        with patch("media.document.pipeline.extract_document", return_value=extracted):
+            result = await pipe._process_impl(_make_input(b"PK data", "application/vnd.openxmlformats"))
+
+        data = result.result_data
+        assert data["format"] == "docx"
+        assert data["extracted_text"] == "Paragraph text"
+        assert data["paragraph_count"] == 1
+        assert data["document_info"]["title"] == "Doc Title"
+        assert data["confidence"] == 0.95
 
 
 class TestDocumentPipelineAsync:
