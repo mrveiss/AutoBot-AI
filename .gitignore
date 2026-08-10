@@ -496,3 +496,7 @@ docs/.obsidian/core-plugins.json
 # It carried five absolute machine paths, including a master-key location, into a
 # public repository, and regenerates on demand — so it is not tracked (#13429).
 .paperclip/
+# Sibling scratch dirs the same tooling creates. The pattern above matches only
+# the exact ".paperclip" name, so .paperclip-work/ was tracked — it carried a
+# design doc at the repo root instead of docs/archives/plans/.
+.paperclip-*/
