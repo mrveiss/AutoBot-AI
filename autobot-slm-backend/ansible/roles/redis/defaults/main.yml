@@ -76,3 +76,24 @@ chromadb_auth_token: ""
 # db-credentials.env) rather than under /opt, which decommission-node.yml and
 # remove-role.yml wipe.
 chromadb_authn_env_file: /etc/autobot/chromadb.env
+
+# #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
+#
+# BOTH roles legitimately install and run chromadb, for different topologies —
+# ai-stack into {{ ai_install_dir }}/venv, redis into
+# {{ chromadb_install_dir }}/venv — and both wrote the SAME unit path from their
+# own template. Whichever ran last won, so the deployed ExecStart, the
+# Description and the restart policy all flipped with run order. Observed live
+# during the #4090 investigation: a self-update applied the redis role, which
+# rewrote the unit underneath a running deployment and pointed it at a
+# different binary.
+#
+# Default `redis`: on a combined host that is the dedicated DB stack and it owns
+# the persist directory. An ai-stack-only topology sets this to `ai-stack` in
+# setup-ai-stack.yml.
+#
+# Deliberately NOT derived from `ansible_play_role_names`: deploy.yml brings
+# roles in with `include_role`, and dynamically included roles are not reliably
+# listed there — a wrong answer would silently deploy no unit at all, which is
+# worse than the flip being fixed.
+chromadb_service_owner: "redis"

@@ -28,7 +28,11 @@ EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 # this unit.
 EnvironmentFile={{ chromadb_authn_env_file }}
 ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
-Restart=always
+# #13870: on-failure, matching the redis role's unit. These differed
+# (always vs on-failure), so the unit's FAILURE BEHAVIOUR changed with
+# role order too, not just its path — and #4090 was about a unit that
+# restarted forever instead of reaching `failed`.
+Restart=on-failure
 RestartSec=10
 # #4090: without these, a unit that can never exec restarts forever and stays
 # out of `systemctl --failed`, so the one thing an operator checks cannot see it
