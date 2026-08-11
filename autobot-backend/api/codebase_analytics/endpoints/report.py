@@ -47,12 +47,17 @@ from utils.file_categorization import (
     FILE_CATEGORY_LOGS,
     FILE_CATEGORY_TEST,
 )
-from utils.io_executor import get_analytics_executor, run_in_analytics_executor
+from utils.io_executor import run_in_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
-from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
+from ..duplicate_detector import (  # noqa: F401
+    LOW_SIMILARITY_THRESHOLD,
+    DuplicateAnalysis,
+    DuplicateCodeDetector,
+)
 from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
+from .duplicates import _run_standard_analysis
 from .shared import (
     filter_problems_by_file_existence,
     resolve_project_root,
@@ -1668,17 +1673,17 @@ async def _get_duplicate_analysis(
     try:
         scan_target = str(project_root) if project_root else str(Path(__file__).resolve().parents[4])
 
-        # Issue #1233: Use dedicated analytics executor to prevent
-        # default thread pool starvation
-        # Issue #2655: Increased timeout from 60s to 120s — large codebases
-        # need more time for duplicate hash comparison across all Python/TS files.
-        analysis = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                lambda: DuplicateCodeDetector(project_root=scan_target).run_analysis(),
-            ),
-            timeout=TIMEOUT_HTTP_LONG,  # 120 second timeout for duplicate detection
-        )
+        # #13602: delegate to the guarded scan in `duplicates`. This submitted
+        # straight to the executor with neither the single-flight lock nor the
+        # cancel token, so /report re-created the accumulation #12779 fixed:
+        # each report queued a full walk regardless of one already running, and
+        # its orphan could not be told to stop. Same executor, same 8 workers.
+        # LOW_SIMILARITY_THRESHOLD is the detector's own default, which is what
+        # this call site relied on implicitly — behaviour unchanged.
+        analysis = await _run_standard_analysis(scan_target, LOW_SIMILARITY_THRESHOLD)
+        if analysis is None:
+            # Either in flight elsewhere or timed out; both already logged.
+            return None
 
         logger.info(
             "Duplicate analysis: %d duplicates (%d high, %d medium, %d low)",
