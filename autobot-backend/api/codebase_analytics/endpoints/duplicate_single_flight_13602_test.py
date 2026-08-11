@@ -34,33 +34,55 @@ import api.codebase_analytics.endpoints.report as report_mod
 
 @pytest.fixture(autouse=True)
 async def _single_flight_lock_is_free():
-    dup_mod._duplicate_scan_lock.acquire()  # MUTATION: simulate a leaked lock
-    """Wait for the module-global lock before and after every test.
+    """Keep the loop pumping until the module-global lock is free.
 
-    The lock is released by a done-callback on the executor future, so a test
-    that abandons a scan releases it ASYNCHRONOUSLY — after its own body has
-    returned. The next test then called `_run_standard_analysis` while the lock
-    was still held, got the "already in flight" decline, and never reached the
-    code it was written to exercise.
+    The lock is released only by a done-callback on the executor future. That
+    callback is delivered with `loop.call_soon_threadsafe` onto the TEST's own
+    event loop — and pytest-asyncio closes that loop at teardown.
+    `_call_set_state` checks `dest_loop.is_closed()` and returns silently, so
+    once the loop is gone the callback NEVER fires and the lock is leaked
+    permanently, not late.
 
-    On this machine the callback always won the race; on a loaded CI runner it
-    did not, and `test_an_outer_cancel_still_signals_the_orphan` failed with
-    "DID NOT RAISE CancelledError" — the task had already returned None.
-    Ordering luck, not a code defect, but a test that depends on it is worthless.
+    That is why this fixture is `async` and function-scoped, and why the poll is
+    `await asyncio.sleep(...)`: its post-yield body runs inside the still-open
+    loop, which is what lets the pending callback be delivered at all. Replace
+    the await with `time.sleep` and it waits the full budget and then fails
+    forever; set `asyncio_default_fixture_loop_scope` to `session` and this
+    stops working silently.
+
+    Without it, the next test called `_run_standard_analysis` while the lock was
+    still held, took the "already in flight" decline, and returned None — so
+    `task.cancel()` landed on a finished task and
+    `test_an_outer_cancel_still_signals_the_orphan` failed with "DID NOT RAISE
+    CancelledError" on a loaded runner.
+
+    Do NOT swap the lock per test with monkeypatch (as the #12779 tests do —
+    safe there, they never submit to the executor). The release is
+    `lambda _f: _duplicate_scan_lock.release()`, which resolves the module
+    global at CALLBACK time: a late callback firing after monkeypatch restores
+    would release a lock this test never took.
     """
     await _wait_for_lock()
     yield
     await _wait_for_lock()
 
 
+_LOCK_POLL_SECONDS = 0.05
+
+
 async def _wait_for_lock(timeout: float = 10.0) -> None:
-    deadline = timeout / 0.05
-    for _ in range(int(deadline)):
+    """Budget assumes stubbed detectors: it bounds orphan-exit plus one loop
+    iteration, not real scan work. Measured need is ~52ms."""
+    for _ in range(int(timeout / _LOCK_POLL_SECONDS)):
         if dup_mod._duplicate_scan_lock.acquire(blocking=False):
             dup_mod._duplicate_scan_lock.release()
             return
-        await asyncio.sleep(0.05)
-    raise AssertionError("the single-flight lock was never released — a previous test leaked it")
+        await asyncio.sleep(_LOCK_POLL_SECONDS)
+    raise AssertionError(
+        f"_duplicate_scan_lock still held {timeout:.0f}s after the test finished — either a "
+        "test abandoned a scan without waiting for the release, or _run_standard_analysis "
+        "failed to release it"
+    )
 
 
 class TestReportUsesTheGuardedScan:
