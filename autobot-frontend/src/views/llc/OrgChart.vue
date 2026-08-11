@@ -3,7 +3,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watchEffect } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +11,9 @@ import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
+import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
+import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
+import { buildOrgCanvasGraph, flattenOrgNodes, ORG_GROUP_PREFIX } from '@/composables/llc/orgCanvasGraph'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -24,6 +27,45 @@ const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
 const showHire = ref(false) // GH#10219
 const terminating = ref(false) // in-flight guard — terminate is irreversible
+
+// GH#13939: second render of the same data — the nested tree stays the default.
+const ALL_UNITS_TAB = 'all'
+type OrgViewMode = 'tree' | 'canvas'
+const viewMode = ref<OrgViewMode>('tree')
+const activeTabId = ref<string>(ALL_UNITS_TAB)
+
+/** Roots the canvas draws: every unit, or the one the active tab selects. */
+const visibleRoots = computed<OrgNode[]>(() =>
+  activeTabId.value === ALL_UNITS_TAB
+    ? tree.value
+    : tree.value.filter((node) => node.id === activeTabId.value),
+)
+
+/** One tab per top-level unit, plus an "all units" tab. */
+const canvasTabs = computed<CanvasTab[]>(() => [
+  { id: ALL_UNITS_TAB, label: t('llc.orgChart.canvasTabAll') },
+  ...tree.value.map((node) => ({ id: node.id, label: node.name })),
+])
+
+// A ref (not a computed) so node drags stay put: the canvas mutates
+// `node.position` in place and that must survive until the tree reloads.
+const canvasNodes = ref<CanvasNode[]>([])
+watchEffect(() => {
+  canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
+    t('llc.orgChart.canvasUnit', { name }),
+  )
+})
+
+function setViewMode(mode: OrgViewMode) {
+  viewMode.value = mode
+}
+
+/** Canvas selection opens the same drawer the tree opens. */
+function onCanvasNodeSelected(nodeId: string | null) {
+  if (!nodeId) return closeDrawer()
+  const node = flattenOrgNodes(tree.value).get(nodeId)
+  if (node) openDrawer(node)
+}
 
 async function fetchTree() {
   isLoading.value = true
@@ -95,6 +137,13 @@ function formatTime(ts: string | null): string {
   return new Date(ts).toLocaleString()
 }
 
+function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
+  // Containers stay anchored to the subtree they enclose.
+  if (nodeId.startsWith(ORG_GROUP_PREFIX)) return
+  const node = canvasNodes.value.find((candidate) => candidate.id === nodeId)
+  if (node) node.position = position
+}
+
 onMounted(fetchTree)
 </script>
 
@@ -102,13 +151,35 @@ onMounted(fetchTree)
   <div class="p-4 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-autobot-text-primary">{{ t('llc.orgChart.title') }}</h1>
-      <button
-        v-if="companyId"
-        class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
-        @click="showHire = true"
-      >
-        {{ t('llc.orgChart.hireAgent') }}
-      </button>
+      <div class="flex items-center gap-3">
+        <!-- GH#13939: view-mode toggle — tree stays the default render -->
+        <div
+          class="inline-flex rounded-md border border-autobot-border overflow-hidden"
+          role="group"
+          :aria-label="t('llc.orgChart.viewMode')"
+        >
+          <button
+            v-for="mode in (['tree', 'canvas'] as const)"
+            :key="mode"
+            class="px-3 py-1.5 text-sm transition-colors"
+            :class="viewMode === mode
+              ? 'bg-autobot-primary text-white'
+              : 'bg-autobot-bg-card text-autobot-text-secondary hover:text-autobot-text-primary'"
+            :data-testid="`org-view-${mode}`"
+            :aria-pressed="viewMode === mode"
+            @click="setViewMode(mode)"
+          >
+            {{ mode === 'tree' ? t('llc.orgChart.viewTree') : t('llc.orgChart.viewCanvas') }}
+          </button>
+        </div>
+        <button
+          v-if="companyId"
+          class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+          @click="showHire = true"
+        >
+          {{ t('llc.orgChart.hireAgent') }}
+        </button>
+      </div>
     </div>
 
     <HireAgentModal
@@ -127,7 +198,7 @@ onMounted(fetchTree)
 
     <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.empty') }}</div>
 
-    <div v-else class="overflow-x-auto">
+    <div v-else-if="viewMode === 'tree'" class="overflow-x-auto">
       <div class="min-w-max flex gap-6 items-start">
         <OrgTreeNode
           v-for="node in tree"
@@ -138,6 +209,23 @@ onMounted(fetchTree)
         />
       </div>
     </div>
+
+    <!-- GH#13939: same data on the existing workflow canvas — pan/zoom, no graph library -->
+    <div v-else class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden" data-testid="org-canvas">
+      <WorkflowCanvas
+        readonly
+        :nodes="canvasNodes"
+        :selected-node-id="selectedNode?.id ?? null"
+        :tabs="canvasTabs"
+        :active-tab-id="activeTabId"
+        @node-selected="onCanvasNodeSelected"
+        @node-moved="onCanvasNodeMoved"
+        @tab-selected="activeTabId = $event"
+      />
+    </div>
+    <p v-if="viewMode === 'canvas' && !isLoading && tree.length > 0" class="mt-2 text-xs text-autobot-text-muted">
+      {{ t('llc.orgChart.canvasHint') }}
+    </p>
 
     <!-- Agent Detail Drawer -->
     <transition name="slide">
@@ -212,6 +300,7 @@ onMounted(fetchTree)
             :class="selectedNode.status === 'paused'
               ? 'bg-green-600 text-white hover:bg-green-700'
               : 'bg-amber-500 text-white hover:bg-amber-600'"
+            data-testid="org-drawer-pause"
             @click="toggleAgentPause(selectedNode)"
           >
             {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
@@ -219,6 +308,7 @@ onMounted(fetchTree)
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
             :disabled="terminating"
+            data-testid="org-drawer-terminate"
             @click="terminateAgent(selectedNode)"
           >
             {{ t('llc.orgChart.terminateAgent') }}

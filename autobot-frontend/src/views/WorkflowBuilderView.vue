@@ -14,7 +14,7 @@
       <!-- Category Navigation -->
       <nav class="category-nav" :aria-label="$t('workflow.views.navAriaLabel')">
         <router-link
-          to="/automation/overview"
+          :to="`${automationBase}/overview`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.overviewAriaLabel')"
@@ -30,7 +30,7 @@
         </div>
 
         <router-link
-          to="/automation/canvas"
+          :to="`${automationBase}/canvas`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
@@ -42,7 +42,7 @@
         </router-link>
 
         <router-link
-          to="/automation/templates"
+          :to="`${automationBase}/templates`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.templatesAriaLabel')"
@@ -55,7 +55,7 @@
         </router-link>
 
         <router-link
-          to="/automation/natural-language"
+          :to="`${automationBase}/natural-language`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
@@ -71,7 +71,7 @@
         </div>
 
         <router-link
-          to="/automation/runner"
+          :to="`${automationBase}/runner`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.runnerAriaLabel')"
@@ -87,7 +87,7 @@
         </router-link>
 
         <router-link
-          to="/automation/history"
+          :to="`${automationBase}/history`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.historyAriaLabel')"
@@ -100,7 +100,7 @@
 
         <!-- Issue #3139: Per-workflow notification configuration -->
         <router-link
-          to="/automation/notifications"
+          :to="`${automationBase}/notifications`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.notifications.sidebarLabel')"
@@ -113,7 +113,7 @@
         </router-link>
 
         <router-link
-          to="/automation/gui-automation"
+          :to="`${automationBase}/gui-automation`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
@@ -126,7 +126,7 @@
         </router-link>
 
         <router-link
-          to="/automation/browser-automation"
+          :to="`${automationBase}/browser-automation`"
           class="category-item"
           :class="{ active: $route.name === 'browser-automation' }"
           :aria-label="$t('nav.browserAutomation')"
@@ -138,7 +138,7 @@
         </router-link>
 
         <router-link
-          to="/automation/vision-automation"
+          :to="`${automationBase}/vision-automation`"
           class="category-item"
           :class="{ active: $route.name === 'vision-automation' }"
           :aria-label="$t('nav.visionAutomation')"
@@ -158,7 +158,7 @@
         </div>
 
         <router-link
-          to="/automation/screen-analysis"
+          :to="`${automationBase}/screen-analysis`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -175,7 +175,7 @@
         </router-link>
 
         <router-link
-          to="/automation/video-processing"
+          :to="`${automationBase}/video-processing`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -192,7 +192,7 @@
         </router-link>
 
         <router-link
-          to="/automation/media-gallery"
+          :to="`${automationBase}/media-gallery`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -214,7 +214,7 @@
 
         <!-- Issue #2155: Live Execution Dashboard -->
         <router-link
-          to="/automation/live-dashboard"
+          :to="`${automationBase}/live-dashboard`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
@@ -226,7 +226,7 @@
         </router-link>
 
         <router-link
-          to="/automation/orchestration"
+          :to="`${automationBase}/orchestration`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.visualizerAriaLabel')"
@@ -238,7 +238,7 @@
         </router-link>
 
         <router-link
-          to="/automation/agents"
+          :to="`${automationBase}/agents`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.agentsAriaLabel')"
@@ -722,11 +722,29 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-/** True when a non-section child route (e.g. /automation/browser-automation) is active (#2368) */
-const isChildRoute = computed(() => route.matched.length > 1 && !route.meta.sectionRoute);
+/**
+ * GH#13939: the module moved under Company OS
+ * (/llc/companies/:companyId/automation). Every in-view link is built from
+ * this base so the builder works wherever it is mounted; the legacy
+ * /automation/* paths forward here.
+ */
+const automationBase = computed(() => {
+  const raw = route.params.companyId;
+  const companyId = Array.isArray(raw) ? raw[0] : raw;
+  return companyId ? `/llc/companies/${companyId}/automation` : '/automation';
+});
+
+/** True when a non-section child route (e.g. …/automation/browser-automation) is active (#2368) */
+const isChildRoute = computed(() => {
+  if (route.meta.sectionRoute) return false;
+  const builderIndex = route.matched.findIndex(
+    (record) => record.name === 'automation' || record.name === 'llc-company-automation',
+  );
+  return builderIndex >= 0 && route.matched.length > builderIndex + 1;
+});
 
 function navigateTo(section: SectionType): void {
-  router.push(`/automation/${section}`);
+  router.push(`${automationBase.value}/${section}`);
 }
 const { showToast } = useNotificationBus();
 

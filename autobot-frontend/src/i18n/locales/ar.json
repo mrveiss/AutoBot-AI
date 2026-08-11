@@ -4261,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
+      "companyRequired": "اختر شركة لفتح الأتمتة."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8230,7 +8232,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "وضع العرض",
+      "viewTree": "شجرة",
+      "viewCanvas": "لوحة",
+      "canvasTabAll": "كل الوحدات",
+      "canvasUnit": "وحدة {name}",
+      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
     },
     "goals": {
       "title": "Goal Tree",
