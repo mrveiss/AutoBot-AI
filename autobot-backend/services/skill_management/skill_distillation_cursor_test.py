@@ -20,6 +20,7 @@ the bug only exists where a wall clock repeats.
 """
 
 import asyncio
+import time
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
@@ -38,6 +39,22 @@ from services.skill_management.skill_distillation_scheduler import (
 _TZ = ZoneInfo("Europe/Riga")
 _FIRST_PASS = datetime(2026, 10, 25, 3, 30, tzinfo=_TZ, fold=0)
 _SECOND_PASS = datetime(2026, 10, 25, 3, 30, tzinfo=_TZ, fold=1)
+
+
+@pytest.fixture
+def process_tz_is_riga(monkeypatch):
+    """Pin the process timezone for tests that exercise local-time resolution.
+
+    `_iso_to_epoch` resolves a naive string in the *process* timezone, so a test
+    about the DST fold is meaningless unless the process actually sits in a zone
+    that has one. Without this the test passes in Riga and fails in UTC — worse
+    than no test, because it only holds on the machine that wrote it.
+    """
+    monkeypatch.setenv("TZ", "Europe/Riga")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
 def _entry(session_id: str, when: datetime) -> dict:
@@ -113,7 +130,33 @@ class TestTheDurableCursorMigrates:
         """AC: the existing stored value is handled, not silently reset."""
         legacy = "2026-06-01T12:00:00"
 
+        assert _cursor_to_epoch(legacy) is not None
+
+    def test_an_unambiguous_legacy_cursor_migrates_exactly(self):
+        """Outside the repeated hour both folds agree, so migration costs nothing."""
+        legacy = "2026-06-01T12:00:00"
+
         assert _cursor_to_epoch(legacy) == datetime(2026, 6, 1, 12, 0).timestamp()
+
+    def test_an_ambiguous_legacy_cursor_resolves_to_the_EARLIER_instant(self, process_tz_is_riga):
+        """The repeated hour names two instants; the later one would skip an hour.
+
+        Reading the cursor late means every conversation between the two instants
+        compares as already distilled — silently and permanently. Reading early
+        costs at most that hour re-distilled once.
+        """
+        ambiguous = _FIRST_PASS.replace(tzinfo=None).isoformat()
+
+        migrated = _cursor_to_epoch(ambiguous)
+
+        assert migrated <= _FIRST_PASS.timestamp()
+        assert migrated < _SECOND_PASS.timestamp(), "the second pass must stay pending"
+
+    @pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "NaN"])
+    def test_a_non_finite_cursor_reads_as_a_first_run(self, bad):
+        """`float("nan")` parses. A nan cursor compares False against everything,
+        so the gate silently becomes a no-op and every session is pending forever."""
+        assert _cursor_to_epoch(bad) is None
 
     def test_the_current_epoch_format_round_trips(self):
         epoch = 1780000000.5

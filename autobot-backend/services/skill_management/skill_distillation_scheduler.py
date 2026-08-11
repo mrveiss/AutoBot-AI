@@ -26,6 +26,7 @@ turn latency.
 """
 
 import asyncio
+import math
 import os
 import time
 from datetime import datetime
@@ -76,19 +77,30 @@ def _decode(value: object) -> str | None:
 
 
 def _iso_to_epoch(value: object) -> float | None:
-    """Epoch seconds for a naive-local ISO timestamp, or None if unusable.
+    """Earliest instant a naive-local ISO timestamp could name, or None if unusable.
 
-    Only used to migrate a legacy cursor. During a DST-repeated hour the string
-    is genuinely ambiguous — it names two instants — so this resolves to one of
-    them. That is acceptable for a one-off migration (worst case, one hour is
-    re-distilled) and is exactly why new values carry the raw epoch instead.
+    Reached only for a legacy cursor and for entries from a producer that predates
+    ``updatedAtEpoch``. A naive string carries no offset, and inside a DST-repeated
+    hour it names **two** instants. ``fold`` selects between them, so taking the
+    minimum resolves the ambiguity in the only safe direction: a cursor that reads
+    slightly early costs a bounded re-distillation, while one that reads late skips
+    conversations permanently and silently — the defect this module fixes.
+
+    Outside the repeated hour both folds agree and this is exact.
+
+    It is still resolved in the *process* timezone, so a deployment that changes
+    its TZ between writing and reading a legacy cursor shifts by the offset delta,
+    which no local-time parse can recover. That exposure predates this fix,
+    applies only to the one-off migration, and ends once the cursor is rewritten
+    in epoch form.
     """
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value).timestamp()
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    return min(parsed.replace(fold=0).timestamp(), parsed.replace(fold=1).timestamp())
 
 
 def _entry_epoch(entry: Dict[str, Any]) -> float | None:
@@ -103,14 +115,34 @@ def _cursor_to_epoch(raw: object) -> float | None:
     """Read the cursor in either format — epoch seconds, or a legacy ISO string.
 
     The stored cursor is durable in Redis, and resetting it re-distils the whole
-    corpus at real LLM cost. So an unrecognised value is migrated, never dropped.
+    corpus at real LLM cost. So a legacy value is migrated, never dropped.
+
+    A legacy value is resolved to the **earliest** instant it could name (see
+    ``_iso_to_epoch``), because an over-estimate skips conversations permanently
+    and silently — the very defect this module fixes — while an under-estimate
+    costs a bounded re-distillation. Bounded re-work, never a silent skip.
     """
     if raw is None:
         return None
     try:
-        return float(raw)  # current format
+        value = float(raw)  # current format
     except (TypeError, ValueError):
-        return _iso_to_epoch(raw)  # pre-#13948 format
+        migrated = _iso_to_epoch(raw)  # pre-#13948 format
+        if migrated is None:
+            logger.warning(
+                "Skill distillation: unreadable cursor %r — treating as a first run, "
+                "which re-distils the corpus once",
+                raw,
+            )
+            return None
+        logger.info("Skill distillation: migrating legacy cursor %r to epoch %s", raw, migrated)
+        return migrated
+    if not math.isfinite(value):
+        # nan compares False against everything, so a nan cursor silently turns
+        # the gate into a no-op: every conversation looks pending, every run.
+        logger.warning("Skill distillation: non-finite cursor %r — treating as a first run", raw)
+        return None
+    return value
 
 
 class SkillDistillationScheduler:
@@ -424,7 +456,7 @@ class SkillDistillationScheduler:
             logger.warning("Idle-flush check failed, falling back to the interval: %s", exc)
             return False
 
-    async def _select_pending_sessions(self, cursor: str | None) -> List[Dict[str, Any]]:
+    async def _select_pending_sessions(self, cursor: float | None) -> List[Dict[str, Any]]:
         """Conversations updated after ``cursor``, oldest first, capped per run."""
         manager = await self._get_chat_history_manager()
         if manager is None:
