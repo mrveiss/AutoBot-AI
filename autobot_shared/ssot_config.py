@@ -1322,6 +1322,17 @@ class PathConfig(RedactedSettings):
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
     vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
+    # noVNC web root — absolute path, not relative to base_dir.
+    #
+    # #13069: pinned to /opt/novnc, NOT the distro /usr/share/novnc package.
+    # roles/vnc removes that package (state: absent) and installs a checksummed
+    # upstream release at this path instead, because the distro build
+    # (novnc 1:1.0.0-5 on Ubuntu 22.04) predates VeNCrypt support and was the
+    # cause of the handshake failure in #13060. Keep in sync with
+    # autobot-slm-backend/ansible/roles/vnc/defaults/main.yml novnc_path.
+    # Override via AUTOBOT_NOVNC_PATH env var.
+    novnc_path: str = Field(default="/opt/novnc", alias="AUTOBOT_NOVNC_PATH")
+
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
     # service orchestration). Absolute path — never relative to base_dir. Legacy
