@@ -35,6 +35,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import QueryDefaults
 
 from ..models.enums import (
     ActivityEventType,
@@ -284,6 +285,15 @@ class WorkItemService(LLCServiceBase):
                 resolved_goal_id = parent.goal_id
 
         identifier = await self._next_identifier(session, company_id)
+        # GH#13937: mirror update()'s single-assignee invariant — a creator
+        # that supplies an assignee id must not land with a NULL discriminator
+        # (that made _assignee_display() report the item as unassigned despite
+        # holding a valid assignee_agent_id/assignee_user_id).
+        resolved_assignee_type: Optional[str] = None
+        if assignee_user_id:
+            resolved_assignee_type = AssigneeType.USER.value
+        elif assignee_agent_id:
+            resolved_assignee_type = AssigneeType.AGENT.value
         item = LLCWorkItem(
             id=uuid.uuid4(),
             company_id=uuid.UUID(company_id),
@@ -300,6 +310,7 @@ class WorkItemService(LLCServiceBase):
             goal_id=resolved_goal_id,
             assignee_agent_id=uuid.UUID(assignee_agent_id) if assignee_agent_id else None,
             assignee_user_id=uuid.UUID(assignee_user_id) if assignee_user_id else None,
+            assignee_type=resolved_assignee_type,
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,
             created_by_user_id=uuid.UUID(created_by_user_id) if created_by_user_id else None,
             labels=labels or [],
@@ -360,6 +371,13 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        # GH#13937: validate before any mutation of `item` below — keeps update()
+        # atomic. An invalid value must raise before the single-assignee
+        # invariant below has a chance to clear the sibling id on the live,
+        # session-attached instance (a half-applied mutation would otherwise
+        # survive the ValueError on a shared session).
+        if fields.get("assignee_type") is not None:
+            fields["assignee_type"] = AssigneeType(fields["assignee_type"]).value
         # Single-assignee invariant (#10532, FR-HYBRID-01): assigning to one
         # party clears the other and fixes assignee_type.
         if fields.get("assignee_user_id"):
@@ -372,10 +390,6 @@ class WorkItemService(LLCServiceBase):
             fields["requires_approval_before"] = _validated_approval_categories(
                 fields["requires_approval_before"], existing=item.requires_approval_before or []
             )
-        # GH#13937: reject an invalid discriminator instead of silently storing
-        # it — mirrors the CoWorkerType(co_worker_type) validation below.
-        if fields.get("assignee_type") is not None:
-            fields["assignee_type"] = AssigneeType(fields["assignee_type"]).value
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
@@ -399,7 +413,7 @@ class WorkItemService(LLCServiceBase):
         co_worker_agent_id: Optional[str] = None,
         co_worker_user_id: Optional[str] = None,
         label_ids: Optional[List[str]] = None,
-        limit: int = 100,
+        limit: int = QueryDefaults.LARGE_BATCH_LIMIT,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
         q = select(LLCWorkItem).where(LLCWorkItem.company_id == uuid.UUID(company_id))

@@ -147,6 +147,48 @@ class TestCreate:
                 )
         assert item.goal_id is None
 
+    async def test_create_with_assignee_agent_id_sets_assignee_type_agent(self, service, mock_session):
+        """GH#13937 review finding: create() must derive assignee_type — a
+        creation-time assignee id must not land with a NULL discriminator
+        (the live liveness_monitor.py recovery-item path relies on this).
+        """
+        agent_id = str(uuid.uuid4())
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-6")):
+            item = await service.create(
+                mock_session,
+                company_id=str(uuid.uuid4()),
+                type=WorkItemType.BUG,
+                title="Recovery item",
+                assignee_agent_id=agent_id,
+            )
+        assert item.assignee_type == AssigneeType.AGENT.value
+        assert str(item.assignee_agent_id) == agent_id
+
+    async def test_create_with_assignee_user_id_sets_assignee_type_user(self, service, mock_session):
+        """GH#13937 review finding: same derivation for the human branch."""
+        user_id = str(uuid.uuid4())
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-7")):
+            item = await service.create(
+                mock_session,
+                company_id=str(uuid.uuid4()),
+                type=WorkItemType.TASK,
+                title="Assigned to human",
+                assignee_user_id=user_id,
+            )
+        assert item.assignee_type == AssigneeType.USER.value
+        assert str(item.assignee_user_id) == user_id
+
+    async def test_create_without_assignee_leaves_assignee_type_none(self, service, mock_session):
+        """No assignee supplied → discriminator stays NULL (unassigned, not a typed guess)."""
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-8")):
+            item = await service.create(
+                mock_session,
+                company_id=str(uuid.uuid4()),
+                type=WorkItemType.TASK,
+                title="Unassigned",
+            )
+        assert item.assignee_type is None
+
 
 class TestStatusTransitions:
     async def test_valid_backlog_to_ready(self, service, mock_session):
