@@ -4261,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "A abrir a automação da sua empresa…",
+      "companyRequired": "Selecione uma empresa para abrir a automação."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8227,7 +8229,13 @@
       "pauseAgent": "Pausar agente",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Modo de visualização",
+      "viewTree": "Árvore",
+      "viewCanvas": "Tela",
+      "canvasTabAll": "Todas as unidades",
+      "canvasUnit": "Unidade {name}",
+      "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes."
     },
     "goals": {
       "title": "Árvore de objetivos",
