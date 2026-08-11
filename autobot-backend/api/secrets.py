@@ -50,6 +50,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
+from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
@@ -84,15 +85,17 @@ class SecretsManager:
 
     def __init__(self):
         """Initialize secrets manager with encryption and caching."""
-        # Use centralized path management
-        from utils.paths_manager import ensure_data_directory, get_data_path
-
-        # Ensure data directory exists
-        ensure_data_directory()
+        # Canonical data directory (#14081): resolve through ssot_config
+        # directly rather than the legacy utils.paths_manager, which reads
+        # an unset config.yaml "paths" key and silently falls back to a
+        # CWD-relative "data/" -- landing the live secrets store outside
+        # the subtree the filesystem MCP bridge excludes in production.
+        data_dir = ssot_config.path.data_path
+        data_dir.mkdir(parents=True, exist_ok=True)
 
         # Get paths using centralized configuration
-        self.secrets_file = str(get_data_path("secrets.json"))
-        self.key_file = str(get_data_path("secrets.key"))
+        self.secrets_file = str(data_dir / "secrets.json")
+        self.key_file = str(data_dir / "secrets.key")
         self._initialize_encryption()
 
         # Cache layer to reduce file I/O (Issue #327)
@@ -101,11 +104,8 @@ class SecretsManager:
         self._cache_mtime: float | None = None  # Track file modification time
 
     def _ensure_directories(self):
-        """Ensure data directory exists - now handled by centralized paths"""
-        # This method is kept for compatibility but functionality moved to centralized paths
-        from utils.paths_manager import ensure_data_directory
-
-        ensure_data_directory()
+        """Ensure the canonical data directory exists (#14081)."""
+        ssot_config.path.data_path.mkdir(parents=True, exist_ok=True)
 
     def _initialize_encryption(self):
         """Initialize or load encryption key"""

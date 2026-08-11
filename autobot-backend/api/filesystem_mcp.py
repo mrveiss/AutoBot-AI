@@ -237,6 +237,13 @@ _EXCLUDED_FILE_PATHS = [
 ]
 _EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_FILE_PATHS]
 
+# Committed, non-secret dotenv templates (review follow-up on #14081): a
+# ".env*" basename denylist alone also blocks these commonly-committed
+# examples, which is over-broad -- they carry no real credential material by
+# convention. Checked against the basename only, so a directory genuinely
+# named e.g. ".env.example" (not a file) stays denied.
+_ENV_TEMPLATE_ALLOWLIST = frozenset({".env.example", ".env.sample", ".env.template"})
+
 
 def _is_excluded_path(resolved: Path) -> bool:
     """Refuse ``.git/``, ``.env*`` and secrets-manager storage (#14081).
@@ -244,10 +251,19 @@ def _is_excluded_path(resolved: Path) -> bool:
     Checked against the *resolved* (symlink-followed, canonicalized) path so
     a symlink or an encoded traversal that lands inside an excluded subtree
     can't slip past a check on the raw input string.
+
+    Accepted gap: this is a path-prefix check, not an inode check, so a
+    *hardlink* to an excluded file placed at an unexcluded path would read
+    through (``os.path.realpath`` follows symlinks but not hardlinks).
+    Creating that hardlink already requires local filesystem write access to
+    the excluded file's directory -- at which point the attacker can already
+    read the excluded file directly without the bridge, so this is
+    defence-in-depth against a caller who only has bridge access, not a hole
+    in the boundary the bridge actually enforces.
     """
     if ".git" in resolved.parts:
         return True
-    if any(fnmatch.fnmatch(part, ".env*") for part in resolved.parts):
+    if resolved.name not in _ENV_TEMPLATE_ALLOWLIST and any(fnmatch.fnmatch(part, ".env*") for part in resolved.parts):
         return True
     for excluded_root in _EXCLUDED_ROOTS:
         try:

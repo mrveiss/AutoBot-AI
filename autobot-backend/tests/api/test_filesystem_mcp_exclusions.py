@@ -22,6 +22,8 @@ Both directions are exercised at the ``_resolve_allowed_path``/
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
@@ -51,6 +53,14 @@ def fake_project(tmp_path, monkeypatch):
     env_file.write_text("EXAMPLE_TOKEN=not-a-real-secret\n", encoding="utf-8")
     env_local = project / ".env.local"
     env_local.write_text("EXAMPLE_TOKEN=not-a-real-secret-either\n", encoding="utf-8")
+    envrc = project / ".envrc"
+    envrc.write_text("export EXAMPLE_TOKEN=not-a-real-secret\n", encoding="utf-8")
+    env_example = project / ".env.example"
+    env_example.write_text("EXAMPLE_TOKEN=\n", encoding="utf-8")
+    env_sample = project / ".env.sample"
+    env_sample.write_text("EXAMPLE_TOKEN=\n", encoding="utf-8")
+    env_template = project / ".env.template"
+    env_template.write_text("EXAMPLE_TOKEN=\n", encoding="utf-8")
 
     data_dir = project / "data"
     data_dir.mkdir()
@@ -83,6 +93,10 @@ def fake_project(tmp_path, monkeypatch):
         "git_config": git_config,
         "env_file": env_file,
         "env_local": env_local,
+        "envrc": envrc,
+        "env_example": env_example,
+        "env_sample": env_sample,
+        "env_template": env_template,
         "secrets_key": secrets_key,
         "secrets_json": secrets_json,
         "secrets_db": secrets_db,
@@ -129,6 +143,22 @@ class TestExcludedSubtreesUnit:
         workflow.write_text("name: ci\n", encoding="utf-8")
 
         assert fs_mcp.is_path_allowed(str(workflow)) is True
+
+    @pytest.mark.parametrize("key", ["env_example", "env_sample", "env_template"])
+    def test_committed_env_templates_are_not_over_blocked(self, fake_project, key):
+        """``.env.example``/``.env.sample``/``.env.template`` are allowed (review follow-up).
+
+        These carry no real credential material by convention and are
+        commonly committed to the repo -- a bare ``.env*`` denylist also
+        catching them is an over-block, not a security requirement.
+        """
+        target = str(fake_project[key])
+
+        assert fs_mcp.is_path_allowed(target) is True
+
+    def test_envrc_still_denied(self, fake_project):
+        """``.envrc`` (direnv) commonly carries real exports -- stays denied."""
+        assert fs_mcp.is_path_allowed(str(fake_project["envrc"])) is False
 
 
 @pytest.fixture
@@ -208,3 +238,98 @@ class TestExcludedSubtreesEndpoint:
         data = response.json()
         assert data["success"] is True
         assert data["content"] == "hello world\n"
+
+
+class TestRealResolverAgreement:
+    """The real secrets-store classes must land inside the real exclusion list.
+
+    Review finding on this PR: an earlier version of the fix derived
+    ``_EXCLUDED_ROOTS`` from ``ssot_config.config.path.data_path`` while
+    ``SecretsManager``/``SecretsService`` still resolved their storage
+    through the legacy ``utils.paths_manager.get_data_path()`` -- which
+    reads an unset ``config.yaml`` "paths" key and silently falls back to a
+    CWD-relative ``"data/..."`` string. In the deployed topology (the
+    backend's systemd ``WorkingDirectory`` sits one level below
+    ``AUTOBOT_BASE_DIR``) the two resolvers disagreed, so the exclusion list
+    protected a path nothing ever wrote to and the live secrets store stayed
+    reachable through the bridge.
+
+    These tests instantiate the *real* classes -- not a monkeypatched
+    ``_EXCLUDED_ROOTS`` and not a hand-picked path -- and check the real,
+    untouched ``fs_mcp.is_path_allowed`` against whatever those classes
+    actually compute. The only stubbing is the unrelated encryption/DB I/O
+    (so the test never writes real key material into the checkout); the
+    path-resolution code under test always runs for real.
+
+    Deterministic regardless of the CWD pytest happens to be invoked from:
+    explicitly ``chdir``s into ``<base_dir>/autobot-backend`` to reproduce
+    the deployed topology rather than relying on ambient CWD, which could
+    accidentally coincide with base_dir and mask the bug.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _deployed_topology_cwd(self, monkeypatch):
+        """Match the systemd WorkingDirectory being one level below base_dir."""
+        backend_cwd = Path(fs_mcp.config.base_dir) / "autobot-backend"
+        monkeypatch.chdir(backend_cwd)
+
+    @pytest.fixture(autouse=True)
+    def _no_stray_secrets_artifacts(self):
+        """Clean up any secrets-store file this test session causes to be
+        (re-)provisioned (#14081 review).
+
+        ``api.secrets`` provisions a module-level ``SecretsManager`` singleton
+        at import time (pre-existing design, unrelated to this fix), which
+        auto-generates a real encryption key the first time the module is
+        imported and no key file exists yet. Importing it here (to reach the
+        real, unmocked path-resolution code) can be that first import in an
+        isolated test run. Removes only files that did not exist before this
+        test and were created during it -- never touches a real,
+        pre-existing store.
+        """
+        data_dir = fs_mcp.config.path.data_path
+        candidates = [data_dir / "secrets.key", data_dir / "secrets.json", data_dir / "secrets.db"]
+        pre_existing = {p for p in candidates if p.exists()}
+        yield
+        for p in candidates:
+            if p.exists() and p not in pre_existing:
+                p.unlink()
+
+    def test_secrets_manager_storage_is_excluded_by_the_real_bridge(self):
+        import api.secrets as secrets_api
+
+        # api.secrets provisions a module-level singleton (`secrets_manager`)
+        # at import time (pre-existing design, tracked separately -- see
+        # #14081 PR discussion) -- reference it directly rather than
+        # constructing a second instance, so this test adds no additional
+        # encryption-key file I/O beyond what importing the module already
+        # does elsewhere in the suite.
+        manager = secrets_api.secrets_manager
+
+        assert fs_mcp.is_path_allowed(manager.key_file) is False, (
+            f"SecretsManager's real encryption key path {manager.key_file!r} is "
+            "reachable through the filesystem MCP bridge."
+        )
+        assert fs_mcp.is_path_allowed(manager.secrets_file) is False, (
+            f"SecretsManager's real secrets store path {manager.secrets_file!r} is "
+            "reachable through the filesystem MCP bridge."
+        )
+
+    def test_secrets_service_storage_is_excluded_by_the_real_bridge(self, monkeypatch):
+        import services.secrets_service as secrets_service_module
+
+        # Stub only the encryption/DB-init I/O -- the path computation this
+        # test guards runs unmodified in the real __init__.
+        monkeypatch.setattr(
+            secrets_service_module.SecretsService,
+            "_init_encryption",
+            lambda self, encryption_key=None: None,
+        )
+        monkeypatch.setattr(secrets_service_module.SecretsService, "_init_database", lambda self: None)
+
+        service = secrets_service_module.SecretsService()
+
+        assert fs_mcp.is_path_allowed(service.db_path) is False, (
+            f"SecretsService's real database path {service.db_path!r} is "
+            "reachable through the filesystem MCP bridge."
+        )

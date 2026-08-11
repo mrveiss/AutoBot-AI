@@ -40,11 +40,15 @@ class SecretsService:
     def __init__(self, db_path: str = None, encryption_key: str | None = None) -> None:
         """Initialize the secrets service with encryption"""
         if db_path is None:
-            # Use centralized path management for default path
-            from utils.paths_manager import ensure_data_directory, get_data_path
-
-            ensure_data_directory()
-            db_path = str(get_data_path("secrets.db"))
+            # Canonical data directory (#14081): resolve through ssot_config
+            # directly rather than the legacy utils.paths_manager, which
+            # reads an unset config.yaml "paths" key and silently falls
+            # back to a CWD-relative "data/" -- landing the live secrets DB
+            # outside the subtree the filesystem MCP bridge excludes in
+            # production.
+            data_dir = config.path.data_path
+            data_dir.mkdir(parents=True, exist_ok=True)
+            db_path = str(data_dir / "secrets.db")
 
         self.db_path = db_path
         self._ensure_db_directory()
