@@ -261,7 +261,9 @@ const nodeLabels = computed(() => ({
   switch: t('workflow.canvas.switchLabel'),
   parallel: t('workflow.canvas.parallelLabel'),
   // #9724: 'loop' is part of WorkflowNode['type'] but had no label entry
-  loop: t('workflow.canvas.loopLabel', 'Loop'),
+  // #13996: the key exists in all 11 locales, so the hard-coded English
+  // fallback was both dead and a hard-coded UI string.
+  loop: t('workflow.canvas.loopLabel'),
   'vision-capture': t('workflow.canvas.visionCapture'),
   'vision-find-element': t('workflow.canvas.visionFindElement'),
   'vision-click': t('workflow.canvas.visionClick'),
