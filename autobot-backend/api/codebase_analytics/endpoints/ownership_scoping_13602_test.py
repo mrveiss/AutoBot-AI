@@ -324,6 +324,17 @@ class TestOwnershipAnalyzerIsBounded:
         assert 0 < _MAX_FILES_TO_BLAME <= 10_000, "a cap this high is not a cap"
         assert 0 < _MAX_BLAME_SECONDS <= 60, "a budget longer than a client timeout bounds nothing"
 
+    def test_one_blame_cannot_outlast_the_budget_containing_it(self):
+        """The pre-existing per-blame timeout was 30s inside a 20s phase budget,
+        so a single slow file could consume the whole budget and overrun it.
+        Caught by the hardcoded-value checker, which flagged the literal — the
+        inconsistency was the more interesting half."""
+        from code_analysis.src.ownership_analyzer import _BLAME_TIMEOUT_SECONDS, _MAX_BLAME_SECONDS
+
+        assert (
+            _BLAME_TIMEOUT_SECONDS < _MAX_BLAME_SECONDS
+        ), "a single git blame may not be allowed more time than the phase budget that bounds it"
+
     def test_a_scan_rooted_in_a_worktree_still_sees_its_own_files(self, tmp_path):
         """The trap I walked into: `.worktrees` was added to _SKIP_DIRECTORIES,
         a SECOND skip list that still matched the absolute path. Since

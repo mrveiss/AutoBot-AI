@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 
 # Issue #542: Handle imports for both standalone execution and backend import
@@ -76,8 +77,12 @@ _SKIP_DIRECTORIES = (
 # through. The wall-clock budget covers the walk as well as the blames, since
 # globbing a large tree is itself measurable; the file cap just stops a
 # pathological tree before the clock starts mattering.
-_MAX_FILES_TO_BLAME = 2000
-_MAX_BLAME_SECONDS = 20.0
+_MAX_FILES_TO_BLAME = env_int("AUTOBOT_OWNERSHIP_MAX_FILES", 2000)
+_MAX_BLAME_SECONDS = env_float("AUTOBOT_OWNERSHIP_BUDGET_SECONDS", 20.0)
+# A single blame must not be allowed to outlast the budget that contains it —
+# the pre-existing 30s here exceeded the whole phase's 20s, so one slow file
+# could consume the entire budget and then some. Kept below it deliberately.
+_BLAME_TIMEOUT_SECONDS = env_float("AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS", 10.0)
 
 # File patterns to skip
 _SKIP_FILE_PATTERNS = (
@@ -404,7 +409,7 @@ class OwnershipAnalyzer:
                     capture_output=True,
                     text=True,
                     cwd=str(root),
-                    timeout=30,
+                    timeout=_BLAME_TIMEOUT_SECONDS,
                 )
             )
 
