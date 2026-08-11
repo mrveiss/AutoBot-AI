@@ -28,6 +28,7 @@ turn latency.
 import asyncio
 import os
 import time
+from datetime import datetime
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_int
@@ -72,6 +73,44 @@ def _decode(value: object) -> str | None:
     if isinstance(value, bytes):
         return value.decode()
     return value if isinstance(value, str) else None
+
+
+def _iso_to_epoch(value: object) -> float | None:
+    """Epoch seconds for a naive-local ISO timestamp, or None if unusable.
+
+    Only used to migrate a legacy cursor. During a DST-repeated hour the string
+    is genuinely ambiguous — it names two instants — so this resolves to one of
+    them. That is acceptable for a one-off migration (worst case, one hour is
+    re-distilled) and is exactly why new values carry the raw epoch instead.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).timestamp()
+    except ValueError:
+        return None
+
+
+def _entry_epoch(entry: Dict[str, Any]) -> float | None:
+    """Unambiguous ordering key for one session-listing entry (#13948)."""
+    epoch = entry.get("updatedAtEpoch")
+    if isinstance(epoch, (int, float)) and not isinstance(epoch, bool):
+        return float(epoch)
+    return _iso_to_epoch(entry.get("updatedAt") or entry.get("lastModified"))
+
+
+def _cursor_to_epoch(raw: object) -> float | None:
+    """Read the cursor in either format — epoch seconds, or a legacy ISO string.
+
+    The stored cursor is durable in Redis, and resetting it re-distils the whole
+    corpus at real LLM cost. So an unrecognised value is migrated, never dropped.
+    """
+    if raw is None:
+        return None
+    try:
+        return float(raw)  # current format
+    except (TypeError, ValueError):
+        return _iso_to_epoch(raw)  # pre-#13948 format
 
 
 class SkillDistillationScheduler:
@@ -394,16 +433,25 @@ class SkillDistillationScheduler:
 
         pending = []
         for entry in sessions:
-            updated_at = entry.get("updatedAt") or entry.get("lastModified")
             session_id = entry.get("id") or entry.get("chatId")
-            if not updated_at or not session_id:
+            updated_at = _entry_epoch(entry)
+            if not session_id:
+                continue
+            if updated_at is None:
+                # Never a *silent* skip: without a usable timestamp the cursor
+                # cannot advance past this session, so distilling it would repeat
+                # every run forever. Loud and skipped beats silent either way.
+                logger.warning("Skill distillation: no usable timestamp for session %s, skipping", session_id)
                 continue
             if cursor is not None and updated_at <= cursor:
                 continue
             pending.append({"id": session_id, "updated_at": updated_at})
 
-        # ISO-8601 timestamps sort lexicographically, so ordering by string keeps the
-        # cursor monotonic without parsing every entry.
+        # Epoch seconds, so ordering is numeric and independent of local time.
+        # The previous string sort relied on ISO-8601 sorting lexicographically,
+        # which holds only at a fixed UTC offset — at the DST fallback the local
+        # clock repeats an hour and sessions in it compared below an already
+        # advanced cursor, skipping them permanently (#13948).
         pending.sort(key=lambda item: item["updated_at"])
         return pending[:MAX_SESSIONS_PER_RUN]
 
@@ -423,24 +471,28 @@ class SkillDistillationScheduler:
     # Cursor
     # ------------------------------------------------------------------
 
-    async def _read_cursor(self) -> str | None:
-        """Last distilled conversation timestamp, or None on first ever run."""
+    async def _read_cursor(self) -> float | None:
+        """Last distilled conversation timestamp in epoch seconds, or None on a first run.
+
+        Reads a legacy ISO cursor too, so an existing deployment migrates in
+        place instead of resetting — a reset re-distils the whole corpus.
+        """
         redis = await get_async_redis_client(database=_REDIS_DB)
         if redis is None:
             return None
         try:
-            return _decode(await redis.get(_CURSOR_KEY))
+            return _cursor_to_epoch(_decode(await redis.get(_CURSOR_KEY)))
         except Exception as exc:
             logger.warning("Skill distillation could not read cursor: %s", exc)
             return None
 
-    async def _write_cursor(self, updated_at: str) -> None:
+    async def _write_cursor(self, updated_at: float) -> None:
         """Advance the cursor. Called only after a proposal call has returned."""
         redis = await get_async_redis_client(database=_REDIS_DB)
         if redis is None:
             return
         try:
-            await redis.set(_CURSOR_KEY, updated_at)
+            await redis.set(_CURSOR_KEY, repr(float(updated_at)))
         except Exception as exc:
             # A cursor that fails to advance costs a re-distillation next run; one that
             # advances without the work having landed costs the conversation entirely.
