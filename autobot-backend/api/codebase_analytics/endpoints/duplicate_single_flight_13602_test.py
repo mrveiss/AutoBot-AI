@@ -32,6 +32,37 @@ import api.codebase_analytics.endpoints.duplicates as dup_mod
 import api.codebase_analytics.endpoints.report as report_mod
 
 
+@pytest.fixture(autouse=True)
+async def _single_flight_lock_is_free():
+    dup_mod._duplicate_scan_lock.acquire()  # MUTATION: simulate a leaked lock
+    """Wait for the module-global lock before and after every test.
+
+    The lock is released by a done-callback on the executor future, so a test
+    that abandons a scan releases it ASYNCHRONOUSLY — after its own body has
+    returned. The next test then called `_run_standard_analysis` while the lock
+    was still held, got the "already in flight" decline, and never reached the
+    code it was written to exercise.
+
+    On this machine the callback always won the race; on a loaded CI runner it
+    did not, and `test_an_outer_cancel_still_signals_the_orphan` failed with
+    "DID NOT RAISE CancelledError" — the task had already returned None.
+    Ordering luck, not a code defect, but a test that depends on it is worthless.
+    """
+    await _wait_for_lock()
+    yield
+    await _wait_for_lock()
+
+
+async def _wait_for_lock(timeout: float = 10.0) -> None:
+    deadline = timeout / 0.05
+    for _ in range(int(deadline)):
+        if dup_mod._duplicate_scan_lock.acquire(blocking=False):
+            dup_mod._duplicate_scan_lock.release()
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError("the single-flight lock was never released — a previous test leaked it")
+
+
 class TestReportUsesTheGuardedScan:
     @pytest.mark.asyncio
     async def test_report_does_not_queue_a_scan_while_one_is_in_flight(self, monkeypatch, tmp_path):
