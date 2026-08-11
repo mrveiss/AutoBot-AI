@@ -49,7 +49,7 @@ from chat_workflow.session_handler import _emit_session_create, _emit_session_de
 from exceptions import get_exceptions_lazy
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
@@ -812,16 +812,10 @@ async def create_session(session_data: SessionCreate, request: Request):
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
     metadata = session_data.metadata or {}
+    # #14020: one builder for every path that stamps ownership (#684 org/team
+    # hierarchy included), so create and backfill cannot drift apart.
+    metadata.update(build_owner_metadata(user_data, session_data.team_id))
     if user_data and user_data.get("username"):
-        metadata["owner"] = user_data["username"]
-        metadata["username"] = user_data["username"]  # For backward compatibility
-        # Issue #684: Capture org/team hierarchy in session metadata
-        if user_data.get("user_id"):
-            metadata["user_id"] = user_data["user_id"]
-        if user_data.get("org_id"):
-            metadata["org_id"] = user_data["org_id"]
-        if session_data.team_id:
-            metadata["team_id"] = session_data.team_id
         logger.info(
             "Session %s created with owner: %s (org: %s)",
             session_id,
