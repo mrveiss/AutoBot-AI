@@ -1898,9 +1898,21 @@ async def send_direct_chat_response(
     Send direct user response to chat (Issue #398: refactored).
 
     Issue #744: Requires authenticated user.
+    Issue #13982: and must own the chat — see the ownership check below.
     """
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
+
+    # #13982: this endpoint carries approval and denial decisions, so without an
+    # ownership check any authenticated user could resolve another user's pending
+    # command approval — and with remember_choice, persist that decision for
+    # future turns in a chat they do not own.
+    #
+    # `Depends(validate_chat_ownership)` cannot be reused here: it resolves
+    # `chat_id` as a path parameter and this endpoint takes it from the body, so
+    # the dependency would validate a different value than the one used. The
+    # explicit call is the same pattern the session endpoints above use.
+    await validate_chat_ownership(chat_id, request)  # SECURITY: caller must own the session
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)

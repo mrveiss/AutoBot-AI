@@ -1381,7 +1381,12 @@ async def delete_session(
     operation="export_session",
     error_code_prefix="CHAT_SESSIONS",
 )
-async def export_session(session_id: str, request: Request, format: str = "json"):
+async def export_session(
+    session_id: str,
+    request: Request,
+    format: str = "json",
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership (#14011)
+):
     """
     Export a chat session in various formats.
 
@@ -1515,6 +1520,12 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         logger.info("Creating new session for reset: %s", session_id)
     else:
         _validate_session_id_or_raise(session_id)
+        # #14011: session_id arrives in the request body, so the file's
+        # `Depends(validate_session_ownership)` pattern cannot be used — it
+        # resolves a path parameter. Reset clears another user's conversation,
+        # so the caller must own it. Only reachable when an id was supplied; an
+        # absent one mints a new session above, which has no owner to check.
+        await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
 
         if clear_context:
             messages_to_keep = _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
