@@ -349,6 +349,19 @@ role_redis_active: >-
 # matching role_xrdp_active below.
 # Migration: a backend/main host that relied on implicit activation must now list
 # 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
+# #13870: which role owns /etc/systemd/system/autobot-chromadb.service on this
+# host. Both ai-stack and redis install and run chromadb, for different
+# topologies, and both wrote the same unit path — so the deployed ExecStart,
+# Description and restart policy flipped with role order.
+#
+# Derived from role_redis_active rather than declared per-playbook: the
+# per-playbook version covered ONE of six entry points, and the other five
+# (deploy-aiml, provision_host, provision-fleet-roles, update-all-nodes and
+# deploy.yml with target_roles=ai-stack) silently deployed no unit at all.
+# Degrades to `ai-stack`, which writes a unit, never to a value that writes
+# nothing.
+chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}

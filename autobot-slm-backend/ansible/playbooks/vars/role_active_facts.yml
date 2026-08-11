@@ -91,3 +91,9 @@ role_llm_active: >-
 role_tts_worker_active: >-
   {{ ('tts-worker' in (node_roles | default([]))) or
      ('autobot-tts-worker' in (node_roles | default([]))) }}
+
+# #13870: mirrors inventory/group_vars/all.yml — the SLM temp-inventory paths
+# load this file instead of group_vars, so an owner defined only there would
+# leave those runs on the role defaults and, on a combined host, write the unit
+# twice again.
+chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"

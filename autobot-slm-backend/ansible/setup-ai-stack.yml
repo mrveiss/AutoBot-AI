@@ -44,12 +44,6 @@
           Data: {{ chromadb_data_dir }}
           ═══════════════════════════════════════════════════════════════
 
-  vars:
-    # #13870: this topology has no redis role, so ai-stack owns the chromadb
-    # unit here. On a combined host the default (`redis`) applies and only one
-    # role writes it — previously both did, and the last one won.
-    chromadb_service_owner: "ai-stack"
-
   roles:
     - role: common
       tags: [common, base]
