@@ -91,6 +91,24 @@ def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_sche
     _validate_config_against_schema(plugin_name, config, config_schema)
 
 
+def _module_is_importable(module_name: str) -> bool:
+    """True if ``module_name`` resolves to an importable module (#13966).
+
+    Takes a MODULE name, not a distribution name — `pillow` is installed but
+    imports as `PIL`, so the manifest must say `PIL`.
+
+    Note that for a dotted name this DOES import the parent packages, because
+    `find_spec("a.b")` must import `a` to find `b`. Third-party `__init__` code
+    therefore executes during a dependency check, and it can raise anything at
+    all — so every Exception means "not importable" rather than propagating out
+    of discovery, where it would produce the #14000 wedge.
+    """
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except Exception:  # noqa: BLE001 — a third-party __init__ may raise anything
+        return False
+
+
 def is_non_production_module(name: str) -> bool:
     """True for package modules that must never be imported at plugin-load time.
 
@@ -395,18 +413,31 @@ class PluginLoader:
 
     def _check_dependencies(self, manifest: PluginManifest) -> List[str]:
         """
-        Check if plugin dependencies are loaded.
+        Check that required plugins are loaded and required modules importable.
+
+        #13966: `dependencies` was resolved against the plugin registry only, so
+        a pip distribution name could never be satisfied no matter what was
+        installed — `telemetry-prompt-middleware` declared `aiohttp` and was
+        structurally unloadable, failing with a message that reads like a
+        missing plugin. The manifest field is documented as "Required plugin
+        names", so the checker matched the schema; the author's intent had
+        nowhere to go. `python_dependencies` is that somewhere.
 
         Args:
             manifest: Plugin manifest
 
         Returns:
-            List of missing dependency names
+            List of missing dependency names, prefixed so the two kinds are
+            distinguishable in the error — the old message named a module and
+            left the operator looking for a plugin.
         """
         missing = []
         for dep in manifest.dependencies:
             if not self.registry.get_plugin(dep):
-                missing.append(dep)
+                missing.append(f"plugin:{dep}")
+        for module in manifest.python_dependencies:
+            if not _module_is_importable(module):
+                missing.append(f"python:{module}")
         return missing
 
     def _check_required_env(self, manifest: PluginManifest) -> Tuple[List[str], List[str]]:
