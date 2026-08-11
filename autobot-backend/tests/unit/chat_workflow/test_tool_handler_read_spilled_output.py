@@ -113,6 +113,58 @@ class TestTheSeamRoutesIt:
         assert ctx.consecutive_invalid_tool_calls == 3
 
 
+class TestAgainstTheRealReader:
+    """No mock. Every other test here stubs `read_spilled_window`, which only
+    proves the handler forwards whatever the reader returns — the uninteresting
+    half. The production question is what the reader returns *at this seam*, and
+    mocking it hides the answer.
+
+    It returns `no_run_bound`, always: `bind_task` is called only from
+    `agent_loop/loop.py`, and `AgentLoop` is documented as never instantiated in
+    production. Pinned here so the day the chat seam starts binding a run, this
+    test changes and says so.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unbound_chat_turn_cannot_read_anything(self):
+        from agent_loop import tool_output_spill as spill
+
+        spill.bind_task(None)  # the state a real chat turn is in
+        results = []
+
+        msgs = await _dispatch(
+            {"name": "read_spilled_output", "params": {"anchor": "autobot:spill:r:bash:deadbeef"}},
+            results,
+        )
+
+        assert results[0]["status"] == "no_run_bound", (
+            "if this now returns something else, the chat seam has started binding a run — "
+            "update #13919's remaining scope"
+        )
+        assert any("Do not retry" in str(getattr(m, "content", "")) for m in msgs)
+
+
+class TestTheNoteAndTheDispatchKeyCannotDrift:
+    def test_the_tool_named_in_the_spill_excerpt_is_dispatchable(self):
+        """The literal in the excerpt note and the dispatch key are asserted
+        independently in two suites, so renaming one leaves both green while the
+        note points at nothing. That drift is exactly how this issue was closed
+        falsely twice. This ties them together."""
+        import re
+
+        from agent_loop.tool_output_spill import _excerpt_payload
+        from chat_workflow.tool_handler import _UNIFORM_BUILTIN_TOOLS
+
+        note = _excerpt_payload("autobot:spill:r:bash:d", "bash", "x" * 100)["note"]
+        named = re.search(r"Read the full output with the (\w+) tool", note)
+
+        assert named, f"the excerpt note no longer names a tool: {note!r}"
+        assert named.group(1) in _UNIFORM_BUILTIN_TOOLS, (
+            f"the note tells the model to call {named.group(1)!r}, "
+            "which the production dispatch seam cannot route"
+        )
+
+
 class TestTheModelIsToldToStopRetrying:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -120,8 +172,9 @@ class TestTheModelIsToldToStopRetrying:
         [
             ({"found": False, "anchor": "a", "reason": "no_run_bound"}, "no_run_bound"),
             ({"found": False, "anchor": "a"}, "not_found"),
+            ({"found": False, "anchor": "a", "reason": "invalid_window"}, "invalid_window"),
         ],
-        ids=["unbound-run", "missing-artifact"],
+        ids=["unbound-run", "missing-artifact", "bad-arguments"],
     )
     async def test_a_miss_is_reported_with_its_reason(self, window, expected):
         """An unbound run and a missing artifact need different responses, and
@@ -132,7 +185,13 @@ class TestTheModelIsToldToStopRetrying:
             msgs = await _dispatch({"name": "read_spilled_output", "params": {"anchor": "a"}}, results)
 
         assert results[0]["status"] == expected
-        assert any("Do not retry" in str(getattr(m, "content", "")) for m in msgs)
+        content = " ".join(str(getattr(m, "content", "")) for m in msgs)
+        if expected == "invalid_window":
+            # Self-correctable: telling the model to abandon the anchor over a
+            # bad integer would lose recoverable output.
+            assert "Retry this anchor" in content
+        else:
+            assert "Do not retry" in content
 
 
 class TestSchemaValidationApplies:

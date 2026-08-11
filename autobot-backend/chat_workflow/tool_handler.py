@@ -649,11 +649,17 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     BROWSER_TOOL_NAMES
     | WEB_RESEARCH_TOOL_NAMES
     | LIVE_PAGE_EXTRACT_TOOL_NAMES
-    # #13919: read_spilled_output is dispatchable unconditionally, even though it
-    # is only *advertised* while AUTOBOT_TOOL_OUTPUT_SPILL is on. Membership here
-    # affects dispatch, not prompt content, and a run that spilled before the
-    # flag was turned off must still be able to resolve its anchors. With the
-    # flag off nothing spills, so a call simply reports not-found.
+    # #13919: read_spilled_output is dispatchable unconditionally, so a run that
+    # spilled before AUTOBOT_TOOL_OUTPUT_SPILL was turned off can still resolve
+    # its anchors — `read_spilled_window` does not consult the flag.
+    #
+    # This DOES leak into prompt content, contrary to an earlier version of this
+    # comment: `_build_unknown_tool_error` derives `known_tools` from this set,
+    # so a model that fumbles any tool name is told this one exists even with the
+    # feature off. Accepted deliberately — the alternative is a flag-dependent
+    # membership set, which would make routing depend on import-time env state
+    # and is a worse trade than one extra name in an error hint. With the flag
+    # off nothing spills, so following the hint reports not-found.
     | frozenset({"web_search", "execute_command", "read_spilled_output"})
 )
 
@@ -2824,13 +2830,24 @@ class ToolHandlerMixin:
             return
 
         if not window.get("found"):
-            # Distinguished from a generic miss so the model stops retrying: an
-            # unbound run and a missing artifact need different responses.
+            # The three miss reasons need three different responses. Flattening
+            # them into "do not retry" tells a model to abandon an anchor over a
+            # self-correctable argument error.
             reason = window.get("reason", "not_found")
+            advice = {
+                # Bad offset/limit — the model can fix this itself, so mirror
+                # the self-correction hint the schema gate gives.
+                "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
+                # No run is bound to this context: an anchor cannot resolve here
+                # at all, and a different anchor would fare no better.
+                "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
+                # The artifact is genuinely gone or never existed.
+                "not_found": "Do not retry this anchor.",
+            }.get(reason, "Do not retry this anchor.")
             execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
             yield WorkflowMessage(
                 type="command_output",
-                content=f"No spilled output for anchor {anchor!r} ({reason}). Do not retry this anchor.",
+                content=f"No spilled output for anchor {anchor!r} ({reason}). {advice}",
                 metadata={"tool": "read_spilled_output", "status": reason},
             )
             return
