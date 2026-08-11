@@ -175,6 +175,10 @@
         @scan-file="handleFileScan"
       />
 
+      <!-- Impact Analysis (#13506): what transitively calls a node. Self-contained —
+           it owns its own query and fetch, so it takes no props from this view. -->
+      <CodebaseImpactPanel />
+
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
@@ -463,6 +467,7 @@ import { useApiClient } from '@/plugins/api'
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
 import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
 import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.vue'
+import CodebaseImpactPanel from '@/components/analytics/CodebaseImpactPanel.vue'
 import CodeSmellsSection from '@/components/analytics/CodeSmellsSection.vue'
 import DuplicatesSection from '@/components/analytics/DuplicatesSection.vue'
 import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
