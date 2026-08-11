@@ -151,7 +151,12 @@ def _resolve_filing_token() -> str | None:
     try:
         return run_or_schedule(_read_filing_token())
     except Exception as exc:  # noqa: BLE001 — a vault outage must not kill the audit run
-        logger.warning("audit: vault lookup for the filing token failed: %s", exc)
+        # Class name only, never the exception text. This is a secrets path, and
+        # a message that happens to interpolate a value would put it in the log.
+        # CodeQL flags it as clear-text-logging-sensitive-data and is right to:
+        # the guarantee should be structural, not a reader having audited every
+        # exception type these calls can raise.
+        logger.warning("audit: vault lookup for the filing token failed (%s)", type(exc).__name__)
         return None
 
 
