@@ -138,7 +138,7 @@ Environment="DISPLAY=:1"
 ### noVNC Settings
 
 - **Port**: 6080
-- **Web Root**: /usr/share/novnc
+- **Web Root**: /opt/novnc (#13069; distro /usr/share/novnc is removed by roles/vnc and stale where it survives)
 - **Proxy Target**: localhost:5901
 
 ## Frontend Integration

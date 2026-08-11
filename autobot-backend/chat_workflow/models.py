@@ -391,6 +391,12 @@ class LLMIterationContext:
     # can gate on them without a DB round-trip.
     work_item_id: str | None = None
     requires_approval_before: List[str] = field(default_factory=list)
+    # #13821: the authenticated caller's RBAC role, resolved by a trusted
+    # server-side producer. Its own field rather than a `context` lookup at the
+    # seam, so the value that reaches MCPDispatcher cannot be a client-supplied
+    # key that slipped through. Defaults to the same "user" every downstream
+    # seam already defaulted to.
+    auth_role: str = "user"
 
 
 def build_governed_identity(

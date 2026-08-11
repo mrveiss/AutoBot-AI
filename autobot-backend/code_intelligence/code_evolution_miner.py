@@ -95,7 +95,7 @@ class PatternLifecycle:
 
 #: Git environment variables that override the repository named on the command
 #: line. Left in place, ``-C repo_path`` becomes advisory and git reads whatever
-#: the ambient environment points at (#13948). A crawler asked to analyse one
+#: the ambient environment points at (#13983). A crawler asked to analyse one
 #: repository must not silently analyse another — the caller gets a plausible
 #: history for the wrong tree, which is worse than an error.
 _REPO_OVERRIDING_GIT_VARS = (

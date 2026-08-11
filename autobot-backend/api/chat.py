@@ -69,7 +69,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -1453,7 +1453,12 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
 
 
 async def _stream_chat_workflow_messages(
-    chat_workflow_manager, chat_id: str, message: str, context: dict, request_id: str
+    chat_workflow_manager,
+    chat_id: str,
+    message: str,
+    context: dict,
+    request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
@@ -1464,7 +1469,7 @@ async def _stream_chat_workflow_messages(
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
         async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context
+            session_id=chat_id, message=message, context=context, auth_role=auth_role
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
@@ -1498,6 +1503,7 @@ async def _stream_direct_response(
     message: str,
     remember_choice: bool,
     request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream direct response for approvals/denials (Issue #398: extracted)."""
     try:
@@ -1508,6 +1514,7 @@ async def _stream_direct_response(
             session_id=chat_id,
             message=message,
             context={"remember_choice": remember_choice},
+            auth_role=auth_role,
         ):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"
@@ -1602,6 +1609,10 @@ async def send_chat_message_by_id(
             message,
             context,
             request_id,
+            # #13821: the RBAC role from the authenticated session, NOT from
+            # request_data — `context` above is the caller's own bag and is
+            # explicitly not trusted for this.
+            auth_role=(current_user or {}).get("role"),
         )
     )
 
@@ -1773,6 +1784,30 @@ async def _merge_chat_messages(
         return new_messages
 
 
+async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
+    """Owner metadata to write when the save path creates a session (#14020).
+
+    `save_session` writes a `metadata` key only when one is passed, so saving to a
+    session id with no existing file produced a session with **no durable owner**.
+    Since #14018 made the file record authoritative, such a session reads as
+    unowned every time its Redis key lapses and is claimed by whoever visits next.
+
+    The write **mirrors the validator's own decision** rather than making an
+    independent one. `validate_chat_ownership` returns ``legacy_migration`` exactly
+    when it found no owner and granted the caller ownership — that is the only case
+    where stamping the file is recording what already happened.
+
+    It deliberately does NOT write on ``enforcement_disabled`` or ``auth_disabled``:
+    those fast paths authorise **without checking any owner at all** (and disabled
+    is the default today, #14010), so claiming there would let any authenticated
+    caller permanently stamp themselves onto an ownerless session — a claim that
+    would outlive the switch to enforced.
+    """
+    if not isinstance(ownership, dict) or ownership.get("reason") != "legacy_migration":
+        return None
+    return build_owner_metadata(ownership.get("user_data")) or None
+
+
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1809,7 +1844,10 @@ async def save_chat_by_id(
     )
 
     result = await chat_history_manager.save_session(
-        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
     )
 
     return JSONResponse(
@@ -1887,15 +1925,35 @@ async def send_direct_chat_response(
     Send direct user response to chat (Issue #398: refactored).
 
     Issue #744: Requires authenticated user.
+    Issue #13982: and must own the chat — see the ownership check below.
     """
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
+
+    # #13982: this endpoint carries approval and denial decisions, so without an
+    # ownership check any authenticated user could resolve another user's pending
+    # command approval — and with remember_choice, persist that decision for
+    # future turns in a chat they do not own.
+    #
+    # `Depends(validate_chat_ownership)` cannot be reused here: it resolves
+    # `chat_id` as a path parameter and this endpoint takes it from the body, so
+    # the dependency would validate a different value than the one used. The
+    # explicit call is the same pattern the session endpoints above use.
+    await validate_chat_ownership(chat_id, request)  # SECURITY: caller must own the session
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
 
     return _create_streaming_response(
-        _stream_direct_response(chat_workflow_manager, chat_id, message, remember_choice, request_id)
+        _stream_direct_response(
+            chat_workflow_manager,
+            chat_id,
+            message,
+            remember_choice,
+            request_id,
+            # #13821: server-side identity, same as the message endpoint.
+            auth_role=(current_user or {}).get("role"),
+        )
     )
 
 

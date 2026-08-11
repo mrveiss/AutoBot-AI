@@ -68,6 +68,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
+from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import rsync_artifact_excludes
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
@@ -847,11 +848,27 @@ async def get_file_drift(
         functools.partial(build_drift_report, source_dir, deployed_dir, component),
     )
 
+    # #13913: annotate the reading with whether a deploy was running when it was
+    # taken. Read after the comparison, not before: a play that starts mid-scan
+    # still makes the reading unstable, and checking afterwards catches that
+    # ordering while checking first does not.
+    activity = await read_deploy_activity()
+    report["deploy_in_progress"] = activity.in_progress
+    report["deploy_state_reason"] = activity.reason
+    report["last_completed_play_at"] = activity.last_completed_play_at
+
     logger.info(
-        "drift check: %d drifted files out of %d compared",
+        "drift check: %d drifted files out of %d compared (deploy_in_progress=%s)",
         len(report["drifted_files"]),
         report["total_compared"],
+        activity.in_progress,
     )
+    if activity.readings_are_unstable and report["drift_detected"]:
+        logger.warning(
+            "drift check: %d drifted files reported while a self-update play is running — "
+            "these are likely files mid-write, not drift",
+            len(report["drifted_files"]),
+        )
 
     return FileDriftReport(**report)
 
@@ -897,6 +914,14 @@ async def resolve_drift(
             status_code=409,
             detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
         )
+    # #13913: a resolve is a delete-style rsync (#13851). Running one against a
+    # tree ansible is mid-write is destructive against files that are simply
+    # being copied, and the drift that prompted it is very likely phantom —
+    # 28 of 30 drifts in one measurement evaporated when the play finished.
+    # Unknown does NOT block: on a host where the unit cannot be queried this
+    # would otherwise disable remediation permanently, which is a worse
+    # failure than the pre-existing behaviour. It is logged instead.
+    await _reject_if_deploy_in_progress()
 
     try:
         source_dir = get_default_source_dir(request.component)
@@ -1029,6 +1054,14 @@ async def resolve_drift_async(
             status_code=409,
             detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
         )
+    # #13913: a resolve is a delete-style rsync (#13851). Running one against a
+    # tree ansible is mid-write is destructive against files that are simply
+    # being copied, and the drift that prompted it is very likely phantom —
+    # 28 of 30 drifts in one measurement evaporated when the play finished.
+    # Unknown does NOT block: on a host where the unit cannot be queried this
+    # would otherwise disable remediation permanently, which is a worse
+    # failure than the pre-existing behaviour. It is logged instead.
+    await _reject_if_deploy_in_progress()
 
     from services.database import db_service
 
@@ -1595,6 +1628,34 @@ _SELF_KILLING_COMPONENTS = frozenset({"autobot-slm-backend", "autobot_shared"})
 # in a restart sequence never runs when the self-restart lands.
 _SELF_SERVICE_NAME = "autobot-slm-backend"
 _restart_pending: bool = False
+
+
+async def _reject_if_deploy_in_progress() -> None:
+    """409 when a self-update play is running; log-and-continue when unknown (#13913).
+
+    Split from the endpoints so both the sync and async resolve paths share one
+    rule — two copies of a safety check is how one of them ends up outdated.
+    """
+    try:
+        activity = await read_deploy_activity()
+    except Exception as exc:  # noqa: BLE001 - a safety probe must not 500 the endpoint
+        # read_deploy_activity is documented never to raise, so this is
+        # defence in depth rather than an expected path: a probe added to make
+        # a destructive operation safer must never be the thing that takes it
+        # down. Failing to probe is the unknown case, handled as such below.
+        logger.warning("drift resolve: deploy-state probe failed (%s) — treating state as unknown", exc)
+        return
+    if activity.readings_are_unstable:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A self-update play is running — resolving now would rsync over files that are "
+                "mid-write, and the drift prompting it is likely transient. Retry once the play "
+                "finishes (#13913)."
+            ),
+        )
+    if activity.in_progress is None:
+        logger.warning("drift resolve: proceeding with deploy state unknown — %s", activity.reason)
 
 
 def _restart_is_pending() -> bool:

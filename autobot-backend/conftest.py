@@ -127,9 +127,21 @@ for _chromadb_mod in [
     "chromadb.config",
     "chromadb.telemetry",
     "chromadb.telemetry.opentelemetry",
+    # #13920: production code catches chromadb.errors.NotFoundError to tell
+    # "this collection does not exist" from every other failure. Without this
+    # entry the stub has no such submodule and the import raises inside the
+    # method under test.
+    "chromadb.errors",
 ]:
     if _chromadb_mod not in sys.modules:
         sys.modules[_chromadb_mod] = _make_pkg_stub(_chromadb_mod)
+
+# The exceptions on the stub must be REAL classes: a MagicMock attribute is not
+# a valid `except` target, so a stubbed-out error type turns a handled absence
+# into a TypeError at the catch site (#13920). Named to match chromadb's own.
+if not isinstance(getattr(sys.modules["chromadb.errors"], "NotFoundError", None), type):
+    _stub_not_found = type("NotFoundError", (Exception,), {})
+    sys.modules["chromadb.errors"].NotFoundError = _stub_not_found
 
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.

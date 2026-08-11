@@ -17,7 +17,6 @@ on exit code + output.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -316,12 +315,77 @@ class TestHardcodedRoles:
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedCategories:
-    """check_hardcoded_categories: blocks `category="general"` literals."""
+    """check_hardcoded_categories: blocks `category="general"` literals.
 
-    def test_blocks_hardcoded_category_string(self, tmp_path: Path) -> None:
+    Issue #14005: the rule catches "keyword-style" shapes (an identifier bound
+    to the literal with `=`/`:`) but was blind to the "call-argument" shape —
+    a STRING-LITERAL key followed by a positional default, e.g.
+    ``doc.get("category", "general")`` — because there is no `=`/`:` between
+    the field name and the value in that shape. It doesn't matter whether that
+    call sits inside a comprehension or not; the missing operator is the gap,
+    not the comprehension. One test per shape the rule intends to catch.
+    """
+
+    def test_blocks_plain_assignment(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'category = "general"\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_dict_literal_value(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
             {"src/q.py": 'q = {"category": "general"}\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_function_default(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def search(category="general"):\n    pass\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        # #14005 reproduction, line 4 of the issue — already caught before the
+        # fix because of the surrounding `category = ` assignment. Kept as a
+        # standalone call-argument case with no assignment wrapper at all.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def b(req):\n    return req.get("category", "general")\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_literal_inside_comprehension(self, tmp_path: Path) -> None:
+        # #14005 reproduction, line 2 of the issue — the exact case that was
+        # missed: same literal, same meaning, invisible only because it sits
+        # inside a `set(... for ...)` comprehension rather than a plain
+        # assignment.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": ("def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'),
+            },
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
+        # Regression for review of #14005: `["\x27]` in a POSIX bracket
+        # expression is NOT "double or single quote" — backslash has no
+        # special meaning inside `[...]` under GNU grep, so that class only
+        # ever matched one of the five literal characters ", \, x, 2, 7 and
+        # never an apostrophe. Every single-quoted literal silently passed
+        # both alternatives. Shape taken verbatim from the real miss found by
+        # the repo-wide audit: autobot-backend/agents/kb_librarian/librarian.py:50.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -331,6 +395,73 @@ class TestHardcodedCategories:
             tmp_path,
             {
                 "src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_unrelated_key_in_comprehension(self, tmp_path: Path) -> None:
+        # Ordinary code: neither the key nor the default is one of the
+        # category/mode literals the rule targets — must stay unflagged so
+        # the widened call-argument pattern doesn't turn into a blanket
+        # "any .get() with two string args" false positive.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_matching_pair_outside_a_get_call(self, tmp_path: Path) -> None:
+        # The call-argument alternative is anchored to `.get(` so a
+        # comma-joined pair of matching string literals elsewhere — a tuple
+        # literal, an assertion — doesn't false-positive just because the
+        # vocabulary happens to line up.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'CATEGORIES = ("category", "general")\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_jsdoc_block_comment_continuation(self, tmp_path: Path) -> None:
+        # Regression from the repo-wide audit (review of #14005): fixing the
+        # quote class to actually match single-quoted literals surfaced
+        # `*`-prefixed JSDoc continuation lines — the hook's comment skip
+        # only recognized `#`/`//` prefixes, not `*` block-comment
+        # continuations. Deliberately a SINGLE quoted value (no ` | `) so
+        # this test exercises the comment skip alone, not the union-type
+        # skip below — a mutation dropping the `\*` comment skip must fail
+        # THIS test independent of the union-type one.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.ts": ("/**\n" " * mode: 'general'\n" " */\n" "export const x = 1\n"),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_typescript_string_literal_union_type(self, tmp_path: Path) -> None:
+        # Same audit finding: `mode?: 'semantic' | 'keyword' | 'hybrid' |
+        # 'auto'` is a TS union-type annotation enumerating accepted values,
+        # not a hardcoded default assignment — must stay unflagged.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/types.ts": (
+                    "export interface Options {\n" "  mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'\n" "}\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_comprehension_using_category_defaults(self, tmp_path: Path) -> None:
+        # Same call-argument shape as the reproduction, but the default is
+        # already the SSOT constant — must stay unflagged.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import CategoryDefaults\n"
+                    'cats = [doc.get("category", CategoryDefaults.GENERAL) for doc in docs]\n'
+                ),
             },
         )
         assert result.returncode == 0

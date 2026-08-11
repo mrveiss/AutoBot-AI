@@ -112,32 +112,54 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
 
     cancel_token = threading.Event()
     _duplicate_scan_cancel = cancel_token
+    released = False
+    # Issue #1233: Use dedicated analytics executor to prevent
+    # default thread pool starvation
+    future = asyncio.get_running_loop().run_in_executor(
+        get_analytics_executor(),
+        lambda: DuplicateCodeDetector(
+            project_root=project_root,
+            min_similarity=min_similarity,
+            cancel_token=cancel_token,
+        ).run_analysis(),
+    )
     try:
-        # Issue #1233: Use dedicated analytics executor to prevent
-        # default thread pool starvation
-        analysis = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                lambda: DuplicateCodeDetector(
-                    project_root=project_root,
-                    min_similarity=min_similarity,
-                    cancel_token=cancel_token,
-                ).run_analysis(),
-            ),
-            timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
-        )
+        analysis = await asyncio.wait_for(asyncio.shield(future), timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
+        _duplicate_scan_lock.release()
+        released = True
         return analysis
     except asyncio.TimeoutError:
         # The executor thread survives this cancellation — signal it to stop, or
         # it keeps scanning for a result that is already discarded (#12779).
         cancel_token.set()
+        # #13602: hold the lock until that thread actually exits. Releasing it
+        # here let the next poll queue a second full scan while the first was
+        # still running, so abandoned scans stacked up — the accumulation #12779
+        # set out to stop. The token above is what makes this bounded rather
+        # than a permanent block: the thread now checks it in its long phases.
+        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        released = True
         logger.warning(
-            "Duplicate detection timed out after %d seconds — signalled the " "orphaned scan to stop",
+            "Duplicate detection timed out after %d seconds — signalled the "
+            "orphaned scan to stop and holding the single-flight lock until it does",
             AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return None
+    except asyncio.CancelledError:
+        # #13602: CancelledError is NOT TimeoutError, so it skipped the handler
+        # above and fell to `finally`, releasing the lock with the token never
+        # set — and the shield guarantees the orphan keeps burning an executor
+        # thread. That is the accumulation both #12779 and this change exist to
+        # close, reachable via uvicorn graceful shutdown and via any outer
+        # deadline tighter than this one. Same treatment as a timeout.
+        cancel_token.set()
+        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        released = True
+        logger.warning("Duplicate detection cancelled — signalled the orphaned scan to stop")
+        raise
     finally:
-        _duplicate_scan_lock.release()
+        if not released:
+            _duplicate_scan_lock.release()
 
 
 def _convert_analysis_to_result(analysis, project_root: str) -> dict:
