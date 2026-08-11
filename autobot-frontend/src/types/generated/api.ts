@@ -1494,6 +1494,7 @@ export interface paths {
          * @description Send direct user response to chat (Issue #398: refactored).
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #13982: and must own the chat — see the ownership check below.
          */
         post: operations["send_direct_chat_response_api_chat_direct_post"];
         delete?: never;
