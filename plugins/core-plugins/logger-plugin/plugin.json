@@ -13,7 +13,7 @@
     "properties": {
       "log_file": {
         "type": "string",
-        "default": "/tmp/plugin_events.log"
+        "default": null
       },
       "log_level": {
         "type": "string",
