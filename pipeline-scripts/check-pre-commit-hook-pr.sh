@@ -165,7 +165,25 @@ fi
 # The trailing `|| true` normalises the while-loop's EOF exit status (1) under
 # `set -e`. It is scoped to the FILTER only — git's exit status is checked
 # above, so this no longer hides a failed diff the way the original did.
+# Generated clients are excluded from every guard this wrapper runs. They are
+# machine-produced from the OpenAPI schema, so a "hardcoded value", a stray
+# console call or a direct redis reference in one is a property of the
+# generator, not of anything a human wrote — nothing here is actionable.
+#
+# It is also a hard performance cliff. Measured 2026-08-11 against
+# pre-commit-hardcoded-values:
+#     3 changed .py files ......  3.7s
+#     generated/api.ts alone ...  >240s (173,665 lines, timed out)
+# Every PR that touches an API response model regenerates that file, which puts
+# it in this diff and turns `code-quality` — a REQUIRED check — into a 40-70
+# minute job. Observed on #13976, where it ran 73 minutes without finishing.
+#
+# NOTE: the `exclude:` key in .pre-commit-config.yaml does NOT cover this path —
+# the invocation below runs the hook script directly rather than through
+# pre-commit, so the filter has to live here. Both are set, for CI and for the
+# local `pre-commit run` respectively.
 files=$(printf '%s\n' "$raw_files" \
+    | grep -Ev '(^|/)(_generated|generated)/' \
     | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
     || true)
 
