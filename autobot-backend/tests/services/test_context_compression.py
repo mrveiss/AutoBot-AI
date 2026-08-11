@@ -134,7 +134,7 @@ class TestCompressHistory:
         # Create 5 messages; each ~6 tokens ("word word word word word .")
         messages = [_msg("user", " ".join(["word"] * 5 + ["."])) for _ in range(5)]
         # Allow budget for only 2 messages (~6 tokens each -> 12 tokens needed)
-        # Each message is 6 words * 1.3 = 7 tokens
+        # Budget maths follows the canonical character estimate (#13694).
         result = await svc.compress_history(messages, 15)
         # First element must be an assistant summary (system mid-history is invalid)
         assert result[0]["role"] == "assistant"
