@@ -31,8 +31,11 @@ Usage:
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import FrozenSet, List, Tuple
+
+from utils.encoding_utils import strip_ansi_codes
 
 # =============================================================================
 # DANGEROUS COMMAND PATTERNS - STRING-BASED (Simple Matching)
@@ -390,6 +393,43 @@ DANGEROUS_RECURSIVE_PATHS: FrozenSet[str] = frozenset(
 # UTILITY FUNCTIONS
 # =============================================================================
 
+# Issue #14027: C0 control characters (NUL through Unit Separator) that can be
+# embedded mid-token to split a dangerous substring/regex match apart while
+# rendering invisibly (or as whitespace) once a shell/terminal normalizes them.
+_C0_CONTROL_RE = re.compile(r"[\x00-\x1f]")
+_WHITESPACE_RUN_RE = re.compile(r"\s+")
+
+
+def _normalize_for_matching(command: str) -> str:
+    """
+    Normalize a command string for dangerous-pattern matching ONLY.
+
+    Issue #14027: is_dangerous_substring/check_dangerous_patterns previously
+    matched on raw input, so a homoglyph (e.g. a fullwidth 'm'), an
+    ANSI-wrapped command, or a NUL/C0-control-split command bypassed every
+    pattern below. This folds all three away before comparison:
+
+    1. Strip ANSI CSI/OSC escape sequences (canonical ``strip_ansi_codes``).
+    2. Replace C0 control characters (NUL, etc.) with a space, so a control
+       byte used as an invisible separator does not glue two tokens the
+       patterns expect to be split apart (and does not glue them together
+       either) once whitespace is collapsed.
+    3. Unicode NFKC-normalize, folding compatibility variants (fullwidth,
+       ligatures, ...) to their canonical form.
+    4. Collapse runs of whitespace to a single space.
+
+    NEVER use the return value as the string that gets executed. NFKC folds
+    characters a legitimate command may legitimately contain (e.g. fullwidth
+    characters in a filename) — normalizing the executed string would
+    silently change what the user asked to run. This function exists to
+    decide *whether* to block, not to rewrite what runs.
+    """
+    normalized = strip_ansi_codes(command)
+    normalized = _C0_CONTROL_RE.sub(" ", normalized)
+    normalized = unicodedata.normalize("NFKC", normalized)
+    normalized = _WHITESPACE_RUN_RE.sub(" ", normalized)
+    return normalized
+
 
 def is_dangerous_substring(command: str) -> Tuple[bool, str | None]:
     """
@@ -401,7 +441,7 @@ def is_dangerous_substring(command: str) -> Tuple[bool, str | None]:
     Returns:
         Tuple of (is_dangerous, matched_pattern_or_none)
     """
-    command_lower = command.lower()
+    command_lower = _normalize_for_matching(command).lower()
     for pattern in DANGEROUS_SUBSTRINGS:
         if pattern.lower() in command_lower:
             return True, pattern
@@ -419,9 +459,10 @@ def check_dangerous_patterns(command: str) -> List[Tuple[str, str, str]]:
         List of tuples (pattern_description, severity, matched_text)
         for all patterns that matched
     """
+    normalized = _normalize_for_matching(command)
     matches = []
     for dp in DANGEROUS_REGEX_PATTERNS:
-        match = dp.pattern.search(command)
+        match = dp.pattern.search(normalized)
         if match:
             matches.append((dp.description, dp.severity, match.group(0)))
     return matches
