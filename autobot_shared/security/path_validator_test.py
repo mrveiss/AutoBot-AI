@@ -133,6 +133,103 @@ class TestValidatePath:
             )
 
 
+class TestValidatePathEncodedTraversal:
+    """#14050: os.path.realpath never decodes or Unicode-normalizes, so a
+    percent-encoded or Unicode-confusable ``..`` never became a real ``..``
+    — it stayed an inert, nonexistent literal filename. That was never an
+    exploitable escape by itself, but ``validate_path``'s containment check
+    still needs a canonical string to check: without normalizing first, a
+    root that happens to contain the caller's cwd (any checkout-relative
+    root, e.g. the filesystem MCP bridge's ``config.base_dir`` allowlist)
+    lets that literal, nonexistent-but-in-bounds filename satisfy
+    containment.
+
+    An earlier version of this fix denylisted the raw/partially-decoded
+    string outright, which also rejected legitimate in-bounds ``..``
+    navigation and filenames literally containing ``..`` — a false-positive
+    regression across 20+ callers (git_mcp.py, npu_code_search_agent.py, the
+    codebase_analytics endpoints, long_running_operations.py) that
+    legitimately walk arbitrary repository trees. The fix instead
+    canonicalizes *before* the one containment check and lets that check be
+    the sole authority in both directions, exactly like it already was for
+    a literal, undisguised ``..``.
+    """
+
+    @pytest.mark.parametrize(
+        "attack_path",
+        [
+            "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "..%2f..%2f..%2fetc%2fpasswd",
+            "%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+            "%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+            "../../etc/passwd",
+            "﹒﹒/﹒﹒/etc/passwd",
+            "‥/‥/etc/passwd",
+        ],
+    )
+    def test_disguised_traversal_rejected_even_inside_cwd(self, tmp_path, attack_path, monkeypatch) -> None:
+        """The allowed root deliberately includes cwd — the case that let a
+        disguised traversal satisfy containment before canonicalization,
+        because the raw/decoded string never resolved to a real out-of-
+        bounds path in the first place."""
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(attack_path, allowed_roots=[str(tmp_path)])
+
+    def test_legitimate_path_with_single_dot_segment_still_resolves(self, tmp_path) -> None:
+        """'.' is not '..' — an ordinary relative reference to cwd itself is
+        untouched by canonicalization."""
+        target = tmp_path / "file.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(f"{tmp_path}/./file.txt", allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_in_bounds_dotdot_navigation_accepted(self, tmp_path) -> None:
+        """The false-positive this pins: 'a/../b/file.txt' resolves to a real
+        in-bounds file and must be ACCEPTED, not denylisted on sight."""
+        (tmp_path / "a").mkdir()
+        b_dir = tmp_path / "b"
+        b_dir.mkdir()
+        target = b_dir / "file.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(f"{tmp_path}/a/../b/file.txt", allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_literal_dotdot_in_filename_accepted(self, tmp_path) -> None:
+        """A real filename containing '..' (not a path segment) must be
+        ACCEPTED — the denylist this replaced rejected it outright."""
+        target = tmp_path / "notes..final.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(str(target), allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_symlink_escape_still_rejected(self, tmp_path) -> None:
+        """A symlink pointing outside the root carries no '..' at all — the
+        pre-existing realpath+containment check this canonicalization sits
+        in front of already caught it, and still must."""
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        link = allowed / "escape"
+        link.symlink_to("/etc")
+
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(str(link / "passwd"), allowed_roots=[str(allowed)])
+
+    def test_percent_encoded_null_byte_rejected(self, tmp_path) -> None:
+        """A null byte smuggled in via '%00' only exists after decoding —
+        checked again post-canonicalization so it can't bypass the
+        pre-decode check the same way an encoded '..' used to."""
+        with pytest.raises(ValueError, match="empty or contains null bytes"):
+            validate_path(f"{tmp_path}/file.txt%00.png", allowed_roots=[str(tmp_path)])
+
+
 # =============================================================================
 # validate_relative_path
 # =============================================================================
@@ -245,6 +342,19 @@ class TestResolveWithinSandbox:
         """URL-encoded traversal is caught after decoding."""
         with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
             resolve_within_sandbox("%2e%2e/etc", tmp_path)
+
+    def test_double_encoded_traversal_rejected(self, tmp_path) -> None:
+        """#14050: a single unquote() pass left %252e%252e undecoded; the
+        shared _canonicalize helper now decodes to a fixed point instead."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("%252e%252e%252fetc", tmp_path)
+
+    def test_unicode_confusable_traversal_rejected(self, tmp_path) -> None:
+        """#14050: Unicode dot look-alikes (e.g. SMALL FULL STOP) NFKC-normalize
+        to ASCII '..'. The raw string carries no literal '..', so this only
+        the second (decode/normalize) check catches it."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("﹒﹒/etc", tmp_path)
 
     def test_null_byte_rejected_as_outside_sandbox(self, tmp_path) -> None:
         """A null byte reaches validate_relative_path and surfaces as outside-sandbox."""

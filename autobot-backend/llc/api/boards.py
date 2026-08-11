@@ -92,7 +92,12 @@ def _board_response(board: Any) -> Dict[str, Any]:
     }
 
 
-def _work_item_summary(item: Any) -> Dict[str, Any]:
+def _work_item_summary(item: Any, column_id: str) -> Dict[str, Any]:
+    """GH#13993: column_id and assignee_type are computed here (not stored on
+    the item) because column membership is derived from status_filter, and
+    the swimlane/column filters on the frontend (KanbanBoardView,
+    SprintBoardView) key off both fields.
+    """
     return {
         "id": str(item.id),
         "identifier": item.identifier,
@@ -103,6 +108,8 @@ def _work_item_summary(item: Any) -> Dict[str, Any]:
         "story_points": item.story_points,
         "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
         "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
+        "assignee_type": item.assignee_type,
+        "column_id": column_id,
     }
 
 
@@ -237,7 +244,7 @@ async def get_board_items(
                 "position": col_data["position"],
                 "status_filter": col_data["status_filter"],
                 "wip_limit": col_data["wip_limit"],
-                "items": [_work_item_summary(i) for i in col_data["items"]],
+                "items": [_work_item_summary(i, col_data["id"]) for i in col_data["items"]],
                 "item_count": len(col_data["items"]),
             }
         )
