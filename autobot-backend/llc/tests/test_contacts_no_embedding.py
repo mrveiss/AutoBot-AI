@@ -31,6 +31,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.api import contacts as contact_api
 from llc.models import contact as contact_model
 from llc.models.contact import LLCContact
 from llc.services import contact as contact_service
@@ -41,7 +42,7 @@ from user_management.models.base import Base
 _FORBIDDEN_IMPORT_MARKERS = ("knowledge", "llc.kb", "async_chromadb_client")
 
 
-@pytest.mark.parametrize("module", [contact_model, contact_service])
+@pytest.mark.parametrize("module", [contact_model, contact_service, contact_api])
 def test_contact_module_never_imports_the_embedding_plane(module) -> None:  # noqa: ANN001
     """Structural guard: source-scan for the forbidden import families.
 

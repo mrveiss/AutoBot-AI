@@ -23,6 +23,7 @@ from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Importing the harness registers the SQLite compile shims for
@@ -42,6 +43,21 @@ def test_contact_model_has_no_authentication_columns() -> None:
     forbidden_markers = ("password", "hash", "session", "token", "otp", "mfa")
     offending = {name for name in column_names if any(marker in name.lower() for marker in forbidden_markers)}
     assert not offending, f"LLCContact must carry no auth-surface columns, found: {offending}"
+
+
+def test_contact_model_has_no_foreign_key_or_relationship_to_users() -> None:
+    """A column-name scan alone would pass a ``ForeignKey("users.id")`` column
+    named e.g. ``owner_id`` — the single change that would actually make a
+    contact resolvable as an auth identity via a join (#13969 review, cheap
+    item). Assert on the schema-level constructs directly rather than
+    trusting naming conventions.
+    """
+    assert not LLCContact.__table__.foreign_keys, (
+        f"LLCContact must have zero foreign keys, found: {LLCContact.__table__.foreign_keys}"
+    )
+    mapper = inspect(LLCContact)
+    user_relationships = [rel for rel in mapper.relationships if rel.mapper.class_.__name__ == "User"]
+    assert not user_relationships, f"LLCContact must have no relationship targeting User, found: {user_relationships}"
 
 
 # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)

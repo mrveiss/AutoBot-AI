@@ -24,12 +24,13 @@ inside one AutoBot installation are organisational units, not separate
 tenants (umbrella #13935 owner correction).
 """
 
+import re
 import uuid
 from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -44,9 +45,32 @@ router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 
 _get_svc = lazy_singleton(ContactService)
 
+# Conservative allow-list — digits, leading +, spaces, and the punctuation a
+# phone number legitimately contains. Never free text: a contact's phone
+# field must not become a place to smuggle arbitrary strings.
+_PHONE_PATTERN = re.compile(r"^\+?[0-9()\-.\s]{3,64}$")
+_NOTES_MAX_LENGTH = 2000
+
 
 def _svc() -> ContactService:
     return _get_svc()
+
+
+def _actor_id(current_user: dict) -> uuid.UUID:
+    """Derive the acting user's id from the authenticated session, never the
+    client-supplied body/query (#13969 review M1 — a client-supplied ``actor``
+    let the audit trail's actor identity and USER/SYSTEM discriminator be
+    whatever the caller typed, and an unparseable value was an unhandled 500
+    in ``ActivityLogService.record``)."""
+    raw = current_user.get("id") or current_user.get("user_id")
+    return uuid.UUID(str(raw))
+
+
+def _strip_full_name(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("full_name must not be blank")
+    return stripped
 
 
 # ------------------------------------------------------------------ Schemas
@@ -54,19 +78,22 @@ def _svc() -> ContactService:
 
 class ContactCreate(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255)
-    email: Optional[str] = Field(None, max_length=320)
-    phone: Optional[str] = Field(None, max_length=64)
+    email: Optional[EmailStr] = Field(None, max_length=320)
+    phone: Optional[str] = Field(None, pattern=_PHONE_PATTERN.pattern, max_length=64)
     role_title: Optional[str] = Field(None, max_length=255)
-    notes: Optional[str] = None
-    actor: Optional[str] = Field(None, description="User ID performing the operation")
+    notes: Optional[str] = Field(None, max_length=_NOTES_MAX_LENGTH)
+
+    _strip_full_name = field_validator("full_name")(_strip_full_name)
 
 
 class ContactUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    email: Optional[str] = Field(None, max_length=320)
-    phone: Optional[str] = Field(None, max_length=64)
+    email: Optional[EmailStr] = Field(None, max_length=320)
+    phone: Optional[str] = Field(None, pattern=_PHONE_PATTERN.pattern, max_length=64)
     role_title: Optional[str] = Field(None, max_length=255)
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=_NOTES_MAX_LENGTH)
+
+    _strip_full_name = field_validator("full_name")(lambda v: _strip_full_name(v) if v is not None else v)
 
 
 class ContactResponse(BaseModel):
@@ -115,7 +142,7 @@ async def create_contact(
         phone=body.phone,
         role_title=body.role_title,
         notes=body.notes,
-        actor=body.actor,
+        actor=_actor_id(_current_user),
     )
     await session.commit()
     return ContactResponse.model_validate(contact)
@@ -147,7 +174,7 @@ async def update_contact(
 ) -> ContactResponse:
     assert_company_access(ctx, company_id)
     updates = body.model_dump(exclude_unset=True)
-    contact = await _svc().update(session, company_id, contact_id, **updates)
+    contact = await _svc().update(session, company_id, contact_id, actor=_actor_id(_current_user), **updates)
     if contact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()
@@ -158,14 +185,13 @@ async def update_contact(
 async def delete_contact(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
-    actor: Optional[str] = None,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     """Permanently delete the contact — its PII no longer exists at rest afterward."""
     assert_company_access(ctx, company_id)
-    deleted = await _svc().delete(session, company_id, contact_id, actor=actor)
+    deleted = await _svc().delete(session, company_id, contact_id, actor=_actor_id(_current_user))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()

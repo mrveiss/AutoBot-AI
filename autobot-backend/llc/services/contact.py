@@ -45,7 +45,7 @@ class ContactService(LLCServiceBase):
         phone: Optional[str] = None,
         role_title: Optional[str] = None,
         notes: Optional[str] = None,
-        actor: Optional[str] = None,
+        actor: Optional[uuid.UUID] = None,
     ) -> LLCContact:
         contact = LLCContact(
             id=uuid.uuid4(),
@@ -103,16 +103,32 @@ class ContactService(LLCServiceBase):
         session: AsyncSession,
         company_id: uuid.UUID,
         contact_id: uuid.UUID,
+        *,
+        actor: Optional[uuid.UUID] = None,
         **fields,
     ) -> Optional[LLCContact]:
         contact = await self.get(session, company_id, contact_id)
         if contact is None:
             return None
         allowed = {"full_name", "email", "phone", "role_title", "notes"}
+        changed_fields = sorted(key for key in fields if key in allowed)
         for key, value in fields.items():
             if key in allowed:
                 setattr(contact, key, value)
         await session.flush()
+
+        if self.activity_log and changed_fields:
+            await self.activity_log.record(
+                session=session,
+                company_id=str(company_id),
+                actor_type=ActorType.USER if actor else ActorType.SYSTEM,
+                actor_id=actor,
+                event_type="contact.updated",
+                entity_type="llc_contact",
+                entity_id=str(contact.id),
+                # Field names only — never the new PII values themselves.
+                after={"fields_changed": changed_fields},
+            )
         return contact
 
     async def delete(
@@ -121,15 +137,26 @@ class ContactService(LLCServiceBase):
         company_id: uuid.UUID,
         contact_id: uuid.UUID,
         *,
-        actor: Optional[str] = None,
+        actor: Optional[uuid.UUID] = None,
     ) -> bool:
         """Hard-delete a contact so its PII no longer exists at rest.
 
         Returns True if a row was deleted, False if no matching contact
         existed for this company (mirrors ``GoalService.delete``'s bool
-        return so the route can 404 without a second lookup).
+        return so the route can 404 without a second lookup). The audit
+        record is written only after ``rowcount`` confirms a row actually
+        matched — a 404 (no matching row) must never emit a
+        ``contact.deleted`` event.
         """
-        if self.activity_log:
+        result = await session.execute(
+            sa_delete(LLCContact).where(
+                LLCContact.id == contact_id,
+                LLCContact.company_id == company_id,
+            )
+        )
+        deleted = result.rowcount > 0
+
+        if deleted and self.activity_log:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
@@ -140,13 +167,7 @@ class ContactService(LLCServiceBase):
                 entity_id=str(contact_id),
                 after=None,
             )
-        result = await session.execute(
-            sa_delete(LLCContact).where(
-                LLCContact.id == contact_id,
-                LLCContact.company_id == company_id,
-            )
-        )
-        return result.rowcount > 0
+        return deleted
 
 
 __all__ = ["ContactService"]

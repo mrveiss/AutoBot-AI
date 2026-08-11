@@ -26,7 +26,14 @@ contact referenceable from multiple companies would need a many-to-many
 ``llc_contact_company_links`` join table and a decision on what "delete"
 means when other companies still hold a link; that is a product decision,
 not an implementation detail, and is tracked as a follow-up decision issue
-rather than guessed at here (see the PR body for the issue link).
+rather than guessed at here — tracked as #13998.
+
+Company soft-delete purges contacts too (#13969 review M2): ``CompanyService.delete()``
+is a soft delete (``Organization.deleted_at``), and every company listing filters
+``deleted_at.is_(None)`` — so without this, a soft-deleted company's contacts would
+vanish from every UI path while their PII stayed at rest forever. ``CompanyService.delete()``
+therefore also issues a hard DELETE against ``llc_contacts`` for that company_id in the
+same transaction. See ``llc/services/company.py::delete`` docstring for the reasoning.
 
 Never in the embedding/knowledge plane: no code path in ``llc/services/contact.py``
 imports ``knowledge``, ``llc.kb``, or ``utils.async_chromadb_client`` — a

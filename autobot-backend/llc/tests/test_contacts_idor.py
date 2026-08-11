@@ -153,3 +153,69 @@ class TestContactsScopeGuard:
         client = _make_client(company_id)
         resp = client.delete(f"/api/llc/contacts/{company_id}/{uuid.uuid4()}")
         assert resp.status_code == 204
+
+    def test_get_by_id_own_company_returns_200(self):
+        """GET /{contact_id} — the write-path guard exists (list/create/delete
+        were already covered); this closes the missing read-single-item case."""
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.get(f"/api/llc/contacts/{company_id}/{uuid.uuid4()}")
+        assert resp.status_code == 200
+
+    def test_get_by_id_other_company_returns_404(self):
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.get(f"/api/llc/contacts/{_OTHER_COMPANY}/{uuid.uuid4()}")
+        assert resp.status_code == 404
+
+    def test_patch_own_company_returns_200(self):
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.patch(f"/api/llc/contacts/{company_id}/{uuid.uuid4()}", json={"phone": "+1-555-0100"})
+        assert resp.status_code == 200
+
+    def test_patch_other_company_returns_404(self):
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.patch(f"/api/llc/contacts/{_OTHER_COMPANY}/{uuid.uuid4()}", json={"phone": "+1-555-0100"})
+        assert resp.status_code == 404
+
+
+class TestContactsActorDerivation:
+    """#13969 review M1: the audit-trail actor must come from the authenticated
+    session, never from client-supplied input — and a client sending garbage
+    in the (now-removed) actor fields must not be able to reach that path at
+    all, let alone crash it."""
+
+    def test_create_derives_actor_from_authenticated_user(self):
+        from llc.api.contacts import ContactService  # noqa: PLC0415
+
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.post(f"/api/llc/contacts/{company_id}", json={"full_name": "Ada Lovelace"})
+        assert resp.status_code == 201
+        _, kwargs = ContactService.create.call_args
+        assert kwargs["actor"] == _FIXED_USER_ID
+
+    def test_delete_derives_actor_from_authenticated_user(self):
+        from llc.api.contacts import ContactService  # noqa: PLC0415
+
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.delete(f"/api/llc/contacts/{company_id}/{uuid.uuid4()}")
+        assert resp.status_code == 204
+        _, kwargs = ContactService.delete.call_args
+        assert kwargs["actor"] == _FIXED_USER_ID
+
+    def test_client_supplied_actor_field_in_body_is_ignored_not_500(self):
+        """Before the fix, an unparseable client-supplied ``actor`` reached
+        ``uuid.UUID(actor_id)`` inside ``ActivityLogService.record`` unguarded
+        — an unhandled 500. The field no longer exists on the schema at all,
+        so pydantic silently drops it as an unknown extra key."""
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        resp = client.post(
+            f"/api/llc/contacts/{company_id}",
+            json={"full_name": "Ada Lovelace", "actor": "not-a-uuid-at-all"},
+        )
+        assert resp.status_code == 201
