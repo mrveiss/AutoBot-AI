@@ -334,8 +334,16 @@ check_hardcoded_categories() {
             continue
         fi
 
-        # Check for category="general" or mode="hybrid" patterns
-        if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["\x27](general|hybrid|unknown)["\x27]'; then
+        # Check for category="general" or mode="hybrid" patterns (keyword-style:
+        # assignment, dict literal value, function default) AND the call-argument
+        # shape `d.get("category", "general")` — the key is a STRING LITERAL
+        # positional argument, not an identifier bound with `=`/`:`, so it has no
+        # operator between the field name and the default value. That shape falls
+        # through the keyword-style pattern whether or not it sits inside a
+        # comprehension (#14005) — the comprehension itself isn't the cause, the
+        # missing operator is.
+        if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["\x27](general|hybrid|unknown)["\x27]' || \
+           echo "$line" | grep -qE '["\x27](category|search_mode|mode)["\x27][[:space:]]*,[[:space:]]*["\x27](general|hybrid|unknown)["\x27]'; then
             local value
             value=$(echo "$line" | grep -oE '["\x27](general|hybrid|unknown)["\x27]' | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
