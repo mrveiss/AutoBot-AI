@@ -274,12 +274,10 @@ def test_no_read_or_delete_path_still_creates_on_access():
             None,
         )
         assert node is not None, f"{rel} no longer defines {func} — the guard would silently cover nothing"
-        called = {
-            n.func.attr for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-        }
-        assert "get_or_create_collection" not in called, (
-            f"{rel}:{func} creates a collection on a path that only reads or deletes — see #13920"
-        )
+        called = {n.func.attr for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+        assert (
+            "get_or_create_collection" not in called
+        ), f"{rel}:{func} creates a collection on a path that only reads or deletes — see #13920"
 
 
 def test_every_entity_delete_drops_its_collection():
