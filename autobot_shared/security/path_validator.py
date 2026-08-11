@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import unicodedata
 import urllib.parse
 from pathlib import Path
 from typing import Sequence
@@ -40,6 +41,36 @@ class SandboxPathError(ValueError):
     verbatim (e.g. as a FastAPI ``HTTPException`` detail) without
     re-deriving wording.
     """
+
+
+def _contains_traversal_token(path: str) -> bool:
+    """True when *path* hides a parent-directory reference behind encoding.
+
+    ``os.path.realpath`` performs neither percent-decoding nor Unicode
+    normalization, so ``validate_path``'s containment check alone never
+    caught a disguised ``..`` — it only rejected such input incidentally,
+    on hosts where the allowed root happened not to contain the caller's
+    current working directory (#14050 — the filesystem MCP bridge's
+    allowlist, ``config.base_dir``, exposed this once a checkout became
+    a real, existing allowed root instead of a nonexistent deployment path).
+
+    Checks the raw string, up to two rounds of percent-decoding (covers
+    single- and double-encoded ``%2e%2e%2f`` forms — matching the encoded
+    case ``resolve_within_sandbox`` already guards, #11844), and the NFKC
+    normalization of each (collapses Unicode confusables such as ``﹒``
+    SMALL FULL STOP or ``‥`` TWO DOT LEADER down to ASCII ``.``) for a
+    literal ``..``.
+    """
+    candidates = {path}
+    decoded = path
+    for _ in range(2):
+        next_decoded = urllib.parse.unquote(decoded)
+        candidates.add(next_decoded)
+        if next_decoded == decoded:
+            break
+        decoded = next_decoded
+    candidates.update({unicodedata.normalize("NFKC", candidate) for candidate in list(candidates)})
+    return any(".." in candidate for candidate in candidates)
 
 
 def validate_path(
@@ -69,11 +100,19 @@ def validate_path(
     Raises
     ------
     ValueError
-        If the path escapes all allowed roots, contains null bytes, or
-        (when *must_exist*) does not exist.
+        If the path escapes all allowed roots, contains null bytes, hides a
+        parent-directory reference behind percent-encoding or a Unicode
+        confusable, or (when *must_exist*) does not exist.
     """
     if not user_path or "\x00" in user_path:
         raise ValueError("Invalid path: empty or contains null bytes")
+
+    # #14050: reject a disguised ".." before it ever reaches realpath —
+    # os.path.realpath resolves the raw byte string, so an allowed root that
+    # happens to contain the caller's cwd (any checkout-relative root) would
+    # otherwise let a decoded traversal land on a real, in-bounds file.
+    if _contains_traversal_token(user_path):
+        raise ValueError("Path is outside allowed directories")
 
     roots = tuple(allowed_roots) if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
 
@@ -188,8 +227,11 @@ def resolve_within_sandbox(path: str, root: Path) -> Path:
     ):
         raise SandboxPathError("Invalid path: path traversal not allowed")
 
-    decoded_path = urllib.parse.unquote(clean_path)
-    if ".." in decoded_path or decoded_path.startswith("/"):
+    # #14050: shares _contains_traversal_token with validate_path so a
+    # double-encoded (%252e%252e) or Unicode-confusable (﹒﹒, ‥) traversal
+    # can't slip past this resolver either — the single-pass unquote() this
+    # replaced only caught one level of percent-encoding.
+    if _contains_traversal_token(clean_path) or urllib.parse.unquote(clean_path).startswith("/"):
         raise SandboxPathError("Invalid path: encoded traversal not allowed")
 
     try:

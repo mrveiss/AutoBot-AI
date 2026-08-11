@@ -133,6 +133,48 @@ class TestValidatePath:
             )
 
 
+class TestValidatePathEncodedTraversal:
+    """#14050: os.path.realpath never decodes — a disguised ``..`` used to be
+    caught only by accident, when the allowed root happened not to contain the
+    caller's cwd. The filesystem MCP bridge's allowlist is exactly
+    ``config.base_dir``, and once that resolves to a real, existing checkout
+    (rather than a nonexistent deployment path) a decoded traversal lands on
+    a real, in-bounds file. These pin the boundary as correct regardless of
+    where ``allowed_roots`` points — including a root that contains cwd.
+    """
+
+    @pytest.mark.parametrize(
+        "attack_path",
+        [
+            "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "..%2f..%2f..%2fetc%2fpasswd",
+            "%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+            "%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+            "../../etc/passwd",
+            "﹒﹒/﹒﹒/etc/passwd",
+            "‥/‥/etc/passwd",
+        ],
+    )
+    def test_disguised_traversal_rejected_even_inside_cwd(self, tmp_path, attack_path, monkeypatch) -> None:
+        """The allowed root deliberately includes cwd — the case that let a
+        disguised traversal through before the encoding/normalization check
+        existed, because it could resolve to a real file under cwd."""
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(attack_path, allowed_roots=[str(tmp_path)])
+
+    def test_legitimate_path_with_single_dot_segment_still_resolves(self, tmp_path) -> None:
+        """'.' is not '..' — an ordinary relative reference to cwd itself is
+        untouched by the traversal check."""
+        target = tmp_path / "file.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(f"{tmp_path}/./file.txt", allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+
 # =============================================================================
 # validate_relative_path
 # =============================================================================
@@ -245,6 +287,19 @@ class TestResolveWithinSandbox:
         """URL-encoded traversal is caught after decoding."""
         with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
             resolve_within_sandbox("%2e%2e/etc", tmp_path)
+
+    def test_double_encoded_traversal_rejected(self, tmp_path) -> None:
+        """#14050: a single unquote() pass left %252e%252e undecoded; the
+        shared _contains_traversal_token check now unwinds a second layer."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("%252e%252e%252fetc", tmp_path)
+
+    def test_unicode_confusable_traversal_rejected(self, tmp_path) -> None:
+        """#14050: Unicode dot look-alikes (e.g. SMALL FULL STOP) NFKC-normalize
+        to ASCII '..'. The raw string carries no literal '..', so this only
+        the second (decode/normalize) check catches it."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("﹒﹒/etc", tmp_path)
 
     def test_null_byte_rejected_as_outside_sandbox(self, tmp_path) -> None:
         """A null byte reaches validate_relative_path and surfaces as outside-sandbox."""
