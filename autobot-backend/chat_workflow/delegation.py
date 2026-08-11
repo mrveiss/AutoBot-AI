@@ -60,6 +60,7 @@ from typing import Awaitable, Callable, Dict, List
 from autobot_shared import tool_catalogue as _tc
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.session_role import DEFAULT_AUTH_ROLE
 
 logger = get_logger(__name__)
 
@@ -99,7 +100,7 @@ def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[s
     return sorted({tool for tool in (_claude_tool_for(f) for f in forbidden) if tool})
 
 
-async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth_role: str = "user") -> str:
+async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
     """Run *task* as a governed claude_code subagent; return its output."""
     from orchestration.agent_registry import resolve_forbidden_tools
     from services.execution.base_backend import ExecutionTask
@@ -119,7 +120,7 @@ async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth
     return result.stdout or result.stderr or ""
 
 
-async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_role: str = "user") -> str:
+async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
     """Run *task* as a governed **internal-LLM** subagent; return its final text.
 
     Drives the production continuation loop (``_execute_llm_continuation_loop``) with
@@ -183,7 +184,7 @@ async def run_delegated_subtask(
     depth: int = 0,
     engine: str = "claude_code",
     parent_agent_id: str | None = None,
-    auth_role: str = "user",
+    auth_role: str = DEFAULT_AUTH_ROLE,
 ) -> str:
     """Run a delegated subtask as a governed subagent (GH#11207).
 
