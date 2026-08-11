@@ -16,6 +16,7 @@ from .company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
+from .contact import LLCContact
 from .enums import (
     ActivityEventType,
     ApprovalStatus,
@@ -63,6 +64,7 @@ __all__ = [
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "LLCContact",
     "FindingProposalStatus",
     "LLCFindingProposal",
     "CompanyCreate",
