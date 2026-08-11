@@ -28,7 +28,7 @@
             'wip-exceeded': isWipExceeded(col),
           }"
         >
-          <span class="column-title">{{ col.title }}</span>
+          <span class="column-title">{{ col.name }}</span>
           <div class="column-meta">
             <span class="column-count">{{ itemsByColumn(col.id).length }}</span>
             <span v-if="col.wip_limit" class="wip-limit" :title="$t('llc.kanban.wipLimit', { limit: col.wip_limit })">
@@ -140,7 +140,10 @@ import type { WorkItem } from './workItemTypes'
 
 interface BoardColumn {
   id: string
-  title: string
+  // GH#13993: the board endpoint (`_board_response` in llc/api/boards.py) emits
+  // `name`, never `title`. The old `title` field rendered a blank header on
+  // every column.
+  name: string
   wip_limit: number | null
 }
 
@@ -156,7 +159,7 @@ function itemsByColumn(colId: string) {
 }
 
 function humanItems(colId: string) {
-  return items.value.filter(i => i.column_id === colId && i.assignee_type === 'human')
+  return items.value.filter(i => i.column_id === colId && i.assignee_type === 'user')
 }
 
 function agentItems(colId: string) {
@@ -220,10 +223,12 @@ async function fetchBoard() {
   try {
     const [boardData, itemsData] = await Promise.all([
       api.get<{ columns: BoardColumn[] }>(`/api/llc/boards/${boardId.value}`),
-      api.get<{ items: WorkItem[] }>(`/api/llc/boards/${boardId.value}/items`),
+      // GH#13993: the board-items endpoint nests items inside each column —
+      // there is no top-level `items` key. Flatten before storing.
+      api.get<{ columns: Array<{ id: string; items: WorkItem[] }> }>(`/api/llc/boards/${boardId.value}/items`),
     ])
     columns.value = boardData.columns ?? []
-    items.value = itemsData.items ?? []
+    items.value = (itemsData.columns ?? []).flatMap(col => col.items ?? [])
   } catch (err) {
     logger.error('Failed to load board', err)
   } finally {

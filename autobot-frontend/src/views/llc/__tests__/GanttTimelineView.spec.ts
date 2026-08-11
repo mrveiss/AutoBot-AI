@@ -59,7 +59,18 @@ const PROJECT_TIMELINE = {
 function wireApi() {
   h.api.get.mockImplementation((url: string) => {
     if (url === '/api/llc/boards/b1') return Promise.resolve({ project_id: 'p1', name: 'Sprint 3 Board' })
-    if (url === '/api/llc/boards/b1/items') return Promise.resolve({ items: [{ id: 'w1' }, { id: 'w2' }] })
+    // GH#13993: the real board-items response nests items inside each column —
+    // there is no top-level `items` key. This fixture previously used the
+    // top-level shape, so these tests passed while the view read a key the API
+    // never sends and every board-scoped timeline silently filtered to empty.
+    if (url === '/api/llc/boards/b1/items')
+      return Promise.resolve({
+        board: { id: 'b1', name: 'Sprint 3 Board' },
+        columns: [
+          { id: 'col-ready', name: 'Ready', position: 0, status_filter: ['ready'], wip_limit: null, items: [{ id: 'w1' }], item_count: 1 },
+          { id: 'col-doing', name: 'Doing', position: 1, status_filter: ['in_progress'], wip_limit: null, items: [{ id: 'w2' }], item_count: 1 },
+        ],
+      })
     if (url === '/api/llc/companies/c1/projects')
       return Promise.resolve([{ id: 'p1', name: 'Proj 1' }, { id: 'p2', name: 'Proj 2' }])
     if (url === '/api/llc/projects/p1/timeline') return Promise.resolve(PROJECT_TIMELINE)
