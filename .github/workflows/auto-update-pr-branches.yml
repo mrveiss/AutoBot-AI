@@ -2,37 +2,50 @@
 #
 # Whenever Dev_new_gui receives a push (merge, direct commit), this workflow
 # refreshes AT MOST ONE open PR targeting Dev_new_gui: the oldest one that is
-# behind base AND is not currently mid-run. Eliminates the manual "Update
+# both behind base AND not currently mid-run. Eliminates the manual "Update
 # branch" click and keeps the next PR to land tested against current base,
-# without resetting PRs that are still executing a check set.
+# without resetting PRs that are still executing a check set. A PR that is
+# mid-run is SKIPPED, never gated on — the workflow moves on to the next
+# behind PR in the queue rather than doing nothing (see #14022 review fix
+# below; an earlier version of this change got that wrong).
 #
 # See: #9300 post-mortem — direct hotfixes on main caused drift.
 #
 # #14022: this used to refresh the single oldest-behind PR on EVERY push,
 # with no regard for whether that PR's own checks (from the last refresh)
 # had finished. On a busy day pushes arrive faster than a full check set
-# completes on the singleton self-hosted runner (~53 minutes), so the same
-# PR was repeatedly reset mid-run and never converged — measured on
-# 2026-08-11: PR #13945 was refreshed at 13:21, 13:33 and 13:43 (three
-# resets in 22 minutes), each discarding whatever of the prior run had
-# completed.
+# completes on the singleton self-hosted runner, so the same PR was
+# repeatedly reset mid-run and never converged — measured on 2026-08-11:
+# PR #13945 was refreshed at 13:21, 13:33 and 13:43 (three resets in 22
+# minutes), each discarding whatever of the prior run had completed.
 #
-# The header used to justify this by `strict: true` — "a PR cannot merge
-# while its branch is behind, and this job is the only thing that clears
-# that". That is no longer the configuration:
+# REVIEW FIX (same PR): the first version of this serialization used
+# `break` on a busy head-of-queue PR, which abandoned every PR behind it
+# too — confirmed live: while #13945 sat busy, #13955/#13991/#14002/#14003
+# were fully idle and eligible, but `break` meant none of them were ever
+# considered. That converts "the head thrashes" into "the tail never
+# updates" — worse, because it exits 0 and looks identical to "nothing was
+# behind". Fixed to `continue`: skip a busy candidate and evaluate the next
+# one. `MAX_BRANCH_UPDATES` already caps actual refreshes at one per push,
+# so scanning past busy candidates to find a refreshable one does not
+# reintroduce the reset amplification this workflow exists to remove.
+#
+# The header used to justify refreshing by `strict: true` — "a PR cannot
+# merge while its branch is behind, and this job is the only thing that
+# clears that". That is no longer the configuration:
 #
 #   $ gh api repos/OWNER/REPO/branches/Dev_new_gui/protection \
 #       --jq '.required_status_checks.strict'
 #   false
 #
 # `strict` was set to false as the recorded decision on #13801, so being
-# behind base no longer blocks a merge. The remaining, real reason to
-# refresh a PR is #9300 drift protection: catch a SEMANTIC conflict between
-# an already-merged PR and a still-open one before it lands, not just a
-# textual one (GitHub already computes textual mergeability on demand,
-# independent of this job). That only needs each PR tested against current
-# base once, immediately before its turn — not reset on every unrelated
-# merge while it is still running.
+# behind base no longer blocks a merge. With strict=false, this workflow's
+# ENTIRE remaining purpose is the #9300 drift/semantic-conflict net: catch
+# a semantic conflict between an already-merged PR and a still-open one
+# before it lands (GitHub already computes textual mergeability on demand,
+# independent of this job). A starved tail — the bug fixed above — would
+# have meant that net went silently absent for every non-head PR exactly
+# when merge volume, and therefore semantic-conflict risk, is highest.
 #
 # WHY NOT REMOVE THE REFRESH ENTIRELY: doing so would mean a PR's CI last
 # ran against a base that has since moved, so a merge could still introduce
@@ -42,21 +55,30 @@
 # runs get starved by rapid merges the same way this job's targets did (see
 # the `cancel-in-progress` comment in ci.yml, #13432: 26 of the last 39 base
 # runs were cancelled before that fix). Relying on it alone would trade one
-# unreliable safety net for another. Serializing the refresh keeps the net
-# on the PR side, where it registers as a required check.
+# already-documented-unreliable safety net for another, and it is also
+# after-the-fact: a semantic break it catches has already landed. Serializing
+# the refresh keeps the net on the PR side, before merge, where it registers
+# as a required check.
 #
 # MERGE QUEUE WAS EVALUATED AND REJECTED FOR NOW: GitHub's native merge
 # queue is the standard solution to this exact problem (serialize, test
 # each PR against base + the queue ahead of it, merge when green) and is
 # available here (public repo, owner is a User account, Free plan). It is
-# not enabled today: `gh api repos/OWNER/REPO/rules/branches/Dev_new_gui`
-# shows only the review-count ruleset, no `merge_queue` rule. Turning it on
-# requires every workflow that publishes one of the ten required contexts
-# (smoke-test, code-quality, startup-import-smoke, "Unit & Integration
-# Tests", "No open blocks-merge issues reference this PR", "No commit
-# trailers", verify-generated-types, migration-matrix,
-# verify-precommit-config, api-wiring) to also trigger on `merge_group` —
-# `grep -rl merge_group .github/workflows/` currently returns nothing. A
+# not enabled today — checked directly:
+#
+#   $ gh api repos/OWNER/REPO/rules/branches/Dev_new_gui
+#   [only the review-count ruleset; no `merge_queue` rule]
+#
+# Turning it on requires every workflow that publishes one of the ten
+# required contexts (smoke-test, code-quality, startup-import-smoke, "Unit &
+# Integration Tests", "No open blocks-merge issues reference this PR", "No
+# commit trailers", verify-generated-types, migration-matrix,
+# verify-precommit-config, api-wiring) to also trigger on `merge_group`. As
+# of the review that produced this comment, none of those ten workflows had
+# one — check the current state yourself before relying on this, e.g.
+# `grep -L merge_group .github/workflows/{smoke-test-workflow-file}.yml`
+# (this file itself now contains the string `merge_group` in prose, so a
+# blanket `grep -rl` over the whole directory no longer proves absence). A
 # ruleset flip without that migration deadlocks the queue: every entrant
 # waits forever for required contexts that never fire, on a repo whose
 # recovery jobs were already moved off the singleton runner once for this
@@ -105,11 +127,28 @@ jobs:
           # keeps the runs this update triggers out of action_required.
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          # #14022: cap on how many PRs one push may refresh. Kept at 1 — a
-          # push refreshes the head of the FIFO queue and nothing else, so a
-          # PR further back never gets reset by someone else's merge. Raising
-          # this only makes sense if the singleton runner constraint is lifted.
+          # #14022: cap on how many PRs one push may ACTUALLY refresh. Kept
+          # at 1 — a push lands one refresh, at most, so a PR further back
+          # never gets reset by someone else's merge. This does NOT cap how
+          # many busy candidates may be skipped while searching for the one
+          # to refresh (see the review fix in the header): a push can pass
+          # over several in-flight PRs and still only update one.
           MAX_BRANCH_UPDATES: '1'
+          # #14022 review fix (HIGH): a check wedged in QUEUED/IN_PROGRESS
+          # forever — the #13401 singleton-runner-outage class — must not
+          # block a PR's turn indefinitely just because it looks "in
+          # flight". Bound: 90 minutes. Justification, not a round number:
+          # sampled the last 14 completed `pull_request` runs of ci.yml
+          # (the workflow carrying the heaviest required checks, including
+          # the 12-shard python-suite) on 2026-08-11 — durations ranged
+          # 14-71 minutes (median ~22, max 70m39s). 90 minutes gives ~19
+          # minutes of margin above the worst OBSERVED legitimate run,
+          # while staying far short of an outage-class wedge, which persists
+          # for hours until a human intervenes, not tens of minutes. A check
+          # non-terminal past this bound is treated as no longer eligible to
+          # block a refresh, not as failed — it is left running; only the
+          # queue-blocking effect is bypassed.
+          STALE_BOUND_SECONDS: '5400'
         run: |
           echo "Dev_new_gui was updated — checking open PRs for staleness..."
 
@@ -179,27 +218,29 @@ jobs:
           OUTDATED=$(echo "$OUTDATED" | tr ' ' '\n' | grep '[0-9]' | sort -n)
 
           # #14022: a PR is "due" for refresh only once its OWN last run has
-          # finished. Checking this is what turns "refresh every behind PR on
+          # finished (or has gone stale past STALE_BOUND_SECONDS — see env
+          # comment above). This is what turns "refresh every behind PR on
           # every push" into "refresh the head of the queue once, when its
-          # turn comes" — the same PR is never reset mid-flight by an
-          # unrelated merge landing while it is still running.
+          # turn comes" — without ALSO turning into "one busy PR blocks
+          # every PR behind it" (the review fix above).
           #
           # `statusCheckRollup` mixes two shapes: GitHub Check Runs (`status`
           # one of QUEUED/IN_PROGRESS/COMPLETED) and legacy Status API
           # contexts (`status` empty, verdict in `.state`, e.g. PENDING). Both
           # are checked so a PR is never treated as idle while either kind is
-          # still running.
-          is_in_flight() {
+          # still running. Emits one line: "<count>|<oldest non-terminal
+          # startedAt, or empty>", both computed by gh's own --jq so no extra
+          # binary is required beyond what this file already depends on.
+          check_pr_state() {
             local pr="$1"
-            local count
-            count=$(gh pr view "$pr" --repo "$REPO" --json statusCheckRollup \
-              --jq '[.statusCheckRollup[] | select((.status != null and .status != "" and .status != "COMPLETED") or (.state == "PENDING"))] | length' \
-              2>/dev/null || echo "")
-            [ -n "$count" ] && [ "$count" -gt 0 ]
+            gh pr view "$pr" --repo "$REPO" --json statusCheckRollup \
+              --jq '([.statusCheckRollup[] | select((.status != null and .status != "" and .status != "COMPLETED") or (.state == "PENDING"))]) as $c | (($c | length | tostring) + "|" + (($c | map(select(.startedAt != null and .startedAt != "")) | map(.startedAt) | min) // ""))' \
+              2>/dev/null || echo "0|"
           }
 
           UPDATED=0
           FAILED=0
+          SKIPPED_BUSY=0
           for PR in $OUTDATED; do
             [ "$UPDATED" -lt "$MAX_BRANCH_UPDATES" ] || break
             # Validate numeric to guard against unexpected jq output
@@ -208,14 +249,32 @@ jobs:
               continue
             fi
 
-            if is_in_flight "$PR"; then
-              # This is the head of the FIFO queue and it is still running —
-              # do not skip ahead to a later PR, and do not touch it either.
-              # Skipping ahead would refresh two PRs concurrently on a
-              # singleton runner for no benefit; touching it would be exactly
-              # the reset this fix removes.
-              echo "  PR #$PR is due next but still has checks running — leaving it, and the rest of the queue, undisturbed this push."
-              break
+            STATE=$(check_pr_state "$PR")
+            COUNT="${STATE%%|*}"
+            OLDEST_START="${STATE#*|}"
+            [[ "$COUNT" =~ ^[0-9]+$ ]] || COUNT=0
+
+            if [ "$COUNT" -gt 0 ]; then
+              AGE=""
+              if [ -n "$OLDEST_START" ]; then
+                NOW_EPOCH=$(date -u +%s)
+                STARTED_EPOCH=$(date -u -d "$OLDEST_START" +%s 2>/dev/null || echo "")
+                if [ -n "$STARTED_EPOCH" ]; then
+                  AGE=$((NOW_EPOCH - STARTED_EPOCH))
+                fi
+              fi
+
+              if [ -n "$AGE" ] && [ "$AGE" -gt "$STALE_BOUND_SECONDS" ]; then
+                echo "  PR #$PR has $COUNT non-terminal check(s), oldest running ${AGE}s (> ${STALE_BOUND_SECONDS}s bound) — treating as wedged (#13401 class), eligible to refresh."
+                # Falls through to the refresh below.
+              else
+                # Genuinely still running (or age unknown) — do NOT refresh
+                # it, and do NOT stop here: move on to the next PR in the
+                # queue instead of letting this one gate everyone behind it.
+                echo "  PR #$PR is due but has $COUNT check(s) still running${AGE:+ (${AGE}s so far)} — leaving it running, checking the next PR in the queue."
+                SKIPPED_BUSY=$((SKIPPED_BUSY + 1))
+                continue
+              fi
             fi
 
             echo "Updating PR #$PR..."
@@ -238,7 +297,25 @@ jobs:
           done
 
           echo ""
-          echo "Done: $UPDATED updated, $FAILED need manual attention."
+          echo "Done: $UPDATED updated, $FAILED need manual attention, $SKIPPED_BUSY skipped as still in flight."
+
+          # #14022 review fix (MEDIUM): "0 updated" is ambiguous — it means
+          # either "nothing was behind" (already reported above and exited
+          # earlier) or "everything behind was busy" (a starved queue). Make
+          # the second case visible instead of indistinguishable from a
+          # quiet, healthy run: a log-level warning annotation (surfaces in
+          # the Actions UI run list) plus a job-summary line (surfaces on the
+          # run page without opening logs).
+          if [ "$UPDATED" -eq 0 ] && [ "$SKIPPED_BUSY" -gt 0 ]; then
+            echo "::warning::auto-update-pr-branches: 0 PRs refreshed this push — all $SKIPPED_BUSY candidate(s) at the head of the queue are still mid-run. Queue is busy, not empty."
+            {
+              echo "### auto-update-pr-branches: queue busy, not empty"
+              echo ""
+              echo "$SKIPPED_BUSY PR(s) at the head of the queue were mid-run and skipped this push; 0 were refreshed."
+              echo "This means the #9300 drift-protection net did not run for any PR on this push — by design, not by failure — because every candidate is still being tested against an earlier base."
+              echo "If this repeats across many consecutive pushes, check whether the head-of-queue PR is a $STALE_BOUND_SECONDS-second-bound candidate (wedged) rather than genuinely still running."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           # Never fail — conflicting PRs just need human resolution
           exit 0
 
