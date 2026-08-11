@@ -53,7 +53,7 @@ except ValueError:
 _GH_REPO = "mrveiss/AutoBot-AI"
 # #13859: canonical name of the issue-filing token in the SYSTEM vault. The
 # worker had no owned credential at all — see _resolve_filing_token.
-_FILING_TOKEN_SECRET = "github_issue_filing_token"
+_FILING_TOKEN_SECRET = "github_issue_filing_token"  # nosec B105  # a secret NAME, not a value
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
