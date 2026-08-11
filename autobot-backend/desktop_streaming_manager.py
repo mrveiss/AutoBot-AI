@@ -254,8 +254,11 @@ class VNCServerManager:
         Returns:
             True if NoVNC is found, False otherwise.
         """
-        # Common NoVNC installation paths
-        novnc_paths = ["/usr/share/novnc", "/opt/novnc", "~/novnc", "./novnc"]
+        # Common NoVNC installation paths. #13076: /usr/share/novnc dropped —
+        # roles/vnc removes that distro package (#13069), and where it survives
+        # it serves a stale pre-VeNCrypt 1.0.0 client (#13060). config.path.novnc_path
+        # is the canonical install location (default /opt/novnc).
+        novnc_paths = [config.path.novnc_path, "~/novnc", "./novnc"]
 
         for path in novnc_paths:
             if Path(path).expanduser().exists():
@@ -444,7 +447,7 @@ class VNCServerManager:
             novnc_command = [
                 websockify_cmd,
                 "--web",
-                "/usr/share/novnc",
+                config.path.novnc_path,
                 "--cert=/etc/autobot/certs/server-cert.pem",
                 "--key=/etc/autobot/certs/server-key.pem",
                 "--ssl-only",

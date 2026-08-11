@@ -1,0 +1,178 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Session endpoints must refuse a session the caller does not own (#14011).
+
+Two gaps, both found by reading every endpoint in `api/chat_sessions.py` rather
+than grepping for the word "ownership":
+
+- ``export_session`` returned another user's **entire transcript**. It even
+  audit-logged the export, so the disclosure was recorded and not prevented.
+- ``reset_chat`` took ``session_id`` from the request body and cleared another
+  user's conversation.
+
+The tests assert behaviour. The precedent in this repo
+(`api_endpoint_migrations_test.py`) uses ``inspect.getsource`` + ``assertIn``,
+which passes on a check that is present but never reached — the failure mode
+worth guarding against when the whole defect is "the call was missing".
+"""
+
+import contextlib
+import inspect
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
+
+from api import chat_sessions
+from security.session_ownership import validate_session_ownership
+
+
+def _forbidden(*_args, **_kwargs):
+    raise HTTPException(status_code=403, detail="not your session")
+
+
+def _client(*, owner: str, seen: list | None = None):
+    """Mount just this router, with ownership resolved for *owner* only.
+
+    A real request through FastAPI is the only way to prove the dependency binds
+    `session_id` from the **path**. Asserting on the signature cannot: a
+    dependency that resolved it as a query parameter would look identical there
+    while validating a caller-controlled value.
+    """
+    app = FastAPI()
+    app.include_router(chat_sessions.router)
+
+    async def _ownership(session_id: str, request: Request = None):  # noqa: ARG001
+        if seen is not None:
+            seen.append(session_id)
+        if session_id != owner:
+            raise HTTPException(status_code=403, detail="not your session")
+        return {"authorized": True}
+
+    app.dependency_overrides[validate_session_ownership] = _ownership
+    return TestClient(app, raise_server_exceptions=False)
+
+
+class TestExportIsRefusedForANonOwner:
+    """AC: user A cannot export user B's session; the owner still can."""
+
+    def test_a_non_owner_gets_403(self):
+        seen: list = []
+        client = _client(owner="alices-chat", seen=seen)
+
+        response = client.get("/chat/sessions/bobs-chat/export")
+
+        assert response.status_code == 403
+        assert seen == ["bobs-chat"], "the refusal must come from the validator, not a routing accident"
+
+    def test_the_owner_is_not_refused(self):
+        """The positive half — a guard that refuses everyone is not a fix.
+
+        Asserting only `!= 403` would pass on a 500, so this also pins that the
+        validator ran and saw the id from the **path**. That is the binding a
+        signature assertion cannot check: a dependency resolving `session_id` as
+        a query parameter would look identical in the signature while validating
+        a value the caller controls.
+        """
+        seen: list = []
+        client = _client(owner="alices-chat", seen=seen)
+
+        response = client.get("/chat/sessions/alices-chat/export")
+
+        assert seen == ["alices-chat"], "the validator must run on the path value"
+        assert response.status_code != 403
+
+
+class TestExportRequiresOwnership:
+    """Cheap structural guards, kept alongside the request-level tests above."""
+
+    def test_the_dependency_is_declared(self):
+        """`Depends` is resolved by FastAPI, so the wiring is what there is to assert.
+
+        Calling the function directly would bypass dependency resolution
+        entirely and prove nothing — hence a signature assertion here, and a
+        behavioural one for `reset_chat` below, which calls its check inline.
+        """
+        params = inspect.signature(chat_sessions.export_session).parameters
+
+        assert "ownership" in params, "export_session must declare the ownership dependency"
+        assert params["ownership"].default is not inspect.Parameter.empty
+
+    def test_the_dependency_is_the_canonical_validator(self):
+        """A `Depends` on some other callable would look identical in the signature."""
+        dep = inspect.signature(chat_sessions.export_session).parameters["ownership"].default
+
+        assert dep.dependency is chat_sessions.validate_session_ownership
+
+
+class TestResetRequiresOwnership:
+    @pytest.mark.asyncio
+    async def test_a_non_owner_cannot_reset_someone_elses_session(self):
+        request = MagicMock()
+        reset = MagicMock(session_id="someone-elses-chat", clear_context=True, keep_system_prompt=True)
+
+        with patch.object(chat_sessions, "validate_session_ownership", side_effect=_forbidden):
+            with patch.object(chat_sessions, "get_chat_history_manager", MagicMock()):
+                with pytest.raises(HTTPException) as excinfo:
+                    await chat_sessions.reset_chat(request, reset)
+
+        assert excinfo.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_happens_before_the_session_is_cleared(self):
+        """A check that runs after the wipe is not a check."""
+        manager = MagicMock()
+        manager.save_session = AsyncMock()
+        manager.clear_session = AsyncMock()
+        request = MagicMock()
+        reset = MagicMock(session_id="someone-elses-chat", clear_context=True, keep_system_prompt=True)
+
+        with patch.object(chat_sessions, "validate_session_ownership", side_effect=_forbidden):
+            with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=manager)):
+                with pytest.raises(HTTPException):
+                    await chat_sessions.reset_chat(request, reset)
+
+        manager.save_session.assert_not_awaited()
+        manager.clear_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_validated_session_id_is_the_one_from_the_body(self):
+        """The body-vs-path mismatch that makes `Depends` unusable here."""
+        seen = {}
+
+        async def _record(session_id, request):  # noqa: ARG001
+            seen["session_id"] = session_id
+            raise HTTPException(status_code=403, detail="stop here")
+
+        request = MagicMock()
+        reset = MagicMock(session_id="chat-from-the-body", clear_context=True, keep_system_prompt=True)
+
+        with patch.object(chat_sessions, "validate_session_ownership", _record):
+            with patch.object(chat_sessions, "get_chat_history_manager", MagicMock()):
+                with pytest.raises(HTTPException):
+                    await chat_sessions.reset_chat(request, reset)
+
+        assert seen["session_id"] == "chat-from-the-body"
+
+    @pytest.mark.asyncio
+    async def test_a_reset_with_no_session_id_is_not_gated(self):
+        """An absent id mints a new session — there is no owner to check yet.
+
+        Gating it would break starting a fresh chat, so this pins that the new
+        guard is scoped to the case that actually has an owner.
+        """
+        checked = MagicMock(side_effect=AssertionError("must not gate a session-less reset"))
+        request = MagicMock()
+        reset = MagicMock(session_id=None, clear_context=True, keep_system_prompt=True)
+
+        with patch.object(chat_sessions, "validate_session_ownership", checked):
+            with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=None)):
+                # Whatever else this path does is not under test; the assertion is
+                # that the ownership guard was never consulted.
+                with contextlib.suppress(Exception):
+                    await chat_sessions.reset_chat(request, reset)
+
+        checked.assert_not_called()

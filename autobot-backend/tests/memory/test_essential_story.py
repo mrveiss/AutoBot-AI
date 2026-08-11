@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.token_count import estimate_fast
+
 # #11796: snapshot sys.modules before the stub bootstrap.  The stubs below
 # leaked (e.g. a bare "knowledge._composed" stub broke the real knowledge
 # package's lazy `from knowledge import KnowledgeBase` for every test module
@@ -188,9 +190,32 @@ class TestEstimateTokens:
         assert gen._estimate_tokens("") == 0
 
     def test_ten_words(self):
+        """#13694: agreement with the canonical estimator, not words * 1.3.
+
+        The old assertion was ``int(10 * 1.3)``. That formula was replaced
+        because ``text.split()`` sees one element for a non-space-delimited
+        script, so it under-counted CJK by ~26x and JSON by ~19x — and this
+        number decides how much of the story fits in the budget.
+
+        Asserted against the shared helper rather than a literal, so it pins
+        agreement rather than a second copy of the arithmetic.
+        """
         gen = EssentialStoryGenerator()
         text = "one two three four five six seven eight nine ten"
-        assert gen._estimate_tokens(text) == int(10 * 1.3)
+
+        assert gen._estimate_tokens(text) == estimate_fast(text)
+
+    def test_a_non_space_delimited_script_is_not_under_counted(self):
+        """The defect itself, not its arithmetic.
+
+        A value-only test goes green again on any ratio tweak; this one fails
+        for the whole class of input the previous formula could not see.
+        """
+        gen = EssentialStoryGenerator()
+        cjk = "\u4e2d\u6587\u5b57\u7b26\u4e32" * 40  # 200 chars, one "word" to split()
+
+        assert len(cjk.split()) == 1, "fixture no longer exercises the defect"
+        assert gen._estimate_tokens(cjk) > 10
 
 
 class TestFetchTopFacts:
@@ -218,7 +243,8 @@ class TestFetchTopFacts:
     @pytest.mark.asyncio
     async def test_respects_token_budget(self):
         """Only facts that fit within max_tokens are returned."""
-        # Each fact ~10 words * 1.3 = 13 tokens
+        # Budget maths follows the canonical character estimate (#13694),
+        # not the removed words * 1.3 ratio.
         facts = _make_facts(20, quality_step=0.05)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)

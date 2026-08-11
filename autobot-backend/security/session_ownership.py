@@ -26,6 +26,34 @@ from autobot_shared.ssot_constants import TTL_30_DAYS
 logger = get_logger(__name__)
 
 
+def build_owner_metadata(user_data: "dict | None", team_id: str | None = None) -> dict:
+    """The durable owner record written into a session file (#14020).
+
+    One builder for every path that stamps ownership, so a session created by
+    ``POST /chat/sessions`` and one backfilled by the save endpoint carry the same
+    fields. They previously drifted: the save path wrote only ``owner``/``username``
+    and dropped the org/team hierarchy #684 records.
+
+    ``username`` is written alongside ``owner`` because ``get_session_owner``
+    resolves ``owner or username`` — sessions predating the ``owner`` field carry
+    only the latter, and dropping it would make older readers blind to new writes.
+
+    Returns {} when there is no authenticated username, so callers can pass the
+    result straight through without a truthiness dance.
+    """
+    username = (user_data or {}).get("username")
+    if not username:
+        return {}
+    metadata = {"owner": username, "username": username}
+    if user_data.get("user_id"):
+        metadata["user_id"] = user_data["user_id"]
+    if user_data.get("org_id"):
+        metadata["org_id"] = user_data["org_id"]
+    if team_id:
+        metadata["team_id"] = team_id
+    return metadata
+
+
 class SessionOwnershipValidator:
     """
     Validates and enforces session ownership for conversation access control.
@@ -76,6 +104,7 @@ class SessionOwnershipValidator:
         username: str,
         org_id: str | None = None,
         team_id: str | None = None,
+        force: bool = False,
     ) -> bool:
         """
         Associate a chat session with its owner and org/team context.
@@ -85,11 +114,29 @@ class SessionOwnershipValidator:
             username: Owner username
             org_id: Organization ID (#684)
             team_id: Team ID for team-scoped sessions (#684)
+            force: Reassign an already-owned session (#14012). A deliberate
+                transfer must say so; the default refuses.
 
         Returns:
-            True if successful
+            True if successful, False if the session already has a different
+            owner and *force* was not set.
         """
         try:
+            # #14012: this used to be an unconditional set, so any writer could
+            # silently take a session over — and then pass every ownership check
+            # on it. An authorization record that any caller can overwrite is not
+            # an authorization record. Refreshing one's own ownership (the TTL
+            # refresh path) is still allowed.
+            existing = await self.get_session_owner(session_id)
+            if existing and existing != username and not force:
+                logger.warning(
+                    "Refusing to reassign session %s... from %s to %s without force",
+                    session_id[:8],
+                    existing,
+                    username,
+                )
+                return False
+
             # Store ownership mapping
             ownership_key = self._get_ownership_key(session_id)
             await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
@@ -455,6 +502,64 @@ class SessionOwnershipValidator:
 
         return None
 
+    async def _durable_owner(self, session_id: str, request: Request) -> str | None:
+        """Owner recorded in the session file, which has no TTL (#14018).
+
+        The Redis ownership key expires; this does not. Consulting it before
+        claiming an apparently-unowned session is what separates "never had an
+        owner" from "the owner has been away for a day".
+
+        Delegates to ``ChatHistoryManager.get_session_owner`` rather than reading
+        ``metadata["owner"]`` here. That accessor also falls back to
+        ``metadata["username"]``, which sessions predating the ``owner`` field
+        carry — ``create_session`` still writes both keys for exactly that
+        reason. Parsing only ``owner`` would have read those older sessions as
+        unowned and handed them to their next visitor, which is this issue's own
+        defect reintroduced for that vintage of file.
+
+        Returns None when the session records no owner or cannot be read; the
+        caller then treats it as genuinely unowned. See the PR for why that
+        fail-open is deliberate and where it is uncomfortable.
+        """
+        try:
+            from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
+
+            manager = get_chat_history_manager(request)
+            if manager is None:
+                return None
+            owner = await manager.get_session_owner(session_id)
+        except Exception as exc:
+            logger.warning("Could not read the durable owner of session %s...: %s", session_id[:8], exc)
+            return None
+        return owner if isinstance(owner, str) and owner else None
+
+    async def _owner_when_cache_is_empty(
+        self, session_id: str, username: str, user_data: Dict, request: Request
+    ) -> "tuple[str | None, Dict | None]":
+        """Resolve ownership when Redis has no record (#14018).
+
+        An absent Redis record does NOT mean the session is unowned: the key
+        carries a TTL, so it also goes absent for any session whose owner has not
+        touched it recently. Claiming it here handed that session to whoever
+        accessed it next, authorized — ownership expiring into a takeover.
+
+        The session file's ``metadata.owner`` does not expire, so it is asked
+        first. Redis is a cache in front of it, not the record of truth.
+
+        Returns ``(owner, early_result)``. A non-None *early_result* is the
+        caller's return value; otherwise *owner* continues the normal comparison.
+        """
+        durable_owner = await self._durable_owner(session_id, request)
+        if durable_owner:
+            if durable_owner == username:
+                # Rehydrate the cache for its real owner, never for the caller.
+                await self.set_session_owner(session_id, durable_owner, org_id=user_data.get("org_id"), team_id=None)
+            return durable_owner, None
+
+        logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
+        await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
+        return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
+
     async def _resolve_ownership(
         self,
         session_id: str,
@@ -465,8 +570,9 @@ class SessionOwnershipValidator:
     ) -> Dict:
         """Helper for validate_ownership. Ref: #1088.
 
-        Performs the Redis ownership lookup and resolves the result into one of:
-        - legacy_migration  (no stored owner — claim it now)
+        Performs the ownership lookup and resolves the result into one of:
+        - legacy_migration  (no owner in Redis *or* on disk — a genuinely
+          unowned session, claimed now)
         - mismatch path     (owner differs — delegate to _check_ownership_mismatch)
         - owner_match       (user owns the session)
 
@@ -483,18 +589,9 @@ class SessionOwnershipValidator:
         stored_owner = await self.get_session_owner(session_id)
 
         if not stored_owner:
-            logger.warning("Session %s... has no owner (legacy session)", session_id[:8])
-            await self.set_session_owner(
-                session_id,
-                username,
-                org_id=user_data.get("org_id"),
-                team_id=None,
-            )
-            return {
-                "authorized": True,
-                "user_data": user_data,
-                "reason": "legacy_migration",
-            }
+            stored_owner, early = await self._owner_when_cache_is_empty(session_id, username, user_data, request)
+            if early is not None:
+                return early
 
         if stored_owner != username:
             return await self._check_ownership_mismatch(

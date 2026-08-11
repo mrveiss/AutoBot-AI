@@ -531,7 +531,7 @@ async def search(request: SearchRequest, req: Request):
     - **query** (required): Search query string
     - **limit** / **top_k**: Maximum results (default: 10, max: 100)
     - **category**: Filter by category
-    - **mode**: Search mode — 'semantic', 'keyword', 'hybrid' (default), 'auto'
+    - **mode**: Search mode — `semantic`, `keyword`, `hybrid` (default), `auto`
     - **enable_rag**: Enable RAG enhancement for synthesized responses
     - **enable_reranking**: Enable cross-encoder reranking
     - **reformulate_query**: Expand query for better coverage

@@ -75,7 +75,7 @@ async def test_run_delegated_subtask_dispatches_to_engine():
     with patch.dict(delegation._ENGINES, {"claude_code": engine}):
         out = await run_delegated_subtask("do it", agent_type="research_agent", depth=0)
     assert out == "subagent output"
-    engine.assert_awaited_once_with("do it", "research_agent", 0)
+    engine.assert_awaited_once_with("do it", "research_agent", 0, "user")
 
 
 @pytest.mark.asyncio
@@ -126,7 +126,7 @@ async def test_internal_engine_registered_and_dispatches():
     with patch.dict(delegation._ENGINES, {"internal": engine}):
         out = await run_delegated_subtask("t", agent_type="research_agent", depth=0, engine="internal")
     assert out == "internal result"
-    engine.assert_awaited_once_with("t", "research_agent", 0)
+    engine.assert_awaited_once_with("t", "research_agent", 0, "user")
 
 
 # --- _handle_delegate_tool: flag off = unchanged, on = runs subagent -------
@@ -271,7 +271,9 @@ async def test_delegate_tool_passes_parent_agent_id_to_runner():
 
     mixin = _mixin()
     agent_ctx = SimpleNamespace(agent_id="the_parent")
-    ctx = SimpleNamespace(context={"delegations_this_turn": 0, "delegation_depth": 0}, agent_context=agent_ctx)
+    ctx = SimpleNamespace(
+        context={"delegations_this_turn": 0, "delegation_depth": 0}, agent_context=agent_ctx, auth_role="admin"
+    )
     captured = {}
     mock_run = AsyncMock(side_effect=lambda *a, **kw: captured.update(kw) or "done")
 
@@ -281,6 +283,10 @@ async def test_delegate_tool_passes_parent_agent_id_to_runner():
     ):
         _ = [m async for m in mixin._handle_delegate_tool({"params": {"task": "t"}}, [], ctx)]
     assert captured.get("parent_agent_id") == "the_parent"
+    # #13821: a subagent acts for the same authenticated user. Dropping the role
+    # here would deny an admin the tools they are entitled to, the moment
+    # delegation ships.
+    assert captured.get("auth_role") == "admin"
 
 
 # --- GH#11266: env_flag covers "on" (canonical truthy) ----------------------

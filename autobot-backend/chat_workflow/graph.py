@@ -394,6 +394,7 @@ def _build_llm_iteration_context(state: ChatState):
     ``SystemMessage``.  See that helper's docstring for the full rationale.
     """
     from .models import LLMIterationContext, build_governed_identity
+    from .session_role import resolve_auth_role
 
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
@@ -414,6 +415,10 @@ def _build_llm_iteration_context(state: ChatState):
     agent_context, work_item_id, approval_cats = build_governed_identity(
         state.get("context", {}) or {}, state["session_id"]
     )
+    # #13821: same lift for the authenticated role. The graph path builds its own
+    # LLMIterationContext, so omitting it here would leave every graph-path tool
+    # call evaluated as the default role — which is the bug being fixed.
+    auth_role = resolve_auth_role(state.get("context", {}) or {})
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
@@ -427,6 +432,7 @@ def _build_llm_iteration_context(state: ChatState):
         system_prompt=state["llm_params"].get("system_prompt"),
         initial_prompt=initial_prompt,
         message=state["user_message"],
+        auth_role=auth_role,
         # #11552: thread the request context (company_id, user_id, …) into the
         # iteration context so the tool-dispatch seam is company-scoped in the
         # GRAPH path too. The legacy _create_llm_iteration_context already passes

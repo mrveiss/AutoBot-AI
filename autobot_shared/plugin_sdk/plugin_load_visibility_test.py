@@ -204,7 +204,9 @@ class TestLoadedNOfM:
             "discovered": 0,
             "loaded": 0,
             "failed": [],
+            "conflicts": [],
             "started": True,
+            "completed": True,
         }
 
     @pytest.mark.asyncio
@@ -322,3 +324,172 @@ class TestCanonicalisationDoesNotSplitTheRegistry:
         canonicalise_plugin_sdk()
 
         assert not [m for m in sys.modules if m.startswith("plugin_sdk.") and m.endswith("_test")]
+
+
+class TestTheReportCannotMisleadTheCaller:
+    """#13677 review: three properties with no test at all."""
+
+    @pytest.mark.asyncio
+    async def test_a_crashed_discovery_is_not_an_empty_tree(self, tmp_path, monkeypatch):
+        """Both report discovered=0, loaded=0. Deriving `started` from the
+        manager's own flag made them byte-identical — "the subsystem delivered
+        nothing" reading exactly like "there is nothing to deliver", which is
+        this issue's headline defect one level up."""
+        manager = PluginManager([tmp_path])
+        monkeypatch.setattr(manager._loader, "discover_plugins", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        with pytest.raises(RuntimeError):
+            await manager.startup()
+
+        crashed = manager.get_load_report()
+
+        empty_manager = PluginManager([tmp_path])
+        await empty_manager.startup()
+        empty = empty_manager.get_load_report()
+
+        assert crashed != empty, "a crashed discovery must not look like an empty tree"
+        assert crashed["completed"] is False
+        assert empty["completed"] is True
+
+    @pytest.mark.asyncio
+    async def test_mutating_the_returned_report_cannot_corrupt_the_manager(self, tmp_path):
+        """`dict()` is shallow, so a caller appending to report["failed"] was
+        editing the manager's own tally."""
+        _make_plugin(tmp_path, "copy-guard-plugin", source="raise RuntimeError('boom')\n")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        manager.get_load_report()["failed"].append("fabricated")
+
+        assert "fabricated" not in manager.get_load_report()["failed"]
+
+    @pytest.mark.asyncio
+    async def test_a_name_claimed_by_two_directories_is_reported(self, tmp_path):
+        """The blocker: manifest first-wins and directory last-wins meant one
+        plugin's CODE ran under another's MANIFEST, reported as loaded 1 of 1
+        with no failures. First still wins; it is no longer silent."""
+        core = tmp_path / "core"
+        community = tmp_path / "community"
+        _make_plugin(core, "collide-demo")
+        _make_plugin(community, "collide-demo")
+
+        manager = PluginManager([core, community])
+        await manager.startup()
+        report = manager.get_load_report()
+
+        assert report["conflicts"] == ["collide-demo"], "a shadowed plugin must be named"
+        assert (
+            manager._loader._manifest_dirs["collide-demo"].resolve() == (core / "collide-demo").resolve()
+        ), "the directory kept must be the one whose manifest was registered"
+
+
+class TestNonProductionModulesAreNeverImported:
+    """The filter's rule, asserted where it can fail.
+
+    Inlined in the alias loop it was untestable: the package has no conftest.py,
+    so the `conftest` clause had no trigger and survived deletion with the whole
+    suite green.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        ["plugin_sdk_test", "loader_file_fallback_test", "test_something", "conftest"],
+    )
+    def test_non_production_names_are_skipped(self, name):
+        from autobot_shared.plugin_sdk.loader import is_non_production_module
+
+        assert is_non_production_module(name) is True
+
+    @pytest.mark.parametrize("name", ["base", "registry", "hooks", "loader", "manifest_contract"])
+    def test_real_submodules_are_not_skipped(self, name):
+        """Over-filtering would silently drop a submodule from canonicalisation
+        and reintroduce the split for anything importing it."""
+        from autobot_shared.plugin_sdk.loader import is_non_production_module
+
+        assert is_non_production_module(name) is False
+
+
+class TestRepeatedDiscoveryDoesNotAccumulate:
+    """#13988 review: two new lines survived deletion with the suite green.
+
+    The `/plugins/discover` admin endpoint calls `discover_plugins()` repeatedly
+    on a module-level singleton loader, so state that is never reset grows
+    across calls — and `_manifest_dirs` growing past the manifest list
+    re-establishes exactly the "these two must agree" invariant this work exists
+    to enforce.
+    """
+
+    def test_conflicts_do_not_grow_across_calls(self, tmp_path):
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        core, community = tmp_path / "core", tmp_path / "community"
+        _make_plugin(core, "repeat-demo")
+        _make_plugin(community, "repeat-demo")
+        loader = PluginLoader(plugin_dirs=[core, community])
+
+        loader.discover_plugins()
+        first = list(loader.name_conflicts)
+        loader.discover_plugins()
+
+        assert loader.name_conflicts == first, "conflicts accumulated across discovery calls"
+
+    def test_manifest_dirs_never_outlives_its_manifests(self, tmp_path):
+        """A plugin deleted from disk must not leave a stale directory entry —
+        that entry is what the file-path import fallback resolves against."""
+        import shutil
+
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        _make_plugin(tmp_path, "ghost-plugin")
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        assert loader.discover_plugins()
+
+        shutil.rmtree(tmp_path / "ghost-plugin")
+        manifests = loader.discover_plugins()
+
+        assert manifests == []
+        assert "ghost-plugin" not in loader._manifest_dirs
+
+    @pytest.mark.asyncio
+    async def test_mutating_conflicts_cannot_corrupt_the_manager(self, tmp_path):
+        """Sibling of the `failed` copy guard — same shallow-dict hazard."""
+        core, community = tmp_path / "core", tmp_path / "community"
+        _make_plugin(core, "conflict-copy-demo")
+        _make_plugin(community, "conflict-copy-demo")
+
+        manager = PluginManager([core, community])
+        await manager.startup()
+        manager.get_load_report()["conflicts"].append("fabricated")
+
+        assert "fabricated" not in manager.get_load_report()["conflicts"]
+
+    @pytest.mark.asyncio
+    async def test_three_directories_claiming_one_name_count_once(self, tmp_path):
+        """`conflicts` names shadowed PLUGINS, not shadowed directories — a check
+        doing len() read two where there is one."""
+        dirs = []
+        for name in ("a", "b", "c"):
+            d = tmp_path / name
+            _make_plugin(d, "tri-demo")
+            dirs.append(d)
+
+        manager = PluginManager(dirs)
+        await manager.startup()
+
+        assert manager.get_load_report()["conflicts"] == ["tri-demo"]
+
+    def test_a_relative_plugin_dir_still_stores_an_absolute_path(self, tmp_path, monkeypatch):
+        """lifespan.py's dev fallback passes two RELATIVE plugin dirs, so an
+        unresolved parent let `_synthesise_parent_packages` walk off the top of
+        the path — yielding repeated `.` and pointing a synthesised package's
+        __path__ at the CWD. The nearest existing assertion calls .resolve() on
+        its own left-hand side, so it structurally cannot catch this."""
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        _make_plugin(tmp_path / "core", "rel-demo")
+        monkeypatch.chdir(tmp_path)
+        loader = PluginLoader(plugin_dirs=[Path("core")])
+
+        assert loader.discover_plugins()
+
+        stored = loader._manifest_dirs["rel-demo"]
+        assert stored.is_absolute(), f"stored plugin dir must be resolved, got {stored}"
