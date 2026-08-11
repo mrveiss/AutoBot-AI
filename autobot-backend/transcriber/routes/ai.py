@@ -48,7 +48,7 @@ async def ai_ask(
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
         except Exception as exc:
             logger.exception("AI analysis failed for recording=%s", recording_id)
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'error': 'AI analysis failed'})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")

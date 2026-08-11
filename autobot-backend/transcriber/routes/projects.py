@@ -38,16 +38,17 @@ async def list_projects(
 
 
 @router.get("/projects/{project_id}", response_model=ProjectOut)
-async def get_project(project_id: int, db: Database = Depends(get_db)):
+async def get_project(project_id: int, request: Request, db: Database = Depends(get_db)):
     project = await db.get_project(project_id)
-    if not project:
+    if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
     return ProjectOut(**project)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectOut)
-async def update_project(project_id: int, body: ProjectUpdate, db: Database = Depends(get_db)):
-    if not await db.get_project(project_id):
+async def update_project(project_id: int, body: ProjectUpdate, request: Request, db: Database = Depends(get_db)):
+    project = await db.get_project(project_id)
+    if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
     try:
         await db.update_project(project_id, body.name, body.description)
@@ -57,8 +58,9 @@ async def update_project(project_id: int, body: ProjectUpdate, db: Database = De
 
 
 @router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(project_id: int, db: Database = Depends(get_db)):
-    if not await db.get_project(project_id):
+async def delete_project(project_id: int, request: Request, db: Database = Depends(get_db)):
+    project = await db.get_project(project_id)
+    if not project or project["user_id"] != _user_id(request):
         raise HTTPException(404, "Project not found")
     try:
         await db.delete_project(project_id)
