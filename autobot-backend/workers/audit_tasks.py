@@ -185,7 +185,9 @@ async def _read_filing_token() -> str | None:
     return None
 
 
-_gh_env_cache: dict[str, str] | None = None
+# (env, came_from_vault) — one fact, cached together. Deriving the second from
+# the first is what made the detector lie (#13859 review).
+_gh_env_cache: tuple[dict[str, str], bool] | None = None
 
 
 def reset_gh_env_cache() -> None:
@@ -199,25 +201,36 @@ def reset_gh_env_cache() -> None:
     _gh_env_cache = None
 
 
-def _gh_env() -> dict[str, str]:
-    """Subprocess environment for every `gh` call (#13859).
+def _gh_env() -> tuple[dict[str, str], bool]:
+    """Subprocess environment for every `gh` call, and whether the vault
+    supplied the token (#13859).
 
     Mirrors the LLC Copilot adapter: both GH_TOKEN and GITHUB_TOKEN, because
     different gh subcommands read different ones.
+
+    Returns the flag rather than letting callers test `"GH_TOKEN" in env`. That
+    test answers "does this process have a token anywhere?", which is a
+    different question: the env starts as a copy of os.environ, and an ambient
+    GH_TOKEN is exactly what the pre-#13859 CRITICAL log told operators to set
+    — docker-compose injects an empty one unconditionally. Deriving the flag
+    that way reported ambient state as vault-owned, suppressed the warning this
+    change exists to emit, and told the operator the credential came from the
+    vault while asking them to put one there.
 
     Cached per run: a task files one issue per finding, and a vault round-trip
     per finding would be pure waste.
     """
     global _gh_env_cache
     if _gh_env_cache is not None:
-        return dict(_gh_env_cache)
+        env, from_vault = _gh_env_cache
+        return dict(env), from_vault
     env = dict(os.environ)
     token = _resolve_filing_token()
     if token:
         env["GH_TOKEN"] = token
         env["GITHUB_TOKEN"] = token
-    _gh_env_cache = env
-    return dict(env)
+    _gh_env_cache = (env, bool(token))
+    return dict(env), bool(token)
 
 
 def _repo_root() -> Path:
@@ -242,7 +255,7 @@ def _list_open_issues(label: str | None = None) -> list[str]:
     ]
     if label:
         cmd += ["--label", label]
-    code, out, _ = _run(cmd, env=_gh_env())
+    code, out, _ = _run(cmd, env=_gh_env()[0])
     if code != 0:
         return []
     try:
@@ -263,10 +276,7 @@ def _gh_available() -> bool:
     identical to a healthy one, so there was no way to tell when filing broke or
     how much had been deferred since.
     """
-    # Fresh credential each run — see reset_gh_env_cache.
-    reset_gh_env_cache()
-    env = _gh_env()
-    vault_backed = "GH_TOKEN" in env
+    env, vault_backed = _gh_env()
     if not vault_backed:
         # #13859: ambient CLI auth is not an owned credential. Nothing rotates
         # it, nothing audits its use, and nothing can revoke it — which is how
@@ -313,7 +323,7 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
             "--label",
             labels,
         ],
-        env=_gh_env(),
+        env=_gh_env()[0],
     )
     if code != 0:
         logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
@@ -588,6 +598,12 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
 @celery_app.task(bind=True, name="workers.audit_testgaps")
 def audit_testgaps(self) -> dict:
     """Every-6h task: find Python modules changed since last run that lack tests."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_run = _redis_get(redis, _TESTGAPS_LAST_RUN_KEY)
     run_at = utc_timestamp()
@@ -653,6 +669,12 @@ def _dead_code_fingerprint(line: str) -> str:
 @celery_app.task(bind=True, name="workers.audit_dead_code")
 def audit_dead_code(self) -> dict:
     """Daily task: run vulture, file issues only for findings new since last run."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_inventory: list[str] = _redis_get(redis, _DEAD_CODE_INVENTORY_KEY) or []
     last_set = set(last_inventory)
@@ -790,6 +812,12 @@ def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -
 @celery_app.task(bind=True, name="workers.audit_claims")
 def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
     run_at = utc_timestamp()

@@ -37,8 +37,9 @@ class TestTheTokenReachesTheSubprocess:
         adapter sets both for the same reason."""
         monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: "tok-abc")
 
-        env = audit_tasks._gh_env()
+        env, from_vault = audit_tasks._gh_env()
 
+        assert from_vault is True
         assert env["GH_TOKEN"] == "tok-abc"
         assert env["GITHUB_TOKEN"] == "tok-abc"
 
@@ -48,8 +49,9 @@ class TestTheTokenReachesTheSubprocess:
         monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: None)
         monkeypatch.delenv("GH_TOKEN", raising=False)
 
-        env = audit_tasks._gh_env()
+        env, from_vault = audit_tasks._gh_env()
 
+        assert from_vault is False
         assert "GH_TOKEN" not in env
 
     def test_file_issue_passes_the_credential(self, monkeypatch):
@@ -91,15 +93,18 @@ class TestRevocationIsPossible:
         tokens = iter(["first", "second"])
         monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: next(tokens))
 
-        assert audit_tasks._gh_env()["GH_TOKEN"] == "first"
-        assert audit_tasks._gh_env()["GH_TOKEN"] == "first", "should be cached within a run"
+        assert audit_tasks._gh_env()[0]["GH_TOKEN"] == "first"
+        assert audit_tasks._gh_env()[0]["GH_TOKEN"] == "first", "should be cached within a run"
 
         audit_tasks.reset_gh_env_cache()
 
-        assert audit_tasks._gh_env()["GH_TOKEN"] == "second", "a new run must re-read the vault"
+        assert audit_tasks._gh_env()[0]["GH_TOKEN"] == "second", "a new run must re-read the vault"
 
-    def test_availability_check_resets_the_cache(self, monkeypatch):
-        """Every task calls this first, so it is where the fresh read belongs."""
+    def test_each_task_resets_before_its_first_gh_call(self, monkeypatch):
+        """The reset must precede `_list_open_issues`, not sit inside
+        `_gh_available`: every task lists issues FIRST, so the run's first gh
+        call carried the previous run's token. A revoked one there returns [],
+        which empties existing_titles and silently disables dedupe."""
         calls = {"n": 0}
 
         def _count():
@@ -109,10 +114,22 @@ class TestRevocationIsPossible:
         monkeypatch.setattr(audit_tasks, "_resolve_filing_token", _count)
         monkeypatch.setattr(audit_tasks, "_run", lambda cmd, cwd=None, env=None: (0, "", ""))
 
-        audit_tasks._gh_available()
-        audit_tasks._gh_available()
+        import ast
+        import inspect
 
-        assert calls["n"] == 2, "the availability check must re-read the vault each run"
+        source = inspect.getsource(audit_tasks)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.FunctionDef) and node.name.startswith("audit_")):
+                continue
+            names = [n.func.id for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+            assert "reset_gh_env_cache" in names, f"{node.name} never drops the cached credential"
+            first_gh = next((i for i, nm in enumerate(names) if nm in {"_list_open_issues", "_gh_available"}), None)
+            if first_gh is not None:
+                assert (
+                    names.index("reset_gh_env_cache") < first_gh
+                ), f"{node.name} resets AFTER its first gh call — that call uses the previous run's token"
+        assert calls["n"] >= 0
 
 
 class TestTheGapIsReportedEvenWhenItWorks:
@@ -122,7 +139,12 @@ class TestTheGapIsReportedEvenWhenItWorks:
         import logging
 
         monkeypatch.setattr(audit_tasks, "_resolve_filing_token", lambda: None)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
+        # An AMBIENT token present, deliberately. The first version of this test
+        # deleted it, which is why it passed against a detector that answered
+        # "does this process have a GH_TOKEN anywhere?" instead of "did the vault
+        # give me one?" — docker-compose injects an empty GH_TOKEN
+        # unconditionally, and the pre-#13859 log told operators to set one.
+        monkeypatch.setenv("GH_TOKEN", "ambient-leftover")
         monkeypatch.setattr(audit_tasks, "_run", lambda cmd, cwd=None, env=None: (0, "ok", ""))
 
         with caplog.at_level(logging.WARNING):
