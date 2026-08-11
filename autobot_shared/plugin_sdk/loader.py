@@ -91,6 +91,19 @@ def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_sche
     _validate_config_against_schema(plugin_name, config, config_schema)
 
 
+def is_non_production_module(name: str) -> bool:
+    """True for package modules that must never be imported at plugin-load time.
+
+    Importing the package's own tests drags pytest into the production process
+    (~100ms), and where pytest is absent the import fails, is swallowed, and —
+    because failed imports are not cached — retries for every plugin on every
+    startup. A `conftest.py` would do the same; it has no trigger in this
+    package today, which is exactly why the rule is stated here where it can be
+    tested rather than inlined where it cannot (#13677 review).
+    """
+    return name.endswith("_test") or name.startswith("test_") or name == "conftest"
+
+
 def canonicalise_plugin_sdk() -> List[str]:
     """Make ``plugin_sdk.*`` and ``autobot_shared.plugin_sdk.*`` the SAME modules (#13677).
 
@@ -130,11 +143,7 @@ def canonicalise_plugin_sdk() -> List[str]:
     # ended up holding a SECOND Registry class with its own singleton, undoing
     # what #11636 fixed (#13677 review).
     for _finder, name, _ispkg in pkgutil.iter_modules(canonical.__path__):
-        # Never import the package's own tests: it drags pytest into the
-        # production process (~100ms), and where pytest is absent the import
-        # fails, is swallowed, and — because failed imports are not cached —
-        # retries on every plugin, every startup.
-        if name.endswith("_test") or name.startswith("test_"):
+        if is_non_production_module(name):
             continue
 
         alias = f"plugin_sdk.{name}"
@@ -178,6 +187,8 @@ class PluginLoader:
         self.registry = PluginRegistry()
         # Maps plugin name -> directory containing its plugin.json (set during discover_plugins)
         self._manifest_dirs: Dict[str, Path] = {}
+        #: Plugin names claimed by more than one directory (#13677 review).
+        self.name_conflicts: List[str] = []
 
     def discover_plugins(self) -> List[PluginManifest]:
         """
@@ -187,6 +198,19 @@ class PluginLoader:
             List of plugin manifests found
         """
         manifests = []
+        # name -> resolved dir of the manifest we KEPT. Deduping here rather than
+        # in the caller is the point: `_manifest_dirs` decides which code runs and
+        # the manifest list decides what is registered, so they must agree. When
+        # they disagreed — manifest first-wins in the caller, directory last-wins
+        # here — two plugins sharing a name ran one's CODE under the other's
+        # MANIFEST, and the load report called it healthy (#13677 review).
+        self.name_conflicts = []
+        # Reset with them: never cleared, `_manifest_dirs` became a superset of
+        # the manifest list across repeated calls (the /plugins/discover admin
+        # endpoint calls this on a module-level singleton), re-establishing the
+        # very "these two must agree" invariant this method exists to enforce.
+        self._manifest_dirs = {}
+        kept_dirs: Dict[str, Path] = {}
 
         for plugin_dir in self.plugin_dirs:
             if not plugin_dir.exists():
@@ -200,8 +224,36 @@ class PluginLoader:
                         data = json.load(f)
 
                     manifest = PluginManifest(**data)
+                    here = manifest_file.parent.resolve()
+                    already = kept_dirs.get(manifest.name)
+                    if already is not None:
+                        if already == here:
+                            # The same plugin reached twice through overlapping
+                            # plugin_dirs — benign, and the common case: lifespan
+                            # passes the deployed root AND the dev fallback.
+                            logger.debug(
+                                "Plugin %s already discovered at %s — ignoring duplicate path",
+                                manifest.name,
+                                here,
+                            )
+                        else:
+                            # Genuinely different plugins claiming one name. First
+                            # wins, as before; what changes is that it is no longer
+                            # silent.
+                            self.name_conflicts.append(manifest.name)
+                            logger.warning(
+                                "Plugin name conflict: %r found at BOTH %s and %s — "
+                                "keeping the first; the second is ignored entirely, "
+                                "including its code",
+                                manifest.name,
+                                already,
+                                here,
+                            )
+                        continue
+
+                    kept_dirs[manifest.name] = here
                     # Remember where on disk this plugin lives (needed for file-path fallback)
-                    self._manifest_dirs[manifest.name] = manifest_file.parent
+                    self._manifest_dirs[manifest.name] = here
                     manifests.append(manifest)
                     logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 
