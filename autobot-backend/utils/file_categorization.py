@@ -407,11 +407,19 @@ def is_skipped_path(path: Path, root: Path) -> bool:
     behaviour we actually want.
     """
     try:
+        # resolve() on both sides, deliberately. A lexical relative_to() is ~12x
+        # cheaper, but it accepts a symlink that points OUT of the scan root as
+        # scannable — and the 167k-file measurement that would have justified
+        # the shortcut is the very number this skip-list removes. At 6,967 files
+        # the difference is ~0.5s on a scan that was taking six minutes.
         relative = path.resolve().relative_to(root.resolve())
     except (ValueError, OSError):
-        # Outside the root (or unreadable): fall back to the absolute check
-        # rather than silently admitting a path we cannot place.
-        return bool(set(path.parts) & SKIP_DIRS)
+        # A path that cannot be placed under the scan root is not in the scan.
+        # Falling back to the absolute check here would consult SKIP_DIRS
+        # against the ROOT's own ancestry — the precise bug this function exists
+        # to remove — so it would reintroduce it on exactly the inputs that are
+        # hardest to reason about (symlink escapes).
+        return True
     return bool(set(relative.parts) & SKIP_DIRS)
 
 

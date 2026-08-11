@@ -177,3 +177,153 @@ class TestScanRootInsideASkippedDirectory:
         assert not detector._should_skip_path(root / "pkg" / "real.py")
         assert detector._should_skip_path(root / ".worktrees" / "nested" / "x.py")
         assert detector._should_skip_path(root / "node_modules" / "y.py")
+
+
+class TestCancellationReachesTheExpensivePhases:
+    """#13602: the token was consulted in exactly one place — the os.walk loop.
+
+    That loop measured 0.14s of a run whose remaining phases took over six
+    minutes on a single tree (105,441 blocks, still building MinHash signatures
+    at 6m15s). So a scan the caller had abandoned still ran to completion,
+    holding one of eight shared executor threads. That starvation is what made
+    unrelated endpoints hang.
+
+    The review of #14014 found these checks shipped with NO test — the whole
+    detector half could be deleted and the suite stayed green. These are that
+    test: each asserts the phase stops, not merely that a check exists.
+    """
+
+    def _blocks(self, count):
+        from api.codebase_analytics.duplicate_detector import CodeBlock
+
+        return [
+            CodeBlock(
+                file_path=f"/tmp/f{i}.py",
+                start_line=1,
+                end_line=5,
+                content=f"def f{i}(): pass",
+                normalized_content=f"def f{i} pass",
+                content_hash=f"h{i}",
+                line_count=5,
+                token_set={f"tok{i}", "def", "pass"},
+            )
+            for i in range(count)
+        ]
+
+    def test_block_extraction_stops_when_cancelled(self, tmp_path, monkeypatch):
+        import api.codebase_analytics.duplicate_detector as det
+
+        files = []
+        for i in range(det.CANCEL_CHECK_INTERVAL * 3):
+            f = tmp_path / f"m{i}.py"
+            f.write_text("x = 1\n", encoding="utf-8")
+            files.append(f)
+
+        token = threading.Event()
+        token.set()
+        detector = det.DuplicateCodeDetector(project_root=str(tmp_path), cancel_token=token)
+
+        read_count = {"n": 0}
+        real_read = Path.read_text
+
+        def _counting_read(self, *args, **kwargs):
+            read_count["n"] += 1
+            return real_read(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", _counting_read)
+        detector._extract_all_blocks(files)
+
+        assert read_count["n"] < len(files), "extraction read every file despite being cancelled"
+
+    def test_minhash_signature_build_stops_when_cancelled(self):
+        """This is the phase that dominates the runtime, and it had no
+        cancellation point at all."""
+        import api.codebase_analytics.duplicate_detector as det
+
+        pytest.importorskip("datasketch")
+        blocks = self._blocks(det.CANCEL_CHECK_INTERVAL * 3)
+
+        signatures = det._build_minhash_signatures(blocks, num_perm=16, cancelled=lambda: True)
+
+        assert len(signatures) < len(blocks), "signature build processed every block despite cancellation"
+
+    def test_minhash_build_completes_when_not_cancelled(self):
+        """The case that must stay working — a cancellation check that always
+        fires would pass the test above while breaking every real scan."""
+        import api.codebase_analytics.duplicate_detector as det
+
+        pytest.importorskip("datasketch")
+        blocks = self._blocks(10)
+
+        signatures = det._build_minhash_signatures(blocks, num_perm=16, cancelled=lambda: False)
+
+        assert len(signatures) == len(blocks)
+
+    def test_the_lsh_phase_is_given_the_token(self, tmp_path, monkeypatch):
+        """Threading the predicate through is the wiring; without it the checks
+        inside are unreachable."""
+        import api.codebase_analytics.duplicate_detector as det
+
+        seen: dict[str, object] = {}
+
+        def _spy(blocks, threshold=0.5, num_perm=128, cancelled=None):
+            seen["cancelled"] = cancelled
+            return []
+
+        monkeypatch.setattr(det, "_find_lsh_candidates", _spy)
+        monkeypatch.setattr(det, "LSH_AVAILABLE", True)
+        detector = det.DuplicateCodeDetector(project_root=str(tmp_path), cancel_token=threading.Event())
+        detector._find_similar_duplicates(self._blocks(20), set())
+
+        assert seen["cancelled"] is not None, "the LSH phase was never given the cancel predicate"
+        assert seen["cancelled"]() is False
+        detector._cancel_token.set()
+        assert seen["cancelled"]() is True, "the predicate must reflect the live token"
+
+    def test_a_scan_cancelled_after_the_walk_skips_the_similarity_phases(self, tmp_path, monkeypatch):
+        """The phase boundary. Without it, a token set during extraction still
+        let the six-minute similarity search run to completion."""
+        import api.codebase_analytics.duplicate_detector as det
+
+        (tmp_path / "a.py").write_text("def a(): pass\n", encoding="utf-8")
+        token = threading.Event()
+        detector = det.DuplicateCodeDetector(project_root=str(tmp_path), cancel_token=token)
+
+        called = {"similar": False}
+
+        def _never(*_args, **_kwargs):
+            called["similar"] = True
+            return []
+
+        monkeypatch.setattr(detector, "_find_similar_duplicates", _never)
+        monkeypatch.setattr(detector, "_extract_all_blocks", lambda files: (token.set(), [])[1])
+
+        result = detector.run_analysis()
+
+        assert not called["similar"], "the similarity search ran on an abandoned scan"
+        assert result.total_duplicates == 0
+
+    @pytest.mark.asyncio
+    async def test_the_async_path_has_the_same_boundary(self, tmp_path, monkeypatch):
+        """`run_analysis` and `run_analysis_async` are separate implementations
+        and the check had to be added to both. Guarding only the sync one would
+        leave the semantic-analysis path running abandoned scans to completion."""
+        import api.codebase_analytics.duplicate_detector as det
+
+        (tmp_path / "a.py").write_text("def a(): pass\n", encoding="utf-8")
+        token = threading.Event()
+        detector = det.DuplicateCodeDetector(project_root=str(tmp_path), cancel_token=token)
+
+        called = {"collected": False}
+
+        async def _never(*_args, **_kwargs):
+            called["collected"] = True
+            return []
+
+        monkeypatch.setattr(detector, "_collect_all_duplicates", _never)
+        monkeypatch.setattr(detector, "_extract_all_blocks", lambda files: (token.set(), [])[1])
+
+        result = await detector.run_analysis_async()
+
+        assert not called["collected"], "the async path ran the expensive phases on an abandoned scan"
+        assert result.total_duplicates == 0

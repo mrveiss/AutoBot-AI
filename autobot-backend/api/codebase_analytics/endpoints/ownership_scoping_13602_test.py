@@ -204,7 +204,131 @@ class TestOwnershipAnalyzerIsBounded:
 
         assert ran_in_thread.get("off_loop"), "git blame must not run on the event loop"
 
-    def test_the_file_cap_is_a_real_number(self):
-        from code_analysis.src.ownership_analyzer import _MAX_FILES_TO_BLAME
+    @pytest.mark.asyncio
+    async def test_the_file_cap_actually_stops_the_walk(self, monkeypatch, tmp_path):
+        """The first version of this asserted `isinstance(int) and > 0`, which
+        cannot fail for any positive integer — a guard that proves nothing about
+        the line it names. Exercise the cap instead."""
+        import code_analysis.src.ownership_analyzer as oa
 
-        assert isinstance(_MAX_FILES_TO_BLAME, int) and _MAX_FILES_TO_BLAME > 0
+        for i in range(12):
+            (tmp_path / f"f{i}.py").write_text("x = 1\n", encoding="utf-8")
+
+        blamed: list[str] = []
+
+        async def _fake_ownership(self, file_path, root):
+            blamed.append(file_path.name)
+            return None
+
+        monkeypatch.setattr(oa, "_MAX_FILES_TO_BLAME", 4)
+        monkeypatch.setattr(oa.OwnershipAnalyzer, "_get_file_ownership", _fake_ownership)
+        analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
+
+        await analyzer._analyze_file_ownership(str(tmp_path), ["**/*.py"])
+
+        assert len(blamed) == 4, f"the cap did not stop the walk: blamed {len(blamed)} files"
+        assert analyzer._truncated_reason, "truncation must be recorded"
+
+    @pytest.mark.asyncio
+    async def test_the_time_budget_stops_a_slow_walk(self, monkeypatch, tmp_path):
+        """A file cap alone is the wrong bound: at the measured ~0.45s per
+        `git blame`, 2000 files is a 15-minute request. Wall clock is what the
+        caller experiences."""
+        import code_analysis.src.ownership_analyzer as oa
+
+        for i in range(30):
+            (tmp_path / f"f{i}.py").write_text("x = 1\n", encoding="utf-8")
+
+        blamed: list[str] = []
+        clock = {"t": 0.0}
+
+        async def _slow(self, file_path, root):
+            blamed.append(file_path.name)
+            clock["t"] += 1.0
+            return None
+
+        monkeypatch.setattr(oa.time, "monotonic", lambda: clock["t"])
+        monkeypatch.setattr(oa, "_MAX_BLAME_SECONDS", 5.0)
+        monkeypatch.setattr(oa, "_MAX_FILES_TO_BLAME", 10_000)
+        monkeypatch.setattr(oa.OwnershipAnalyzer, "_get_file_ownership", _slow)
+        analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
+
+        await analyzer._analyze_file_ownership(str(tmp_path), ["**/*.py"])
+
+        assert len(blamed) <= 7, f"the time budget did not stop the walk: {len(blamed)} files"
+        assert "time budget" in (analyzer._truncated_reason or "")
+
+    @pytest.mark.asyncio
+    async def test_one_budget_covers_all_patterns(self, monkeypatch, tmp_path):
+        """Breaking only the inner loop would give every later pattern a fresh
+        budget, which is not a budget."""
+        import code_analysis.src.ownership_analyzer as oa
+
+        for ext in ("py", "ts", "vue"):
+            for i in range(6):
+                (tmp_path / f"f{i}.{ext}").write_text("x = 1\n", encoding="utf-8")
+
+        blamed: list[str] = []
+
+        async def _fake(self, file_path, root):
+            blamed.append(file_path.name)
+            return None
+
+        monkeypatch.setattr(oa, "_MAX_FILES_TO_BLAME", 3)
+        monkeypatch.setattr(oa.OwnershipAnalyzer, "_get_file_ownership", _fake)
+        analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
+
+        await analyzer._analyze_file_ownership(str(tmp_path), ["**/*.py", "**/*.ts", "**/*.vue"])
+
+        assert len(blamed) == 3, f"each pattern got its own budget: {len(blamed)} files blamed"
+
+    def test_a_truncated_result_says_so_to_the_caller(self, tmp_path):
+        """Server-side logging is not enough — the caller is the one drawing
+        conclusions from these numbers."""
+        import code_analysis.src.ownership_analyzer as oa
+
+        analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
+        analyzer._truncated_reason = "file cap (2000)"
+        result = analyzer._build_ownership_results([], [], [], [], {}, 0.1)
+
+        assert result["summary"]["truncated"] is True
+        assert "2000" in result["summary"]["truncated_reason"]
+
+    def test_a_complete_result_is_not_flagged(self, tmp_path):
+        """The direction that must stay true — a flag that is always set carries
+        no information."""
+        import code_analysis.src.ownership_analyzer as oa
+
+        analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
+        analyzer._truncated_reason = None
+        result = analyzer._build_ownership_results([], [], [], [], {}, 0.1)
+
+        assert result["summary"]["truncated"] is False
+
+    def test_the_bounds_are_set_to_values_that_actually_bound(self):
+        """The behavioural tests above monkeypatch these, so they prove the
+        mechanism works without noticing if the shipped constant were raised to
+        something that never fires. Measured: `git blame --line-porcelain` runs
+        at a median 0.45s per file on this repo, so the file cap alone allows a
+        ~15 minute request — which is why the wall-clock budget is the real
+        bound and has to stay small enough to matter."""
+        from code_analysis.src.ownership_analyzer import _MAX_BLAME_SECONDS, _MAX_FILES_TO_BLAME
+
+        assert 0 < _MAX_FILES_TO_BLAME <= 10_000, "a cap this high is not a cap"
+        assert 0 < _MAX_BLAME_SECONDS <= 60, "a budget longer than a client timeout bounds nothing"
+
+    def test_a_scan_rooted_in_a_worktree_still_sees_its_own_files(self, tmp_path):
+        """The trap I walked into: `.worktrees` was added to _SKIP_DIRECTORIES,
+        a SECOND skip list that still matched the absolute path. Since
+        resolve_project_root() lands inside a worktree on any dev checkout, the
+        endpoint returned 200 with zero contributors and no error — a loud 400
+        replaced by a silent empty success."""
+        from code_analysis.src.ownership_analyzer import OwnershipAnalyzer
+
+        root = tmp_path / ".worktrees" / "issue-13602"
+        (root / "pkg").mkdir(parents=True)
+        analyzer = OwnershipAnalyzer.__new__(OwnershipAnalyzer)
+
+        assert not analyzer._should_skip_file(root / "pkg" / "real.py", root)
+        assert analyzer._should_skip_file(root / ".worktrees" / "nested" / "x.py", root)
+        assert analyzer._should_skip_file(root / "node_modules" / "y.py", root)

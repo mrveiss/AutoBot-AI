@@ -1682,7 +1682,13 @@ async def _get_duplicate_analysis(
         # this call site relied on implicitly — behaviour unchanged.
         analysis = await _run_standard_analysis(scan_target, LOW_SIMILARITY_THRESHOLD)
         if analysis is None:
-            # Either in flight elsewhere or timed out; both already logged.
+            # #13602: say so. The GUI polls /duplicates while loading /report and
+            # they now share one lock, so this is the common case — and a report
+            # that omits the section without comment reads as "no duplicates".
+            logger.warning(
+                "Duplicate section omitted from the report: the scan was "
+                "unavailable (already in flight, or it exceeded its deadline)"
+            )
             return None
 
         logger.info(

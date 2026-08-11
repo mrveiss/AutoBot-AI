@@ -116,9 +116,15 @@ def _validate_path_security(path: str, project_root: str) -> JSONResponse | None
         # after normalisation is a scope mismatch, not an escape attempt; only
         # a path that climbs out of it is worth an attack-shaped warning.
         if _escapes_root(path, project_root):
-            logger.warning("Path traversal attempt blocked outside %s", project_root)
+            # The requested path is the attacker-supplied string and the only
+            # forensically useful field; the root is ours and stays out of the
+            # log. The first version of this logged exactly the wrong one.
+            logger.warning("Path traversal attempt blocked: %s", path)
         else:
-            logger.info("Requested path is outside the resolved scan root; rejecting")
+            # Still WARNING, deliberately: an alert keyed on a rejected path must
+            # keep firing. Only the misleading "attack" wording is scoped to an
+            # actual climb out of the root.
+            logger.warning("Rejected a path outside the resolved scan root for this source")
         return JSONResponse(
             {
                 "status": "error",

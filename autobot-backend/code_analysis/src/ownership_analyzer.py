@@ -70,11 +70,13 @@ _SKIP_DIRECTORIES = (
     "worktrees",
 )
 
-# #13602: a hard ceiling on blamed files. Each one is a `git blame` subprocess,
-# so an unbounded tree turned this endpoint into a multi-hour job that the
-# caller had long since given up on. Truncation is logged — a silent cap reads
-# as "we analysed everything".
+# #13602: two ceilings, because a file count alone is the wrong bound. Measured
+# on this repo, `git blame --line-porcelain` runs at a median 0.45s per file, so
+# 2000 files is a ~15 minute request — a hang traded for a wait nobody will sit
+# through. The wall-clock budget is what the caller actually experiences; the
+# file cap just stops a pathological tree before the clock starts mattering.
 _MAX_FILES_TO_BLAME = 2000
+_MAX_BLAME_SECONDS = 20.0
 
 # File patterns to skip
 _SKIP_FILE_PATTERNS = (
@@ -261,6 +263,11 @@ class OwnershipAnalyzer:
             "status": "success",
             "analysis_time_seconds": analysis_time,
             "summary": {
+                # #13602: a truncated result that does not say so reads as a
+                # complete one. The server log alone is not enough — the caller
+                # is the one drawing conclusions from these numbers.
+                "truncated": bool(getattr(self, "_truncated_reason", None)),
+                "truncated_reason": getattr(self, "_truncated_reason", None),
                 "total_files": len(file_ownerships),
                 "total_directories": len(directory_ownerships),
                 "total_contributors": len(expertise_scores),
@@ -278,30 +285,36 @@ class OwnershipAnalyzer:
     async def _analyze_file_ownership(self, root_path: str, patterns: List[str]) -> List[FileOwnership]:
         """Analyze ownership for individual files using git blame"""
         file_ownerships = []
+        self._truncated_reason: str | None = None
         root = Path(root_path).resolve()
 
         considered = 0
-        truncated = False
+        deadline = time.monotonic() + _MAX_BLAME_SECONDS
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if not file_path.is_file() or self._should_skip_file(file_path):
+                if not file_path.is_file() or self._should_skip_file(file_path, root):
                     continue
                 if considered >= _MAX_FILES_TO_BLAME:
-                    truncated = True
+                    self._truncated_reason = f"file cap ({_MAX_FILES_TO_BLAME})"
+                    break
+                if time.monotonic() > deadline:
+                    self._truncated_reason = f"time budget ({_MAX_BLAME_SECONDS:.0f}s)"
                     break
                 considered += 1
 
                 ownership = await self._get_file_ownership(file_path, root)
                 if ownership:
                     file_ownerships.append(ownership)
-            if truncated:
+            if self._truncated_reason:
+                # Break the PATTERN loop too — otherwise later patterns would
+                # each get a fresh budget, which is not a budget.
                 break
 
-        if truncated:
+        if self._truncated_reason:
             logger.warning(
-                "Ownership analysis truncated at %d files — results are a subset of %s",
-                _MAX_FILES_TO_BLAME,
-                root,
+                "Ownership analysis truncated by %s after %d files — results are a subset",
+                self._truncated_reason,
+                considered,
             )
 
         # Sort by total lines descending
@@ -746,13 +759,26 @@ class OwnershipAnalyzer:
             ),
         }
 
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
+    def _should_skip_file(self, file_path: Path, root: "Path | None" = None) -> bool:
+        """Check if file should be skipped, relative to ``root`` when given.
+
+        #13602: this matched _SKIP_DIRECTORIES against the ABSOLUTE path. Once
+        `.worktrees` joined that list, a scan rooted inside one — which is where
+        `resolve_project_root()` lands on any dev checkout — skipped every file
+        below it and returned 200 with zero contributors and no error. Adding
+        the name without this is how a loud 400 becomes a silent empty 200.
+        """
         path_str = str(file_path)
+        if root is not None:
+            try:
+                path_str = str(file_path.resolve().relative_to(root.resolve()))
+            except (ValueError, OSError):
+                # Not inside the root: not part of this scan.
+                return True
         file_name = file_path.name
 
         for skip_dir in _SKIP_DIRECTORIES:
-            if f"/{skip_dir}/" in path_str or path_str.startswith(f"{skip_dir}/"):
+            if f"/{skip_dir}/" in f"/{path_str}" or path_str.startswith(f"{skip_dir}/"):
                 return True
 
         for pattern in _SKIP_FILE_PATTERNS:

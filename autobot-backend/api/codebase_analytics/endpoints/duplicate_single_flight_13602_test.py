@@ -143,3 +143,57 @@ class TestTheLockOutlastsTheOrphan:
         assert token is not None, "the scan must be given a cancel token"
         assert token.is_set(), "an abandoned scan must be signalled to stop"
         proceed.set()
+
+
+class TestCancellationIsNotATimeout:
+    """#14014 review: `CancelledError` is not `TimeoutError`, so it skipped the
+    timeout handler entirely and fell through to `finally`.
+
+    The lock was released with the token never set — and because the future is
+    shielded, the orphan kept burning an executor thread with no way to stop it.
+    That is the accumulation both #12779 and this work exist to close, reachable
+    via uvicorn graceful shutdown and via any outer deadline tighter than the
+    inner one. `/report` now wraps this call in its own deadline, so the two are
+    nested and the margin between them is the only thing that was preventing it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_outer_cancel_still_signals_the_orphan(self, monkeypatch, tmp_path):
+        seen: dict[str, threading.Event | None] = {}
+        proceed = threading.Event()
+        started = threading.Event()
+
+        class _SlowDetector:
+            def __init__(self, **kwargs):
+                seen["token"] = kwargs.get("cancel_token")
+
+            def run_analysis(self):
+                started.set()
+                proceed.wait(timeout=30)
+                return "done"
+
+        monkeypatch.setattr(dup_mod, "DuplicateCodeDetector", _SlowDetector)
+
+        task = asyncio.ensure_future(dup_mod._run_standard_analysis(str(tmp_path), 0.5))
+        await asyncio.get_running_loop().run_in_executor(None, started.wait, 10)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert seen["token"] is not None
+        assert seen["token"].is_set(), "a cancelled scan must be signalled to stop, exactly like a timed-out one"
+
+        # And the guard must stay shut until the orphan actually exits.
+        acquired = dup_mod._duplicate_scan_lock.acquire(blocking=False)
+        if acquired:
+            dup_mod._duplicate_scan_lock.release()
+        assert not acquired, "the lock was released while the cancelled scan was still running"
+
+        proceed.set()
+        for _ in range(100):
+            if dup_mod._duplicate_scan_lock.acquire(blocking=False):
+                dup_mod._duplicate_scan_lock.release()
+                break
+            await asyncio.sleep(0.05)
+        else:
+            pytest.fail("the lock was never released after the cancelled scan finished")
