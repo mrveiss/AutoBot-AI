@@ -997,7 +997,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-4) var(--spacing-5);
   margin-bottom: var(--spacing-4);
-  border-left: 4px solid var(--accent-primary, #3b82f6);
+  border-left: 4px solid var(--accent-primary);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1025,7 +1025,7 @@ onUnmounted(() => {
   gap: var(--spacing-1);
 }
 
-.project-meta-item.status-ready { color: var(--color-success, #22c55e); }
+.project-meta-item.status-ready { color: var(--color-success); }
 .project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
 

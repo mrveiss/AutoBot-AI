@@ -158,9 +158,9 @@ async function run(): Promise<void> {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--color-danger, #dc2626);
+  border: 1px solid var(--color-danger);
   border-radius: 6px;
-  color: var(--color-danger, #dc2626);
+  color: var(--color-danger);
 }
 
 /* Deliberately loud: this is the difference between a complete answer and a
@@ -170,7 +170,7 @@ async function run(): Promise<void> {
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   margin-bottom: var(--spacing-md, 1rem);
-  border-left: 4px solid var(--color-warning, #d97706);
+  border-left: 4px solid var(--color-warning);
   background: var(--color-bg-secondary);
   border-radius: 4px;
 }
@@ -195,7 +195,7 @@ async function run(): Promise<void> {
 }
 
 .impact-metric.warn {
-  border-color: var(--color-warning, #d97706);
+  border-color: var(--color-warning);
 }
 
 .metric-value {
