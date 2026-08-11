@@ -64007,11 +64007,6 @@ export interface components {
             role_title?: string | null;
             /** Notes */
             notes?: string | null;
-            /**
-             * Actor
-             * @description User ID performing the operation
-             */
-            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -167981,9 +167976,7 @@ export interface operations {
     };
     delete_contact_api_llc_contacts__company_id___contact_id__delete: {
         parameters: {
-            query?: {
-                actor?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 company_id: string;
