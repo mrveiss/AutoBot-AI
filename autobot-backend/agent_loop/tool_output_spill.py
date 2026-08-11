@@ -62,7 +62,20 @@ def _int_env(name: str, default: int) -> int:
 # Env-tunable, never hard-coded (CLAUDE.md).
 SPILL_ENABLED: bool = os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL", "").lower() in ("1", "true", "yes")
 SPILL_THRESHOLD_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_THRESHOLD", 8000))
-SPILL_EXCERPT_CHARS: int = max(1, _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT", 2000))
+# Rough fixed cost of an excerpt payload. Deliberately an ESTIMATE and
+# deliberately NOT the safety mechanism: measured overhead ranges 286-1710 chars
+# depending on tool-name length and how much JSON re-escapes the classification
+# markers, so no constant can be correct. `spill_if_oversized` measures the real
+# replacement and declines to spill if it would not be smaller — this clamp only
+# keeps the default configuration sensible so that check rarely has to fire.
+_EXCERPT_OVERHEAD_CHARS = 400 + 3 * 200
+SPILL_EXCERPT_CHARS: int = max(
+    1,
+    min(
+        _int_env("AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT", 2000),
+        max(1, SPILL_THRESHOLD_CHARS - _EXCERPT_OVERHEAD_CHARS),
+    ),
+)
 # Largest payload written to disk. Above this the stored copy is truncated and
 # marked — serialise + json.dumps + utf-8 encode peaks at roughly 3-4x the
 # payload, so an unbounded result was an unbounded allocation.
@@ -112,6 +125,27 @@ def _spill_root() -> Path:
     return PATH.get_data_path("tool_output_spill")
 
 
+def sweepable_spill_root() -> Path | None:
+    """The spill root, but only when AutoBot owns the directory.
+
+    The nightly cleanup recursively unlinks everything older than its TTL, and
+    the other directories it sweeps (``data/cache``, ``TEMP_DIR``) are
+    AutoBot-owned by construction. This one is not: the operator picks it. A
+    root pointed at a shared scratch directory or a mounted volume would have
+    the sweep delete unrelated files on its first run — immediately, since the
+    criterion is mtime alone and pre-existing files are already old.
+
+    So an operator-chosen root is never swept automatically. Only the default
+    under ``DATA_DIR`` is, and only once the spill has actually created it —
+    which also means an operator who sets the root while the feature is off does
+    not get their directory swept by a feature that never wrote a byte.
+    """
+    if os.environ.get("AUTOBOT_TOOL_OUTPUT_SPILL_ROOT"):
+        return None
+    root = _spill_root()
+    return root if root.is_dir() else None
+
+
 def _anchor(task_id: str, tool_name: str, payload: str) -> str:
     """Stable, collision-resistant anchor for one spilled observation.
 
@@ -157,11 +191,33 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
     if len(payload) <= SPILL_THRESHOLD_CHARS:
         return result, False
 
+    anchor = _anchor(task_id, tool_name, payload)
+
+    # MEASURE the replacement; never estimate it. This module's whole purpose is
+    # "what enters context is smaller than what it replaced", and that property
+    # was broken three times running because each fix reasoned about the *shape*
+    # in the last bug report instead of checking the result: the value was copied
+    # verbatim, then only `str` was bounded, then the overhead was estimated by a
+    # hardcoded constant that is 2-6x too low once JSON re-escapes the markers.
+    #
+    # A control-char-dense string still inverted at the default configuration
+    # (8,001 -> 12,282 chars), because `_serialise` returns a str raw while the
+    # excerpt slice gets escaped. One comparison makes every value type, shape,
+    # escaping mode and env configuration safe by construction, so there is no
+    # round five.
+    excerpt = _excerpt_payload(anchor, tool_name, payload, result)
+    if len(_serialise(excerpt)) >= len(payload):
+        logger.debug(
+            "Not spilling %s: the excerpt would not be smaller than the output (%d chars)",
+            tool_name,
+            len(payload),
+        )
+        return result, False
+
     # Marked, not silently sliced: the excerpt's note quotes the *original*
     # length, so an unmarked truncation makes the artifact contradict it.
     truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
     stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
-    anchor = _anchor(task_id, tool_name, payload)
     try:
         path = _artifact_path(anchor)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,24 +254,30 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
 _CLASSIFYING_KEYS = ("error", "status", "success")
 
 
+_CLASSIFICATION_MARKER_CHARS = 200
+
+
 def _classification_marker(value: Any) -> Any:
     """Preserve what a value *means*, never how big it is.
 
-    The first version of this fix copied the value verbatim. For the shape it
-    was written for — ``{"error": <26KB traceback>}`` — that put the whole
-    traceback back into context beside the excerpt, so a spilled failure was
-    *larger* than not spilling at all (27,649 -> 30,023 chars measured) while
-    the note claimed the output had been truncated.
+    Two earlier versions of this got it wrong the same way. The first copied the
+    value verbatim, so ``{"error": <26KB traceback>}`` put the whole traceback
+    back beside the excerpt — a spilled failure was *larger* than not spilling
+    (27,649 -> 30,023 chars). The second bounded only ``str``, which left every
+    structured error unbounded — and ``{"error": {"code", "message", "trace"}}``
+    is the standard shape for HTTP, API and subprocess failures, so that was the
+    mainline case rather than a corner (31,254 -> 33,585 measured).
 
-    `_should_iterate` tests key presence and `_record_observation_fingerprints`
-    tests truthiness, so a bounded prefix satisfies both.
+    Bounded by **serialised size**, not by type. Scalars pass through untouched
+    because the loop reads them for truth, not text: `_should_iterate` tests key
+    presence and `_record_observation_fingerprints` tests truthiness, so
+    ``{"error": None}`` and ``{"success": False}`` must stay falsy rather than
+    becoming the truthy strings ``"None"`` / ``"False"``.
     """
-    if isinstance(value, str):
-        return value[:_CLASSIFICATION_MARKER_CHARS]
-    return value
-
-
-_CLASSIFICATION_MARKER_CHARS = 200
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    text = value if isinstance(value, str) else _serialise(value)
+    return text[:_CLASSIFICATION_MARKER_CHARS]
 
 
 def _excerpt_payload(anchor: str, tool_name: str, payload: str, original: Any = None) -> Dict[str, Any]:
@@ -348,6 +410,7 @@ __all__ = [
     "bind_task",
     "current_task_id",
     "read_spilled",
+    "sweepable_spill_root",
     "read_spilled_window",
     "spill_if_oversized",
     "spill_results",

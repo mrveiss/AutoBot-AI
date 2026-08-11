@@ -1875,7 +1875,13 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         plugin_manager = PluginManager(plugin_dirs)
         await plugin_manager.startup()
         app.state.plugin_manager = plugin_manager
-        logger.info("PluginManager started — %s", plugin_manager.get_plugin_status())
+        # #13677: the load tally, not just per-plugin statuses. A status map
+        # nobody totals is why 0-of-7 read the same as "no plugins installed".
+        logger.info(
+            "PluginManager started — %s | %s",
+            plugin_manager.get_load_report(),
+            plugin_manager.get_plugin_status(),
+        )
     except Exception as pm_err:
         logger.warning("Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True)
 

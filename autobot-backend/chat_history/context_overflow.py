@@ -17,9 +17,9 @@ Builds on #8990 (token usage tracking) and #3770 (compression service).
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
