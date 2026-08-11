@@ -1453,7 +1453,12 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
 
 
 async def _stream_chat_workflow_messages(
-    chat_workflow_manager, chat_id: str, message: str, context: dict, request_id: str
+    chat_workflow_manager,
+    chat_id: str,
+    message: str,
+    context: dict,
+    request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
@@ -1464,7 +1469,7 @@ async def _stream_chat_workflow_messages(
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
         async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context
+            session_id=chat_id, message=message, context=context, auth_role=auth_role
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
@@ -1602,6 +1607,10 @@ async def send_chat_message_by_id(
             message,
             context,
             request_id,
+            # #13821: the RBAC role from the authenticated session, NOT from
+            # request_data — `context` above is the caller's own bag and is
+            # explicitly not trusted for this.
+            auth_role=(current_user or {}).get("role"),
         )
     )
 

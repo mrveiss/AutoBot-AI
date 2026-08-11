@@ -3700,6 +3700,15 @@ class ToolHandlerMixin:
         break_loop_requested = False
         respond_content = None
 
+        # #13821: forward the authenticated role. #2629 wired `role` as far as
+        # _dispatch_tool_call's signature and stopped here, so the `role="user"`
+        # default won every call and MCPDispatcher never saw who was signed in —
+        # an admin was denied the admin-only tools they are entitled to, and the
+        # #13228 shadow inventory could only ever contain user rows.
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
+        role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
+
         for tool_call in tool_calls:
             async for result in self._dispatch_tool_call(
                 tool_call,
@@ -3710,6 +3719,7 @@ class ToolHandlerMixin:
                 execution_results,
                 additional_response_parts,
                 ctx=ctx,
+                role=role,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result
