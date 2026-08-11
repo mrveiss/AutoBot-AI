@@ -21920,6 +21920,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/codebase/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyze Impact
+         * @description Return what transitively calls *node_id*.
+         *
+         *     A 200 with ``indexed: false`` rather than a 404 when the graph is missing:
+         *     "the code graph has not been built" is a different answer from "that node
+         *     does not exist", and collapsing them would send an operator hunting for a
+         *     typo in their node id.
+         */
+        get: operations["analyze_impact_api_analytics_codebase_impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reporting/report": {
         parameters: {
             query?: never;
@@ -130473,6 +130498,40 @@ export interface operations {
             path: {
                 source_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_impact_api_analytics_codebase_impact_get: {
+        parameters: {
+            query: {
+                /** @description Graph node id to walk back from */
+                node_id: string;
+                /** @description Override the configured hop limit. Omit to use impact_analysis_max_depth. */
+                max_depth?: number | null;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
