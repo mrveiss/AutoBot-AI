@@ -160,8 +160,7 @@ class TestTheNoteAndTheDispatchKeyCannotDrift:
 
         assert named, f"the excerpt note no longer names a tool: {note!r}"
         assert named.group(1) in _UNIFORM_BUILTIN_TOOLS, (
-            f"the note tells the model to call {named.group(1)!r}, "
-            "which the production dispatch seam cannot route"
+            f"the note tells the model to call {named.group(1)!r}, " "which the production dispatch seam cannot route"
         )
 
 
