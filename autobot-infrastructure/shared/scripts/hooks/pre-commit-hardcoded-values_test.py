@@ -288,10 +288,78 @@ class TestMagicNumbers:
         )
         assert result.returncode == 0
 
+    # Issue #14048: same call-argument blind spot fixed for
+    # check_hardcoded_categories in #14005 — `d.get("limit", 10)` has no
+    # `=`/`:` between the field name and the default, so the keyword-style
+    # regex alone never matches. One test per magic-number pattern the
+    # call-argument alternative was added to.
+
+    def test_blocks_call_argument_limit_10(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def c(d):\n    return d.get("limit", 10)\n'},
+        )
+        assert result.returncode != 0
+        assert "10" in result.stdout
+
+    def test_blocks_call_argument_page_size_50(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def e(d):\n    return d.get("page_size", 50)\n'},
+        )
+        assert result.returncode != 0
+        assert "50" in result.stdout
+
+    def test_blocks_call_argument_limit_100(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def f(d):\n    return d.get("limit", 100)\n'},
+        )
+        assert result.returncode != 0
+        assert "100" in result.stdout
+
+    def test_blocks_call_argument_max_results_5(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def g(d):\n    return d.get("max_results", 5)\n'},
+        )
+        assert result.returncode != 0
+        assert "5" in result.stdout
+
+    def test_allows_call_argument_unrelated_key(self, tmp_path: Path) -> None:
+        # Ordinary code: neither the key nor the default is one of the
+        # limit/page_size/max_results/batch literals the rule targets.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def h(d):\n    return d.get("count", 10)\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_call_argument_using_query_defaults(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import QueryDefaults\n"
+                    'def i(d):\n    return d.get("limit", QueryDefaults.DEFAULT_SEARCH_LIMIT)\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedRoles:
-    """check_hardcoded_roles: blocks `role="user"` literals."""
+    """check_hardcoded_roles: blocks `role="user"` literals.
+
+    Issue #14048: shares the same two bugs #14005 fixed for
+    check_hardcoded_categories — the keyword-style regex is blind to the
+    call-argument shape (`d.get("role", "user")`, no `=`/`:` between key and
+    default), and the quote class `["\\x27]` is not "double or single quote"
+    inside a POSIX bracket expression (backslash has no special meaning
+    there), so it never matched an apostrophe and every single-quoted role
+    literal silently passed.
+    """
 
     def test_blocks_hardcoded_role_string(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -307,6 +375,62 @@ class TestHardcodedRoles:
             {
                 "src/chat.py": (
                     "from constants import CategoryDefaults\n" 'msg = {"role": CategoryDefaults.ROLE_USER}\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": 'def a(msg):\n    return msg.get("role", "user")\n'},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_blocks_single_quoted_keyword_style(self, tmp_path: Path) -> None:
+        # Regression for the quote-class bug: `["\x27]` matched one of the
+        # five literal characters ", \, x, 2, 7 — never an apostrophe.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": "msg = {'role': 'user', 'content': 'hi'}\n"},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": "def a(msg):\n    return msg.get('role', 'user')\n"},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_allows_unrelated_key_in_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_jsdoc_block_comment_continuation(self, tmp_path: Path) -> None:
+        # Same false-positive class caught for categories in review of
+        # #14005: fixing the quote class surfaces `*`-prefixed JSDoc
+        # continuation lines unless the comment skip also covers them.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.ts": ("/**\n" " * role: 'user'\n" " */\n" "export const x = 1\n"),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_typescript_string_literal_union_type(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/types.ts": (
+                    "export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"
                 ),
             },
         )
@@ -568,6 +692,24 @@ class TestHardcodedTimeouts:
         # a hook tightening, the new behavior should be reflected here
         # rather than the test being deleted.
         assert result.returncode in (0, 1), "Hook should produce either pass or violation, not error"
+
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        # Issue #14048: same call-argument blind spot fixed for
+        # check_hardcoded_categories in #14005 — `d.get("timeout", 30)` has
+        # no `=`/`:` between the field name and the default.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": 'def b(d):\n    return d.get("timeout", 30)\n'},
+        )
+        assert result.returncode != 0
+        assert "30" in result.stdout
+
+    def test_allows_call_argument_unrelated_key(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": 'def c(d):\n    return d.get("retry_count", 30)\n'},
+        )
+        assert result.returncode == 0
 
     def test_allows_timeout_via_config(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
