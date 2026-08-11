@@ -100,6 +100,11 @@ _PROVENANCE_RECORD_TYPE = "graph_provenance"
 # not a valid relative path, so it can never collide with a cached file entry.
 _CACHE_VERSION_KEY = "::extractor_version"
 
+# #13509: signature fingerprints live in the same cache dict under this prefix,
+# so the existing EXTRACTOR_VERSION gate discards them too rather than needing a
+# second versioning mechanism. The prefix cannot collide with a relative path.
+_SIGNATURE_KEY_PREFIX = "::sig::"
+
 # Bound on the read-only git calls provenance makes; never hard-coded inline.
 _GIT_TIMEOUT_SECONDS = int(os.environ.get("AUTOBOT_CODE_INDEX_GIT_TIMEOUT_SECONDS", "10"))
 
@@ -471,8 +476,15 @@ class CodeIndexer:
             return result
 
         await self._ensure_known_ids()
-        await self._index_extraction(rel_path, extracted, result)
-        self._update_hash_cache(file_path, rel_path)
+        if extracted.get("signature_unchanged"):
+            # #13509: the interface is identical, so every embedding would be
+            # recomputed for the same text. Line numbers still move, and a stale
+            # line makes "go to definition" drift — so the records are updated,
+            # just not re-embedded.
+            await self._refresh_line_ranges(rel_path, extracted, result)
+        else:
+            await self._index_extraction(rel_path, extracted, result)
+        self._update_hash_cache(file_path, rel_path, extracted.get("signature"))
         return result
 
     async def _extract_file(
@@ -498,12 +510,84 @@ class CodeIndexer:
             result.failed += 1
             result.errors.append(f"{rel_path}: missing dependency — {extracted['dep_error']}")
             return None
+        extracted["signature"] = self._signature_of(ext, content)
+        extracted["signature_unchanged"] = not force and self._signature_unchanged(rel_path, extracted["signature"])
         return extracted
 
-    def _update_hash_cache(self, file_path: str, rel_path: str) -> None:
+    def _signature_unchanged(self, rel_path: str, current: str | None) -> bool:
+        """Whether *rel_path*'s interface is identical to the stored fingerprint.
+
+        The import is deferred: the top-level test conftest stubs
+        ``code_intelligence`` as a MagicMock to avoid its heavy import chain, and
+        a module-level import here would bind that stub — so a comparison would
+        silently return a truthy Mock and skip re-embedding. Any import failure
+        answers False, i.e. re-analyse.
+        """
+        try:
+            from code_intelligence.fingerprinting.signature_hasher import (  # noqa: PLC0415
+                signature_matches,
+            )
+        except Exception:  # pragma: no cover - defensive
+            return False
+        return signature_matches(self._hash_cache.get(_SIGNATURE_KEY_PREFIX + rel_path), current)
+
+    @staticmethod
+    def _signature_of(ext: str, content: bytes) -> str | None:
+        """Interface fingerprint for *content*, or None when one cannot be had.
+
+        #13509: None means "re-analyse". Only Python is covered — the hasher is
+        `ast`-based — so every other extension keeps today's full-rebuild path
+        rather than silently skipping on a fingerprint that was never computed.
+        """
+        if ext != ".py":
+            return None
+        try:
+            from code_intelligence.fingerprinting.signature_hasher import (  # noqa: PLC0415
+                compute_signature_fingerprint,
+            )
+
+            return compute_signature_fingerprint(content.decode("utf-8"))
+        except Exception:
+            return None
+
+    async def _refresh_line_ranges(self, rel_path: str, extracted: dict, result: CodeIndexResult) -> None:
+        """Update node line numbers without recomputing a single embedding (#13509).
+
+        Metadata-only: the embedded text for a node is its kind, name, path and
+        line, and the first three are unchanged by definition when the signature
+        matched. Re-embedding to move a line number is the waste this issue is
+        about.
+        """
+        nodes = extracted["nodes"]
+        self._known_ids.update(n["id"] for n in nodes)
+        if not nodes:
+            return
+        try:
+            await asyncio.to_thread(
+                self._collection.update,
+                ids=[n["id"] for n in nodes],
+                metadatas=[{"line": str(n.get("line", 0))} for n in nodes],
+            )
+            result.success += len(nodes)
+        except Exception as exc:
+            # Fail open: a failed refresh must not leave the cache claiming the
+            # file is current, or the drift becomes permanent.
+            logger.warning("%s: line-range refresh failed, forcing re-index next run: %s", rel_path, exc)
+            extracted["signature"] = None
+            result.failed += len(nodes)
+        result.nodes += len(nodes)
+
+    def _update_hash_cache(self, file_path: str, rel_path: str, signature: str | None = None) -> None:
         new_hash = self._compute_hash(file_path)
         if new_hash:
             self._hash_cache[rel_path] = new_hash
+            # A missing signature clears any stored one, so the next run takes
+            # the full path rather than comparing against a stale fingerprint.
+            key = _SIGNATURE_KEY_PREFIX + rel_path
+            if signature:
+                self._hash_cache[key] = signature
+            else:
+                self._hash_cache.pop(key, None)
             self._save_cache()
 
     async def index_directory(
