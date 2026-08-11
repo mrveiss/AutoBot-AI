@@ -69,7 +69,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -1784,32 +1784,28 @@ async def _merge_chat_messages(
         return new_messages
 
 
-async def _durable_owner_metadata(chat_history_manager, session_id: str, current_user: dict | None) -> dict | None:
-    """Owner metadata to write when a session has no durable owner yet (#14020).
+async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
+    """Owner metadata to write when the save path creates a session (#14020).
 
     `save_session` writes a `metadata` key only when one is passed, so saving to a
     session id with no existing file produced a session with **no durable owner**.
     Since #14018 made the file record authoritative, such a session reads as
-    genuinely unowned every time its Redis key lapses — reclaimable by whoever
-    visits next, once per TTL window.
+    unowned every time its Redis key lapses and is claimed by whoever visits next.
 
-    Returns None when a durable owner already exists, so an existing session's
-    recorded owner is never overwritten by whoever happens to be saving. The
-    caller has already passed `validate_chat_ownership` by this point, so when
-    there is no durable owner they are the recognised owner and the record is
-    simply catching up with that.
+    The write **mirrors the validator's own decision** rather than making an
+    independent one. `validate_chat_ownership` returns ``legacy_migration`` exactly
+    when it found no owner and granted the caller ownership — that is the only case
+    where stamping the file is recording what already happened.
+
+    It deliberately does NOT write on ``enforcement_disabled`` or ``auth_disabled``:
+    those fast paths authorise **without checking any owner at all** (and disabled
+    is the default today, #14010), so claiming there would let any authenticated
+    caller permanently stamp themselves onto an ownerless session — a claim that
+    would outlive the switch to enforced.
     """
-    username = (current_user or {}).get("username")
-    if not username:
+    if not isinstance(ownership, dict) or ownership.get("reason") != "legacy_migration":
         return None
-    try:
-        if await chat_history_manager.get_session_owner(session_id):
-            return None
-    except Exception as exc:
-        logger.warning("Could not check the durable owner of %s, not writing one: %s", session_id, exc)
-        return None
-    # Both keys, matching create_session — older readers look at `username`.
-    return {"owner": username, "username": username}
+    return build_owner_metadata(ownership.get("user_data")) or None
 
 
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
@@ -1851,7 +1847,7 @@ async def save_chat_by_id(
         session_id=chat_id,
         messages=merged_messages,
         name=save_data.get("name", ""),
-        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, current_user),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
     )
 
     return JSONResponse(
