@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
 
