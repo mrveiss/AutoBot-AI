@@ -50,6 +50,7 @@ from .models import (
     filter_internal_prompts,
 )
 from .session_handler import SessionHandlerMixin
+from .session_role import resolve_auth_role
 from .tool_handler import ToolHandlerMixin
 
 logger = get_logger(__name__)
@@ -3432,6 +3433,7 @@ before summarizing.
             agent_context=agent_context,
             work_item_id=work_item_id,
             requires_approval_before=approval_cats,
+            auth_role=resolve_auth_role(merged_context),
         )
 
     async def _execute_llm_workflow(
@@ -3557,11 +3559,15 @@ before summarizing.
 
     @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
-        self, session_id: str, message: str, context: Dict[str, Any] | None = None
+        self,
+        session_id: str,
+        message: str,
+        context: Dict[str, Any] | None = None,
+        auth_role: str | None = None,
     ) -> List[WorkflowMessage]:
         """Process a message through the workflow system and return all messages."""
         messages = []
-        async for msg in self.process_message_stream(session_id, message, context):
+        async for msg in self.process_message_stream(session_id, message, context, auth_role):
             messages.append(msg)
         return messages
 
@@ -3623,7 +3629,9 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
-    async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    async def _apply_session_role(
+        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None
+    ) -> Dict[str, Any] | None:
         """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
 
         A server-set session role overrides any client-supplied ``agent_id`` so the
@@ -3634,10 +3642,19 @@ before summarizing.
         seam gate holds matching tools BEFORE they execute — the correct
         pre-execution stage. Backend decides; the frontend only calls the endpoints.
         """
-        from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService, apply_role
+        from chat_workflow.session_role import (
+            CHAT_APPROVAL_GATE_ENABLED,
+            SessionRoleService,
+            apply_auth_role,
+            apply_role,
+        )
         from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
         svc = SessionRoleService()
+        # #13821: the authenticated caller's RBAC role, from the endpoint's
+        # server-side identity. Applied unconditionally (it strips on a missing
+        # role) so a client-supplied auth_role can never reach the tool seam.
+        context = apply_auth_role(context, auth_role)
         context = apply_role(context, await svc.get_role(session_id))
         # #13704: same trust model for the work-item binding. A server-set value
         # overrides any client-supplied work_item_id, and an unbound session has
@@ -3650,7 +3667,13 @@ before summarizing.
                 context = {**(context or {}), "requires_approval_before": categories}
         return context
 
-    async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
+    async def process_message_stream(
+        self,
+        session_id: str,
+        message: str,
+        context: Dict[str, Any] | None = None,
+        auth_role: str | None = None,
+    ):
         """Process a message via LangGraph StateGraph.
 
         Issue #1043: Replaced hand-rolled async generator with LangGraph graph
@@ -3661,7 +3684,7 @@ before summarizing.
         """
         # GH#11186: apply the trusted per-session role once here, so both the graph
         # and legacy paths carry the governed identity into the tool seam.
-        context = await self._apply_session_role(session_id, context)
+        context = await self._apply_session_role(session_id, context, auth_role)
         try:
             async for msg in self._process_via_graph(session_id, message, context):
                 yield msg
