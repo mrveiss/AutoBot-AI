@@ -44,6 +44,9 @@ class LoggerPlugin(BasePlugin):
         # manifest's config_schema still allows an override.
         self.log_file = Path((config or {}).get("log_file") or _default_log_path())
         self.hook_registry = HookRegistry()
+        # False until initialize() proves the sink opened. Defaulting to True
+        # would let an uninitialised instance write and fail per event.
+        self._sink_enabled = False
 
     async def initialize(self) -> None:
         """Initialize plugin and register hooks."""
@@ -133,7 +136,7 @@ class LoggerPlugin(BasePlugin):
 
     def _write_log(self, data: Dict) -> None:
         """Write log entry to file, if the sink came up (#13967)."""
-        if not getattr(self, "_sink_enabled", True):
+        if not self._sink_enabled:
             # Already reported once at initialize(); re-reporting per event
             # would turn a degraded sink into a log flood.
             return

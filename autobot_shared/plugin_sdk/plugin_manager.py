@@ -11,6 +11,7 @@ Handles startup discovery, ordered plugin loading, and graceful shutdown.
 Issue #3278 - Plugin and extension system for third-party integrations.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
@@ -46,6 +47,9 @@ class PluginManager:
         # #13677: the load tally, so "is the plugin subsystem working?" is a
         # QUERY and not a log-reading exercise. A stream of per-plugin lines
         # nobody totals is why 0-of-7 and "no plugins installed" looked the same.
+        # Held across the completed-check and the retry: `startup()` awaits, so
+        # two concurrent retries would otherwise interleave and load twice.
+        self._retry_lock = asyncio.Lock()
         self._load_report: Dict[str, object] = {
             "discovered": 0,
             "loaded": 0,
@@ -100,6 +104,19 @@ class PluginManager:
         failed: List[str] = []
 
         for manifest in manifests:
+            # #14000 review: `PluginRegistry._plugins` is a process-wide class
+            # attribute, shared with the live `POST /plugins/{name}/load` route,
+            # and `load_plugin` runs `initialize()` BEFORE `register()` — so the
+            # duplicate check fires only after every side effect has happened.
+            # Re-initialising a live plugin appends its hook callbacks a second
+            # time (HookRegistry is also a singleton and does not dedupe), leaks
+            # the discarded instance, and then reports a working plugin as
+            # failed. Skipping here is what makes a retry safe, and it fixes the
+            # same latent hazard in a plain second startup().
+            if self._registry.get_plugin(manifest.name):
+                loaded.append(manifest.name)
+                logger.info("PluginManager: '%s' is already registered — not re-initialising", manifest.name)
+                continue
             try:
                 plugin = await self._loader.load_plugin(manifest)
                 if plugin:
@@ -249,14 +266,25 @@ class PluginManager:
             The load report for the new attempt, or the existing one unchanged
             when there was nothing to recover.
         """
-        if self._load_report.get("completed"):
-            logger.info("PluginManager.retry_discovery(): last startup completed — nothing to retry")
-            return self.get_load_report()
+        async with self._retry_lock:
+            # Direct indexing, not .get(): the key is set in __init__,
+            # _record_load_report and shutdown(), so a default here would only
+            # ever hide a rename — the same argument as the conflicts copy above.
+            if self._load_report["completed"]:
+                logger.info("PluginManager.retry_discovery(): last startup completed — nothing to retry")
+                return self.get_load_report()
+            if not self._started:
+                # shutdown() also leaves completed=False. Retrying there would
+                # resurrect a manager the caller deliberately stopped — and
+                # "crashed" vs "cleanly shut down" is exactly the conflation
+                # #13677 removed one level up.
+                logger.info("PluginManager.retry_discovery(): manager is not started — nothing to retry")
+                return self.get_load_report()
 
-        logger.warning("PluginManager.retry_discovery(): re-running discovery after an incomplete startup")
-        self._started = False
-        await self.startup()
-        return self.get_load_report()
+            logger.warning("PluginManager.retry_discovery(): re-running discovery after an incomplete startup")
+            self._started = False
+            await self.startup()
+            return self.get_load_report()
 
     def get_load_report(self) -> Dict[str, object]:
         """Return the startup load tally.

@@ -92,14 +92,20 @@ def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_sche
 
 
 def _module_is_importable(module_name: str) -> bool:
-    """True if ``module_name`` can be imported without importing it (#13966).
+    """True if ``module_name`` resolves to an importable module (#13966).
 
-    `find_spec` raises rather than returning None for a parent package that is
-    itself missing, so both outcomes have to mean "not importable".
+    Takes a MODULE name, not a distribution name — `pillow` is installed but
+    imports as `PIL`, so the manifest must say `PIL`.
+
+    Note that for a dotted name this DOES import the parent packages, because
+    `find_spec("a.b")` must import `a` to find `b`. Third-party `__init__` code
+    therefore executes during a dependency check, and it can raise anything at
+    all — so every Exception means "not importable" rather than propagating out
+    of discovery, where it would produce the #14000 wedge.
     """
     try:
         return importlib.util.find_spec(module_name) is not None
-    except (ImportError, ValueError, ModuleNotFoundError):
+    except Exception:  # noqa: BLE001 — a third-party __init__ may raise anything
         return False
 
 

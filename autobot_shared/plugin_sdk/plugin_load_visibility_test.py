@@ -25,6 +25,7 @@ plugins produced the same shape as a host where all seven were broken.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -636,3 +637,90 @@ class TestCrashedDiscoveryIsRecoverable:
 
         assert report["completed"] is True
         assert report["discovered"] == 0
+
+
+class TestRetryDoesNotReinitialiseLivePlugins:
+    """#14000 review blocker: `PluginRegistry._plugins` is a class attribute —
+    process-wide, shared with the live `POST /plugins/{name}/load` route — and
+    `load_plugin` runs `initialize()` BEFORE `register()`, so the duplicate
+    check fires only after every side effect has already happened.
+
+    A retry therefore re-initialised plugins that were already live: hook
+    callbacks appended a second time (HookRegistry is also a singleton and does
+    not dedupe, so the duplicate is permanent), the second instance discarded
+    without `shutdown()`, and the report naming a working plugin as failed with
+    `completed: True` locking the lie in.
+
+    Asserting the report is not enough here — the report was the thing that
+    lied. These count the side effects.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_already_registered_plugin_is_not_initialised_twice(self, tmp_path):
+        _make_plugin(tmp_path, "already-live")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        plugin = manager._registry.get_plugin("already-live")
+        assert plugin is not None, "fixture must actually register, or this guards nothing"
+        before = getattr(plugin, "init_count", None)
+
+        # Force the crashed-startup state the retry path exists for.
+        manager._load_report["completed"] = False
+        await manager.retry_discovery()
+
+        again = manager._registry.get_plugin("already-live")
+        assert again is plugin, "the live instance must survive a retry"
+        if before is not None:
+            assert getattr(again, "init_count", None) == before, "initialize() ran a second time on a live plugin"
+
+    @pytest.mark.asyncio
+    async def test_a_live_plugin_is_reported_loaded_not_failed(self, tmp_path):
+        """It reported working plugins as casualties — the manufactured-casualty
+        failure #13677 already fixed one level up."""
+        _make_plugin(tmp_path, "live-not-failed")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        manager._load_report["completed"] = False
+        report = await manager.retry_discovery()
+
+        assert report["failed"] == [], "a live plugin must not be reported as a failure"
+        assert report["loaded"] == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_after_a_clean_shutdown_is_refused(self, tmp_path):
+        """`shutdown()` also leaves completed=False, so gating on that alone
+        would resurrect a manager the caller deliberately stopped — 'crashed'
+        and 'cleanly shut down' conflated, which is this umbrella's whole
+        subject."""
+        _make_plugin(tmp_path, "shutdown-demo")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+        await manager.shutdown()
+
+        report = await manager.retry_discovery()
+
+        assert report["loaded"] == 0 or not manager._started, "a shut-down manager must not be restarted by a retry"
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_retries_do_not_both_run(self, tmp_path, monkeypatch):
+        """`startup()` awaits, so without a lock two retries interleave. The
+        earlier version of this test passed only because the fixture plugins
+        never actually suspend."""
+        _make_plugin(tmp_path, "race-demo")
+        manager = PluginManager([tmp_path])
+
+        real_load = manager._loader.load_plugin
+
+        async def _slow_load(manifest):
+            await asyncio.sleep(0.05)
+            return await real_load(manifest)
+
+        monkeypatch.setattr(manager._loader, "load_plugin", _slow_load)
+        await manager.startup()
+        manager._load_report["completed"] = False
+
+        await asyncio.gather(manager.retry_discovery(), manager.retry_discovery())
+
+        assert manager.get_load_report()["failed"] == [], "concurrent retries manufactured a failure"
