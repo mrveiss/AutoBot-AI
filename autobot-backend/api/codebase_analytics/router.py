@@ -14,6 +14,7 @@ from auth_middleware import check_admin_permission
 # Issue #208: Code Pattern Detection & Optimization
 from .endpoints import api_endpoints  # Issue #527: API Endpoint Checker
 from .endpoints import environment  # Issue #538: Environment analysis
+from .endpoints import impact  # Issue #13506: impact analysis (REST/GUI path)
 from .endpoints import ownership  # Issue #248: Code Ownership and Expertise Map
 from .endpoints import (
     cache,
@@ -27,7 +28,6 @@ from .endpoints import (
     indexing,
     pattern_analysis,
 )
-from .endpoints import impact  # Issue #13506: impact analysis (REST/GUI path)
 from .endpoints import queue as queue_router
 from .endpoints import (
     report,
