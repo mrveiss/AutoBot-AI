@@ -100,7 +100,7 @@ _PROVENANCE_RECORD_TYPE = "graph_provenance"
 # not a valid relative path, so it can never collide with a cached file entry.
 _CACHE_VERSION_KEY = "::extractor_version"
 
-# #13509: signature fingerprints live in the same cache dict under this prefix,
+# #13509: graph-shape fingerprints live in the same cache dict under this prefix,
 # so the existing EXTRACTOR_VERSION gate discards them too rather than needing a
 # second versioning mechanism. The prefix cannot collide with a relative path.
 _SIGNATURE_KEY_PREFIX = "::sig::"
@@ -476,7 +476,7 @@ class CodeIndexer:
             return result
 
         await self._ensure_known_ids()
-        if extracted.get("signature_unchanged"):
+        if extracted.get("shape_unchanged"):
             # #13509: the interface is identical, so every embedding would be
             # recomputed for the same text. Line numbers still move, and a stale
             # line makes "go to definition" drift — so the records are updated,
@@ -484,7 +484,7 @@ class CodeIndexer:
             await self._refresh_line_ranges(rel_path, extracted, result)
         else:
             await self._index_extraction(rel_path, extracted, result)
-        self._update_hash_cache(file_path, rel_path, extracted.get("signature"))
+        self._update_hash_cache(file_path, rel_path, extracted.get("shape"))
         return result
 
     async def _extract_file(
@@ -510,82 +510,92 @@ class CodeIndexer:
             result.failed += 1
             result.errors.append(f"{rel_path}: missing dependency — {extracted['dep_error']}")
             return None
-        extracted["signature"] = self._signature_of(ext, content)
-        extracted["signature_unchanged"] = not force and self._signature_unchanged(rel_path, extracted["signature"])
+        extracted["shape"] = self._shape_of(extracted)
+        extracted["shape_unchanged"] = not force and self._shape_unchanged(rel_path, extracted["shape"])
         return extracted
 
-    def _signature_unchanged(self, rel_path: str, current: str | None) -> bool:
-        """Whether *rel_path*'s interface is identical to the stored fingerprint.
+    def _shape_unchanged(self, rel_path: str, current: str | None) -> bool:
+        """Whether *rel_path* produced exactly the graph shape stored last run.
 
-        The import is deferred: the top-level test conftest stubs
-        ``code_intelligence`` as a MagicMock to avoid its heavy import chain, and
-        a module-level import here would bind that stub — so a comparison would
-        silently return a truthy Mock and skip re-embedding. Any import failure
-        answers False, i.e. re-analyse.
+        The import is deferred so ``code_indexer`` degrades rather than failing
+        to import if the ``code_intelligence`` package chain is unavailable in a
+        standalone worker context. Any import failure answers False — re-analyse.
         """
         try:
-            from code_intelligence.fingerprinting.signature_hasher import (  # noqa: PLC0415
-                signature_matches,
-            )
+            from code_intelligence.fingerprinting.graph_shape import shape_matches  # noqa: PLC0415
         except Exception:  # pragma: no cover - defensive
             return False
-        return signature_matches(self._hash_cache.get(_SIGNATURE_KEY_PREFIX + rel_path), current)
+        return shape_matches(self._hash_cache.get(_SIGNATURE_KEY_PREFIX + rel_path), current)
 
     @staticmethod
-    def _signature_of(ext: str, content: bytes) -> str | None:
-        """Interface fingerprint for *content*, or None when one cannot be had.
+    def _shape_of(extracted: dict) -> str | None:
+        """Fingerprint the extractor's own output (#13509).
 
-        #13509: None means "re-analyse". Only Python is covered — the hasher is
-        `ast`-based — so every other extension keeps today's full-rebuild path
-        rather than silently skipping on a fingerprint that was never computed.
+        Language-agnostic on purpose: it reads the emitted nodes/edges rather
+        than re-parsing the source, so it cannot disagree with what gets
+        persisted the way an AST-derived signature did.
         """
-        if ext != ".py":
-            return None
         try:
-            from code_intelligence.fingerprinting.signature_hasher import (  # noqa: PLC0415
-                compute_signature_fingerprint,
+            from code_intelligence.fingerprinting.graph_shape import (  # noqa: PLC0415
+                compute_graph_shape_fingerprint,
             )
 
-            return compute_signature_fingerprint(content.decode("utf-8"))
+            return compute_graph_shape_fingerprint(extracted)
         except Exception:
             return None
 
     async def _refresh_line_ranges(self, rel_path: str, extracted: dict, result: CodeIndexResult) -> None:
         """Update node line numbers without recomputing a single embedding (#13509).
 
-        Metadata-only: the embedded text for a node is its kind, name, path and
-        line, and the first three are unchanged by definition when the signature
-        matched. Re-embedding to move a line number is the waste this issue is
-        about.
+        Metadata-only: a node's embedded text is its kind, name and path, and an
+        edge document reuses its source node's embedding — all unchanged by
+        definition when the fingerprint matched, since it covers every persisted
+        field except the line. Re-embedding to move a line number is the waste
+        this issue is about.
         """
         nodes = extracted["nodes"]
+        edges = extracted.get("edges") or []
         self._known_ids.update(n["id"] for n in nodes)
         if not nodes:
             return
+
+        ids = [n["id"] for n in nodes]
+        metadatas: list[dict] = [{"line": str(n.get("line", 0))} for n in nodes]
+        # The line is part of the embedded text, so the stored document is
+        # rewritten too — the *embedding* is what stays, and a line number moves
+        # it immeasurably. Leaving the document behind would make the record
+        # disagree with its own metadata.
+        documents: list[str] = [_node_document(n, rel_path) for n in nodes]
+        # #13509 (review): edges move too. Their identity is in the fingerprint,
+        # so a match means only the call site's line shifted — but leaving
+        # call_line stale makes impact analysis point at the wrong line, which is
+        # the same silent drift for edges that stale node lines are for nodes.
+        for edge in edges:
+            ids.append(f"edge::{edge.get('source')}::{edge.get('target_name')}")
+            metadatas.append({"call_line": edge.get("line", 0)})
+            documents.append(f"CALLS {edge.get('target_name')}")
+
         try:
-            await asyncio.to_thread(
-                self._collection.update,
-                ids=[n["id"] for n in nodes],
-                metadatas=[{"line": str(n.get("line", 0))} for n in nodes],
-            )
+            await asyncio.to_thread(self._collection.update, ids=ids, metadatas=metadatas, documents=documents)
             result.success += len(nodes)
         except Exception as exc:
             # Fail open: a failed refresh must not leave the cache claiming the
             # file is current, or the drift becomes permanent.
             logger.warning("%s: line-range refresh failed, forcing re-index next run: %s", rel_path, exc)
-            extracted["signature"] = None
+            extracted["shape"] = None
             result.failed += len(nodes)
         result.nodes += len(nodes)
+        result.edges += len(edges)
 
-    def _update_hash_cache(self, file_path: str, rel_path: str, signature: str | None = None) -> None:
+    def _update_hash_cache(self, file_path: str, rel_path: str, shape: str | None = None) -> None:
         new_hash = self._compute_hash(file_path)
         if new_hash:
             self._hash_cache[rel_path] = new_hash
-            # A missing signature clears any stored one, so the next run takes
+            # A missing fingerprint clears any stored one, so the next run takes
             # the full path rather than comparing against a stale fingerprint.
             key = _SIGNATURE_KEY_PREFIX + rel_path
-            if signature:
-                self._hash_cache[key] = signature
+            if shape:
+                self._hash_cache[key] = shape
             else:
                 self._hash_cache.pop(key, None)
             self._save_cache()
@@ -839,7 +849,7 @@ class CodeIndexer:
         """Upsert one function/class node. Returns its embedding on success (reused
         for that node's outgoing edge documents to avoid extra model calls),
         None on failure."""
-        content = f"{node['kind'].upper()} {node['name']}\n" f"File: {rel_path} line {node.get('line', 0)}"
+        content = _node_document(node, rel_path)
         metadata: dict[str, Any] = {
             "source": "autobot_code",
             "record_type": "node",
@@ -1022,6 +1032,16 @@ async def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
     if not counted.isdigit():
         return None
     return int(counted)
+
+
+def _node_document(node: dict, rel_path: str) -> str:
+    """The text embedded for one node record.
+
+    Shared with the #13509 refresh path so the two can never drift: that path
+    rewrites this string when a line moves *without* re-embedding, which is only
+    sound while both sides format it identically.
+    """
+    return f"{node['kind'].upper()} {node['name']}\n" f"File: {rel_path} line {node.get('line', 0)}"
 
 
 def _build_edge_batch(
