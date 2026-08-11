@@ -179,7 +179,8 @@ async def _read_filing_token() -> str | None:
         try:
             raw = await EnvelopeSecretsService().read(session, secret_id=row.id, accessible_vaults=[owner])
         except (SecretNotFoundError, SecretAccessError) as exc:
-            logger.warning("audit: filing token present but unreadable: %s", exc)
+            # Class name only — same reason as above.
+            logger.warning("audit: filing token present but unreadable (%s)", type(exc).__name__)
             return None
         return raw.decode("utf-8").strip() or None
     return None
