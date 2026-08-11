@@ -41,6 +41,41 @@ get_files_to_scan() {
         grep -v -E '(constants/|config\.py$|\.env)' || true
 }
 
+# Shared call-argument matcher (#14005 -> #14048).
+#
+# Every "keyword-style" regex in this file (identifier bound to a literal with
+# `=`/`:` — assignment, dict value, function default) is blind to the
+# "call-argument" shape: `obj.get("field", value)`. There the field name is a
+# STRING-LITERAL positional argument, not an identifier bound with `=`/`:`, so
+# there is no operator between the field name and the default value for the
+# keyword-style regex to anchor on. #14005 hit this first for
+# check_hardcoded_categories (`doc.get("category", "general")`); the same gap
+# was audited and confirmed in check_hardcoded_roles, check_hardcoded_timeouts
+# and check_magic_numbers (#14048) — every one of them reuses this identical
+# keyword-style shape and is blind to the identical call-argument shape.
+#
+# Anchored to `.get(` so it only matches an actual dict-style lookup, not any
+# comma-joined pair of matching literals elsewhere (a tuple, an assertion).
+#
+# Args:
+#   $1  line to test
+#   $2  field-name alternation, e.g. 'role' or 'timeout|timeout_seconds'
+#   $3  value regex, ALREADY shaped by the caller (quoted for string values —
+#       e.g. `["'](user|assistant|system)["']` — or bare for numeric ones —
+#       e.g. `\b(30|60)\b` — since some checkers key off a quoted string
+#       default and others off a bare numeric one)
+#   $4  optional: pass "i" for a case-insensitive match, matching
+#       check_magic_numbers' existing `grep -qiE` keyword-style patterns
+_matches_get_call_argument() {
+    local line="$1" fields="$2" value_regex="$3" flags="${4:-}"
+    local pattern="\\.get\\([[:space:]]*[\"'](${fields})[\"'][[:space:]]*,[[:space:]]*${value_regex}"
+    if [ "$flags" = "i" ]; then
+        echo "$line" | grep -qiE "$pattern"
+    else
+        echo "$line" | grep -qE "$pattern"
+    fi
+}
+
 # Check for hardcoded VM IPs
 check_hardcoded_ips() {
     local file="$1"
@@ -137,8 +172,11 @@ check_magic_numbers() {
             continue
         fi
 
-        # Pattern 1: limit=10, limit: int = 10, default=10, Field(default=10) for limit/search context
-        if echo "$line" | grep -qiE '(limit|top_k|max_results|page_size)[^a-z_].*=\s*10\b'; then
+        # Pattern 1: limit=10, limit: int = 10, default=10, Field(default=10) for
+        # limit/search context (keyword-style) AND the call-argument shape
+        # `d.get("limit", 10)` — see _matches_get_call_argument (#14005 -> #14048).
+        if echo "$line" | grep -qiE '(limit|top_k|max_results|page_size)[^a-z_].*=\s*10\b' || \
+           _matches_get_call_argument "$line" 'limit|top_k|max_results|page_size' '10\b' i; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 10 in limit/search context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_SEARCH_LIMIT${NC}"
@@ -148,8 +186,10 @@ check_magic_numbers() {
             continue
         fi
 
-        # Pattern 2: limit=50, page_size=50, Field(default=50)
-        if echo "$line" | grep -qiE '(limit|page_size)[^a-z_].*=\s*50\b'; then
+        # Pattern 2: limit=50, page_size=50, Field(default=50) (keyword-style) AND
+        # the call-argument shape `d.get("page_size", 50)` (#14005 -> #14048).
+        if echo "$line" | grep -qiE '(limit|page_size)[^a-z_].*=\s*50\b' || \
+           _matches_get_call_argument "$line" 'limit|page_size' '50\b' i; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 50 in pagination context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_PAGE_SIZE${NC}"
@@ -159,8 +199,10 @@ check_magic_numbers() {
             continue
         fi
 
-        # Pattern 3: limit=100 for knowledge/batch context
-        if echo "$line" | grep -qiE '(limit|batch)[^a-z_].*=\s*100\b'; then
+        # Pattern 3: limit=100 for knowledge/batch context (keyword-style) AND the
+        # call-argument shape `d.get("limit", 100)` (#14005 -> #14048).
+        if echo "$line" | grep -qiE '(limit|batch)[^a-z_].*=\s*100\b' || \
+           _matches_get_call_argument "$line" 'limit|batch' '100\b' i; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 100 in limit/batch context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT or BatchConfig.LARGE_BATCH${NC}"
@@ -171,7 +213,10 @@ check_magic_numbers() {
         fi
 
         # Pattern 4: offset=0 (only if explicitly set, not just = 0 anywhere)
-        if echo "$line" | grep -qiE 'offset[^a-z_]*[=:][^=]*\b0\b'; then
+        # (keyword-style) AND the call-argument shape `d.get("offset", 0)`
+        # (#14005 -> #14048).
+        if echo "$line" | grep -qiE 'offset[^a-z_]*[=:][^=]*\b0\b' || \
+           _matches_get_call_argument "$line" 'offset' '0\b' i; then
             # This is a warning, not a violation - offset=0 is common
             echo -e "${YELLOW}WARNING${NC} $file:$line_num"
             echo "  Consider using QueryDefaults.DEFAULT_OFFSET for consistency"
@@ -181,8 +226,10 @@ check_magic_numbers() {
             continue
         fi
 
-        # Pattern 5: max_results=5 for RAG context
-        if echo "$line" | grep -qiE '(max_results|rag)[^a-z_]*[=:][^=]*\b5\b'; then
+        # Pattern 5: max_results=5 for RAG context (keyword-style) AND the
+        # call-argument shape `d.get("max_results", 5)` (#14005 -> #14048).
+        if echo "$line" | grep -qiE '(max_results|rag)[^a-z_]*[=:][^=]*\b5\b' || \
+           _matches_get_call_argument "$line" 'max_results|rag' '5\b' i; then
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Magic number 5 in RAG/results context"
             echo -e "  ${CYAN}Fix: Use QueryDefaults.RAG_DEFAULT_RESULTS${NC}"
@@ -202,8 +249,13 @@ check_hardcoded_roles() {
     while IFS= read -r line; do
         ((line_num++))
 
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
+        # Skip comments. Includes JSDoc/block-comment continuation lines
+        # (`* ...`) — same false-positive class caught for
+        # check_hardcoded_categories in review of #14005: the quote-class fix
+        # below makes single-quoted literals visible for the first time,
+        # which surfaces `* - role: 'user'`-style doc comments in .ts files
+        # (#14048).
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
             continue
         fi
 
@@ -217,10 +269,30 @@ check_hardcoded_roles() {
             continue
         fi
 
-        # Check for role="user" or role: "user" patterns (with quotes)
-        if echo "$line" | grep -qE 'role[^a-z_]*[=:][^=]*["\x27](user|assistant|system)["\x27]'; then
+        # Skip TypeScript/Flow string-literal union types, e.g.
+        # `role?: 'user' | 'assistant' | 'system'` — a type annotation
+        # enumerating accepted values, not a hardcoded default. Same
+        # surfacing as the comment case above (#14048, mirroring #14005).
+        if echo "$line" | grep -qE '["'"'"'][[:space:]]*\|[[:space:]]*["'"'"']'; then
+            continue
+        fi
+
+        # Check for role="user" or role: "user" patterns (keyword-style:
+        # assignment, dict literal value, function default) AND the
+        # call-argument shape `d.get("role", "user")` — see
+        # _matches_get_call_argument (#14005 -> #14048).
+        #
+        # Quote class is a LITERAL apostrophe inside the bracket expression
+        # (["'](...)["']), not `["\x27]`. Backslash has no special meaning
+        # inside a POSIX bracket expression under GNU grep, so `["\x27]`
+        # matched one of the five literal characters ", \, x, 2, 7 — never
+        # an apostrophe — and every single-quoted literal (`'user'`) silently
+        # passed. Same bug as #14005's categories fix, audited and confirmed
+        # here in #14048.
+        if echo "$line" | grep -qE 'role[^a-z_]*[=:][^=]*["'"'"'](user|assistant|system)["'"'"']' || \
+           _matches_get_call_argument "$line" 'role' '["'"'"'](user|assistant|system)["'"'"']'; then
             local role
-            role=$(echo "$line" | grep -oE '["\x27](user|assistant|system)["\x27]' | head -1)
+            role=$(echo "$line" | grep -oE '["'"'"'](user|assistant|system)["'"'"']' | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Hardcoded role string: $role"
             echo -e "  ${CYAN}Fix: Use CategoryDefaults.ROLE_USER/ROLE_ASSISTANT/ROLE_SYSTEM${NC}"
@@ -363,11 +435,12 @@ check_hardcoded_categories() {
         # apostrophe — and every single-quoted literal (`'general'`) silently
         # passed both alternatives. Caught in review of #14005.
         #
-        # The call-argument alternative is anchored to `.get(` so it only
-        # matches an actual dict-style lookup, not any comma-joined pair of
-        # matching string literals (e.g. a tuple literal or an assertion).
+        # The call-argument alternative is the shared _matches_get_call_argument
+        # helper (#14048) — anchored to `.get(` so it only matches an actual
+        # dict-style lookup, not any comma-joined pair of matching string
+        # literals (e.g. a tuple literal or an assertion).
         if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["'"'"'](general|hybrid|unknown)["'"'"']' || \
-           echo "$line" | grep -qE '\.get\([[:space:]]*["'"'"'](category|search_mode|mode)["'"'"'][[:space:]]*,[[:space:]]*["'"'"'](general|hybrid|unknown)["'"'"']'; then
+           _matches_get_call_argument "$line" 'category|search_mode|mode' '["'"'"'](general|hybrid|unknown)["'"'"']'; then
             local value
             value=$(echo "$line" | grep -oE '["'"'"'](general|hybrid|unknown)["'"'"']' | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
@@ -445,8 +518,14 @@ check_hardcoded_timeouts() {
             continue
         fi
 
-        # Detect timeout=N or timeout_seconds=N patterns
-        if echo "$line" | grep -qE "(timeout|timeout_seconds|connect_timeout|read_timeout)[^a-z_]*[=:][^=]*\b(${timeout_values})\b"; then
+        # Detect timeout=N or timeout_seconds=N patterns (keyword-style) AND
+        # the call-argument shape `d.get("timeout", 30)` — see
+        # _matches_get_call_argument (#14005 -> #14048). Unlike
+        # categories/roles the default here is a bare numeric literal, not a
+        # quoted string, so no quote-class bug applies — only the missing
+        # keyword-style operator did.
+        if echo "$line" | grep -qE "(timeout|timeout_seconds|connect_timeout|read_timeout)[^a-z_]*[=:][^=]*\b(${timeout_values})\b" || \
+           _matches_get_call_argument "$line" 'timeout|timeout_seconds|connect_timeout|read_timeout' "\\b(${timeout_values})\\b"; then
             local val
             val=$(echo "$line" | grep -oE "\b(${timeout_values})\b" | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
