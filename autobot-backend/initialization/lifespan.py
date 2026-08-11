@@ -1873,8 +1873,13 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         ]
 
         plugin_manager = PluginManager(plugin_dirs)
-        await plugin_manager.startup()
+        # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
+        # one thing — a crashed discovery from an empty tree — and on a crash the
+        # manager was discarded before it ever reached app.state, so the only
+        # state that key exists to report was unobservable in production. A
+        # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
+        await plugin_manager.startup()
         # #13677: the load tally, not just per-plugin statuses. A status map
         # nobody totals is why 0-of-7 read the same as "no plugins installed".
         logger.info(
@@ -1884,6 +1889,11 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         )
     except Exception as pm_err:
         logger.warning("Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True)
+        # Report the tally here too: this is the crashed-discovery path, and it
+        # is the only place `completed=False` can be seen.
+        manager = getattr(app.state, "plugin_manager", None)
+        if manager is not None:
+            logger.warning("PluginManager load report after failure: %s", manager.get_load_report())
 
 
 async def _init_content_reach_registry(app: FastAPI) -> None:

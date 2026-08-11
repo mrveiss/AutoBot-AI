@@ -205,6 +205,11 @@ class PluginLoader:
         # here — two plugins sharing a name ran one's CODE under the other's
         # MANIFEST, and the load report called it healthy (#13677 review).
         self.name_conflicts = []
+        # Reset with them: never cleared, `_manifest_dirs` became a superset of
+        # the manifest list across repeated calls (the /plugins/discover admin
+        # endpoint calls this on a module-level singleton), re-establishing the
+        # very "these two must agree" invariant this method exists to enforce.
+        self._manifest_dirs = {}
         kept_dirs: Dict[str, Path] = {}
 
         for plugin_dir in self.plugin_dirs:
@@ -248,7 +253,7 @@ class PluginLoader:
 
                     kept_dirs[manifest.name] = here
                     # Remember where on disk this plugin lives (needed for file-path fallback)
-                    self._manifest_dirs[manifest.name] = manifest_file.parent
+                    self._manifest_dirs[manifest.name] = here
                     manifests.append(manifest)
                     logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 

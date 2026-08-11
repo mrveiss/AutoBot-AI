@@ -196,7 +196,11 @@ class PluginManager:
             "discovered": len(manifests),
             "loaded": len(loaded),
             "failed": sorted(failed),
-            "conflicts": sorted(getattr(self._loader, "name_conflicts", [])),
+            # set(): three dirs claiming one name appended twice, so a check doing
+            # len(conflicts) read two shadowed plugins where there is one.
+            # Direct attribute access, not getattr-with-default: a duck-typed
+            # loader missing it would have rendered as a clean "no conflicts".
+            "conflicts": sorted(set(self._loader.name_conflicts)),
             "started": True,
             "completed": True,
         }

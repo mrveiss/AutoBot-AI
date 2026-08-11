@@ -406,3 +406,73 @@ class TestNonProductionModulesAreNeverImported:
         from autobot_shared.plugin_sdk.loader import is_non_production_module
 
         assert is_non_production_module(name) is False
+
+
+class TestRepeatedDiscoveryDoesNotAccumulate:
+    """#13988 review: two new lines survived deletion with the suite green.
+
+    The `/plugins/discover` admin endpoint calls `discover_plugins()` repeatedly
+    on a module-level singleton loader, so state that is never reset grows
+    across calls — and `_manifest_dirs` growing past the manifest list
+    re-establishes exactly the "these two must agree" invariant this work exists
+    to enforce.
+    """
+
+    def test_conflicts_do_not_grow_across_calls(self, tmp_path):
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        core, community = tmp_path / "core", tmp_path / "community"
+        _make_plugin(core, "repeat-demo")
+        _make_plugin(community, "repeat-demo")
+        loader = PluginLoader(plugin_dirs=[core, community])
+
+        loader.discover_plugins()
+        first = list(loader.name_conflicts)
+        loader.discover_plugins()
+
+        assert loader.name_conflicts == first, "conflicts accumulated across discovery calls"
+
+    def test_manifest_dirs_never_outlives_its_manifests(self, tmp_path):
+        """A plugin deleted from disk must not leave a stale directory entry —
+        that entry is what the file-path import fallback resolves against."""
+        import shutil
+
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        _make_plugin(tmp_path, "ghost-plugin")
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        assert loader.discover_plugins()
+
+        shutil.rmtree(tmp_path / "ghost-plugin")
+        manifests = loader.discover_plugins()
+
+        assert manifests == []
+        assert "ghost-plugin" not in loader._manifest_dirs
+
+    @pytest.mark.asyncio
+    async def test_mutating_conflicts_cannot_corrupt_the_manager(self, tmp_path):
+        """Sibling of the `failed` copy guard — same shallow-dict hazard."""
+        core, community = tmp_path / "core", tmp_path / "community"
+        _make_plugin(core, "conflict-copy-demo")
+        _make_plugin(community, "conflict-copy-demo")
+
+        manager = PluginManager([core, community])
+        await manager.startup()
+        manager.get_load_report()["conflicts"].append("fabricated")
+
+        assert "fabricated" not in manager.get_load_report()["conflicts"]
+
+    @pytest.mark.asyncio
+    async def test_three_directories_claiming_one_name_count_once(self, tmp_path):
+        """`conflicts` names shadowed PLUGINS, not shadowed directories — a check
+        doing len() read two where there is one."""
+        dirs = []
+        for name in ("a", "b", "c"):
+            d = tmp_path / name
+            _make_plugin(d, "tri-demo")
+            dirs.append(d)
+
+        manager = PluginManager(dirs)
+        await manager.startup()
+
+        assert manager.get_load_report()["conflicts"] == ["tri-demo"]
