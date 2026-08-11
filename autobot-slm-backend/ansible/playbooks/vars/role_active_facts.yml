@@ -91,3 +91,10 @@ role_llm_active: >-
 role_tts_worker_active: >-
   {{ ('tts-worker' in (node_roles | default([]))) or
      ('autobot-tts-worker' in (node_roles | default([]))) }}
+
+# #13870: mirrors inventory/group_vars/all.yml — the SLM temp-inventory paths
+# load this file instead of group_vars. ai-stack wins a combined host because
+# that is what wins today; moving the store to redis would relocate the data
+# and chroma comes up healthy against an empty directory (open decision on
+# #13870).
+chromadb_service_owner: "{{ 'ai-stack' if (role_ai_stack_active | default(false) | bool) else 'redis' }}"
