@@ -47,6 +47,47 @@ def valid_roles() -> "frozenset[str]":
     return _valid_roles
 
 
+#: Context key carrying the *authenticated caller's* RBAC role (#13821).
+#:
+#: Distinct from the ``agent_id`` role above, which pins a governed agent profile.
+#: This one answers "who is signed in", and is what ``MCPDispatcher.dispatch()``
+#: resolves permissions against.
+AUTH_ROLE_CONTEXT_KEY = "auth_role"
+
+#: Role assumed when no authenticated identity reached the workflow. Matches the
+#: long-standing ``role: str = "user"`` default at every seam downstream, so an
+#: unauthenticated path is no more privileged than it was before #13821.
+DEFAULT_AUTH_ROLE = "user"
+
+
+def apply_auth_role(context: "dict | None", role: Optional[str]) -> "dict | None":
+    """Overlay the trusted authenticated *role* onto *context* (#13821).
+
+    Unlike ``apply_role``, a falsy *role* **strips** the key rather than leaving
+    *context* untouched. That asymmetry is the security property: ``context`` is
+    the client-supplied ``request_data["context"]`` bag, so a caller can put
+    ``auth_role: "admin"`` in it. Returning early on a missing server-side role
+    would let exactly that value survive into the tool seam and grant the
+    privileges it names. Every path therefore writes or removes the key — the
+    caller's value is never the one that reaches ``dispatch()``.
+    """
+    merged = {**(context or {})}
+    if role:
+        merged[AUTH_ROLE_CONTEXT_KEY] = role
+    else:
+        merged.pop(AUTH_ROLE_CONTEXT_KEY, None)
+    return merged
+
+
+def resolve_auth_role(context: "dict | None") -> str:
+    """Read the authenticated role a trusted producer overlaid, else the default.
+
+    Only ever called on a context already passed through ``apply_auth_role``.
+    """
+    value = (context or {}).get(AUTH_ROLE_CONTEXT_KEY)
+    return value if isinstance(value, str) and value else DEFAULT_AUTH_ROLE
+
+
 def apply_role(context: "dict | None", role: Optional[str]) -> "dict | None":
     """Overlay a trusted *role* onto *context* as ``agent_id`` (GH#11186).
 

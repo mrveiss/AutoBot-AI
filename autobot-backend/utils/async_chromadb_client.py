@@ -370,6 +370,40 @@ class AsyncChromaClient:
         self._collection_cache[name] = async_collection
         return async_collection
 
+    async def get_collection_or_none(
+        self,
+        name: str,
+        embedding_function: Any | None = None,
+    ) -> "AsyncChromaCollection | None":
+        """Return the collection if it exists, or ``None`` — never create it (#13920).
+
+        Read and delete paths were calling ``get_or_create_collection``, so
+        merely *querying* an entity KB that never had anything ingested left a
+        permanent empty collection behind. On one deployment that was 32 of 37
+        collections, which both buries the Explorer and hides a real signal: a
+        KB that should have content and does not becomes indistinguishable from
+        one that was queried once.
+
+        Absence is reported as ``None``; every other failure still raises.
+        Collapsing a connection error into ``None`` would make an unreachable
+        ChromaDB look exactly like an empty one, and callers here treat ``None``
+        as "no results" — the outage would surface as silently empty answers.
+        """
+        # Local import: chromadb is deliberately lazy here (#3016, ~1s to import).
+        # By the time this runs the client exists, so the module is already
+        # loaded and this costs a dict lookup.
+        from chromadb.errors import NotFoundError  # noqa: PLC0415
+
+        if name in self._collection_cache:
+            return self._collection_cache[name]
+
+        try:
+            return await self.get_collection(name, embedding_function=embedding_function)
+        except NotFoundError:
+            # Raised both when the collection never existed and when it was
+            # dropped between the lookup and this call; either way it is absent.
+            return None
+
     async def get_or_create_collection(
         self,
         name: str,

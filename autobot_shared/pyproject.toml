@@ -44,6 +44,28 @@ test = [
     "pytest-asyncio>=0.24",
 ]
 
+[tool.setuptools]
+# pyproject.toml lives INSIDE the package directory it describes
+# (autobot_shared/pyproject.toml, not <repo>/pyproject.toml). Mapping the
+# "autobot_shared" package name (NOT the "" root key) to "." tells
+# setuptools that THIS directory IS the autobot_shared package's source.
+#
+# A `{"" = ".."}` root mapping looks equivalent but is not: with a single
+# ""-keyed entry setuptools' editable-install `_select_strategy()` takes
+# the `_StaticPth` branch, which writes a raw .pth line adding the ENTIRE
+# resolved ".." directory (the repo root) to sys.path — it never consults
+# include/exclude. That put every repo-root sibling (scripts/, tools/,
+# main.py, conftest.py, ...) on sys.path as bare top-level names, which is
+# the same bug class #14035 exists to close, at a larger blast radius.
+# Keying on the real package name instead makes setuptools use
+# `_TopLevelFinder`, a meta-path finder scoped to exactly the packages
+# `packages.find` discovered below.
+package-dir = { "autobot_shared" = "." }
+
 [tool.setuptools.packages.find]
-where = ["."]
-exclude = ["tests*", "*_test*"]
+# Rooted one level up so setuptools registers the "autobot_shared"
+# directory itself as the top-level package, instead of treating its
+# contents (auth/, browser/, components/, ...) as top-level packages.
+where = [".."]
+include = ["autobot_shared", "autobot_shared.*"]
+exclude = ["autobot_shared.tests*", "autobot_shared.*_test*"]

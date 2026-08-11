@@ -60,6 +60,7 @@ from typing import Awaitable, Callable, Dict, List
 from autobot_shared import tool_catalogue as _tc
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.session_role import DEFAULT_AUTH_ROLE
 
 logger = get_logger(__name__)
 
@@ -99,7 +100,7 @@ def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[s
     return sorted({tool for tool in (_claude_tool_for(f) for f in forbidden) if tool})
 
 
-async def _run_claude_code_subagent(task: str, agent_type: str, depth: int) -> str:
+async def _run_claude_code_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
     """Run *task* as a governed claude_code subagent; return its output."""
     from orchestration.agent_registry import resolve_forbidden_tools
     from services.execution.base_backend import ExecutionTask
@@ -119,7 +120,7 @@ async def _run_claude_code_subagent(task: str, agent_type: str, depth: int) -> s
     return result.stdout or result.stderr or ""
 
 
-async def _run_internal_subagent(task: str, agent_type: str, depth: int) -> str:
+async def _run_internal_subagent(task: str, agent_type: str, depth: int, auth_role: str = DEFAULT_AUTH_ROLE) -> str:
     """Run *task* as a governed **internal-LLM** subagent; return its final text.
 
     Drives the production continuation loop (``_execute_llm_continuation_loop``) with
@@ -148,6 +149,13 @@ async def _run_internal_subagent(task: str, agent_type: str, depth: int) -> str:
         work_item_id=work_item_id,
         requires_approval_before=approval_categories,
         context={"delegation_depth": depth + 1},
+        # #13821: a subagent acts for the same authenticated user, so it inherits
+        # their role rather than silently dropping to the default. Leaving it
+        # unset would reproduce the pre-#13821 bug (an admin denied the tools
+        # they are entitled to) the moment delegation ships. The value comes from
+        # the delegating ctx, which a trusted server-side overlay produced — not
+        # from anything the caller can set.
+        auth_role=auth_role,
     )
     logger.info("delegation: internal subagent agent=%s depth=%d model=%s", agent_type, depth, ctx.selected_model)
     responses: List[str] = []
@@ -164,7 +172,7 @@ async def _run_internal_subagent(task: str, agent_type: str, depth: int) -> str:
 
 
 # Engine registry — provider-agnostic dispatch; new engines register a name here.
-_ENGINES: Dict[str, Callable[[str, str, int], Awaitable[str]]] = {
+_ENGINES: Dict[str, Callable[[str, str, int, str], Awaitable[str]]] = {
     "claude_code": _run_claude_code_subagent,
     "internal": _run_internal_subagent,
 }
@@ -176,8 +184,15 @@ async def run_delegated_subtask(
     depth: int = 0,
     engine: str = "claude_code",
     parent_agent_id: str | None = None,
+    auth_role: str = DEFAULT_AUTH_ROLE,
 ) -> str:
     """Run a delegated subtask as a governed subagent (GH#11207).
+
+    #13821: ``auth_role`` is the delegating session's authenticated role, carried
+    so a subagent acts with the same RBAC identity as the user who asked for it —
+    it is not a privilege grant, since the value can only come from a trusted
+    server-side overlay upstream. Defaulting it instead would deny an admin the
+    tools they are entitled to, which is the bug #13821 fixes.
 
     Raises ``ValueError`` past ``MAX_DELEGATION_DEPTH``, for an unknown engine, or
     for an *unbounded* ``agent_type`` (GH#13588). Emits an INFO log with engine,
@@ -209,4 +224,4 @@ async def run_delegated_subtask(
         depth,
         task,
     )
-    return await runner(task, agent_type, depth)
+    return await runner(task, agent_type, depth, auth_role)

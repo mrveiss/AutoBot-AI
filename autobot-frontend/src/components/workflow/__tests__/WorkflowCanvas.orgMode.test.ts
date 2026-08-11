@@ -18,6 +18,8 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
+import { buildOrgCanvasGraph } from '@/composables/llc/orgCanvasGraph'
+import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 
 const ORG_NODES: CanvasNode[] = [
   {
@@ -162,6 +164,64 @@ describe('WorkflowCanvas read-only org mode (#13939)', () => {
     expect(tabs[0].classes()).toContain('active')
     await tabs[1].trigger('click')
     expect(wrapper.emitted('tab-selected')).toEqual([['ceo']])
+  })
+})
+
+/** A company member as the org-chart endpoint returns one: a root, no reports. */
+function member(index: number): OrgNode {
+  return {
+    id: `user:${index}`,
+    name: `Person ${index}`,
+    title: 'member',
+    status: 'idle',
+    adapter_type: 'human',
+    is_human: true,
+    last_heartbeat: null,
+    budget_spent: 0,
+    budget_total: 0,
+    assigned_item_count: 0,
+    parent_id: null,
+    children: [],
+  }
+}
+
+// GH#13994: every fixture above is agent-shaped, so the canvas suite never saw
+// what a company of people renders as. It rendered one "unit" box and one tab
+// per person. These cases mount the graph the Org Chart actually hands over and
+// assert the DOM, not that the component mounted.
+describe('WorkflowCanvas draws a company of people (#13994)', () => {
+  const unitLabel = (name: string) => `${name} unit`
+  const people = Array.from({ length: 12 }, (_, i) => member(i))
+
+  it('renders twelve person cards and not one unit box', () => {
+    const nodes = buildOrgCanvasGraph(people, unitLabel)
+    const wrapper = mountCanvas({ nodes, readonly: true })
+
+    expect(wrapper.findAll('.workflow-node.org-person')).toHaveLength(12)
+    expect(wrapper.findAll('.workflow-node.org-group')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('unit')
+  })
+
+  it('still boxes the one root that has reports, and only that one', () => {
+    const boss: OrgNode = { ...member(99), name: 'Ada', children: [member(0)] }
+    const nodes = buildOrgCanvasGraph([boss, member(1), member(2)], unitLabel)
+    const wrapper = mountCanvas({ nodes, readonly: true })
+
+    const groups = wrapper.findAll('.workflow-node.org-group')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].text()).toContain('Ada unit')
+    expect(wrapper.findAll('.workflow-node.org-person')).toHaveLength(4)
+  })
+
+  it('keeps a bare person clickable — no container, same selection', async () => {
+    const nodes = buildOrgCanvasGraph(people, unitLabel)
+    const wrapper = mountCanvas({ nodes, readonly: true })
+    const cards = wrapper.findAll('.workflow-node.org-person')
+
+    expect(cards[3].text()).toContain('Person 3')
+    await cards[3].trigger('click')
+
+    expect(wrapper.emitted('node-selected')).toEqual([['user:3']])
   })
 })
 

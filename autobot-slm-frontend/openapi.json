@@ -4084,6 +4084,28 @@
             "title": "Checked At",
             "type": "string"
           },
+          "deploy_in_progress": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deploy In Progress"
+          },
+          "deploy_state_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deploy State Reason"
+          },
           "deployed_dir": {
             "title": "Deployed Dir",
             "type": "string"
@@ -4098,6 +4120,17 @@
             },
             "title": "Drifted Files",
             "type": "array"
+          },
+          "last_completed_play_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed Play At"
           },
           "source_dir": {
             "title": "Source Dir",
