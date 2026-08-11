@@ -207,6 +207,33 @@ class CoWorkerType(str, Enum):
     HUMAN = "human"
 
 
+class AssigneeType(str, Enum):
+    """Discriminator for the primary assignee of a work item (GH#13937).
+
+    Selects between ``assignee_agent_id`` and ``assignee_user_id`` on
+    ``LLCWorkItem``. Values match the string literals already persisted by
+    existing rows ("user" / "agent") — additive only, no data migration.
+    The column itself stays ``String(16)`` (same *column* pattern as
+    ``co_worker_type`` / ``CoWorkerType`` above); every write site must
+    construct/compare through this enum instead of a bare string literal so
+    an invalid value raises at write time rather than being silently stored.
+
+    The column-pattern precedent above is NOT a vocabulary precedent: this
+    enum's human-actor member is ``USER = "user"``, while ``CoWorkerType``'s
+    is ``HUMAN = "human"`` — same axis (agent vs. human), different string
+    for the human side. Applying one enum's member to the other field is
+    exactly the bug in #13954 (a frontend filter compared ``assignee_type``
+    against ``'human'``, which this enum never emits). Tracked for
+    convergence in #13970. Because both are ``str``-mixin enums,
+    ``AssigneeType.AGENT == CoWorkerType.AGENT`` is silently ``True`` while
+    ``AssigneeType.USER == CoWorkerType.HUMAN`` is silently ``False`` —
+    never compare across the two enums.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 
