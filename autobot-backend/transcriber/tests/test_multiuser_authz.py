@@ -13,6 +13,7 @@ if that policy is weakened or a route stops calling it, these tests go red.
 
 import asyncio
 import io
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -257,34 +258,78 @@ class TestTheFixtureDoesNotLeakConnections:
         await db.close()
         await db.close()
 
-    def test_the_fixture_still_closes_what_it_opens(self):
-        """Structural, because the symptom is at INTERPRETER EXIT.
+    def test_no_fixture_in_this_directory_connects_without_closing(self):
+        """Structural, and directory-wide, because the symptom is at INTERPRETER EXIT.
 
-        Deleting `await db.close()` from the fixture does not fail a test — it
-        makes the process hang after the suite passes, which in CI is another
-        cancelled job with no failure. That is the defect, so a guard that only
-        reproduces it is a guard that hangs too. This one fails in milliseconds.
+        Deleting a `close()` does not fail a test — it makes the process hang
+        after the suite passes, which in CI is another cancelled job with no
+        failure. So a guard that only reproduces it is a guard that hangs too;
+        this one fails in milliseconds.
 
-        (An earlier attempt mutated `Database.close()` to drop the reference
-        without closing; that turned out to be an EQUIVALENT mutant — CPython
-        finalises the connection and the worker thread exits anyway. The
-        fixture's missing call is the real regression shape.)
+        Two earlier versions of this were weaker, and both weaknesses are the
+        reason it is written this way:
+
+        It matched attribute names only, so ANY `.close()` on any object in the
+        fixture disarmed it — an unrelated `StringIO().close()` made it pass
+        while `db` leaked. It now requires the receiver to be the same name the
+        `connect()` was called on.
+
+        And it checked only this file, while four siblings in the same directory
+        carried the identical leak and hung the interpreter today. They survive
+        `ci.yml` only because xdist's execnet workers exit hard; the moment one
+        reaches a serial invocation — co-located-smoke is exactly that — #13861
+        recurs verbatim. Asserting the invariant over the directory is what
+        catches that; asserting the reported instance is what missed it.
         """
         import ast
-        from pathlib import Path as _Path
 
-        tree = ast.parse(_Path(__file__).read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not (isinstance(node, ast.AsyncFunctionDef) and node.name == "client"):
-                continue
-            calls = {
-                n.func.attr for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-            }
-            assert "connect" in calls, "fixture no longer connects — this guard would pass against nothing"
-            assert "close" in calls, (
-                "the `client` fixture opens a Database and never closes it. aiosqlite's "
-                "worker thread is non-daemon, so the interpreter cannot exit and CI "
-                "cancels the job at its timeout with no failure reported (#13861)"
-            )
-            return
-        pytest.fail("the `client` fixture was renamed or removed — this guard matches nothing")
+        offenders: list[str] = []
+        directory = Path(__file__).resolve().parent
+        for path in sorted(directory.glob("test_*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                    continue
+                # `async with aiosqlite.connect(...)` closes on exit — those are
+                # correct and must not be flagged, or the guard cries wolf and
+                # gets deleted.
+                managed = {
+                    id(item.context_expr)
+                    for inner in ast.walk(node)
+                    if isinstance(inner, (ast.With, ast.AsyncWith))
+                    for item in inner.items
+                }
+                opened, closed = set(), set()
+                for call in ast.walk(node):
+                    if id(call) in managed:
+                        continue
+                    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+                        continue
+                    receiver = call.func.value
+                    if not isinstance(receiver, ast.Name):
+                        continue
+                    if call.func.attr == "connect":
+                        opened.add(receiver.id)
+                    elif call.func.attr == "close":
+                        closed.add(receiver.id)
+                for name in opened - closed:
+                    offenders.append(f"{path.name}::{node.name} opens `{name}` and never closes it")
+
+        assert not offenders, (
+            "aiosqlite's worker thread is non-daemon, so an unclosed connection keeps the "
+            "interpreter alive after the suite passes and CI cancels the job with no failure "
+            "reported (#13861):\n  " + "\n  ".join(offenders)
+        )
+
+    def test_the_guard_can_see_the_connections_it_checks(self):
+        """Guard the guard: if the fixtures stop calling `.connect()` by that
+        name, the check above passes against nothing."""
+        import ast
+
+        directory = Path(__file__).resolve().parent
+        found = 0
+        for path in directory.glob("test_*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "connect":
+                    found += 1
+        assert found >= 8, f"expected the directory's Database.connect() calls, found {found}"

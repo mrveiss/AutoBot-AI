@@ -55,7 +55,11 @@ _HAVE_PROMTOOL = Path(_PROMTOOL).is_file()
 # and a pass are indistinguishable in a green check, which is how this file came
 # to protect nothing on CI for as long as it did. On a developer machine without
 # the Prometheus stack, skipping is still the right behaviour.
-_ON_CI = bool(os.environ.get("CI"))
+# Set by the job that installs the binary — see ci.yml. NOT the generic CI
+# var: coverage.yml and test-durations.yml also run repo_tests on a hosted
+# runner and never promised promtool, so keying on CI produced a confident
+# false diagnosis there.
+_PROMTOOL_REQUIRED = bool(os.environ.get("AUTOBOT_REQUIRE_PROMTOOL"))
 
 
 def _require_promtool() -> None:
@@ -66,10 +70,11 @@ def _require_promtool() -> None:
         f"promtool not found at {_PROMTOOL} — Prometheus rule BEHAVIOUR is unverified. "
         "Install via autobot-infrastructure/shared/scripts/install-prometheus-stack.sh"
     )
-    if _ON_CI:
+    if _PROMTOOL_REQUIRED:
         pytest.fail(
-            f"{message}. On CI this is a regression in the install step, not a bare "
-            "environment: a silent skip here is what let a rule that could never "
+            f"{message}. AUTOBOT_REQUIRE_PROMTOOL is set, so this job installed the "
+            "binary and it has gone missing — a regression in the install step, not a "
+            "bare environment. A silent skip here is what let a rule that could never "
             "fire ship green (#13909)."
         )
     pytest.skip(message)
