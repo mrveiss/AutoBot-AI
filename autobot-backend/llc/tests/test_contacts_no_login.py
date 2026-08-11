@@ -28,9 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect).
 from autobot_shared.user_management.models.role import Role, UserRole
-from llc.tests import _e2e_harness as harness
 from llc.models.contact import LLCContact
 from llc.services.contact import ContactService
+from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
 from user_management.models.user import User
 from user_management.services.user_service import UserService

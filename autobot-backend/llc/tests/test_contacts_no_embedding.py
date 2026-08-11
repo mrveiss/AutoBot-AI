@@ -31,11 +31,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.tests import _e2e_harness as harness  # registers SQLite compile shims
 from llc.models import contact as contact_model
 from llc.models.contact import LLCContact
 from llc.services import contact as contact_service
 from llc.services.contact import ContactService
+from llc.tests import _e2e_harness as harness  # registers SQLite compile shims
 from user_management.models.base import Base
 
 _FORBIDDEN_IMPORT_MARKERS = ("knowledge", "llc.kb", "async_chromadb_client")

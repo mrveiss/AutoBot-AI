@@ -18,11 +18,10 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.tests import _e2e_harness as harness  # registers SQLite compile shims
 from llc.models.contact import LLCContact
 from llc.services.contact import ContactService
+from llc.tests import _e2e_harness as harness  # registers SQLite compile shims
 from user_management.models.base import Base
-
 
 # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
 _SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
