@@ -3,7 +3,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { computed, ref, onMounted, watchEffect } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -16,13 +16,14 @@ import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
   buildOrgCanvasGraph,
   flattenOrgNodes,
+  orgLayoutKey,
   orgUnitRoots,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -68,13 +69,43 @@ const visibleRoots = computed<OrgNode[]>(() =>
     : tree.value.filter((node) => node.id === effectiveTabId.value),
 )
 
-// A ref (not a computed) so node drags stay put: the canvas mutates
-// `node.position` in place and that must survive until the tree reloads.
+// A ref (not a computed) so node drags stay put: the canvas reports a drag as
+// `node-moved` and `onCanvasNodeMoved` writes the new position here, where it
+// must survive until the drawn forest itself changes.
 const canvasNodes = ref<CanvasNode[]>([])
-watchEffect(() => {
-  canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
-    t('llc.orgChart.canvasUnit', { name }),
-  )
+
+/**
+ * Explicit, shallow layout source (#13996): ids, nesting and labels — never
+ * `status`. `toggleAgentPause` writes `status` on the tree node in place, and
+ * the previous `watchEffect` subscribed to it, so pause/resume — the primary
+ * canvas-mode action — rebuilt the graph and threw away every dragged position.
+ */
+const layoutKey = computed(() => `${locale.value}\n${orgLayoutKey(visibleRoots.value)}`)
+
+watch(
+  layoutKey,
+  () => {
+    canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
+      t('llc.orgChart.canvasUnit', { name }),
+    )
+  },
+  { immediate: true },
+)
+
+/** Current status per agent id — the one field that changes without a reload. */
+const statusById = computed<Record<string, string>>(() => {
+  const byId: Record<string, string> = {}
+  for (const [id, node] of flattenOrgNodes(tree.value)) byId[id] = node.status
+  return byId
+})
+
+// #13996: a status change is merged into the nodes already on the canvas
+// instead of relaying out, so a drag survives pause/resume.
+watch(statusById, (statuses) => {
+  for (const node of canvasNodes.value) {
+    const status = statuses[node.id]
+    if (status !== undefined) (node.data as Record<string, unknown>).status = status
+  }
 })
 
 function setViewMode(mode: OrgViewMode) {
@@ -120,8 +151,11 @@ async function toggleAgentPause(node: OrgNode) {
     } else {
       await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
     }
+    // #13996: mutate the tree node itself — the drawer reads through
+    // `selectedNode`, so replacing it with a detached copy left a second
+    // toggle updating the copy while the canvas kept the stale status.
     node.status = willPause ? 'paused' : 'idle'
-    if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
+    if (selectedNode.value?.id === node.id) selectedNode.value = node
   } catch (err: unknown) {
     logger.error('Toggle pause failed', err)
   }
