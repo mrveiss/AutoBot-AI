@@ -3,7 +3,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { computed, ref, onMounted, watchEffect } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -16,13 +16,14 @@ import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
   buildOrgCanvasGraph,
   flattenOrgNodes,
+  orgLayoutKey,
   orgUnitRoots,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -68,13 +69,43 @@ const visibleRoots = computed<OrgNode[]>(() =>
     : tree.value.filter((node) => node.id === effectiveTabId.value),
 )
 
-// A ref (not a computed) so node drags stay put: the canvas mutates
-// `node.position` in place and that must survive until the tree reloads.
+// A ref (not a computed) so node drags stay put: the canvas reports a drag as
+// `node-moved` and `onCanvasNodeMoved` writes the new position here, where it
+// must survive until the drawn forest itself changes.
 const canvasNodes = ref<CanvasNode[]>([])
-watchEffect(() => {
-  canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
-    t('llc.orgChart.canvasUnit', { name }),
-  )
+
+/**
+ * Explicit, shallow layout source (#13996): ids, nesting and labels — never
+ * `status`. `toggleAgentPause` writes `status` on the tree node in place, and
+ * the previous `watchEffect` subscribed to it, so pause/resume — the primary
+ * canvas-mode action — rebuilt the graph and threw away every dragged position.
+ */
+const layoutKey = computed(() => `${locale.value}\n${orgLayoutKey(visibleRoots.value)}`)
+
+watch(
+  layoutKey,
+  () => {
+    canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
+      t('llc.orgChart.canvasUnit', { name }),
+    )
+  },
+  { immediate: true },
+)
+
+/** Current status per agent id — the one field that changes without a reload. */
+const statusById = computed<Record<string, string>>(() => {
+  const byId: Record<string, string> = {}
+  for (const [id, node] of flattenOrgNodes(tree.value)) byId[id] = node.status
+  return byId
+})
+
+// #13996: a status change is merged into the nodes already on the canvas
+// instead of relaying out, so a drag survives pause/resume.
+watch(statusById, (statuses) => {
+  for (const node of canvasNodes.value) {
+    const status = statuses[node.id]
+    if (status !== undefined) (node.data as Record<string, unknown>).status = status
+  }
 })
 
 function setViewMode(mode: OrgViewMode) {
@@ -120,8 +151,11 @@ async function toggleAgentPause(node: OrgNode) {
     } else {
       await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
     }
+    // #13996: mutate the tree node itself — the drawer reads through
+    // `selectedNode`, so replacing it with a detached copy left a second
+    // toggle updating the copy while the canvas kept the stale status.
     node.status = willPause ? 'paused' : 'idle'
-    if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
+    if (selectedNode.value?.id === node.id) selectedNode.value = node
   } catch (err: unknown) {
     logger.error('Toggle pause failed', err)
   }
@@ -255,7 +289,9 @@ onMounted(fetchTree)
         class="fixed inset-y-0 right-0 w-80 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50 flex flex-col"
       >
         <div class="flex items-center justify-between px-5 py-4 border-b border-autobot-border">
-          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ t('llc.orgChart.agentDetail') }}</h2>
+          <h2 class="text-lg font-semibold text-autobot-text-primary">
+            {{ selectedNode.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail') }}
+          </h2>
           <button class="text-autobot-text-muted hover:text-autobot-text-secondary" @click="closeDrawer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -277,9 +313,15 @@ onMounted(fetchTree)
           </div>
 
           <dl class="space-y-2 text-sm">
-            <div class="flex justify-between">
+            <!-- "Adapter: lead" is nonsense for a person — the Type row below
+                 already says Human, so the adapter row is agent-only. -->
+            <div v-if="!selectedNode.is_human" class="flex justify-between">
               <dt class="text-autobot-text-muted">{{ t('llc.orgChart.adapter') }}</dt>
               <dd class="text-autobot-text-primary font-medium">{{ selectedNode.adapter_type }}</dd>
+            </div>
+            <div v-if="selectedNode.is_human" class="flex justify-between">
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.role') }}</dt>
+              <dd class="text-autobot-text-primary font-medium">{{ selectedNode.title }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-autobot-text-muted">{{ t('llc.orgChart.type') }}</dt>
@@ -301,7 +343,13 @@ onMounted(fetchTree)
             </div>
           </dl>
         </div>
-        <div v-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
+        <!-- Agent lifecycle controls. Gated on !is_human (#13936): people are not
+             hired agents — /controls/agents/{id} has no meaning for a membership,
+             so the buttons must not be offered for a human node. -->
+        <div v-if="selectedNode.is_human" class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
+          {{ t('llc.orgChart.humanNoAgentControls') }}
+        </div>
+        <div v-else-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
             :class="selectedNode.status === 'paused'

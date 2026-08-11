@@ -93,6 +93,37 @@ async function mountChart() {
   return wrapper
 }
 
+/** The canvas node with `id`, as the canvas currently receives it. */
+function canvasNode(wrapper: Awaited<ReturnType<typeof mountChart>>, id: string) {
+  return wrapper
+    .findComponent(WorkflowCanvas)
+    .props('nodes')
+    .find((node) => node.id === id)!
+}
+
+/** The rendered person card carrying `name`. */
+function personNode(wrapper: Awaited<ReturnType<typeof mountChart>>, name: string) {
+  return wrapper.findAll('.workflow-node.org-person').find((node) => node.text().includes(name))!
+}
+
+/**
+ * Drag a person node with a real mouse gesture (#13996) — emitting
+ * `node-moved` directly is what let the pan and the drag defects ship green.
+ */
+async function dragPerson(
+  wrapper: Awaited<ReturnType<typeof mountChart>>,
+  name: string,
+  dx: number,
+  dy: number,
+) {
+  const person = personNode(wrapper, name)
+  const area = wrapper.get('.canvas-area')
+  await person.trigger('mousedown', { clientX: 300, clientY: 300, button: 0 })
+  await area.trigger('mousemove', { clientX: 300 + dx, clientY: 300 + dy })
+  await area.trigger('mouseup', { clientX: 300 + dx, clientY: 300 + dy })
+  await flushPromises()
+}
+
 beforeEach(() => {
   get.mockReset()
   post.mockReset()
@@ -208,6 +239,42 @@ describe('OrgChart view-mode toggle (#13939)', () => {
       .props('nodes')
       .find((node) => node.id === groupId)!.position
     expect(after).toEqual(before)
+  })
+
+  it('a drag performed as a real gesture survives a pause/resume (#13996)', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    const before = canvasNode(wrapper, 'dev').position
+
+    await dragPerson(wrapper, 'Grace', 120, 60)
+    const dragged = canvasNode(wrapper, 'dev').position
+    expect(dragged).not.toEqual(before)
+
+    // Resume the agent from the drawer — the primary canvas-mode action.
+    await personNode(wrapper, 'Grace').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/dev/resume', {})
+    expect(canvasNode(wrapper, 'dev').position).toEqual(dragged)
+  })
+
+  it('a pause/resume still reaches the canvas as a status change (#13996)', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    expect(canvasNode(wrapper, 'dev').data.status).toBe('paused')
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+    await flushPromises()
+
+    expect(canvasNode(wrapper, 'dev').data.status).toBe('idle')
+    // The drawer reads the same node, so a second toggle is not fighting a copy.
+    expect(wrapper.get('[data-testid="org-drawer-pause"]').text()).toBe(
+      en.llc.orgChart.pauseAgent,
+    )
   })
 
   it('resume from the drawer still calls the canonical endpoint in canvas mode', async () => {

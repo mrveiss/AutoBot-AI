@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,19 +50,42 @@ _TEST_SUITE_GLOB = "*.promtool-test.yml"
 _PROMTOOL = shutil.which("promtool") or os.environ.get("AUTOBOT_PROMTOOL", "/opt/prometheus/promtool")
 _HAVE_PROMTOOL = Path(_PROMTOOL).is_file()
 
-# HONEST STATUS: no CI job installs promtool, so on a GitHub-hosted runner every
-# check below skips and this file protects nothing there. That is the gap this
-# file was written to close, one layer down — an unexecuted test is not a test.
-# Installing it in the workflow is a repo-wide CI change with its own blast
-# radius, tracked separately rather than bundled into a metrics PR. Locally, and
-# on any host with the Prometheus stack, these run for real.
-needs_promtool = pytest.mark.skipif(
-    not _HAVE_PROMTOOL,
-    reason=(
-        "promtool not on PATH or at AUTOBOT_PROMTOOL — rule BEHAVIOUR is unverified here. "
+# #13927: CI now installs promtool (ci.yml, python-shard), so a skip THERE means
+# the install step regressed — not that the environment is simply bare. A skip
+# and a pass are indistinguishable in a green check, which is how this file came
+# to protect nothing on CI for as long as it did. On a developer machine without
+# the Prometheus stack, skipping is still the right behaviour.
+# Set by the job that installs the binary — see ci.yml. NOT the generic CI
+# var: coverage.yml and test-durations.yml also run repo_tests on a hosted
+# runner and never promised promtool, so keying on CI produced a confident
+# false diagnosis there.
+_PROMTOOL_REQUIRED = bool(os.environ.get("AUTOBOT_REQUIRE_PROMTOOL"))
+
+
+def _require_promtool() -> None:
+    """Skip locally, FAIL on CI (#13927)."""
+    if _HAVE_PROMTOOL:
+        return
+    message = (
+        f"promtool not found at {_PROMTOOL} — Prometheus rule BEHAVIOUR is unverified. "
         "Install via autobot-infrastructure/shared/scripts/install-prometheus-stack.sh"
-    ),
-)
+    )
+    if _PROMTOOL_REQUIRED:
+        pytest.fail(
+            f"{message}. AUTOBOT_REQUIRE_PROMTOOL is set, so this job installed the "
+            "binary and it has gone missing — a regression in the install step, not a "
+            "bare environment. A silent skip here is what let a rule that could never "
+            "fire ship green (#13909)."
+        )
+    pytest.skip(message)
+
+
+@pytest.fixture(autouse=False)
+def promtool_required():
+    _require_promtool()
+
+
+needs_promtool = pytest.mark.usefixtures("promtool_required")
 
 
 def _run(*args: str) -> subprocess.CompletedProcess:
@@ -181,3 +205,70 @@ def test_rule_file_has_a_behavioural_suite(rule_file: Path):
     assert (
         f"{expected}.promtool-test.yml" in suites
     ), f"{rule_file.name} has no behavioural test; add {expected}.promtool-test.yml"
+
+
+# The two tests below re-invoke pytest on THIS file to observe its own
+# skip/fail behaviour from outside. Without this sentinel the child run collects
+# them too and spawns another child, forever.
+_NESTED = "AUTOBOT_PROMTOOL_SELFTEST_CHILD"
+
+
+@pytest.mark.skipif(bool(os.environ.get(_NESTED)), reason="child of the promtool self-test")
+class TestAMissingPromtoolIsLoudOnCI:
+    """#13927: the skip and the pass were indistinguishable in a green check.
+
+    Four of this file's ten collected checks skipped on every GitHub-hosted runner
+    because nothing installed promtool, so Prometheus rule BEHAVIOUR was
+    verified by nothing — while the check reported green. #13909 shipped a
+    recording rule whose `and` operands were reversed, so the alert compared a
+    byte count against 0.15 and could never fire; every Python test passed,
+    because they asserted substrings of expr strings.
+
+    Installing the binary is half the fix. This is the other half: if a future
+    runner loses it, that must be a failure, not a return to silence.
+    """
+
+    def _run_in(self, env: dict) -> subprocess.CompletedProcess:
+        """Child pytest with a controlled environment.
+
+        Both gate variables are stripped before `env` is applied, so a test
+        states the condition it wants rather than inheriting the parent's. The
+        first version cleared only `CI` — and when the gate moved to
+        AUTOBOT_REQUIRE_PROMTOOL, the child kept inheriting the real one from
+        the job that installs promtool, so the "developer machine" case failed
+        instead of skipping. The test asserted an environment it no longer
+        controlled.
+        """
+        merged = {**os.environ}
+        for gate in ("CI", "AUTOBOT_REQUIRE_PROMTOOL", "GITHUB_ACTIONS"):
+            merged.pop(gate, None)
+        merged.update({**env, _NESTED: "1"})
+        merged.pop("PATH", None)
+        merged["PATH"] = "/nonexistent-bin"
+        return subprocess.run(  # nosec B603  # fixed interpreter, repo-local target
+            [sys.executable, "-m", "pytest", str(Path(__file__)), "-q", "-p", "no:cacheprovider"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            env=merged,
+            timeout=300,
+        )
+
+    def test_ci_without_promtool_fails_rather_than_skips(self):
+        result = self._run_in({"AUTOBOT_REQUIRE_PROMTOOL": "1", "AUTOBOT_PROMTOOL": "/nonexistent/promtool"})
+
+        assert result.returncode != 0, (
+            "a CI run with no promtool reported success — rule behaviour was unverified "
+            "and nothing said so, which is the exact condition #13927 exists to end"
+        )
+        assert "promtool not found" in (result.stdout + result.stderr)
+
+    def test_a_developer_machine_without_promtool_still_skips(self):
+        """The direction that must stay true. Turning every bare checkout red
+        would make the failure meaningless — and a guard that only proves the
+        CI case passes equally against a check that always fails."""
+        # No AUTOBOT_REQUIRE_PROMTOOL at all — the bare-checkout condition.
+        result = self._run_in({"AUTOBOT_PROMTOOL": "/nonexistent/promtool"})
+
+        assert result.returncode == 0, "a local run without promtool must skip, not fail"
+        assert "skipped" in (result.stdout + result.stderr)

@@ -1303,8 +1303,14 @@ class PathConfig(RedactedSettings):
     )
 
     # Installation root — all derived paths use this as their base.
-    # Default matches the standard Ansible deployment target.
-    base_dir: str = Field(default="/opt/autobot", alias="AUTOBOT_BASE_DIR")
+    #
+    # Default is lazily resolved via the canonical ``project_root()`` (#13149,
+    # #14050) rather than frozen at import time to a hardcoded literal: a real
+    # Ansible deployment always sets AUTOBOT_BASE_DIR explicitly (see
+    # ansible/roles/backend/templates/backend.env.j2), so this default only
+    # governs the *unset* case — a developer running from a checkout, who must
+    # resolve into the checkout rather than into the live install.
+    base_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_BASE_DIR")
 
     # Well-known sub-directories (all relative to base_dir unless absolute).
     # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
@@ -1313,10 +1319,14 @@ class PathConfig(RedactedSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
-    # code_source lives at /opt/autobot/code_source, a sibling of autobot-backend/ —
-    # NOT inside base_dir. Absolute default ensures correct resolution regardless
-    # of what AUTOBOT_BASE_DIR is set to.
-    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
+    # On a real deployment, code_source lives at /opt/autobot/code_source, a
+    # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
+    # only governs the unset case. In a checkout there is no separate
+    # code_source sibling: the checkout root *is* the git repo root, so the
+    # default resolves lazily via project_root() (#13149, #14050) to that
+    # same checkout instead of the live install.
+    code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
 
     # VNC password file — absolute path, not relative to base_dir.
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
@@ -1432,7 +1442,18 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
+    # #14050: lazily resolved via project_root() rather than a hardcoded
+    # literal. security_layer.py's own module-level fallback (#13149) is
+    # only ever reached when this field is falsy, so a frozen "/opt/autobot"
+    # default here silently overrode that fix — a checkout without
+    # AUTOBOT_AUDIT_LOG_FILE set would still write into the live install.
+    # A real deployment always sets AUTOBOT_AUDIT_LOG_FILE explicitly (see
+    # ansible/roles/backend/templates/backend.env.j2), so only the unset
+    # case changes here.
+    audit_log_file: str = Field(
+        default_factory=lambda: str(project_root() / "logs" / "audit.log"),
+        alias="AUTOBOT_AUDIT_LOG_FILE",
+    )
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
