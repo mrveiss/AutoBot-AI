@@ -1784,6 +1784,34 @@ async def _merge_chat_messages(
         return new_messages
 
 
+async def _durable_owner_metadata(chat_history_manager, session_id: str, current_user: dict | None) -> dict | None:
+    """Owner metadata to write when a session has no durable owner yet (#14020).
+
+    `save_session` writes a `metadata` key only when one is passed, so saving to a
+    session id with no existing file produced a session with **no durable owner**.
+    Since #14018 made the file record authoritative, such a session reads as
+    genuinely unowned every time its Redis key lapses — reclaimable by whoever
+    visits next, once per TTL window.
+
+    Returns None when a durable owner already exists, so an existing session's
+    recorded owner is never overwritten by whoever happens to be saving. The
+    caller has already passed `validate_chat_ownership` by this point, so when
+    there is no durable owner they are the recognised owner and the record is
+    simply catching up with that.
+    """
+    username = (current_user or {}).get("username")
+    if not username:
+        return None
+    try:
+        if await chat_history_manager.get_session_owner(session_id):
+            return None
+    except Exception as exc:
+        logger.warning("Could not check the durable owner of %s, not writing one: %s", session_id, exc)
+        return None
+    # Both keys, matching create_session — older readers look at `username`.
+    return {"owner": username, "username": username}
+
+
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1820,7 +1848,10 @@ async def save_chat_by_id(
     )
 
     result = await chat_history_manager.save_session(
-        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, current_user),
     )
 
     return JSONResponse(
