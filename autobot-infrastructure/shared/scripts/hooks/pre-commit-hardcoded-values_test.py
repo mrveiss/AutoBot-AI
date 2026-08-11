@@ -429,9 +429,7 @@ class TestHardcodedRoles:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "src/types.ts": (
-                    "export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"
-                ),
+                "src/types.ts": ("export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"),
             },
         )
         assert result.returncode == 0
