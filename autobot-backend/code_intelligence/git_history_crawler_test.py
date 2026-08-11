@@ -14,13 +14,14 @@ So the load-bearing assertions here are **non-empty**. A test suite that only
 checked shapes would have passed against the inert version for years.
 """
 
+import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from code_intelligence.code_evolution_miner import GitHistoryCrawler, _parse_numstat
+from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler, _parse_numstat
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -185,6 +186,60 @@ def test_a_non_repository_degrades_rather_than_raising(tmp_path):
 def test_a_real_repository_reports_itself_available(repo):
     """The flag must distinguish the two cases, or "no history" is ambiguous again."""
     assert GitHistoryCrawler(str(repo)).available is True
+
+
+# ------------------------- a git failure, not a missing repository (#14114)
+
+
+def _corrupt_object_store(repo: Path) -> None:
+    """Break git log on an otherwise-valid repository.
+
+    ``rev-parse --git-dir`` still succeeds afterwards — the ``.git`` directory
+    is real — so ``available`` stays ``True``. Only the history walk fails,
+    which is exactly the shape of the CI failure in #14114: the fixture's
+    temporary repository lost objects mid-test while remaining, by every
+    cheaper check, a git repository.
+    """
+    shutil.rmtree(repo / ".git" / "objects")
+    (repo / ".git" / "objects").mkdir()
+
+
+def test_a_git_failure_on_an_available_repo_raises_not_degrades(repo):
+    """MUST fail against the pre-#14114 code: every caller here returned ``[]``
+    on any non-zero git exit, indistinguishable from "no history"."""
+    crawler = GitHistoryCrawler(str(repo))
+    assert crawler.available is True
+
+    _corrupt_object_store(repo)
+
+    with pytest.raises(GitCommandError, match="git"):
+        crawler.get_commits_in_range()
+
+
+def test_get_file_history_raises_on_a_git_failure_too(repo):
+    """Every ``_run_git`` caller gets the same treatment, not just one method."""
+    crawler = GitHistoryCrawler(str(repo))
+    _corrupt_object_store(repo)
+
+    with pytest.raises(GitCommandError, match="git"):
+        crawler.get_file_history("a.py")
+
+
+def test_get_commit_files_raises_on_a_git_failure_too(repo):
+    crawler = GitHistoryCrawler(str(repo))
+    commit_hash = crawler.get_commits_in_range()[0]["hash"]
+    _corrupt_object_store(repo)
+
+    with pytest.raises(GitCommandError, match="git"):
+        crawler.get_commit_files(commit_hash)
+
+
+def test_a_genuinely_empty_window_stays_no_history_not_an_error(repo):
+    """The distinction the fix exists to preserve: an intact repository with no
+    commits in range is "no history", never an error (#14114)."""
+    future = datetime.now(timezone.utc) + timedelta(days=1)
+
+    assert GitHistoryCrawler(str(repo)).get_commits_in_range(start_date=future) == []
 
 
 # ---------------------------------------------------------------- numstat parsing

@@ -13,6 +13,7 @@ and a fake would not exercise the part that costs.
 """
 
 import os
+import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from code_intelligence.co_change import CoChangeAnalyzer, CoChangePair
-from code_intelligence.code_evolution_miner import GitHistoryCrawler
+from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler
 
 #: Git environment variables that redirect git away from the repository named
 #: on the command line. Inherited from the CI job, they make every worker's
@@ -131,6 +132,12 @@ def repo(tmp_path):
 
 
 def _pairs(repo_path: Path, **kwargs):
+    """#14114: if the git walk itself fails, this now raises ``GitCommandError``
+    with the underlying git stderr rather than returning an empty file-set list.
+    Before that fix, every test built on this helper failed (if at all) on a
+    downstream pair-count assertion that had nothing to do with the actual
+    cause — see ``test_a_git_failure_on_an_available_repo_names_the_error``.
+    """
     file_sets = GitHistoryCrawler(str(repo_path)).get_commit_file_sets()
     analyzer = CoChangeAnalyzer(**kwargs)
     return analyzer.analyze(file_sets), analyzer.commits_too_large_to_pair
@@ -399,12 +406,59 @@ def test_a_quoted_vendored_path_cannot_slip_past_the_filter(tmp_path):
 
 
 def test_a_failing_git_call_is_logged_not_swallowed(tmp_path, caplog):
-    """A timeout, a non-repo path and an empty window must not look identical."""
+    """A non-repository path degrades to an empty result, but is still logged.
+
+    This is the "not a repository" branch, distinguished from a genuine git
+    failure on an *available* repository — see
+    ``test_a_git_failure_on_an_available_repo_names_the_error`` below, which is
+    the branch that must raise rather than degrade (#14114).
+    """
     with caplog.at_level("WARNING"):
         result = GitHistoryCrawler(str(tmp_path)).get_commit_file_sets()
 
     assert result == []
     assert any("git" in r.getMessage() for r in caplog.records), "a git failure produced no log line"
+
+
+def test_a_git_failure_on_an_available_repo_names_the_error(tmp_path):
+    """A corrupted object store must not read as "no coupling found" (#14114).
+
+    This reproduces the real CI failure behind #14114: a temporary repository's
+    object store was lost mid-test, ``_run_git`` returned ``""`` on the exit-128
+    failure, ``get_commit_file_sets`` read that as "no history", and
+    ``co_change_test.py::test_the_minimum_count_is_inclusive_at_its_boundary``
+    then failed on a bogus ``assert 0 == 1`` — an assertion about pair counts
+    that had nothing to do with the actual defect.
+
+    Unlike a non-repository path, this repo passes ``rev-parse --git-dir`` at
+    construction time — ``available`` is ``True`` — and only fails later, when
+    ``git log`` cannot read its own objects. That failure must reach the
+    caller as a named git error, not disappear into an empty list.
+
+    MUST fail against the pre-#14114 code: ``_run_git`` returned ``""`` on any
+    non-zero exit and every caller treated that as an empty history.
+    """
+    _git_init(tmp_path)
+    _git(tmp_path, "config", "user.email", "a@b.c")
+    _git(tmp_path, "config", "user.name", "t")
+    _commit(tmp_path, {"a.py": "1\n"}, "solo")
+
+    crawler = GitHistoryCrawler(str(tmp_path))
+    assert crawler.available is True, "the repo is valid before its object store is corrupted"
+
+    shutil.rmtree(tmp_path / ".git" / "objects")
+    (tmp_path / ".git" / "objects").mkdir()
+
+    with pytest.raises(GitCommandError, match="git"):
+        crawler.get_commit_file_sets()
+
+
+def test_a_genuinely_empty_window_is_not_an_error(repo):
+    """A repo with real history but zero commits in range stays "no history",
+    never an error (#14114) — the distinction the fix exists to preserve."""
+    future = datetime.now(timezone.utc) + timedelta(days=1)
+
+    assert GitHistoryCrawler(str(repo)).get_commit_file_sets(since=future) == []
 
 
 def test_the_default_window_is_actually_applied():
