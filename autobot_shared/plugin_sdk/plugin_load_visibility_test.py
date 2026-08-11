@@ -705,11 +705,33 @@ class TestRetryDoesNotReinitialiseLivePlugins:
 
     @pytest.mark.asyncio
     async def test_two_concurrent_retries_do_not_both_run(self, tmp_path, monkeypatch):
-        """`startup()` awaits, so without a lock two retries interleave. The
-        earlier version of this test passed only because the fixture plugins
-        never actually suspend."""
+        """`startup()` awaits, so without a lock two retries interleave.
+
+        The state has to be a genuinely CRASHED startup — nothing registered.
+        Retrying after a successful one exercises nothing, because the
+        already-registered skip means `load_plugin` is never called and there is
+        no suspension point to interleave at. An earlier version of this test
+        made that mistake and passed with the lock deleted.
+        """
         _make_plugin(tmp_path, "race-demo")
         manager = PluginManager([tmp_path])
+
+        # Crash the first startup so completed=False and nothing is registered.
+        real_discover = manager._loader.discover_plugins
+        runs = {"n": 0}
+        boom = {"raise": True}
+
+        def _counting_discover():
+            if boom["raise"]:
+                boom["raise"] = False
+                raise RuntimeError("discovery exploded")
+            runs["n"] += 1
+            return real_discover()
+
+        monkeypatch.setattr(manager._loader, "discover_plugins", _counting_discover)
+        with pytest.raises(RuntimeError):
+            await manager.startup()
+        assert manager.get_load_report()["completed"] is False
 
         real_load = manager._loader.load_plugin
 
@@ -718,9 +740,11 @@ class TestRetryDoesNotReinitialiseLivePlugins:
             return await real_load(manifest)
 
         monkeypatch.setattr(manager._loader, "load_plugin", _slow_load)
-        await manager.startup()
-        manager._load_report["completed"] = False
 
         await asyncio.gather(manager.retry_discovery(), manager.retry_discovery())
 
+        # Count DISCOVERY runs, not outcomes: the already-registered skip makes a
+        # second pass harmless, so the report alone cannot distinguish a locked
+        # implementation from an unlocked one.
+        assert runs["n"] == 1, f"discovery ran {runs['n']} times — the second retry was not serialised"
         assert manager.get_load_report()["failed"] == [], "concurrent retries manufactured a failure"
