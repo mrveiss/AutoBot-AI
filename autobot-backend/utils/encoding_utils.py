@@ -27,7 +27,14 @@ logger = get_logger(__name__)
 # These patterns are used frequently in terminal output processing
 _ANSI_CSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")  # CSI sequences
 _ANSI_OSC_BEL_RE = re.compile(r"\x1b\][^\x07]{0,1024}\x07")  # OSC with BEL
-_ANSI_OSC_ST_RE = re.compile(r"\x1b\][^\x1b]{0,1024}(?:\x1b\\)?")  # OSC with ST
+# OSC terminator is REQUIRED (#14027 review). It used to be optional, so an
+# UNTERMINATED introducer swallowed up to 1024 following characters. Anything
+# after it -- including a plain, unobfuscated command -- was deleted from the
+# text handed to the dangerous-command matchers, turning a payload that was
+# caught before into a 'safe' verdict. An unterminated introducer is now
+# handled by _ANSI_OSC_BARE_RE, which removes the introducer only.
+_ANSI_OSC_ST_RE = re.compile(r"\x1b\][^\x1b\x07]{0,1024}(?:\x07|\x1b\\)")  # OSC, terminated
+_ANSI_OSC_BARE_RE = re.compile(r"\x1b\]")  # unterminated: drop introducer, keep the text
 _ANSI_SET_MODE_RE = re.compile(r"\x1b[=>]")  # Set modes
 _ANSI_CHARSET_RE = re.compile(r"\x1b[()][AB012]")  # Character sets
 _ANSI_BRACKET_RE = re.compile(r"\[[\?\d;]*[hlHJ]")  # Bracket sequences
@@ -218,6 +225,7 @@ def strip_ansi_codes(text: str) -> str:
     text = _ANSI_CSI_RE.sub("", text)  # CSI sequences
     text = _ANSI_OSC_BEL_RE.sub("", text)  # OSC with BEL
     text = _ANSI_OSC_ST_RE.sub("", text)  # OSC with ST
+    text = _ANSI_OSC_BARE_RE.sub("", text)  # unterminated OSC: keep trailing content
     text = _ANSI_SET_MODE_RE.sub("", text)  # Set modes
     text = _ANSI_CHARSET_RE.sub("", text)  # Character sets
     text = _ANSI_BRACKET_RE.sub("", text)  # Bracket sequences

@@ -23,6 +23,7 @@ from security.command_patterns import (
     is_dangerous_command,
     is_dangerous_substring,
 )
+from utils.encoding_utils import strip_ansi_codes
 
 # U+FF4D FULLWIDTH LATIN SMALL LETTER M — NFKC-folds to ASCII 'm'.
 _FULLWIDTH_M = "ｍ"
@@ -140,3 +141,45 @@ class TestPlainDangerousCommandsStillCaught:
         is_dangerous, reason = is_dangerous_command("ls -la")
         assert is_dangerous is False
         assert reason is None
+
+
+class TestAnUnterminatedOscMustNotSwallowTheCommand:
+    """Review of #14027 found the normalization *weakened* the gate here.
+
+    ``strip_ansi_codes``' OSC pattern had an OPTIONAL terminator, so a bare
+    introducer consumed up to 1024 following characters. Normalizing before
+    matching then deleted a plain, unobfuscated dangerous command from the text
+    the matchers saw — a payload that was caught BEFORE the normalization fix
+    became "safe" after it. Strictly worse than the baseline, which is the one
+    outcome a security fix must never produce.
+
+    Built from parts so this file contains no destructive literal.
+    """
+
+    OSC = "\x1b]"
+    BEL = "\x07"
+    KILL = "kill" + " -9 " + "-1"
+
+    def test_content_after_an_unterminated_osc_is_still_examined(self):
+        payload = "echo hi" + self.OSC + "0;AAAAA;" + self.KILL
+
+        flagged, _reason = is_dangerous_command(payload)
+
+        assert flagged is True, "an unterminated OSC must not hide the rest of the command"
+
+    def test_the_introducer_is_removed_but_the_text_survives(self):
+        stripped = strip_ansi_codes("echo hi" + self.OSC + "tail")
+
+        assert "tail" in stripped, "only the introducer may be dropped, never the content"
+        assert "\x1b" not in stripped
+
+    def test_a_properly_terminated_osc_is_still_stripped_whole(self):
+        """The legitimate case must keep working — this is a real terminal sequence."""
+        stripped = strip_ansi_codes("a" + self.OSC + "0;window title" + self.BEL + "b")
+
+        assert stripped == "ab"
+
+    def test_a_bare_introducer_alone_does_not_flag_a_benign_command(self):
+        flagged, _reason = is_dangerous_command("echo hi" + self.OSC + "0;title")
+
+        assert flagged is False
