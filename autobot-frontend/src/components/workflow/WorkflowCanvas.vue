@@ -512,7 +512,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
 .workflow-node.switch .node-header { background: var(--wfcanvas-node-switch); }
-.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, var(--wfcanvas-node-vision-from), var(--wfcanvas-node-vision-to)); }
 .workflow-node.org-person .node-header { background: var(--color-info); }
 .workflow-node.org-group { background: var(--color-info-bg); border-style: dashed; cursor: default; }
 .workflow-node.org-group .node-header { background: transparent; color: var(--text-secondary); border-bottom: 1px dashed var(--border-default); }
