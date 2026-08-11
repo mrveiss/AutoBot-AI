@@ -20,8 +20,12 @@ root through every sub-analysis so a report for one source never scans or
 returns another source's (or AutoBot's own) tree.
 """
 
+import asyncio
+import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +88,7 @@ class TestBuildAnalysisTaskListScoping:
                 source_id="B",
                 scan_root=scan_root,
             )
-            for _name, coro in tasks:
+            for _name, coro, _deadline in tasks:
                 await coro
 
         # None of the sub-analyses fall back to AutoBot's own root/no source.
@@ -350,3 +354,101 @@ class TestGetBugPredictionUsesAsyncPath:
             )
 
         fake_cls.assert_called_once_with(project_root="/srv/sources/b", use_semantic_analysis=True, source_id="B")
+
+
+class TestEveryAnalysisIsBounded:
+    """#13602: `/report` never responded, and logged nothing while not responding.
+
+    Four of the five analyses wrapped themselves in `asyncio.wait_for`. The
+    fifth, api_endpoint, did not. The shared analytics executor has 8 workers,
+    so once the slower analyses occupied them all, that unbounded submission
+    queued and never started — `gather` never returned, the socket stayed open,
+    and no handler ever ran to log anything.
+
+    Asserting on the task list rather than on any one analysis is deliberate:
+    the defect was an omission, and an omission is only caught by a check that
+    covers every member by construction.
+    """
+
+    def test_every_task_carries_a_positive_deadline(self):
+        import api.codebase_analytics.endpoints.report as report_mod
+
+        tasks = report_mod._build_analysis_task_list(
+            include_bug_prediction=True,
+            include_api_analysis=True,
+            include_duplicate_analysis=True,
+            include_cross_language_analysis=True,
+            include_pattern_analysis=True,
+            use_semantic=False,
+            source_id="A",
+            scan_root=Path("/tmp/does-not-need-to-exist"),
+        )
+        try:
+            assert len(tasks) == 5, "all five analyses must be represented"
+            for name, _coro, deadline in tasks:
+                assert isinstance(deadline, (int, float)), f"{name} has a non-numeric deadline"
+                assert deadline > 0, f"{name} has no usable deadline"
+        finally:
+            for _name, coro, _deadline in tasks:
+                coro.close()
+
+    @pytest.mark.asyncio
+    async def test_an_unbounded_analysis_cannot_hang_the_report(self, monkeypatch):
+        """The reproduction, not the predicate: an analysis that never returns
+        must not stop `_run_parallel_analyses` from returning.
+
+        A test asserting 'every task has a deadline' passes equally against a
+        deadline that is never applied — so exercise the hang itself.
+        """
+        import api.codebase_analytics.endpoints.report as report_mod
+
+        async def never_returns(*_args, **_kwargs):
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(report_mod, "_get_api_endpoint_analysis", never_returns)
+        monkeypatch.setattr(report_mod, "API_ENDPOINT_ANALYSIS_TIMEOUT", 0.05)
+
+        result = await asyncio.wait_for(
+            report_mod._run_parallel_analyses(
+                include_bug_prediction=False,
+                include_api_analysis=True,
+                include_duplicate_analysis=False,
+                include_cross_language_analysis=False,
+                include_pattern_analysis=False,
+                use_semantic=False,
+            ),
+            timeout=10,
+        )
+
+        assert result["api_endpoint"] is None, "an abandoned analysis contributes no result"
+
+    @pytest.mark.asyncio
+    async def test_the_abandonment_is_logged(self, monkeypatch, caplog):
+        """Silence was half the defect: #13602 reports 180s with zero log output,
+        so a bounded-but-silent handler would still be undiagnosable."""
+        import api.codebase_analytics.endpoints.report as report_mod
+
+        async def never_returns(*_args, **_kwargs):
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(report_mod, "_get_api_endpoint_analysis", never_returns)
+        monkeypatch.setattr(report_mod, "API_ENDPOINT_ANALYSIS_TIMEOUT", 0.05)
+
+        # Bounded on purpose: without the fix this call never returns, and a
+        # test that hangs burns the CI job timeout instead of reporting.
+        with caplog.at_level(logging.WARNING):
+            await asyncio.wait_for(
+                report_mod._run_parallel_analyses(
+                    include_bug_prediction=False,
+                    include_api_analysis=True,
+                    include_duplicate_analysis=False,
+                    include_cross_language_analysis=False,
+                    include_pattern_analysis=False,
+                    use_semantic=False,
+                ),
+                timeout=10,
+            )
+
+        assert any(
+            "api_endpoint" in r.message and "deadline" in r.message for r in caplog.records
+        ), "an analysis abandoned at its deadline must say so"
