@@ -98,6 +98,8 @@
   tags: ['redis', 'chromadb']
 
 - name: "ChromaDB | Deploy systemd service unit"
+  # #13870: only when this role owns the unit — see chromadb_service_owner.
+  when: chromadb_service_owner == 'redis'
   ansible.builtin.template:
     src: autobot-chromadb.service.j2
     dest: /etc/systemd/system/autobot-chromadb.service

@@ -147,6 +147,57 @@ jobs:
 
     - uses: ./.github/actions/setup-python-suite
 
+    # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
+    # every deployed rule file and `promtool test rules` over every behavioural
+    # suite — and on a GitHub-hosted runner it did NONE of that, because nothing
+    # installed the binary. Four of its ten collected checks skipped, so rule behaviour
+    # was verified by nothing in CI.
+    #
+    # That is not hypothetical: #13909 shipped a recording rule whose `and`
+    # operands were reversed, so ServiceMemoryHeadroomLow compared a byte count
+    # against 0.15 and could never fire. Every Python test passed, because they
+    # asserted substrings of the expr strings. The promtool suite catches it.
+    #
+    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
+    # with the same binary the hosts run.
+    # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
+    # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
+    # promtool tests collect into exactly one shard. Not gated on the shard
+    # number: which shard they land in is a function of .test_durations and
+    # moves silently.
+    - name: Cache promtool
+      id: promtool-cache
+      uses: actions/cache@v6
+      with:
+        path: /usr/local/bin/promtool
+        key: promtool-${{ runner.os }}-2.47.0
+
+    - name: Install promtool (Prometheus rule validation, #13927)
+      if: steps.promtool-cache.outputs.cache-hit != 'true'
+      run: |
+        set -euo pipefail
+        PROM_VERSION=2.47.0
+        TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
+        # --retry: this step sits in front of the entire Python suite. One
+        # transient CDN 5xx would redden python-shard -> python-suite ->
+        # deployment-check with a message about Prometheus, 12 times over. A PR
+        # about indicators whose red carries no information must not add that.
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
+          -o "/tmp/${TARBALL}.tar.gz" \
+          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"
+        tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
+        sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
+
+    - name: Require promtool in the rule tests (#13927)
+      # Explicit, rather than keying on the generic CI var: repo_tests also runs
+      # in coverage.yml and test-durations.yml, which are equally "CI" and never
+      # promised the binary. Keying on CI made those emit a fixture error
+      # asserting "a regression in the install step" — a false diagnosis, and
+      # swallowed anyway because both steps end in `|| echo ::warning::`.
+      run: |
+        echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
+        promtool --version
+
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
     # workflows over the same three trees; code-quality.yml's bandit has no

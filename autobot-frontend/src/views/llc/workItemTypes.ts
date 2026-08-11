@@ -8,8 +8,13 @@
  * column_id), which made the views' WorkItem incompatible with
  * WorkItemDetail's `@updated` payload.
  *
- * `column_id` and `assignee_type` are only present on board API responses,
- * hence optional here.
+ * Both `column_id` and `assignee_type` are optional because neither is on
+ * every response (GH#13993):
+ * - `assignee_type` is emitted by the work-items response (`api/work_items.py`)
+ *   and, since GH#13993, by the board-items response as well.
+ * - `column_id` is derived from a board's column `status_filter` rather than
+ *   stored on the item, so ONLY the board-items response
+ *   (`GET /api/llc/boards/{id}/items`) carries it.
  */
 
 /**
@@ -37,7 +42,8 @@ export interface WorkItem {
   priority: WorkItemPriority
   story_points: number | null
   assignee_name: string | null
-  assignee_type?: 'human' | 'agent' | null
+  // GH#13993: backend only ever writes 'user' | 'agent' (never 'human').
+  assignee_type?: 'user' | 'agent' | null
   // Assignment keyspace (#10032): agent = AgentOrgNode UUID PK, user = user UUID.
   assignee_agent_id?: string | null
   assignee_user_id?: string | null
