@@ -51,9 +51,17 @@ except ValueError:
 
 # GitHub repo used for filing issues
 _GH_REPO = "mrveiss/AutoBot-AI"
-# #13859: canonical name of the issue-filing token in the SYSTEM vault. The
-# worker had no owned credential at all — see _resolve_filing_token.
-_FILING_TOKEN_SECRET = "github_issue_filing_token"  # nosec B105  # a secret NAME, not a value
+# #13859: the KEY the issue-filing credential is stored under in the SYSTEM
+# vault. Not the credential — see _resolve_filing_token, which reads it.
+#
+# Named for what it is after both scanners disagreed with the old name
+# `_FILING_TOKEN_SECRET`: bandit raised B105 (hardcoded password) and CodeQL
+# raised two high-severity clear-text-logging alerts, because logging this
+# constant looked like logging a secret. They were reacting to a genuinely
+# misleading name, so the name changed rather than the warnings being
+# suppressed. A scanner-suppression comment here would have taught the next
+# reader that this file logs secrets and that we decided not to mind.
+_FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
@@ -176,7 +184,7 @@ async def _read_filing_token() -> str | None:
     owner_str = owner.to_str()
     async for session in get_async_session():
         result = await session.execute(
-            select(Secret).where(Secret.name == _FILING_TOKEN_SECRET, Secret.owner_vault == owner_str)
+            select(Secret).where(Secret.name == _FILING_CREDENTIAL_VAULT_KEY, Secret.owner_vault == owner_str)
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -294,7 +302,7 @@ def _gh_available() -> bool:
             "ambient `gh` CLI auth for whichever account this worker runs as. "
             "Store a token as '%s' in the system vault to get grant, audit and "
             "revocation. (#13859)",
-            _FILING_TOKEN_SECRET,
+            _FILING_CREDENTIAL_VAULT_KEY,
         )
     code, out, err = _run(["gh", "auth", "status"], env=env)
     if code != 0:
@@ -305,7 +313,7 @@ def _gh_available() -> bool:
             "vault, or authenticate gh for the service account. gh said: %s",
             _GH_REPO,
             "system vault" if vault_backed else "ambient CLI auth",
-            _FILING_TOKEN_SECRET,
+            _FILING_CREDENTIAL_VAULT_KEY,
             # stdout as well as stderr: gh routes this message to stderr today,
             # but a build that changed that would gut the diagnostic silently.
             ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
