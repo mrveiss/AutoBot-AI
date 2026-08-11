@@ -864,6 +864,98 @@ def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
     return "idle"
 
 
+# ``adapter_type`` is agent vocabulary; for a person the honest value is the kind,
+# not an adapter. The frontend suppresses the "Adapter" row for human nodes.
+_HUMAN_ADAPTER_TYPE = "human"
+
+
+async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> List[OrgChartNode]:
+    """Return the company's people as org-chart nodes (#13936).
+
+    The org chart is the native place to display the people of a company, not
+    only its hired agents. Before this, the only ``OrgChartNode`` construction
+    site hardcoded ``is_human=False`` and ``llc_company_memberships`` was never
+    read here, so the human branch the frontend already renders
+    (``OrgTreeNode.vue``) was structurally unreachable.
+
+    Two queries at most, and none at all beyond the first when the company has
+    no members. No schema change, no migration.
+    """
+    from sqlalchemy import func, select  # noqa: PLC0415
+
+    from llc.models.work_item import LLCWorkItem  # noqa: PLC0415
+    from user_management.models.user import User  # noqa: PLC0415
+
+    # One outer join rather than membership-then-names: both models sit on the
+    # same declarative Base, and selecting the four columns avoids loading full
+    # ORM entities for two fields. LEFT join so a membership whose user row is
+    # gone still yields a node instead of vanishing silently.
+    member_rows = (
+        await session.execute(
+            select(
+                LLCCompanyMembership.user_id,
+                LLCCompanyMembership.role,
+                User.display_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == LLCCompanyMembership.user_id)
+            .where(LLCCompanyMembership.company_id == company_id)
+            .order_by(LLCCompanyMembership.created_at, LLCCompanyMembership.user_id)
+        )
+    ).all()
+
+    if not member_rows:
+        return []
+
+    # Assigned work-item counts per person — keyed by ``assignee_user_id``, the
+    # human half of the assignment keyspace delivered under #10532. Mirrors the
+    # agent query: one grouped statement, no N+1, terminal states excluded.
+    count_rows = (
+        await session.execute(
+            select(LLCWorkItem.assignee_user_id, func.count(LLCWorkItem.id).label("cnt"))
+            .where(
+                LLCWorkItem.company_id == company_id,
+                LLCWorkItem.assignee_user_id.isnot(None),
+                LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),
+            )
+            .group_by(LLCWorkItem.assignee_user_id)
+        )
+    ).all()
+    human_counts: Dict[uuid.UUID, int] = {row.assignee_user_id: row.cnt for row in count_rows}
+
+    nodes: List[OrgChartNode] = []
+    for user_id, role, display_name, username in member_rows:
+        # ``role`` is mapped through sa.Enum, so the ORM hands back the enum
+        # member — str() on it yields "MembershipRole.LEAD", not "lead". Take
+        # .value when present so the wire format stays the lowercase label.
+        role_label = str(getattr(role, "value", role))
+        nodes.append(
+            OrgChartNode(
+                # ``id`` is namespaced so a person can never collide with an
+                # agent slug; ``node_id`` keeps the raw user id, the keyspace
+                # ``assignee_user_id`` references.
+                id=f"user:{user_id}",
+                node_id=str(user_id),
+                name=display_name or username or str(user_id),
+                title=role_label,
+                # ``idle`` is exactly what ``_heartbeat_status_to_org_status``
+                # returns for an agent with no run, so it asserts no liveness we
+                # do not have. Budget stays 0/0 — people are not metered by
+                # LLCAgentBudget.
+                status="idle",
+                adapter_type=_HUMAN_ADAPTER_TYPE,
+                is_human=True,
+                last_heartbeat=None,
+                budget_spent=0.0,
+                budget_total=0.0,
+                assigned_item_count=human_counts.get(user_id, 0),
+                parent_id=None,
+                children=[],
+            )
+        )
+    return nodes
+
+
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
 async def get_org_chart(
     company_id: uuid.UUID,
@@ -1012,14 +1104,31 @@ async def get_org_chart(
         else:
             roots.append(node)
 
+    # People join the forest as roots — memberships carry no ``reports_to`` edge,
+    # so they are siblings of the agent hierarchy rather than grafted onto it.
+    roots.extend(await _compose_human_nodes(session, company_id))
+
     return OrgChartResponse(nodes=roots)
+
+
+# Capability-search result bounds. These literals predate #13936; they were named
+# when the hardcoded-values gate flagged them on this PR. (#13950 has since made
+# that gate line-scoped, so the original file-scoped rationale no longer applies —
+# the constants are kept because naming them is right, not because a gate forces it.)
+_AGENT_SEARCH_DEFAULT_LIMIT = 10
+_AGENT_SEARCH_MAX_LIMIT = 100
 
 
 @router.get("/{company_id}/agents/search")
 async def search_agents(
     company_id: uuid.UUID,
     q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
-    limit: int = Query(10, ge=1, le=100, description="Max results"),
+    limit: int = Query(
+        _AGENT_SEARCH_DEFAULT_LIMIT,
+        ge=1,
+        le=_AGENT_SEARCH_MAX_LIMIT,
+        description="Max results",
+    ),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
