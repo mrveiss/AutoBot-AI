@@ -525,6 +525,20 @@ async def delete_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
     await session.commit()
+    # #13920: drop the KB collection with its entity. Post-commit and
+    # non-fatal — the row is gone either way, and a stranded collection is a
+    # tidiness problem where a failed delete would be a correctness one.
+    await _drop_kb_collection(work_item_id)
+
+
+async def _drop_kb_collection(work_item_id: str) -> None:
+    """Best-effort removal of a deleted work item's KB collection (#13920)."""
+    from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
+
+    try:
+        await KbCollectionManager().drop_collection(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
+    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
+        logger.warning("Could not drop KB collection for work item %s", work_item_id, exc_info=True)
 
 
 @router.post("/{work_item_id}/checkout")
