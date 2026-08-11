@@ -35,8 +35,16 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import QueryDefaults
 
-from ..models.enums import ActivityEventType, CoWorkerType, WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import (
+    ActivityEventType,
+    AssigneeType,
+    CoWorkerType,
+    WorkItemPriority,
+    WorkItemStatus,
+    WorkItemType,
+)
 from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
@@ -277,6 +285,15 @@ class WorkItemService(LLCServiceBase):
                 resolved_goal_id = parent.goal_id
 
         identifier = await self._next_identifier(session, company_id)
+        # GH#13937: mirror update()'s single-assignee invariant — a creator
+        # that supplies an assignee id must not land with a NULL discriminator
+        # (that made _assignee_display() report the item as unassigned despite
+        # holding a valid assignee_agent_id/assignee_user_id).
+        resolved_assignee_type: Optional[str] = None
+        if assignee_user_id:
+            resolved_assignee_type = AssigneeType.USER.value
+        elif assignee_agent_id:
+            resolved_assignee_type = AssigneeType.AGENT.value
         item = LLCWorkItem(
             id=uuid.uuid4(),
             company_id=uuid.UUID(company_id),
@@ -293,6 +310,7 @@ class WorkItemService(LLCServiceBase):
             goal_id=resolved_goal_id,
             assignee_agent_id=uuid.UUID(assignee_agent_id) if assignee_agent_id else None,
             assignee_user_id=uuid.UUID(assignee_user_id) if assignee_user_id else None,
+            assignee_type=resolved_assignee_type,
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,
             created_by_user_id=uuid.UUID(created_by_user_id) if created_by_user_id else None,
             labels=labels or [],
@@ -353,14 +371,21 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        # GH#13937: validate before any mutation of `item` below — keeps update()
+        # atomic. An invalid value must raise before the single-assignee
+        # invariant below has a chance to clear the sibling id on the live,
+        # session-attached instance (a half-applied mutation would otherwise
+        # survive the ValueError on a shared session).
+        if fields.get("assignee_type") is not None:
+            fields["assignee_type"] = AssigneeType(fields["assignee_type"]).value
         # Single-assignee invariant (#10532, FR-HYBRID-01): assigning to one
         # party clears the other and fixes assignee_type.
         if fields.get("assignee_user_id"):
             item.assignee_agent_id = None
-            fields.setdefault("assignee_type", "user")
+            fields.setdefault("assignee_type", AssigneeType.USER.value)
         elif fields.get("assignee_agent_id"):
             item.assignee_user_id = None
-            fields.setdefault("assignee_type", "agent")
+            fields.setdefault("assignee_type", AssigneeType.AGENT.value)
         if "requires_approval_before" in fields:
             fields["requires_approval_before"] = _validated_approval_categories(
                 fields["requires_approval_before"], existing=item.requires_approval_before or []
@@ -388,7 +413,7 @@ class WorkItemService(LLCServiceBase):
         co_worker_agent_id: Optional[str] = None,
         co_worker_user_id: Optional[str] = None,
         label_ids: Optional[List[str]] = None,
-        limit: int = 100,
+        limit: int = QueryDefaults.LARGE_BATCH_LIMIT,
         offset: int = 0,
     ) -> Sequence[LLCWorkItem]:
         q = select(LLCWorkItem).where(LLCWorkItem.company_id == uuid.UUID(company_id))
@@ -475,7 +500,7 @@ class WorkItemService(LLCServiceBase):
         item.checkout_run_id = run_id or str(uuid.uuid4())
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
-        item.assignee_type = "agent"
+        item.assignee_type = AssigneeType.AGENT.value
         # GH#9532 — persist intent for audit trail.  Clearing prior intent when
         # work_intent is absent is deliberate: stale intent must not survive a
         # new checkout.
@@ -573,7 +598,7 @@ class WorkItemService(LLCServiceBase):
 
         item.assignee_user_id = uuid.UUID(user_id)
         item.assignee_agent_id = None
-        item.assignee_type = "user"
+        item.assignee_type = AssigneeType.USER.value
         item.checkout_run_id = None
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.version += 1
@@ -592,7 +617,7 @@ class WorkItemService(LLCServiceBase):
                     event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
                     entity_type="work_item",
                     entity_id=work_item_id,
-                    after={"assignee_user_id": user_id, "assignee_type": "user"},
+                    after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
                 )
             except Exception:
                 logger.warning("Activity log failed for claim_human %s", work_item_id)

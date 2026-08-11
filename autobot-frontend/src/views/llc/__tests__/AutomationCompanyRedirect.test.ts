@@ -11,7 +11,13 @@ import en from '@/i18n/locales/en.json'
 
 const replace = vi.fn()
 const resolveCompanyId = vi.fn()
-let currentRoute = { params: {} as Record<string, unknown>, fullPath: '/automation' }
+interface TestRoute {
+  params: Record<string, unknown>
+  fullPath: string
+  query?: Record<string, unknown>
+  hash?: string
+}
+let currentRoute: TestRoute = { params: {}, fullPath: '/automation', query: {}, hash: '' }
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace }),
@@ -27,11 +33,12 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 import AutomationCompanyRedirectView from '../AutomationCompanyRedirectView.vue'
+import { safeRedirectTarget } from '@/router/redirectTarget'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
-async function mountView(route: { params: Record<string, unknown>; fullPath: string }) {
-  currentRoute = route
+async function mountView(route: TestRoute) {
+  currentRoute = { query: {}, hash: '', ...route }
   const wrapper = mount(AutomationCompanyRedirectView, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper
@@ -46,13 +53,21 @@ describe('AutomationCompanyRedirectView (#13939)', () => {
   it('forwards a bare /automation to the company overview section', async () => {
     await mountView({ params: {}, fullPath: '/automation' })
 
-    expect(replace).toHaveBeenCalledWith('/llc/companies/c1/automation/overview')
+    expect(replace).toHaveBeenCalledWith({
+      path: '/llc/companies/c1/automation/overview',
+      query: {},
+      hash: '',
+    })
   })
 
   it('preserves the requested section of a deep link', async () => {
     await mountView({ params: { pathMatch: ['canvas'] }, fullPath: '/automation/canvas' })
 
-    expect(replace).toHaveBeenCalledWith('/llc/companies/c1/automation/canvas')
+    expect(replace).toHaveBeenCalledWith({
+      path: '/llc/companies/c1/automation/canvas',
+      query: {},
+      hash: '',
+    })
   })
 
   it('preserves a multi-segment path', async () => {
@@ -61,9 +76,11 @@ describe('AutomationCompanyRedirectView (#13939)', () => {
       fullPath: '/automation/browser-automation/sessions',
     })
 
-    expect(replace).toHaveBeenCalledWith(
-      '/llc/companies/c1/automation/browser-automation/sessions',
-    )
+    expect(replace).toHaveBeenCalledWith({
+      path: '/llc/companies/c1/automation/browser-automation/sessions',
+      query: {},
+      hash: '',
+    })
   })
 
   it('sends the user to the company selector when no company exists', async () => {
@@ -77,8 +94,35 @@ describe('AutomationCompanyRedirectView (#13939)', () => {
     expect(wrapper.text()).toBe(en.workflow.views.companyRequired)
   })
 
+  // #13996 (M4): `resolveEntityRoute` deep-links here as
+  // `/automation?workflow=<id>`; a bare path dropped the anchor.
+  it('carries the query and hash of the deep link across', async () => {
+    await mountView({
+      params: {},
+      fullPath: '/automation?workflow=wf-1#step-3',
+      query: { workflow: 'wf-1' },
+      hash: '#step-3',
+    })
+
+    expect(replace).toHaveBeenCalledWith({
+      path: '/llc/companies/c1/automation/overview',
+      query: { workflow: 'wf-1' },
+      hash: '#step-3',
+    })
+  })
+
+  // #13996 (H1): the two ends of the first-run path, joined by the real
+  // validator — the selector used to drop this destination on the floor.
+  it('emits a selector redirect the selector actually honours', async () => {
+    resolveCompanyId.mockResolvedValue('')
+    await mountView({ params: { pathMatch: ['canvas'] }, fullPath: '/automation/canvas' })
+
+    const { query } = replace.mock.calls[0][0] as { query: { redirect: string } }
+    expect(safeRedirectTarget(query.redirect)).toBe('/automation/canvas')
+  })
+
   it('shows a localised holding message while resolving', () => {
-    currentRoute = { params: {}, fullPath: '/automation' }
+    currentRoute = { params: {}, fullPath: '/automation', query: {}, hash: '' }
     const wrapper = mount(AutomationCompanyRedirectView, { global: { plugins: [i18n] } })
 
     expect(wrapper.text()).toBe(en.workflow.views.resolvingCompany)
