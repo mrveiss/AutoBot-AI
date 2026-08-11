@@ -56,14 +56,80 @@ class TestTheSpillAlwaysShrinks:
             {"status": "success", "output": "K" * 40000},
             {"success": True, "rows": ["R" * 100] * 400},
             "K" * 40000,
+            # Non-str classification values. The second version of the fix
+            # bounded only `str`, so each of these still GREW — and a
+            # structured error is the standard shape for HTTP, API and
+            # subprocess tool failures, so it was the mainline case.
+            {"error": {"code": 500, "message": "boom", "trace": ["F" * 100] * 300}},
+            {"status": {"phase": "failed", "log": "Z" * 30000}},
+            {"success": False, "error": ["E" * 100] * 300},
+            {"error": b"B" * 30000},
+            # Non-ASCII: `_serialise` uses ensure_ascii=False, so measure the
+            # same way rather than through json.dumps' escaping.
+            {"error": "\u90e8\u7f72\u5931\u6557" * 8000},
         ],
     )
     def test_what_enters_context_is_smaller_than_what_it_replaces(self, original):
-        import json
+        """The one property the module exists to provide.
+
+        Stated as "spilled OR smaller", because declining to spill is a valid
+        outcome — the module measures its own replacement and keeps the original
+        when the swap would not help. Asserting "always spills" would force back
+        the bug this guards.
+
+        Measured with `_serialise`, which is what actually enters context —
+        `json.dumps` escapes non-ASCII and would flatter the assertion.
+        """
+        rewritten, count = spill.spill_results(TASK, {"bash": original})
+        spilled = rewritten["bash"]
+
+        assert count == 0 or len(spill._serialise(spilled)) < len(spill._serialise(original))
+
+    @pytest.mark.parametrize(
+        ("threshold", "payload"),
+        [
+            # Control-char density: `_serialise` returns a str raw, but the
+            # excerpt slice is JSON-escaped, so a dense payload inverted at the
+            # DEFAULT configuration (8,001 -> 12,282 chars).
+            (8000, "\x01" * 8001),
+            (8000, ("\x01" * 6 + "abcd") * 801),
+            # Small thresholds, where the hardcoded overhead estimate is wrong by
+            # 2-6x once the classification markers are re-escaped.
+            (1500, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+            (2000, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+            (3000, {"error": {"m": 'a"b' * 400}, "status": "failed", "success": False}),
+        ],
+    )
+    def test_the_invariant_holds_across_configurations(self, threshold, payload, tmp_path, monkeypatch):
+        """No constant can be right, so the module must measure.
+
+        Overhead ranges 286-1710 chars with tool-name length and escaping, and
+        an estimate that is low turns every threshold in a band into a growth
+        case — which is how this defect survived three fixes.
+        """
+        monkeypatch.setattr(spill, "SPILL_THRESHOLD_CHARS", threshold)
+        monkeypatch.setattr(spill, "SPILL_EXCERPT_CHARS", max(1, threshold - 1000))
+
+        rewritten, count = spill.spill_results(TASK, {"bash": payload})
+        spilled = rewritten["bash"]
+
+        assert count == 0 or len(spill._serialise(spilled)) < len(spill._serialise(payload))
+
+    @pytest.mark.parametrize(
+        "falsy",
+        [{"error": None}, {"success": False}, {"status": 0}],
+        ids=["error-none", "success-false", "status-zero"],
+    )
+    def test_falsy_classifications_stay_falsy(self, falsy):
+        """`_record_observation_fingerprints` tests truthiness, so stringifying
+        a scalar would turn `None`/`False` into the truthy `"None"`/`"False"`
+        and invert the decision."""
+        original = {**falsy, "output": "K" * 40000}
+        key = next(iter(falsy))
 
         spilled = _spill_one(original)
 
-        assert len(json.dumps(spilled)) < len(json.dumps(original))
+        assert bool(spilled[key]) is bool(falsy[key])
 
 
 class TestAFailureStaysAFailure:
@@ -174,6 +240,29 @@ class TestTheLoopActuallyCallsIt:
         assert out.tool_results["bash"]["spilled"] is True, "the iteration did not route results through the spill"
 
     @pytest.mark.asyncio
+    async def test_a_resumed_run_also_releases_its_binding(self, loop):
+        """The mirror of `test_a_finished_run_releases_its_binding`.
+
+        `resume_run` bound the run and never released it, reopening the
+        cross-run read on the resume path. Deleting the bind left all 44 tests
+        green — it had no coverage in either direction.
+        """
+        from agent_loop.types import TaskContext
+
+        # Built by the real serialiser, not hand-written: a hand-made dict fails
+        # the version check and the test then passes for the wrong reason.
+        source = TaskContext(task_id="run-R", description="x", metadata={})
+        source.iteration_count = 1
+        snapshot = source.to_snapshot()
+
+        with patch.object(loop, "load_run_snapshot", new=AsyncMock(return_value=snapshot)):
+            with patch.object(loop, "_execute_main_loop", new=AsyncMock(side_effect=RuntimeError("boom"))):
+                with contextlib.suppress(Exception):
+                    await loop.resume_run("run-R")
+
+        assert spill.current_task_id() is None, "a resumed run's binding outlived it"
+
+    @pytest.mark.asyncio
     async def test_no_run_context_means_no_spill(self, loop):
         """The removed "unknown" fallback put every context-less run into one
         shared namespace, collapsing the read-side run check."""
@@ -248,16 +337,43 @@ class TestConfigParsingCannotBreakTheImport:
 
 
 class TestArtifactsAreSwept:
-    def test_the_spill_root_is_a_cleanup_candidate(self, tmp_path, monkeypatch):
-        """Nothing deleted a spilled artifact before this.
+    """Nothing deleted a spilled artifact before this — the nightly sweep covers
+    `data/cache` and `data/temp`, and the spill root is neither."""
 
-        The nightly sweep covers `data/cache` and `data/temp`; the spill root is
-        neither, so it grew for the life of the install.
-        """
+    def test_an_operator_chosen_root_is_never_swept(self, tmp_path):
+        """The sweep recursively unlinks by mtime alone, and every other
+        candidate is AutoBot-owned by construction. An operator pointing the
+        root at a shared scratch directory or a mounted volume would otherwise
+        have unrelated files deleted on the first run — immediately, since
+        pre-existing files are already older than the TTL."""
         from tasks.knowledge_tasks import _resolve_cache_directories
 
-        # The autouse fixture points the writer at tmp_path via the env
-        # override. The sweep must follow the *writer's* resolution — a
-        # hardcoded DATA_DIR/"tool_output_spill" would clean an empty directory
-        # forever while the real root grew.
-        assert spill._spill_root() in _resolve_cache_directories()
+        # the autouse fixture sets AUTOBOT_TOOL_OUTPUT_SPILL_ROOT
+        assert spill.sweepable_spill_root() is None
+        assert spill._spill_root() not in _resolve_cache_directories()
+
+    def test_the_default_root_is_swept_once_it_exists(self, tmp_path, monkeypatch):
+        """The AutoBot-owned default is safe to sweep, and must be — otherwise
+        the directory grows for the life of the install."""
+        import constants.path_constants as path_constants
+        from tasks.knowledge_tasks import _resolve_cache_directories
+
+        monkeypatch.delenv("AUTOBOT_TOOL_OUTPUT_SPILL_ROOT", raising=False)
+        stub = type(
+            "PathStub",
+            (),
+            {
+                "DATA_DIR": tmp_path,
+                "TEMP_DIR": tmp_path / "cache",
+                "get_data_path": staticmethod(lambda *p: tmp_path.joinpath(*p)),
+            },
+        )()
+        monkeypatch.setattr(path_constants, "PATH", stub)
+
+        assert spill.sweepable_spill_root() is None, "not a candidate before the spill creates it"
+
+        (tmp_path / "tool_output_spill").mkdir()
+        (tmp_path / "cache").mkdir()
+
+        assert spill.sweepable_spill_root() == tmp_path / "tool_output_spill"
+        assert tmp_path / "tool_output_spill" in _resolve_cache_directories()

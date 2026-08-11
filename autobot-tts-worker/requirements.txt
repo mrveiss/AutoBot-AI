@@ -5,6 +5,6 @@ torch>=2.13.0
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-huggingface_hub>=1.26.1
+huggingface_hub>=1.27.0
 aiofiles>=25.1.0
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
