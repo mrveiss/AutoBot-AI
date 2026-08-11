@@ -2167,6 +2167,8 @@ class ToolHandlerMixin:
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
         parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
         try:
             result = await run_delegated_subtask(
                 task,
@@ -2174,6 +2176,7 @@ class ToolHandlerMixin:
                 depth=depth,
                 engine=engine,
                 parent_agent_id=parent_agent_id,
+                auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
             )
             execution_results.append(
                 {
@@ -3550,9 +3553,17 @@ class ToolHandlerMixin:
         """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
 
         async def _dispatch(tool: str, params: dict) -> Any:
+            from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
             sub_results: list[dict[str, Any]] = []
             sub_call = {"name": tool, "params": params}
-            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
+            # #13821: a tool called from inside a compose script is still the same
+            # authenticated caller. Omitting the role here left this one path on
+            # the "user" default — the very bug this issue fixes, unfixed.
+            role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
+            async for _ in self._dispatch_tool_call(
+                sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx, role=role
+            ):
                 pass
             last = sub_results[-1] if sub_results else {}
             if last.get("status") == "error":

@@ -127,6 +127,32 @@ class TestTheRoleReachesTheDispatchSeam:
         assert await _roles_forwarded(None) == [DEFAULT_AUTH_ROLE]
 
 
+class TestEverySeamThatReachesDispatch:
+    """Review of #13981: three more paths dropped the role and were left on the default.
+
+    Each one silently reproduced the bug this issue fixes, on its own route.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_tool_called_from_a_compose_script_carries_the_role(self):
+        """The compose shim dispatches through the same seam and must not reset it."""
+        handler = _Recorder()
+        dispatch = handler._build_compose_dispatch("sess-1", SimpleNamespace(auth_role="admin"))
+
+        await dispatch("redis_flushall", {})
+
+        assert handler.seen == ["admin"]
+
+    @pytest.mark.asyncio
+    async def test_a_compose_call_without_a_context_uses_the_default(self):
+        handler = _Recorder()
+        dispatch = handler._build_compose_dispatch("sess-1", None)
+
+        await dispatch("redis_flushall", {})
+
+        assert handler.seen == [DEFAULT_AUTH_ROLE]
+
+
 class TestTheEffectOnAdminOnlyTools:
     """AC: an admin session reaches an admin-only MCP tool; a user session does not.
 
