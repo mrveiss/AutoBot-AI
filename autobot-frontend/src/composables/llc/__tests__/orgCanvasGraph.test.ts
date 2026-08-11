@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildOrgCanvasGraph,
   flattenOrgNodes,
+  orgLayoutKey,
   isOrgUnit,
   orgUnitRoots,
   ORG_GROUP_PREFIX,
@@ -156,6 +157,39 @@ describe('buildOrgCanvasGraph (#13939)', () => {
 
     expect([...byId.keys()].sort()).toEqual(['advisor', 'ceo', 'cfo', 'cto', 'dev1', 'dev2'])
     expect(byId.get('dev2')!.name).toBe('Agent dev2')
+  })
+})
+
+// GH#13996: the layout key is what the Org Chart watches. It must change when
+// the drawn forest changes and must NOT change on a pause/resume — a relayout
+// throws away every position the user dragged.
+describe('orgLayoutKey (#13996)', () => {
+  it('is stable when only a status changes', () => {
+    const before = orgLayoutKey(FOREST)
+    const paused: OrgNode[] = structuredClone(FOREST)
+    paused[0].children[0].status = 'paused'
+
+    expect(orgLayoutKey(paused)).toBe(before)
+  })
+
+  it.each<[string, (forest: OrgNode[]) => void]>([
+    ['a renamed agent', (f) => void (f[0].name = 'Renamed')],
+    ['a changed title', (f) => void (f[0].title = 'CTO')],
+    ['a changed adapter', (f) => void (f[0].adapter_type = 'ollama')],
+    ['a human/agent switch', (f) => void (f[0].is_human = true)],
+    ['a removed child', (f) => void f[0].children.pop()],
+    ['a new root', (f) => void f.push(node('newbie'))],
+    ['a moved child', (f) => void (f[1].children = [f[0].children.pop()!])],
+  ])('changes on %s', (_label, mutate) => {
+    const before = orgLayoutKey(FOREST)
+    const after: OrgNode[] = structuredClone(FOREST)
+    mutate(after)
+
+    expect(orgLayoutKey(after)).not.toBe(before)
+  })
+
+  it('is empty for an empty forest', () => {
+    expect(orgLayoutKey([])).toBe('')
   })
 })
 
