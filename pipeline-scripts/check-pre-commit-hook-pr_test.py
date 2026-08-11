@@ -25,6 +25,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = REPO_ROOT / "pipeline-scripts" / "check-pre-commit-hook-pr.sh"
+NO_PRINT_CONSOLE_HOOK = (
+    REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "hooks" / "pre-commit-no-print-console"
+)
 
 
 def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
@@ -361,5 +364,165 @@ class TestChangedLinesOnly:
         head = _commit_pr(tmp_path)
 
         result = _run_wrapper(tmp_path, "pre-commit-hardcoded-values", base, head)
+
+        assert result.returncode == 1
+
+
+# #14051: a multi-line print()/console.*() call's suppression comment can sit
+# on the closing-paren line, several lines below where the guard matches.
+_MULTILINE_NOQA_OPEN = (
+    "def f():\n"
+    "    print(  # noqa: print\n"
+    '        "a long message that lives on its own line inside the call"\n'
+    "    )\n"
+)
+_MULTILINE_NOQA_CLOSE = (
+    "def f():\n"
+    "    print(\n"
+    '        "a long message that lives on its own line inside the call"\n'
+    "    )  # noqa: print\n"
+)
+_MULTILINE_NO_NOQA = (
+    "def f():\n" "    print(\n" '        "a long message that lives on its own line inside the call"\n' "    )\n"
+)
+_SINGLELINE_NO_NOQA = 'print("still a violation")\n'
+
+
+@pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
+class TestMultilineNoqaRecognition:
+    """The hook's own multi-line scan (#14051), invoked directly (argv mode).
+
+    Independent of --changed-lines-only: this is about the hook understanding
+    a suppression that isn't on the line it matched on, whole-file or scoped.
+    """
+
+    # Filenames passed as RELATIVE paths, cwd=tmp_path: the hook's own
+    # `test_.*\.py$` exclusion matches anywhere in the string it is given, and
+    # pytest's own tmp_path is named e.g. "test_noqa_on_opening_line0" — an
+    # absolute path would silently fall into that exclusion and report exit 0
+    # for "filtered out as a test file", indistinguishable from "recognised".
+    # Caught by the mutation check (#14051 workflow step 7): two tests here
+    # first passed with the fix REMOVED, because they were filtered, not
+    # exercised.
+
+    def test_noqa_on_opening_line_is_recognised(self, tmp_path: Path) -> None:
+        (tmp_path / "m.py").write_text(_MULTILINE_NOQA_OPEN, encoding="utf-8")
+        result = subprocess.run(
+            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stdout
+        assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
+
+    def test_noqa_on_closing_paren_line_is_recognised(self, tmp_path: Path) -> None:
+        """The exact shape from PR #14046: the comment sat on the `)` line."""
+        (tmp_path / "m.py").write_text(_MULTILINE_NOQA_CLOSE, encoding="utf-8")
+        result = subprocess.run(
+            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stdout
+        assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
+
+    def test_multiline_call_with_no_noqa_anywhere_still_fails(self, tmp_path: Path) -> None:
+        """The scan must not become so permissive it stops catching real calls."""
+        (tmp_path / "m.py").write_text(_MULTILINE_NO_NOQA, encoding="utf-8")
+        result = subprocess.run(
+            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 1, result.stdout
+
+    def test_singleline_call_with_no_noqa_still_fails(self, tmp_path: Path) -> None:
+        """Regression guard: the single-line path must be untouched by the scan."""
+        (tmp_path / "m.py").write_text(_SINGLELINE_NO_NOQA, encoding="utf-8")
+        result = subprocess.run(
+            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 1, result.stdout
+
+    def test_multiline_console_noqa_on_closing_line_is_recognised(self, tmp_path: Path) -> None:
+        """Same gap, TypeScript side: `console.*(` can wrap across lines too."""
+        (tmp_path / "m.ts").write_text(
+            "function f() {\n"
+            "  console.log(\n"
+            '    "a long message that lives on its own line inside the call"\n'
+            "  );  // noqa: console\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.ts"], cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stdout
+        assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
+
+
+@pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
+class TestChangedLinesOnlyPrintConsole:
+    """#14051 fix (2): the same --changed-lines-only scoping #13950 gave the
+    hardcoded-values guard, applied to pre-commit-no-print-console.
+
+    This is what actually made autobot-backend/cli/doctor.py editable again:
+    PR #14046 changed a function signature, added zero prints, and still hit
+    three violations because the file had pre-existing (suppressed, but
+    invisible to the unscoped guard) print() calls elsewhere in it.
+    """
+
+    def test_a_pre_existing_violation_in_a_touched_file_does_not_fail(self, tmp_path: Path) -> None:
+        base, _ = _amend_pr(tmp_path, {"m.py": _SINGLELINE_NO_NOQA})
+        (tmp_path / "m.py").write_text(_SINGLELINE_NO_NOQA + "x = 1\n", encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 0, f"pre-existing violation failed the build:\n{result.stdout}"
+        assert "did not touch" in result.stdout
+
+    def test_a_violation_the_pr_adds_still_fails(self, tmp_path: Path) -> None:
+        """The property that must survive: this is a scope change, not an off switch."""
+        base, _ = _amend_pr(tmp_path, {"m.py": "x = 1\n"})
+        (tmp_path / "m.py").write_text("x = 1\n" + _SINGLELINE_NO_NOQA, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 1, f"a newly added violation passed:\n{result.stdout}"
+        assert "lines this PR added" in result.stdout
+
+    def test_a_newly_added_multiline_violation_still_fails(self, tmp_path: Path) -> None:
+        """Combines both #14051 fixes: scoping must not let a NEW multi-line,
+        unsuppressed call slip through just because it spans several lines."""
+        base, _ = _amend_pr(tmp_path, {"m.py": "x = 1\n"})
+        (tmp_path / "m.py").write_text("x = 1\n" + _MULTILINE_NO_NOQA, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 1, f"a newly added multi-line violation passed:\n{result.stdout}"
+
+    def test_a_newly_added_multiline_call_with_noqa_on_closing_line_passes(self, tmp_path: Path) -> None:
+        """The PR #14046 shape, reproduced end-to-end through the CI wrapper."""
+        base, _ = _amend_pr(tmp_path, {"m.py": "x = 1\n"})
+        (tmp_path / "m.py").write_text("x = 1\n" + _MULTILINE_NOQA_CLOSE, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 0, result.stdout
+
+    def test_a_clean_pr_stays_clean(self, tmp_path: Path) -> None:
+        base, _ = _amend_pr(tmp_path, {"m.py": "x = 1\n"})
+        (tmp_path / "m.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 0
+
+    def test_the_default_mode_is_unchanged(self, tmp_path: Path) -> None:
+        """Without the flag, a pre-existing violation still fails whole-file."""
+        base, _ = _amend_pr(tmp_path, {"m.py": _SINGLELINE_NO_NOQA})
+        (tmp_path / "m.py").write_text(_SINGLELINE_NO_NOQA + "x = 1\n", encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_wrapper(tmp_path, "pre-commit-no-print-console", base, head)
 
         assert result.returncode == 1

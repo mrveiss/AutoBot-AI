@@ -13,10 +13,20 @@
 # Intentional exceptions:
 # - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
 # - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
-# - Lines with "# noqa: print" or "// noqa: console" comments
+# - Lines with "# noqa: print" or "// noqa: console" comments — for a
+#   multi-line call this is recognised on the OPENING line ("print(") as well
+#   as any line up to the closing paren (#14051). Both placements are
+#   black-stable IF the call is written multi-line to begin with (the
+#   collapsed single-line form would exceed the 120-char limit, so black has
+#   no reason to touch it). What is NOT stable: manually collapsing a wrapped
+#   call onto one line just to attach the comment. If that collapsed line is
+#   still over 120 chars, `black` re-splits it right back — moving the
+#   suppression onto the new closing-paren line regardless of where you
+#   wrote it. Verified against the real doctor.py multi-line calls (#14051).
 # - ansible/ (deployed copies with doctest examples)
 #
 # Issue: #1082 - Pre-commit hooks not blocking print/console violations
+# Issue: #14051 - multi-line noqa recognition + changed-lines scoping (CI wrapper)
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
@@ -28,6 +38,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/_common.sh"
 
 VIOLATIONS=0
+
+# #14051: a multi-line call's `# noqa`/`// noqa` often sits on the
+# closing-paren line, not the line the call opened on — the line-by-line scan
+# below never looks past the line it matched on, so that suppression was
+# invisible and the file became uneditable by anyone who merely touched it.
+#
+# Net unmatched '(' on a single line: opens minus closes. Used to detect a
+# call left open at end-of-line and to track when it closes again.
+_paren_balance() {
+    local s="$1"
+    local opens closes
+    opens=$(printf '%s' "$s" | tr -cd '(' | wc -c)
+    closes=$(printf '%s' "$s" | tr -cd ')' | wc -c)
+    echo $((opens - closes))
+}
+
+# Bounded forward scan: a print(/console.*( call that reads as still-open at
+# the end of the matched line may close (and carry its noqa) several lines
+# later. Minimal by design, per the issue: track paren balance line by line
+# until it returns to zero, and accept a noqa found on ANY line in between —
+# not a full parser, just enough for the one shape (#14051) reports. Capped so
+# a genuinely unbalanced file (mismatched quotes defeating the strip, etc.)
+# fails closed instead of scanning to EOF.
+MULTILINE_NOQA_SCAN_LIMIT=20
+
+# Args: <array-name> <next-line-index> <first-line-text> <noqa-regex>
+# array-name holds the whole file, 0-indexed; next-line-index is where to
+# resume scanning (the line after the one that matched).
+suppressed_in_multiline_call() {
+    local -n _lines_ref="$1"
+    local next_idx="$2"
+    local first_line="$3"
+    local noqa_regex="$4"
+
+    local balance
+    balance=$(_paren_balance "$first_line")
+    [ "$balance" -le 0 ] && return 1  # closes on the same line — not multi-line
+
+    local scanned=0 j="$next_idx"
+    local total="${#_lines_ref[@]}"
+
+    while [ "$balance" -gt 0 ] && [ "$j" -lt "$total" ] && [ "$scanned" -lt "$MULTILINE_NOQA_SCAN_LIMIT" ]; do
+        local candidate="${_lines_ref[$j]}"
+        if printf '%s' "$candidate" | grep -qE "$noqa_regex"; then
+            return 0
+        fi
+        balance=$((balance + $(_paren_balance "$candidate")))
+        j=$((j + 1))
+        scanned=$((scanned + 1))
+    done
+
+    return 1
+}
 
 # Get Python files to scan (production code only).
 # Uses get_staged_files (#7185) for the staged-files lookup with positional-args
@@ -58,10 +121,15 @@ get_staged_ts_files() {
 # Check a Python file for print() calls
 check_python_print() {
     local file="$1"
-    local line_num=0
+    local -a lines
+    mapfile -t lines < "$file"
+    local total="${#lines[@]}"
+    local idx=0
 
-    while IFS= read -r line; do
-        ((line_num++))
+    while [ "$idx" -lt "$total" ]; do
+        local line="${lines[$idx]}"
+        local line_num=$((idx + 1))
+        idx=$((idx + 1))
 
         # Skip empty lines
         [[ -z "$line" ]] && continue
@@ -85,20 +153,31 @@ check_python_print() {
 
         # Match actual print( calls — word boundary before print
         if printf '%s' "$stripped" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
+            # #14051: the call may still be open at end-of-line (multi-line
+            # args) — check forward lines up to the closing paren for a noqa
+            # before reporting.
+            if suppressed_in_multiline_call lines "$idx" "$stripped" '# noqa(: print)?($| )'; then
+                continue
+            fi
             echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
             echo "    ${line:0:100}"
             ((VIOLATIONS++))
         fi
-    done < "$file"
+    done
 }
 
 # Check a TypeScript/Vue file for console.* calls
 check_ts_console() {
     local file="$1"
-    local line_num=0
+    local -a lines
+    mapfile -t lines < "$file"
+    local total="${#lines[@]}"
+    local idx=0
 
-    while IFS= read -r line; do
-        ((line_num++))
+    while [ "$idx" -lt "$total" ]; do
+        local line="${lines[$idx]}"
+        local line_num=$((idx + 1))
+        idx=$((idx + 1))
 
         # Skip empty lines
         [[ -z "$line" ]] && continue
@@ -114,11 +193,15 @@ check_ts_console() {
 
         # Match console.log/warn/error/debug/info calls
         if echo "$line" | grep -qE 'console\.(log|warn|error|debug|info)\s*\('; then
+            # #14051: same multi-line-suppression gap as Python print().
+            if suppressed_in_multiline_call lines "$idx" "$line" 'noqa: console'; then
+                continue
+            fi
             echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
             echo "    ${line:0:100}"
             ((VIOLATIONS++))
         fi
-    done < "$file"
+    done
 }
 
 main() {
