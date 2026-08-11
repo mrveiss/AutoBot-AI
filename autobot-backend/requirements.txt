@@ -25,7 +25,9 @@ asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (sin
 # Document Generation (MVA-2174)
 python-docx>=1.2.0  # DOCX export for transcripts
 reportlab>=5.0.0    # PDF export for transcripts
-PyPDF2>=3.0.1       # PDF testing for transcript export
+# PyPDF2 removed (#13893): unmaintained, and it was the PDF reader behind the
+# Drive/OneDrive connectors while the repo pinned pypdf as a security update
+# (requirements.txt:23). All PDF reading now goes through media/document/extraction.py.
 openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
 python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 

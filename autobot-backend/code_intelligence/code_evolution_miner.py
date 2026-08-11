@@ -17,6 +17,7 @@ Features:
 - Evolution reports and visualizations
 """
 
+import os
 import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -92,6 +93,27 @@ class PatternLifecycle:
         return 0
 
 
+#: Git environment variables that override the repository named on the command
+#: line. Left in place, ``-C repo_path`` becomes advisory and git reads whatever
+#: the ambient environment points at (#13948). A crawler asked to analyse one
+#: repository must not silently analyse another — the caller gets a plausible
+#: history for the wrong tree, which is worse than an error.
+_REPO_OVERRIDING_GIT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+)
+
+
+def _git_env() -> dict:
+    """The ambient environment minus anything that redirects git off ``-C``."""
+    return {k: v for k, v in os.environ.items() if k not in _REPO_OVERRIDING_GIT_VARS}
+
+
 def _run_git(repo_path: str, *args: str) -> str:
     """Run a read-only git command; empty string on any failure (#13639).
 
@@ -111,6 +133,7 @@ def _run_git(repo_path: str, *args: str) -> str:
             errors="replace",
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
+            env=_git_env(),
         )
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("git %s failed in %s: %s", args, repo_path, exc)
