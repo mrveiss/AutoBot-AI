@@ -46,9 +46,9 @@ from utils.file_categorization import (
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
     SKIP_DIRS,
-    is_skipped_path,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
+    is_skipped_path,
 )
 
 logger = get_logger(__name__)

@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from utils.file_categorization import FILE_CATEGORY_CODE, is_skipped_path
+from utils.file_categorization import FILE_CATEGORY_CODE
 from utils.file_categorization import get_file_category as _get_file_category
+from utils.file_categorization import is_skipped_path
 
 from .analyzers import (
     analyze_documentation_file,

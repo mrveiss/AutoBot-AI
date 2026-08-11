@@ -23,11 +23,13 @@ from utils.file_categorization import (
     HTML_EXTENSIONS,
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
-    is_skipped_path,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
 from utils.file_categorization import get_file_category as _get_file_category
+from utils.file_categorization import (
+    is_skipped_path,
+)
 
 from .analyzers import (
     analyze_documentation_file,

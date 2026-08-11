@@ -12,6 +12,7 @@ Analyzes codebase for:
 - Team coverage analysis
 """
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -63,7 +64,17 @@ _SKIP_DIRECTORIES = (
     "build",
     "egg-info",
     ".eggs",
+    # #13602: near-complete repo copies. Without these, one ownership request
+    # globbed 167,072 files where 6,967 exist, and ran `git blame` on each.
+    ".worktrees",
+    "worktrees",
 )
+
+# #13602: a hard ceiling on blamed files. Each one is a `git blame` subprocess,
+# so an unbounded tree turned this endpoint into a multi-hour job that the
+# caller had long since given up on. Truncation is logged — a silent cap reads
+# as "we analysed everything".
+_MAX_FILES_TO_BLAME = 2000
 
 # File patterns to skip
 _SKIP_FILE_PATTERNS = (
@@ -269,14 +280,29 @@ class OwnershipAnalyzer:
         file_ownerships = []
         root = Path(root_path).resolve()
 
+        considered = 0
+        truncated = False
         for pattern in patterns:
             for file_path in root.glob(pattern):
                 if not file_path.is_file() or self._should_skip_file(file_path):
                     continue
+                if considered >= _MAX_FILES_TO_BLAME:
+                    truncated = True
+                    break
+                considered += 1
 
                 ownership = await self._get_file_ownership(file_path, root)
                 if ownership:
                     file_ownerships.append(ownership)
+            if truncated:
+                break
+
+        if truncated:
+            logger.warning(
+                "Ownership analysis truncated at %d files — results are a subset of %s",
+                _MAX_FILES_TO_BLAME,
+                root,
+            )
 
         # Sort by total lines descending
         file_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
@@ -350,12 +376,18 @@ class OwnershipAnalyzer:
         try:
             relative_path = str(file_path.relative_to(root))
 
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv; file_path is a Path object, no shell
-                ["git", "blame", "--line-porcelain", str(file_path)],
-                capture_output=True,
-                text=True,
-                cwd=str(root),
-                timeout=30,
+            # #13602: was a bare subprocess.run inside `async def`, so every
+            # blame blocked the event loop for its full duration — up to the 30s
+            # timeout, once per file. That is what made unrelated endpoints
+            # return 000 while an analytics panel was loading.
+            result = await asyncio.to_thread(
+                lambda: subprocess.run(  # nosec B603 B607  # fixed git argv; file_path is a Path object, no shell
+                    ["git", "blame", "--line-porcelain", str(file_path)],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(root),
+                    timeout=30,
+                )
             )
 
             if result.returncode != 0:

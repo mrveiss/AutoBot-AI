@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-from .shared import resolve_project_root
+from .shared import resolve_project_root, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -75,6 +75,26 @@ def _get_project_root() -> str:
     return resolve_project_root()
 
 
+def _escapes_root(path: str, project_root: str) -> bool:
+    """True only when ``path`` climbs OUT of ``project_root`` after normalising.
+
+    #13602: distinguishes a genuine traversal attempt ("../../etc/passwd") from
+    a request scoped to a different, legitimate root. Both were logged as
+    attacks, so ordinary use filled the security log with false alerts.
+    """
+    from pathlib import Path as _Path
+
+    try:
+        resolved = _Path(path).resolve()
+        root = _Path(project_root).resolve()
+    except (OSError, ValueError):
+        return True
+    if resolved == root or root in resolved.parents:
+        return False
+    # Inside the root before normalising but outside after => it climbed out.
+    return ".." in _Path(path).parts
+
+
 def _validate_path_security(path: str, project_root: str) -> JSONResponse | None:
     """
     Validate that path is within project root.
@@ -90,7 +110,15 @@ def _validate_path_security(path: str, project_root: str) -> JSONResponse | None
         validate_path(path, allowed_roots=[project_root])
         return None
     except ValueError:
-        logger.warning("Path traversal attempt blocked: %s", path)
+        # #13602: this fired on every legitimate source-scoped request and read
+        # as an attack, which devalues the real ones — and it echoed the
+        # internal clone path into the log. A path that stays inside its root
+        # after normalisation is a scope mismatch, not an escape attempt; only
+        # a path that climbs out of it is worth an attack-shaped warning.
+        if _escapes_root(path, project_root):
+            logger.warning("Path traversal attempt blocked outside %s", project_root)
+        else:
+            logger.info("Requested path is outside the resolved scan root; rejecting")
         return JSONResponse(
             {
                 "status": "error",
@@ -307,21 +335,18 @@ async def get_ownership_analysis(
     if cached:
         return cached
 
-    project_root = _get_project_root()
-    # Issue #3685: Use clone_path for the correct project when source_id provided
-    if source_id and not path:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = source.clone_path
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
+    # #13602: was `_get_project_root()` on the next-but-one line, discarding the
+    # clone path resolved just above. A source's clone path lives under
+    # data/code-sources/<id> while the project root resolves to the checkout —
+    # sibling subtrees that never nest, so the containment check rejected EVERY
+    # source-scoped request. Deterministic, not layout-dependent.
+    # Now uses the canonical resolver (#12330), as environment.py, call_graph.py
+    # and dependencies.py already do, instead of hand-rolling the lookup.
+    scan_root = str(await resolve_scan_root(source_id))
     if not path:
-        path = project_root
+        path = scan_root
 
-    error_response = _validate_path_security(path, _get_project_root())
+    error_response = _validate_path_security(path, scan_root)
     if error_response:
         return error_response
 
@@ -387,12 +412,15 @@ async def get_expertise_scores(
             return JSONResponse(_build_expertise_response(scores, len(scores), "cache"))
 
     # Run fresh analysis if no cache
-    project_root = _get_project_root()
+    # #13602: these accepted `source_id` "for API consistency" and ignored it,
+    # so every source's panel analysed AutoBot's own tree — cross-project
+    # leakage rather than the 400 that /analysis returned.
+    scan_root = str(await resolve_scan_root(source_id))
     if not path:
-        path = project_root
+        path = scan_root
 
-    # Security: Validate path is within project root
-    error_response = _validate_path_security(path, project_root)
+    # Security: Validate path is within the resolved scan root
+    error_response = _validate_path_security(path, scan_root)
     if error_response:
         return error_response
 
@@ -441,12 +469,15 @@ async def get_knowledge_gaps(
             return JSONResponse(_build_knowledge_gaps_response(gaps, len(gaps), "cache"))
 
     # Run fresh analysis if no cache
-    project_root = _get_project_root()
+    # #13602: these accepted `source_id` "for API consistency" and ignored it,
+    # so every source's panel analysed AutoBot's own tree — cross-project
+    # leakage rather than the 400 that /analysis returned.
+    scan_root = str(await resolve_scan_root(source_id))
     if not path:
-        path = project_root
+        path = scan_root
 
-    # Security: Validate path is within project root
-    error_response = _validate_path_security(path, project_root)
+    # Security: Validate path is within the resolved scan root
+    error_response = _validate_path_security(path, scan_root)
     if error_response:
         return error_response
 
