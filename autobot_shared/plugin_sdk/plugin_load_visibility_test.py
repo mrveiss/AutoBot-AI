@@ -204,7 +204,9 @@ class TestLoadedNOfM:
             "discovered": 0,
             "loaded": 0,
             "failed": [],
+            "conflicts": [],
             "started": True,
+            "completed": True,
         }
 
     @pytest.mark.asyncio
@@ -322,3 +324,85 @@ class TestCanonicalisationDoesNotSplitTheRegistry:
         canonicalise_plugin_sdk()
 
         assert not [m for m in sys.modules if m.startswith("plugin_sdk.") and m.endswith("_test")]
+
+
+class TestTheReportCannotMisleadTheCaller:
+    """#13677 review: three properties with no test at all."""
+
+    @pytest.mark.asyncio
+    async def test_a_crashed_discovery_is_not_an_empty_tree(self, tmp_path, monkeypatch):
+        """Both report discovered=0, loaded=0. Deriving `started` from the
+        manager's own flag made them byte-identical — "the subsystem delivered
+        nothing" reading exactly like "there is nothing to deliver", which is
+        this issue's headline defect one level up."""
+        manager = PluginManager([tmp_path])
+        monkeypatch.setattr(manager._loader, "discover_plugins", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        with pytest.raises(RuntimeError):
+            await manager.startup()
+
+        crashed = manager.get_load_report()
+
+        empty_manager = PluginManager([tmp_path])
+        await empty_manager.startup()
+        empty = empty_manager.get_load_report()
+
+        assert crashed != empty, "a crashed discovery must not look like an empty tree"
+        assert crashed["completed"] is False
+        assert empty["completed"] is True
+
+    @pytest.mark.asyncio
+    async def test_mutating_the_returned_report_cannot_corrupt_the_manager(self, tmp_path):
+        """`dict()` is shallow, so a caller appending to report["failed"] was
+        editing the manager's own tally."""
+        _make_plugin(tmp_path, "copy-guard-plugin", source="raise RuntimeError('boom')\n")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        manager.get_load_report()["failed"].append("fabricated")
+
+        assert "fabricated" not in manager.get_load_report()["failed"]
+
+    @pytest.mark.asyncio
+    async def test_a_name_claimed_by_two_directories_is_reported(self, tmp_path):
+        """The blocker: manifest first-wins and directory last-wins meant one
+        plugin's CODE ran under another's MANIFEST, reported as loaded 1 of 1
+        with no failures. First still wins; it is no longer silent."""
+        core = tmp_path / "core"
+        community = tmp_path / "community"
+        _make_plugin(core, "collide-demo")
+        _make_plugin(community, "collide-demo")
+
+        manager = PluginManager([core, community])
+        await manager.startup()
+        report = manager.get_load_report()
+
+        assert report["conflicts"] == ["collide-demo"], "a shadowed plugin must be named"
+        assert (
+            manager._loader._manifest_dirs["collide-demo"].resolve() == (core / "collide-demo").resolve()
+        ), "the directory kept must be the one whose manifest was registered"
+
+
+class TestNonProductionModulesAreNeverImported:
+    """The filter's rule, asserted where it can fail.
+
+    Inlined in the alias loop it was untestable: the package has no conftest.py,
+    so the `conftest` clause had no trigger and survived deletion with the whole
+    suite green.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        ["plugin_sdk_test", "loader_file_fallback_test", "test_something", "conftest"],
+    )
+    def test_non_production_names_are_skipped(self, name):
+        from autobot_shared.plugin_sdk.loader import is_non_production_module
+
+        assert is_non_production_module(name) is True
+
+    @pytest.mark.parametrize("name", ["base", "registry", "hooks", "loader", "manifest_contract"])
+    def test_real_submodules_are_not_skipped(self, name):
+        """Over-filtering would silently drop a submodule from canonicalisation
+        and reintroduce the split for anything importing it."""
+        from autobot_shared.plugin_sdk.loader import is_non_production_module
+
+        assert is_non_production_module(name) is False

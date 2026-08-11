@@ -46,7 +46,18 @@ class PluginManager:
         # #13677: the load tally, so "is the plugin subsystem working?" is a
         # QUERY and not a log-reading exercise. A stream of per-plugin lines
         # nobody totals is why 0-of-7 and "no plugins installed" looked the same.
-        self._load_report: Dict[str, object] = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
+        self._load_report: Dict[str, object] = {
+            "discovered": 0,
+            "loaded": 0,
+            "failed": [],
+            "conflicts": [],
+            "started": False,
+            # #13677 review: `started` alone made a CRASHED discovery
+            # indistinguishable from an empty tree — both reported
+            # discovered=0, loaded=0, started=True. That is this issue's own
+            # conflation one level up, so the outcome is its own key.
+            "completed": False,
+        }
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -73,7 +84,10 @@ class PluginManager:
         # lands in `failed`: the live config reported discovered=14 with five
         # perfectly-loaded plugins named as casualties. A signal built to end a
         # misdiagnosis must not manufacture one (#13677 review).
-        manifests = self._dedupe_manifests(self._loader.discover_plugins())
+        # The LOADER dedupes now, because it also owns `_manifest_dirs` — the map
+        # that decides which code runs. Deduping in two places with opposite
+        # precedence is what let one plugin's code run under another's manifest.
+        manifests = self._loader.discover_plugins()
         logger.info("PluginManager: discovered %d plugin(s)", len(manifests))
 
         loaded: List[str] = []
@@ -142,7 +156,14 @@ class PluginManager:
         # #13677: reset the tally too — after shutdown the previous run's counts would
         # describe a subsystem that is no longer running, and "loaded 5 of 7"
         # from a dead manager is worse than no answer.
-        self._load_report = {"discovered": 0, "loaded": 0, "failed": [], "started": False}
+        self._load_report = {
+            "discovered": 0,
+            "loaded": 0,
+            "failed": [],
+            "conflicts": [],
+            "started": False,
+            "completed": False,
+        }
         logger.info("PluginManager: shutdown complete")
 
     # ------------------------------------------------------------------
@@ -158,20 +179,6 @@ class PluginManager:
     def plugin_registry(self) -> PluginRegistry:
         """Return the shared PluginRegistry."""
         return self._registry
-
-    @staticmethod
-    def _dedupe_manifests(manifests: List) -> List:
-        """First manifest wins per name, preserving discovery order."""
-        seen: Dict[str, object] = {}
-        for manifest in manifests:
-            seen.setdefault(manifest.name, manifest)
-        duplicates = len(manifests) - len(seen)
-        if duplicates:
-            logger.info(
-                "PluginManager: ignored %d duplicate manifest(s) from overlapping plugin dirs",
-                duplicates,
-            )
-        return list(seen.values())
 
     def _record_load_report(self, manifests: List, loaded: List[str], failed: List[str]) -> None:
         """Emit the `loaded N of M` summary and store it for querying (#13677).
@@ -189,7 +196,9 @@ class PluginManager:
             "discovered": len(manifests),
             "loaded": len(loaded),
             "failed": sorted(failed),
+            "conflicts": sorted(getattr(self._loader, "name_conflicts", [])),
             "started": True,
+            "completed": True,
         }
 
         if not manifests:
@@ -224,10 +233,12 @@ class PluginManager:
         # report["failed"] was mutating the manager's own tally.
         failed = self._load_report.get("failed", [])
         report["failed"] = list(failed) if isinstance(failed, list) else []
-        # Derived, not stored: the stored flag only flips at the END of startup,
-        # so a manager mid-load — or one whose discovery raised — would have
-        # reported started=False while running.
+        # `started` is derived (the manager IS running); `completed` stays
+        # stored. Deriving both made a crashed discovery report exactly like an
+        # empty tree — the conflation this issue exists to remove.
         report["started"] = self._started
+        conflicts = self._load_report.get("conflicts", [])
+        report["conflicts"] = list(conflicts) if isinstance(conflicts, list) else []
         return report
 
     def get_plugin_status(self) -> Dict[str, str]:
