@@ -76,3 +76,18 @@ chromadb_auth_token: ""
 # db-credentials.env) rather than under /opt, which decommission-node.yml and
 # remove-role.yml wipe.
 chromadb_authn_env_file: /etc/autobot/chromadb.env
+
+# #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
+#
+# BOTH roles legitimately install and run chromadb, for different topologies,
+# and both used to write the SAME unit path from their own template. Whichever
+# ran last won, so the deployed ExecStart, Description and restart policy all
+# flipped with run order — observed live during the #4090 investigation.
+#
+# This default is the role's OWN name, deliberately: it is the last-resort
+# floor, and it must fail SAFE. A shared default of one role's name meant every
+# topology running the other role alone deployed no unit at all — five of six
+# entry points, including the updater's — which is worse than the flip being
+# fixed. The both-roles case is resolved one precedence level up, by
+# `chromadb_service_owner` in group_vars/all.yml.
+chromadb_service_owner: "redis"

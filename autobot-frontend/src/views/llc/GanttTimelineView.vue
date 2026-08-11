@@ -417,9 +417,13 @@ async function loadBoardScope() {
   try {
     const [board, boardItems] = await Promise.all([
       api.get<{ project_id: string | null; name: string }>(`/api/llc/boards/${scopeBoardId.value}`),
-      api.get<{ items: { id: string }[] }>(`/api/llc/boards/${scopeBoardId.value}/items`),
+      // GH#13993: the board-items endpoint nests items inside each column —
+      // there is no top-level `items` key. Flatten before collecting the ids.
+      api.get<{ columns: Array<{ items: { id: string }[] }> }>(`/api/llc/boards/${scopeBoardId.value}/items`),
     ])
-    scopedItemIds.value = new Set((boardItems.items ?? []).map((i) => i.id))
+    scopedItemIds.value = new Set(
+      (boardItems.columns ?? []).flatMap((col) => col.items ?? []).map((i) => i.id),
+    )
     scopeLabel.value = board.name
     if (board.project_id) selectedProjectId.value = board.project_id
   } catch (err) {

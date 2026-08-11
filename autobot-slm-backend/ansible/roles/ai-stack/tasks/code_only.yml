@@ -36,6 +36,9 @@
   tags: ['ai', 'deploy']
 
 - name: Deploy ChromaDB systemd service
+  # #13870: only when this role owns the unit. Both roles used to write it
+  # unconditionally, so the last one to run decided the ExecStart.
+  when: chromadb_service_owner == 'ai-stack'
   ansible.builtin.template:
     src: autobot-chromadb.service.j2
     dest: /etc/systemd/system/autobot-chromadb.service
