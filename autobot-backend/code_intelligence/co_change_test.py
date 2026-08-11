@@ -24,7 +24,7 @@ from code_intelligence.code_evolution_miner import GitHistoryCrawler
 
 #: Git environment variables that redirect git away from the repository named
 #: on the command line. Inherited from the CI job, they make every worker's
-#: ``git`` operate on shared state instead of its own tmpdir (#13948).
+#: ``git`` operate on shared state instead of its own tmpdir (#13983).
 _INHERITED_GIT_VARS = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -41,7 +41,7 @@ _INHERITED_GIT_VARS = (
 def _hermetic_git_env() -> dict:
     """A git environment that cannot reach outside the repo passed to ``-C``.
 
-    #13948: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
+    #13983: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
     **one** index while committing in its **own** tmpdir repo, so a worker
     commits a tree whose blobs live in another worker's object store:
 
@@ -416,7 +416,7 @@ def test_the_default_window_is_actually_applied():
     assert abs(delta.days - COCHANGE_WINDOW_DAYS) <= 1
 
 
-# ------------------------------------------- the repo named is the repo read (#13948)
+# ------------------------------------------- the repo named is the repo read (#13983)
 
 
 def test_the_crawler_reads_the_repo_it_was_given_not_the_ambient_one(repo, tmp_path, monkeypatch):
@@ -431,7 +431,7 @@ def test_the_crawler_reads_the_repo_it_was_given_not_the_ambient_one(repo, tmp_p
     file is built, ``GIT_DIR`` is pointed at it, and the crawler must still
     report the fixture's files.
     """
-    other = tmp_path.parent / "other_repo_13948"
+    other = tmp_path.parent / "other_repo_13983"
     other.mkdir()
     _git_init(other)
     _git(other, "config", "user.email", "a@b.c")
