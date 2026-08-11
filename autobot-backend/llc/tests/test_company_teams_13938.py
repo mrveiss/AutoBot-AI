@@ -94,9 +94,7 @@ async def test_company_teams_returns_named_team_with_its_members(client, session
     resp = await client.get(f"/api/llc/companies/{company_id}/teams")
 
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {
-        "teams": [{"id": str(team_id), "name": "Platform", "member_user_ids": [str(user_id)]}]
-    }
+    assert resp.json() == {"teams": [{"id": str(team_id), "name": "Platform", "member_user_ids": [str(user_id)]}]}
 
 
 @pytest.mark.asyncio

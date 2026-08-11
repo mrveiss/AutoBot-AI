@@ -1170,9 +1170,7 @@ async def get_company_teams(
     team_rows = (
         (
             await session.execute(
-                select(Team)
-                .where(Team.org_id == company_id, Team.deleted_at.is_(None))
-                .order_by(Team.name)
+                select(Team).where(Team.org_id == company_id, Team.deleted_at.is_(None)).order_by(Team.name)
             )
         )
         .scalars()
@@ -1196,8 +1194,7 @@ async def get_company_teams(
 
     return CompanyTeamsResponse(
         teams=[
-            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id])
-            for team in team_rows
+            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id]) for team in team_rows
         ]
     )
 
