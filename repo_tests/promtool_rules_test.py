@@ -229,7 +229,20 @@ class TestAMissingPromtoolIsLoudOnCI:
     """
 
     def _run_in(self, env: dict) -> subprocess.CompletedProcess:
-        merged = {**os.environ, **env, _NESTED: "1"}
+        """Child pytest with a controlled environment.
+
+        Both gate variables are stripped before `env` is applied, so a test
+        states the condition it wants rather than inheriting the parent's. The
+        first version cleared only `CI` — and when the gate moved to
+        AUTOBOT_REQUIRE_PROMTOOL, the child kept inheriting the real one from
+        the job that installs promtool, so the "developer machine" case failed
+        instead of skipping. The test asserted an environment it no longer
+        controlled.
+        """
+        merged = {**os.environ}
+        for gate in ("CI", "AUTOBOT_REQUIRE_PROMTOOL", "GITHUB_ACTIONS"):
+            merged.pop(gate, None)
+        merged.update({**env, _NESTED: "1"})
         merged.pop("PATH", None)
         merged["PATH"] = "/nonexistent-bin"
         return subprocess.run(  # nosec B603  # fixed interpreter, repo-local target
@@ -242,7 +255,7 @@ class TestAMissingPromtoolIsLoudOnCI:
         )
 
     def test_ci_without_promtool_fails_rather_than_skips(self):
-        result = self._run_in({"CI": "true", "AUTOBOT_PROMTOOL": "/nonexistent/promtool"})
+        result = self._run_in({"AUTOBOT_REQUIRE_PROMTOOL": "1", "AUTOBOT_PROMTOOL": "/nonexistent/promtool"})
 
         assert result.returncode != 0, (
             "a CI run with no promtool reported success — rule behaviour was unverified "
@@ -254,8 +267,8 @@ class TestAMissingPromtoolIsLoudOnCI:
         """The direction that must stay true. Turning every bare checkout red
         would make the failure meaningless — and a guard that only proves the
         CI case passes equally against a check that always fails."""
-        env = {"AUTOBOT_PROMTOOL": "/nonexistent/promtool"}
-        result = self._run_in({**env, "CI": ""})
+        # No AUTOBOT_REQUIRE_PROMTOOL at all — the bare-checkout condition.
+        result = self._run_in({"AUTOBOT_PROMTOOL": "/nonexistent/promtool"})
 
         assert result.returncode == 0, "a local run without promtool must skip, not fail"
         assert "skipped" in (result.stdout + result.stderr)
