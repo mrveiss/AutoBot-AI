@@ -75,6 +75,24 @@ def _make_scheduler(extractor=None, proposer=None) -> SkillDistillationScheduler
     return scheduler
 
 
+def _epoch(iso: str) -> float:
+    """#13948: the cursor stores epoch seconds, not the ISO string.
+
+    These tests assert which conversation the cursor names, not how it is
+    serialised — comparing the stored bytes pinned a format that had to change,
+    because ISO strings are naive local time and stop ordering at a DST fallback.
+    """
+    from datetime import datetime
+
+    return datetime.fromisoformat(iso).timestamp()
+
+
+def _stored_cursor(redis) -> float | None:
+    from services.skill_management.skill_distillation_scheduler import _cursor_to_epoch
+
+    return _cursor_to_epoch(redis.store.get("skills:distillation:cursor"))
+
+
 def _with_sessions(scheduler, sessions, history=None):
     """Point the scheduler at a fake chat history manager."""
     manager = MagicMock()
@@ -160,7 +178,7 @@ class TestDistillationPass:
 
         proposer.propose_skills.assert_not_awaited()
         assert result["sessions_distilled"] == 1
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
 
     @pytest.mark.asyncio
     async def test_existing_skills_are_passed_as_prior_art(self, redis):
@@ -190,7 +208,7 @@ class TestDurableCursor:
 
         await scheduler.run_once()
 
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
 
     @pytest.mark.asyncio
     async def test_failed_proposal_leaves_the_cursor_untouched(self, redis):
@@ -248,7 +266,7 @@ class TestDurableCursor:
         result = await scheduler.run_once()
 
         assert result["sessions_distilled"] == 1
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
 
 
 class TestLifecycle:
