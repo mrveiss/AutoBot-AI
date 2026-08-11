@@ -103,10 +103,12 @@ Other MCP bridges can follow this pattern by:
 
 import asyncio
 import base64
+import fnmatch
 import mimetypes
 import os
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
@@ -209,11 +211,55 @@ ALLOWED_DIRECTORIES = [
 # Maximum file size for read operations (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
+# Security Configuration: Excluded Subtrees (#14081)
+#
+# Since #14050, an unset AUTOBOT_BASE_DIR (every dev checkout and CI runner)
+# resolves ALLOWED_DIRECTORIES to the whole git checkout, and the only gate on
+# this bridge is admin role or the shared X-Internal-API-Key header. Without
+# an exclusion, either credential grants read *and write* access to VCS
+# history and any local secrets.
+#
+# Enforced in _resolve_allowed_path (the single seam every path goes through,
+# shared by is_path_allowed and _validated_path) rather than by curating
+# ALLOWED_DIRECTORIES, so the exclusion holds regardless of how base_dir is
+# configured -- including a deployment that legitimately points it at a
+# directory containing these.
+#
+# _EXCLUDED_FILE_PATHS are the canonical secrets-manager storage locations
+# (services/secrets_service.py, api/secrets.py, auth_middleware.py's durable
+# JWT keypair) -- all resolved from config.path.data_path so they track
+# wherever AUTOBOT_DATA_DIR actually points, not a hardcoded literal.
+_EXCLUDED_FILE_PATHS = [
+    config.path.data_path / "secrets.key",  # SecretsManager encryption key
+    config.path.data_path / "secrets.json",  # SecretsManager encrypted store
+    config.path.data_path / "secrets.db",  # SecretsService encrypted store
+    config.path.data_path / "service-keys",  # durable JWT RSA keypair (.pem)
+]
+_EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_FILE_PATHS]
+
+
+def _is_excluded_path(resolved: Path) -> bool:
+    """Refuse ``.git/``, ``.env*`` and secrets-manager storage (#14081).
+
+    Checked against the *resolved* (symlink-followed, canonicalized) path so
+    a symlink or an encoded traversal that lands inside an excluded subtree
+    can't slip past a check on the raw input string.
+    """
+    if ".git" in resolved.parts:
+        return True
+    if any(fnmatch.fnmatch(part, ".env*") for part in resolved.parts):
+        return True
+    for excluded_root in _EXCLUDED_ROOTS:
+        try:
+            resolved.relative_to(excluded_root)
+            return True
+        except ValueError:
+            continue
+    return False
+
 
 def _should_include_file(filename: str, pattern: str, exclude_patterns: list) -> bool:
     """Check if a file should be included in search results. (Issue #315 - extracted)"""
-    import fnmatch
-
     if not fnmatch.fnmatch(filename, pattern):
         return False
     return not any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
@@ -236,7 +282,10 @@ def _resolve_allowed_path(path: str):
     """
     if "\\" in path:
         raise ValueError("Path contains a backslash; use '/' as the separator")
-    return validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+    resolved = validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+    if _is_excluded_path(resolved):
+        raise ValueError("Path is within an excluded subtree (.git, .env, or secrets storage)")
+    return resolved
 
 
 def is_path_allowed(path: str) -> bool:
