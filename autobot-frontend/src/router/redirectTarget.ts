@@ -34,6 +34,20 @@ export function safeRedirectTarget(raw: unknown): string | null {
   if (hasControlCharacter(raw)) return null
 
   const path = raw.split(/[?#]/)[0]
+
+  // Traversal defeats the prefix check: `/automation/../../evil` passes it, and
+  // although a path-absolute string can never change the origin (so this is not
+  // an open redirect), `history.pushState` hands the raw string to the browser,
+  // which DOES collapse the dot segments. The address bar then shows `/evil`
+  // while the router state still holds the prefixed path — so an attacker-set
+  // `?redirect=` could steer an authenticated user to any in-app route, not the
+  // two this list names. Reject dot segments, including the percent-encoded
+  // spelling, which normalises identically.
+  const segments = path.split('/')
+  if (segments.some((seg) => seg === '.' || seg === '..' || seg.toLowerCase() === '%2e%2e' || seg.toLowerCase() === '%2e')) {
+    return null
+  }
+
   const allowed = ALLOWED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
   return allowed ? raw : null
 }

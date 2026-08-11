@@ -37,6 +37,15 @@ describe('safeRedirectTarget rejects everything else (#13996)', () => {
     ['a tab-obfuscated protocol-relative URL', '/\t/evil.example'],
     ['a newline-obfuscated URL', '/automation\n//evil.example'],
     ['an empty string', ''],
+    // Traversal: these all pass a naive prefix check, and the browser collapses
+    // the dot segments on pushState, so the user lands outside the allow-list.
+    // Not an origin escape — a path-absolute string cannot change the host —
+    // but it breaks the prefix invariant this module exists to enforce.
+    ['a traversal escape from the allowlist', '/automation/../../evil.example'],
+    ['a percent-encoded traversal', '/automation/%2e%2e/%2e%2e/evil'],
+    ['a traversal with a doubled slash', '/automation/..//evil.example'],
+    ['a traversal mixing a backslash', '/llc/../\\/evil.example'],
+    ['a single-dot segment', '/llc/./companies'],
   ])('rejects %s', (_label, raw) => {
     expect(safeRedirectTarget(raw)).toBeNull()
   })
