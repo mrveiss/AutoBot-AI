@@ -476,3 +476,20 @@ class TestRepeatedDiscoveryDoesNotAccumulate:
         await manager.startup()
 
         assert manager.get_load_report()["conflicts"] == ["tri-demo"]
+
+    def test_a_relative_plugin_dir_still_stores_an_absolute_path(self, tmp_path, monkeypatch):
+        """lifespan.py's dev fallback passes two RELATIVE plugin dirs, so an
+        unresolved parent let `_synthesise_parent_packages` walk off the top of
+        the path — yielding repeated `.` and pointing a synthesised package's
+        __path__ at the CWD. The nearest existing assertion calls .resolve() on
+        its own left-hand side, so it structurally cannot catch this."""
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        _make_plugin(tmp_path / "core", "rel-demo")
+        monkeypatch.chdir(tmp_path)
+        loader = PluginLoader(plugin_dirs=[Path("core")])
+
+        assert loader.discover_plugins()
+
+        stored = loader._manifest_dirs["rel-demo"]
+        assert stored.is_absolute(), f"stored plugin dir must be resolved, got {stored}"
