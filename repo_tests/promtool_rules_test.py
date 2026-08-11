@@ -217,7 +217,7 @@ _NESTED = "AUTOBOT_PROMTOOL_SELFTEST_CHILD"
 class TestAMissingPromtoolIsLoudOnCI:
     """#13927: the skip and the pass were indistinguishable in a green check.
 
-    Five of this file's seven checks skipped on every GitHub-hosted runner
+    Four of this file's ten collected checks skipped on every GitHub-hosted runner
     because nothing installed promtool, so Prometheus rule BEHAVIOUR was
     verified by nothing — while the check reported green. #13909 shipped a
     recording rule whose `and` operands were reversed, so the alert compared a
