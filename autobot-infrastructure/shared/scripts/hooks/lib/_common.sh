@@ -39,11 +39,18 @@ NC='\033[0m'
 # Usage:
 #   get_staged_files '\.py$' "$@"
 #   get_staged_files '^\.github/(workflows|actions)/.*\.ya?ml$' "$@"
+# GH#13936: the argv branch used to `printf '%s\n' "$@"` and return WITHOUT
+# applying $pattern, so a hook's own file-type filter was silently bypassed in
+# CI (which always passes argv) while working correctly in pre-commit (which
+# does not). That handed a .vue file to pre-commit-no-direct-redis' Python
+# tokenizer, and the resulting IndentationError was reported to the user as
+# "1 direct Redis connection(s) found" in a file containing no Redis at all.
+# The pattern now applies to both branches, so the two invocation paths agree.
 get_staged_files() {
     local pattern="$1"
     shift
     if [ "$#" -gt 0 ]; then
-        printf '%s\n' "$@"
+        printf '%s\n' "$@" | grep -E "$pattern" || true
         return
     fi
     git diff --cached --name-only --diff-filter=ACMRT \
