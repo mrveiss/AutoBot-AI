@@ -233,9 +233,10 @@ jobs:
           # binary is required beyond what this file already depends on.
           check_pr_state() {
             local pr="$1"
-            # shellcheck disable=SC2016 -- `$c` below is a jq variable, not a
-            # shell one. Single quotes are required: letting the shell expand it
-            # would substitute an empty string and break the filter.
+            # `$c` below is a jq variable, not a shell one. Single quotes are
+            # required: letting the shell expand it would substitute an empty
+            # string and break the filter.
+            # shellcheck disable=SC2016
             gh pr view "$pr" --repo "$REPO" --json statusCheckRollup \
               --jq '([.statusCheckRollup[] | select((.status != null and .status != "" and .status != "COMPLETED") or (.state == "PENDING"))]) as $c | (($c | length | tostring) + "|" + (($c | map(select(.startedAt != null and .startedAt != "")) | map(.startedAt) | min) // ""))' \
               2>/dev/null || echo "0|"
