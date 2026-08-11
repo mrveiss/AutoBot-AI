@@ -1105,9 +1105,10 @@ async def get_org_chart(
     return OrgChartResponse(nodes=roots)
 
 
-# Capability-search result bounds. Named because the hardcoded-values gate is
-# file-scoped: these literals predate #13936 but touching this module put them in
-# scope, so they are fixed here rather than left to redden the next PR too.
+# Capability-search result bounds. These literals predate #13936; they were named
+# when the hardcoded-values gate flagged them on this PR. (#13950 has since made
+# that gate line-scoped, so the original file-scoped rationale no longer applies —
+# the constants are kept because naming them is right, not because a gate forces it.)
 _AGENT_SEARCH_DEFAULT_LIMIT = 10
 _AGENT_SEARCH_MAX_LIMIT = 100
 

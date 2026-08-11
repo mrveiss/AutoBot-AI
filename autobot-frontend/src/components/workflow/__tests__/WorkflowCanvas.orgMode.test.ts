@@ -123,6 +123,40 @@ describe('WorkflowCanvas read-only org mode (#13939)', () => {
     expect(person.find('.org-status.status-paused').exists()).toBe(true)
   })
 
+  it('does not print adapter vocabulary on a human node (#13936)', () => {
+    // The canvas is the second renderer of the org-chart payload. A person's
+    // adapter_type is the literal "human" — untranslated in all 11 locales —
+    // and their role is already the title, so it must be suppressed here just
+    // as OrgTreeNode.vue suppresses it. An agent must still show its adapter.
+    const wrapper = mountCanvas({
+      nodes: [
+        {
+          id: 'person',
+          type: 'org-person',
+          position: { x: 0, y: 0 },
+          data: { label: 'Ada', title: 'lead', status: 'idle', adapter_type: 'human', is_human: true },
+          connections: [],
+        },
+        {
+          id: 'agent',
+          type: 'org-person',
+          position: { x: 0, y: 120 },
+          data: { label: 'worker-1', title: 'worker', status: 'idle', adapter_type: 'claude', is_human: false },
+          connections: [],
+        },
+      ] as CanvasNode[],
+      readonly: true,
+    })
+
+    const [person, agent] = wrapper.findAll('.workflow-node.org-person')
+    expect(person.text()).toContain('lead')
+    expect(person.find('.org-adapter').exists()).toBe(false)
+    expect(person.text()).not.toContain('human')
+    // The case that must stay caught: agents keep their adapter.
+    expect(agent.find('.org-adapter').exists()).toBe(true)
+    expect(agent.text()).toContain('claude')
+  })
+
   it('emits node-selected when an org node is clicked', async () => {
     const wrapper = mountCanvas({ nodes: ORG_NODES, readonly: true })
     await wrapper.get('.workflow-node.org-person').trigger('click')

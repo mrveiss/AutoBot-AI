@@ -164,7 +164,12 @@
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
               <div class="org-meta">
                 <span class="org-status" :class="`status-${nodeText(node, 'status') || 'unknown'}`"></span>
-                <span class="org-adapter">{{ nodeText(node, 'adapter_type') }}</span>
+                <!-- GH#13936: adapter_type is agent vocabulary. A person's node
+                     already shows their role as the title, and their adapter_type
+                     is the literal "human" — untranslated in all 11 locales. This
+                     mirrors the same guard in OrgTreeNode.vue; the canvas is the
+                     second renderer of the same org-chart payload. -->
+                <span v-if="!nodeFlag(node, 'is_human')" class="org-adapter">{{ nodeText(node, 'adapter_type') }}</span>
               </div>
             </template>
           </div>
@@ -280,6 +285,12 @@ function nodeTitle(node: CanvasNode): string {
 function nodeText(node: CanvasNode, key: string): string {
   const value = (node.data as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : '';
+}
+
+/** Boolean counterpart to `nodeText` — `nodeText` returns '' for a boolean, so a
+ *  flag read through it is always falsy and can never gate anything (GH#13936). */
+function nodeFlag(node: CanvasNode, key: string): boolean {
+  return (node.data as Record<string, unknown>)[key] === true;
 }
 
 /** Position, plus the optional size a container node carries in `data`. */
