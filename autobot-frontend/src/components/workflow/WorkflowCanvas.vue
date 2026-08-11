@@ -164,7 +164,12 @@
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
               <div class="org-meta">
                 <span class="org-status" :class="`status-${nodeText(node, 'status') || 'unknown'}`"></span>
-                <span class="org-adapter">{{ nodeText(node, 'adapter_type') }}</span>
+                <!-- GH#13936: adapter_type is agent vocabulary. A person's node
+                     already shows their role as the title, and their adapter_type
+                     is the literal "human" — untranslated in all 11 locales. This
+                     mirrors the same guard in OrgTreeNode.vue; the canvas is the
+                     second renderer of the same org-chart payload. -->
+                <span v-if="!nodeFlag(node, 'is_human')" class="org-adapter">{{ nodeText(node, 'adapter_type') }}</span>
               </div>
             </template>
           </div>
@@ -285,6 +290,12 @@ function nodeTitle(node: CanvasNode): string {
 function nodeText(node: CanvasNode, key: string): string {
   const value = (node.data as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : '';
+}
+
+/** Boolean counterpart to `nodeText` — `nodeText` returns '' for a boolean, so a
+ *  flag read through it is always falsy and can never gate anything (GH#13936). */
+function nodeFlag(node: CanvasNode, key: string): boolean {
+  return (node.data as Record<string, unknown>)[key] === true;
 }
 
 /**
@@ -525,7 +536,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
 .workflow-node.switch .node-header { background: var(--wfcanvas-node-switch); }
-.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, var(--wfcanvas-node-vision-from), var(--wfcanvas-node-vision-to)); }
 .workflow-node.org-person .node-header { background: var(--color-info); }
 .workflow-node.org-group { background: var(--color-info-bg); border-style: dashed; cursor: default; }
 .workflow-node.org-group .node-header { background: transparent; color: var(--text-secondary); border-bottom: 1px dashed var(--border-default); }
