@@ -101,3 +101,28 @@ def test_submodules_not_registered_as_top_level_names(polluted_name):
         "autobot_shared's submodules as top-level package names again (#14035).\n"
         f"stdout:\n{result.stdout}"
     )
+
+
+@pytest.mark.parametrize(
+    "repo_root_sibling",
+    ["scripts", "tools", "docs", "main", "conftest", "tasks", "security", "data"],
+)
+def test_repo_root_not_leaked_onto_sys_path(repo_root_sibling):
+    """A `package-dir = {"" = ...}` root mapping is a DIFFERENT bug, not a fix.
+
+    A single ""-keyed `package-dir` entry makes setuptools' editable-install
+    `_select_strategy()` take the `_StaticPth` branch, which writes a raw
+    `.pth` line adding the ENTIRE resolved source directory to `sys.path` —
+    it never consults `include`/`exclude`. Pointed at the repo root, that
+    puts every sibling of `autobot_shared/` (`scripts/`, `tools/`,
+    `main.py`, `conftest.py`, ...) on `sys.path` as a bare top-level name —
+    the same bug class #14035 exists to close, at a far larger blast
+    radius than the original 16 submodules.
+    """
+    result = _run_in_other_cwd(f"import {repo_root_sibling}")
+    assert result.returncode != 0, (
+        f"`import {repo_root_sibling}` unexpectedly succeeded from a "
+        "non-repo-root cwd — the editable install is leaking the repo "
+        "root itself onto sys.path (#14035).\n"
+        f"stdout:\n{result.stdout}"
+    )
