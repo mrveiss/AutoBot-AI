@@ -13,7 +13,12 @@ import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
-import { buildOrgCanvasGraph, flattenOrgNodes, ORG_GROUP_PREFIX } from '@/composables/llc/orgCanvasGraph'
+import {
+  buildOrgCanvasGraph,
+  flattenOrgNodes,
+  orgUnitRoots,
+  ORG_GROUP_PREFIX,
+} from '@/composables/llc/orgCanvasGraph'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -34,18 +39,34 @@ type OrgViewMode = 'tree' | 'canvas'
 const viewMode = ref<OrgViewMode>('tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
-/** Roots the canvas draws: every unit, or the one the active tab selects. */
-const visibleRoots = computed<OrgNode[]>(() =>
-  activeTabId.value === ALL_UNITS_TAB
-    ? tree.value
-    : tree.value.filter((node) => node.id === activeTabId.value),
+/**
+ * One tab per unit, plus an "all units" tab — and no strip at all when nothing
+ * is grouped. GH#13994: this used to be one tab per *root*, which gave a
+ * company of twelve people twelve person-named tabs. `orgUnitRoots` is the same
+ * predicate the canvas draws its containers from, so the strip and the canvas
+ * can never disagree about what a unit is.
+ */
+const canvasTabs = computed<CanvasTab[]>(() => {
+  const units = orgUnitRoots(tree.value)
+  if (units.length === 0) return []
+  return [
+    { id: ALL_UNITS_TAB, label: t('llc.orgChart.canvasTabAll') },
+    ...units.map((node) => ({ id: node.id, label: node.name })),
+  ]
+})
+
+// A selected unit can stop being one between reloads (its last report leaves).
+// Falling back to "all units" keeps the canvas populated instead of blank.
+const effectiveTabId = computed<string>(() =>
+  canvasTabs.value.some((tab) => tab.id === activeTabId.value) ? activeTabId.value : ALL_UNITS_TAB,
 )
 
-/** One tab per top-level unit, plus an "all units" tab. */
-const canvasTabs = computed<CanvasTab[]>(() => [
-  { id: ALL_UNITS_TAB, label: t('llc.orgChart.canvasTabAll') },
-  ...tree.value.map((node) => ({ id: node.id, label: node.name })),
-])
+/** Roots the canvas draws: the whole forest, or the one unit the tab selects. */
+const visibleRoots = computed<OrgNode[]>(() =>
+  effectiveTabId.value === ALL_UNITS_TAB
+    ? tree.value
+    : tree.value.filter((node) => node.id === effectiveTabId.value),
+)
 
 // A ref (not a computed) so node drags stay put: the canvas mutates
 // `node.position` in place and that must survive until the tree reloads.
@@ -217,7 +238,7 @@ onMounted(fetchTree)
         :nodes="canvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
-        :active-tab-id="activeTabId"
+        :active-tab-id="effectiveTabId"
         @node-selected="onCanvasNodeSelected"
         @node-moved="onCanvasNodeMoved"
         @tab-selected="activeTabId = $event"
