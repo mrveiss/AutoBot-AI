@@ -230,8 +230,10 @@ async def test_delegation_still_accepts_an_unregistered_agent_type(monkeypatch):
 
     seen = {}
 
-    async def _fake_engine(task, agent_type, depth):
-        seen.update(task=task, agent_type=agent_type, depth=depth)
+    async def _fake_engine(task, agent_type, depth, auth_role):
+        # #13821: engines take the delegating session's authenticated role as a
+        # 4th argument, so a subagent runs as the user who asked for it.
+        seen.update(task=task, agent_type=agent_type, depth=depth, auth_role=auth_role)
         return "ok"
 
     monkeypatch.setitem(delegation._ENGINES, "claude_code", _fake_engine)
@@ -239,3 +241,4 @@ async def test_delegation_still_accepts_an_unregistered_agent_type(monkeypatch):
     assert await delegation.run_delegated_subtask("t", agent_type="typo_agent") == "ok"
 
     assert seen["agent_type"] == "typo_agent"
+    assert seen["auth_role"] == "user"
