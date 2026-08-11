@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projekta analītika"
+      },
+      "impact": {
+        "title": "Ietekmes analīze",
+        "hint": "Kas tranzitīvi izsauc mezglu — pārbaudiet pirms mainīšanas vai dzēšanas.",
+        "nodeIdPlaceholder": "piem. pakotne.modulis.KlasesNosaukums",
+        "nodeIdLabel": "Grafa mezgla ID",
+        "analyze": "Analizēt",
+        "analyzing": "Analizē…",
+        "notIndexedTitle": "Koda grafs nav izveidots",
+        "notIndexedBody": "Indeksējiet šo avotu pirms ietekmes analīzes.",
+        "partialTitle": "Daļējs rezultāts — tā ir apakšējā robeža",
+        "partialDepth": "Apstaigāšana apstājās {depth}. līmenī ar {frontier} neizvērstiem mezgliem. Izsaucēju var būt vairāk.",
+        "partialUnresolved": "{count} šķautni(-es) neizdevās atrisināt, tāpēc daži izsaucēji var trūkt.",
+        "callers": "izsaucēji",
+        "callersAtLeast": "izsaucēji (vismaz)",
+        "callersHeading": "Sasniegtie izsaucēji",
+        "edgesResolved": "atrisinātās šķautnes",
+        "edgesUnresolved": "neatrisinātās šķautnes",
+        "depth": "sasniegtais dziļums",
+        "noCallersTitle": "Izsaucēji nav atrasti",
+        "noCallersBody": "Nekas indeksētajā grafā neizsauc šo mezglu.",
+        "skippedHeading": "Rādīt {count} neatrisinātās šķautnes"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8205,7 +8229,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Skata režīms",
+      "viewTree": "Koks",
+      "viewCanvas": "Audekls",
+      "canvasTabAll": "Visas vienības",
+      "canvasUnit": "Vienība {name}",
+      "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas."
     },
     "goals": {
       "title": "Goal Tree",

@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projektanalysen"
+      },
+      "impact": {
+        "title": "Auswirkungsanalyse",
+        "hint": "Was einen Knoten transitiv aufruft — vor Änderung oder Entfernung prüfen.",
+        "nodeIdPlaceholder": "z. B. paket.modul.KlassenName",
+        "nodeIdLabel": "Graph-Knoten-ID",
+        "analyze": "Analysieren",
+        "analyzing": "Analysiere…",
+        "notIndexedTitle": "Code-Graph nicht erstellt",
+        "notIndexedBody": "Indexieren Sie diese Quelle, bevor Sie die Auswirkungen analysieren.",
+        "partialTitle": "Teilergebnis — dies ist eine Untergrenze",
+        "partialDepth": "Der Durchlauf endete bei Tiefe {depth}; {frontier} Knoten wurden nicht expandiert. Es kann mehr Aufrufer geben.",
+        "partialUnresolved": "{count} Kante(n) konnten nicht aufgelöst werden, daher fehlen möglicherweise Aufrufer.",
+        "callers": "Aufrufer",
+        "callersAtLeast": "Aufrufer (mindestens)",
+        "callersHeading": "Erreichte Aufrufer",
+        "edgesResolved": "aufgelöste Kanten",
+        "edgesUnresolved": "nicht aufgelöste Kanten",
+        "depth": "erreichte Tiefe",
+        "noCallersTitle": "Keine Aufrufer gefunden",
+        "noCallersBody": "Nichts im indexierten Graphen ruft diesen Knoten auf.",
+        "skippedHeading": "{count} nicht aufgelöste Kante(n) anzeigen"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8205,7 +8229,13 @@
       "pauseAgent": "Agent pausieren",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Ansicht",
+      "viewTree": "Baum",
+      "viewCanvas": "Leinwand",
+      "canvasTabAll": "Alle Einheiten",
+      "canvasUnit": "Einheit {name}",
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
     },
     "goals": {
       "title": "Zielbaum",

@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Analityka projektu"
+      },
+      "impact": {
+        "title": "Analiza wpływu",
+        "hint": "Co przechodnio wywołuje węzeł — sprawdź przed zmianą lub usunięciem.",
+        "nodeIdPlaceholder": "np. pakiet.moduł.NazwaKlasy",
+        "nodeIdLabel": "Identyfikator węzła",
+        "analyze": "Analizuj",
+        "analyzing": "Analizowanie…",
+        "notIndexedTitle": "Graf kodu nie został zbudowany",
+        "notIndexedBody": "Zindeksuj to źródło przed analizą wpływu.",
+        "partialTitle": "Wynik częściowy — to dolna granica",
+        "partialDepth": "Przejście zatrzymało się na głębokości {depth}, pozostawiając {frontier} nierozwiniętych węzłów. Wywołań może być więcej.",
+        "partialUnresolved": "Nie udało się rozwiązać {count} krawędzi, więc część wywołań może brakować.",
+        "callers": "wywołania",
+        "callersAtLeast": "wywołania (co najmniej)",
+        "callersHeading": "Osiągnięte wywołania",
+        "edgesResolved": "rozwiązane krawędzie",
+        "edgesUnresolved": "nierozwiązane krawędzie",
+        "depth": "osiągnięta głębokość",
+        "noCallersTitle": "Nie znaleziono wywołań",
+        "noCallersBody": "Nic w zindeksowanym grafie nie wywołuje tego węzła.",
+        "skippedHeading": "Pokaż {count} nierozwiązanych krawędzi"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Otwieranie automatyzacji Twojej firmy…",
+      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8205,7 +8229,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Tryb widoku",
+      "viewTree": "Drzewo",
+      "viewCanvas": "Płótno",
+      "canvasTabAll": "Wszystkie jednostki",
+      "canvasUnit": "Jednostka {name}",
+      "canvasHint": "Shift+przeciągnięcie przesuwa, przewijanie przybliża, kliknij węzeł, aby zobaczyć szczegóły."
     },
     "goals": {
       "title": "Goal Tree",

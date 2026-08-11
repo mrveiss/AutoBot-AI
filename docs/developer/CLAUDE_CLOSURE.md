@@ -15,6 +15,17 @@ These compare the delivery against the ORIGINAL ISSUE BODY — implementation he
 3. **No partial close.** A bundled/multi-issue PR's `Closes #N` requires the FULL AC set of N. If a PR delivers a subset: check off the delivered subtask on the issue and either leave it open or name the follow-up issue number in the same comment. Riding along on a bundle's momentum never closes an issue.
 4. **Merged ≠ delivered (#12959).** A fix whose only home is a file the runtime never applies is not delivered. Before closing an issue whose fix lands in `autobot-slm-backend/ansible/roles/`, name the task in `playbooks/update-all-nodes.yml` that applies it — `include_role` (with `tasks_from` if partial) or a bare `roles:` entry. No such task ⇒ the builtin updater cannot deliver it and the issue stays open. #12777, #12886 and #12907 were each closed against a green merge and were still absent from every host weeks later; the playbook's `[PLAY 2] Verify | …` assertions now fail such a run instead of reporting success.
 
+5. **Worktree evidence (#13879).** Before `gh issue close N`, run:
+   ```bash
+   scripts/verify-done.sh --branch <branch>        # full gate
+   scripts/verify-done.sh --leftovers-only         # evidence report
+   ```
+   Gates [1]-[4] (clean tree, non-integration branch, PR merged, commits in base) exit 1 on failure. Section [5] **reports evidence and never instructs a removal** — it prints, per worktree, the landed verdict, merged PR, uncommitted count, ignored-file count, index bits and lock state, and marks candidates. **You decide whether to remove; the tool does not.**
+
+   That split is deliberate. Seven review rounds found thirteen ways to produce a false "this has landed, remove it", and every one of them was harmful only because the output was an imperative. A wrong "keep" costs disk; a wrong "remove" costs work that exists nowhere else. The tool also cannot see everything a removal destroys: `git status` is *specified* to ignore `assume-unchanged`/`skip-worktree` entries, and `git worktree remove` uses the same blind check — so a worktree can hold uncommitted work, report clean, and be deleted with rc=0 (verified). Ignored files (`.env`, `data/.slm_keys`) are invisible to it too. Hence the counts are reported and the judgement is yours.
+
+   Before removing a candidate: inspect its ignored files, check the index bits, and `git worktree unlock` rather than `remove -f -f`.
+
 ## Before Closing an Issue
 
 1. **Read the issue description fully** — identify ALL acceptance criteria (stated and implicit)

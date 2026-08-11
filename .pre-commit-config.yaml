@@ -467,6 +467,19 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
         types: [python, ts, vue]
+        # Generated clients are machine-produced from the OpenAPI schema; a
+        # "hardcoded value" in one is a symptom of the schema, not of code
+        # anyone wrote, so scanning them finds nothing actionable.
+        #
+        # It is also ruinously slow. Measured 2026-08-11 on this hook:
+        #   3 changed .py files ........  3.7s
+        #   generated/api.ts alone .....  >240s (173,665 lines, timed out)
+        # Every PR that touches an API response model regenerates that file,
+        # which drags it into the changed set and turns `code-quality` — a
+        # REQUIRED check — into a 40-70 minute job. Observed on #13976.
+        #
+        # Same pattern the line-length hook above already uses.
+        exclude: ^(.*(_generated|generated)/)
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"

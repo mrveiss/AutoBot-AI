@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "تحليلات المشروع"
+      },
+      "impact": {
+        "title": "تحليل الأثر",
+        "hint": "ما الذي يستدعي عقدة بشكل غير مباشر — استخدمه قبل التغيير أو الحذف.",
+        "nodeIdPlaceholder": "مثال: package.module.ClassName",
+        "nodeIdLabel": "معرّف عقدة الرسم البياني",
+        "analyze": "تحليل",
+        "analyzing": "جارٍ التحليل…",
+        "notIndexedTitle": "لم يتم بناء رسم الشيفرة",
+        "notIndexedBody": "قم بفهرسة هذا المصدر قبل تحليل الأثر.",
+        "partialTitle": "نتيجة جزئية — هذا حد أدنى",
+        "partialDepth": "توقف المسار عند العمق {depth} مع {frontier} عقدة غير موسّعة. قد يوجد مستدعون أكثر.",
+        "partialUnresolved": "تعذّر حل {count} حافة، لذا قد يكون بعض المستدعين مفقودًا.",
+        "callers": "المستدعون",
+        "callersAtLeast": "المستدعون (على الأقل)",
+        "callersHeading": "المستدعون الذين تم الوصول إليهم",
+        "edgesResolved": "حواف تم حلها",
+        "edgesUnresolved": "حواف لم تُحل",
+        "depth": "العمق المُدرك",
+        "noCallersTitle": "لا يوجد مستدعون",
+        "noCallersBody": "لا شيء في الرسم المفهرس يستدعي هذه العقدة.",
+        "skippedHeading": "إظهار {count} حافة غير محلولة"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
+      "companyRequired": "اختر شركة لفتح الأتمتة."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8205,7 +8229,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "وضع العرض",
+      "viewTree": "شجرة",
+      "viewCanvas": "لوحة",
+      "canvasTabAll": "كل الوحدات",
+      "canvasUnit": "وحدة {name}",
+      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
     },
     "goals": {
       "title": "Goal Tree",
