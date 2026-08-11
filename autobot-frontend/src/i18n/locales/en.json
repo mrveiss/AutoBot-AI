@@ -1424,6 +1424,28 @@
         "evolution": "Evolution",
         "overview": "Overview",
         "ariaLabel": "Project analytics"
+      },
+      "impact": {
+        "title": "Impact Analysis",
+        "hint": "What transitively calls a node — use it before changing or removing one.",
+        "nodeIdPlaceholder": "e.g. package.module.ClassName",
+        "nodeIdLabel": "Graph node id",
+        "analyze": "Analyze",
+        "analyzing": "Analyzing…",
+        "notIndexedTitle": "Code graph not built",
+        "notIndexedBody": "Run an index for this source before analysing impact.",
+        "partialTitle": "Partial result — this is a lower bound",
+        "partialDepth": "The walk stopped at depth {depth} with {frontier} node(s) still unexpanded. There may be more callers than shown.",
+        "partialUnresolved": "{count} edge(s) could not be resolved, so some callers may be missing.",
+        "callers": "callers",
+        "callersAtLeast": "callers (at least)",
+        "callersHeading": "Callers reached",
+        "edgesResolved": "edges resolved",
+        "edgesUnresolved": "edges unresolved",
+        "depth": "depth reached",
+        "noCallersTitle": "No callers found",
+        "noCallersBody": "Nothing in the indexed graph calls this node.",
+        "skippedHeading": "Show {count} unresolved edge(s)"
       }
     },
     "patterns": {
