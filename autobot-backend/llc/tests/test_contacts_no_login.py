@@ -52,9 +52,9 @@ def test_contact_model_has_no_foreign_key_or_relationship_to_users() -> None:
     item). Assert on the schema-level constructs directly rather than
     trusting naming conventions.
     """
-    assert not LLCContact.__table__.foreign_keys, (
-        f"LLCContact must have zero foreign keys, found: {LLCContact.__table__.foreign_keys}"
-    )
+    assert (
+        not LLCContact.__table__.foreign_keys
+    ), f"LLCContact must have zero foreign keys, found: {LLCContact.__table__.foreign_keys}"
     mapper = inspect(LLCContact)
     user_relationships = [rel for rel in mapper.relationships if rel.mapper.class_.__name__ == "User"]
     assert not user_relationships, f"LLCContact must have no relationship targeting User, found: {user_relationships}"

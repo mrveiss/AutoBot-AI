@@ -23,7 +23,7 @@ from typing import AsyncIterator
 import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 
 from llc.models.contact import LLCContact
