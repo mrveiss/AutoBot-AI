@@ -14,15 +14,28 @@
 # - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
 # - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
 # - Lines with "# noqa: print" or "// noqa: console" comments — for a
-#   multi-line call this is recognised on the OPENING line ("print(") as well
-#   as any line up to the closing paren (#14051). Both placements are
-#   black-stable IF the call is written multi-line to begin with (the
-#   collapsed single-line form would exceed the 120-char limit, so black has
-#   no reason to touch it). What is NOT stable: manually collapsing a wrapped
-#   call onto one line just to attach the comment. If that collapsed line is
-#   still over 120 chars, `black` re-splits it right back — moving the
-#   suppression onto the new closing-paren line regardless of where you
-#   wrote it. Verified against the real doctor.py multi-line calls (#14051).
+#   multi-line call this is recognised on any line from the opening
+#   "print("/"console.*(" through its closing paren (#14051). Every
+#   candidate line is normalized first via lib/strip-significant.awk —
+#   string/template/regex-literal BODIES and (for balance tracking) the
+#   trailing comment are stripped, so punctuation living inside a string
+#   argument or a comment cannot masquerade as call structure or as a
+#   suppression (#14051 review round 2: the original scan compared a
+#   stripped opening line against RAW candidate lines, which a comment's or
+#   a regex literal's stray '(' — or a noqa-shaped string of characters
+#   inside a string argument — could fool).
+#   Both opening- and closing-line placement are black-stable for a call
+#   that is genuinely multi-line (its collapsed single-line form would
+#   exceed the 120-char limit, so black has no reason to touch it). What is
+#   NOT stable: manually collapsing a wrapped call onto one line just to
+#   attach the comment — if that collapsed line is still over 120 chars,
+#   `black` re-splits it right back onto the closing-paren line regardless
+#   of where the comment started.
+#   Note: the doctor.py calls that motivated #14051 all carry their noqa on
+#   the OPENING line, which the pre-#14051 hook already honoured — the CI
+#   failure there was the *unscoped* wrapper blaming a PR for pre-existing
+#   violations elsewhere in the file, fixed by --changed-lines-only, not by
+#   this recognition change.
 # - ansible/ (deployed copies with doctest examples)
 #
 # Issue: #1082 - Pre-commit hooks not blocking print/console violations
@@ -39,13 +52,22 @@ source "$SCRIPT_DIR/lib/_common.sh"
 
 VIOLATIONS=0
 
-# #14051: a multi-line call's `# noqa`/`// noqa` often sits on the
-# closing-paren line, not the line the call opened on — the line-by-line scan
-# below never looks past the line it matched on, so that suppression was
-# invisible and the file became uneditable by anyone who merely touched it.
-#
-# Net unmatched '(' on a single line: opens minus closes. Used to detect a
-# call left open at end-of-line and to track when it closes again.
+# Normalize a line via lib/strip-significant.awk — see that file for the
+# per-language rules and the keep_comment contract. `sq` is passed in rather
+# than embedded so this invocation never has to quote a literal single quote.
+_strip_significant() {
+    local lang="$1" keep_comment="$2" line="$3"
+    awk -v lang="$lang" -v keep_comment="$keep_comment" -v sq="'" \
+        -f "$SCRIPT_DIR/lib/strip-significant.awk" <<< "$line"
+}
+
+_strip_py_for_balance() { _strip_significant py 0 "$1"; }
+_strip_py_for_noqa()    { _strip_significant py 1 "$1"; }
+_strip_ts_for_balance() { _strip_significant ts 0 "$1"; }
+_strip_ts_for_noqa()    { _strip_significant ts 1 "$1"; }
+
+# Net unmatched '(' on an already-normalized line: opens minus closes. Used to
+# detect a call left open at end-of-line and to track when it closes again.
 _paren_balance() {
     local s="$1"
     local opens closes
@@ -56,40 +78,62 @@ _paren_balance() {
 
 # Bounded forward scan: a print(/console.*( call that reads as still-open at
 # the end of the matched line may close (and carry its noqa) several lines
-# later. Minimal by design, per the issue: track paren balance line by line
-# until it returns to zero, and accept a noqa found on ANY line in between —
-# not a full parser, just enough for the one shape (#14051) reports. Capped so
-# a genuinely unbalanced file (mismatched quotes defeating the strip, etc.)
-# fails closed instead of scanning to EOF.
+# later. Balance is tracked on NORMALIZED text so a comment's or a regex
+# literal's stray '(' cannot hold the window open past the real closing
+# paren (#14051 review round 2). Stops at the first line where balance
+# returns to zero — never accepts a suppression past where the call actually
+# closes — and is capped so a line the strip still can't balance (should not
+# happen post-fix, kept as a fail-closed backstop) doesn't scan to EOF.
+#
+# Populates LAST_CALL_CLOSE_LINE (1-based, out-parameter): the line the
+# suppression was found on, the line the call's parens actually balanced on,
+# or the matched line itself if neither happened — used by the caller to
+# report a line RANGE for multi-line violations. Without the range, deleting
+# a closing-line noqa left the CI wrapper's added-line scoping blind to it,
+# since the reported (opening) line never changed (#14051 review finding 4).
 MULTILINE_NOQA_SCAN_LIMIT=20
+LAST_CALL_CLOSE_LINE=0
 
-# Args: <array-name> <next-line-index> <first-line-text> <noqa-regex>
-# array-name holds the whole file, 0-indexed; next-line-index is where to
-# resume scanning (the line after the one that matched).
+# Args: <array-name> <next-idx> <first-line-raw> <noqa-regex> <match-line-num>
+#       <balance-strip-fn> <noqa-strip-fn>
 suppressed_in_multiline_call() {
     local -n _lines_ref="$1"
-    local next_idx="$2"
-    local first_line="$3"
-    local noqa_regex="$4"
+    local next_idx="$2" first_line="$3" noqa_regex="$4" match_line_num="$5"
+    local balance_fn="$6" noqa_fn="$7"
 
+    LAST_CALL_CLOSE_LINE="$match_line_num"
     local balance
-    balance=$(_paren_balance "$first_line")
+    balance=$(_paren_balance "$("$balance_fn" "$first_line")")
     [ "$balance" -le 0 ] && return 1  # closes on the same line — not multi-line
 
-    local scanned=0 j="$next_idx"
-    local total="${#_lines_ref[@]}"
-
+    local scanned=0 j="$next_idx" total="${#_lines_ref[@]}"
     while [ "$balance" -gt 0 ] && [ "$j" -lt "$total" ] && [ "$scanned" -lt "$MULTILINE_NOQA_SCAN_LIMIT" ]; do
-        local candidate="${_lines_ref[$j]}"
-        if printf '%s' "$candidate" | grep -qE "$noqa_regex"; then
+        local candidate="${_lines_ref[$j]}" candidate_line=$((j + 1))
+        if "$noqa_fn" "$candidate" | grep -qE "$noqa_regex"; then
+            LAST_CALL_CLOSE_LINE="$candidate_line"
             return 0
         fi
-        balance=$((balance + $(_paren_balance "$candidate")))
+        balance=$((balance + $(_paren_balance "$("$balance_fn" "$candidate")")))
+        [ "$balance" -le 0 ] && LAST_CALL_CLOSE_LINE="$candidate_line"
         j=$((j + 1))
         scanned=$((scanned + 1))
     done
 
     return 1
+}
+
+# Report a VIOLATION, as a line RANGE when the call spans more than one line
+# (#14051 review finding 4) so the CI wrapper's --changed-lines-only key
+# comparison covers every line the suppression could live on.
+report_violation() {
+    local file="$1" line_num="$2" close_line="$3" code="$4"
+    if [ "$close_line" -gt "$line_num" ]; then
+        echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}-${close_line}"
+    else
+        echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
+    fi
+    echo "    ${code:0:100}"
+    ((VIOLATIONS++))
 }
 
 # Get Python files to scan (production code only).
@@ -118,90 +162,55 @@ get_staged_ts_files() {
         grep -v -E '(autobot-browser-worker/)' || true  # Node.js server: console.* is appropriate
 }
 
-# Check a Python file for print() calls
-check_python_print() {
-    local file="$1"
+# Shared driver: both languages are "read file, walk lines, skip the
+# language's own comment/doc-comment lines, match the call on a normalized
+# line, resolve any multi-line suppression, report" — only the regexes and
+# strip functions differ (#14051 review finding 6: check_python_print and
+# check_ts_console had grown past the ≤30-line convention by duplicating
+# this exact shape).
+# Args: <file> <skip-regex> <match-regex> <noqa-regex> <balance-fn> <noqa-fn>
+_scan_file_for_calls() {
+    local file="$1" skip_regex="$2" match_regex="$3" noqa_regex="$4"
+    local balance_fn="$5" noqa_fn="$6"
     local -a lines
     mapfile -t lines < "$file"
-    local total="${#lines[@]}"
-    local idx=0
+    local total="${#lines[@]}" idx=0
 
     while [ "$idx" -lt "$total" ]; do
-        local line="${lines[$idx]}"
-        local line_num=$((idx + 1))
+        local line="${lines[$idx]}" line_num=$((idx + 1))
         idx=$((idx + 1))
-
-        # Skip empty lines
         [[ -z "$line" ]] && continue
+        [[ "$line" =~ $skip_regex ]] && continue
 
-        # Skip comments
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        # Strings (TS also: templates/regex bodies) stripped — a noqa or a
+        # call MENTIONED inside one must not count (#14051 findings 1/2) —
+        # comment kept; also what the call match below runs against.
+        local sig
+        sig=$("$noqa_fn" "$line")
+        printf '%s' "$sig" | grep -qE "$noqa_regex" && continue
 
-        # Skip noqa exemption (specific "noqa: print" or bare "noqa" suppressing all rules)
-        echo "$line" | grep -qE '# noqa(: print)?($| )' && continue
-
-        # Strip quoted spans BEFORE matching (#13880). The comment below used to
-        # claim string definitions were skipped, but a word boundary alone does
-        # not do that: `"... e.g. \`print(json.dumps(x))\` ..."` inside a prompt
-        # or docstring was reported as a logging violation. Removing "..." and
-        # '...' spans first keeps real calls (`print("hi")` -> `print()`, still
-        # matched) while dropping mentions (`log.info("use print(x)")` ->
-        # `log.info()`, no longer matched).
-        # Known limitation: line-based, so a print( inside a TRIPLE-quoted block
-        # spanning lines is still reported. Add `# noqa: print` there.
-        stripped=$(printf '%s' "$line" | sed 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')
-
-        # Match actual print( calls — word boundary before print
-        if printf '%s' "$stripped" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
-            # #14051: the call may still be open at end-of-line (multi-line
-            # args) — check forward lines up to the closing paren for a noqa
-            # before reporting.
-            if suppressed_in_multiline_call lines "$idx" "$stripped" '# noqa(: print)?($| )'; then
+        if printf '%s' "$sig" | grep -qE "$match_regex"; then
+            if suppressed_in_multiline_call lines "$idx" "$line" "$noqa_regex" \
+                "$line_num" "$balance_fn" "$noqa_fn"; then
                 continue
             fi
-            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
-            echo "    ${line:0:100}"
-            ((VIOLATIONS++))
+            report_violation "$file" "$line_num" "$LAST_CALL_CLOSE_LINE" "$line"
         fi
     done
 }
 
+# Check a Python file for print() calls
+check_python_print() {
+    _scan_file_for_calls "$1" '^[[:space:]]*#' \
+        '(^|[^a-zA-Z0-9_.])print\s*\(' '# noqa(: print)?($| )' \
+        _strip_py_for_balance _strip_py_for_noqa
+}
+
 # Check a TypeScript/Vue file for console.* calls
 check_ts_console() {
-    local file="$1"
-    local -a lines
-    mapfile -t lines < "$file"
-    local total="${#lines[@]}"
-    local idx=0
-
-    while [ "$idx" -lt "$total" ]; do
-        local line="${lines[$idx]}"
-        local line_num=$((idx + 1))
-        idx=$((idx + 1))
-
-        # Skip empty lines
-        [[ -z "$line" ]] && continue
-
-        # Skip comments (single-line)
-        [[ "$line" =~ ^[[:space:]]*//.* ]] && continue
-
-        # Skip noqa exemption
-        echo "$line" | grep -q 'noqa: console' && continue
-
-        # Skip lines inside JSDoc/multiline comments (starts with *)
-        [[ "$line" =~ ^[[:space:]]*\* ]] && continue
-
-        # Match console.log/warn/error/debug/info calls
-        if echo "$line" | grep -qE 'console\.(log|warn|error|debug|info)\s*\('; then
-            # #14051: same multi-line-suppression gap as Python print().
-            if suppressed_in_multiline_call lines "$idx" "$line" 'noqa: console'; then
-                continue
-            fi
-            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
-            echo "    ${line:0:100}"
-            ((VIOLATIONS++))
-        fi
-    done
+    _scan_file_for_calls "$1" '^[[:space:]]*(//.*|\*)' \
+        'console\.(log|warn|error|debug|info)\s*\(' 'noqa: console' \
+        _strip_ts_for_balance _strip_ts_for_noqa
 }
 
 main() {

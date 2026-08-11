@@ -171,9 +171,7 @@ class TestPathspecIsNotShellExpanded:
         assert result.returncode != 0, "nested violation must still be caught"
 
     @pytest.mark.parametrize("bad_ext", [".py", " py", "py!", "p y"])
-    def test_malformed_ext_exits_2_rather_than_matching_nothing(
-        self, tmp_path: Path, bad_ext: str
-    ) -> None:
+    def test_malformed_ext_exits_2_rather_than_matching_nothing(self, tmp_path: Path, bad_ext: str) -> None:
         """A pathspec like `*..py` matches nothing and would read as 'clean'."""
         validator = tmp_path / "check_always_fail.py"
         validator.write_text("import sys; sys.exit(1)\n", encoding="utf-8")
@@ -279,9 +277,7 @@ def _amend_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True
-    )
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
     base = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
     ).stdout.strip()
@@ -290,9 +286,7 @@ def _amend_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
 
 def _commit_pr(tmp_path: Path) -> str:
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True
-    )
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True)
     return subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
     ).stdout.strip()
@@ -388,6 +382,11 @@ _MULTILINE_NO_NOQA = (
 _SINGLELINE_NO_NOQA = 'print("still a violation")\n'
 
 
+def _run_hook(tmp_path: Path, filename: str) -> subprocess.CompletedProcess:
+    """Invoke the hook directly (argv mode) with a RELATIVE filename, cwd=tmp_path."""
+    return subprocess.run(["bash", str(NO_PRINT_CONSOLE_HOOK), filename], cwd=tmp_path, capture_output=True, text=True)
+
+
 @pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
 class TestMultilineNoqaRecognition:
     """The hook's own multi-line scan (#14051), invoked directly (argv mode).
@@ -406,36 +405,35 @@ class TestMultilineNoqaRecognition:
     # exercised.
 
     def test_noqa_on_opening_line_is_recognised(self, tmp_path: Path) -> None:
+        """A REGRESSION guard, not forward-scan coverage: this shape is caught
+        by the pre-existing same-line check, and passes even with the
+        forward scan disabled entirely. See
+        test_noqa_on_closing_paren_line_is_recognised for a case that
+        actually exercises the scan."""
         (tmp_path / "m.py").write_text(_MULTILINE_NOQA_OPEN, encoding="utf-8")
-        result = subprocess.run(
-            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = _run_hook(tmp_path, "m.py")
         assert result.returncode == 0, result.stdout
         assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
 
     def test_noqa_on_closing_paren_line_is_recognised(self, tmp_path: Path) -> None:
-        """The exact shape from PR #14046: the comment sat on the `)` line."""
+        """The exact shape from PR #14046: the comment sat on the `)` line.
+        Genuinely exercises the forward scan — the opening line carries no
+        noqa at all."""
         (tmp_path / "m.py").write_text(_MULTILINE_NOQA_CLOSE, encoding="utf-8")
-        result = subprocess.run(
-            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = _run_hook(tmp_path, "m.py")
         assert result.returncode == 0, result.stdout
         assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
 
     def test_multiline_call_with_no_noqa_anywhere_still_fails(self, tmp_path: Path) -> None:
         """The scan must not become so permissive it stops catching real calls."""
         (tmp_path / "m.py").write_text(_MULTILINE_NO_NOQA, encoding="utf-8")
-        result = subprocess.run(
-            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = _run_hook(tmp_path, "m.py")
         assert result.returncode == 1, result.stdout
 
     def test_singleline_call_with_no_noqa_still_fails(self, tmp_path: Path) -> None:
         """Regression guard: the single-line path must be untouched by the scan."""
         (tmp_path / "m.py").write_text(_SINGLELINE_NO_NOQA, encoding="utf-8")
-        result = subprocess.run(
-            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.py"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = _run_hook(tmp_path, "m.py")
         assert result.returncode == 1, result.stdout
 
     def test_multiline_console_noqa_on_closing_line_is_recognised(self, tmp_path: Path) -> None:
@@ -448,11 +446,80 @@ class TestMultilineNoqaRecognition:
             "}\n",
             encoding="utf-8",
         )
-        result = subprocess.run(
-            ["bash", str(NO_PRINT_CONSOLE_HOOK), "m.ts"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = _run_hook(tmp_path, "m.ts")
         assert result.returncode == 0, result.stdout
         assert "No production files staged" not in result.stdout, "file was filtered, not scanned"
+
+
+@pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
+class TestMultilineScanDoesNotOverreach:
+    """#14051 code review round 2 (PR #14112): the forward scan seeded its
+    paren balance from a STRIPPED first line but then read RAW candidate
+    lines. Wherever raw parens diverged from real syntax — a trailing
+    comment's stray '(', a regex literal, a noqa-shaped string of characters
+    inside a string ARGUMENT — the window stayed open past the real closing
+    paren and could accept an unrelated noqa or hide a live violation. Every
+    case here failed (exit 0 — wrongly suppressed) against the hook at
+    63e957e2d and must fail (exit 1) here.
+    """
+
+    def test_unrelated_noqa_below_does_not_suppress_backtick_call(self, tmp_path: Path) -> None:
+        """A template literal's stray '(' held the scan window open long
+        enough to reach an unrelated noqa 19 lines down."""
+        lines = ["console.log(`fetching (${url}`);"] + [f"const a{i} = {i};" for i in range(18)]
+        lines.append('console.warn("x");  // noqa: console')
+        (tmp_path / "m.ts").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        result = _run_hook(tmp_path, "m.ts")
+        assert result.returncode == 1, result.stdout
+
+    def test_unrelated_noqa_below_does_not_suppress_regex_literal_call(self, tmp_path: Path) -> None:
+        """A regex literal's parenthesis character is not call structure."""
+        (tmp_path / "m.ts").write_text(
+            'console.log(str.replace(/\\(/g, ""));\nconst a = 1;\nconsole.warn("x");  // noqa: console\n',
+            encoding="utf-8",
+        )
+        result = _run_hook(tmp_path, "m.ts")
+        assert result.returncode == 1, result.stdout
+
+    def test_noqa_substring_inside_ts_string_does_not_suppress(self, tmp_path: Path) -> None:
+        """A noqa MENTIONED in a string argument, on a line the forward scan
+        visits WHILE the call is still open, must not suppress it. A fake
+        noqa on a line that never enters the scan window (e.g. because the
+        call already closed, or a standalone line elsewhere) proves nothing
+        about this bug — it has to be a live forward-scan candidate."""
+        (tmp_path / "m.ts").write_text(
+            'console.log(\n  "a message",\n  "write // noqa: console to skip"\n);\n',
+            encoding="utf-8",
+        )
+        result = _run_hook(tmp_path, "m.ts")
+        assert result.returncode == 1, result.stdout
+
+    def test_noqa_inside_python_string_argument_does_not_suppress(self, tmp_path: Path) -> None:
+        """The exact shape the hook's own quick-fix message prints:
+        'add # noqa to suppress this rule' — as a STRING, not a comment."""
+        (tmp_path / "m.py").write_text('print(\n    "add # noqa to suppress this rule",\n)\n', encoding="utf-8")
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
+
+    def test_trailing_comment_paren_does_not_open_scan_window(self, tmp_path: Path) -> None:
+        """A single-line call's own trailing comment must not be misread as
+        leaving the call open, reaching a `# noqa` on the next line down."""
+        (tmp_path / "m.py").write_text("print(x)  # emit the value (verbose mode\ny = g()  # noqa\n", encoding="utf-8")
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
+
+    def test_escaped_quote_does_not_defeat_the_strip(self, tmp_path: Path) -> None:
+        (tmp_path / "m.py").write_text('print("say \\" ( hi")\ny = g()  # noqa\n', encoding="utf-8")
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
+
+    def test_scan_bound_fails_closed(self, tmp_path: Path) -> None:
+        """A call that never resolves within the bound must still fail, not
+        read as suppressed just because the window ran out."""
+        lines = ["print("] + [f"    arg{i}," for i in range(25)] + [")  # noqa: print"]
+        (tmp_path / "m.py").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
 
 
 @pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
@@ -526,3 +593,28 @@ class TestChangedLinesOnlyPrintConsole:
         result = _run_wrapper(tmp_path, "pre-commit-no-print-console", base, head)
 
         assert result.returncode == 1
+
+    def test_deleting_a_closing_line_noqa_is_still_caught(self, tmp_path: Path) -> None:
+        """#14051 review round 2, finding 4: fix (1) lets a suppression live
+        on the CLOSING line; fix (2) scopes CI by the REPORTED line, which
+        the guard always put on the OPENING line. Combined, deleting a
+        closing-line noqa touched only that line — the diff hunk never
+        touches the opening line the guard reports at — so the scoped
+        wrapper read it as untouched and passed. The hook now reports a line
+        RANGE for multi-line violations so this diff hunk falls inside it."""
+        base, _ = _amend_pr(tmp_path, {"m.py": _MULTILINE_NOQA_CLOSE})
+        (tmp_path / "m.py").write_text(_MULTILINE_NO_NOQA, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        # Confirm the diff really is closing-line-only, or this test proves nothing.
+        diff = subprocess.run(
+            ["git", "diff", base, head, "--", "m.py"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout
+        removed = [ln for ln in diff.splitlines() if ln.startswith("-") and not ln.startswith("---")]
+        added = [ln for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
+        assert removed == ["-    )  # noqa: print"], f"expected exactly one removed (noqa) line:\n{diff}"
+        assert added == ["+    )"], f"expected exactly one added line:\n{diff}"
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 1, f"deleting a closing-line noqa was not caught:\n{result.stdout}"

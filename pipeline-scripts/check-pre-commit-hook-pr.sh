@@ -277,6 +277,23 @@ else
             else               { supp_text = supp_text block; suppressed++ }
             block = ""; keep = 1; is_violation = 0
         }
+        # A key is "path:N" or "path:N-M" (#14051): a hook may report a
+        # multi-line construct as the range it spans, since the ONE line it
+        # picks to report on can go untouched while a line elsewhere in
+        # the range changes — e.g. deleting a closing-paren noqa touches
+        # only that line, not the opening line the print/console guard
+        # reports at. A single reported line would make that edit invisible
+        # to this scope check. For a range, kept if ANY line in it was added.
+        function key_is_added(key,    spec, path, rng, s, e, i) {
+            match(key, /:[0-9]+(-[0-9]+)?$/)
+            spec = substr(key, RSTART + 1, RLENGTH - 1)
+            path = substr(key, 1, RSTART - 1)
+            if (spec !~ /-/) return (path ":" spec) in added
+            split(spec, rng, "-")
+            s = rng[1] + 0; e = rng[2] + 0
+            for (i = s; i <= e; i++) if ((path ":" i) in added) return 1
+            return 0
+        }
         BEGIN {
             split(ENVIRON["ADDED"], a, "\n")
             for (i in a) if (a[i] != "") added[a[i]] = 1
@@ -293,9 +310,9 @@ else
                 flush_block()
                 seen_header++
                 is_violation = 1
-                match(plain, /[^[:space:]]+:[0-9]+/)
+                match(plain, /[^[:space:]]+:[0-9]+(-[0-9]+)?/)
                 key = substr(plain, RSTART, RLENGTH)
-                keep = (key in added) ? 1 : 0
+                keep = key_is_added(key) ? 1 : 0
             }
             block = block $0 "\n"
             if (plain ~ /^[[:space:]]*$/) flush_block()
