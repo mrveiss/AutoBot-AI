@@ -8238,7 +8238,25 @@
       "viewCanvas": "Płótno",
       "canvasTabAll": "Wszystkie jednostki",
       "canvasUnit": "Jednostka {name}",
-      "canvasHint": "Shift+przeciągnięcie przesuwa, przewijanie przybliża, kliknij węzeł, aby zobaczyć szczegóły."
+      "canvasHint": "Shift+przeciągnięcie przesuwa, przewijanie przybliża, kliknij węzeł, aby zobaczyć szczegóły.",
+      "viewPeople": "Osoby",
+      "peopleLegend": "Rodzaje osób",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "Użytkownik",
+        "contact": "Kontakt"
+      },
+      "peopleKindHint": {
+        "agent": "Zatrudniony wykonawca",
+        "user": "Posiadacz konta, może się zalogować",
+        "contact": "Kontakt procesowy, bez konta"
+      },
+      "peopleNoTeam": "Poza zespołem",
+      "peopleTeamEmpty": "Brak członków w tym zespole.",
+      "peopleNoTeamsDefined": "Dla tej firmy nie zdefiniowano zespołów — wszyscy są wymienieni razem.",
+      "peopleTeamsCoverUsersOnly": "Zespoły obejmują posiadaczy kont. Agenci i kontakty nie należą do żadnego zespołu.",
+      "peopleContactNotInHierarchy": "Kontakty nie są częścią hierarchii raportowania — nie mają przełożonego, budżetu ani sygnału życia.",
+      "peopleEmpty": "Ta firma nie ma jeszcze żadnych osób."
     },
     "goals": {
       "title": "Goal Tree",

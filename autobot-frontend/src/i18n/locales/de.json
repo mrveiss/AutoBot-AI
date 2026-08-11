@@ -8238,7 +8238,25 @@
       "viewCanvas": "Leinwand",
       "canvasTabAll": "Alle Einheiten",
       "canvasUnit": "Einheit {name}",
-      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details.",
+      "viewPeople": "Personen",
+      "peopleLegend": "Personenarten",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "Benutzer",
+        "contact": "Kontakt"
+      },
+      "peopleKindHint": {
+        "agent": "Beauftragter Ausführender",
+        "user": "Kontoinhaber, kann sich anmelden",
+        "contact": "Prozesskontakt, kein Konto"
+      },
+      "peopleNoTeam": "Keinem Team zugeordnet",
+      "peopleTeamEmpty": "Keine Mitglieder in diesem Team.",
+      "peopleNoTeamsDefined": "Für dieses Unternehmen sind keine Teams definiert — alle werden gemeinsam aufgeführt.",
+      "peopleTeamsCoverUsersOnly": "Teams umfassen Kontoinhaber. Agenten und Kontakte gehören keinem Team an.",
+      "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
+      "peopleEmpty": "Dieses Unternehmen hat noch keine Personen."
     },
     "goals": {
       "title": "Zielbaum",

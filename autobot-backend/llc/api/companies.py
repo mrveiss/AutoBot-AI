@@ -19,6 +19,7 @@ Route group: /llc/companies
   POST   /{id}/members             — add a member (GH#8223)
   DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
   GET    /{id}/members             — list members (GH#8223)
+  GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
   POST   /{id}/export/snapshot     — full-state export for backup/migration (GH#8245)
 
@@ -1109,6 +1110,96 @@ async def get_org_chart(
     roots.extend(await _compose_human_nodes(session, company_id))
 
     return OrgChartResponse(nodes=roots)
+
+
+# ------------------------------------------------------------------
+# Company teams (#13938) — read-only projection of existing team data
+# ------------------------------------------------------------------
+
+
+class CompanyTeam(BaseModel):
+    """One team of a company, with the user ids that belong to it.
+
+    Read-only projection of ``teams`` / ``team_memberships`` — the team data
+    plane that already exists (#6042). No new table, no migration, and no new
+    vocabulary: a company inside AutoBot *is* an ``Organization`` (see
+    ``CompanyService.delete``, which soft-deletes ``Organization.deleted_at``),
+    so ``Team.org_id == company_id`` is the company's own team list.
+
+    Only ``member_user_ids`` is returned because teams cover exactly one of the
+    three person kinds the Org Chart shows: account holders. Hired agents
+    (``agent_org_nodes``) and contacts (``llc_contacts``) carry no team column,
+    so inventing a team for them would be fabricated grouping. The frontend
+    renders them under an explicit "not in a team" bucket instead.
+    """
+
+    id: str
+    name: str
+    member_user_ids: List[str]
+
+
+class CompanyTeamsResponse(BaseModel):
+    teams: List[CompanyTeam]
+
+
+@router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
+async def get_company_teams(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> CompanyTeamsResponse:
+    """Return the company's teams and their member user ids (#13938).
+
+    Company-scoped by path parameter through the same shared
+    :func:`assert_company_access` guard the rest of the LLC router uses, rather
+    than by the ambient org context that ``/teams`` relies on — a platform
+    admin viewing another company's Org Chart must see that company's teams,
+    not their own.
+
+    Two queries, both bounded by the company: teams, then the memberships of
+    those teams. Soft-deleted teams are excluded, matching every other team
+    listing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from user_management.models.team import Team, TeamMembership  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    team_rows = (
+        (
+            await session.execute(
+                select(Team)
+                .where(Team.org_id == company_id, Team.deleted_at.is_(None))
+                .order_by(Team.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not team_rows:
+        return CompanyTeamsResponse(teams=[])
+
+    team_ids = [team.id for team in team_rows]
+    membership_rows = (
+        await session.execute(
+            select(TeamMembership.team_id, TeamMembership.user_id)
+            .where(TeamMembership.team_id.in_(team_ids))
+            .order_by(TeamMembership.joined_at)
+        )
+    ).all()
+
+    members_by_team: Dict[uuid.UUID, List[str]] = {team_id: [] for team_id in team_ids}
+    for team_id, user_id in membership_rows:
+        members_by_team[team_id].append(str(user_id))
+
+    return CompanyTeamsResponse(
+        teams=[
+            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id])
+            for team in team_rows
+        ]
+    )
 
 
 # Capability-search result bounds. These literals predate #13936; they were named

@@ -8238,7 +8238,25 @@
       "viewCanvas": "Tela",
       "canvasTabAll": "Todas as unidades",
       "canvasUnit": "Unidade {name}",
-      "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes."
+      "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes.",
+      "viewPeople": "Pessoas",
+      "peopleLegend": "Tipos de pessoa",
+      "peopleKind": {
+        "agent": "Agente",
+        "user": "Utilizador",
+        "contact": "Contacto"
+      },
+      "peopleKindHint": {
+        "agent": "Executor contratado",
+        "user": "Titular de conta, pode iniciar sessão",
+        "contact": "Contacto de processo, sem conta"
+      },
+      "peopleNoTeam": "Sem equipa",
+      "peopleTeamEmpty": "Sem membros nesta equipa.",
+      "peopleNoTeamsDefined": "Não há equipas definidas para esta empresa — todos são listados em conjunto.",
+      "peopleTeamsCoverUsersOnly": "As equipas abrangem titulares de conta. Agentes e contactos não pertencem a nenhuma equipa.",
+      "peopleContactNotInHierarchy": "Os contactos não fazem parte da hierarquia de reporte — não têm responsável, orçamento nem heartbeat.",
+      "peopleEmpty": "Esta empresa ainda não tem pessoas."
     },
     "goals": {
       "title": "Árvore de objetivos",

@@ -8238,7 +8238,25 @@
       "viewCanvas": "لوحة",
       "canvasTabAll": "كل الوحدات",
       "canvasUnit": "وحدة {name}",
-      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
+      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل.",
+      "viewPeople": "الأشخاص",
+      "peopleLegend": "أنواع الأشخاص",
+      "peopleKind": {
+        "agent": "وكيل",
+        "user": "مستخدم",
+        "contact": "جهة اتصال"
+      },
+      "peopleKindHint": {
+        "agent": "منفّذ متعاقد",
+        "user": "صاحب حساب، يمكنه تسجيل الدخول",
+        "contact": "جهة اتصال في العملية، بلا حساب"
+      },
+      "peopleNoTeam": "بلا فريق",
+      "peopleTeamEmpty": "لا يوجد أعضاء في هذا الفريق.",
+      "peopleNoTeamsDefined": "لا توجد فرق معرَّفة لهذه الشركة — يُعرض الجميع معًا.",
+      "peopleTeamsCoverUsersOnly": "تشمل الفرق أصحاب الحسابات. الوكلاء وجهات الاتصال لا ينتمون إلى أي فريق.",
+      "peopleContactNotInHierarchy": "جهات الاتصال ليست جزءًا من التسلسل الإداري — لا مدير لها ولا ميزانية ولا نبض.",
+      "peopleEmpty": "لا يوجد أشخاص في هذه الشركة بعد."
     },
     "goals": {
       "title": "Goal Tree",

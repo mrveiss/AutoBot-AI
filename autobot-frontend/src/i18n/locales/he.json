@@ -8238,7 +8238,25 @@
       "viewCanvas": "קנבס",
       "canvasTabAll": "כל היחידות",
       "canvasUnit": "יחידת {name}",
-      "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים."
+      "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים.",
+      "viewPeople": "אנשים",
+      "peopleLegend": "סוגי אנשים",
+      "peopleKind": {
+        "agent": "סוכן",
+        "user": "משתמש",
+        "contact": "איש קשר"
+      },
+      "peopleKindHint": {
+        "agent": "מבצע שנשכר",
+        "user": "בעל חשבון, יכול להתחבר",
+        "contact": "איש קשר בתהליך, ללא חשבון"
+      },
+      "peopleNoTeam": "ללא צוות",
+      "peopleTeamEmpty": "אין חברים בצוות הזה.",
+      "peopleNoTeamsDefined": "לא הוגדרו צוותים לחברה הזו — כולם מוצגים יחד.",
+      "peopleTeamsCoverUsersOnly": "צוותים מכסים בעלי חשבון. סוכנים ואנשי קשר אינם שייכים לאף צוות.",
+      "peopleContactNotInHierarchy": "אנשי קשר אינם חלק מהיררכיית הדיווח — אין להם מנהל, תקציב או פעימת לב.",
+      "peopleEmpty": "לחברה הזו אין עדיין אנשים."
     },
     "goals": {
       "title": "Goal Tree",

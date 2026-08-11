@@ -8238,7 +8238,25 @@
       "viewCanvas": "Canevas",
       "canvasTabAll": "Toutes les unités",
       "canvasUnit": "Unité {name}",
-      "canvasHint": "Maj+glisser pour déplacer, molette pour zoomer, cliquez sur un nœud pour les détails."
+      "canvasHint": "Maj+glisser pour déplacer, molette pour zoomer, cliquez sur un nœud pour les détails.",
+      "viewPeople": "Personnes",
+      "peopleLegend": "Types de personne",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "Utilisateur",
+        "contact": "Contact"
+      },
+      "peopleKindHint": {
+        "agent": "Exécutant recruté",
+        "user": "Titulaire d'un compte, peut se connecter",
+        "contact": "Contact de processus, sans compte"
+      },
+      "peopleNoTeam": "Sans équipe",
+      "peopleTeamEmpty": "Aucun membre dans cette équipe.",
+      "peopleNoTeamsDefined": "Aucune équipe n'est définie pour cette entreprise — tout le monde est listé ensemble.",
+      "peopleTeamsCoverUsersOnly": "Les équipes couvrent les titulaires de compte. Les agents et les contacts n'appartiennent à aucune équipe.",
+      "peopleContactNotInHierarchy": "Les contacts ne font pas partie de la hiérarchie de reporting : ils n'ont ni responsable, ni budget, ni battement de cœur.",
+      "peopleEmpty": "Cette entreprise n'a encore aucune personne."
     },
     "goals": {
       "title": "Arbre des objectifs",

@@ -8226,7 +8226,25 @@
       "viewCanvas": "Canvas",
       "canvasTabAll": "All units",
       "canvasUnit": "{name} unit",
-      "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details."
+      "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details.",
+      "viewPeople": "People",
+      "peopleLegend": "Person kinds",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "User",
+        "contact": "Contact"
+      },
+      "peopleKindHint": {
+        "agent": "Hired executor",
+        "user": "Account holder, can sign in",
+        "contact": "Process contact, no account"
+      },
+      "peopleNoTeam": "Not in a team",
+      "peopleTeamEmpty": "No members in this team.",
+      "peopleNoTeamsDefined": "No teams are defined for this company — everyone is listed together.",
+      "peopleTeamsCoverUsersOnly": "Teams cover account holders. Agents and contacts belong to no team.",
+      "peopleContactNotInHierarchy": "Contacts are not part of the reporting hierarchy — they have no manager, budget or heartbeat.",
+      "peopleEmpty": "This company has no people yet."
     },
     "goals": {
       "title": "Goal Tree",

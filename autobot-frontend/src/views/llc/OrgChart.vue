@@ -20,6 +20,13 @@ import {
   orgUnitRoots,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
+import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import {
+  buildOrgPeople,
+  countByKind,
+  groupPeopleByTeam,
+} from '@/composables/llc/orgPeople'
+import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -36,9 +43,26 @@ const terminating = ref(false) // in-flight guard — terminate is irreversible
 
 // GH#13939: second render of the same data — the nested tree stays the default.
 const ALL_UNITS_TAB = 'all'
-type OrgViewMode = 'tree' | 'canvas'
+// GH#13938: the People list is a third render of the company — the only one
+// that shows contacts, which are not hierarchy members and so appear in
+// neither the tree nor the canvas.
+type OrgViewMode = 'tree' | 'canvas' | 'people'
+const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people'] as const
+const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = {
+  tree: 'llc.orgChart.viewTree',
+  canvas: 'llc.orgChart.viewCanvas',
+  people: 'llc.orgChart.viewPeople',
+}
 const viewMode = ref<OrgViewMode>('tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
+
+// GH#13938: contacts and teams are fetched only when the People list is first
+// opened. The org chart's own mount stays a single request, and a terminate
+// reload keeps reloading exactly the hierarchy it changed.
+const contacts = ref<ContactSource[]>([])
+const teams = ref<CompanyTeam[]>([])
+const peopleLoaded = ref(false)
+const peopleLoading = ref(false)
 
 /**
  * One tab per unit, plus an "all units" tab — and no strip at all when nothing
@@ -108,8 +132,52 @@ watch(statusById, (statuses) => {
   }
 })
 
+/** Everyone in the company, of all three kinds, in one list (#13938). */
+const people = computed(() => buildOrgPeople(tree.value, contacts.value))
+
+const peopleGroups = computed(() => groupPeopleByTeam(people.value, teams.value))
+
+const peopleCounts = computed(() => countByKind(people.value))
+
+/**
+ * Load the two sources the People list needs beyond the org chart.
+ *
+ * Each is independent: a company with no contacts must still get its teams,
+ * and a teams endpoint failure must not blank the people. `Promise.allSettled`
+ * keeps a partial answer partial instead of turning it into an empty list.
+ */
+async function loadPeopleSources(): Promise<void> {
+  if (peopleLoaded.value || peopleLoading.value) return
+  const cid = await resolveCompanyId()
+  if (!cid) return
+  peopleLoading.value = true
+  const [contactsResult, teamsResult] = await Promise.allSettled([
+    api.get<ContactSource[]>(`/api/llc/contacts/${cid}`),
+    api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
+  ])
+  if (contactsResult.status === 'fulfilled') {
+    contacts.value = Array.isArray(contactsResult.value) ? contactsResult.value : []
+  } else {
+    logger.error('Failed to fetch contacts:', contactsResult.reason)
+  }
+  if (teamsResult.status === 'fulfilled') {
+    teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
+  } else {
+    logger.error('Failed to fetch company teams:', teamsResult.reason)
+  }
+  peopleLoaded.value = true
+  peopleLoading.value = false
+}
+
 function setViewMode(mode: OrgViewMode) {
   viewMode.value = mode
+  if (mode === 'people') void loadPeopleSources()
+}
+
+/** A People-list selection opens the same drawer the tree and canvas open. */
+function onPersonSelected(orgNodeId: string) {
+  const node = flattenOrgNodes(tree.value).get(orgNodeId)
+  if (node) openDrawer(node)
 }
 
 /** Canvas selection opens the same drawer the tree opens. */
@@ -214,7 +282,7 @@ onMounted(fetchTree)
           :aria-label="t('llc.orgChart.viewMode')"
         >
           <button
-            v-for="mode in (['tree', 'canvas'] as const)"
+            v-for="mode in VIEW_MODES"
             :key="mode"
             class="px-3 py-1.5 text-sm transition-colors"
             :class="viewMode === mode
@@ -224,7 +292,7 @@ onMounted(fetchTree)
             :aria-pressed="viewMode === mode"
             @click="setViewMode(mode)"
           >
-            {{ mode === 'tree' ? t('llc.orgChart.viewTree') : t('llc.orgChart.viewCanvas') }}
+            {{ t(VIEW_MODE_LABEL_KEY[mode]) }}
           </button>
         </div>
         <button
@@ -251,7 +319,16 @@ onMounted(fetchTree)
 
     <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
 
-    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.empty') }}</div>
+    <!-- GH#13938: the People list carries its own empty state. An empty
+         hierarchy does not mean an empty company — a company can have contacts
+         and no agent or member at all, and short-circuiting here would report
+         "no people" over a list that has some. -->
+    <div
+      v-else-if="tree.length === 0 && !error && viewMode !== 'people'"
+      class="text-center py-12 text-autobot-text-muted"
+    >
+      {{ t('llc.orgChart.empty') }}
+    </div>
 
     <div v-else-if="viewMode === 'tree'" class="overflow-x-auto">
       <div class="min-w-max flex gap-6 items-start">
@@ -263,6 +340,20 @@ onMounted(fetchTree)
           @select="openDrawer"
         />
       </div>
+    </div>
+
+    <!-- GH#13938: teams and people of all three kinds — the only render that
+         shows contacts, which are not hierarchy members. -->
+    <div v-else-if="viewMode === 'people'">
+      <p v-if="peopleLoading" class="text-center py-6 text-autobot-text-muted">
+        {{ t('llc.orgChart.loading') }}
+      </p>
+      <OrgPeopleList
+        :groups="peopleGroups"
+        :counts="peopleCounts"
+        :has-teams="teams.length > 0"
+        @select="onPersonSelected"
+      />
     </div>
 
     <!-- GH#13939: same data on the existing workflow canvas — pan/zoom, no graph library -->

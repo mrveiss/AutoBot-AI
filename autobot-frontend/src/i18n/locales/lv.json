@@ -8238,7 +8238,25 @@
       "viewCanvas": "Audekls",
       "canvasTabAll": "Visas vienības",
       "canvasUnit": "Vienība {name}",
-      "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas."
+      "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas.",
+      "viewPeople": "Cilvēki",
+      "peopleLegend": "Personu veidi",
+      "peopleKind": {
+        "agent": "Aģents",
+        "user": "Lietotājs",
+        "contact": "Kontaktpersona"
+      },
+      "peopleKindHint": {
+        "agent": "Nolīgts izpildītājs",
+        "user": "Konta īpašnieks, var pieteikties",
+        "contact": "Procesa kontaktpersona, bez konta"
+      },
+      "peopleNoTeam": "Nav komandā",
+      "peopleTeamEmpty": "Šajā komandā nav dalībnieku.",
+      "peopleNoTeamsDefined": "Šim uzņēmumam nav definētu komandu — visi ir uzskaitīti kopā.",
+      "peopleTeamsCoverUsersOnly": "Komandas aptver kontu īpašniekus. Aģenti un kontaktpersonas nepieder nevienai komandai.",
+      "peopleContactNotInHierarchy": "Kontaktpersonas nav pakļautības hierarhijas daļa — tām nav vadītāja, budžeta vai sirdspukstu.",
+      "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka."
     },
     "goals": {
       "title": "Goal Tree",
