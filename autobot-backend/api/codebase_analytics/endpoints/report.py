@@ -481,6 +481,13 @@ BUG_PREDICTION_TIMEOUT = AnalyticsConfig.BUG_PREDICTION_TIMEOUT
 TOP_HIGH_RISK_FILES_LIMIT = AnalyticsConfig.TOP_HIGH_RISK_FILES_LIMIT
 # Maximum items to show in API endpoint section - from SSOT
 API_ENDPOINT_LIST_LIMIT = AnalyticsConfig.API_ENDPOINT_LIST_LIMIT
+# Issue #13602: deadlines for the /report fan-out. The grace margin lets an
+# analysis that bounds itself report its own, better-named timeout first; the
+# outer bound is the backstop for one that does not.
+ANALYSIS_DEADLINE_GRACE = 15.0
+# api_endpoint had no self-imposed timeout at all, which is the reported hang.
+API_ENDPOINT_ANALYSIS_TIMEOUT = TIMEOUT_HTTP_LONG
+PATTERN_ANALYSIS_TIMEOUT = 180.0
 
 
 # =============================================================================
@@ -1299,14 +1306,26 @@ def _build_analysis_task_list(
     use_semantic: bool,
     source_id: str | None = None,
     scan_root: Path | None = None,
-) -> List[Tuple[str, Any]]:
+) -> List[Tuple[str, Any, float]]:
     """
-    Build list of analysis tasks to run based on flags.
+    Build list of analysis tasks to run, each with its own deadline.
 
     Issue #620: Extracted from _run_parallel_analyses.
     Issue #12372: Thread source_id/scan_root into every sub-analysis so a
     report requested for one source never scans or caches another project's
     (or AutoBot's own) tree -- mirrors the #12356/#12374 cross-language fix.
+
+    Issue #13602: every entry carries a deadline as its third element. Four of
+    the five analyses wrapped themselves in ``asyncio.wait_for``; the fifth,
+    api_endpoint, did not, and that omission is the reported hang. The shared
+    analytics executor has 8 workers, so once slower analyses occupy them all,
+    an unbounded submission queues and never starts -- ``gather`` never returns
+    and the socket stays open with nothing logged. Carrying the deadline in the
+    tuple makes a task without one a type error rather than an oversight.
+
+    These are OUTER deadlines with a grace margin: an analysis that reports its
+    own timeout produces a better message naming the analysis, so it should win
+    the race. The outer bound only fires where there is no inner one.
     """
     tasks = []
     if include_bug_prediction:
@@ -1318,21 +1337,41 @@ def _build_analysis_task_list(
                     use_semantic=use_semantic,
                     source_id=source_id,
                 ),
+                BUG_PREDICTION_TIMEOUT + ANALYSIS_DEADLINE_GRACE,
             )
         )
     if include_api_analysis:
-        tasks.append(("api_endpoint", _get_api_endpoint_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "api_endpoint",
+                _get_api_endpoint_analysis(project_root=scan_root),
+                API_ENDPOINT_ANALYSIS_TIMEOUT,
+            )
+        )
     if include_duplicate_analysis:
-        tasks.append(("duplicate", _get_duplicate_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "duplicate",
+                _get_duplicate_analysis(project_root=scan_root),
+                TIMEOUT_HTTP_LONG + ANALYSIS_DEADLINE_GRACE,
+            )
+        )
     if include_cross_language_analysis:
         tasks.append(
             (
                 "cross_language",
                 _get_cross_language_analysis(source_id=source_id, project_root=scan_root),
+                TIMEOUT_HTTP_LONG + ANALYSIS_DEADLINE_GRACE,
             )
         )
     if include_pattern_analysis:
-        tasks.append(("pattern_analysis", _get_pattern_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "pattern_analysis",
+                _get_pattern_analysis(project_root=scan_root),
+                PATTERN_ANALYSIS_TIMEOUT + ANALYSIS_DEADLINE_GRACE,
+            )
+        )
     return tasks
 
 
@@ -1382,12 +1421,25 @@ async def _run_parallel_analyses(
     if not analysis_tasks:
         return result
 
-    # Run all analyses in parallel with individual error handling
-    results = await asyncio.gather(*[task for _, task in analysis_tasks], return_exceptions=True)
+    # #13602: every analysis is bounded here, not by remembering to wrap it at
+    # its own definition. gather() cannot outlast the slowest deadline.
+    results = await asyncio.gather(
+        *[asyncio.wait_for(task, timeout=deadline) for _, task, deadline in analysis_tasks],
+        return_exceptions=True,
+    )
 
     # Map results back to dict
-    for i, (task_name, _) in enumerate(analysis_tasks):
+    for i, (task_name, _, deadline) in enumerate(analysis_tasks):
         task_result = results[i]
+        if isinstance(task_result, asyncio.TimeoutError):
+            # Was silent before: an unbounded analysis produced no result and no
+            # log, so the report simply omitted the section with no explanation.
+            logger.warning(
+                "Analysis %s exceeded its %.0fs deadline and was abandoned",
+                task_name,
+                deadline,
+            )
+            continue
         if isinstance(task_result, Exception):
             logger.warning("Analysis %s failed: %s", task_name, task_result)
             continue

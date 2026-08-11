@@ -26,7 +26,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -104,6 +104,11 @@ MAX_BLOCKS_FOR_SIMILARITY = 500
 LSH_NUM_PERMUTATIONS = 128  # Higher = more precision, slower. 128=~95% recall, 256=~98%
 LSH_SIMILARITY_THRESHOLD = 0.5  # Minimum similarity for LSH candidate pairs
 LSH_ENABLED = True  # Set False to disable LSH and use O(n^2) fallback
+
+# Issue #13602: how often the long phases consult the cancel token. Checking
+# every item would cost more than the work between checks; every 500 bounds the
+# abandonment window to well under a second while staying free in the hot loop.
+CANCEL_CHECK_INTERVAL = 500
 
 
 # =============================================================================
@@ -438,6 +443,7 @@ def _build_minhash(token_set: Set[str], num_perm: int = LSH_NUM_PERMUTATIONS) ->
 def _build_minhash_signatures(
     blocks: List[CodeBlock],
     num_perm: int,
+    cancelled: "Callable[[], bool] | None" = None,
 ) -> Dict[int, MinHash]:
     """
     Build MinHash signatures for all code blocks.
@@ -447,12 +453,19 @@ def _build_minhash_signatures(
     Args:
         blocks: List of code blocks
         num_perm: Number of MinHash permutations
+        cancelled: #13602 — polled so an abandoned scan stops here. This is the
+            phase that dominates the runtime, and it had no cancellation point
+            at all, so a caller that had already timed out still waited on one
+            of eight shared executor threads until it finished.
 
     Returns:
         Dictionary mapping block index to MinHash signature
     """
     minhashes: Dict[int, MinHash] = {}
     for idx, block in enumerate(blocks):
+        if cancelled is not None and idx % CANCEL_CHECK_INTERVAL == 0 and cancelled():
+            logger.info("MinHash signature build cancelled at %d/%d blocks", idx, len(blocks))
+            return minhashes
         token_set = block.token_set if block.token_set else set(block.normalized_content.split())
         if token_set:
             minhashes[idx] = _build_minhash(token_set, num_perm)
@@ -536,6 +549,7 @@ def _find_lsh_candidates(
     blocks: List[CodeBlock],
     threshold: float = LSH_SIMILARITY_THRESHOLD,
     num_perm: int = LSH_NUM_PERMUTATIONS,
+    cancelled: "Callable[[], bool] | None" = None,
 ) -> List[Tuple[int, int, float]]:
     """
     Find candidate duplicate pairs using Locality-Sensitive Hashing.
@@ -576,7 +590,9 @@ def _find_lsh_candidates(
     )
 
     # Phase 1: Build MinHash signatures - O(n) (Issue #665: uses helper)
-    minhashes = _build_minhash_signatures(blocks, num_perm)
+    minhashes = _build_minhash_signatures(blocks, num_perm, cancelled=cancelled)
+    if cancelled is not None and cancelled():
+        return []
 
     # Phase 2: Create LSH index - O(n) (Issue #665: uses helper)
     lsh = _build_lsh_index(minhashes, threshold, num_perm)
@@ -715,9 +731,23 @@ class DuplicateCodeDetector(_BaseClass):
         return files
 
     def _extract_all_blocks(self, files: List[Path]) -> List[CodeBlock]:
-        """Extract code blocks from all files (Issue #560: extracted)."""
+        """Extract code blocks from all files (Issue #560: extracted).
+
+        #13602: honours the cancel token. #12779 added the token but consulted
+        it only inside the os.walk loop — 0.14 s of a run whose remaining phases
+        measured over six minutes on a single tree. So a scan the caller had
+        abandoned still ran to completion holding one of eight executor threads,
+        which is the starvation that makes unrelated endpoints hang.
+        """
         all_blocks: List[CodeBlock] = []
-        for file_path in files:
+        for index, file_path in enumerate(files):
+            if index % CANCEL_CHECK_INTERVAL == 0 and self._cancelled():
+                logger.info(
+                    "Block extraction cancelled after %d/%d files",
+                    index,
+                    len(files),
+                )
+                return all_blocks
             try:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
                 blocks = _extract_code_blocks(str(file_path), content)
@@ -901,6 +931,7 @@ class DuplicateCodeDetector(_BaseClass):
                 all_blocks,
                 threshold=LSH_SIMILARITY_THRESHOLD,
                 num_perm=LSH_NUM_PERMUTATIONS,
+                cancelled=self._cancelled,
             )
 
             return self._process_lsh_candidates(all_blocks, lsh_candidates, seen_pairs)
@@ -950,6 +981,12 @@ class DuplicateCodeDetector(_BaseClass):
         # Extract all code blocks
         all_blocks = self._extract_all_blocks(files)
         logger.info("Extracted %d code blocks", len(all_blocks))
+        if self._cancelled():
+            # #13602: abandoned before the expensive similarity phases. Returning
+            # an empty analysis is honest — the caller has already stopped
+            # waiting — and it frees the executor thread the next request needs.
+            logger.info("Duplicate detection abandoned before similarity search")
+            return self._build_duplicate_analysis([], len(files))
 
         # Group blocks by hash for exact matches
         hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
@@ -1204,6 +1241,12 @@ class DuplicateCodeDetector(_BaseClass):
         # Extract all code blocks
         all_blocks = self._extract_all_blocks(files)
         logger.info("Extracted %d code blocks", len(all_blocks))
+        if self._cancelled():
+            # #13602: abandoned before the expensive similarity phases. Returning
+            # an empty analysis is honest — the caller has already stopped
+            # waiting — and it frees the executor thread the next request needs.
+            logger.info("Duplicate detection abandoned before similarity search")
+            return self._build_duplicate_analysis([], len(files))
 
         # Issue #665: Use helper to collect duplicates
         duplicates = await self._collect_all_duplicates(all_blocks)
