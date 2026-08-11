@@ -375,6 +375,21 @@ class TestHardcodedCategories:
         assert result.returncode != 0
         assert "general" in result.stdout
 
+    def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
+        # Regression for review of #14005: `["\x27]` in a POSIX bracket
+        # expression is NOT "double or single quote" — backslash has no
+        # special meaning inside `[...]` under GNU grep, so that class only
+        # ever matched one of the five literal characters ", \, x, 2, 7 and
+        # never an apostrophe. Every single-quoted literal silently passed
+        # both alternatives. Shape taken verbatim from the real miss found by
+        # the repo-wide audit: autobot-backend/agents/kb_librarian/librarian.py:50.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
     def test_allows_category_via_constants(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
@@ -392,6 +407,48 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {"src/q.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_matching_pair_outside_a_get_call(self, tmp_path: Path) -> None:
+        # The call-argument alternative is anchored to `.get(` so a
+        # comma-joined pair of matching string literals elsewhere — a tuple
+        # literal, an assertion — doesn't false-positive just because the
+        # vocabulary happens to line up.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'CATEGORIES = ("category", "general")\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_jsdoc_block_comment_continuation(self, tmp_path: Path) -> None:
+        # Regression from the repo-wide audit (review of #14005): fixing the
+        # quote class to actually match single-quoted literals surfaced
+        # `*`-prefixed JSDoc continuation lines — the hook's comment skip
+        # only recognized `#`/`//` prefixes, not `*` block-comment
+        # continuations. Deliberately a SINGLE quoted value (no ` | `) so
+        # this test exercises the comment skip alone, not the union-type
+        # skip below — a mutation dropping the `\*` comment skip must fail
+        # THIS test independent of the union-type one.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.ts": ("/**\n" " * mode: 'general'\n" " */\n" "export const x = 1\n"),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_typescript_string_literal_union_type(self, tmp_path: Path) -> None:
+        # Same audit finding: `mode?: 'semantic' | 'keyword' | 'hybrid' |
+        # 'auto'` is a TS union-type annotation enumerating accepted values,
+        # not a hardcoded default assignment — must stay unflagged.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/types.ts": (
+                    "export interface Options {\n" "  mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'\n" "}\n"
+                ),
+            },
         )
         assert result.returncode == 0
 

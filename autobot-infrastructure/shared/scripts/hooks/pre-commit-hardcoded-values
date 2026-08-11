@@ -324,13 +324,26 @@ check_hardcoded_categories() {
     while IFS= read -r line; do
         ((line_num++))
 
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
+        # Skip comments. Includes JSDoc/block-comment continuation lines
+        # (`* ...`) — the fixed quote class below now also matches
+        # single-quoted literals, which surfaced `* - mode: 'a' | 'b'`-style
+        # doc comments in .ts files as false positives (review of #14005).
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
             continue
         fi
 
         # Skip if using CategoryDefaults
         if echo "$line" | grep -qE '(CategoryDefaults\.|GENERAL|UNKNOWN|SEARCH_MODE)'; then
+            continue
+        fi
+
+        # Skip TypeScript/Flow string-literal union types, e.g.
+        # `mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'` — a type
+        # annotation enumerating the accepted values, not a hardcoded
+        # default. Same surfacing as the comment case above: the fixed
+        # quote class now matches these once single-quoted values are
+        # visible at all.
+        if echo "$line" | grep -qE '["'"'"'][[:space:]]*\|[[:space:]]*["'"'"']'; then
             continue
         fi
 
@@ -342,10 +355,21 @@ check_hardcoded_categories() {
         # through the keyword-style pattern whether or not it sits inside a
         # comprehension (#14005) — the comprehension itself isn't the cause, the
         # missing operator is.
-        if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["\x27](general|hybrid|unknown)["\x27]' || \
-           echo "$line" | grep -qE '["\x27](category|search_mode|mode)["\x27][[:space:]]*,[[:space:]]*["\x27](general|hybrid|unknown)["\x27]'; then
+        #
+        # Quote class is a LITERAL apostrophe inside the bracket expression
+        # (["'](...)["']), not `["\x27]`. Backslash has no special meaning
+        # inside a POSIX bracket expression under GNU grep, so `["\x27]`
+        # matches one of the five literal characters ", \, x, 2, 7 — never an
+        # apostrophe — and every single-quoted literal (`'general'`) silently
+        # passed both alternatives. Caught in review of #14005.
+        #
+        # The call-argument alternative is anchored to `.get(` so it only
+        # matches an actual dict-style lookup, not any comma-joined pair of
+        # matching string literals (e.g. a tuple literal or an assertion).
+        if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["'"'"'](general|hybrid|unknown)["'"'"']' || \
+           echo "$line" | grep -qE '\.get\([[:space:]]*["'"'"'](category|search_mode|mode)["'"'"'][[:space:]]*,[[:space:]]*["'"'"'](general|hybrid|unknown)["'"'"']'; then
             local value
-            value=$(echo "$line" | grep -oE '["\x27](general|hybrid|unknown)["\x27]' | head -1)
+            value=$(echo "$line" | grep -oE '["'"'"'](general|hybrid|unknown)["'"'"']' | head -1)
             echo -e "${RED}VIOLATION${NC} $file:$line_num"
             echo "  Hardcoded category/mode string: $value"
             echo -e "  ${CYAN}Fix: Use CategoryDefaults.GENERAL/SEARCH_MODE_HYBRID/UNKNOWN${NC}"
