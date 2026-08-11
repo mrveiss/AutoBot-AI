@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Análises do projeto"
+      },
+      "impact": {
+        "title": "Análise de impacto",
+        "hint": "O que chama transitivamente um nó — use antes de alterar ou remover.",
+        "nodeIdPlaceholder": "ex. pacote.modulo.NomeClasse",
+        "nodeIdLabel": "ID do nó do grafo",
+        "analyze": "Analisar",
+        "analyzing": "A analisar…",
+        "notIndexedTitle": "Grafo de código não construído",
+        "notIndexedBody": "Indexe esta fonte antes de analisar o impacto.",
+        "partialTitle": "Resultado parcial — é um limite inferior",
+        "partialDepth": "A travessia parou na profundidade {depth} com {frontier} nó(s) por expandir. Pode haver mais chamadores.",
+        "partialUnresolved": "{count} aresta(s) não puderam ser resolvidas, pelo que podem faltar chamadores.",
+        "callers": "chamadores",
+        "callersAtLeast": "chamadores (pelo menos)",
+        "callersHeading": "Chamadores alcançados",
+        "edgesResolved": "arestas resolvidas",
+        "edgesUnresolved": "arestas não resolvidas",
+        "depth": "profundidade alcançada",
+        "noCallersTitle": "Nenhum chamador encontrado",
+        "noCallersBody": "Nada no grafo indexado chama este nó.",
+        "skippedHeading": "Mostrar {count} aresta(s) não resolvida(s)"
       }
     },
     "patterns": {

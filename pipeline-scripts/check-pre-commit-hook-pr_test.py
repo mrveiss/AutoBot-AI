@@ -259,3 +259,107 @@ class TestPythonValidatorMode:
         base, head = _make_pr(tmp_path, {"src/foo.py": "x = 1\n"})
         result = _run_wrapper_python(tmp_path, validator, base, head, ext="py")
         assert result.returncode == 0
+
+
+def _amend_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
+    """A repo whose BASE already contains *files*, and whose PR edits one line.
+
+    The point of #13950 is the distinction between "in a file this PR touched"
+    and "on a line this PR added", so the fixture has to be able to express it:
+    the base carries pre-existing content and the PR appends to it.
+    """
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    for rel, content in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True
+    )
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    return base, ""
+
+
+def _commit_pr(tmp_path: Path) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True
+    )
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _run_scoped(tmp_path: Path, hook_name: str, base: str, head: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(WRAPPER), "--changed-lines-only", hook_name],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+    )
+
+
+# A violation the hardcoded-values hook reliably reports: a bare port literal.
+_OFFENDING = '    URL = "http://127.0.0.1:8001/api/health"\n'
+_CLEAN = "    VALUE = compute()\n"
+
+
+@pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
+class TestChangedLinesOnly:
+    """#13950: a PR answers for the lines it added, not for the file it touched."""
+
+    def test_a_pre_existing_violation_in_a_touched_file_does_not_fail(self, tmp_path: Path) -> None:
+        """The reported symptom: four PRs red on other commits' violations."""
+        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _OFFENDING})
+        (tmp_path / "m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
+
+        assert result.returncode == 0, f"pre-existing violation failed the build:\n{result.stdout}"
+        assert "did not touch" in result.stdout, "the suppressed violation was hidden rather than reported"
+
+    def test_a_violation_the_pr_adds_still_fails(self, tmp_path: Path) -> None:
+        """The property that must survive: this is a scope change, not an off switch.
+
+        Without this, the whole change is indistinguishable from deleting the
+        guard — which is exactly how a loosened check stops catching anything.
+        """
+        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _CLEAN})
+        (tmp_path / "m.py").write_text("def f():\n" + _CLEAN + _OFFENDING, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
+
+        assert result.returncode == 1, f"a newly added violation passed:\n{result.stdout}"
+        assert "lines this PR added" in result.stdout
+
+    def test_a_clean_pr_stays_clean(self, tmp_path: Path) -> None:
+        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _CLEAN})
+        (tmp_path / "m.py").write_text("def f():\n" + _CLEAN + "    OTHER = g()\n", encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-hardcoded-values", base, head)
+
+        assert result.returncode == 0
+
+    def test_the_default_mode_is_unchanged(self, tmp_path: Path) -> None:
+        """Without the flag, a pre-existing violation still fails.
+
+        The flag is opt-in precisely so every other hook keeps its behaviour;
+        if the default changed too, the blast radius would be every guard that
+        runs through this wrapper.
+        """
+        base, _ = _amend_pr(tmp_path, {"m.py": "def f():\n" + _OFFENDING})
+        (tmp_path / "m.py").write_text("def f():\n" + _OFFENDING + _CLEAN, encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_wrapper(tmp_path, "pre-commit-hardcoded-values", base, head)
+
+        assert result.returncode == 1

@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projekta analītika"
+      },
+      "impact": {
+        "title": "Ietekmes analīze",
+        "hint": "Kas tranzitīvi izsauc mezglu — pārbaudiet pirms mainīšanas vai dzēšanas.",
+        "nodeIdPlaceholder": "piem. pakotne.modulis.KlasesNosaukums",
+        "nodeIdLabel": "Grafa mezgla ID",
+        "analyze": "Analizēt",
+        "analyzing": "Analizē…",
+        "notIndexedTitle": "Koda grafs nav izveidots",
+        "notIndexedBody": "Indeksējiet šo avotu pirms ietekmes analīzes.",
+        "partialTitle": "Daļējs rezultāts — tā ir apakšējā robeža",
+        "partialDepth": "Apstaigāšana apstājās {depth}. līmenī ar {frontier} neizvērstiem mezgliem. Izsaucēju var būt vairāk.",
+        "partialUnresolved": "{count} šķautni(-es) neizdevās atrisināt, tāpēc daži izsaucēji var trūkt.",
+        "callers": "izsaucēji",
+        "callersAtLeast": "izsaucēji (vismaz)",
+        "callersHeading": "Sasniegtie izsaucēji",
+        "edgesResolved": "atrisinātās šķautnes",
+        "edgesUnresolved": "neatrisinātās šķautnes",
+        "depth": "sasniegtais dziļums",
+        "noCallersTitle": "Izsaucēji nav atrasti",
+        "noCallersBody": "Nekas indeksētajā grafā neizsauc šo mezglu.",
+        "skippedHeading": "Rādīt {count} neatrisinātās šķautnes"
       }
     },
     "patterns": {

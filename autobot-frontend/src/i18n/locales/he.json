@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "ניתוחי פרויקט"
+      },
+      "impact": {
+        "title": "ניתוח השפעה",
+        "hint": "מה קורא לצומת באופן טרנזיטיבי — בדוק לפני שינוי או הסרה.",
+        "nodeIdPlaceholder": "לדוגמה package.module.ClassName",
+        "nodeIdLabel": "מזהה צומת בגרף",
+        "analyze": "נתח",
+        "analyzing": "מנתח…",
+        "notIndexedTitle": "גרף הקוד לא נבנה",
+        "notIndexedBody": "בצע אינדוקס למקור זה לפני ניתוח ההשפעה.",
+        "partialTitle": "תוצאה חלקית — זהו חסם תחתון",
+        "partialDepth": "המעבר נעצר בעומק {depth} עם {frontier} צמתים שלא הורחבו. ייתכנו קוראים נוספים.",
+        "partialUnresolved": "לא ניתן היה לפתור {count} קשתות, ולכן ייתכן שחסרים קוראים.",
+        "callers": "קוראים",
+        "callersAtLeast": "קוראים (לפחות)",
+        "callersHeading": "קוראים שנמצאו",
+        "edgesResolved": "קשתות שנפתרו",
+        "edgesUnresolved": "קשתות שלא נפתרו",
+        "depth": "עומק שהושג",
+        "noCallersTitle": "לא נמצאו קוראים",
+        "noCallersBody": "דבר בגרף המאונדקס אינו קורא לצומת זה.",
+        "skippedHeading": "הצג {count} קשתות שלא נפתרו"
       }
     },
     "patterns": {
