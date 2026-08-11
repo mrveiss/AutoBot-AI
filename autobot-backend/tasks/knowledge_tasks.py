@@ -696,19 +696,26 @@ def _resolve_cache_directories() -> list:
     # the directory grows without bound for the life of the install. It is
     # neither `cache` nor `temp`, so the sweep above missed it.
     #
-    # Resolved through the writer's own helper, not `DATA_DIR / "..."`: the
-    # writer honours AUTOBOT_TOOL_OUTPUT_SPILL_ROOT first, so a hardcoded path
-    # here would sweep an empty directory forever while the real root grew.
+    # Resolved through the writer's own helper, not `DATA_DIR / "..."`, so the
+    # sweep cannot clean an empty directory while the real root grows.
+    #
+    # `sweepable_spill_root` returns None for an operator-chosen root: this
+    # sweep recursively unlinks by mtime alone, and every other candidate is
+    # AutoBot-owned by construction. Only the default under DATA_DIR is swept.
     #
     # Swept at `knowledge_cache_ttl_days` (default 7, mtime-based). A run
     # outliving that is not a real case, but dropping the TTL to hours would
     # start deleting artifacts a live run can still re-read.
     try:
-        from agent_loop.tool_output_spill import _spill_root
+        from agent_loop.tool_output_spill import sweepable_spill_root
 
-        candidates.append(_spill_root())
+        spill_root = sweepable_spill_root()
+        if spill_root is not None:
+            candidates.append(spill_root)
     except Exception:  # pragma: no cover - the sweep must not depend on the agent loop
-        logger.debug("tool-output spill root unavailable; skipping it in cleanup")
+        # Warned, not debugged: silence here restores the unbounded growth this
+        # entry exists to prevent.
+        logger.warning("tool-output spill root unavailable; skipping it in cleanup", exc_info=True)
 
     return [p for p in candidates if isinstance(p, Path) and p.exists()]
 

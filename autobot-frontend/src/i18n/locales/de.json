@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projektanalysen"
+      },
+      "impact": {
+        "title": "Auswirkungsanalyse",
+        "hint": "Was einen Knoten transitiv aufruft — vor Änderung oder Entfernung prüfen.",
+        "nodeIdPlaceholder": "z. B. paket.modul.KlassenName",
+        "nodeIdLabel": "Graph-Knoten-ID",
+        "analyze": "Analysieren",
+        "analyzing": "Analysiere…",
+        "notIndexedTitle": "Code-Graph nicht erstellt",
+        "notIndexedBody": "Indexieren Sie diese Quelle, bevor Sie die Auswirkungen analysieren.",
+        "partialTitle": "Teilergebnis — dies ist eine Untergrenze",
+        "partialDepth": "Der Durchlauf endete bei Tiefe {depth}; {frontier} Knoten wurden nicht expandiert. Es kann mehr Aufrufer geben.",
+        "partialUnresolved": "{count} Kante(n) konnten nicht aufgelöst werden, daher fehlen möglicherweise Aufrufer.",
+        "callers": "Aufrufer",
+        "callersAtLeast": "Aufrufer (mindestens)",
+        "callersHeading": "Erreichte Aufrufer",
+        "edgesResolved": "aufgelöste Kanten",
+        "edgesUnresolved": "nicht aufgelöste Kanten",
+        "depth": "erreichte Tiefe",
+        "noCallersTitle": "Keine Aufrufer gefunden",
+        "noCallersBody": "Nichts im indexierten Graphen ruft diesen Knoten auf.",
+        "skippedHeading": "{count} nicht aufgelöste Kante(n) anzeigen"
       }
     },
     "patterns": {

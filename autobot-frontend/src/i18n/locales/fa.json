@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "تحلیل‌های پروژه"
+      },
+      "impact": {
+        "title": "تحلیل اثر",
+        "hint": "چه چیزی به‌طور غیرمستقیم یک گره را فرا می‌خواند — پیش از تغییر یا حذف بررسی کنید.",
+        "nodeIdPlaceholder": "مثلاً package.module.ClassName",
+        "nodeIdLabel": "شناسه گره گراف",
+        "analyze": "تحلیل",
+        "analyzing": "در حال تحلیل…",
+        "notIndexedTitle": "گراف کد ساخته نشده است",
+        "notIndexedBody": "پیش از تحلیل اثر، این منبع را نمایه کنید.",
+        "partialTitle": "نتیجه ناقص — این یک کران پایین است",
+        "partialDepth": "پیمایش در عمق {depth} با {frontier} گره گسترش‌نیافته متوقف شد. ممکن است فراخوان‌های بیشتری وجود داشته باشد.",
+        "partialUnresolved": "{count} یال قابل حل نبود، بنابراین ممکن است برخی فراخوان‌ها جا مانده باشند.",
+        "callers": "فراخوان‌ها",
+        "callersAtLeast": "فراخوان‌ها (حداقل)",
+        "callersHeading": "فراخوان‌های یافت‌شده",
+        "edgesResolved": "یال‌های حل‌شده",
+        "edgesUnresolved": "یال‌های حل‌نشده",
+        "depth": "عمق طی‌شده",
+        "noCallersTitle": "فراخوانی یافت نشد",
+        "noCallersBody": "هیچ چیز در گراف نمایه‌شده این گره را فرا نمی‌خواند.",
+        "skippedHeading": "نمایش {count} یال حل‌نشده"
       }
     },
     "patterns": {

@@ -16,8 +16,20 @@
 # set for the PR/push context and invokes the hook in argv mode.
 #
 # Usage:
-#   bash pipeline-scripts/check-pre-commit-hook-pr.sh <hook-name>
+#   bash pipeline-scripts/check-pre-commit-hook-pr.sh [--changed-lines-only] <hook-name>
 #   bash pipeline-scripts/check-pre-commit-hook-pr.sh --python <validator-path> [--ext py,ts,...]
+#
+# --changed-lines-only (#13950)
+#   Report only violations on lines this PR actually added. Without it the hook
+#   reads each changed file whole, so editing one line of a legacy module makes
+#   the PR answerable for that file's entire backlog: four PRs in one session
+#   failed on violations blame attributes to other commits, and in two of them
+#   the constant the message suggested was the wrong concept (an RBAC role and a
+#   ceiling), so the mechanical fix would have gone green while encoding a
+#   different meaning. Opt-in per invocation rather than default, so hooks whose
+#   output this wrapper cannot parse keep their existing behaviour exactly.
+#   Suppressed violations are still printed, and the whole-file backlog stays
+#   visible by running the hook directly.
 #
 # Examples (in GitHub Actions steps):
 #   - run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
@@ -46,6 +58,7 @@ set -euo pipefail
 USE_PYTHON=false
 VALIDATOR_PATH=""
 HOOK_NAME=""
+CHANGED_LINES_ONLY=false
 # An ARRAY, not a string (#13880). As a string it was passed unquoted to
 # `git diff -- $EXT_GLOB`, so the SHELL expanded the globs against the cwd
 # before git saw them. In CI the cwd is the repo root, where `*.py` matches
@@ -59,6 +72,15 @@ if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <hook-name>" >&2
     echo "       $0 --python <validator-path> [--ext py,ts,...]" >&2
     exit 2
+fi
+
+if [ "$1" = "--changed-lines-only" ]; then
+    CHANGED_LINES_ONLY=true
+    shift
+    if [ "$#" -lt 1 ]; then
+        echo "Usage: $0 --changed-lines-only <hook-name>" >&2
+        exit 2
+    fi
 fi
 
 if [ "$1" = "--python" ]; then
@@ -165,7 +187,25 @@ fi
 # The trailing `|| true` normalises the while-loop's EOF exit status (1) under
 # `set -e`. It is scoped to the FILTER only — git's exit status is checked
 # above, so this no longer hides a failed diff the way the original did.
+# Generated clients are excluded from every guard this wrapper runs. They are
+# machine-produced from the OpenAPI schema, so a "hardcoded value", a stray
+# console call or a direct redis reference in one is a property of the
+# generator, not of anything a human wrote — nothing here is actionable.
+#
+# It is also a hard performance cliff. Measured 2026-08-11 against
+# pre-commit-hardcoded-values:
+#     3 changed .py files ......  3.7s
+#     generated/api.ts alone ...  >240s (173,665 lines, timed out)
+# Every PR that touches an API response model regenerates that file, which puts
+# it in this diff and turns `code-quality` — a REQUIRED check — into a 40-70
+# minute job. Observed on #13976, where it ran 73 minutes without finishing.
+#
+# NOTE: the `exclude:` key in .pre-commit-config.yaml does NOT cover this path —
+# the invocation below runs the hook script directly rather than through
+# pre-commit, so the filter has to live here. Both are set, for CI and for the
+# local `pre-commit run` respectively.
 files=$(printf '%s\n' "$raw_files" \
+    | grep -Ev '(^|/)(_generated|generated)/' \
     | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
     || true)
 
@@ -186,8 +226,120 @@ if $USE_PYTHON; then
     echo "Running ${VALIDATOR_PATH} against $count changed file(s)..."
     # shellcheck disable=SC2086
     echo "$files" | xargs python3 "$VALIDATOR_PATH"
-else
+elif ! $CHANGED_LINES_ONLY; then
     echo "Running ${HOOK_NAME} against $count changed file(s)..."
     # shellcheck disable=SC2086
     bash "$HOOK_PATH" $files
+else
+    echo "Running ${HOOK_NAME} against $count changed file(s), reporting only added lines..."
+
+    # The set of lines this PR added, as "path:line" keys. -U0 so hunk headers
+    # bound exactly the added lines and nothing either side of them.
+    added_lines=$(
+        for f in $files; do
+            git diff -U0 "$base" "$HEAD_SHA" -- "$f" | awk -v path="$f" '
+                /^@@/ {
+                    # @@ -a,b +c,d @@   (d omitted means 1)
+                    match($0, /\+[0-9]+(,[0-9]+)?/)
+                    spec = substr($0, RSTART + 1, RLENGTH - 1)
+                    n = split(spec, parts, ",")
+                    start = parts[1] + 0
+                    len = (n > 1) ? parts[2] + 0 : 1
+                    for (i = 0; i < len; i++) print path ":" (start + i)
+                }'
+        done
+    ) || {
+        echo "FATAL: could not compute the added-line set — refusing to report clean." >&2
+        exit 1
+    }
+
+    set +e
+    hook_output=$(bash "$HOOK_PATH" $files 2>&1)
+    hook_status=$?
+    set -e
+
+    if [ "$hook_status" -eq 0 ]; then
+        printf '%s\n' "$hook_output"
+        exit 0
+    fi
+
+    # Partition the hook's violation blocks. A block starts at a VIOLATION
+    # header carrying "path:line" and runs to the next blank line.
+    filtered=$(printf '%s\n' "$hook_output" | ADDED="$added_lines" awk '
+        # is_violation distinguishes a real violation block from the hook'"'"'s
+        # banner and trailer. Counting those as kept reported "6 violations on
+        # lines this PR added" for a PR that added one clean line — the summary
+        # would have contradicted the (correct) suppression right above it.
+        function flush_block() {
+            if (block == "") return
+            if (!is_violation) { kept_text = kept_text block }
+            else if (keep)     { kept_text = kept_text block; kept++ }
+            else               { supp_text = supp_text block; suppressed++ }
+            block = ""; keep = 1; is_violation = 0
+        }
+        BEGIN {
+            split(ENVIRON["ADDED"], a, "\n")
+            for (i in a) if (a[i] != "") added[a[i]] = 1
+            keep = 1
+        }
+        {
+            plain = $0
+            gsub(/\033\[[0-9;]*m/, "", plain)
+            # The hook'"'"'s trailer counts what the hook found across whole files.
+            # In scoped mode this wrapper decides, so printing "COMMIT BLOCKED"
+            # next to "not failing the build" would contradict the verdict.
+            if (plain ~ /COMMIT BLOCKED/) next
+            if (plain ~ /VIOLATION[[:space:]]+[^[:space:]]+:[0-9]+/) {
+                flush_block()
+                seen_header++
+                is_violation = 1
+                match(plain, /[^[:space:]]+:[0-9]+/)
+                key = substr(plain, RSTART, RLENGTH)
+                keep = (key in added) ? 1 : 0
+            }
+            block = block $0 "\n"
+            if (plain ~ /^[[:space:]]*$/) flush_block()
+        }
+        END {
+            flush_block()
+            print "@@HEADERS@@" seen_header
+            print "@@KEPT@@" kept
+            print "@@SUPPRESSED@@" suppressed
+            print "@@KEPTTEXT@@"
+            printf "%s", kept_text
+            print "@@SUPPTEXT@@"
+            printf "%s", supp_text
+        }
+    ')
+
+    seen_headers=$(printf '%s\n' "$filtered" | sed -n 's/^@@HEADERS@@//p')
+    kept_count=$(printf '%s\n' "$filtered" | sed -n 's/^@@KEPT@@//p')
+    supp_count=$(printf '%s\n' "$filtered" | sed -n 's/^@@SUPPRESSED@@//p')
+
+    # Fail closed. The hook said "violations" and we parsed none, so the output
+    # format is not one this filter understands. Suppressing an unparsed
+    # failure would turn a real regression into a green build — the precise
+    # failure mode #13880 was about, reached from the other direction.
+    if [ "${seen_headers:-0}" -eq 0 ]; then
+        printf '%s\n' "$hook_output"
+        echo "FATAL: ${HOOK_NAME} failed but produced no parseable 'file:line' violations." >&2
+        echo "  --changed-lines-only cannot scope this output, and refuses to drop it." >&2
+        exit "$hook_status"
+    fi
+
+    printf '%s\n' "$filtered" | sed -n '/^@@KEPTTEXT@@$/,/^@@SUPPTEXT@@$/p' | sed '1d;$d'
+
+    if [ "${supp_count:-0}" -gt 0 ]; then
+        echo "----------------------------------------"
+        echo "${supp_count} pre-existing violation(s) on lines this PR did not touch (#13950):"
+        printf '%s\n' "$filtered" | sed -n '/^@@SUPPTEXT@@$/,$p' | sed '1d'
+        echo "Not failing the build for these. Run the hook directly for the whole-file backlog."
+    fi
+
+    if [ "${kept_count:-0}" -gt 0 ]; then
+        echo "${kept_count} violation(s) on lines this PR added."
+        exit 1
+    fi
+    echo "No violations on lines this PR added."
+    exit 0
 fi

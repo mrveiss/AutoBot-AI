@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Analyses du projet"
+      },
+      "impact": {
+        "title": "Analyse d'impact",
+        "hint": "Ce qui appelle transitivement un nœud — à consulter avant de le modifier ou le supprimer.",
+        "nodeIdPlaceholder": "ex. paquet.module.NomClasse",
+        "nodeIdLabel": "Identifiant du nœud",
+        "analyze": "Analyser",
+        "analyzing": "Analyse…",
+        "notIndexedTitle": "Graphe de code non construit",
+        "notIndexedBody": "Indexez cette source avant d'analyser l'impact.",
+        "partialTitle": "Résultat partiel — il s'agit d'une borne inférieure",
+        "partialDepth": "Le parcours s'est arrêté à la profondeur {depth} avec {frontier} nœud(s) non développé(s). Il peut y avoir d'autres appelants.",
+        "partialUnresolved": "{count} arête(s) n'ont pas pu être résolues ; des appelants peuvent manquer.",
+        "callers": "appelants",
+        "callersAtLeast": "appelants (au moins)",
+        "callersHeading": "Appelants atteints",
+        "edgesResolved": "arêtes résolues",
+        "edgesUnresolved": "arêtes non résolues",
+        "depth": "profondeur atteinte",
+        "noCallersTitle": "Aucun appelant trouvé",
+        "noCallersBody": "Rien dans le graphe indexé n'appelle ce nœud.",
+        "skippedHeading": "Afficher {count} arête(s) non résolue(s)"
       }
     },
     "patterns": {

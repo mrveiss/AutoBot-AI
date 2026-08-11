@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "پروجیکٹ کے تجزیات"
+      },
+      "impact": {
+        "title": "اثر کا تجزیہ",
+        "hint": "کون سی چیز بالواسطہ کسی نوڈ کو کال کرتی ہے — تبدیلی یا حذف سے پہلے دیکھیں۔",
+        "nodeIdPlaceholder": "مثلاً package.module.ClassName",
+        "nodeIdLabel": "گراف نوڈ آئی ڈی",
+        "analyze": "تجزیہ کریں",
+        "analyzing": "تجزیہ جاری…",
+        "notIndexedTitle": "کوڈ گراف نہیں بنایا گیا",
+        "notIndexedBody": "اثر کا تجزیہ کرنے سے پہلے اس ماخذ کو انڈیکس کریں۔",
+        "partialTitle": "جزوی نتیجہ — یہ کم از کم حد ہے",
+        "partialDepth": "چال {depth} گہرائی پر رک گئی، {frontier} نوڈز باقی رہ گئے۔ مزید کالرز ہو سکتے ہیں۔",
+        "partialUnresolved": "{count} کنارے حل نہیں ہو سکے، اس لیے کچھ کالرز غائب ہو سکتے ہیں۔",
+        "callers": "کالرز",
+        "callersAtLeast": "کالرز (کم از کم)",
+        "callersHeading": "پائے گئے کالرز",
+        "edgesResolved": "حل شدہ کنارے",
+        "edgesUnresolved": "غیر حل شدہ کنارے",
+        "depth": "طے شدہ گہرائی",
+        "noCallersTitle": "کوئی کالر نہیں ملا",
+        "noCallersBody": "انڈیکس شدہ گراف میں کوئی چیز اس نوڈ کو کال نہیں کرتی۔",
+        "skippedHeading": "{count} غیر حل شدہ کنارے دکھائیں"
       }
     },
     "patterns": {

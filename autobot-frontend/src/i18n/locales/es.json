@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Analíticas del proyecto"
+      },
+      "impact": {
+        "title": "Análisis de impacto",
+        "hint": "Qué llama transitivamente a un nodo — úsalo antes de cambiarlo o eliminarlo.",
+        "nodeIdPlaceholder": "p. ej. paquete.modulo.NombreClase",
+        "nodeIdLabel": "ID del nodo del grafo",
+        "analyze": "Analizar",
+        "analyzing": "Analizando…",
+        "notIndexedTitle": "Grafo de código no construido",
+        "notIndexedBody": "Indexa esta fuente antes de analizar el impacto.",
+        "partialTitle": "Resultado parcial — es una cota inferior",
+        "partialDepth": "El recorrido se detuvo en la profundidad {depth} con {frontier} nodo(s) sin expandir. Puede haber más llamadores.",
+        "partialUnresolved": "No se pudieron resolver {count} arista(s), por lo que pueden faltar llamadores.",
+        "callers": "llamadores",
+        "callersAtLeast": "llamadores (al menos)",
+        "callersHeading": "Llamadores alcanzados",
+        "edgesResolved": "aristas resueltas",
+        "edgesUnresolved": "aristas sin resolver",
+        "depth": "profundidad alcanzada",
+        "noCallersTitle": "No se encontraron llamadores",
+        "noCallersBody": "Nada en el grafo indexado llama a este nodo.",
+        "skippedHeading": "Mostrar {count} arista(s) sin resolver"
       }
     },
     "patterns": {
