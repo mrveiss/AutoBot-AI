@@ -13,7 +13,7 @@ Issue #3278 - Plugin and extension system for third-party integrations.
 
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from .base import PluginRegistry, PluginStatus
 from .hooks import HookRegistry
@@ -74,6 +74,12 @@ class PluginManager:
             logger.warning("PluginManager.startup() called more than once — skipping")
             return
 
+        # #14000: set BEFORE discovery, deliberately, and that is the wedge this
+        # issue is about — a discovery that raises leaves the flag True, so every
+        # later startup() is a no-op reporting success while nothing is loaded.
+        # The flag stays as-is because callers rely on the idempotence contract;
+        # `retry_discovery()` below is the way out, so an operator who sees the
+        # #13677 report has an action that is not "restart the service".
         self._started = True
         logger.info("PluginManager: starting plugin discovery")
 
@@ -224,6 +230,33 @@ class PluginManager:
             len(manifests),
             f" — failed: {', '.join(sorted(failed))}" if failed else "",
         )
+
+    async def retry_discovery(self) -> Dict[str, Any]:
+        """Re-run discovery after a crashed startup, and report what happened.
+
+        #14000: `startup()` marks itself started before discovery runs, so a
+        crash there wedges the manager permanently — no plugins, a flag saying
+        startup succeeded, and no way back short of a process restart. #13677
+        made that state *visible* (`completed: False`); this makes it
+        recoverable.
+
+        Refuses when the previous run completed, because re-importing modules
+        that already registered their plugins raises "Plugin already
+        registered" and would turn a healthy manager into a broken one — the
+        exact failure #13677's dedupe work exists to prevent.
+
+        Returns:
+            The load report for the new attempt, or the existing one unchanged
+            when there was nothing to recover.
+        """
+        if self._load_report.get("completed"):
+            logger.info("PluginManager.retry_discovery(): last startup completed — nothing to retry")
+            return self.get_load_report()
+
+        logger.warning("PluginManager.retry_discovery(): re-running discovery after an incomplete startup")
+        self._started = False
+        await self.startup()
+        return self.get_load_report()
 
     def get_load_report(self) -> Dict[str, object]:
         """Return the startup load tally.
