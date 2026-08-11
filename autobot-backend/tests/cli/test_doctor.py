@@ -7,6 +7,7 @@
 Issue #7371: each repair is a discrete idempotent function with a unit test.
 """
 
+from autobot_shared.paths import project_root
 from cli.doctor import (
     CheckResult,
     check_env_file,
@@ -33,6 +34,53 @@ def test_check_env_file_missing(tmp_path):
     result = check_env_file(str(tmp_path / "nonexistent.env"))
     assert not result.ok
     assert "not found" in result.message
+
+
+def test_check_env_file_default_is_not_the_live_install():
+    """#13149: the default used to be a hardcoded `/opt/autobot` literal, so
+    the diagnostic always read the live install's `.env` regardless of which
+    checkout invoked it. Calling with no arg (as ALL_CHECKS does) must not
+    resolve under /opt/autobot."""
+    result = check_env_file()
+
+    assert "/opt/autobot" not in result.message
+
+
+def test_check_env_file_default_is_wired_to_the_canonical_resolver():
+    result = check_env_file()
+
+    expected = str(project_root() / "autobot-backend" / ".env")
+    assert expected in result.message
+
+
+def test_check_env_file_default_tracks_project_root_env_override(monkeypatch, tmp_path):
+    fake_root = tmp_path / "fake-checkout"
+    (fake_root / "autobot-backend").mkdir(parents=True)
+    monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", str(fake_root))
+
+    result = check_env_file()
+
+    assert str(fake_root / "autobot-backend" / ".env") in result.message
+
+
+def test_check_env_file_default_matches_original_literal_when_deployed(monkeypatch):
+    """Compositional check for the deployed case — see the equivalent test in
+    ``source_paths_test.py`` for why AUTOBOT_PROJECT_ROOT stands in for the
+    real ``.env``-walk here, and why full host verification is out of scope
+    for a hermetic test.
+
+    Whether this dev machine can even stat ``/opt/autobot`` varies (it may
+    not exist, or exist with restricted permissions owned by the deployed
+    service account) — either way the diagnostic must fail closed and name
+    the exact path the original hardcoded literal pointed at, proving the
+    composed default is unchanged for a real deployment.
+    """
+    monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
+
+    result = check_env_file()
+
+    assert result.ok is False
+    assert "/opt/autobot/autobot-backend/.env" in result.message
 
 
 def test_check_env_file_ok(tmp_path):
@@ -87,6 +135,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
     rc = run_doctor(fix=True)
     assert fixed == [1]
+    assert rc == 0
 
 
 def test_run_doctor_fix_manual_items_return_1(capsys, monkeypatch):
