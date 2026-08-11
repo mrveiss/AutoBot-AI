@@ -1026,14 +1026,14 @@ onUnmounted(() => {
 }
 
 .project-meta-item.status-ready { color: var(--color-success); }
-.project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
-.project-meta-item.status-error { color: var(--color-error, #ef4444); }
+.project-meta-item.status-syncing { color: var(--color-warning); }
+.project-meta-item.status-error { color: var(--color-error); }
 
 /* GH#11129: LLC project label displayed next to source name */
 .project-header-llc-label {
   font-size: 0.75em;
   font-weight: 500;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent));
   background: var(--bg-hover);
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
