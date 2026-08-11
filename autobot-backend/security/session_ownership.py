@@ -481,10 +481,17 @@ class SessionOwnershipValidator:
         claiming an apparently-unowned session is what separates "never had an
         owner" from "the owner has been away for a day".
 
-        Returns None when the session cannot be read or records no owner — the
-        caller then treats it as genuinely unowned. A read failure is reported at
-        warning level rather than swallowed, because it silently re-enables the
-        claim path this exists to close.
+        Delegates to ``ChatHistoryManager.get_session_owner`` rather than reading
+        ``metadata["owner"]`` here. That accessor also falls back to
+        ``metadata["username"]``, which sessions predating the ``owner`` field
+        carry — ``create_session`` still writes both keys for exactly that
+        reason. Parsing only ``owner`` would have read those older sessions as
+        unowned and handed them to their next visitor, which is this issue's own
+        defect reintroduced for that vintage of file.
+
+        Returns None when the session records no owner or cannot be read; the
+        caller then treats it as genuinely unowned. See the PR for why that
+        fail-open is deliberate and where it is uncomfortable.
         """
         try:
             from utils.chat_utils import get_chat_history_manager  # noqa: PLC0415
@@ -492,13 +499,10 @@ class SessionOwnershipValidator:
             manager = get_chat_history_manager(request)
             if manager is None:
                 return None
-            session = await manager.get_session(session_id)
+            owner = await manager.get_session_owner(session_id)
         except Exception as exc:
             logger.warning("Could not read the durable owner of session %s...: %s", session_id[:8], exc)
             return None
-        if not isinstance(session, dict):
-            return None
-        owner = (session.get("metadata") or {}).get("owner")
         return owner if isinstance(owner, str) and owner else None
 
     async def _owner_when_cache_is_empty(

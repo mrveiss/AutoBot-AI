@@ -143,3 +143,71 @@ class TestThePresentCacheStillDecides:
 
         assert result["authorized"] is False
         validator._durable_owner.assert_not_awaited()
+
+
+class TestTheDurableLookupSeesOlderSessions:
+    """The owner field is not the only durable record (#14019 review).
+
+    Sessions predating the `owner` field carry `metadata.username` instead, and
+    `create_session` still writes both keys for exactly that reason. Parsing only
+    `owner` read those as unowned and handed them to their next visitor — this
+    issue's own defect, reintroduced for that vintage of file.
+
+    `ChatHistoryManager.get_session_owner` already resolves
+    `owner or username`, so `_durable_owner` delegates to it rather than
+    reimplementing the parse.
+    """
+
+    @staticmethod
+    def _validator_with_manager(manager):
+        validator = SessionOwnershipValidator.__new__(SessionOwnershipValidator)
+        validator.redis = MagicMock()
+        validator.ownership_ttl = 86400
+        return validator
+
+    @pytest.mark.asyncio
+    async def test_a_username_only_session_is_recognised_as_owned(self, monkeypatch):
+        manager = MagicMock()
+        # What the shared accessor returns for a pre-`owner` session file.
+        manager.get_session_owner = AsyncMock(return_value=_ALICE)
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", MagicMock(return_value=manager))
+
+        validator = self._validator_with_manager(manager)
+        owner = await validator._durable_owner("chat-1", MagicMock())
+
+        assert owner == _ALICE, "an older session must not read as unowned"
+
+    @pytest.mark.asyncio
+    async def test_the_shared_accessor_is_used_not_a_local_reparse(self, monkeypatch):
+        """Pins the delegation: a reimplementation here would miss the fallback."""
+        manager = MagicMock()
+        manager.get_session_owner = AsyncMock(return_value=_ALICE)
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", MagicMock(return_value=manager))
+
+        validator = self._validator_with_manager(manager)
+        await validator._durable_owner("chat-1", MagicMock())
+
+        manager.get_session_owner.assert_awaited_once_with("chat-1")
+
+    @pytest.mark.asyncio
+    async def test_a_session_with_no_durable_owner_yields_none(self, monkeypatch):
+        manager = MagicMock()
+        manager.get_session_owner = AsyncMock(return_value=None)
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", MagicMock(return_value=manager))
+
+        validator = self._validator_with_manager(manager)
+
+        assert await validator._durable_owner("chat-1", MagicMock()) is None
+
+    @pytest.mark.asyncio
+    async def test_a_read_failure_yields_none_and_is_logged(self, monkeypatch, caplog):
+        manager = MagicMock()
+        manager.get_session_owner = AsyncMock(side_effect=RuntimeError("storage down"))
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", MagicMock(return_value=manager))
+
+        validator = self._validator_with_manager(manager)
+        with caplog.at_level("WARNING"):
+            result = await validator._durable_owner("chat-1", MagicMock())
+
+        assert result is None
+        assert any("durable owner" in r.message for r in caplog.records), "the fail-open must not be silent"
