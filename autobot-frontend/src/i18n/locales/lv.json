@@ -4261,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8227,7 +8229,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Skata režīms",
+      "viewTree": "Koks",
+      "viewCanvas": "Audekls",
+      "canvasTabAll": "Visas vienības",
+      "canvasUnit": "Vienība {name}",
+      "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas."
     },
     "goals": {
       "title": "Goal Tree",
