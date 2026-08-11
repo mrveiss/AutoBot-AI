@@ -6,6 +6,7 @@
 
 import pytest
 
+from autobot_shared.token_count import estimate_fast
 from services.memory.compression import (
     _DEFAULT_COMPRESSION_THRESHOLD,
     ContextCompressionService,
@@ -41,9 +42,33 @@ class TestEstimateTokens:
         assert _estimate_tokens("hello") == 1
 
     def test_multiple_words(self) -> None:
+        """#13694: the estimate is character-based now, not words * 1.3.
+
+        The old assertion was ``10 * 1.3 = 13``. That formula was replaced
+        because it under-counted JSON by ~19x and CJK by ~26x, and this number
+        gates whether compression runs at all — so under-counting disabled
+        compression on exactly the payloads that needed it.
+
+        Asserted against the shared helper rather than a literal, so this test
+        pins *agreement with the canonical estimator* rather than a second copy
+        of its arithmetic that would drift the moment the ratio is tuned.
+        """
         text = " ".join(["word"] * 10)
-        # 10 * 1.3 = 13
-        assert _estimate_tokens(text) == 13
+
+        assert _estimate_tokens(text) == estimate_fast(text)
+
+    def test_a_non_space_delimited_script_is_not_under_counted(self) -> None:
+        """The defect the change exists to fix, not just its arithmetic.
+
+        ``text.split()`` returns a single element for CJK, so the old estimator
+        scored a long Chinese string as 1 word -> 1 token. A value-only test
+        would go green again on any ratio tweak; this one fails for the whole
+        class of input the previous formula could not see.
+        """
+        cjk = "\u4e2d\u6587\u5b57\u7b26\u4e32" * 40  # 200 chars, one "word" to split()
+
+        assert len(cjk.split()) == 1, "fixture no longer exercises the defect"
+        assert _estimate_tokens(cjk) > 10, "a non-space-delimited script is being counted as one token"
 
 
 # ---------------------------------------------------------------------------
