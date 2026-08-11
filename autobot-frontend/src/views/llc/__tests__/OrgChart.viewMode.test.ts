@@ -135,10 +135,11 @@ describe('OrgChart view-mode toggle (#13939)', () => {
     await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
 
     const canvas = wrapper.findComponent(WorkflowCanvas)
+    // #13994: `advisor` is a root with no reports — a person, not a unit, so it
+    // gets no tab of its own.
     expect(canvas.props('tabs')).toEqual([
       { id: 'all', label: en.llc.orgChart.canvasTabAll },
       { id: 'ceo', label: 'Ada' },
-      { id: 'advisor', label: 'Alan' },
     ])
     expect(canvas.props('activeTabId')).toBe('all')
   })
@@ -148,11 +149,11 @@ describe('OrgChart view-mode toggle (#13939)', () => {
     await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
     const canvas = wrapper.findComponent(WorkflowCanvas)
 
-    canvas.vm.$emit('tab-selected', 'advisor')
+    canvas.vm.$emit('tab-selected', 'ceo')
     await flushPromises()
 
     const ids = wrapper.findComponent(WorkflowCanvas).props('nodes').map((node) => node.id)
-    expect(ids).toEqual([`${ORG_GROUP_PREFIX}advisor`, 'advisor'])
+    expect(ids).toEqual([`${ORG_GROUP_PREFIX}ceo`, 'dev', 'ceo'])
   })
 
   it('a canvas node selection opens the same detail drawer the tree opens', async () => {
@@ -273,5 +274,57 @@ describe('OrgChart nested-tree mode is unregressed (#13939)', () => {
 
     expect(wrapper.findComponent(OrgTreeNode).exists()).toBe(true)
     expect(wrapper.findComponent(WorkflowCanvas).exists()).toBe(false)
+  })
+})
+
+// GH#13994: people arrive from the org-chart endpoint as roots (a membership
+// carries no `reports_to` edge). The tab strip used to be built from root-ness,
+// so a company of twelve people got twelve person-named tabs beside twelve
+// single-person boxes. The strip and the canvas now share one definition of a
+// unit, so they cannot disagree.
+describe('OrgChart canvas tabs follow the container rule (#13994)', () => {
+  const MEMBERS = Array.from({ length: 12 }, (_, i) => ({
+    ...structuredClone(NODES)[1],
+    id: `user:${i}`,
+    name: `Person ${i}`,
+    title: 'member',
+  }))
+
+  async function mountWith(nodes: unknown[]) {
+    get.mockResolvedValue({ nodes })
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    return wrapper
+  }
+
+  it('shows no tab strip for a company that is only people', async () => {
+    const canvas = (await mountWith(MEMBERS)).findComponent(WorkflowCanvas)
+
+    expect(canvas.props('tabs')).toEqual([])
+    const nodes = canvas.props('nodes')
+    expect(nodes.filter((node) => node.type === 'org-group')).toEqual([])
+    expect(nodes.filter((node) => node.type === 'org-person')).toHaveLength(12)
+  })
+
+  it('draws all twelve people on the canvas — none of them hidden behind a tab', async () => {
+    const wrapper = await mountWith(MEMBERS)
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+
+    expect(canvas.props('nodes').map((node) => node.id)).toEqual(
+      MEMBERS.map((member) => member.id),
+    )
+    expect(wrapper.findAll('.workflow-node.org-person')).toHaveLength(12)
+    expect(wrapper.find('.canvas-tabs').exists()).toBe(false)
+  })
+
+  it('falls back to all units when the selected tab is no longer a unit', async () => {
+    const wrapper = await mountWith(MEMBERS)
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('tab-selected', 'user:3')
+    await flushPromises()
+
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+    expect(canvas.props('activeTabId')).toBe('all')
+    expect(canvas.props('nodes')).toHaveLength(12)
   })
 })
