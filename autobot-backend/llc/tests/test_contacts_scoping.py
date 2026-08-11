@@ -39,9 +39,13 @@ from llc.services.contact import ContactService
 from user_management.models.base import Base
 
 
+# canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
+_SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local engine)
+    eng = create_async_engine(_SQLITE_MEMORY_URL)
     tables = [LLCContact.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
@@ -54,10 +58,13 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)  # canonical: ignore py-adhoc-db-engine
+    # canonical: ignore py-adhoc-db-engine (test-local session factory)
+    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
-async def _seed_contact(session_factory, company_id: uuid.UUID, *, full_name: str, email: str) -> uuid.UUID:  # noqa: ANN001
+async def _seed_contact(  # noqa: ANN001
+    session_factory, company_id: uuid.UUID, *, full_name: str, email: str
+) -> uuid.UUID:
     async with session_factory() as session:
         svc = ContactService()
         contact = await svc.create(session, company_id, full_name, email=email)

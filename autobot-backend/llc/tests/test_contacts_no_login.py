@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect).
+from autobot_shared.user_management.models.role import Role, UserRole
 from llc.tests import _e2e_harness as harness
 from llc.models.contact import LLCContact
 from llc.services.contact import ContactService
@@ -43,10 +44,14 @@ def test_contact_model_has_no_authentication_columns() -> None:
     assert not offending, f"LLCContact must carry no auth-surface columns, found: {offending}"
 
 
+# canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
+_SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local engine)
-    tables = [User.__table__, LLCContact.__table__]
+    eng = create_async_engine(_SQLITE_MEMORY_URL)
+    tables = [User.__table__, UserRole.__table__, Role.__table__, LLCContact.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._rebind_enums_by_value(table)
@@ -59,7 +64,8 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)  # canonical: ignore py-adhoc-db-engine
+    # canonical: ignore py-adhoc-db-engine (test-local session factory)
+    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
 @pytest.mark.asyncio

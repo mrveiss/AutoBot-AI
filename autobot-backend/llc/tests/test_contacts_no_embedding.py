@@ -56,9 +56,13 @@ def test_contact_module_never_imports_the_embedding_plane(module) -> None:  # no
     assert not offending, f"{module.__name__} must never import the embedding plane, found: {offending}"
 
 
+# canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
+_SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local engine)
+    eng = create_async_engine(_SQLITE_MEMORY_URL)
     tables = [LLCContact.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
@@ -71,7 +75,8 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)  # canonical: ignore py-adhoc-db-engine
+    # canonical: ignore py-adhoc-db-engine (test-local session factory)
+    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
 @pytest.mark.asyncio
