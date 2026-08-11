@@ -23,7 +23,7 @@ from utils.file_categorization import (
     HTML_EXTENSIONS,
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
-    SKIP_DIRS,
+    is_skipped_path,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
@@ -349,7 +349,7 @@ async def _analyze_single_file(
         logger.debug("Error checking if path is file %s: %s", file_path, e)
         return base_result
 
-    if not is_file or any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+    if not is_file or is_skipped_path(file_path, root_path_obj):  # #13602
         return base_result
 
     # Check if file needs reindexing (Issue #539)

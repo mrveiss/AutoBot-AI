@@ -31,7 +31,13 @@ def _tree(root: Path) -> None:
     """Build a source tree with excluded dirs that must never be descended."""
     (root / "pkg").mkdir(parents=True)
     (root / "pkg" / "real.py").write_text("x = 1\n", encoding="utf-8")
-    for skipped in ("node_modules", ".git", "venv"):
+    # #13602: `.worktrees` and `.claude/worktrees` were NOT in SKIP_DIRS, despite
+    # _get_files_to_scan's own docstring claiming `.worktrees/` was pruned. On a
+    # real checkout that was 160,105 of 167,072 code files — the repo scanned ~26
+    # times over. This test passed throughout, because _tree() never built one.
+    (root / ".claude" / "worktrees" / "wt2" / "pkg").mkdir(parents=True)
+    (root / ".claude" / "worktrees" / "wt2" / "pkg" / "noise.py").write_text("z = 3\n", encoding="utf-8")
+    for skipped in ("node_modules", ".git", "venv", ".worktrees"):
         deep = root / skipped / "a" / "b" / "c"
         deep.mkdir(parents=True)
         (deep / "noise.py").write_text("y = 2\n", encoding="utf-8")
@@ -137,3 +143,37 @@ class TestSingleFlight:
         ep._duplicate_scan_lock.release()
         assert ep._duplicate_scan_lock.acquire(blocking=False)
         ep._duplicate_scan_lock.release()
+
+
+class TestScanRootInsideASkippedDirectory:
+    """#13602: adding `.worktrees` to SKIP_DIRS arms a trap.
+
+    Five call sites tested `SKIP_DIRS & set(path.parts)` on an ABSOLUTE path,
+    which asks whether a skip name appears anywhere in it — including in the
+    scan root. CI and development both run from inside `.worktrees/`, so the
+    moment the name was added, scanning from such a root would classify every
+    file below it as skippable and report an empty codebase. No error, no log,
+    just zero results — indistinguishable from a clean repo.
+
+    The root-relative check (#7128b's pattern) is what makes the name safe to
+    add at all.
+    """
+
+    def test_a_root_inside_worktrees_still_finds_its_own_files(self, tmp_path):
+        root = tmp_path / ".worktrees" / "issue-13602"
+        _tree(root)
+        found = DuplicateCodeDetector(project_root=str(root))._get_files_to_scan()
+        names = {p.name for p in found}
+        assert "real.py" in names, "a scan rooted inside .worktrees must not erase itself"
+        assert "noise.py" not in names, "nested skip dirs must still be pruned"
+
+    def test_should_skip_path_is_relative_to_the_scan_root(self, tmp_path):
+        """The dead method wired in (#13602). It had no callers, so its absolute
+        comparison was a trap armed for whoever wired it in next."""
+        root = tmp_path / ".worktrees" / "issue-13602"
+        (root / "pkg").mkdir(parents=True)
+        detector = DuplicateCodeDetector(project_root=str(root))
+
+        assert not detector._should_skip_path(root / "pkg" / "real.py")
+        assert detector._should_skip_path(root / ".worktrees" / "nested" / "x.py")
+        assert detector._should_skip_path(root / "node_modules" / "y.py")

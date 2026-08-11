@@ -380,7 +380,40 @@ SKIP_DIRS: Set[str] = {
     "obj",  # .NET build output
     ".gradle",
     ".m2",  # Java build caches
+    # #13602: git worktrees are near-complete copies of the repo. Measured on a
+    # working checkout, 160,105 of 167,072 code files (96%) lived under these two
+    # directories — every analytics walk was scanning the repo ~26 times over.
+    # `duplicate_detector._get_files_to_scan` already documented `.worktrees/` as
+    # pruned; it never was, because the name was missing from this set.
+    ".worktrees",
+    "worktrees",  # .claude/worktrees — same content, different parent
 }
+
+
+def is_skipped_path(path: Path, root: Path) -> bool:
+    """True if ``path`` lies inside a SKIP_DIRS directory *below* ``root``.
+
+    The root-relative check is the whole point (#7128b, #13602). Testing
+    ``SKIP_DIRS & set(path.parts)`` on an absolute path asks whether the skip
+    name appears ANYWHERE in it — including in the root itself. So a scan whose
+    root is `/repo/.worktrees/issue-X` classified every file under it as
+    skippable and reported an empty codebase: not an error, not a log line, just
+    zero results, which reads exactly like a clean repo.
+
+    That trap is why `.worktrees` could not simply be added to SKIP_DIRS — CI and
+    development both run from inside a worktree.
+
+    A skip directory *nested* under the root is still skipped, which is the
+    behaviour we actually want.
+    """
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except (ValueError, OSError):
+        # Outside the root (or unreadable): fall back to the absolute check
+        # rather than silently admitting a path we cannot place.
+        return bool(set(path.parts) & SKIP_DIRS)
+    return bool(set(relative.parts) & SKIP_DIRS)
+
 
 # Directory-based categories (not skipped, but categorized)
 BACKUP_DIRS: Set[str] = {"backup", "backups", "bak", ".backup"}

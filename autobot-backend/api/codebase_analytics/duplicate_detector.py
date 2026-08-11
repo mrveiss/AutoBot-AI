@@ -46,6 +46,7 @@ from utils.file_categorization import (
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
     SKIP_DIRS,
+    is_skipped_path,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
@@ -662,9 +663,14 @@ class DuplicateCodeDetector(_BaseClass):
         return self._cancel_token is not None and self._cancel_token.is_set()
 
     def _should_skip_path(self, path: Path) -> bool:
-        """Check if path should be skipped."""
-        path_parts = set(path.parts)
-        return bool(path_parts & SKIP_DIRS)
+        """Check if path should be skipped, relative to this scan's root.
+
+        #13602: this compared SKIP_DIRS against the ABSOLUTE path, so scanning a
+        root that itself sits under `.worktrees/` would have classified every
+        file below it as skippable. The method had no callers, so nothing broke
+        — it was a trap armed for whoever wired it in next.
+        """
+        return is_skipped_path(path, self.project_root)
 
     def _get_files_to_scan(self) -> List[Path]:
         """Get list of files to scan for duplicates.

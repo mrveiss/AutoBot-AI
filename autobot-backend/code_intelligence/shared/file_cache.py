@@ -47,7 +47,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
-from utils.file_categorization import SKIP_DIRS
+from utils.file_categorization import is_skipped_path
 
 logger = get_logger(__name__)
 
@@ -168,9 +168,9 @@ class FileListCache:
         """Check if cache entry is still valid."""
         return (time.time() - entry.timestamp) < self._ttl
 
-    def _should_skip_path(self, path: Path) -> bool:
-        """Check if path should be skipped based on SKIP_DIRS."""
-        return any(skip_dir in path.parts for skip_dir in SKIP_DIRS)
+    def _should_skip_path(self, path: Path, root_path: Path) -> bool:
+        """Check if path should be skipped, relative to the scan root (#13602)."""
+        return is_skipped_path(path, root_path)
 
     async def _scan_files(
         self,
@@ -189,7 +189,7 @@ class FileListCache:
             for ext in extensions:
                 pattern = f"*{ext}"
                 for file_path in root_path.rglob(pattern):
-                    if file_path.is_file() and not self._should_skip_path(file_path):
+                    if file_path.is_file() and not self._should_skip_path(file_path, root_path):
                         files.append(file_path)
             return sorted(files)
 
