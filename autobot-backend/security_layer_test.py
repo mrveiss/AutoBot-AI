@@ -554,6 +554,51 @@ class TestAuditLogFileDefault:
             importlib.reload(security_layer)
 
 
+class TestAuditLogFileFollowsSSOTDefault:
+    """#14050: the two audit-log defaults can no longer silently disagree.
+
+    ``_resolve_audit_log_file()`` only falls back to
+    ``_AUDIT_LOG_FILE_DEFAULT`` (#13149) when ``config.audit_log_file`` is
+    falsy. Before #14050, ``MiscConfig.audit_log_file`` defaulted to a
+    hardcoded ``"/opt/autobot/logs/audit.log"`` — never falsy — so that
+    fallback was dead code and the SSOT's own literal silently won. This
+    proves ``_AUDIT_LOG_FILE`` (the value the module actually uses) now
+    tracks the fixed SSOT field, resolving under the checkout in the unset
+    case exactly like ``_AUDIT_LOG_FILE_DEFAULT`` does.
+    """
+
+    def test_resolved_path_matches_the_ssot_default_when_unset(self, monkeypatch) -> None:
+        from autobot_shared import ssot_config
+
+        monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+        monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
+        monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
+        ssot_config.reload_config()
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE == ssot_config.config.audit_log_file
+            assert reloaded._AUDIT_LOG_FILE == reloaded._AUDIT_LOG_FILE_DEFAULT
+            assert not reloaded._AUDIT_LOG_FILE.startswith("/opt/autobot")
+        finally:
+            ssot_config.reload_config()
+            importlib.reload(security_layer)
+
+    def test_resolved_path_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared import ssot_config
+
+        monkeypatch.setenv("AUTOBOT_AUDIT_LOG_FILE", "/opt/autobot/logs/audit.log")
+        ssot_config.reload_config()
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE == "/opt/autobot/logs/audit.log"
+        finally:
+            monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+            ssot_config.reload_config()
+            importlib.reload(security_layer)
+
+
 # Run tests
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
