@@ -8240,6 +8240,29 @@
       "canvasUnit": "وحدة {name}",
       "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
     },
+    "canvasRules": {
+      "legendTitle": "وسيلة الإيضاح",
+      "colourBy": "التلوين حسب",
+      "dimension": {
+        "status": "الحالة",
+        "owner": "المالك",
+        "tool": "الأداة"
+      },
+      "status": {
+        "active": "نشط",
+        "idle": "خامل",
+        "paused": "متوقف مؤقتًا",
+        "error": "خطأ",
+        "terminated": "منتهٍ",
+        "unknown": "غير معروف"
+      },
+      "owner": {
+        "unassigned": "غير مُسنَد"
+      },
+      "tool": {
+        "none": "لا توجد أداة"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

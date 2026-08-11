@@ -8240,6 +8240,29 @@
       "canvasUnit": "Einheit {name}",
       "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
     },
+    "canvasRules": {
+      "legendTitle": "Legende",
+      "colourBy": "Einfärben nach",
+      "dimension": {
+        "status": "Status",
+        "owner": "Inhaber",
+        "tool": "Werkzeug"
+      },
+      "status": {
+        "active": "Aktiv",
+        "idle": "Leerlauf",
+        "paused": "Pausiert",
+        "error": "Fehler",
+        "terminated": "Beendet",
+        "unknown": "Unbekannt"
+      },
+      "owner": {
+        "unassigned": "Nicht zugewiesen"
+      },
+      "tool": {
+        "none": "Kein Werkzeug"
+      }
+    },
     "goals": {
       "title": "Zielbaum",
       "retry": "Erneut versuchen",

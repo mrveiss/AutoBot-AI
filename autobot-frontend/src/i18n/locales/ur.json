@@ -8240,6 +8240,29 @@
       "canvasUnit": "{name} یونٹ",
       "canvasHint": "پین کرنے کے لیے Shift دبا کر گھسیٹیں، زوم کے لیے اسکرول کریں، تفصیلات کے لیے نوڈ پر کلک کریں۔"
     },
+    "canvasRules": {
+      "legendTitle": "کلید",
+      "colourBy": "رنگ بندی بلحاظ",
+      "dimension": {
+        "status": "حیثیت",
+        "owner": "مالک",
+        "tool": "آلہ"
+      },
+      "status": {
+        "active": "فعال",
+        "idle": "بیکار",
+        "paused": "معطل",
+        "error": "خرابی",
+        "terminated": "ختم شدہ",
+        "unknown": "نامعلوم"
+      },
+      "owner": {
+        "unassigned": "غیر تفویض شدہ"
+      },
+      "tool": {
+        "none": "کوئی آلہ نہیں"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

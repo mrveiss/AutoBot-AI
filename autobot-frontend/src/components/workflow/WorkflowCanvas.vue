@@ -17,6 +17,24 @@
             {{ tab.label }}
           </button>
         </div>
+        <!-- GH#13941: which declarative rule set colours the nodes. Offered only
+             when there are org nodes to colour, so workflow authoring is
+             untouched. -->
+        <div v-if="hasOrgNodes" class="rule-mode" role="group" :aria-label="$t('llc.canvasRules.colourBy')">
+          <span class="rule-mode-label">{{ $t('llc.canvasRules.colourBy') }}</span>
+          <button
+            v-for="dimension in RULE_DIMENSIONS"
+            :key="dimension"
+            type="button"
+            class="rule-mode-btn"
+            :class="{ active: colourMode === dimension }"
+            :aria-pressed="colourMode === dimension"
+            :data-testid="`rule-mode-${dimension}`"
+            @click="colourMode = dimension"
+          >
+            {{ dimensionLabels[dimension] }}
+          </button>
+        </div>
         <template v-if="!readonly">
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
           <Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}
@@ -80,7 +98,9 @@
         </svg>
 
         <!-- Nodes -->
-        <div v-for="node in nodes" :key="node.id" class="workflow-node" :class="[node.type, { selected: selectedNodeId === node.id }]"
+        <div v-for="node in nodes" :key="node.id" class="workflow-node"
+             :class="[node.type, { selected: selectedNodeId === node.id }, ...ruleClasses(node)]"
+             :data-rule-id="nodeRuleId(node)"
              :style="nodeStyle(node)"
              @mousedown="onNodeMouseDown(node, $event)" @click.stop="selectNode(node.id)">
           <div class="node-header">
@@ -163,7 +183,15 @@
             <template v-else-if="node.type === 'org-person'">
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
               <div class="org-meta">
-                <span class="org-status" :class="`status-${nodeText(node, 'status') || 'unknown'}`"></span>
+                <!-- GH#13941: this was a bare coloured dot — colour was the only
+                     signal it carried, and a paused agent was indistinguishable
+                     from an errored one to a reader who cannot separate the
+                     hues. The chip pairs the active rule's colour with a
+                     distinct marker shape and the rule's translated name. -->
+                <span class="rule-chip">
+                  <span class="rule-marker" aria-hidden="true"></span>
+                  <span class="rule-chip-label">{{ nodeRuleLabel(node) }}</span>
+                </span>
                 <!-- GH#13936: adapter_type is agent vocabulary. A person's node
                      already shows their role as the title, and their adapter_type
                      is the literal "human" — untranslated in all 11 locales. This
@@ -184,6 +212,25 @@
           <p>{{ $t('workflow.canvas.emptyDescription') }}</p>
           <button v-if="!readonly" class="btn-primary" @click="addStepNode"><Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}</button>
         </div>
+      </div>
+
+      <!-- GH#13941: legend — derived from the same evaluation the nodes use, so
+           it lists exactly the rules that won on a node currently drawn. Sits
+           outside `.canvas-content` so panning and zooming never move it. -->
+      <div v-if="legendRules.length > 0" class="canvas-legend" data-testid="canvas-legend">
+        <span class="canvas-legend-title">{{ $t('llc.canvasRules.legendTitle') }}</span>
+        <ul class="canvas-legend-items">
+          <li
+            v-for="rule in legendRules"
+            :key="rule.id"
+            class="canvas-legend-item"
+            :class="[`rule-${rule.swatch}`, `rule-shape-${rule.shape}`]"
+            :data-rule-id="rule.id"
+          >
+            <span class="rule-marker" aria-hidden="true"></span>
+            <span>{{ ruleLabel(rule) }}</span>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -209,6 +256,16 @@ import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
+import {
+  RULE_DIMENSIONS,
+  activeRules,
+  matchRule,
+  orgNodeFacts,
+  rulesForDimension,
+  type CanvasNodeFacts,
+  type CanvasNodeRule,
+  type CanvasRuleDimension,
+} from './canvasNodeRules';
 
 const { t } = useI18n();
 const { confirm } = useConfirmDialog();
@@ -314,6 +371,64 @@ function nodeStyle(node: CanvasNode): Record<string, string> {
   if (typeof data.width === 'number') style.width = `${data.width}px`;
   if (typeof data.height === 'number') style.height = `${data.height}px`;
   return style;
+}
+
+/* ------------------------------------------------------------------ *
+ * GH#13941: declarative node colouring + legend.
+ *
+ * Presentation only — the rules read facts the nodes already carry and
+ * change nothing that is fetched, authorised or persisted. The chosen
+ * dimension is component state; it is deliberately not persisted, so the
+ * canvas keeps its single source of truth in the org-chart payload.
+ * ------------------------------------------------------------------ */
+
+const colourMode = ref<CanvasRuleDimension>('status');
+
+/** Facts per node id, for the nodes the rules apply to (org people only). */
+const orgFacts = computed(() => {
+  const byId = new Map<string, CanvasNodeFacts>();
+  for (const node of props.nodes) {
+    const facts = orgNodeFacts(node);
+    if (facts) byId.set(node.id, facts);
+  }
+  return byId;
+});
+
+const hasOrgNodes = computed(() => orgFacts.value.size > 0);
+const factsOnCanvas = computed(() => [...orgFacts.value.values()]);
+const activeRuleSet = computed(() => rulesForDimension(colourMode.value, factsOnCanvas.value));
+/** Only rules that won on a node currently drawn — the legend's contents. */
+const legendRules = computed(() => activeRules(activeRuleSet.value, factsOnCanvas.value));
+
+const dimensionLabels = computed<Record<CanvasRuleDimension, string>>(() => ({
+  status: t('llc.canvasRules.dimension.status'),
+  owner: t('llc.canvasRules.dimension.owner'),
+  tool: t('llc.canvasRules.dimension.tool'),
+}));
+
+function ruleForNode(node: CanvasNode): CanvasNodeRule | null {
+  const facts = orgFacts.value.get(node.id);
+  return facts ? matchRule(activeRuleSet.value, facts) : null;
+}
+
+/** Translated rule name, or the raw data value for a data-derived rule. */
+function ruleLabel(rule: CanvasNodeRule): string {
+  return rule.labelKey ? t(rule.labelKey) : (rule.labelText ?? '');
+}
+
+function nodeRuleLabel(node: CanvasNode): string {
+  const rule = ruleForNode(node);
+  return rule ? ruleLabel(rule) : '';
+}
+
+function nodeRuleId(node: CanvasNode): string | undefined {
+  return ruleForNode(node)?.id;
+}
+
+/** Swatch (colour token) + shape classes for a node; empty for authoring nodes. */
+function ruleClasses(node: CanvasNode): string[] {
+  const rule = ruleForNode(node);
+  return rule ? [`rule-${rule.swatch}`, `rule-shape-${rule.shape}`] : [];
 }
 
 const canvasRef = ref<HTMLElement | null>(null);
@@ -542,10 +657,54 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.org-group .node-header { background: transparent; color: var(--text-secondary); border-bottom: 1px dashed var(--border-default); }
 .org-title { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); }
 .org-meta { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-tertiary); }
-.org-status { width: var(--spacing-2); height: var(--spacing-2); border-radius: 50%; background: var(--text-muted); }
-.org-status.status-active, .org-status.status-working { background: var(--color-success); }
-.org-status.status-paused { background: var(--color-warning); }
-.org-status.status-terminated, .org-status.status-error { background: var(--color-error); }
+
+/* GH#13941: one swatch class per rule, each binding a single design token to
+   --rule-accent. The node accent stripe and every marker read the accent from
+   there, so a rule's colour is declared exactly once and never as a literal. */
+.rule-status-active { --rule-accent: var(--color-success); }
+.rule-status-idle { --rule-accent: var(--color-info); }
+.rule-status-paused { --rule-accent: var(--color-warning); }
+.rule-status-error { --rule-accent: var(--color-error); }
+.rule-status-terminated { --rule-accent: var(--color-secondary); }
+.rule-status-unknown { --rule-accent: var(--text-muted); }
+.rule-owner-human { --rule-accent: var(--chart-blue); }
+.rule-owner-agent { --rule-accent: var(--chart-purple); }
+.rule-owner-unassigned { --rule-accent: var(--color-warning); }
+.rule-tool-1 { --rule-accent: var(--chart-1); }
+.rule-tool-2 { --rule-accent: var(--chart-2); }
+.rule-tool-3 { --rule-accent: var(--chart-3); }
+.rule-tool-4 { --rule-accent: var(--chart-4); }
+.rule-tool-5 { --rule-accent: var(--chart-5); }
+.rule-tool-6 { --rule-accent: var(--chart-6); }
+.rule-tool-7 { --rule-accent: var(--chart-7); }
+.rule-tool-8 { --rule-accent: var(--chart-8); }
+.rule-tool-none { --rule-accent: var(--text-muted); }
+
+/* The accent stripe. Selection still reads on the remaining three sides plus
+   the focus ring, so a coloured node never hides which node is selected. */
+.workflow-node.org-person { border-inline-start-width: 6px; border-inline-start-color: var(--rule-accent, var(--border-default)); }
+
+.rule-chip { display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
+.rule-chip-label { white-space: nowrap; }
+.rule-marker { flex: none; width: var(--spacing-2-5); height: var(--spacing-2-5); background: var(--rule-accent, var(--text-muted)); }
+.rule-shape-disc .rule-marker { border-radius: 50%; }
+.rule-shape-ring .rule-marker { border-radius: 50%; background: transparent; border: 2px solid var(--rule-accent, var(--text-muted)); }
+.rule-shape-square .rule-marker { border-radius: var(--radius-default); }
+.rule-shape-diamond .rule-marker { border-radius: var(--radius-default); transform: rotate(45deg); }
+.rule-shape-triangle .rule-marker { background: transparent; width: 0; height: 0; border-inline: 5px solid transparent; border-bottom: 10px solid var(--rule-accent, var(--text-muted)); }
+.rule-shape-bar .rule-marker { height: var(--spacing-1); border-radius: var(--radius-default); }
+
+.rule-mode { display: flex; align-items: center; gap: var(--spacing-1); }
+.rule-mode-label { font-size: var(--text-xs); color: var(--text-tertiary); }
+.rule-mode-btn { padding: var(--spacing-1) var(--spacing-2); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); font-size: var(--text-xs); cursor: pointer; }
+.rule-mode-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.rule-mode-btn.active { background: var(--bg-tertiary); border-color: var(--color-primary); color: var(--text-primary); }
+.rule-mode-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.canvas-legend { position: absolute; bottom: var(--spacing-3); inset-inline-start: var(--spacing-3); max-width: 240px; padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+.canvas-legend-title { display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--spacing-1); }
+.canvas-legend-items { list-style: none; margin: var(--spacing-0); padding: var(--spacing-0); display: flex; flex-direction: column; gap: var(--spacing-1); }
+.canvas-legend-item { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-secondary); }
 
 .canvas-tabs { display: flex; align-items: center; gap: var(--spacing-1); }
 .canvas-tab { padding: var(--spacing-1-5) var(--spacing-3); background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--text-secondary); font-size: var(--text-sm); cursor: pointer; }

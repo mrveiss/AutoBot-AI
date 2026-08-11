@@ -8240,6 +8240,29 @@
       "canvasUnit": "Unidad {name}",
       "canvasHint": "Mayús+arrastrar para desplazar, rueda para acercar, haz clic en un nodo para ver detalles."
     },
+    "canvasRules": {
+      "legendTitle": "Leyenda",
+      "colourBy": "Colorear por",
+      "dimension": {
+        "status": "Estado",
+        "owner": "Propietario",
+        "tool": "Herramienta"
+      },
+      "status": {
+        "active": "Activo",
+        "idle": "Inactivo",
+        "paused": "En pausa",
+        "error": "Error",
+        "terminated": "Finalizado",
+        "unknown": "Desconocido"
+      },
+      "owner": {
+        "unassigned": "Sin asignar"
+      },
+      "tool": {
+        "none": "Sin herramienta"
+      }
+    },
     "goals": {
       "title": "Árbol de objetivos",
       "retry": "Reintentar",
