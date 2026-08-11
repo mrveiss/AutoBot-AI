@@ -779,8 +779,11 @@ class TestRestUrlPrefix:
         named in the report."""
         src = (Path(__file__).resolve().parent / "slm_client.py").read_text(encoding="utf-8")
 
-        assert src.count("._rest_url(") == 6, (
-            "expected exactly 6 REST call sites routed through _rest_url "
+        # A floor, not a pin: a new endpoint that correctly calls _rest_url must
+        # not break this test. The negative patterns below are the real guard —
+        # they forbid reintroducing the hardcoded prefix whatever the count is.
+        assert src.count("._rest_url(") >= 6, (
+            "expected at least the 6 REST call sites routed through _rest_url "
             "(_fetch_all_agents, _fetch_agent_llm_config, create_deployment, "
             "get_deployment, list_deployments, _fetch_from_slm) — #13584"
         )
