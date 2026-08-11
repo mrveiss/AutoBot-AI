@@ -82,7 +82,7 @@
         <!-- Nodes -->
         <div v-for="node in nodes" :key="node.id" class="workflow-node" :class="[node.type, { selected: selectedNodeId === node.id }]"
              :style="nodeStyle(node)"
-             @mousedown.stop="startDrag(node, $event)" @click.stop="selectNode(node.id)">
+             @mousedown="onNodeMouseDown(node, $event)" @click.stop="selectNode(node.id)">
           <div class="node-header">
             <Icon :name="nodeIcons[node.type]" />
             <span>{{ nodeTitle(node) }}</span>
@@ -203,7 +203,7 @@ import { ref, reactive, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
-import type { CanvasNode, CanvasTab } from './canvasNode';
+import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 
 const { t } = useI18n();
 const { confirm } = useConfirmDialog();
@@ -238,11 +238,14 @@ const showVisionDropdown = ref(false);
 
 // #13939: these are Icon component names — they were previously rendered as
 // `<i :class="…">`, which silently produced no icon at all.
-const nodeIcons: Record<string, IconName> = {
+// #13996: keyed by CanvasNodeType (not `string`), so a node type without an
+// icon is a compile error rather than an `<Icon :name="undefined">` warning.
+const nodeIcons: Record<CanvasNodeType, IconName> = {
   step: 'terminal',
   condition: 'code-branch',
   switch: 'random',
   parallel: 'columns',
+  loop: 'sync-alt',
   'vision-capture': 'camera',
   'vision-find-element': 'search',
   'vision-click': 'mouse-pointer',
@@ -282,13 +285,19 @@ function nodeText(node: CanvasNode, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Position, plus the optional size a container node carries in `data`. */
+/**
+ * Position, plus the size a grouping container carries in `data`.
+ * #13996: only `org-group` is sized from `data` — `WorkflowNode['data']` is an
+ * arbitrary bag, so honouring width/height for every type let unrelated
+ * authoring payloads silently resize their node.
+ */
 function nodeStyle(node: CanvasNode): Record<string, string> {
-  const data = node.data as Record<string, unknown>;
   const style: Record<string, string> = {
     left: `${node.position.x}px`,
     top: `${node.position.y}px`,
   };
+  if (node.type !== 'org-group') return style;
+  const data = node.data as Record<string, unknown>;
   if (typeof data.width === 'number') style.width = `${data.width}px`;
   if (typeof data.height === 'number') style.height = `${data.height}px`;
   return style;
@@ -428,6 +437,19 @@ function handleWheel(e: WheelEvent) { zoom.value = Math.max(0.3, Math.min(2, zoo
 
 function startPan(e: MouseEvent) {
   if (e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
+}
+
+/**
+ * #13996: a press on a node used to stop dead here (`@mousedown.stop`), so it
+ * never reached `startPan` on `.canvas-area`. An `org-group` container is
+ * sized to its whole subtree and covers the drawing area, which left the
+ * shift-drag pan the UI advertises working only in the canvas gutters. A pan
+ * gesture is handed on; everything else still starts a node drag.
+ */
+function onNodeMouseDown(node: CanvasNode, e: MouseEvent) {
+  if (e.shiftKey || e.button === 1) return;
+  e.stopPropagation();
+  startDrag(node, e);
 }
 
 function startDrag(node: CanvasNode, e: MouseEvent) {

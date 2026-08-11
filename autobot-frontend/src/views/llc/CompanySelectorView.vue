@@ -21,6 +21,7 @@ import { BaseButton, BaseModal } from '@autobot/ui'
 import { useLlcCompanyStore, type LlcCompany } from '@/stores/useLlcCompanyStore'
 import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import CompanyStatusControl from '@/components/llc/CompanyStatusControl.vue'
+import { safeRedirectTarget } from '@/router/redirectTarget'
 import type { CompanyStatusResult } from '@/composables/llc/useCompanyStatusApi'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -49,8 +50,11 @@ const deleteError = ref('')
 
 async function selectCompany(company: LlcCompany): Promise<void> {
   companyStore.selectCompany(company.id)
-  const redirect = route.query.redirect
-  if (typeof redirect === 'string' && redirect.startsWith('/llc/')) {
+  // #13996: the destination may be any allow-listed in-app path — the
+  // Automation first-run entry arrives as `/automation/...`, not `/llc/...`,
+  // and used to be silently discarded here.
+  const redirect = safeRedirectTarget(route.query.redirect)
+  if (redirect) {
     await router.push(redirect)
     return
   }

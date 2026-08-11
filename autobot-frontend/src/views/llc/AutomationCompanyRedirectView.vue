@@ -40,7 +40,13 @@ onMounted(async () => {
     await router.replace({ name: 'llc-company-select', query: { redirect: route.fullPath } })
     return
   }
-  await router.replace(`/llc/companies/${companyId}/automation/${section}`)
+  // #13996: carry the query and hash across — `resolveEntityRoute` deep-links
+  // here as `/automation?workflow=<id>`, and a bare path dropped the anchor.
+  await router.replace({
+    path: `/llc/companies/${companyId}/automation/${section}`,
+    query: route.query,
+    hash: route.hash,
+  })
 })
 </script>
 

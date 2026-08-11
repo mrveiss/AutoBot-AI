@@ -131,6 +131,23 @@ export function buildOrgCanvasGraph(
   return [...groups, ...people]
 }
 
+/**
+ * Structural key of a forest: ids, nesting and the labels the canvas paints.
+ *
+ * Deliberately excludes `status`. Pause/resume writes `status` on the tree node
+ * in place, and a layout driven by it rebuilt the whole graph on every toggle,
+ * discarding every position the user had dragged (GH#13996).
+ */
+export function orgLayoutKey(roots: OrgNode[]): string {
+  return roots
+    .map(
+      (node) =>
+        `${node.id}:${node.name}:${node.title}:${node.adapter_type}:${node.is_human}` +
+        `(${orgLayoutKey(node.children ?? [])})`,
+    )
+    .join(',')
+}
+
 /** Flatten an org forest into a lookup by agent id. */
 export function flattenOrgNodes(roots: OrgNode[]): Map<string, OrgNode> {
   const byId = new Map<string, OrgNode>()
