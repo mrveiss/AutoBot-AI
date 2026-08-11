@@ -110,9 +110,22 @@ def _bootstrap_chromadb_collections(missing: set[str]) -> None:
         client.get_or_create_collection(name)
 
 
-def check_env_file(env_path: str = "/opt/autobot/autobot-backend/.env") -> CheckResult:
-    """Validate required environment variables are present."""
+def check_env_file(env_path: str | None = None) -> CheckResult:
+    """Validate required environment variables are present.
+
+    #13149: the default used to be a hardcoded `/opt/autobot` literal, so the
+    diagnostic always read the *live install's* `.env` regardless of which
+    checkout invoked it. It now resolves through the canonical project root,
+    computed lazily (not as a mutable-default-style module-import-time
+    literal) so tests can still override it and the resolver is only invoked
+    on the code path that needs it.
+    """
     import os
+
+    from autobot_shared.paths import project_root
+
+    if env_path is None:
+        env_path = str(project_root() / "autobot-backend" / ".env")
 
     required_vars = [
         "OLLAMA_HOST",
