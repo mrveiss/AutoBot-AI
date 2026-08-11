@@ -18,7 +18,7 @@
     # role_*_active facts, so it needs its own derivation. Without it a
     # `target_roles=ai-stack` run falls to the role default and, on a host where
     # redis also ran earlier, both roles write the unit again.
-    chromadb_service_owner: "{{ 'redis' if 'redis' in (target_roles.split(',') | map('trim') | list) else 'ai-stack' }}"
+    chromadb_service_owner: "{{ 'ai-stack' if 'ai-stack' in (target_roles.split(',') | map('trim') | list) else 'redis' }}"
 
   tasks:
     - name: Parse target roles

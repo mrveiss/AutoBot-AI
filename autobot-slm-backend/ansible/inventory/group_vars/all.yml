@@ -354,13 +354,18 @@ role_redis_active: >-
 # topologies, and both wrote the same unit path — so the deployed ExecStart,
 # Description and restart policy flipped with role order.
 #
-# Derived from role_redis_active rather than declared per-playbook: the
-# per-playbook version covered ONE of six entry points, and the other five
-# (deploy-aiml, provision_host, provision-fleet-roles, update-all-nodes and
-# deploy.yml with target_roles=ai-stack) silently deployed no unit at all.
-# Degrades to `ai-stack`, which writes a unit, never to a value that writes
-# nothing.
-chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
+# ai-stack wins a combined host deliberately, because that is what wins TODAY:
+# the old run order put ai-stack last (deploy.yml applies redis before ai-stack;
+# the fleet play runs redis in phase 3 and ai-stack in 5a), so the live
+# ExecStart --path is ai-stack's. Handing ownership to redis would relocate the
+# vector store, and chroma comes up healthy against an empty directory — the
+# knowledge base would read as empty with no error anywhere. Whether to move it
+# (with a migration or a pre-flight refusal) is an open decision on #13870; this
+# change makes ownership deterministic without touching the data path.
+#
+# Derived, not declared per-playbook: the per-playbook version covered ONE of
+# six entry points and the other five silently deployed no unit at all.
+chromadb_service_owner: "{{ 'ai-stack' if (role_ai_stack_active | default(false) | bool) else 'redis' }}"
 
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or

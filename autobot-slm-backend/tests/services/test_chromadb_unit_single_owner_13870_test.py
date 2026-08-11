@@ -210,4 +210,25 @@ def test_the_combined_host_owner_is_derived_where_both_roles_can_run():
     for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
         text = (_ANSIBLE / rel).read_text(encoding="utf-8")
         assert "chromadb_service_owner" in text, f"{rel} does not derive the owner"
-        assert "role_redis_active" in text, f"{rel} does not derive it from role_redis_active"
+        assert (
+            "role_ai_stack_active" in text or "role_redis_active" in text
+        ), f"{rel} does not derive the owner from a role_*_active fact"
+
+
+def test_the_combined_host_keeps_todays_data_path():
+    """ai-stack must win a combined host, because that is what wins TODAY.
+
+    The old run order put ai-stack last (deploy.yml applies redis before
+    ai-stack; the fleet play runs redis in phase 3 and ai-stack in 5a), so the
+    live ExecStart --path is ai-stack's. Handing ownership to redis relocates
+    the vector store, and chroma comes up healthy against an empty directory —
+    the knowledge base would read as empty with no error anywhere. Making
+    ownership deterministic must not smuggle in a data move.
+    """
+    for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
+        text = (_ANSIBLE / rel).read_text(encoding="utf-8")
+        line = next(ln for ln in text.splitlines() if ln.startswith("chromadb_service_owner:"))
+        assert "'ai-stack' if" in line, (
+            f"{rel} hands a combined host to redis — that relocates the chroma data "
+            "directory silently (#13870, open decision)"
+        )
