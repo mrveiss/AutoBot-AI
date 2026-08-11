@@ -12,6 +12,7 @@ from chat_history.context_overflow import (
     ContextOverflowProtection,
     ConversationSummarizer,
     SessionTokenTracker,
+    SummarizationFailed,
 )
 
 
@@ -139,21 +140,51 @@ class TestConversationSummarizer:
         assert "Summary" in summary
 
     @pytest.mark.asyncio
-    async def test_summarize_llm_failure_fallback(self):
-        """Verify fallback when LLM fails."""
-        summarizer = ConversationSummarizer()
+    async def test_a_gateway_failure_raises_instead_of_returning_a_placeholder(self):
+        """#14065: the old behaviour returned a success-shaped placeholder here.
 
+        This test previously asserted that placeholder ("1 earlier message"),
+        pinning the defect in place: the caller could not distinguish "history
+        was compressed" from "history was destroyed and replaced with a sentence
+        saying it existed", so it reset the token tracker and reported success.
+        """
+        summarizer = ConversationSummarizer()
         messages = [{"sender": "user", "text": "Hello"}]
 
-        mock_gateway = AsyncMock()
-        mock_gateway.chat_completion.side_effect = Exception("LLM error")
-
         with patch.object(summarizer, "_get_gateway", side_effect=Exception("LLM error")):
-            summary = await summarizer.summarize_messages(messages, "gpt-4")
+            with pytest.raises(SummarizationFailed) as excinfo:
+                await summarizer.summarize_messages(messages, "gpt-4")
 
-        # Should return fallback placeholder
-        assert "Summary" in summary
-        assert "1 earlier message" in summary
+        assert "LLM error" in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_an_empty_completion_raises_rather_than_reading_as_a_summary(self):
+        """A provider that returns nothing is a failure, not a very short summary."""
+        summarizer = ConversationSummarizer()
+        messages = [{"sender": "user", "text": "Hello"}]
+
+        mock_response = MagicMock()
+        mock_response.content = "   "
+        mock_gateway = AsyncMock()
+        mock_gateway.chat_completion.return_value = mock_response
+
+        with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
+            with pytest.raises(SummarizationFailed):
+                await summarizer.summarize_messages(messages, "gpt-4")
+
+    @pytest.mark.asyncio
+    async def test_a_formatting_bug_is_not_relabelled_a_summarization_failure(self):
+        """#14065: the ``except Exception`` used to cover the whole body.
+
+        A crash in ``_format_messages`` is a programming error. Reported as a
+        summarization failure it would be retried on every turn forever, and the
+        real traceback would be buried under a generic provider-failure message.
+        """
+        summarizer = ConversationSummarizer()
+
+        with patch.object(summarizer, "_format_messages", side_effect=TypeError("bad message shape")):
+            with pytest.raises(TypeError, match="bad message shape"):
+                await summarizer.summarize_messages([{"sender": "user", "text": "x"}], "gpt-4")
 
 
 class TestContextOverflowProtection:
@@ -231,6 +262,123 @@ class TestContextOverflowProtection:
 
         # Verify summarizer was called
         mock_summarizer.summarize_messages.assert_called_once()
+
+        # The success path must still reset the tracker — the guard added in
+        # #14065 must not break working compaction.
+        mock_tracker.reset_session.assert_awaited_once_with("session-1")
+        assert status["summary_error"] == ""
+
+
+class TestSummarizationFailureIsNotReportedAsSuccess:
+    """#14065 — what happens to the session when compaction fails.
+
+    The damage was never the failed LLM call. It was that ``reset_session`` ran
+    unconditionally afterwards: the token counter went back to a fresh baseline
+    while the conversation was still full, so nothing ever re-triggered and the
+    session continued with the agent having silently forgotten the first half of
+    the work. Every observable signal — return value, status dict, info log —
+    said compaction succeeded.
+
+    These assert the *reproduction* (a failing summarization call through the
+    real ``check_and_protect`` path), not the predicate.
+    """
+
+    @staticmethod
+    def _protection_at_92_percent():
+        protection = ContextOverflowProtection(warning_threshold=0.80, compress_threshold=0.90)
+        mock_tracker = AsyncMock()
+        mock_tracker.get_session_usage.return_value = {
+            "total_tokens": 920,
+            "prompt_tokens": 614,
+            "completion_tokens": 306,
+            "message_count": 12,
+        }
+        protection.tracker = mock_tracker
+        return protection, mock_tracker
+
+    async def _run_with_failing_summarizer(self, side_effect):
+        protection, mock_tracker = self._protection_at_92_percent()
+        messages = [{"sender": "user", "text": f"Message {i}"} for i in range(10)]
+
+        mock_summarizer = AsyncMock()
+        mock_summarizer.summarize_messages.side_effect = side_effect
+        protection.summarizer = mock_summarizer
+
+        with patch.object(protection, "_get_context_limit", return_value=1000):
+            status = await protection.check_and_protect(
+                session_id="session-1",
+                model_name="gpt-4",
+                usage={"prompt_tokens": 10, "completion_tokens": 5},
+                mode="auto",
+                messages=messages,
+            )
+        return status, mock_tracker
+
+    @pytest.mark.asyncio
+    async def test_a_gateway_error_leaves_the_token_tracker_untouched(self):
+        status, mock_tracker = await self._run_with_failing_summarizer(
+            SummarizationFailed("summarization call failed: provider 429")
+        )
+
+        assert status["summary_created"] is False
+        assert status["summary_text"] == ""
+        assert "429" in status["summary_error"]
+        # The load-bearing assertion: an un-reset counter is what makes the next
+        # turn retry instead of proceeding on a lie.
+        mock_tracker.reset_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_empty_completion_leaves_the_token_tracker_untouched(self):
+        status, mock_tracker = await self._run_with_failing_summarizer(
+            SummarizationFailed("LLM returned empty summary")
+        )
+
+        assert status["summary_created"] is False
+        assert status["summary_text"] == ""
+        assert status["summary_error"]
+        mock_tracker.reset_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_placeholder_text_reaches_the_outbound_view(self):
+        """The placeholder is what got injected into the conversation.
+
+        ``summary_text`` is what the caller injects as a system message
+        (``create_summary_message``). On failure it must be empty, not a
+        sentence claiming the messages were summarized.
+        """
+        status, _ = await self._run_with_failing_summarizer(SummarizationFailed("provider timeout"))
+
+        assert status["summary_text"] == ""
+        assert "were summarized to preserve context" not in status["summary_error"]
+
+    @pytest.mark.asyncio
+    async def test_the_failure_survives_the_integration_seam(self):
+        """``handle_message_completion`` is what production actually calls."""
+        from chat_history import overflow_integration
+
+        protection, mock_tracker = self._protection_at_92_percent()
+        mock_summarizer = AsyncMock()
+        mock_summarizer.summarize_messages.side_effect = SummarizationFailed("provider 503")
+        protection.summarizer = mock_summarizer
+
+        llm_response = MagicMock()
+        llm_response.usage = {"prompt_tokens": 10, "completion_tokens": 5}
+
+        with (
+            patch.object(protection, "_get_context_limit", return_value=1000),
+            patch.object(overflow_integration, "get_overflow_protection", return_value=protection),
+        ):
+            status = await overflow_integration.handle_message_completion(
+                session_id="session-1",
+                model_name="gpt-4",
+                llm_response=llm_response,
+                messages=[{"sender": "user", "text": f"Message {i}"} for i in range(10)],
+                mode="auto",
+            )
+
+        assert status["summary_created"] is False
+        assert "503" in status["summary_error"]
+        mock_tracker.reset_session.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_disabled_mode_no_action(self):

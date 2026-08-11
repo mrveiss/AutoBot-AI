@@ -186,6 +186,23 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     return cleaned
 
 
+class SummarizationFailed(RuntimeError):
+    """Summarization did not produce a usable summary (#14065).
+
+    Raised instead of returning a placeholder string. The placeholder read like
+    a successful compaction — "[Summary: N earlier message(s) were summarized to
+    preserve context.]" — so the caller reset the token tracker, reported
+    ``summary_created: True`` and logged "messages compressed" while the oldest
+    half of the conversation had in fact been replaced by a sentence containing
+    none of the goals, decisions, file paths or state the summarization prompt
+    exists to preserve.
+
+    Failure has to be *shaped* differently from success, not merely logged
+    differently. A ``logger.error`` in one line and a truthy return value in the
+    next is a failure the caller cannot see.
+    """
+
+
 class ConversationSummarizer:
     """Uses LLM to create intelligent conversation summaries.
 
@@ -242,42 +259,46 @@ class ConversationSummarizer:
             model_name: LLM model to use for summarization.
 
         Returns:
-            Summary text. Returns placeholder on error.
+            Summary text.
+
+        Raises:
+            SummarizationFailed: The gateway errored, or returned nothing usable.
+                Never a placeholder — see that exception's docstring (#14065).
         """
+        # Deliberately outside the try: these are pure, local transformations of
+        # the caller's own data. A bug in _sanitize_tool_messages or
+        # _format_messages is a programming error and must surface as itself,
+        # not be relabelled "summarization failed" and retried forever (#14065).
+        safe_messages = _sanitize_tool_messages(messages)
+        conversation_text = self._format_messages(safe_messages)
+        prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
+            "{{count}}", str(len(messages))
+        )
+
         try:
             gateway = await self._get_gateway()
-
-            # Sanitize orphaned tool messages before formatting
-            safe_messages = _sanitize_tool_messages(messages)
-            conversation_text = self._format_messages(safe_messages)
-            prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
-                "{{count}}", str(len(messages))
-            )
-
-            # Generate summary via LLM
             response = await gateway.chat_completion(
                 messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
                 model=model_name,
                 temperature=0.3,  # Low temp for consistent summaries
                 max_tokens=500,  # Cap summary length
             )
+            summary = (getattr(response, "content", None) or "").strip()
+        except Exception as exc:
+            logger.error("Summarization failed for %d messages: %s", len(messages), exc, exc_info=True)
+            raise SummarizationFailed(f"summarization call failed: {exc}") from exc
 
-            summary = response.content.strip()
-            if not summary:
-                raise ValueError("LLM returned empty summary")
+        if not summary:
+            logger.error("Summarization returned an empty completion for %d messages", len(messages))
+            raise SummarizationFailed("LLM returned empty summary")
 
-            logger.info(
-                "Generated summary for %d messages (%d → %d tokens est.)",
-                len(messages),
-                sum(len(m.get("text", "")) for m in messages) // 4,
-                len(summary) // 4,
-            )
-            return summary
-
-        except Exception as e:
-            logger.error("Summarization failed: %s", e, exc_info=True)
-            # Fallback: simple count-based placeholder
-            return f"[Summary: {len(messages)} earlier message(s) were summarized to preserve context.]"
+        logger.info(
+            "Generated summary for %d messages (%d → %d tokens est.)",
+            len(messages),
+            sum(len(m.get("text", "")) for m in messages) // 4,
+            len(summary) // 4,
+        )
+        return summary
 
     def _format_messages(self, messages: List[Dict[str, Any]]) -> str:
         """Format messages into readable conversation text.
@@ -385,6 +406,10 @@ class ContextOverflowProtection:
             "warning_triggered": False,
             "summary_created": False,
             "summary_text": "",
+            # Always present so a caller can branch on it without a KeyError.
+            # Empty means "no attempt failed", not "no attempt was made" —
+            # summary_created distinguishes those two (#14065).
+            "summary_error": "",
             "current_fill_percentage": fill_percentage,
             "total_tokens": total_tokens,
             "context_limit": context_limit,
@@ -407,15 +432,30 @@ class ContextOverflowProtection:
         if mode == "auto" and fill_percentage >= self.compress_threshold:
             # Trigger auto-summarization
             if messages:
-                summary = await self._create_summary(session_id, messages, model_name)
-                if summary:
-                    result["summary_created"] = True
-                    result["summary_text"] = summary
-                    logger.info(
-                        "Auto-summarized session %s: %d messages compressed",
+                try:
+                    summary = await self._create_summary(session_id, messages, model_name)
+                except SummarizationFailed as exc:
+                    # The history is intact and the tracker was not reset, so the
+                    # session is still over threshold and the next turn retries.
+                    # Reporting this instead of swallowing it is the point: a
+                    # caller that cannot see the failure keeps talking to an
+                    # agent that has silently forgotten half the work (#14065).
+                    result["summary_error"] = str(exc)
+                    logger.error(
+                        "Auto-summarization FAILED for session %s: %s — history left intact, "
+                        "token counter not reset",
                         session_id,
-                        len(messages),
+                        exc,
                     )
+                else:
+                    if summary:
+                        result["summary_created"] = True
+                        result["summary_text"] = summary
+                        logger.info(
+                            "Auto-summarized session %s: %d messages compressed",
+                            session_id,
+                            len(messages),
+                        )
             else:
                 logger.warning(
                     "Auto-summarization triggered but no messages provided for session %s",
@@ -454,7 +494,10 @@ class ContextOverflowProtection:
         if not messages_to_summarize:
             return ""
 
-        # Generate summary
+        # Generate summary. A SummarizationFailed propagates deliberately: the
+        # tracker reset below must not run when the history it claims to have
+        # compressed is still uncompressed (#14065). Leaving the counter high is
+        # what makes the next turn retry instead of proceeding on a lie.
         summary = await self.summarizer.summarize_messages(messages_to_summarize, model_name)
 
         # Reset token tracker (conversation now starts from summary)
@@ -475,4 +518,5 @@ __all__ = [
     "SessionTokenTracker",
     "ConversationSummarizer",
     "ContextOverflowProtection",
+    "SummarizationFailed",
 ]
