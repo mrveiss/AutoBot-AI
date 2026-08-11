@@ -26,6 +26,34 @@ from autobot_shared.ssot_constants import TTL_30_DAYS
 logger = get_logger(__name__)
 
 
+def build_owner_metadata(user_data: "dict | None", team_id: str | None = None) -> dict:
+    """The durable owner record written into a session file (#14020).
+
+    One builder for every path that stamps ownership, so a session created by
+    ``POST /chat/sessions`` and one backfilled by the save endpoint carry the same
+    fields. They previously drifted: the save path wrote only ``owner``/``username``
+    and dropped the org/team hierarchy #684 records.
+
+    ``username`` is written alongside ``owner`` because ``get_session_owner``
+    resolves ``owner or username`` — sessions predating the ``owner`` field carry
+    only the latter, and dropping it would make older readers blind to new writes.
+
+    Returns {} when there is no authenticated username, so callers can pass the
+    result straight through without a truthiness dance.
+    """
+    username = (user_data or {}).get("username")
+    if not username:
+        return {}
+    metadata = {"owner": username, "username": username}
+    if user_data.get("user_id"):
+        metadata["user_id"] = user_data["user_id"]
+    if user_data.get("org_id"):
+        metadata["org_id"] = user_data["org_id"]
+    if team_id:
+        metadata["team_id"] = team_id
+    return metadata
+
+
 class SessionOwnershipValidator:
     """
     Validates and enforces session ownership for conversation access control.

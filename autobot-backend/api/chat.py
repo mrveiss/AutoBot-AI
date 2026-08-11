@@ -69,7 +69,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -1784,6 +1784,30 @@ async def _merge_chat_messages(
         return new_messages
 
 
+async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
+    """Owner metadata to write when the save path creates a session (#14020).
+
+    `save_session` writes a `metadata` key only when one is passed, so saving to a
+    session id with no existing file produced a session with **no durable owner**.
+    Since #14018 made the file record authoritative, such a session reads as
+    unowned every time its Redis key lapses and is claimed by whoever visits next.
+
+    The write **mirrors the validator's own decision** rather than making an
+    independent one. `validate_chat_ownership` returns ``legacy_migration`` exactly
+    when it found no owner and granted the caller ownership — that is the only case
+    where stamping the file is recording what already happened.
+
+    It deliberately does NOT write on ``enforcement_disabled`` or ``auth_disabled``:
+    those fast paths authorise **without checking any owner at all** (and disabled
+    is the default today, #14010), so claiming there would let any authenticated
+    caller permanently stamp themselves onto an ownerless session — a claim that
+    would outlive the switch to enforced.
+    """
+    if not isinstance(ownership, dict) or ownership.get("reason") != "legacy_migration":
+        return None
+    return build_owner_metadata(ownership.get("user_data")) or None
+
+
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1820,7 +1844,10 @@ async def save_chat_by_id(
     )
 
     result = await chat_history_manager.save_session(
-        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
     )
 
     return JSONResponse(
