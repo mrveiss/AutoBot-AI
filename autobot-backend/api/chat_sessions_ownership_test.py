@@ -23,17 +23,71 @@ import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
 
 from api import chat_sessions
+from security.session_ownership import validate_session_ownership
 
 
 def _forbidden(*_args, **_kwargs):
     raise HTTPException(status_code=403, detail="not your session")
 
 
+def _client(*, owner: str, seen: list | None = None):
+    """Mount just this router, with ownership resolved for *owner* only.
+
+    A real request through FastAPI is the only way to prove the dependency binds
+    `session_id` from the **path**. Asserting on the signature cannot: a
+    dependency that resolved it as a query parameter would look identical there
+    while validating a caller-controlled value.
+    """
+    app = FastAPI()
+    app.include_router(chat_sessions.router)
+
+    async def _ownership(session_id: str, request: Request = None):  # noqa: ARG001
+        if seen is not None:
+            seen.append(session_id)
+        if session_id != owner:
+            raise HTTPException(status_code=403, detail="not your session")
+        return {"authorized": True}
+
+    app.dependency_overrides[validate_session_ownership] = _ownership
+    return TestClient(app, raise_server_exceptions=False)
+
+
+class TestExportIsRefusedForANonOwner:
+    """AC: user A cannot export user B's session; the owner still can."""
+
+    def test_a_non_owner_gets_403(self):
+        seen: list = []
+        client = _client(owner="alices-chat", seen=seen)
+
+        response = client.get("/chat/sessions/bobs-chat/export")
+
+        assert response.status_code == 403
+        assert seen == ["bobs-chat"], "the refusal must come from the validator, not a routing accident"
+
+    def test_the_owner_is_not_refused(self):
+        """The positive half — a guard that refuses everyone is not a fix.
+
+        Asserting only `!= 403` would pass on a 500, so this also pins that the
+        validator ran and saw the id from the **path**. That is the binding a
+        signature assertion cannot check: a dependency resolving `session_id` as
+        a query parameter would look identical in the signature while validating
+        a value the caller controls.
+        """
+        seen: list = []
+        client = _client(owner="alices-chat", seen=seen)
+
+        response = client.get("/chat/sessions/alices-chat/export")
+
+        assert seen == ["alices-chat"], "the validator must run on the path value"
+        assert response.status_code != 403
+
+
 class TestExportRequiresOwnership:
-    """A path-parameter endpoint, so it uses this file's `Depends` pattern."""
+    """Cheap structural guards, kept alongside the request-level tests above."""
 
     def test_the_dependency_is_declared(self):
         """`Depends` is resolved by FastAPI, so the wiring is what there is to assert.
