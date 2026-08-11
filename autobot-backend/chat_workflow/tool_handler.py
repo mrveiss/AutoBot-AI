@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, SENSITIVE_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
@@ -3134,6 +3134,94 @@ class ToolHandlerMixin:
             metadata={"tool": name, "error": True, "fact_forcing": True},
         )
 
+    async def _enforce_pre_action_verifier(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Run the adversarial pre-action verifier on a sensitive tool call (#14031).
+
+        ``PreActionVerifier`` (#10547) existed only inside the dormant ``AgentLoop``
+        (no production caller — #13587/#14031); this is its first production
+        caller. Scope matches the original: only tools in the canonical
+        ``SENSITIVE_TOOLS`` set are verified, the same set ``AgentLoop._sensitive_tool_name``
+        gated on. Gated on ``pre_action_verifier_enabled``, resolved through the
+        guard profile (defaults ``True`` — ``agent_loop/types.py:266``).
+
+        A BLOCK verdict with ``VERIFIER_HARD_BLOCK=1`` hard-blocks the call,
+        preserving the original semantics exactly. Without hard-block, the call
+        is held pending approval with the verifier's rationale attached — the
+        same ``pending_approval`` shape ``_enforce_work_item_approval`` already
+        uses at this seam. A broken or unavailable verifier fails open
+        (SKIP/PASS via ``PreActionVerifier.verify``) and never blocks the loop.
+        """
+        from autobot_shared.pre_action_verifier_guard import (
+            HARD_BLOCK,
+            PreActionVerifier,
+            VerifierVerdict,
+            pre_action_verifier_enabled,
+        )
+
+        tool_name = tool_call.get("name", "")
+        if match_tool_name(tool_name, SENSITIVE_TOOLS) is None:
+            return None
+        if not pre_action_verifier_enabled():
+            return None
+
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        if not isinstance(args, dict):
+            args = {"value": repr(args)}
+        reason = tool_call.get("reason", "")
+        task_id = ctx.session_id if ctx is not None else None
+
+        result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
+        if result.verdict != VerifierVerdict.BLOCK:
+            return None
+
+        if HARD_BLOCK:
+            error = (
+                f"Tool '{tool_name}' was hard-blocked by the adversarial verifier "
+                f"(prob={result.refutation_probability:.2f}): {result.rationale}"
+            )
+            logger.warning(
+                "[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120]
+            )
+            execution_results.append(
+                {"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True}
+            )
+            return WorkflowMessage(
+                type="error",
+                content=error,
+                metadata={"tool": tool_name, "error": True, "verifier_hard_block": True},
+            )
+
+        msg = (
+            f"Action '{tool_name}' requires approval before proceeding — the adversarial "
+            f"verifier flagged it (prob={result.refutation_probability:.2f}): {result.rationale}"
+        )
+        logger.warning(
+            "[#14031] verifier held tool '%s' pending approval — %s", tool_name, result.rationale[:120]
+        )
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "pending_approval",
+                "reason": msg,
+                "verifier_rationale": result.rationale,
+                "verifier_refutation_probability": result.refutation_probability,
+            }
+        )
+        return WorkflowMessage(
+            type="approval_required",
+            content=msg,
+            metadata={
+                "tool": tool_name,
+                "approval_required": True,
+                "verifier_rationale": result.rationale,
+            },
+        )
+
     def _enforce_repetition(
         self,
         tool_call: dict[str, Any],
@@ -3275,6 +3363,16 @@ class ToolHandlerMixin:
         fact_msg = self._enforce_fact_forcing(tool_call, ctx, execution_results)
         if fact_msg is not None:
             yield fact_msg
+            return
+
+        # #14031: adversarial pre-action verifier — an independent, differently
+        # prompted model tries to REFUTE a sensitive action before it executes.
+        # Runs before the approval hold below so a HARD_BLOCK verdict short-circuits
+        # without ever reaching the human approval step, matching the original
+        # AgentLoop._check_approvals ordering.
+        verifier_msg = await self._enforce_pre_action_verifier(tool_call, ctx, execution_results)
+        if verifier_msg is not None:
+            yield verifier_msg
             return
 
         # GH#11160: hold a tool the work item declared as approval-gated
