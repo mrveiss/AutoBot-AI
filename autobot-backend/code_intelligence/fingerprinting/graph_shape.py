@@ -28,12 +28,20 @@ served indefinitely, that no later run can heal (the content hash was updated
 too, so the file short-circuits before it is ever reconsidered).
 
 The fix is to stop *predicting* what the extractor will produce and hash what it
-actually produced. Every field that is persisted is included except ``line``,
-which is exactly what the skip path goes on to refresh. So the invariant is
-mechanical rather than argued: **if this fingerprint matches, nothing but line
-numbers moved.** It also costs nothing — extraction already runs on every
-indexed file, before this is called — and it works for every language the
-indexer supports rather than only Python.
+actually produced. So the invariant is mechanical rather than argued: **if this
+fingerprint matches, this file extracted to the same graph, and only the line
+numbers moved.** It costs nothing — extraction already runs on every indexed
+file, before this is called — and it works for every language the indexer
+supports rather than only Python.
+
+**What this deliberately does not cover.** A persisted edge also carries
+``target_id``/``resolved``/``origin``/``candidate_count``, which come from
+resolving the call against every node id known so far. Those are a function of
+*other* files, not of this one, so no fingerprint of this extraction could
+predict them either — the caller therefore recomputes resolution on the skip
+path rather than trusting the fingerprint for it. Without that, a call to a
+then-unknown function would stay unresolved forever once the caller's own shape
+settled.
 
 **Fail open.** Every error path returns ``None``, and the caller must treat
 ``None`` as "re-analyse", never as "unchanged". A false negative costs one

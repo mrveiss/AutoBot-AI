@@ -476,13 +476,13 @@ class CodeIndexer:
             return result
 
         await self._ensure_known_ids()
-        if extracted.get("shape_unchanged"):
-            # #13509: the interface is identical, so every embedding would be
-            # recomputed for the same text. Line numbers still move, and a stale
-            # line makes "go to definition" drift — so the records are updated,
-            # just not re-embedded.
-            await self._refresh_line_ranges(rel_path, extracted, result)
-        else:
+        # #13509: the graph shape is identical, so every embedding would be
+        # recomputed for the same text. Everything else is still rewritten — a
+        # stale line makes "go to definition" drift. The refresh declines (and
+        # we fall through to a full index) when a record it would patch is not
+        # actually in the collection.
+        refreshed = extracted.get("shape_unchanged") and await self._refresh_line_ranges(rel_path, extracted, result)
+        if not refreshed:
             await self._index_extraction(rel_path, extracted, result)
         self._update_hash_cache(file_path, rel_path, extracted.get("shape"))
         return result
@@ -544,48 +544,101 @@ class CodeIndexer:
         except Exception:
             return None
 
-    async def _refresh_line_ranges(self, rel_path: str, extracted: dict, result: CodeIndexResult) -> None:
-        """Update node line numbers without recomputing a single embedding (#13509).
+    def _node_refresh_batch(self, nodes: list[dict], rel_path: str) -> tuple[list, list, list]:
+        """Full node records for the skip path — everything but the embedding."""
+        return (
+            [n["id"] for n in nodes],
+            [_node_document(n, rel_path) for n in nodes],
+            [_node_metadata(n, rel_path) for n in nodes],
+        )
 
-        Metadata-only: a node's embedded text is its kind, name and path, and an
-        edge document reuses its source node's embedding — all unchanged by
-        definition when the fingerprint matched, since it covers every persisted
-        field except the line. Re-embedding to move a line number is the waste
-        this issue is about.
+    def _edge_refresh_batch(self, edges: list[dict], rel_path: str) -> tuple[list, list, list]:
+        """Full edge records, with call resolution recomputed (#13509 review).
+
+        ``target_id``/``resolved``/``origin``/``candidate_count`` come from
+        ``resolve_call`` against ``_known_ids``, which grows as other files are
+        indexed — so they are NOT a function of this file's extracted edges and
+        the shape fingerprint cannot cover them. Left alone, a call to a
+        then-unknown function would stay ``resolved: False`` forever once the
+        caller's own shape settled, silently under-reporting ``find_callers``.
+        Re-resolving here costs no embedding.
+        """
+        ids: list[str] = []
+        documents: list[str] = []
+        metadatas: list[dict] = []
+        for source_id, calls in self._resolve_edges(edges).items():
+            for edge, resolved in calls:
+                ids.append(f"edge::{source_id}::{edge['target_name']}")
+                documents.append(f"CALLS {edge['target_name']}")
+                metadatas.append(_build_edge_metadata(source_id, edge, resolved, rel_path))
+        return ids, documents, metadatas
+
+    async def _refresh_line_ranges(self, rel_path: str, extracted: dict, result: CodeIndexResult) -> bool:
+        """Rewrite this file's records without recomputing a single embedding.
+
+        Returns False when the caller must fall back to a full index. The
+        embedding is the only thing reused; metadata, documents and edge
+        resolution are all written afresh, so a skipped file lands in the same
+        state a full index would leave it, minus the embedding-model calls.
         """
         nodes = extracted["nodes"]
         edges = extracted.get("edges") or []
         self._known_ids.update(n["id"] for n in nodes)
         if not nodes:
-            return
+            return True
 
-        ids = [n["id"] for n in nodes]
-        metadatas: list[dict] = [{"line": str(n.get("line", 0))} for n in nodes]
-        # The line is part of the embedded text, so the stored document is
-        # rewritten too — the *embedding* is what stays, and a line number moves
-        # it immeasurably. Leaving the document behind would make the record
-        # disagree with its own metadata.
-        documents: list[str] = [_node_document(n, rel_path) for n in nodes]
-        # #13509 (review): edges move too. Their identity is in the fingerprint,
-        # so a match means only the call site's line shifted — but leaving
-        # call_line stale makes impact analysis point at the wrong line, which is
-        # the same silent drift for edges that stale node lines are for nodes.
-        for edge in edges:
-            ids.append(f"edge::{edge.get('source')}::{edge.get('target_name')}")
-            metadatas.append({"call_line": edge.get("line", 0)})
-            documents.append(f"CALLS {edge.get('target_name')}")
+        n_ids, n_docs, n_meta = self._node_refresh_batch(nodes, rel_path)
+        e_ids, e_docs, e_meta = self._edge_refresh_batch(edges, rel_path)
+        ids = n_ids + e_ids
 
+        if not await self._all_records_exist(ids):
+            # ChromaDB's update() silently drops unknown ids, so patching a
+            # record an earlier run failed to write would report success while
+            # the record stayed missing — permanently, since the content hash is
+            # cached either way. A full index re-upserts instead.
+            logger.info("%s: records missing from the collection, re-indexing instead of refreshing", rel_path)
+            return False
+
+        await self._apply_refresh(rel_path, extracted, result, ids, n_docs + e_docs, n_meta + e_meta, len(nodes))
+        result.nodes += len(nodes)
+        result.edges += len(e_ids)
+        return True
+
+    async def _apply_refresh(
+        self,
+        rel_path: str,
+        extracted: dict,
+        result: CodeIndexResult,
+        ids: list,
+        documents: list,
+        metadatas: list,
+        node_count: int,
+    ) -> None:
+        """Write the refreshed records; on failure clear the stored fingerprint."""
         try:
-            await asyncio.to_thread(self._collection.update, ids=ids, metadatas=metadatas, documents=documents)
-            result.success += len(nodes)
+            await asyncio.to_thread(self._collection.update, ids=ids, documents=documents, metadatas=metadatas)
+            result.success += node_count
         except Exception as exc:
             # Fail open: a failed refresh must not leave the cache claiming the
             # file is current, or the drift becomes permanent.
-            logger.warning("%s: line-range refresh failed, forcing re-index next run: %s", rel_path, exc)
+            logger.warning("%s: record refresh failed, forcing re-index next run: %s", rel_path, exc)
             extracted["shape"] = None
-            result.failed += len(nodes)
-        result.nodes += len(nodes)
-        result.edges += len(edges)
+            result.failed += node_count
+
+    async def _all_records_exist(self, ids: list[str]) -> bool:
+        """Whether every id is already in the collection.
+
+        A lookup failure answers False — re-indexing costs embeddings, while
+        wrongly assuming presence loses the records for good.
+        """
+        if not ids:
+            return True
+        try:
+            found = await asyncio.to_thread(self._collection.get, ids=ids, include=[])
+        except Exception as exc:
+            logger.warning("record presence check failed, re-indexing: %s", exc)
+            return False
+        return set(found.get("ids") or []) >= set(ids)
 
     def _update_hash_cache(self, file_path: str, rel_path: str, shape: str | None = None) -> None:
         new_hash = self._compute_hash(file_path)
@@ -850,16 +903,7 @@ class CodeIndexer:
         for that node's outgoing edge documents to avoid extra model calls),
         None on failure."""
         content = _node_document(node, rel_path)
-        metadata: dict[str, Any] = {
-            "source": "autobot_code",
-            "record_type": "node",
-            "node_kind": node["kind"],
-            "node_name": node["name"],
-            "source_path": rel_path,
-            "line": str(node.get("line", 0)),
-            "parent": node.get("parent") or "",
-            "origin": "extracted",
-        }
+        metadata: dict[str, Any] = _node_metadata(node, rel_path)
         try:
             embedding = await asyncio.to_thread(self._embed_model.get_text_embedding, content)
             await asyncio.to_thread(
@@ -1032,6 +1076,25 @@ async def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
     if not counted.isdigit():
         return None
     return int(counted)
+
+
+def _node_metadata(node: dict, rel_path: str) -> dict[str, Any]:
+    """The metadata persisted for one node record.
+
+    Shared with the #13509 refresh path, which rewrites the full record rather
+    than a `line` patch — so the skip path stores exactly what a full index
+    would, and the two cannot drift.
+    """
+    return {
+        "source": "autobot_code",
+        "record_type": "node",
+        "node_kind": node["kind"],
+        "node_name": node["name"],
+        "source_path": rel_path,
+        "line": str(node.get("line", 0)),
+        "parent": node.get("parent") or "",
+        "origin": "extracted",
+    }
 
 
 def _node_document(node: dict, rel_path: str) -> str:
