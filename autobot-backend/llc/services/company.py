@@ -13,12 +13,14 @@ import asyncio
 import uuid
 from typing import List, Optional
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from llc.models.company import CompanyCreate, CompanyTreeNode, CompanyUpdate
+from llc.models.contact import LLCContact
 from llc.models.enums import LLCCompanyStatus
 from user_management.models.organization import Organization
 
@@ -153,6 +155,16 @@ class CompanyService(LLCServiceBase):
 
         Raises CompanyHasChildrenError when active child companies exist, preventing
         orphaned children that ON DELETE SET NULL cannot handle for soft-deletes.
+
+        #13969 review M2: the company itself is soft-deleted (``deleted_at``),
+        but its contacts are pure PII with their own "deletion removes PII"
+        acceptance criterion — a soft-deleted company must not leave every
+        contact's name/email/phone/notes sitting at rest forever, unreachable
+        by any UI path (every listing filters ``deleted_at.is_(None)``). This
+        purges the company's ``llc_contacts`` rows in the same transaction,
+        rather than the more complex option of reassigning them elsewhere,
+        which is a product decision (tracked as #13998) this method should
+        not make unilaterally.
         """
         org = await self._get_or_404(company_id)
         children = await self.list_children(company_id)
@@ -162,8 +174,9 @@ class CompanyService(LLCServiceBase):
                 "re-parent or delete children before deleting the parent"
             )
         org.soft_delete()
+        await self.session.execute(sa_delete(LLCContact).where(LLCContact.company_id == company_id))
         await self.session.flush()
-        logger.info("LLC company soft-deleted: %s (id=%s)", org.name, org.id)
+        logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged", org.name, org.id)
 
     # ------------------------------------------------------------------
     # Status transitions
