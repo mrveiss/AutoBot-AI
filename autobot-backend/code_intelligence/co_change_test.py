@@ -12,6 +12,7 @@ tests here pin — on a real repository built in a tmpdir, because the input is 
 and a fake would not exercise the part that costs.
 """
 
+import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,6 +21,49 @@ import pytest
 
 from code_intelligence.co_change import CoChangeAnalyzer, CoChangePair
 from code_intelligence.code_evolution_miner import GitHistoryCrawler
+
+#: Git environment variables that redirect git away from the repository named
+#: on the command line. Inherited from the CI job, they make every worker's
+#: ``git`` operate on shared state instead of its own tmpdir (#13948).
+_INHERITED_GIT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CONFIG",
+)
+
+
+def _hermetic_git_env() -> dict:
+    """A git environment that cannot reach outside the repo passed to ``-C``.
+
+    #13948: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
+    **one** index while committing in its **own** tmpdir repo, so a worker
+    commits a tree whose blobs live in another worker's object store:
+
+        error: invalid object 100644 <sha> for 'solo_12.py'
+        error: Error building trees
+
+    That reads as repository corruption and is nowhere near the code under
+    test. Identity is supplied here too, so the fixture does not depend on the
+    runner having a global git identity configured.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in _INHERITED_GIT_VARS}
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "a@b.c",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "a@b.c",
+        }
+    )
+    return env
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -31,7 +75,7 @@ def _git(repo: Path, *args: str) -> None:
     therefore read as a bare "exit status 128" with no indication of the cause,
     which is what made the intermittent failure undiagnosable from the log.
     """
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=_hermetic_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
@@ -41,7 +85,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _git_init(path: Path) -> None:
     """git init with the same stderr-surfacing contract as _git (#13882)."""
-    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True)
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_hermetic_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
@@ -370,3 +414,56 @@ def test_the_default_window_is_actually_applied():
     delta = datetime.now(timezone.utc) - default_window_start()
 
     assert abs(delta.days - COCHANGE_WINDOW_DAYS) <= 1
+
+
+# ------------------------------------------- the repo named is the repo read (#13948)
+
+
+def test_the_crawler_reads_the_repo_it_was_given_not_the_ambient_one(repo, tmp_path, monkeypatch):
+    """``GIT_DIR`` must not silently redirect the crawler to another repository.
+
+    Git treats ``GIT_DIR`` as higher precedence than ``-C``, so an exported one
+    makes the path argument advisory. The caller then gets a perfectly plausible
+    history for the wrong tree — no error, no empty result, just an answer about
+    something else. That is strictly worse than failing.
+
+    Reproduced rather than asserted abstractly: a second repo with a distinct
+    file is built, ``GIT_DIR`` is pointed at it, and the crawler must still
+    report the fixture's files.
+    """
+    other = tmp_path.parent / "other_repo_13948"
+    other.mkdir()
+    _git_init(other)
+    _git(other, "config", "user.email", "a@b.c")
+    _git(other, "config", "user.name", "t")
+    _commit(other, {"decoy.py": "x\n"}, "decoy commit")
+
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+
+    file_sets = GitHistoryCrawler(str(repo)).get_commit_file_sets()
+    seen = {path for commit in file_sets for path in commit}
+
+    assert "schema.py" in seen, "the crawler did not read the repository it was given"
+    assert "decoy.py" not in seen, "GIT_DIR redirected the crawler to the ambient repository"
+
+
+def test_the_stripped_git_vars_cover_the_ones_that_override__C():
+    """The strip list must name every variable that outranks ``-C``.
+
+    Listed explicitly rather than stripping ``GIT_*`` wholesale: ``GIT_AUTHOR_*``,
+    ``GIT_SSH_COMMAND`` and friends are legitimate and removing them would break
+    unrelated callers.
+    """
+    from code_intelligence.code_evolution_miner import _REPO_OVERRIDING_GIT_VARS, _git_env
+
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"):
+        assert var in _REPO_OVERRIDING_GIT_VARS, f"{var} outranks -C but is not stripped"
+
+    import os as _os
+
+    _os.environ["GIT_DIR"] = "/nowhere"
+    try:
+        assert "GIT_DIR" not in _git_env()
+        assert "PATH" in _git_env(), "the environment was emptied rather than filtered"
+    finally:
+        _os.environ.pop("GIT_DIR", None)
