@@ -2317,7 +2317,7 @@ vncserver :1 -localhost no -SecurityTypes VncAuth,TLSVnc -rfbport 5901 \
     -geometry 1920x1080 -depth 24
 
 # Start websockify
-websockify --web /usr/share/novnc 0.0.0.0:6080 localhost:5901
+websockify --web /opt/novnc 0.0.0.0:6080 localhost:5901
 ```
 
 **Problem: VNC accessible locally but not remotely**
