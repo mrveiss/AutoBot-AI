@@ -3184,9 +3184,7 @@ class ToolHandlerMixin:
                 f"Tool '{tool_name}' was hard-blocked by the adversarial verifier "
                 f"(prob={result.refutation_probability:.2f}): {result.rationale}"
             )
-            logger.warning(
-                "[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120]
-            )
+            logger.warning("[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120])
             execution_results.append(
                 {"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True}
             )
@@ -3200,9 +3198,7 @@ class ToolHandlerMixin:
             f"Action '{tool_name}' requires approval before proceeding — the adversarial "
             f"verifier flagged it (prob={result.refutation_probability:.2f}): {result.rationale}"
         )
-        logger.warning(
-            "[#14031] verifier held tool '%s' pending approval — %s", tool_name, result.rationale[:120]
-        )
+        logger.warning("[#14031] verifier held tool '%s' pending approval — %s", tool_name, result.rationale[:120])
         execution_results.append(
             {
                 "tool": tool_name,
