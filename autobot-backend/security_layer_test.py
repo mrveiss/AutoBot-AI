@@ -6,16 +6,19 @@ Tests integrated security features including role-based access and command execu
 """
 
 import asyncio
+import importlib
 import json
 import os
 import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from secure_command_executor import CommandRisk
-
 # Import the modules to test
+import security_layer
+from autobot_shared.paths import project_root
+from secure_command_executor import CommandRisk
 from security_layer import SecurityLayer
 
 
@@ -505,6 +508,95 @@ class TestSecurityLayerIntegration:
         assert "Command forbidden" in result["stderr"]
         assert result["security"]["risk"] == "forbidden"
         assert result["security"]["blocked"] is True
+
+
+class TestAuditLogFileDefault:
+    """_AUDIT_LOG_FILE_DEFAULT's canonical project-root fallback (#13149).
+
+    Before this fix it was a module-level literal hardcoding
+    ``/opt/autobot/logs/audit.log`` — reached whenever
+    ``AUTOBOT_AUDIT_LOG_FILE``/``config.audit_log_file`` was empty. It now
+    derives from ``autobot_shared.paths.project_root()``.
+    """
+
+    def test_default_is_not_the_live_install(self):
+        """The property that matters: a dev run must not resolve under /opt/autobot."""
+        assert not security_layer._AUDIT_LOG_FILE_DEFAULT.startswith("/opt/autobot")
+
+    def test_default_is_wired_to_the_canonical_resolver(self):
+        assert security_layer._AUDIT_LOG_FILE_DEFAULT == str(project_root() / "logs" / "audit.log")
+
+    def test_default_tracks_project_root_env_override(self, monkeypatch, tmp_path):
+        fake_root = tmp_path / "fake-checkout"
+        fake_root.mkdir()
+        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", str(fake_root))
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE_DEFAULT == str(fake_root / "logs" / "audit.log")
+        finally:
+            monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
+            importlib.reload(security_layer)
+
+    def test_deployed_install_still_resolves_to_the_original_default(self, monkeypatch):
+        """Compositional check for the deployed case — see the equivalent test
+        in ``source_paths_test.py`` for why AUTOBOT_PROJECT_ROOT stands in for
+        the real ``.env``-walk here, and why full host verification is out of
+        scope for a hermetic test.
+        """
+        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE_DEFAULT == str(Path("/opt/autobot/logs/audit.log"))
+        finally:
+            monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
+            importlib.reload(security_layer)
+
+
+class TestAuditLogFileFollowsSSOTDefault:
+    """#14050: the two audit-log defaults can no longer silently disagree.
+
+    ``_resolve_audit_log_file()`` only falls back to
+    ``_AUDIT_LOG_FILE_DEFAULT`` (#13149) when ``config.audit_log_file`` is
+    falsy. Before #14050, ``MiscConfig.audit_log_file`` defaulted to a
+    hardcoded ``"/opt/autobot/logs/audit.log"`` — never falsy — so that
+    fallback was dead code and the SSOT's own literal silently won. This
+    proves ``_AUDIT_LOG_FILE`` (the value the module actually uses) now
+    tracks the fixed SSOT field, resolving under the checkout in the unset
+    case exactly like ``_AUDIT_LOG_FILE_DEFAULT`` does.
+    """
+
+    def test_resolved_path_matches_the_ssot_default_when_unset(self, monkeypatch) -> None:
+        from autobot_shared import ssot_config
+
+        monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+        monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
+        monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
+        ssot_config.reload_config()
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE == ssot_config.config.audit_log_file
+            assert reloaded._AUDIT_LOG_FILE == reloaded._AUDIT_LOG_FILE_DEFAULT
+            assert not reloaded._AUDIT_LOG_FILE.startswith("/opt/autobot")
+        finally:
+            ssot_config.reload_config()
+            importlib.reload(security_layer)
+
+    def test_resolved_path_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared import ssot_config
+
+        monkeypatch.setenv("AUTOBOT_AUDIT_LOG_FILE", "/opt/autobot/logs/audit.log")
+        ssot_config.reload_config()
+
+        reloaded = importlib.reload(security_layer)
+        try:
+            assert reloaded._AUDIT_LOG_FILE == "/opt/autobot/logs/audit.log"
+        finally:
+            monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+            ssot_config.reload_config()
+            importlib.reload(security_layer)
 
 
 # Run tests

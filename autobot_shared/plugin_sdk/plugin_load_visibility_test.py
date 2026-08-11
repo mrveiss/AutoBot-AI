@@ -25,6 +25,7 @@ plugins produced the same shape as a host where all seven were broken.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -79,6 +80,22 @@ def _fresh_plugin_modules():
     # guards that cannot fail.
     for name in [n for n in sys.modules if n == "plugin_sdk" or n.startswith("plugin_sdk.")]:
         sys.modules.pop(name, None)
+
+
+def _manifest(**overrides):
+    """A minimal valid PluginManifest for checker-level tests (#13966)."""
+    from autobot_shared.plugin_sdk.base import PluginManifest
+
+    fields = {
+        "name": "dep-demo",
+        "version": "1.0.0",
+        "display_name": "Dep Demo",
+        "description": "dependency checker fixture",
+        "author": "mrveiss",
+        "entry_point": "dep_demo.main",
+    }
+    fields.update(overrides)
+    return PluginManifest(**fields)
 
 
 def _make_plugin(root: Path, name: str, source: str = _PLUGIN_SOURCE) -> None:
@@ -493,3 +510,241 @@ class TestRepeatedDiscoveryDoesNotAccumulate:
 
         stored = loader._manifest_dirs["rel-demo"]
         assert stored.is_absolute(), f"stored plugin dir must be resolved, got {stored}"
+
+
+class TestPythonDependenciesAreCheckable:
+    """#13966: `telemetry-prompt-middleware` declared `dependencies: ["aiohttp"]`
+    and could never load.
+
+    `_check_dependencies` resolved every entry against the plugin REGISTRY — it
+    asked "is a plugin named aiohttp loaded?" — so a pip distribution name was
+    unsatisfiable no matter what was installed. The manifest field is documented
+    as "Required plugin names", so the checker matched its schema and the
+    manifest was the thing that was wrong; but the author's intent ("this needs
+    a Python package") had nowhere to go and no check that would say so.
+    """
+
+    def test_an_importable_module_satisfies_a_python_dependency(self, tmp_path):
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        manifest = _manifest(python_dependencies=["json"])
+
+        assert loader._check_dependencies(manifest) == []
+
+    def test_a_missing_module_is_reported_as_python_not_plugin(self, tmp_path):
+        """The old message named a module and left the operator hunting for a
+        plugin. The two kinds have to be distinguishable."""
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        manifest = _manifest(python_dependencies=["definitely_not_installed_xyz"])
+
+        assert loader._check_dependencies(manifest) == ["python:definitely_not_installed_xyz"]
+
+    def test_a_plugin_dependency_is_still_checked_against_the_registry(self, tmp_path):
+        """The direction that must keep working."""
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        manifest = _manifest(dependencies=["some-other-plugin"])
+
+        assert loader._check_dependencies(manifest) == ["plugin:some-other-plugin"]
+
+    def test_a_pip_name_in_the_plugin_field_is_still_unsatisfiable(self, tmp_path):
+        """Guards the distinction rather than the fix: putting a module name in
+        `dependencies` must NOT start silently passing, or the two fields
+        collapse back into one and the confusion returns."""
+        from autobot_shared.plugin_sdk.loader import PluginLoader
+
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        manifest = _manifest(dependencies=["json"])
+
+        assert loader._check_dependencies(manifest) == ["plugin:json"]
+
+    def test_the_shipped_manifest_no_longer_declares_a_pip_name_as_a_plugin(self):
+        """The manifest that motivated the field."""
+        import json as _json
+        from pathlib import Path as _Path
+
+        repo = _Path(__file__).resolve().parents[2]
+        data = _json.loads(
+            (repo / "plugins" / "core-plugins" / "telemetry-prompt-middleware" / "plugin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert "aiohttp" not in data.get("dependencies", []), "a pip name in `dependencies` can never be satisfied"
+        assert "aiohttp" in data.get("python_dependencies", [])
+
+
+class TestCrashedDiscoveryIsRecoverable:
+    """#14000: `startup()` sets `_started = True` BEFORE discovery.
+
+    A crash there wedges the manager permanently — no plugins loaded, a flag
+    saying startup succeeded, and every later `startup()` a no-op. #13677 made
+    that state visible; this makes it recoverable without a process restart.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retry_after_a_crashed_discovery_loads_plugins(self, tmp_path, monkeypatch):
+        _make_plugin(tmp_path, "recover-demo")
+        manager = PluginManager([tmp_path])
+
+        boom = {"raise": True}
+        real_discover = manager._loader.discover_plugins
+
+        def _flaky():
+            if boom["raise"]:
+                raise RuntimeError("discovery exploded")
+            return real_discover()
+
+        monkeypatch.setattr(manager._loader, "discover_plugins", _flaky)
+
+        with pytest.raises(RuntimeError):
+            await manager.startup()
+        assert manager.get_load_report()["completed"] is False
+
+        boom["raise"] = False
+        report = await manager.retry_discovery()
+
+        assert report["completed"] is True
+        assert report["loaded"] == 1, "the recovered run must actually load the plugin"
+        assert report["failed"] == []
+
+    @pytest.mark.asyncio
+    async def test_retry_after_a_successful_startup_is_refused(self, tmp_path):
+        """The negative case, and the one that matters: re-importing modules
+        that already registered would raise "Plugin already registered" and turn
+        a healthy manager into a broken one."""
+        _make_plugin(tmp_path, "no-retry-demo")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+        before = manager.get_load_report()
+
+        after = await manager.retry_discovery()
+
+        assert after["loaded"] == before["loaded"], "a completed startup must not be re-run"
+        assert after["failed"] == [], "a refused retry must not manufacture failures"
+        assert after["completed"] is True
+
+    @pytest.mark.asyncio
+    async def test_retry_on_an_empty_tree_does_not_loop_forever(self, tmp_path):
+        """An empty tree completes; it is not a crash, so retry declines."""
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        report = await manager.retry_discovery()
+
+        assert report["completed"] is True
+        assert report["discovered"] == 0
+
+
+class TestRetryDoesNotReinitialiseLivePlugins:
+    """#14000 review blocker: `PluginRegistry._plugins` is a class attribute —
+    process-wide, shared with the live `POST /plugins/{name}/load` route — and
+    `load_plugin` runs `initialize()` BEFORE `register()`, so the duplicate
+    check fires only after every side effect has already happened.
+
+    A retry therefore re-initialised plugins that were already live: hook
+    callbacks appended a second time (HookRegistry is also a singleton and does
+    not dedupe, so the duplicate is permanent), the second instance discarded
+    without `shutdown()`, and the report naming a working plugin as failed with
+    `completed: True` locking the lie in.
+
+    Asserting the report is not enough here — the report was the thing that
+    lied. These count the side effects.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_already_registered_plugin_is_not_initialised_twice(self, tmp_path):
+        _make_plugin(tmp_path, "already-live")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        plugin = manager._registry.get_plugin("already-live")
+        assert plugin is not None, "fixture must actually register, or this guards nothing"
+        before = getattr(plugin, "init_count", None)
+
+        # Force the crashed-startup state the retry path exists for.
+        manager._load_report["completed"] = False
+        await manager.retry_discovery()
+
+        again = manager._registry.get_plugin("already-live")
+        assert again is plugin, "the live instance must survive a retry"
+        if before is not None:
+            assert getattr(again, "init_count", None) == before, "initialize() ran a second time on a live plugin"
+
+    @pytest.mark.asyncio
+    async def test_a_live_plugin_is_reported_loaded_not_failed(self, tmp_path):
+        """It reported working plugins as casualties — the manufactured-casualty
+        failure #13677 already fixed one level up."""
+        _make_plugin(tmp_path, "live-not-failed")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+
+        manager._load_report["completed"] = False
+        report = await manager.retry_discovery()
+
+        assert report["failed"] == [], "a live plugin must not be reported as a failure"
+        assert report["loaded"] == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_after_a_clean_shutdown_is_refused(self, tmp_path):
+        """`shutdown()` also leaves completed=False, so gating on that alone
+        would resurrect a manager the caller deliberately stopped — 'crashed'
+        and 'cleanly shut down' conflated, which is this umbrella's whole
+        subject."""
+        _make_plugin(tmp_path, "shutdown-demo")
+        manager = PluginManager([tmp_path])
+        await manager.startup()
+        await manager.shutdown()
+
+        report = await manager.retry_discovery()
+
+        assert report["loaded"] == 0 or not manager._started, "a shut-down manager must not be restarted by a retry"
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_retries_do_not_both_run(self, tmp_path, monkeypatch):
+        """`startup()` awaits, so without a lock two retries interleave.
+
+        The state has to be a genuinely CRASHED startup — nothing registered.
+        Retrying after a successful one exercises nothing, because the
+        already-registered skip means `load_plugin` is never called and there is
+        no suspension point to interleave at. An earlier version of this test
+        made that mistake and passed with the lock deleted.
+        """
+        _make_plugin(tmp_path, "race-demo")
+        manager = PluginManager([tmp_path])
+
+        # Crash the first startup so completed=False and nothing is registered.
+        real_discover = manager._loader.discover_plugins
+        runs = {"n": 0}
+        boom = {"raise": True}
+
+        def _counting_discover():
+            if boom["raise"]:
+                boom["raise"] = False
+                raise RuntimeError("discovery exploded")
+            runs["n"] += 1
+            return real_discover()
+
+        monkeypatch.setattr(manager._loader, "discover_plugins", _counting_discover)
+        with pytest.raises(RuntimeError):
+            await manager.startup()
+        assert manager.get_load_report()["completed"] is False
+
+        real_load = manager._loader.load_plugin
+
+        async def _slow_load(manifest):
+            await asyncio.sleep(0.05)
+            return await real_load(manifest)
+
+        monkeypatch.setattr(manager._loader, "load_plugin", _slow_load)
+
+        await asyncio.gather(manager.retry_discovery(), manager.retry_discovery())
+
+        # Count DISCOVERY runs, not outcomes: the already-registered skip makes a
+        # second pass harmless, so the report alone cannot distinguish a locked
+        # implementation from an unlocked one.
+        assert runs["n"] == 1, f"discovery ran {runs['n']} times — the second retry was not serialised"
+        assert manager.get_load_report()["failed"] == [], "concurrent retries manufactured a failure"
