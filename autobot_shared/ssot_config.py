@@ -1497,6 +1497,14 @@ class MiscConfig(RedactedSettings):
         default="",
         alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
     )
+    # #13884: fraction of a paginated document's pages that must carry a text
+    # layer before the extraction is treated as usable. Below it the document is
+    # reported as having no usable text layer rather than as a successful
+    # extraction that happens to be empty.
+    document_min_text_page_ratio: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
+    )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(

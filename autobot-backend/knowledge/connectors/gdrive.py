@@ -243,7 +243,15 @@ class GoogleDriveConnector(AbstractConnector):
                 return None
 
         if not text.strip():
-            self.logger.debug("Extracted empty text from file %s", file_id)
+            # #13884: this was logger.debug, so a sync over a folder of scanned
+            # PDFs skipped every file and reported nothing at all. The skip is
+            # correct; its invisibility was not.
+            self.logger.warning(
+                "Skipping %s (%s): no text could be extracted. Scanned or image-only "
+                "documents need OCR before they can be indexed.",
+                file_name,
+                file_id,
+            )
             return None
 
         # Add file header

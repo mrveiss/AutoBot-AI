@@ -97,7 +97,41 @@ class DocumentPipeline(BasePipeline):
             "metadata": metadata,
         }
         result.update(self._format_fields(extracted))
+        result.update(self._text_layer_fields(extracted))
         return result
+
+    def _text_layer_fields(self, extracted: ExtractedDocument) -> Dict[str, Any]:
+        """Report what was actually readable, so empty is never mistaken for blank.
+
+        Extraction succeeded — the file parsed. What failed is that the document
+        carries no text to recover, which is what a scan looks like. Reporting
+        that as a plain success with a high confidence told consumers the
+        document was blank (#13884).
+        """
+        fields: Dict[str, Any] = {}
+
+        # Report unreadable pages even when the document as a whole is usable: a
+        # 40-page contract with one scanned addendum still has a hole in it, and
+        # the caller can only OCR what it knows is missing.
+        if extracted.empty_page_numbers:
+            fields["empty_pages"] = list(extracted.empty_page_numbers)
+            fields["text_page_ratio"] = round(extracted.text_page_ratio, 4)
+
+        if extracted.has_usable_text_layer:
+            return fields
+
+        fields["processing_status"] = "no_text_layer"
+        fields["text_layer_reason"] = (
+            "No recoverable text layer — the document is most likely scanned or image-only and needs OCR."
+        )
+        fields.setdefault("text_page_ratio", round(extracted.text_page_ratio, 4))
+        logger.info(
+            "Document has no usable text layer (format=%s, pages=%s, text_page_ratio=%.2f)",
+            extracted.format,
+            extracted.page_count,
+            extracted.text_page_ratio,
+        )
+        return fields
 
     def _format_fields(self, extracted: ExtractedDocument) -> Dict[str, Any]:
         """Per-format fields that are not part of the canonical result."""
@@ -116,12 +150,17 @@ class DocumentPipeline(BasePipeline):
         return fields
 
     def _confidence_for(self, extracted: ExtractedDocument) -> float:
-        """Plain text decodes exactly; parsed formats keep the historical score.
+        """Score what was recovered, not merely that parsing did not raise.
+
+        A document with no usable text layer scores 0.0: previously an image-only
+        PDF returned 0.95 with an empty ``extracted_text``, which asserted the
+        document was blank rather than unread (#13884).
 
         PDF table extraction is still unimplemented upstream (#13895), so this
-        score continues to describe text recovery only — it is not a claim about
-        the ``tables`` field.
+        score describes text recovery only — it is not a claim about ``tables``.
         """
+        if not extracted.has_usable_text_layer:
+            return 0.0
         return 1.0 if extracted.format == "text" else 0.95
 
     # ------------------------------------------------------------------

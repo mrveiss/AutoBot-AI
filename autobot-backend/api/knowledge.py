@@ -1167,6 +1167,31 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     return file_content.decode("utf-8", errors="replace")
 
 
+def _no_text_detail(filename: str, file_content: bytes) -> str:
+    """Explain *why* no text was extracted, not merely that none was (#13884).
+
+    A paginated document that parsed cleanly but carries no text layer is a scan;
+    telling the user that is the difference between "try OCR" and "try another
+    file".
+    """
+    from media.document.extraction import DocumentExtractionError, detect_format, extract_pdf
+
+    if detect_format(file_content) != "pdf":
+        return "No text content could be extracted from file"
+
+    try:
+        extracted = extract_pdf(file_content)
+    except DocumentExtractionError:
+        return "No text content could be extracted from file"
+
+    if extracted.page_count:
+        return (
+            f"No text layer found in any of the {extracted.page_count} page(s). "
+            "The document appears to be scanned or image-only and needs OCR."
+        )
+    return "No text content could be extracted from file"
+
+
 def _parse_upload_tags(tags_str) -> list:
     """Parse and validate tags from upload form."""
     try:
@@ -1224,7 +1249,10 @@ async def upload_file_to_knowledge(
 
     content = _extract_file_content(filename, file_content)
     if not content.strip():
-        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+        # #13884: distinguish "we could not read it" from "it is empty". A scanned
+        # PDF parses fine and yields nothing, and a generic message left the user
+        # with no way to tell that OCR — not a different file — is what is needed.
+        raise HTTPException(status_code=400, detail=_no_text_detail(filename, file_content))
 
     # Issue #5064: sanitize uploaded document content against prompt injection
     # before the text reaches the KB / embedding pipeline.

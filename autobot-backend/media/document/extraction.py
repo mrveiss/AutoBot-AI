@@ -28,7 +28,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -40,6 +42,40 @@ _PDF_MAGIC = b"%PDF"
 _ZIP_MAGIC = b"PK"
 _DOCX_MARKER = b"word/"
 _DOCX_SNIFF_BYTES = 2000
+
+# #13884: fraction of pages that must carry text before an extraction counts as
+# usable. Default 0.5 — a document where most pages are unreadable is a scan,
+# whatever the remaining pages contain. Override when a corpus is legitimately
+# mixed (title pages, plates, appendices of figures).
+DEFAULT_MIN_TEXT_PAGE_RATIO = 0.5
+
+
+def min_text_page_ratio() -> float:
+    """Resolve the usable-text-layer threshold from config.
+
+    Resolved per call rather than captured at import so a deployment can retune
+    it without a restart, and so tests can exercise the bounds.
+    """
+    raw = blank_to_none(config.misc.document_min_text_page_ratio)
+    if raw is None:
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO=%r is not a number; falling back to %s",
+            raw,
+            DEFAULT_MIN_TEXT_PAGE_RATIO,
+        )
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO=%s must be within [0.0, 1.0]; falling back to %s",
+            value,
+            DEFAULT_MIN_TEXT_PAGE_RATIO,
+        )
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    return value
 
 
 class DocumentExtractionError(Exception):
@@ -94,6 +130,36 @@ class ExtractedDocument:
         the signal a scanned document needs OCR (#13884, #13896).
         """
         return bool(self.text.strip())
+
+    @property
+    def empty_page_numbers(self) -> Tuple[int, ...]:
+        """Pages that carried no recoverable text, 1-indexed.
+
+        Non-empty only for paginated formats. This is what lets a caller say
+        *which* pages need OCR instead of failing or succeeding wholesale.
+        """
+        return tuple(page.number for page in self.pages if not page.text.strip())
+
+    @property
+    def text_page_ratio(self) -> float:
+        """Fraction of pages that carried text; ``1.0`` for unpaginated formats.
+
+        A 40-page scan with one stray text page reports ``has_text`` as True,
+        which is technically correct and practically misleading — this is the
+        measure that separates the two.
+        """
+        if not self.pages:
+            return 1.0 if self.has_text else 0.0
+        return (len(self.pages) - len(self.empty_page_numbers)) / len(self.pages)
+
+    @property
+    def has_usable_text_layer(self) -> bool:
+        """Whether enough of the document was readable to treat it as extracted.
+
+        Distinct from :attr:`has_text`: a document can carry text and still be
+        unusable, which is the case a scanned PDF with an OCR cover page hits.
+        """
+        return self.has_text and self.text_page_ratio >= min_text_page_ratio()
 
 
 def render_pages(pages: Sequence[PageText], marker: str = PAGE_MARKER_TEMPLATE) -> str:
