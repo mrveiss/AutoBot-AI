@@ -13,7 +13,7 @@ storage to the chat_history subsystem.
 import json
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.schemas_chat import (
@@ -734,6 +734,49 @@ async def _track_session_in_memory_graph(
         )
 
 
+async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> None:
+    """Refuse to create over an existing session the caller does not own (#14012).
+
+    The caller-supplied id (#6746) is validated for shape only, so without this a
+    request naming someone else's session id would overwrite their messages and
+    reassign ownership. Re-creating one's *own* session id is left alone — that
+    is a client retry, and the #6746 round-trip depends on it.
+
+    A lookup failure refuses rather than proceeding: not being able to tell
+    whether a session exists is not a reason to overwrite it.
+    """
+    try:
+        existing = await chat_history_manager.get_session(session_id)
+    except Exception as exc:
+        logger.warning("Could not check session %s for collision, refusing create: %s", session_id, exc)
+        raise _session_id_taken_error()
+    if existing is None:
+        return
+
+    owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
+    caller = (user_data or {}).get("username")
+    if owner and caller and owner == caller:
+        return  # the caller's own session — a retry, not a takeover
+
+    logger.warning("Refusing create over existing session %s (owner=%s, caller=%s)", session_id, owner, caller)
+    raise _session_id_taken_error()
+
+
+def _session_id_taken_error() -> HTTPException:
+    """409 for a create that collides with an existing session id (#14012).
+
+    Deliberately an ``HTTPException`` rather than the domain ``AuthorizationError``:
+    ``@with_error_handling`` re-raises ``HTTPException`` untouched but converts
+    anything else into a generic 500 ("The operation failed"), so the domain
+    exception refused the request while telling the client the server broke.
+
+    Deliberately 409 and identical for both refusal cases — a session owned by
+    someone else and one with no recorded owner. A 403 on the first would confirm
+    who does own it; the caller only needs to know the id is not theirs to take.
+    """
+    return HTTPException(status_code=409, detail="A session with this id already exists")
+
+
 @router.post("/chat/sessions", response_model=DataResponse[SessionCreateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -754,14 +797,20 @@ async def create_session(session_data: SessionCreate, request: Request):
     # so the frontend's locally-minted UUID survives the round-trip and
     # frontend/backend stay aligned. Falls back to server-mint when absent
     # (legacy callers, CLI, tests).
+    # SECURITY: Extract authenticated user and add to metadata as owner
+    user_data = get_auth_middleware().get_user_from_request(request)
+
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id
+        # #14012: the id above is caller-supplied and only its FORMAT was
+        # checked. Without this, creating over an existing id replaced the
+        # stored messages with [] and reassigned ownership — one request that
+        # destroyed a conversation and took the session over.
+        await _reject_session_id_collision(chat_history_manager, session_id, user_data)
     else:
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-    # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = get_auth_middleware().get_user_from_request(request)
     metadata = session_data.metadata or {}
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]

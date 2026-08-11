@@ -76,6 +76,7 @@ class SessionOwnershipValidator:
         username: str,
         org_id: str | None = None,
         team_id: str | None = None,
+        force: bool = False,
     ) -> bool:
         """
         Associate a chat session with its owner and org/team context.
@@ -85,11 +86,29 @@ class SessionOwnershipValidator:
             username: Owner username
             org_id: Organization ID (#684)
             team_id: Team ID for team-scoped sessions (#684)
+            force: Reassign an already-owned session (#14012). A deliberate
+                transfer must say so; the default refuses.
 
         Returns:
-            True if successful
+            True if successful, False if the session already has a different
+            owner and *force* was not set.
         """
         try:
+            # #14012: this used to be an unconditional set, so any writer could
+            # silently take a session over — and then pass every ownership check
+            # on it. An authorization record that any caller can overwrite is not
+            # an authorization record. Refreshing one's own ownership (the TTL
+            # refresh path) is still allowed.
+            existing = await self.get_session_owner(session_id)
+            if existing and existing != username and not force:
+                logger.warning(
+                    "Refusing to reassign session %s... from %s to %s without force",
+                    session_id[:8],
+                    existing,
+                    username,
+                )
+                return False
+
             # Store ownership mapping
             ownership_key = self._get_ownership_key(session_id)
             await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
