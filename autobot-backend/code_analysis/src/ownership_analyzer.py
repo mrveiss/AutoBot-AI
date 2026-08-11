@@ -73,8 +73,9 @@ _SKIP_DIRECTORIES = (
 # #13602: two ceilings, because a file count alone is the wrong bound. Measured
 # on this repo, `git blame --line-porcelain` runs at a median 0.45s per file, so
 # 2000 files is a ~15 minute request — a hang traded for a wait nobody will sit
-# through. The wall-clock budget is what the caller actually experiences; the
-# file cap just stops a pathological tree before the clock starts mattering.
+# through. The wall-clock budget covers the walk as well as the blames, since
+# globbing a large tree is itself measurable; the file cap just stops a
+# pathological tree before the clock starts mattering.
 _MAX_FILES_TO_BLAME = 2000
 _MAX_BLAME_SECONDS = 20.0
 
@@ -292,13 +293,17 @@ class OwnershipAnalyzer:
         deadline = time.monotonic() + _MAX_BLAME_SECONDS
         for pattern in patterns:
             for file_path in root.glob(pattern):
+                # Ahead of the skip `continue` on purpose: behind it, globbing
+                # and skipping sat OUTSIDE the budget entirely — measured 18s of
+                # walk on this repo with blame costing nothing. A budget that
+                # excludes the walk is not what the caller experiences.
+                if time.monotonic() > deadline:
+                    self._truncated_reason = f"time budget ({_MAX_BLAME_SECONDS:.0f}s)"
+                    break
                 if not file_path.is_file() or self._should_skip_file(file_path, root):
                     continue
                 if considered >= _MAX_FILES_TO_BLAME:
                     self._truncated_reason = f"file cap ({_MAX_FILES_TO_BLAME})"
-                    break
-                if time.monotonic() > deadline:
-                    self._truncated_reason = f"time budget ({_MAX_BLAME_SECONDS:.0f}s)"
                     break
                 considered += 1
 
@@ -778,7 +783,7 @@ class OwnershipAnalyzer:
         file_name = file_path.name
 
         for skip_dir in _SKIP_DIRECTORIES:
-            if f"/{skip_dir}/" in f"/{path_str}" or path_str.startswith(f"{skip_dir}/"):
+            if f"/{skip_dir}/" in f"/{path_str}":
                 return True
 
         for pattern in _SKIP_FILE_PATTERNS:

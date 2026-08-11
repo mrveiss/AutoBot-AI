@@ -260,8 +260,15 @@ class TestOwnershipAnalyzerIsBounded:
 
     @pytest.mark.asyncio
     async def test_one_budget_covers_all_patterns(self, monkeypatch, tmp_path):
-        """Breaking only the inner loop would give every later pattern a fresh
-        budget, which is not a budget."""
+        """One budget across all patterns — enforced by hoisting `considered`
+        and `deadline` ABOVE the pattern loop.
+
+        The first version of this docstring claimed the outer `break` was what
+        prevented a fresh budget per pattern. It is not: with the counters
+        hoisted, removing that break leaves the mutant equivalent — a later
+        pattern re-breaks on its first non-skipped file. So the test could not
+        fail for the reason it named. It guards the hoisting; the break is an
+        optimisation."""
         import code_analysis.src.ownership_analyzer as oa
 
         for ext in ("py", "ts", "vue"):

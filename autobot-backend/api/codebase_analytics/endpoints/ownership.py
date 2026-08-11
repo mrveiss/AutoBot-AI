@@ -119,7 +119,9 @@ def _validate_path_security(path: str, project_root: str) -> JSONResponse | None
             # The requested path is the attacker-supplied string and the only
             # forensically useful field; the root is ours and stays out of the
             # log. The first version of this logged exactly the wrong one.
-            logger.warning("Path traversal attempt blocked: %s", path)
+            # %r, truncated: the attacker controls this string, and an
+            # unescaped newline in it forges log lines.
+            logger.warning("Path traversal attempt blocked: %r", str(path)[:200])
         else:
             # Still WARNING, deliberately: an alert keyed on a rejected path must
             # keep firing. Only the misleading "attack" wording is scoped to an

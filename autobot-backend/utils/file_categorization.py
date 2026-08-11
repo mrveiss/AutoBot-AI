@@ -406,12 +406,30 @@ def is_skipped_path(path: Path, root: Path) -> bool:
     A skip directory *nested* under the root is still skipped, which is the
     behaviour we actually want.
     """
+    # Three tiers, because this runs once per GLOBBED path — 214k of them on
+    # this repo, not the 6,967 surviving files. An earlier version of this
+    # comment used the wrong denominator and understated the cost by ~30x.
+    #
+    # 1. Lexically inside a skip dir -> skipped. A symlink cannot change that,
+    #    so no stat at all. 96% of paths land here.
+    # 2. Lexically clean and not a symlink -> kept. glob/rglob do not recurse
+    #    symlinked directories, so only a symlinked LEAF can escape, and
+    #    is_symlink() is one lstat where resolve() is a full realpath walk.
+    # 3. Anything else -> resolve and place it properly.
+    #
+    # Tuple slicing rather than relative_to(): same answer, and relative_to was
+    # measured at ~28us of the ~29us total.
+    root_parts = root.parts
+    path_parts = path.parts
+    if path_parts[: len(root_parts)] == root_parts:
+        if set(path_parts[len(root_parts) :]) & SKIP_DIRS:
+            # Already inside a skipped directory lexically. A symlink cannot
+            # change that answer, so skip the lstat — and this is the hot case:
+            # 96% of globbed paths on a working checkout land here.
+            return True
+        if not path.is_symlink():
+            return False
     try:
-        # resolve() on both sides, deliberately. A lexical relative_to() is ~12x
-        # cheaper, but it accepts a symlink that points OUT of the scan root as
-        # scannable — and the 167k-file measurement that would have justified
-        # the shortcut is the very number this skip-list removes. At 6,967 files
-        # the difference is ~0.5s on a scan that was taking six minutes.
         relative = path.resolve().relative_to(root.resolve())
     except (ValueError, OSError):
         # A path that cannot be placed under the scan root is not in the scan.
