@@ -57,6 +57,7 @@ from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
 from type_defs.common import Metadata
+from utils.secrets_store_migration import migrate_legacy_secrets_store
 
 logger = get_logger(__name__)
 
@@ -96,6 +97,13 @@ class SecretsManager:
         # Get paths using centralized configuration
         self.secrets_file = str(data_dir / "secrets.json")
         self.key_file = str(data_dir / "secrets.key")
+
+        # One-time migration off the legacy CWD-relative resolver (#14081
+        # review, #14113): must run before _initialize_encryption() decides
+        # whether to load an existing key or mint a fresh one, or an
+        # existing deployment's real store is silently orphaned.
+        migrate_legacy_secrets_store(data_dir, ["secrets.key", "secrets.json"], "secrets manager")
+
         self._initialize_encryption()
 
         # Cache layer to reduce file I/O (Issue #327)

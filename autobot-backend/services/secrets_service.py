@@ -20,6 +20,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
+from utils.secrets_store_migration import migrate_legacy_secrets_store
 
 logger = get_logger(__name__)
 
@@ -48,6 +49,13 @@ class SecretsService:
             # production.
             data_dir = config.path.data_path
             data_dir.mkdir(parents=True, exist_ok=True)
+
+            # One-time migration off the legacy CWD-relative resolver
+            # (#14081 review, #14113): must run before _init_database()
+            # creates a fresh, empty database, or an existing deployment's
+            # real store is silently orphaned.
+            migrate_legacy_secrets_store(data_dir, ["secrets.db"], "secrets service")
+
             db_path = str(data_dir / "secrets.db")
 
         self.db_path = db_path
