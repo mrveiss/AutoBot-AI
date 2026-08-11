@@ -51,14 +51,34 @@ def _calls_audit_log(node: ast.AST) -> bool:
     )
 
 
+_LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
+
+
+def _is_logger_call(node: ast.AST) -> bool:
+    """True for `<something log-ish>.warning(...)` and friends.
+
+    The receiver is checked on purpose. Matching the method name alone made the
+    detector lie: a handler that dropped the audit record and merely bumped
+    `_METRICS.error("sso_audit_write_failed")` read as compliant. On an umbrella
+    about detectors that report the reassuring value, a guard with that hole is
+    the bug it was written to catch.
+    """
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+        return False
+    if node.func.attr not in _LOG_METHODS:
+        return False
+    receiver = node.func.value
+    name = receiver.id if isinstance(receiver, ast.Name) else getattr(receiver, "attr", "")
+    return "log" in name.lower()
+
+
 def _handler_is_silent(handler: ast.ExceptHandler) -> bool:
     """True if the handler neither logs nor re-raises — i.e. swallows."""
     for node in ast.walk(handler):
         if isinstance(node, ast.Raise):
             return False
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr in {"debug", "info", "warning", "error", "exception", "critical"}:
-                return False
+        if _is_logger_call(node):
+            return False
     return True
 
 
@@ -76,7 +96,7 @@ def test_the_file_still_has_audit_writes_to_check():
     """Guard the guard: a rename or refactor that stops matching would make
     every assertion below pass against nothing."""
     handlers = _audit_write_handlers()
-    assert len(handlers) >= 7, f"expected the file's audit-write handlers, found {len(handlers)}"
+    assert len(handlers) >= 13, f"expected the file's audit-write handlers, found {len(handlers)}"
 
 
 @pytest.mark.parametrize(
