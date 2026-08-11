@@ -11,6 +11,7 @@ goes through transcriber.deps.can_access (#9863 single ownership policy);
 if that policy is weakened or a route stops calling it, these tests go red.
 """
 
+import asyncio
 import io
 from types import SimpleNamespace
 
@@ -52,8 +53,17 @@ async def client(tmp_path):
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c
+    finally:
+        # #13861: `connect()` had no matching `close()`, and aiosqlite runs its
+        # connection on a NON-daemon worker thread. Every one of the 8 tests
+        # created a fixture, so 8 threads outlived the run and the interpreter
+        # could never exit — the suite passed, printed `........ [100%]`, and
+        # then hung until CI cancelled the job at 15 minutes. 20 of 20 runs
+        # across seven branches ended `cancelled`, never once pass or fail.
+        await db.close()
 
 
 async def _create_project(client, user: str) -> int:
@@ -196,3 +206,85 @@ async def test_legacy_default_rows_not_accessible_to_other_users(client):
     # DEFAULT_USER caller can still access its own rows
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: DEFAULT_USER})
     assert r.status_code == 200
+
+
+class TestTheFixtureDoesNotLeakConnections:
+    """#13861: co-located-smoke had never completed — 20 of 20 runs cancelled.
+
+    Not one `success`, not one `failure`, across seven branches over a week.
+    The tests all PASSED; the interpreter then hung, because `client` called
+    `db.connect()` with no matching `close()` and aiosqlite runs its connection
+    on a NON-daemon worker thread. Eight tests, eight fixtures, eight threads
+    that outlive the run — so the process could never exit and CI cancelled the
+    job at its 15-minute timeout.
+
+    A check that can only ever be cancelled produces no signal in either
+    direction: it cannot pass, so it confirms nothing; it cannot fail, so nobody
+    investigates. Meanwhile it sits in the PR check list looking like coverage.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_closed_database_leaves_no_worker_thread(self, tmp_path):
+        """Assert the invariant, not the symptom. A test that merely finishes
+        proves nothing here — the old suite finished too, and then hung."""
+        import threading
+
+        before = {t.ident for t in threading.enumerate()}
+
+        db = Database(str(tmp_path / "leak.db"))
+        await db.connect()
+        during = {t.ident for t in threading.enumerate()} - before
+        assert during, "aiosqlite should have started a worker thread — otherwise this guards nothing"
+
+        await db.close()
+
+        for _ in range(50):
+            if not ({t.ident for t in threading.enumerate()} & during):
+                break
+            await asyncio.sleep(0.05)
+        else:
+            pytest.fail(
+                "aiosqlite worker thread outlived close() — it is non-daemon, so the "
+                "interpreter cannot exit and CI cancels the job with no failure (#13861)"
+            )
+
+    @pytest.mark.asyncio
+    async def test_close_is_idempotent(self, tmp_path):
+        """The fixture closes in a `finally`, so a test that already closed must
+        not turn teardown into an error."""
+        db = Database(str(tmp_path / "twice.db"))
+        await db.connect()
+        await db.close()
+        await db.close()
+
+    def test_the_fixture_still_closes_what_it_opens(self):
+        """Structural, because the symptom is at INTERPRETER EXIT.
+
+        Deleting `await db.close()` from the fixture does not fail a test — it
+        makes the process hang after the suite passes, which in CI is another
+        cancelled job with no failure. That is the defect, so a guard that only
+        reproduces it is a guard that hangs too. This one fails in milliseconds.
+
+        (An earlier attempt mutated `Database.close()` to drop the reference
+        without closing; that turned out to be an EQUIVALENT mutant — CPython
+        finalises the connection and the worker thread exits anyway. The
+        fixture's missing call is the real regression shape.)
+        """
+        import ast
+        from pathlib import Path as _Path
+
+        tree = ast.parse(_Path(__file__).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.AsyncFunctionDef) and node.name == "client"):
+                continue
+            calls = {
+                n.func.attr for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            }
+            assert "connect" in calls, "fixture no longer connects — this guard would pass against nothing"
+            assert "close" in calls, (
+                "the `client` fixture opens a Database and never closes it. aiosqlite's "
+                "worker thread is non-daemon, so the interpreter cannot exit and CI "
+                "cancels the job at its timeout with no failure reported (#13861)"
+            )
+            return
+        pytest.fail("the `client` fixture was renamed or removed — this guard matches nothing")

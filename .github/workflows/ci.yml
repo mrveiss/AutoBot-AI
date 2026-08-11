@@ -147,6 +147,30 @@ jobs:
 
     - uses: ./.github/actions/setup-python-suite
 
+    # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
+    # every deployed rule file and `promtool test rules` over every behavioural
+    # suite — and on a GitHub-hosted runner it did NONE of that, because nothing
+    # installed the binary. Five of its seven checks skipped, so rule behaviour
+    # was verified by nothing in CI.
+    #
+    # That is not hypothetical: #13909 shipped a recording rule whose `and`
+    # operands were reversed, so ServiceMemoryHeadroomLow compared a byte count
+    # against 0.15 and could never fire. Every Python test passed, because they
+    # asserted substrings of the expr strings. The promtool suite catches it.
+    #
+    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
+    # with the same binary the hosts run.
+    - name: Install promtool (Prometheus rule validation, #13927)
+      run: |
+        set -euo pipefail
+        PROM_VERSION=2.47.0
+        TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
+        curl -fsSL -o "/tmp/${TARBALL}.tar.gz" \
+          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"
+        tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
+        sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
+        promtool --version
+
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
     # workflows over the same three trees; code-quality.yml's bandit has no
