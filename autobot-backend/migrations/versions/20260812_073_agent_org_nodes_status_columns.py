@@ -21,8 +21,9 @@ Create Date: 2026-08-12 00:00:00.000000
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
+
+from migrations.guards import has_table
 
 revision: str = "20260812_073"
 down_revision: Union[str, None] = "20260811_072"
@@ -31,28 +32,34 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "agent_org_nodes",
-        sa.Column(
-            "status",
-            sa.String(32),
-            nullable=False,
-            # Literal, not an import of LLCAgentStatus.AVAILABLE — migrations
-            # in this tree never import application code, only stdlib/sa/op.
-            server_default="available",
-        ),
+    # Guarded + IF NOT EXISTS, following 20260629_063 / 20260630_064, which
+    # reconcile the same class of drift: raw SQL writing to a column no
+    # migration ever created.
+    #
+    # This matters here specifically. #14108 records that we do NOT know whether
+    # a deployed database already carries these columns from some out-of-band
+    # path — settling that needs host evidence. A bare `op.add_column` would
+    # hard-fail the deploy in exactly that case, so the migration must be
+    # correct under both readings, not just the one we hope is true.
+    if not has_table("agent_org_nodes"):
+        return
+
+    op.execute(
+        'ALTER TABLE "agent_org_nodes" '
+        "ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'available'"
     )
-    op.add_column(
-        "agent_org_nodes",
-        sa.Column("pause_reason", sa.Text(), nullable=True),
-    )
-    op.add_column(
-        "agent_org_nodes",
-        sa.Column("paused_at", sa.DateTime(timezone=True), nullable=True),
+    op.execute('ALTER TABLE "agent_org_nodes" ADD COLUMN IF NOT EXISTS pause_reason TEXT')
+    op.execute(
+        'ALTER TABLE "agent_org_nodes" '
+        "ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE"
     )
 
 
 def downgrade() -> None:
-    op.drop_column("agent_org_nodes", "paused_at")
-    op.drop_column("agent_org_nodes", "pause_reason")
-    op.drop_column("agent_org_nodes", "status")
+    # Symmetrically guarded: a downgrade must not fail on a database where the
+    # columns were never present.
+    if not has_table("agent_org_nodes"):
+        return
+    op.execute('ALTER TABLE "agent_org_nodes" DROP COLUMN IF EXISTS paused_at')
+    op.execute('ALTER TABLE "agent_org_nodes" DROP COLUMN IF EXISTS pause_reason')
+    op.execute('ALTER TABLE "agent_org_nodes" DROP COLUMN IF EXISTS status')
