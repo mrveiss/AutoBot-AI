@@ -130,9 +130,7 @@ class TestTheRealBoundaryFromPtyResultToPrompt:
         Those two facts are why the old fallback chain always degraded to its
         literal, and why a hand-built dict with an `error` key hid the bug.
         """
-        return CommandExecutor._build_pty_result(
-            CommandExecutor.__new__(CommandExecutor), stdout, return_code
-        )
+        return CommandExecutor._build_pty_result(CommandExecutor.__new__(CommandExecutor), stdout, return_code)
 
     def test_the_producer_still_derives_status_from_the_exit_code(self):
         """The invariant #14141 is really about, asserted at its origin.
