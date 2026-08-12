@@ -1,5 +1,12 @@
 # CLAUDE.md Optimization Plan
 
+> **SUPERSEDED — historical record, do not follow (#14133).**
+> This plan targeted a 685-line `CLAUDE.md`, aiming to reach ~476 lines. That work landed and
+> was then taken considerably further: `CLAUDE.md` is now a trigger-routed index of a few dozen
+> lines, with all detail lazy-loaded from `docs/developer/`. The module paths named below
+> (`src/utils/redis_client.py`) also predate the move to `autobot_shared/`.
+> Kept for the reasoning it records; read [`../../CLAUDE.md`](../../CLAUDE.md) for current structure.
+
 **Goal**: Reduce token usage by 30% while preserving ALL instructions and restrictions
 
 ## 🎯 Optimization Strategy

@@ -1,6 +1,7 @@
 ---
 name: performance-engineer
 description: Performance specialist for AutoBot AutoBot platform. Use for optimization, profiling, monitoring, NPU acceleration, multi-modal processing performance, and scalability analysis. Proactively engage for performance bottlenecks and system efficiency improvements.
+model: sonnet
 tools: Read, Write, Bash, Grep, Glob
 ---
 
