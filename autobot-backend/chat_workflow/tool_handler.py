@@ -1753,7 +1753,7 @@ class ToolHandlerMixin:
             Tuple of (WorkflowMessage, additional_text)
         """
         if approval_result:
-            error = approval_result.get("error", "Command was denied or failed")
+            error = approval_result.get("error") or "Command was denied or failed"
             return (
                 WorkflowMessage(
                     type="error",
@@ -2086,7 +2086,10 @@ class ToolHandlerMixin:
         """
         from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
 
-        error = result.get("error", "Unknown error")
+        # #14148: `.get(key, default)` does NOT apply the default when the key
+        # exists holding None — and `terminal_tool._format_execution_result`
+        # constructs exactly that. `or` coalesces both shapes.
+        error = result.get("error") or "Unknown error"
         stderr = result.get("stderr", "")
         repairable_error = self._classify_command_error(command, error, stderr)
 
@@ -2140,7 +2143,11 @@ class ToolHandlerMixin:
         Returns:
             RepairableException if error is recoverable, None if critical
         """
-        combined = f"{error.lower()} {stderr.lower()}"
+        # #14148: a classifier crashing the turn is never the right answer to an
+        # unexpected value. `None` reached here through a `.get()` default that
+        # did not apply, and the bare `raise` upstream propagated the
+        # AttributeError out of the tool-call generator.
+        combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
         # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):

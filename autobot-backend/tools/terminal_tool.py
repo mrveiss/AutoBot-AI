@@ -179,7 +179,15 @@ class TerminalTool:
                 ),
             }
         elif result.get("status") == "error":
-            return {"status": "error", "error": result.get("error"), "command": command}
+            # #14148: never emit a None under a key callers read with a
+            # `.get(key, default)` — the default will not apply and the None
+            # travels onward. Fall back through the fields the PTY result
+            # actually carries before giving up.
+            return {
+                "status": "error",
+                "error": result.get("error") or result.get("stderr") or "Command failed with no error detail",
+                "command": command,
+            }
         else:
             return {
                 "status": "success",
