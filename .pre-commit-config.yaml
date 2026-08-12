@@ -213,6 +213,21 @@ repos:
   # file list but added no guard, so the pattern drifted back.
   - repo: local
     hooks:
+      # #14171: core.fileMode=false hides a hook script committed as 100644 --
+      # the working tree stays executable, so the mismatch is invisible on the
+      # machine that introduced it and only breaks a fresh checkout. It has
+      # reached CI twice (#14151's sweep, #14162), and #14181 records the 16
+      # hooks it found already dormant.
+      - id: hook-exec-bits
+        name: Pre-commit hook entries must be tracked executable (#14171)
+        entry: pipeline-scripts/check_hook_exec_bits.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^(\.pre-commit-config\.yaml|autobot-infrastructure/shared/config/\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
+
       - id: no-open-without-encoding
         name: Require encoding= on text-mode open() (#3391 / #13151)
         entry: pipeline-scripts/check_open_encoding.py
