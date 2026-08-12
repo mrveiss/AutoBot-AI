@@ -10,6 +10,7 @@ Dataclasses for security events, threats, and user profiles.
 Part of Issue #381 - God Class Refactoring
 """
 
+import math
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -258,6 +259,24 @@ class ThreatEvent:
     mitigation_actions: List[str]
 
 
+
+def _is_finite_number(value: object) -> bool:
+    """True for a real, finite int/float -- rejecting bool, NaN and Infinity.
+
+    Two traps in one predicate (#14159 review):
+
+    * ``isinstance(True, int)`` is ``True``, so a bare int check accepts
+      booleans and a profile can arrive with ``risk_score=True``.
+    * Python's ``json.load`` accepts the **non-standard** ``NaN`` /
+      ``Infinity`` / ``-Infinity`` tokens by default, and ``isinstance`` is
+      perfectly happy with the resulting floats. A ``NaN`` risk score makes
+      ``is_high_risk()`` (``risk_score > 0.7``) silently evaluate ``False``
+      forever -- a threat profile that can never be flagged -- and re-saving
+      re-emits the non-standard token, so the store stops being parseable by
+      a strict JSON reader.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
 @dataclass
 class UserProfile:
     """User behavioral profile for anomaly detection"""
@@ -331,13 +350,15 @@ class UserProfile:
             return None
 
         user_id = data.get("user_id")
-        if not isinstance(user_id, str) or not user_id:
+        # `.strip()` because a whitespace-only id is truthy and would key a
+        # profile nobody can look up (#14159 review).
+        if not isinstance(user_id, str) or not user_id.strip():
             logger.warning("Skipping user profile entry: missing or invalid user_id")
             return None
 
         baseline_actions = data.get("baseline_actions", {})
         if not isinstance(baseline_actions, dict) or not all(
-            isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+            isinstance(k, str) and _is_finite_number(v)
             for k, v in baseline_actions.items()
         ):
             logger.warning("Skipping user profile %s: invalid baseline_actions", user_id)
@@ -370,14 +391,14 @@ class UserProfile:
 
         api_usage_patterns = data.get("api_usage_patterns", {})
         if not isinstance(api_usage_patterns, dict) or not all(
-            isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+            isinstance(k, str) and _is_finite_number(v)
             for k, v in api_usage_patterns.items()
         ):
             logger.warning("Skipping user profile %s: invalid api_usage_patterns", user_id)
             return None
 
         risk_score = data.get("risk_score", 0.5)
-        if not isinstance(risk_score, (int, float)) or isinstance(risk_score, bool):
+        if not _is_finite_number(risk_score):
             logger.warning("Skipping user profile %s: invalid risk_score", user_id)
             return None
 

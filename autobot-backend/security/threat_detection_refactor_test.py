@@ -819,3 +819,62 @@ class TestThreatDetectionEngineProfileStorageJson:
         restored = engine.user_profiles["erin"]
         assert restored.typical_ips == {"192.168.0.1"}
         assert restored.risk_score == pytest.approx(0.9)
+
+
+# --- #14159 review follow-ups -------------------------------------------------
+
+
+def _profile_payload(**overrides):
+    """A minimal valid to_dict() payload, with fields overridden per test."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    payload = UserProfile(user_id="u1").to_dict()
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_a_non_finite_risk_score_is_rejected(token):
+    """`json.load` accepts NaN/Infinity by default; the validator must not.
+
+    A NaN risk score makes `is_high_risk()` (`risk_score > 0.7`) evaluate
+    False forever -- a profile that can never be flagged -- and re-saving
+    re-emits the non-standard token, so the store stops being readable by a
+    strict JSON parser. `isinstance(x, float)` is True for NaN, so the type
+    check alone does not catch it.
+    """
+    import json
+
+    from security.enterprise.threat_detection.models import UserProfile
+
+    raw = json.loads('{"user_id": "u1", "risk_score": %s}' % token)
+    assert isinstance(raw["risk_score"], float), "precondition: json parsed it as a float"
+
+    assert UserProfile.from_dict(_profile_payload(risk_score=raw["risk_score"])) is None
+
+
+@pytest.mark.parametrize("field_name", ["baseline_actions", "api_usage_patterns"])
+def test_a_non_finite_metric_value_is_rejected(field_name):
+    """Same trap, in the two float-valued mappings."""
+    import json
+
+    from security.enterprise.threat_detection.models import UserProfile
+
+    nan = json.loads("NaN")
+    assert UserProfile.from_dict(_profile_payload(**{field_name: {"a": nan}})) is None
+
+
+def test_a_whitespace_only_user_id_is_rejected():
+    """A non-empty string is truthy, so `not user_id` lets `"   "` through."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    assert UserProfile.from_dict(_profile_payload(user_id="   ")) is None
+
+
+def test_a_finite_risk_score_still_loads():
+    """The rejections above must not take ordinary values with them."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    profile = UserProfile.from_dict(_profile_payload(risk_score=0.9))
+    assert profile is not None and profile.risk_score == 0.9
+    assert profile.is_high_risk()
