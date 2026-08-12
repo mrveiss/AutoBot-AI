@@ -53,8 +53,16 @@ find_python() {
 # propagates (set -e turns that into a hard stop); the later filter chain's
 # `|| true` still only ever tolerates an empty *result*, not a git error.
 get_staged_python_files() {
+    # GH#14163: neither this wrapper nor its call site in main() used to
+    # forward "$@" the way every sibling hook's get_staged_*_files() does
+    # (#6785 convention: no-args -> git diff --cached, argv -> explicit
+    # file list, so the same script works as a local hook AND a CI
+    # wrapper). Without it, an argv-mode invocation silently fell back to
+    # `git diff --cached` against whatever happened to be staged in that
+    # invocation's working tree instead of the file list the caller asked
+    # for.
     local staged
-    staged="$(get_staged_files '\.py$')" || return 1
+    staged="$(get_staged_files '\.py$' "$@")" || return 1
     printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(test_|_test\.py|tests/)' | \
@@ -82,7 +90,7 @@ main() {
     fi
 
     local files
-    files=$(get_staged_python_files)
+    files=$(get_staged_python_files "$@")
 
     if [[ -z "$files" ]]; then
         echo -e "${GREEN}No Python files staged for commit.${NC}"

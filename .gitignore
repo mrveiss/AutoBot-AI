@@ -23,6 +23,7 @@ bin/
 lib/
 !scripts/lib/
 !autobot-infrastructure/shared/scripts/hooks/lib/
+!autobot-infrastructure/shared/scripts/lib/
 lib64/
 include/
 share/
