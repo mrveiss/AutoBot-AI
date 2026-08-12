@@ -47,7 +47,7 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
+from llc.models.enums import ExternalPMType, LLCAgentStatus, LLCCompanyStatus, MembershipRole, WorkItemStatus
 from llc.models.membership import LLCCompanyMembership
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -839,7 +839,7 @@ class OrgChartNode(BaseModel):
     node_id: str
     name: str
     title: str
-    status: str  # active | idle | error | paused
+    status: str  # active | idle | error | paused | terminated
     adapter_type: str
     is_human: bool
     last_heartbeat: Optional[str]
@@ -863,6 +863,39 @@ def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
         return "error"
     # completed / cancelled / rate_limited / queued / no-run → idle
     return "idle"
+
+
+# Persisted ``LLCAgentStatus`` values that must win over the heartbeat-derived
+# status (#14108). Both are terminal *from the org chart's point of view*: an
+# agent an operator paused or terminated must read that way even while a
+# stale/queued heartbeat run would otherwise derive ``active`` or ``idle``.
+_STOP_STATUSES = frozenset({LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value})
+
+
+def _resolve_org_status(persisted_status: Optional[str], run_status: Optional[str]) -> str:
+    """Combine ``agent_org_nodes.status`` with the derived heartbeat status.
+
+    Precedence rule (#14108): an explicit *stop* lifecycle state — ``paused``
+    or ``terminated`` — always wins over the heartbeat-derived liveness. A
+    terminated agent must never read as ``active``/``idle`` merely because a
+    stale ``llc_heartbeat_runs`` row exists; the same is true of ``paused``.
+    ``controls_service.py`` sets exactly these two values as terminal writes
+    (pause/terminate); resume restores ``pre_pause_status`` or ``available``,
+    neither of which is a stop state, so control returns to the heartbeat
+    derivation on the very next org-chart read after a resume.
+
+    Every other ``LLCAgentStatus`` member (``available``, ``assigned``,
+    ``in_sprint``, ``on_leave``, ``onboarding``, ``offboarding``,
+    ``inactive``) describes work assignment, not liveness — it has no
+    dedicated slot in the org chart's 5-member display vocabulary
+    (``active`` / ``idle`` / ``error`` / ``paused`` / ``terminated``,
+    ``AgentDisplayStatus`` in ``llcStatus.ts``) and falls through to the
+    heartbeat-derived value exactly as before this fix. Per #13485, this is a
+    mapping onto the existing vocabulary — not a tenth status vocabulary.
+    """
+    if persisted_status in _STOP_STATUSES:
+        return persisted_status
+    return _heartbeat_status_to_org_status(run_status)
 
 
 # ``adapter_type`` is agent vocabulary; for a person the honest value is the kind,
@@ -1063,8 +1096,17 @@ async def get_org_chart(
             node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
             name=row.name,
             title=row.title or row.org_role,
-            status=_heartbeat_status_to_org_status(run.status if run else None),
-            adapter_type=row.org_role,
+            # #14108: an explicit pause/terminate must win over a derived
+            # heartbeat status — see `_resolve_org_status` for the precedence
+            # rule and why every other lifecycle value falls through to it.
+            status=_resolve_org_status(row.status, run.status if run else None),
+            # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
+            # back to "" (not the role) when NULL: the hire flow
+            # (agent_hires.py) always sets a concrete adapter — "claude_code"
+            # by default — so a NULL here means a legacy/manually-seeded row
+            # with genuinely no configured adapter, and reusing ``org_role``
+            # is exactly the dishonest substitution this fix removes.
+            adapter_type=row.adapter_type or "",
             is_human=False,
             # Liveness: latest run is picked by created_at; a just-queued run
             # may have no started_at, so fall back to created_at.
