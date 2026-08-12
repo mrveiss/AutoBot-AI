@@ -39,7 +39,7 @@ reason on, and reasoning on it is what let #14162's five hooks through.
 from __future__ import annotations
 
 import argparse
-import subprocess  # nosec B404 - git plumbing, fixed argv, no shell
+import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
@@ -82,7 +82,7 @@ _KNOWN_DORMANT = frozenset(
 
 def _tracked_modes() -> dict[str, str]:
     """Map every tracked path to its git mode, or die rather than report clean."""
-    result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "-s"],
         capture_output=True,
         text=True,
@@ -146,24 +146,24 @@ def main(argv: list[str] | None = None) -> int:
     if known:
         # Printed on every run, pass or fail. A backlog nobody is reminded of is
         # indistinguishable from no backlog.
-        print(f"check-hook-exec-bits: {len(known)} hook(s) dormant and tracked in {_KNOWN_DORMANT_ISSUE}:")
+        print(f"check-hook-exec-bits: {len(known)} hook(s) dormant and tracked in {_KNOWN_DORMANT_ISSUE}:")  # noqa: print
         for item in known:
-            print(f"  KNOWN  {item}")
-        print()
+            print(f"  KNOWN  {item}")  # noqa: print
+        print()  # noqa: print
 
     if not blocking:
-        print(f"check-hook-exec-bits: no new hook entry is missing its exec bit (expected {_REQUIRED_MODE})")
+        print(f"check-hook-exec-bits: no new hook entry is missing its exec bit (expected {_REQUIRED_MODE})")  # noqa: print
         return 0
 
-    print(f"check-hook-exec-bits: {len(blocking)} hook entr(ies) not tracked executable\n")
+    print(f"check-hook-exec-bits: {len(blocking)} hook entr(ies) not tracked executable\n")  # noqa: print
     for violation in blocking:
-        print(f"  FAIL   {violation}")
-    print(
+        print(f"  FAIL   {violation}")  # noqa: print
+    print(  # noqa: print
         f"\nExpected {_REQUIRED_MODE}. These hooks fail on a fresh checkout (CI or a new clone)\n"
         "even when they work locally: core.fileMode=false means chmod never reaches the\n"
         "index, so the mismatch is invisible on the machine that introduced it. Fix with:\n"
         "  git update-index --chmod=+x <path>\n"
-    )
+    )  # noqa: print
     return 1
 
 
