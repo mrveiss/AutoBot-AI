@@ -53,6 +53,7 @@ from constants.model_constants import (
     MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
+from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
@@ -807,7 +808,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             for record_str in records:
                 try:
                     record = json.loads(record_str)
-                    category = record.get("category", "unknown")
+                    category = record.get("category", CategoryDefaults.UNKNOWN)
                     categories[category]["count"] += 1
                     categories[category]["cost"] += record.get("cost", 0)
                 except json.JSONDecodeError:

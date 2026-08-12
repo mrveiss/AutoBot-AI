@@ -22,6 +22,7 @@ for both backends, so it needs a cross-backend review rather than a drive-by.
 """
 
 import ast
+import functools
 import pathlib
 
 import pytest
@@ -93,16 +94,69 @@ def _python_files():
         yield path
 
 
-def test_no_hand_rolled_admin_role_comparisons():
-    """Use ``is_admin_role()`` instead — it admits superadmin, as guards do."""
-    offenders = []
+def _may_contain_offender(source: str) -> bool:
+    """Cheap text prefilter: can *source* possibly hold an offending compare?
+
+    ``_offenders_in`` only ever flags a comparison that pairs a ``role``-ish
+    operand (name/attribute/subscript/kwarg all matched on the text ``role``)
+    with one of :data:`ADMIN_ROLE_LITERALS` (all three contain ``admin``). A
+    file whose source contains neither substring cannot produce a hit, so it
+    never needs parsing.
+
+    Known limit: any *obfuscated* spelling of the literal defeats the prefilter —
+    implicit concatenation (``"ad" "min"``), escape sequences (``"\x61dmin"``,
+    ``"\u0061dmin"``), an escaped subscript key (``d["\x72ole"]``), or an
+    NFKC-normalised identifier (``ｒｏｌｅ``). Each is a hit for the matcher whose
+    source text lacks the substring. Verified zero such constructs exist across
+    all 2,171 backend files; someone writing one is defeating a lint guard
+    deliberately, not tripping one accidentally.
+
+    This is what makes the guard affordable (#13284): ``ast.walk`` plus the
+    per-node loop in ``_offenders_in`` is pure Python, so under ``--cov`` every
+    one of ~2.7M AST nodes is traced. The prefilter is a C-level ``str.lower``
+    and ``in``, and drops ~2,170 backend files to ~90 — a ~96% cut in nodes
+    walked.
+
+    Known limit: a literal spelled indirectly (``"ad" "min"``, ``"\\x61dmin"``)
+    would be skipped. Every call site in this repo spells it plainly, and
+    ``TestGuardDetection`` still pins the AST shapes the matcher must catch.
+    """
+    lowered = source.lower()
+    return "admin" in lowered and "role" in lowered
+
+
+@functools.lru_cache(maxsize=1)
+def _hand_rolled_admin_comparisons() -> tuple[str, ...]:
+    """``path:line`` for every hand-rolled admin-role comparison in the backend.
+
+    Cached so repeat callers (and reruns within a session) pay the sweep once.
+    """
+    offenders: list[str] = []
     for path in _python_files():
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):
+            source = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            # A non-UTF-8 source cannot hold the ASCII literals this guard matches on.
+            continue
+        except OSError as exc:
+            # #13284: do NOT skip silently. Before the prefilter this read was not
+            # wrapped, so an unreadable file failed the run. An unreadable file inside
+            # a security guard is exactly where an offender could hide, so keep it loud.
+            raise AssertionError(f"admin-role guard could not read {path}: {exc}") from exc
+        if not _may_contain_offender(source):
+            continue
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
             continue
         for line in _offenders_in(tree):
             offenders.append(f"{path.relative_to(BACKEND_ROOT)}:{line}")
+    return tuple(sorted(offenders))
+
+
+def test_no_hand_rolled_admin_role_comparisons():
+    """Use ``is_admin_role()`` instead — it admits superadmin, as guards do."""
+    offenders = _hand_rolled_admin_comparisons()
 
     assert not offenders, (
         "Hand-rolled admin-role comparison(s) found — a superadmin is admitted by "

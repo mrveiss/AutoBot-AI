@@ -26,6 +26,10 @@ turn latency.
 """
 
 import asyncio
+import math
+import os
+import time
+from datetime import datetime
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_int
@@ -47,6 +51,18 @@ MAX_SESSIONS_PER_RUN = env_int("AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS", 10)
 # A conversation shorter than this cannot contain a workflow worth extracting;
 # SkillExtractor rejects it anyway, so skip it before paying for the load.
 MIN_MESSAGES_TO_DISTILL = env_int("AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES", 4)
+# #13695: idle-flush. Distillation was purely clock-bound, so a session ending at
+# 09:00 waited for the small hours before anything depending on distilled output
+# — the essential story, proposed skills — stopped being stale. When a pending
+# conversation has been quiet this long, run the pass now instead of waiting out
+# the interval.
+#
+# Deliberately ONE knob. The source design this came from also has a debounce
+# delay and a min/max interval band; those are excluded by #13695 and must stay
+# excluded until #13251 makes recall quality measurable. Interacting constants
+# with no metric to tune against is how that design ended up unable to tell
+# whether its memory layer helped.
+IDLE_FLUSH_S = env_int("AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S", 900)
 
 _REDIS_DB = "knowledge"
 _LEADER_KEY = "skills:distillation:leader"
@@ -60,6 +76,75 @@ def _decode(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _iso_to_epoch(value: object) -> float | None:
+    """Earliest instant a naive-local ISO timestamp could name, or None if unusable.
+
+    Reached only for a legacy cursor and for entries from a producer that predates
+    ``updatedAtEpoch``. A naive string carries no offset, and inside a DST-repeated
+    hour it names **two** instants. ``fold`` selects between them, so taking the
+    minimum resolves the ambiguity in the only safe direction: a cursor that reads
+    slightly early costs a bounded re-distillation, while one that reads late skips
+    conversations permanently and silently — the defect this module fixes.
+
+    Outside the repeated hour both folds agree and this is exact.
+
+    It is still resolved in the *process* timezone, so a deployment that changes
+    its TZ between writing and reading a legacy cursor shifts by the offset delta,
+    which no local-time parse can recover. That exposure predates this fix,
+    applies only to the one-off migration, and ends once the cursor is rewritten
+    in epoch form.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return min(parsed.replace(fold=0).timestamp(), parsed.replace(fold=1).timestamp())
+
+
+def _entry_epoch(entry: Dict[str, Any]) -> float | None:
+    """Unambiguous ordering key for one session-listing entry (#13948)."""
+    epoch = entry.get("updatedAtEpoch")
+    if isinstance(epoch, (int, float)) and not isinstance(epoch, bool):
+        return float(epoch)
+    return _iso_to_epoch(entry.get("updatedAt") or entry.get("lastModified"))
+
+
+def _cursor_to_epoch(raw: object) -> float | None:
+    """Read the cursor in either format — epoch seconds, or a legacy ISO string.
+
+    The stored cursor is durable in Redis, and resetting it re-distils the whole
+    corpus at real LLM cost. So a legacy value is migrated, never dropped.
+
+    A legacy value is resolved to the **earliest** instant it could name (see
+    ``_iso_to_epoch``), because an over-estimate skips conversations permanently
+    and silently — the very defect this module fixes — while an under-estimate
+    costs a bounded re-distillation. Bounded re-work, never a silent skip.
+    """
+    if raw is None:
+        return None
+    try:
+        value = float(raw)  # current format
+    except (TypeError, ValueError):
+        migrated = _iso_to_epoch(raw)  # pre-#13948 format
+        if migrated is None:
+            logger.warning(
+                "Skill distillation: unreadable cursor %r — treating as a first run, "
+                "which re-distils the corpus once",
+                raw,
+            )
+            return None
+        logger.info("Skill distillation: migrating legacy cursor %r to epoch %s", raw, migrated)
+        return migrated
+    if not math.isfinite(value):
+        # nan compares False against everything, so a nan cursor silently turns
+        # the gate into a no-op: every conversation looks pending, every run.
+        logger.warning("Skill distillation: non-finite cursor %r — treating as a first run", raw)
+        return None
+    return value
+
+
 class SkillDistillationScheduler:
     """Periodically distils finished conversations into proposed skills."""
 
@@ -71,6 +156,14 @@ class SkillDistillationScheduler:
         # with the connector scheduler. Only the key and database are ours.
         self._lease = LeaderLease(key=_LEADER_KEY, database=_REDIS_DB, label="Skill distillation")
         self._task: asyncio.Task | None = None
+        # #13695: the chats-directory mtime the last idle flush fired against.
+        # The next one requires *new activity* since then, which is what stops a
+        # conversation the pass cannot get past re-triggering `run_once` every
+        # leader cycle. Deliberately not the cursor: `_read_cursor` returns None
+        # for a first run AND for any Redis fault, so a cursor-based guard is
+        # inert precisely when the cursor also cannot advance — the 10s spin,
+        # conditioned on an outage instead of a stuck session.
+        self._last_idle_flush_mtime: float | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -134,7 +227,12 @@ class SkillDistillationScheduler:
                     await asyncio.sleep(self._lease.poll_s)
                     continue
                 await self._lease.update_leadership()
-                if self._lease.is_leader and elapsed >= DISTILLATION_INTERVAL_S:
+                # #13695: the interval remains the backstop — a session that never
+                # goes idle, or a worker that dies mid-flush, must still be swept.
+                # Idle-flush only makes the pass happen *sooner*; it runs the same
+                # run_once, under the same lease, against the same cursor, so a
+                # race with the interval cannot double-process or skip.
+                if self._lease.is_leader and (elapsed >= DISTILLATION_INTERVAL_S or await self._has_idle_pending()):
                     await self.run_once()
                     elapsed = 0
 
@@ -208,7 +306,157 @@ class SkillDistillationScheduler:
             logger.error("Skill distillation failed for conversation %s: %s", session_id, exc)
             return None
 
-    async def _select_pending_sessions(self, cursor: str | None) -> List[Dict[str, Any]]:
+    async def _corpus_idle_for(self) -> float | None:
+        """Seconds since any conversation was last written, or None if unknown.
+
+        Deliberately the **directory mtime**, not a parsed timestamp:
+
+        * Timezone-free. `session_listing.py` emits naive local time (#13856),
+          which read back as UTC makes an ISO-derived idle age negative east of
+          UTC and — worse — inverts west of it, reporting a session someone is
+          actively typing into as long-idle. Epoch floats cannot express that
+          bug.
+        * O(1). One `os.stat` per leader cycle instead of reading and parsing
+          every chat file (measured 1.5s at 1000 conversations).
+        * Cannot be hidden by truncation. The directory mtime is the newest
+          activity across *all* sessions, so a capped listing cannot miss an
+          active one.
+
+        This is sound only because the normal save is atomic — `file_io.py`
+        writes a temp file into the same directory and `os.replace`s it, two
+        dir-entry mutations per save. Verified empirically; a plain in-place
+        content write does NOT bump the parent, and this signal would silently
+        never fire. Check that before changing the save path.
+
+        Known writes that do NOT bump it, so the idle clock can run during them:
+
+        * `session.py:424` — the direct-write fallback when `_atomic_write`
+          raises. Degraded path, but the one where a flush during an active
+          conversation becomes possible.
+        * `session.py:795` / `:881` — in-place rename/metadata updates. These
+          bump the *file* mtime, which `list_sessions_fast` reports as
+          `updatedAt`, so renaming an old chat makes it pending again without
+          resetting the idle clock — it is re-distilled on the next flush.
+        * `api/terminal_handlers.py` transcript appends (`mode="a"`).
+
+        And writes that bump it WITHOUT user activity, delaying a flush rather
+        than causing a false one: the dedup re-save in
+        `session.py:_process_loaded_messages` (reached from distillation's own
+        read), `memory.py:_cleanup_old_session_files`, orphan-session creation
+        in `session_listing.py`, and the `uploads/` retention purge.
+
+        None of these makes the signal unsafe — the interval backstop still
+        sweeps everything — but they are why this is a *hint to run sooner*
+        rather than an authoritative activity log.
+        """
+        mtime = await self._chats_mtime()
+        if mtime is None:
+            return None
+        return max(0.0, time.time() - mtime)
+
+    async def _chats_mtime(self) -> float | None:
+        """Directory mtime of the chats corpus, or None when it cannot be read.
+
+        Logged on the None path rather than returning silently: a wrong or
+        missing path leaves idle-flush permanently inert, which is the same
+        *class* of failure as #13856 — a feature that quietly does nothing —
+        and the relative default (``data/chats``) makes it CWD-dependent
+        (#13149).
+        """
+        manager = await self._get_chat_history_manager()
+        if manager is None:
+            return None
+        resolve = getattr(manager, "_get_chats_directory", None)
+        if resolve is None:
+            logger.warning("Idle-flush disabled: chat manager exposes no chats directory (#13695)")
+            return None
+        try:
+            from chat_history.file_io import run_in_chat_io_executor
+
+            # The chat I/O pool, not the default executor: #718 moved chat file
+            # I/O off the default pool because indexing saturates it, and this
+            # await sits inside the leader loop — a stall here delays
+            # `update_leadership` against the lease TTL and flaps leadership.
+            stat = await run_in_chat_io_executor(os.stat, resolve())
+            return stat.st_mtime
+        except (OSError, AttributeError) as exc:
+            logger.warning("Idle-flush disabled: cannot stat the chats directory (%s) (#13695)", exc)
+            return None
+
+    async def _has_idle_pending(self) -> bool:
+        """True when an undistilled conversation has been quiet past the threshold (#13695).
+
+        Three gates, cheapest first:
+
+        1. The corpus has been quiet for ``IDLE_FLUSH_S`` — one `os.stat`.
+        2. There has been *new activity* since the last idle flush. Without
+           this, a conversation the pass cannot get past re-triggers `run_once`
+           every leader cycle — 10s instead of hourly, a 360x rise in LLM spend.
+        3. Only then, whether anything is actually past the durable cursor —
+           reusing the cursor rather than tracking a private notion of
+           "unprocessed", so the idle path cannot re-distil what the cron
+           already handled.
+
+        Gate 2 keys on the **mtime**, not the cursor. A cursor-based guard was
+        inert in exactly the cases that matter: `_read_cursor` returns None for
+        a first-ever run and for *any* Redis fault, and during an outage the
+        cursor also cannot advance — so the guard disengaged precisely when the
+        spin it prevents becomes unbounded. It also released after every
+        successful pass (the cursor advances per distilled session), turning
+        idle-flush into an unpaced backlog drain that removed the spend bound
+        `DISTILLATION_INTERVAL_S` provides.
+
+        Together gates 1 and 2 bound idle flushes to at most one per
+        ``IDLE_FLUSH_S``: firing again requires a write, and a write restarts
+        the quiet window. No new tuning constant is introduced — the pacing
+        falls out of the existing knob.
+
+        Never raises into the leader loop; a failure here simply means the
+        interval backstop is what triggers the pass, which is the pre-#13695
+        behaviour.
+        """
+        if IDLE_FLUSH_S <= 0:
+            return False
+        try:
+            mtime = await self._chats_mtime()
+            if mtime is None:
+                return False
+            if max(0.0, time.time() - mtime) < IDLE_FLUSH_S:
+                return False
+            idle_for = time.time() - mtime
+            if self._last_idle_flush_mtime is not None and mtime <= self._last_idle_flush_mtime:
+                return False
+
+            # Recorded BEFORE the pending check, not after. The guard means
+            # "this activity generation has been evaluated", not "it produced a
+            # flush" — recording it only on a flush left it permanently unarmed
+            # on a quiet deployment whose cursor is caught up, so gates 1 and 2
+            # passed every cycle and gate 3 read and JSON-parsed the entire
+            # corpus every 10s forever. Measured: 20 listings in 20 cycles with
+            # nothing pending. That is the exact cost this rework claims to have
+            # removed, reintroduced one gate later.
+            #
+            # A transient listing failure therefore consumes the generation and
+            # costs one early flush; the interval backstop still sweeps. That is
+            # strictly better than polling the whole corpus indefinitely.
+            self._last_idle_flush_mtime = mtime
+
+            cursor = await self._read_cursor()
+            pending = await self._select_pending_sessions(cursor)
+            if not pending:
+                return False
+
+            logger.info(
+                "Skill distillation idle-flush: %d conversation(s) pending, corpus quiet for %.0fs (#13695)",
+                len(pending),
+                idle_for,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Idle-flush check failed, falling back to the interval: %s", exc)
+            return False
+
+    async def _select_pending_sessions(self, cursor: float | None) -> List[Dict[str, Any]]:
         """Conversations updated after ``cursor``, oldest first, capped per run."""
         manager = await self._get_chat_history_manager()
         if manager is None:
@@ -217,16 +465,25 @@ class SkillDistillationScheduler:
 
         pending = []
         for entry in sessions:
-            updated_at = entry.get("updatedAt") or entry.get("lastModified")
             session_id = entry.get("id") or entry.get("chatId")
-            if not updated_at or not session_id:
+            updated_at = _entry_epoch(entry)
+            if not session_id:
+                continue
+            if updated_at is None:
+                # Never a *silent* skip: without a usable timestamp the cursor
+                # cannot advance past this session, so distilling it would repeat
+                # every run forever. Loud and skipped beats silent either way.
+                logger.warning("Skill distillation: no usable timestamp for session %s, skipping", session_id)
                 continue
             if cursor is not None and updated_at <= cursor:
                 continue
             pending.append({"id": session_id, "updated_at": updated_at})
 
-        # ISO-8601 timestamps sort lexicographically, so ordering by string keeps the
-        # cursor monotonic without parsing every entry.
+        # Epoch seconds, so ordering is numeric and independent of local time.
+        # The previous string sort relied on ISO-8601 sorting lexicographically,
+        # which holds only at a fixed UTC offset — at the DST fallback the local
+        # clock repeats an hour and sessions in it compared below an already
+        # advanced cursor, skipping them permanently (#13948).
         pending.sort(key=lambda item: item["updated_at"])
         return pending[:MAX_SESSIONS_PER_RUN]
 
@@ -246,24 +503,28 @@ class SkillDistillationScheduler:
     # Cursor
     # ------------------------------------------------------------------
 
-    async def _read_cursor(self) -> str | None:
-        """Last distilled conversation timestamp, or None on first ever run."""
+    async def _read_cursor(self) -> float | None:
+        """Last distilled conversation timestamp in epoch seconds, or None on a first run.
+
+        Reads a legacy ISO cursor too, so an existing deployment migrates in
+        place instead of resetting — a reset re-distils the whole corpus.
+        """
         redis = await get_async_redis_client(database=_REDIS_DB)
         if redis is None:
             return None
         try:
-            return _decode(await redis.get(_CURSOR_KEY))
+            return _cursor_to_epoch(_decode(await redis.get(_CURSOR_KEY)))
         except Exception as exc:
             logger.warning("Skill distillation could not read cursor: %s", exc)
             return None
 
-    async def _write_cursor(self, updated_at: str) -> None:
+    async def _write_cursor(self, updated_at: float) -> None:
         """Advance the cursor. Called only after a proposal call has returned."""
         redis = await get_async_redis_client(database=_REDIS_DB)
         if redis is None:
             return
         try:
-            await redis.set(_CURSOR_KEY, updated_at)
+            await redis.set(_CURSOR_KEY, repr(float(updated_at)))
         except Exception as exc:
             # A cursor that fails to advance costs a re-distillation next run; one that
             # advances without the work having landed costs the conversation entirely.

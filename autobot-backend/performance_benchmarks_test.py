@@ -9,21 +9,37 @@ under various load conditions.
 """
 
 import asyncio
+import shutil
 import statistics
+import tempfile
 import threading
 import time
 from typing import Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import psutil
 import pytest
 
+from autobot_types import TaskComplexity
+from config import ConfigManager
 from knowledge import KnowledgeBase
 from memory import MemoryManager
+from memory.enums import MemoryCategory
 
 # Import components to benchmark
 from orchestrator import Orchestrator
 from services.llm_service import LLMService
+
+# #13688: the general memory plane is owner-scoped; tests must name an owner.
+TEST_USER = "test-user"
+
+# #13162: every test in this module asserts a wall-clock budget
+# (``avg_duration``/``total_time``) or an RSS delta — there is not one
+# functional-only test here. That makes the module a benchmark suite, so it
+# belongs to the ``performance`` selection rather than the unit selection,
+# where wall-clock budgets measure the CI runner's contention instead of the
+# code. The budgets themselves are unchanged.
+pytestmark = pytest.mark.performance
 
 
 class PerformanceBenchmark:
@@ -106,7 +122,10 @@ class TestLLMServicePerformance:
 
                 # Mock LLMService.chat at the public surface — internal
                 # ProviderRegistry routing is out of scope for this benchmark.
-                with patch.object(self.llm, "chat") as mock_chat:
+                # #13162: chat() is a coroutine function, so the double must be
+                # an AsyncMock — a MagicMock returns a value that cannot be
+                # awaited.
+                with patch.object(self.llm, "chat", new_callable=AsyncMock) as mock_chat:
                     mock_chat.return_value = MagicMock(
                         content=f"Mock response for prompt {i}",
                         error=None,
@@ -143,7 +162,7 @@ class TestLLMServicePerformance:
             async def make_request():
                 self.benchmark.start_measurement()
 
-                with patch.object(self.llm, "chat") as mock_chat:
+                with patch.object(self.llm, "chat", new_callable=AsyncMock) as mock_chat:
                     mock_chat.return_value = MagicMock(
                         content="Concurrent mock response",
                         error=None,
@@ -194,12 +213,27 @@ class TestKnowledgeBasePerformance:
 
     async def test_knowledge_base_search_performance(self):
         """Benchmark knowledge base search operations"""
-        # Mock the vector index for testing
-        with patch.object(self.kb, "index") as mock_index:
-            mock_query_engine = MagicMock()
-            mock_query_engine.query.return_value.response = "Mock search result"
-            mock_index.as_query_engine.return_value = mock_query_engine
+        # #13162: KnowledgeBase no longer carries a LlamaIndex `index`
+        # attribute, so `patch.object(self.kb, "index")` raised AttributeError.
+        # The retrieval backend is now reached through
+        # `knowledge.search.get_vector_search_engine()`; mocking that is the
+        # direct successor of the old index mock and keeps the benchmark
+        # measuring the KB's own dispatch (validation, prompt-injection
+        # sanitizing, result conversion) rather than a live vector store.
+        mock_engine = AsyncMock()
+        mock_engine.search.return_value = []
 
+        # `initialized` is what `initialize()` flips once the backing stores are
+        # wired; the stores are exactly what the mocked engine stands in for,
+        # so the benchmark declares the KB up rather than dialing Redis/Chroma.
+        with (
+            patch(
+                "knowledge.search.get_vector_search_engine",
+                new_callable=AsyncMock,
+                return_value=mock_engine,
+            ),
+            patch.object(self.kb, "initialized", True),
+        ):
             search_queries = [
                 "simple query",
                 "more complex search query with multiple terms",
@@ -213,7 +247,9 @@ class TestKnowledgeBasePerformance:
                 for _ in range(10):
                     self.benchmark.start_measurement()
 
-                    results = await self.kb.search(query, limit=5)
+                    # top_k (not limit) keeps this on the basic vector path,
+                    # which is the path the mocked engine serves.
+                    results = await self.kb.search(query, top_k=5)
 
                     self.benchmark.end_measurement()
 
@@ -243,8 +279,12 @@ class TestKnowledgeBasePerformance:
             },
         ]
 
-        with patch.object(self.kb, "index") as mock_index:
-            mock_index.insert_documents = MagicMock()
+        # #13162: `index.insert_documents` is gone with the LlamaIndex index.
+        # `add_document()` now persists through `store_fact()`, so that is the
+        # seam the benchmark mocks — the measured span stays the KB's own
+        # provenance-defaulting and timeout wrapper.
+        with patch.object(self.kb, "store_fact", new_callable=AsyncMock) as mock_store_fact:
+            mock_store_fact.return_value = {"status": "success", "doc_id": "bench"}
 
             for i, doc in enumerate(documents):
                 self.benchmark.metrics = []
@@ -274,9 +314,28 @@ class TestOrchestratorPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        with patch("orchestrator.config_manager") as mock_config:
-            mock_config.get_llm_config.return_value = {"orchestrator_llm": "llama3.2:1b"}
-            self.orchestrator = Orchestrator()
+        # #13699: the `orchestrator` module has no `config_manager` attribute to
+        # patch — it imports `get_config_manager` and `Orchestrator.__init__`
+        # takes an injectable `config_manager` (#13162). Patching the absent
+        # name raised AttributeError in setup, so both benchmarks below have
+        # been erroring at collection rather than running. Inject the config
+        # double instead, the same way dependency_injection_test.py does.
+        mock_config = Mock(spec=ConfigManager)
+        mock_config.get_llm_config.return_value = {"orchestrator_llm": "llama3.2:1b"}
+        mock_config.get.side_effect = lambda key, default=None: default
+        self.orchestrator = Orchestrator(config_manager=mock_config)
+
+        # #13699: `GemmaClassificationAgent()` raises AgentConfigurationError
+        # unless AUTOBOT_CLASSIFICATION_PROVIDER is configured, and
+        # `_init_classification_agent` swallows that into
+        # `classification_agent = None`. `classify_request_complexity` then
+        # short-circuits on the None branch, so the benchmark would time an
+        # early return rather than the classification seam — and would time a
+        # different path depending on the environment. Bind a double so the
+        # measured path is the same everywhere and never reaches a provider.
+        self.orchestrator.classification_agent = MagicMock(
+            classify_user_request=AsyncMock(return_value=MagicMock(complexity=TaskComplexity.COMPLEX))
+        )
 
     async def test_orchestrator_task_planning_performance(self):
         """Benchmark orchestrator task planning operations"""
@@ -286,8 +345,13 @@ class TestOrchestratorPerformance:
             "Research network security tools, evaluate them, and provide installation recommendations with approval workflow",
         ]
 
+        # #13699: neither benchmarked entry point routes through
+        # `llm_service` today — classification goes via `classification_agent`
+        # and `plan_workflow_steps` is pure step construction. The double stays
+        # as a guard so no iteration can reach a real provider if that changes,
+        # and `chat` is an AsyncMock because it is awaited when it is called.
         with patch.object(self.orchestrator, "llm_service") as mock_llm:
-            mock_llm.chat.return_value = MagicMock(content="Mock orchestrator response", error=None)
+            mock_llm.chat = AsyncMock(return_value=MagicMock(content="Mock orchestrator response", error=None))
 
             for request in test_requests:
                 self.benchmark.metrics = []
@@ -295,15 +359,22 @@ class TestOrchestratorPerformance:
                 for _ in range(5):
                     self.benchmark.start_measurement()
 
-                    # Mock the workflow planning
-                    complexity = self.orchestrator.classify_request_complexity(request)
-                    steps = self.orchestrator.plan_workflow_steps(request, complexity)
+                    # #13162: both planning entry points are coroutine
+                    # functions; without await the benchmark measured only how
+                    # long it takes to build a coroutine object.
+                    complexity = await self.orchestrator.classify_request_complexity(request)
+                    steps = await self.orchestrator.plan_workflow_steps(request, complexity)
 
                     self.benchmark.end_measurement()
 
-                    # Verify planning results
-                    assert complexity is not None
+                    # Verify planning results. #13699: `isinstance(steps, list)`
+                    # alone passes on the empty list every unavailable-types
+                    # branch returns, which is how this body could have looked
+                    # meaningful while measuring nothing. Assert the plan is
+                    # real and that classification produced a TaskComplexity.
+                    assert isinstance(complexity, TaskComplexity)
                     assert isinstance(steps, list)
+                    assert steps, f"Planning produced no steps for: {request[:50]}..."
 
                 stats = self.benchmark.get_statistics()
 
@@ -323,11 +394,11 @@ class TestOrchestratorPerformance:
                 self.benchmark.start_measurement()
 
                 with patch.object(self.orchestrator, "llm_service") as mock_llm:
-                    mock_llm.chat.return_value = MagicMock(content="Mock response", error=None)
+                    mock_llm.chat = AsyncMock(return_value=MagicMock(content="Mock response", error=None))
 
                     request = f"Test concurrent workflow {threading.current_thread().ident}"
-                    complexity = self.orchestrator.classify_request_complexity(request)
-                    steps = self.orchestrator.plan_workflow_steps(request, complexity)
+                    complexity = await self.orchestrator.classify_request_complexity(request)
+                    steps = await self.orchestrator.plan_workflow_steps(request, complexity)
 
                 self.benchmark.end_measurement()
                 return len(steps)
@@ -338,9 +409,11 @@ class TestOrchestratorPerformance:
             results = await asyncio.gather(*tasks)
             total_time = time.perf_counter() - start_time
 
-            # Verify all workflows completed
+            # Verify all workflows completed. #13699: a step count of 0 is not a
+            # completed workflow, so assert the plans were non-empty rather than
+            # merely integer-shaped.
             assert len(results) == count
-            assert all(isinstance(r, int) for r in results)
+            assert all(isinstance(r, int) and r > 0 for r in results)
 
             self.benchmark.get_statistics()
 
@@ -357,10 +430,22 @@ class TestMemorySystemPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        self.memory_manager = MemoryManager()
+        # #13162: point the benchmark at a throwaway SQLite file. The default
+        # db_path is the repo-relative data/unified_memory.db, so the previous
+        # form would have written 65 benchmark rows into the working tree.
+        self._db_dir = tempfile.mkdtemp(prefix="autobot-memory-benchmark-")
+        self.memory_manager = MemoryManager(db_path=f"{self._db_dir}/unified_memory.db")
+
+    def teardown_method(self):
+        """Remove the throwaway memory database"""
+        shutil.rmtree(self._db_dir, ignore_errors=True)
 
     async def test_memory_storage_performance(self):
         """Benchmark memory storage operations"""
+        # #13162: store_memory() takes (category, content, metadata, ...) — the
+        # `memory_type`/`context` keywords it was called with never existed on
+        # this signature. Category is a MemoryCategory; the free-form context
+        # travels in metadata, which is where the storage layer keeps it.
         memory_entries = [
             {"content": "Short memory", "context": "test"},
             {
@@ -380,10 +465,10 @@ class TestMemorySystemPerformance:
                 self.benchmark.start_measurement()
 
                 await self.memory_manager.store_memory(
+                    category=MemoryCategory.EXECUTION,
                     content=entry["content"],
-                    memory_type="episodic",
-                    context=entry["context"],
-                    metadata={"test_id": i},
+                    user_id=TEST_USER,
+                    metadata={"test_id": i, "context": entry["context"]},
                 )
 
                 self.benchmark.end_measurement()
@@ -399,41 +484,45 @@ class TestMemorySystemPerformance:
 
     async def test_memory_retrieval_performance(self):
         """Benchmark memory retrieval operations"""
+        # #13162: retrieve_memories() selects by category (plus optional date /
+        # reference_path filters) — it has no `query` parameter and never did
+        # on this signature. Store across three categories, then benchmark a
+        # read of each.
+        categories = [
+            MemoryCategory.EXECUTION,
+            MemoryCategory.STATE,
+            MemoryCategory.FACT,
+        ]
+
         # First, store some test memories
         for i in range(50):
             await self.memory_manager.store_memory(
+                category=categories[i % len(categories)],
                 content=f"Test memory {i}",
-                memory_type="episodic",
-                context="performance_test",
-                metadata={"test_id": i},
+                user_id=TEST_USER,
+                metadata={"test_id": i, "context": "performance_test"},
             )
 
-        # Test retrieval performance
-        search_queries = [
-            "test memory",
-            "performance test context",
-            "specific memory with details",
-        ]
-
-        for query in search_queries:
+        for category in categories:
             self.benchmark.metrics = []
 
             for _ in range(10):
                 self.benchmark.start_measurement()
 
-                results = await self.memory_manager.retrieve_memories(query=query, limit=10)
+                results = await self.memory_manager.retrieve_memories(category=category, user_id=TEST_USER, limit=10)
 
                 self.benchmark.end_measurement()
 
                 # Verify retrieval results
                 assert isinstance(results, list)
+                assert results, f"No memories retrieved for category {category.value}"
 
             stats = self.benchmark.get_statistics()
 
             # Performance assertions
-            assert stats["avg_duration"] < 1.0, f"Memory retrieval too slow for: {query}"
+            assert stats["avg_duration"] < 1.0, f"Memory retrieval too slow for: {category.value}"
 
-            print(f"\nMemory retrieval '{query}': {stats['avg_duration']:.3f}s avg")  # noqa: print  # noqa: print
+            print(f"\nMemory retrieval '{category.value}': {stats['avg_duration']:.3f}s avg")  # noqa: print
 
 
 class TestSystemIntegrationPerformance:
@@ -451,10 +540,12 @@ class TestSystemIntegrationPerformance:
             patch("knowledge_base.KnowledgeBase") as mock_kb_class,
             patch("memory.manager.MemoryManager") as mock_memory_class,
         ):
-            # Set up mocks
-            mock_orchestrator = MagicMock()
-            mock_kb = MagicMock()
-            mock_memory = MagicMock()
+            # Set up mocks. #13162: the workflow awaits every one of these
+            # calls, so the doubles must be AsyncMocks — a MagicMock hands back
+            # a plain dict/list that cannot be awaited.
+            mock_orchestrator = AsyncMock()
+            mock_kb = AsyncMock()
+            mock_memory = AsyncMock()
 
             mock_orchestrator_class.return_value = mock_orchestrator
             mock_kb_class.return_value = mock_kb

@@ -13,7 +13,7 @@ Inspired by oVirt's ovirt-engine-pki-ca-create and ovirt-engine-pki-enroll.
 """
 
 import os
-import subprocess  # nosec B404 - Required for PKI certificate generation
+import subprocess  # nosec B404  # Required for PKI certificate generation
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -40,9 +40,8 @@ def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> T
         Tuple of (success: bool, error_message: str | None)
     """
     try:
-        subprocess.run(
-            cmd, check=True, capture_output=True
-        )  # nosec B603 - cmd is openssl argv built by callers using hardcoded arg lists
+        # cmd is openssl argv built by callers using hardcoded arg lists.
+        subprocess.run(cmd, check=True, capture_output=True)  # nosec B603
         return True, None
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.decode() if e.stderr else str(e)
@@ -262,9 +261,8 @@ class CertificateGenerator:
         ]
 
         try:
-            subprocess.run(
-                key_cmd, check=True, capture_output=True
-            )  # nosec B603 - key_cmd is fixed openssl argv built above
+            # key_cmd is fixed openssl argv built above.
+            subprocess.run(key_cmd, check=True, capture_output=True)  # nosec B603
             os.chmod(ca_key, 0o600)
             return True
         except subprocess.CalledProcessError as e:
@@ -303,9 +301,8 @@ class CertificateGenerator:
         ]
 
         try:
-            subprocess.run(
-                cert_cmd, check=True, capture_output=True
-            )  # nosec B603 - cert_cmd is fixed openssl argv built above
+            # cert_cmd is fixed openssl argv built above.
+            subprocess.run(cert_cmd, check=True, capture_output=True)  # nosec B603
             os.chmod(ca_cert, 0o644)
             logger.info(f"CA certificate generated: {ca_cert}")
             return True
@@ -495,9 +492,8 @@ class CertificateGenerator:
             str(self.config.ca_cert_path),
             str(cert_path),
         ]
-        verify_result = subprocess.run(
-            verify_cmd, capture_output=True
-        )  # nosec B603 - verify_cmd is fixed openssl argv built above
+        # verify_cmd is fixed openssl argv built above.
+        verify_result = subprocess.run(verify_cmd, capture_output=True)  # nosec B603
         return verify_result.returncode == 0
 
     def get_certificate_status(self, cert_path: Path) -> CertificateStatus:
@@ -516,9 +512,8 @@ class CertificateGenerator:
                 "-issuer",
                 "-dates",
             ]
-            result = subprocess.run(
-                cmd, capture_output=True, check=True
-            )  # nosec B603 - cmd is fixed openssl argv built above
+            # cmd is fixed openssl argv built above.
+            result = subprocess.run(cmd, capture_output=True, check=True)  # nosec B603
             output = result.stdout.decode()
 
             subject, issuer, expires_at = self._parse_certificate_output(output)

@@ -29,6 +29,7 @@ from fastapi import APIRouter, Request
 from api.schemas_knowledge import SearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from knowledge.schemas import (
     ExpandQueryResponse,
     KnowledgeSearchResponse,
@@ -360,7 +361,7 @@ def _convert_results_to_documents(results: List[Metadata], original_query: str) 
                 "metadata": {
                     "filename": (result.get("metadata", {}).get("title", "Unknown")),
                     "source": (result.get("metadata", {}).get("source", "knowledge_base")),
-                    "category": (result.get("metadata", {}).get("category", "general")),
+                    "category": (result.get("metadata", {}).get("category", CategoryDefaults.GENERAL)),
                     "score": result.get("score", 0.0),
                     "source_query": result.get("source_query", original_query),
                 },
@@ -531,7 +532,7 @@ async def search(request: SearchRequest, req: Request):
     - **query** (required): Search query string
     - **limit** / **top_k**: Maximum results (default: 10, max: 100)
     - **category**: Filter by category
-    - **mode**: Search mode — 'semantic', 'keyword', 'hybrid' (default), 'auto'
+    - **mode**: Search mode — `semantic`, `keyword`, `hybrid` (default), `auto`
     - **enable_rag**: Enable RAG enhancement for synthesized responses
     - **enable_reranking**: Enable cross-encoder reranking
     - **reformulate_query**: Expand query for better coverage

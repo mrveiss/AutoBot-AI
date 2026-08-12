@@ -36,7 +36,7 @@ class LateProvider(SpeechProvider):
     def _check_availability(self):
         """Check if LATE binary is available."""
         try:
-            result = subprocess.run(  # nosec B603 - fixed argv [binary, "--version"]; binary path is from env var
+            result = subprocess.run(  # nosec B603  # fixed argv [binary, "--version"]; binary path is from env var
                 [self.late_binary, "--version"],
                 capture_output=True,
                 text=True,
@@ -110,12 +110,14 @@ class LateProvider(SpeechProvider):
             JSON output string or None on failure
         """
         try:
-            result = subprocess.run(  # nosec B603 - cmd is [late_binary + fixed flags]; callers construct argv, no user
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-                encoding="utf-8",
+            result = (
+                subprocess.run(  # nosec B603  # cmd is [late_binary + fixed flags]; callers construct argv, no user
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout
+                    encoding="utf-8",
+                )
             )
 
             if result.returncode != 0:

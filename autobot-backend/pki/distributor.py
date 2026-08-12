@@ -321,7 +321,7 @@ class CertificateDistributor:
         content = await asyncio.to_thread(local_path.read_bytes)
 
         # Write to temporary location
-        temp_path = f"/tmp/{local_path.name}"  # nosec B108 - remote VM temp dir
+        temp_path = f"/tmp/{local_path.name}"  # nosec B108  # remote VM temp dir
         async with conn.start_sftp_client() as sftp:
             async with sftp.open(temp_path, "wb") as f:
                 await f.write(content)

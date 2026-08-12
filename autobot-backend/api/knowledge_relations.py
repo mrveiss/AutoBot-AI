@@ -27,6 +27,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.relations import KB_RELATION_TYPES
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -62,19 +63,13 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
 
     This enables graph-based knowledge retrieval alongside vector search.
 
-    Valid relation types:
-    - relates_to: General relationship
-    - depends_on: Dependency relationship
-    - implements: Implementation relationship
-    - fixes: Bug fix relationship
-    - informs: Information flow
-    - guides: Guidance relationship
-    - follows: Sequential relationship
-    - contains: Containment relationship
-    - blocks: Blocking relationship
-    - references: Reference relationship
-    - supersedes: Replacement relationship
-    - contradicts: Contradiction relationship
+    Valid relation types are served by GET /api/knowledge/relations/types,
+    which reads the canonical vocabulary directly. They are deliberately not
+    restated here: the hand-maintained copy that used to live in this docstring
+    had already drifted from the vocabulary it documented (#13452).
+
+    The legacy spelling "relates_to" is still accepted and is stored as its
+    canonical name "related_to".
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -288,30 +283,14 @@ async def get_available_relation_types(req: Request):
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-    if kb is None:
-        # Return hardcoded types if KB not available
-        return {
-            "success": True,
-            "relation_types": [
-                {"name": "relates_to", "description": "General relationship"},
-                {"name": "depends_on", "description": "Dependency relationship"},
-                {"name": "implements", "description": "Implementation relationship"},
-                {"name": "fixes", "description": "Bug fix relationship"},
-                {"name": "informs", "description": "Information flow"},
-                {"name": "guides", "description": "Guidance relationship"},
-                {"name": "follows", "description": "Sequential relationship"},
-                {"name": "contains", "description": "Containment relationship"},
-                {"name": "blocks", "description": "Blocking relationship"},
-                {"name": "references", "description": "Reference relationship"},
-                {"name": "supersedes", "description": "Replacement relationship"},
-                {"name": "contradicts", "description": "Contradiction relationship"},
-            ],
-        }
+    # #13452: both branches read the same canonical vocabulary. The fallback
+    # used to be a hand-maintained literal list that had already drifted from
+    # the knowledge base's own set.
+    relation_types = kb.RELATION_TYPES if kb is not None else KB_RELATION_TYPES
 
     return {
         "success": True,
         "relation_types": [
-            {"name": rt, "description": f"{rt.replace('_', ' ').title()} relationship"}
-            for rt in sorted(kb.RELATION_TYPES)
+            {"name": rt, "description": f"{rt.replace('_', ' ').title()} relationship"} for rt in sorted(relation_types)
         ],
     }

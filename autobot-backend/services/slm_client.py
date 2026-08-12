@@ -430,6 +430,26 @@ class SLMClient:
             self._http_session = aiohttp.ClientSession(headers=headers, connector=connector)
         return self._http_session
 
+    def _rest_url(self, path: str) -> str:
+        """Build a REST URL using the same direct-vs-proxy decision as the
+        WebSocket path (``_is_direct_uvicorn_url``, see ``_ws_connect_and_listen``).
+
+        Behind nginx, REST endpoints are proxied under the ``/slm`` prefix
+        just like the WebSocket route; hitting uvicorn directly with that
+        prefix 404s because uvicorn has no ``/slm/`` route. Every REST call
+        site must go through this helper so a new endpoint cannot reintroduce
+        the direct/proxy asymmetry that caused #13584.
+
+        Args:
+            path: The API path, e.g. ``/api/agents`` (leading slash required).
+
+        Returns:
+            The full URL, prefixed with ``/slm`` when ``self.slm_url`` targets
+            an nginx reverse proxy.
+        """
+        prefix = "" if _is_direct_uvicorn_url(self.slm_url) else "/slm"
+        return f"{self.slm_url}{prefix}{path}"
+
     async def connect(self) -> None:
         """
         Connect to SLM server and start WebSocket listener.
@@ -474,7 +494,7 @@ class SLMClient:
         """Fetch all agents from SLM and populate cache."""
         try:
             session = await self._get_session()
-            url = f"{self.slm_url}/api/agents"
+            url = self._rest_url("/api/agents")
 
             async with session.get(url) as response:
                 if response.status == 200:
@@ -518,7 +538,7 @@ class SLMClient:
         """
         try:
             session = await self._get_session()
-            url = f"{self.slm_url}/api/agents/{agent_id}/llm"
+            url = self._rest_url(f"/api/agents/{agent_id}/llm")
 
             async with session.get(url) as response:
                 if response.status == 200:
@@ -830,7 +850,7 @@ class SLMClient:
             aiohttp.ClientResponseError: On non-2xx HTTP responses.
         """
         session = await self._get_session()
-        url = f"{self.slm_url}/api/deployments"
+        url = self._rest_url("/api/deployments")
         async with session.post(url, json=payload) as response:
             response.raise_for_status()
             data = await response.json()
@@ -855,7 +875,7 @@ class SLMClient:
             aiohttp.ClientResponseError: On non-2xx HTTP responses.
         """
         session = await self._get_session()
-        url = f"{self.slm_url}/api/deployments/{deployment_id}"
+        url = self._rest_url(f"/api/deployments/{deployment_id}")
         async with session.get(url) as response:
             response.raise_for_status()
             return await response.json()
@@ -877,7 +897,7 @@ class SLMClient:
         params = {}
         if node_id is not None:
             params["node_id"] = node_id
-        url = f"{self.slm_url}/api/deployments"
+        url = self._rest_url("/api/deployments")
         async with session.get(url, params=params) as response:
             response.raise_for_status()
             return await response.json()
@@ -990,7 +1010,7 @@ async def _fetch_from_slm(service_name: str) -> str | None:
 
     try:
         session = await client._get_session()
-        url = f"{client.slm_url}/api/discover/{service_name}"
+        url = client._rest_url(f"/api/discover/{service_name}")
 
         async with session.get(url) as response:
             if response.status == 200:

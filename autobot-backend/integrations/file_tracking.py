@@ -28,7 +28,7 @@ def _resolve_file_type(path: str) -> str | None:
         path_obj = Path(path)
         if path_obj.suffix:
             file_type = path_obj.suffix.lstrip(".")
-    except Exception:  # nosec B110 - silently handle invalid paths
+    except Exception:  # nosec B110  # silently handle invalid paths
         logger.debug("Suppressed exception in try block", exc_info=True)
     return file_type
 

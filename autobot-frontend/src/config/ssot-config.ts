@@ -194,6 +194,17 @@ export const PERMISSION_ACTIONS = ['allow', 'ask', 'deny'] as const;
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 /**
+ * Category/mode default values matching backend `CategoryDefaults`
+ * (`autobot_shared/ssot_constants.py`). Only the values consumed on the
+ * frontend today are mirrored here — asserted value-for-value against the
+ * Python source by `src/config/__tests__/ssot-parity.spec.ts` (#14047).
+ */
+export const CATEGORY_DEFAULTS = {
+  GENERAL: 'general',
+  SEARCH_MODE_HYBRID: 'hybrid',
+} as const;
+
+/**
  * Permission rule interface.
  */
 export interface PermissionRule {

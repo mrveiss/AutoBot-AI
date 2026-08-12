@@ -15,10 +15,12 @@ Date: 2025-10-24
 import asyncio
 import json
 import os
+import statistics
 import tempfile
 import time
 from unittest.mock import AsyncMock, Mock
 
+import aiofiles
 import pytest
 
 # Test Issue 3: Terminal Output Buffer Race
@@ -42,6 +44,20 @@ class TestTerminalBufferRace:
             conversation_id="test_conv",
             redis_client=mock_redis,
         )
+
+        # #13284: passing conversation_id makes __init__ build a real
+        # ChatHistoryManager, and every "Output i\n" contains a newline, so
+        # _save_to_chat_buffered persists on all 100 writes. That is real chat
+        # persistence, not buffer-race verification, and it measured 51.22s on
+        # CI — the second-largest entry in the suite. Stub the save the same way
+        # test_buffer_lock_prevents_interleaving below already does; the buffer
+        # still resets through the same _output_lock path, so the assertion
+        # underneath is unchanged.
+        terminal.chat_history_manager.add_message = AsyncMock()
+        # #13284: send_output also calls _log_to_transcript, which does a real
+        # aiofiles append per write whenever conversation_id is set — 100 more
+        # filesystem round-trips that have nothing to do with the buffer race.
+        terminal._log_to_transcript = AsyncMock()
 
         # Simulate 100 concurrent output writes
         async def write_output(text: str):
@@ -356,29 +372,71 @@ class TestPerformance:
 
     @pytest.mark.asyncio
     async def test_atomic_write_overhead(self):
-        """Measure atomic write overhead vs direct write"""
+        """Measure atomic write overhead vs direct write.
+
+        #13162: this used to assert a fixed 500ms wall-clock budget for a
+        SINGLE atomic write, and CI measured 743.26ms. Nothing about the write
+        got slower — ``_atomic_write`` is five thread-pool round-trips
+        (mkstemp, flock, the aiofiles write, os.replace, unlink) whose cost is
+        hand-off latency rather than work, so on a runner executing twelve
+        pytest shards that each run ``-n auto`` the absolute number reports
+        machine contention, not the write.
+
+        The docstring already named the right property: overhead *versus a
+        direct write*. So measure that directly. The plain ``aiofiles`` write
+        and the atomic write are interleaved in one loop, so both see the same
+        contention window, and the ratio of their medians is what gets
+        asserted. Load inflates both sides together and cancels; a real
+        regression — a synchronous call, an fsync per chunk, a lost executor —
+        moves only the atomic side and still fails the test.
+        """
         from chat_history import ChatHistoryManager
 
         # Create manager BEFORE timing (exclude initialization overhead)
         manager = ChatHistoryManager()
         await manager.initialize()
 
+        rounds = 15
+        content = '{"test": "data"}' * 100  # ~1.5KB
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            target_file = os.path.join(tmpdir, "perf.json")
-            content = '{"test": "data"}' * 100  # ~1.5KB
+            direct_target = os.path.join(tmpdir, "direct.json")
+            atomic_target = os.path.join(tmpdir, "atomic.json")
 
-            # Warmup run to exclude first-time overhead
-            await manager._atomic_write(target_file + ".warmup", content)
+            # Warmup both paths to exclude first-time executor start-up cost
+            async with aiofiles.open(direct_target, "w", encoding="utf-8") as handle:
+                await handle.write(content)
+            await manager._atomic_write(atomic_target, content)
 
-            # Measure atomic write time (excluding initialization)
-            start = time.time()
-            await manager._atomic_write(target_file, content)
-            atomic_time = time.time() - start
+            direct_samples = []
+            atomic_samples = []
+            for _ in range(rounds):
+                start = time.perf_counter()
+                async with aiofiles.open(direct_target, "w", encoding="utf-8") as handle:
+                    await handle.write(content)
+                direct_samples.append(time.perf_counter() - start)
 
-            # Should be <500ms (realistic threshold for async I/O with variable system load)
-            # Note: Includes async I/O, fcntl locking, and filesystem operations
-            # The race condition fix is correct - this test verifies reasonable performance
-            assert atomic_time < 0.5, f"Atomic write {atomic_time*1000:.2f}ms > 500ms"
+                start = time.perf_counter()
+                await manager._atomic_write(atomic_target, content)
+                atomic_samples.append(time.perf_counter() - start)
+
+            # The atomic write must have produced the same content, not just
+            # spent time — a fast write of nothing is not a passing result.
+            with open(atomic_target, "r", encoding="utf-8") as fh:
+                assert fh.read() == content
+
+        direct = statistics.median(direct_samples)
+        atomic = statistics.median(atomic_samples)
+
+        # _atomic_write makes five executor round-trips against the plain
+        # write's one, so a few multiples is the floor; measured 2.5x. The
+        # bound leaves headroom for a contended runner without leaving room
+        # for a newly added blocking call.
+        max_overhead_ratio = 15.0
+        assert atomic <= direct * max_overhead_ratio, (
+            f"Atomic write {atomic*1000:.2f}ms is {atomic / direct:.1f}x a plain write "
+            f"({direct*1000:.2f}ms), limit {max_overhead_ratio}x"
+        )
 
 
 if __name__ == "__main__":

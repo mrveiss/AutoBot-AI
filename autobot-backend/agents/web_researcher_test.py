@@ -78,6 +78,14 @@ class TestAcquireBeforeResearch:
         proceeding — matches the retired local RateLimiter's semantics."""
         researcher = WebResearcher({"enabled": True, "rate_limit_requests": 3, "rate_limit_window": 45})
         researcher.rate_limiter.acquire_window = AsyncMock(return_value=True)
+        # #13284: acquire_window is the only thing under test, but
+        # conduct_research goes on to `asyncio.create_task(self.search_web(...))`
+        # and awaits it under `wait_for(timeout=self.timeout_seconds)`. Left
+        # unmocked that is a real outbound web search, and this test measured
+        # 29.74s on CI — a search timeout expiring, not verification. Stubbing
+        # search_web keeps every assertion below intact (acquire_window must
+        # still be called first, with these arguments) and removes the network.
+        researcher.search_web = AsyncMock(return_value={"status": "success", "results": []})
 
         await researcher.conduct_research("test query")
 

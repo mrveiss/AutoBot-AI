@@ -91,6 +91,30 @@ class ResourceFactory:
         return get_orchestrator_sync()
 
     @staticmethod
+    def get_initialized_chat_history_manager():
+        """Return the process-wide ChatHistoryManager, or None — never constructs one.
+
+        Issue #13686: request-free callers (the chat workflow manager runs outside
+        any request scope) need the *same* manager the app initialised at startup,
+        because that is the object that owns the initialised ``memory_graph``
+        (``chat_history/base.py:166`` → ``_init_memory_graph``). Constructing a
+        second manager would build a second ``AutoBotMemoryGraph``, which is
+        exactly the duplicate-concept outcome #13686 forbids.
+
+        ``initialization.lifespan.app_state`` is the canonical request-free mirror
+        of ``app.state`` (written at ``lifespan.py:160``, already read this way by
+        ``api/system.py``). Returns None before startup completes or outside an
+        app process, so callers must degrade rather than assume.
+        """
+        try:
+            from initialization.lifespan import app_state
+
+            return app_state.get("chat_history_manager")
+        except Exception as exc:  # pragma: no cover - import guard only
+            logger.debug("No process-wide ChatHistoryManager available: %s", exc)
+            return None
+
+    @staticmethod
     async def get_chat_history_manager(request: Request = None):
         """Get or create ChatHistoryManager instance with app.state caching"""
         try:
@@ -103,13 +127,17 @@ class ResourceFactory:
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
-            from config import config as global_config_manager
+
+            # `config.config` is the SSOT AutoBotConfig proxy — it has neither
+            # get_redis_config() nor get_nested(). The config *manager* is the
+            # canonical holder of both, as every other call site uses.
+            from config import unified_config_manager
 
             logger.info("Creating new ChatHistoryManager instance (expensive operation)")
 
-            redis_config = global_config_manager.get_redis_config()
+            redis_config = unified_config_manager.get_redis_config()
             chm = ChatHistoryManager(
-                history_file=global_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
+                history_file=unified_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
                 use_redis=redis_config.get("enabled", False),
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),

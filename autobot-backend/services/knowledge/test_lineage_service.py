@@ -22,6 +22,12 @@ import pytest
 # Stub heavy dependencies before importing lineage_service
 # ---------------------------------------------------------------------------
 
+# #13651: keep hold of the stub objects this module installs. The install below
+# is already guarded, so a genuine module is never displaced — but the unload
+# used to pop the name regardless, deleting a real module it never installed and
+# forcing the next importer to build a second one.
+_OWN_STUBS: dict = {}
+
 for _mod in (
     "autobot_shared",
     "autobot_shared.redis_client",
@@ -34,12 +40,25 @@ for _mod in (
         stub.__path__ = []  # type: ignore[attr-defined]
         stub.__package__ = _mod
         sys.modules[_mod] = stub
+        _OWN_STUBS[_mod] = stub
 
 from services.knowledge.lineage_service import (  # noqa: E402
     LineageService,
     SynthesisRun,
     get_lineage_service,
 )
+
+# #13435: see the matching note in test_analyzer_service.py. ``utils.chromadb_client``
+# is the one stub above that escapes this directory — it is not needed after the
+# import, and leaving it installed poisoned utils/chromadb_auth_test.py and
+# utils/chromadb_client_cache_key_test.py, which pass alone and failed in CI.
+# ``_reinstall_module_stubs`` in this package's conftest puts it back around this
+# module's own tests and removes it afterwards.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client",)
+    if sys.modules.get(name) is _OWN_STUBS.get(name) is not None
+}
 
 # ---------------------------------------------------------------------------
 # Helpers

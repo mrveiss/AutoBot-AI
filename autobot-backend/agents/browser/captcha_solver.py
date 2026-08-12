@@ -43,6 +43,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from services.captcha_human_loop import get_captcha_human_loop
 
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily
@@ -72,7 +73,11 @@ _HCAPTCHA_PATTERNS = frozenset({"h-captcha", "hcaptcha", "hcaptcha.com"})
 _SLIDER_PATTERNS = frozenset({"slider", "slide-verify", "slidercaptcha", "drag"})
 
 # Math CAPTCHA: matches expressions like "3 + 4 = ?", "12 - 5 =", "7 × 2"
-_MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/×÷x])\s*(\d+)")
+# ``x``/``X`` are accepted as multiplication: CAPTCHAs commonly render "4 x 5 = ?".
+# Both cases are required because ``_clean_math_expression`` upper-cases its input
+# before this pattern is applied, while ``CaptchaDetector.detect`` applies it to
+# lower-cased HTML. ``_apply_operator`` normalises the captured operator.
+_MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/×÷xX])\s*(\d+)")
 _TRAILING_EQUALS_RE = re.compile(r"\s*[=?]+\s*$")
 
 # Non-alphanumeric characters used to clean OCR output
@@ -733,8 +738,6 @@ class CaptchaSolverPipeline:
             captcha_type.value,
         )
         try:
-            from services.captcha_human_loop import get_captcha_human_loop
-
             service = get_captcha_human_loop()
             url: str = page.url
             resolution = await service.request_human_intervention(

@@ -11,7 +11,7 @@ import asyncio
 import gc
 import logging
 import platform
-import subprocess  # nosec B404 - controlled system diagnostics
+import subprocess  # nosec B404  # controlled system diagnostics
 import sys
 import time
 from datetime import datetime, timezone
@@ -41,8 +41,30 @@ class PerformanceOptimizedDiagnostics:
     Enhanced diagnostics with performance monitoring and timeout optimization
     """
 
-    def __init__(self):
-        """Initialize performance diagnostics with monitoring settings and Redis."""
+    def __init__(self, config_manager=None, llm_service=None):
+        """Initialize performance diagnostics with injected or default dependencies.
+
+        Nothing here reads a ConfigManager key: the ``diagnostics.*`` settings
+        declared in models/settings.py are not reachable through ConfigManager,
+        which exposes no ``diagnostics`` section (recorded on #12750). The
+        manager is held so callers such as dependencies.get_diagnostics can
+        supply one and so the class stops reaching for the global singleton.
+
+        Args:
+            config_manager: ConfigManager for this instance (#13162). Falls back
+                to the application-wide singleton so existing zero-arg callers
+                keep working.
+            llm_service: LLMService used for failure analysis. Falls back to the
+                shared singleton.
+        """
+        # Imported lazily: config.manager and services.llm_service both sit
+        # above this module in the startup import graph.
+        from config.manager import get_config_manager
+        from services.llm_service import get_llm_service
+
+        self.config_manager = config_manager or get_config_manager()
+        self.llm_service = llm_service or get_llm_service()
+
         # Performance monitoring settings (Issue #376 - use named constants)
         self.max_user_permission_timeout = float(TimingConstants.SHORT_TIMEOUT)
         self.permission_retry_attempts = RetryConfig.MIN_RETRIES
@@ -106,7 +128,7 @@ class PerformanceOptimizedDiagnostics:
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information for performance monitoring"""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
+            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.total,memory.used,utilization.gpu",

@@ -55,6 +55,16 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Imported here, not inside the dump helpers: each of them prepends a backend
+# dir to sys.path and chdirs into it, and the repo root is not on sys.path when
+# this script runs as `python3 scripts/audit_api_wiring.py` — so a late import
+# fails with "No module named 'autobot_shared'" and takes the whole dump with it.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
+from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
+
 BACKEND = REPO_ROOT / "autobot-backend"
 # #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts
 # its own '/api'-prefixed route table, entirely separate from autobot-backend
@@ -81,7 +91,11 @@ FE_EXCLUDE_PATTERNS = (
 ROUTE_DECORATOR_RE = re.compile(
     r"@(?:router|app|api_router)\.(get|post|put|delete|patch|websocket|head|options)\(\s*[\'\"]([^\'\"]*)"
 )
-INCLUDE_ROUTER_RE = re.compile(r"include_router\(\s*([A-Za-z_][\w.]*)[^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
+# #12985: the router-prefix grammar now lives in
+# autobot_shared/api_routing/router_prefixes.py. It was duplicated here and in
+# api_endpoint_scanner.py with separate regexes, and the two had diverged —
+# the scanner got package resolution (#12945/#12956), this gate did not.
+INCLUDE_ROUTER_RE = _routing.INCLUDE_ROUTER_RE
 FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
 # #12326: the dominant idiom composes the path from a helper —
 # ``apiClient.get(`${getApiBase()}/knowledge_base/health/status`)``. getApiBase()
@@ -135,7 +149,10 @@ def dump_openapi(out_path: str) -> int:
         from app_factory import create_app  # type: ignore
 
         app = create_app()
-        spec = app.openapi()
+        # Same anchor normalisation as the SLM path below — the main backend has
+        # no Field(pattern=…) today, so this is prophylactic, not a fix. It is
+        # here so the first one added does not silently publish `\z`.
+        spec = normalize_pattern_anchors(app.openapi())
         # FastAPI omits WebSocket routes from OpenAPI — record them in a
         # custom key so the audit can verify /api/ws* style frontend calls
         # against the real route table instead of flagging them (GH#9864).
@@ -176,7 +193,10 @@ def dump_slm_openapi(out_path: str) -> int:
     try:
         from main import app  # type: ignore
 
-        spec = app.openapi()
+        # Must match autobot-slm-backend/scripts/dump_openapi.py exactly: CI
+        # regenerates through THIS path and diffs against the file the other
+        # path produced, so any divergence is reported as stale generated types.
+        spec = normalize_pattern_anchors(app.openapi())
         # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
         ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
         spec["x-websocket-paths"] = sorted(ws)
@@ -203,7 +223,7 @@ def backend_paths_from_openapi(src: str) -> set[str]:
     return paths
 
 
-ROUTER_PREFIX_RE = re.compile(r"APIRouter\([^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
+ROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
 # #12432: feature/core routers are mounted via *data-driven config tuples* in
 # initialization/router_registry/*.py — e.g.
 #   ("api.advanced_control", "/advanced-control", ["advanced-control"], "advanced_control")
@@ -216,38 +236,30 @@ ROUTER_PREFIX_RE = re.compile(r"APIRouter\([^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)",
 # a sub-router's routes (including websocket ones) get NO prefix, not merely
 # the wrong one — e.g. advanced_control.py's ``/ws/monitoring`` never becomes
 # ``/advanced-control/ws/monitoring``.
-ROUTER_CONFIG_ENTRY_RE = re.compile(
-    r"\(\s*(?:[\'\"](?P<mod>api(?:\.\w+)+)[\'\"]|(?P<var>[A-Za-z_]\w*))"
-    r"\s*,\s*(?:[\'\"]router[\'\"]\s*,\s*)?[\'\"](?P<prefix>[^\'\"]*)[\'\"]\s*,\s*\["
-)
-ROUTER_IMPORT_ALIAS_RE = re.compile(r"from\s+(api(?:\.\w+)+)\s+import\s+router\s+as\s+(\w+)")
+ROUTER_CONFIG_ENTRY_RE = _routing.ROUTER_CONFIG_ENTRY_RE
+ROUTER_IMPORT_ALIAS_RE = _routing.ROUTER_IMPORT_ALIAS_RE
 
 
 def _registry_module_prefixes(root: Path) -> dict[str, str]:
-    """Map ``api/<module>.py`` -> its registry-configured mount prefix (#12432).
+    """Map a served source file -> its registry-configured mount prefix (#12432).
 
-    Scans ``initialization/router_registry/*.py`` for the config-tuple
-    patterns described above, resolving variable-alias entries (core_routers.py
-    style) via their ``from api.X import router as X_router`` import line.
-    Returns {} for backends (e.g. autobot-slm-backend) with no such directory.
+    #12985: delegates to the shared resolver. This used to be a flat
+    ``registry_dir.glob("*.py")`` that assumed every registry entry named a
+    module *file*, so a package entry — ``("llc.api", "", …)`` — resolved to a
+    non-existent ``llc/api.py`` and contributed **no prefix at all**. Its 30
+    submodules were scanned but mounted at the wrong path, in a gate whose reds
+    are treated as genuine unwired calls.
+
+    Keys stay repo-relative path suffixes, which is what the caller matches on.
     """
-    registry_dir = root / "initialization" / "router_registry"
-    if not registry_dir.is_dir():
-        return {}
-    alias_to_module: dict[str, str] = {}
-    entries: list[tuple[str, str]] = []
-    for py in registry_dir.glob("*.py"):
-        txt = py.read_text(encoding="utf-8", errors="ignore")
-        alias_to_module.update({alias: mod for mod, alias in ROUTER_IMPORT_ALIAS_RE.findall(txt)})
-        entries.extend(
-            (m.group("mod") or m.group("var"), m.group("prefix")) for m in ROUTER_CONFIG_ENTRY_RE.finditer(txt)
-        )
-    module_prefix: dict[str, str] = {}
-    for mod_or_var, prefix in entries:
-        mod = mod_or_var if mod_or_var.startswith("api.") else alias_to_module.get(mod_or_var)
-        if mod:
-            module_prefix[mod.replace(".", "/") + ".py"] = prefix.rstrip("/")
-    return module_prefix
+    entries = _routing.registry_entries(root / "initialization" / "router_registry")
+    targets = _routing.resolve_registry_targets(root, entries)
+    # Keyed by the same absolute string `_scan_route_decorators` builds from
+    # `root.rglob`, so the caller can do a dict lookup. #12985 grew this map from
+    # a handful of api/*.py entries to every registry-mounted package submodule
+    # (~300), and the previous consumer scanned it linearly per source file —
+    # which turned a seconds-long blocking gate into one that does not finish.
+    return {str(path): prefix for path, prefix in targets.items()}
 
 
 def _scan_route_decorators(
@@ -289,7 +301,7 @@ def _combine_prefixed_paths(
     registry_prefixes = registry_prefixes or {}
     for sp, routes in raw_routes.items():
         own = module_prefix.get(sp, "")
-        reg = next((p for suffix, p in registry_prefixes.items() if sp.endswith("/" + suffix)), None)
+        reg = registry_prefixes.get(sp)
         for r in routes:
             base = own + ("" if (r.startswith("/") or not r) else "/") + r
             candidates = {r, base}
@@ -687,9 +699,7 @@ def rename_candidates(path: str, suggestions: list[str]) -> list[str]:
     ``restart`` matching ``health``).
     """
     return [
-        s
-        for s in suggestions
-        if _namespace(s) == _namespace(path) and _same_resource(_resource(s), _resource(path))
+        s for s in suggestions if _namespace(s) == _namespace(path) and _same_resource(_resource(s), _resource(path))
     ]
 
 

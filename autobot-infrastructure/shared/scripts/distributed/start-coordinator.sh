@@ -6,6 +6,12 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
@@ -24,7 +30,7 @@ echo -e "${CYAN}Architecture: 6-VM Distributed System${NC}"
 echo ""
 
 # Change to AutoBot directory
-cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
+cd ${PROJECT_ROOT}
 
 # Load environment variables for distributed mode
 echo -e "${CYAN}📋 Loading distributed environment configuration...${NC}"
@@ -112,7 +118,7 @@ if pgrep -f "python.*backend/main.py" > /dev/null; then
 fi
 
 # Set Python path
-export PYTHONPATH="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}:$PYTHONPATH"
+export PYTHONPATH="${PROJECT_ROOT}:$PYTHONPATH"
 
 # Start backend with distributed configuration
 echo "Starting FastAPI backend coordinator..."

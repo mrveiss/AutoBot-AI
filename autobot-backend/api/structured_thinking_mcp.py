@@ -27,7 +27,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_common import DataResponse
+from api.schemas_common import MAX_THOUGHT_COUNT
 from api.schemas_system import (
     ClearHistoryRequest,
     GenerateSummaryRequest,
@@ -165,11 +165,13 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
                     "type": "integer",
                     "description": "Position in the thinking sequence",
                     "minimum": 1,
+                    "maximum": MAX_THOUGHT_COUNT,
                 },
                 "total_thoughts": {
                     "type": "integer",
                     "description": "Expected total number of thoughts",
                     "minimum": 1,
+                    "maximum": MAX_THOUGHT_COUNT,
                 },
                 "next_thought_needed": {
                     "type": "boolean",
@@ -339,7 +341,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     return response
 
 
-@router.post("/mcp/generate_summary", response_model=DataResponse[StructuredThinkingSummaryData])
+@router.post("/mcp/generate_summary", response_model=StructuredThinkingSummaryData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_summary_mcp",

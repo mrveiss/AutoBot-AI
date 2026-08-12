@@ -36,6 +36,7 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_async_redis_client
@@ -294,7 +295,7 @@ class AsyncBaselineTest:
         fail_count = 0
 
         # Create temp directory for test files
-        test_dir = Path("/tmp/autobot_baseline_test")  # nosec B108 - test/controlled code uses tmpdir intentionally
+        test_dir = Path("/tmp/autobot_baseline_test")  # nosec B108  # test/controlled code uses tmpdir intentionally
         test_dir.mkdir(parents=True, exist_ok=True)
 
         async def mixed_io_operation(redis_client, op_id):
@@ -548,7 +549,7 @@ class AsyncBaselineTest:
         }
 
         # Save report to file
-        output_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/performance/results")
+        output_dir = project_root() / "tests" / "performance" / "results"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")

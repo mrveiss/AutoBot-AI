@@ -29,6 +29,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _STUBS: dict = {}
+_STUB_MISSING = object()
 
 
 def _make_stub(name: str) -> types.ModuleType:
@@ -48,6 +49,32 @@ _ssot.config.port.chromadb = 8100  # type: ignore[attr-defined]
 # utils / chromadb_client stubs
 _utils_stub = _make_stub("utils")
 _chromadb_stub = _make_stub("utils.chromadb_client")
+# AnalyzerService reaches ChromaDB through knowledge.backends'
+# get_async_default_client(), which lazily imports get_async_chromadb_client
+# from utils.async_chromadb_client (#5316) — not the sync utils.chromadb_client.
+# _make_stub() uses sys.modules.setdefault but returns its own fresh object, so
+# when a sibling test module registered this name first the returned stub is a
+# dangling copy that production code never sees. Read the registered module back.
+_make_stub("utils.async_chromadb_client")
+
+# #13651: force *our* stub in for the two chromadb names, remembering what it
+# displaced — ``setdefault`` is a no-op once the genuine module is imported, and
+# the mutations below must not land on that genuine module.
+_DISPLACED_BY_STUB = {}
+for _n in ("utils.chromadb_client", "utils.async_chromadb_client"):
+    _registered = sys.modules.get(_n, _STUB_MISSING)
+    if _registered is not _STUBS[_n]:
+        # Only when something else holds the name — rewriting our own stub back
+        # over itself is a no-op the leak guard would still record as a mutation.
+        _DISPLACED_BY_STUB[_n] = _registered
+        sys.modules[_n] = _STUBS[_n]
+_async_chromadb_stub = sys.modules["utils.async_chromadb_client"]
+# Injecting a submodule straight into sys.modules does not bind it on the
+# parent package, so mock.patch("utils.async_chromadb_client....") — used by
+# services/rag_service_kb_synthesis_test.py — cannot resolve it. Bind it, and
+# seed the symbol production imports so patch() finds an existing attribute.
+_async_chromadb_stub.get_async_chromadb_client = AsyncMock()  # type: ignore[attr-defined]
+sys.modules["utils"].async_chromadb_client = _async_chromadb_stub  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # Load analyzer_service via importlib to bypass package __init__ imports
@@ -58,13 +85,60 @@ _spec = importlib.util.spec_from_file_location("services.knowledge.analyzer_serv
 assert _spec and _spec.loader, "Could not load analyzer_service spec"
 _analyzer_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.analyzer_service"] = _analyzer_mod
-_spec.loader.exec_module(_analyzer_mod)  # type: ignore[union-attr]
+try:
+    _spec.loader.exec_module(_analyzer_mod)  # type: ignore[union-attr]
+except BaseException:  # noqa: BLE001 - re-raised below
+    # #13651: a failed import must not leave our stub installed for the rest of
+    # the session. The guard's own advice is to install and remove in the same
+    # try/finally; without this, an ImportError here is strictly worse than the
+    # old behaviour, which left the genuine module untouched.
+    for _n, _prev in _DISPLACED_BY_STUB.items():
+        if _prev is not _STUB_MISSING:
+            sys.modules[_n] = _prev
+        else:
+            sys.modules.pop(_n, None)
+    raise
 
 from services.knowledge.analyzer_service import (  # noqa: E402
     AnalyzerService,
     Lesson,
     get_analyzer_service,
 )
+
+# #13435: the stubs above were needed to import analyzer_service, and they are
+# needed again while this module's tests run, because those tests patch through
+# dotted paths such as ``utils.async_chromadb_client.get_async_chromadb_client``
+# which resolve via ``sys.modules``. They are NOT needed in between — and
+# "in between" is when every other test module in the worker gets imported, so
+# leaving them installed is what leaked ``utils`` and its children across the
+# session (the leak guard added in #13361 now fails the run on it).
+#
+# Unload them here; ``_reinstall_module_stubs`` in this package's conftest puts
+# these exact objects back for the duration of this module's tests and removes
+# them afterwards. The same objects, not fresh ones — analyzer_service captured
+# references at import and a different stub would not be the module it holds.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
+    if name in sys.modules
+}
+
+# Put back whatever those stubs displaced (#13651): a genuine module imported
+# before this one must survive it as the same, unmutated object.
+#
+# The parent attribute is restored alongside the ``sys.modules`` entry. They are
+# two separate channels -- ``mock.patch("utils.async_chromadb_client.X")``
+# resolves via ``getattr(sys.modules["utils"], ...)`` (#11532, #12463), while
+# ``import utils.async_chromadb_client`` reads the key -- and letting them
+# disagree would mean patching a stub while the code under test holds the real
+# module.
+for _n, _prev in _DISPLACED_BY_STUB.items():
+    if _prev is not _STUB_MISSING:
+        sys.modules[_n] = _prev
+        _parent_name, _, _leaf = _n.rpartition(".")
+        _parent = sys.modules.get(_parent_name) if _parent_name else None
+        if _parent is not None:
+            setattr(_parent, _leaf, _prev)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,7 +170,7 @@ def _make_chromadb_client(collection: AsyncMock) -> AsyncMock:
 def _patch_chromadb(analyzer: AnalyzerService, collection: AsyncMock) -> None:
     """Inject a mock ChromaDB client into analyzer._get_collection path."""
     client = _make_chromadb_client(collection)
-    _chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
+    _async_chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
 
 
 # ---------------------------------------------------------------------------

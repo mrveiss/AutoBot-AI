@@ -20,6 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# #13688: the general memory plane is owner-scoped; tests must name an owner.
+TEST_USER = "test-user"
+
 from memory import (
     LongTermMemoryManager,
     MemoryCategory,
@@ -100,6 +103,7 @@ async def test_3_general_memory_storage():
         entry_id = await manager.store_memory(
             MemoryCategory.FACT,
             "AutoBot supports multi-modal AI",
+            user_id=TEST_USER,
             metadata={"source": "test", "confidence": 0.95},
         )
         assert entry_id > 0, f"Expected entry_id > 0, got {entry_id}"
@@ -108,16 +112,17 @@ async def test_3_general_memory_storage():
         await manager.store_memory(
             MemoryCategory.STATE,
             "System initialized",
+            user_id=TEST_USER,
             metadata={"component": "orchestrator"},
         )
 
         # Retrieve memories by category
-        facts = await manager.retrieve_memories(MemoryCategory.FACT, limit=10)
+        facts = await manager.retrieve_memories(MemoryCategory.FACT, user_id=TEST_USER, limit=10)
         assert len(facts) == 1, f"Expected 1 fact, got {len(facts)}"
         assert facts[0].content == "AutoBot supports multi-modal AI"
         assert facts[0].metadata["confidence"] == 0.95
 
-        states = await manager.retrieve_memories(MemoryCategory.STATE, limit=10)
+        states = await manager.retrieve_memories(MemoryCategory.STATE, user_id=TEST_USER, limit=10)
         assert len(states) == 1, f"Expected 1 state, got {len(states)}"
 
     print("✅ PASSED: General memory storage works correctly")  # noqa: print
@@ -177,6 +182,7 @@ async def test_5_strategy_pattern():
             content="Strategy pattern works",
             metadata={"test": True},
             timestamp=datetime.now(),
+            user_id=TEST_USER,
         )
         entry_id = await manager.store(entry, StorageStrategy.GENERAL_MEMORY)
         assert entry_id > 0
@@ -243,12 +249,13 @@ async def test_7_backward_compatibility_longterm():
         entry_id = await manager.store_memory(
             "task",  # Old API used strings
             "Test content",
+            user_id=TEST_USER,
             metadata={"test": True},
         )
         assert entry_id > 0
 
         # Retrieve with old API
-        memories = await manager.retrieve_memories("task", limit=10)
+        memories = await manager.retrieve_memories("task", limit=10, user_id=TEST_USER)
         assert len(memories) == 1
         assert memories[0].content == "Test content"
 
@@ -299,7 +306,7 @@ async def test_9_statistics():
         )
         await manager.log_task(task)
 
-        await manager.store_memory(MemoryCategory.FACT, "Test fact", metadata={})
+        await manager.store_memory(MemoryCategory.FACT, "Test fact", user_id=TEST_USER, metadata={})
 
         manager.cache_put("test", "value")
 

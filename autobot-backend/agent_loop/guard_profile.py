@@ -17,7 +17,7 @@ Guard matrix (fields are ``AgentLoopConfig`` guard booleans / limits):
     pre_action_verifier_enabled      False       True      True
     halt_on_stagnation               False       True      True
     abstain_on_low_confidence        False       True      True
-    max_identical_tool_calls           5           3        2
+    max_identical_tool_calls           5           2        2
 
 (*) ``standard`` is the default and reproduces today's ``AgentLoopConfig``
 defaults exactly.

@@ -154,6 +154,11 @@ def test_run_post_sync_steps_restart_false_does_not_call_restart() -> None:
     restart_mock = AsyncMock()
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        # #13312: unmocked, _snapshot_component spawns a real deleting rsync into
+        # the live snapshot store.  rsync creates the destination before it fails,
+        # so each run leaves an empty snapshot dir behind on any host where the
+        # test user can write there.
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
@@ -182,6 +187,11 @@ def test_run_post_sync_steps_restart_true_calls_restart() -> None:
     restart_mock = AsyncMock()
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        # #13312: unmocked, _snapshot_component spawns a real deleting rsync into
+        # the live snapshot store.  rsync creates the destination before it fails,
+        # so each run leaves an empty snapshot dir behind on any host where the
+        # test user can write there.
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
@@ -213,6 +223,11 @@ def test_run_post_sync_steps_restart_false_frontend() -> None:
     restart_mock = AsyncMock()
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        # #13312: unmocked, _snapshot_component spawns a real deleting rsync into
+        # the live snapshot store.  rsync creates the destination before it fails,
+        # so each run leaves an empty snapshot dir behind on any host where the
+        # test user can write there.
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._build_npm_frontend_for_component", AsyncMock()),
         patch("api.code_sync._restart_component_services", restart_mock),
     ):
@@ -234,6 +249,11 @@ def test_run_post_sync_steps_restart_false_shared_library() -> None:
     restart_mock = AsyncMock()
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        # #13312: unmocked, _snapshot_component spawns a real deleting rsync into
+        # the live snapshot store.  rsync creates the destination before it fails,
+        # so each run leaves an empty snapshot dir behind on any host where the
+        # test user can write there.
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", restart_mock),
     ):
@@ -290,6 +310,10 @@ def test_run_component_resolve_job_happy_path() -> None:
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
         patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        # #13851: the job dry-runs rsync before syncing; unpatched that is a real
+        # subprocess in a unit test. Refusal behaviour lives in
+        # tests/api/test_resolve_deletion_guard_13851.py.
+        patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch("api.code_sync._rsync_component_local", AsyncMock(return_value=(True, ""))),
         patch(
             "api.code_sync._run_post_sync_steps",
@@ -331,6 +355,7 @@ def test_run_component_resolve_job_rsync_failure() -> None:
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
         patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch("api.code_sync._rsync_component_local", AsyncMock(return_value=(False, "rsync boom"))),
         patch("api.code_sync._run_post_sync_steps", AsyncMock()),
         patch("api.code_sync._restart_component_services", restart_mock),
@@ -358,9 +383,10 @@ def test_run_component_resolve_job_shared_sync_failure() -> None:
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
         patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch(
             "api.code_sync._ensure_autobot_shared_synced",
-            AsyncMock(return_value=(False, "autobot_shared-first: resync failed before autobot-slm-backend")),
+            AsyncMock(return_value=(False, "autobot_shared-first: resync failed before autobot-slm-backend", [])),
         ),
         patch("api.code_sync._rsync_component_local", rsync_mock),
         patch("api.code_sync._run_post_sync_steps", AsyncMock()),

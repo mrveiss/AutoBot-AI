@@ -22,6 +22,13 @@ Options:
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
@@ -38,7 +45,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
-AUTOBOT_ROOT="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+AUTOBOT_ROOT="${PROJECT_ROOT}"
 TEST_MODE="full"
 VERBOSE=false
 CI_MODE=false
@@ -178,7 +185,7 @@ run_test_category() {
 
     # Extract JSON results if available
     if grep -q "Test Suite Complete" "$test_output"; then
-        local json_file=$(grep -o "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/[^[:space:]]*\.json" "$test_output" | head -1)
+        local json_file=$(grep -o "${PROJECT_ROOT}/tests/results/[^[:space:]]*\.json" "$test_output" | head -1)
         if [ -n "$json_file" ] && [ -f "$json_file" ]; then
             cp "$json_file" "$test_results"
             print_status "INFO" "Results saved to: $test_results"

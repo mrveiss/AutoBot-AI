@@ -29,6 +29,8 @@ from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.pre_action_verifier import PreActionVerifier, VerifierResult, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
+from agent_loop.tool_output_spill import bind_task as _bind_spill_task
+from agent_loop.tool_output_spill import spill_results_async as _spill_results_async
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
@@ -49,6 +51,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
 from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
@@ -127,6 +130,23 @@ class AgentLoop:
     runtime effect until a production caller instantiates ``AgentLoop``. Treat
     this as a library of parts + a reference implementation, not a live code
     path, when reasoning about what actually runs.
+
+    MIRRORED IN PRODUCTION (#13590) — these guards now also run at the live
+    seam, so changing them here alone is no longer the whole story:
+
+    - ``max_identical_tool_calls`` → ``chat_workflow/tool_handler.py``
+      ``_enforce_repetition``, via ``autobot_shared/repetition_guard.py``. The
+      production counter keys on ``(call fingerprint, result hash)`` rather than
+      the call alone, so a polling loop whose result moves is not halted.
+    - ``halt_on_stagnation`` / ``stagnation_window`` /
+      ``min_observation_novelty`` → the same seam, same module, reusing
+      ``fingerprint.compute_novel_token_ratio``.
+    - ``AUTOBOT_GUARD_PROFILE`` and the per-guard env overrides in
+      ``guard_profile.py`` therefore now govern production for these fields.
+
+    STILL UNPORTED: everything else in the guard stack — schema self-correction
+    (``max_schema_retries``), the approval workflow fields, and the belief-state
+    and planning machinery — remains dormant here.
     """
 
     def __init__(
@@ -254,6 +274,10 @@ class AgentLoop:
             description=task_description,
             metadata=initial_context or {},
         )
+        # #13865: bind the spill run here, before any tool executes. Binding it
+        # later left the first iteration's reads scoped to whatever run ran
+        # previously in this asyncio context.
+        _bind_spill_task(task_id)
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
         self._reset_run_flags()
@@ -441,6 +465,10 @@ class AgentLoop:
 
         finally:
             self._current_phase = LoopPhase.STANDBY
+            # #13865: drop the spill run binding on every terminal path. Without
+            # this, a second run awaited in the same asyncio task inherits the
+            # previous run's binding and can read its artifacts.
+            _bind_spill_task(None)
             # GH#11175: clear the resume checkpoint on any terminal path
             # (success/failure/cancel). A hard process crash skips finally, so its
             # checkpoint survives for resume_run() — which is the intended behaviour.
@@ -461,16 +489,24 @@ class AgentLoop:
         self._current_context = TaskContext.from_snapshot(snapshot)
         self._iteration_count = self._current_context.iteration_count
         self._reset_run_flags()  # start from a clean halt/error latch (GH#11175)
+        _bind_spill_task(task_id)  # #13865: a resumed run scopes its own reads
         logger.info(
             "AgentLoop: resuming task %s from iteration %d",
             task_id,
             self._iteration_count,
         )
 
-        results = await self._execute_main_loop()
-        result = await self._finalize_task(results)
-        await self._clear_run_checkpoint(task_id)
-        return result
+        try:
+            results = await self._execute_main_loop()
+            result = await self._finalize_task(results)
+            await self._clear_run_checkpoint(task_id)
+            return result
+        finally:
+            # #13865: same release as `run_task`. Without it a resumed run left
+            # its binding live, so the next run in this asyncio context
+            # inherited it and could read the resumed run's artifacts — the hole
+            # the run_task fix closes, reopened on the resume path.
+            _bind_spill_task(None)
 
     async def cancel(self) -> None:
         """Cancel the current task."""
@@ -536,6 +572,31 @@ class AgentLoop:
     # =========================================================================
     # Iteration Logic
     # =========================================================================
+
+    async def _offload_oversized_results(self, tool_results: dict[str, Any]) -> dict[str, Any]:
+        """Write oversized tool output aside, leaving an excerpt plus an anchor.
+
+        #13692 step 1: one large tool result cannot consume the window in a
+        single step. Off by default (#12555 precedent); a run under the
+        threshold is byte-identical to a run without this.
+
+        #13865: skipped entirely when there is no run to scope artifacts to.
+        The previous ``"unknown"`` fallback put every context-less run into one
+        shared namespace, so anchors collided across runs and the read-side run
+        check became a no-op.
+        """
+        task_id = self._current_context.task_id if self._current_context else None
+        if not task_id:
+            return tool_results
+
+        tool_results, spilled = await _spill_results_async(task_id, tool_results)
+        if spilled:
+            logger.info(
+                "Offloaded %d oversized tool result(s) for task %s (#13692)",
+                spilled,
+                task_id,
+            )
+        return tool_results
 
     async def _execute_iteration_phases(self, result: IterationResult) -> IterationResult:
         """
@@ -610,6 +671,8 @@ class AgentLoop:
 
         live_results = await self._execute_tools(tools_to_run) if tools_to_run else {}
         tool_results = {**cached_results, **live_results}
+
+        tool_results = await self._offload_oversized_results(tool_results)
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and
@@ -970,7 +1033,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )
@@ -1002,7 +1065,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )

@@ -19,6 +19,7 @@ from typing import List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 from models.command_execution import CommandExecution, CommandState
@@ -28,7 +29,7 @@ logger = get_logger(__name__)
 
 def _decode_command_ids(command_ids: set) -> List[str]:
     """Decode Redis set members to string list. (Issue #315 - extracted)"""
-    return [cid.decode("utf-8") for cid in command_ids]
+    return [decode_redis_value(cid) for cid in command_ids]
 
 
 def _parse_command_data_safe(command_data: bytes, state_filter: CommandState | None = None) -> CommandExecution | None:

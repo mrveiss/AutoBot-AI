@@ -86,6 +86,21 @@ def _serialize_props(props: Dict[str, Any]) -> Dict[str, str]:
     return result
 
 
+def _traversal_step(entry: Dict[str, Any], current_id: str) -> Dict[str, Any]:
+    """Tag a ``get_neighbors`` entry with the direction it was crossed in.
+
+    ``get_neighbors(direction="both")`` merges outgoing and incoming results
+    without saying which is which, so a path built from them cannot be read back
+    (#13474). Comparing the edge's ``from`` against the node we departed tells
+    us: equal means we followed the relation, otherwise we crossed it backwards.
+    """
+    edge = entry.get("edge") or {}
+    return {
+        **entry,
+        "direction": "outgoing" if edge.get("from") == current_id else "incoming",
+    }
+
+
 def _deserialize_props(raw: Dict[bytes, bytes]) -> Dict[str, Any]:
     """Convert Redis hgetall bytes result back to Python dict."""
     out: Dict[str, Any] = {}
@@ -563,6 +578,7 @@ class PropertyGraph:
         to_id: str,
         relation: str | None = None,
         max_depth: int = 6,
+        direction: str = "outgoing",
     ) -> List[Dict[str, Any]] | None:
         """
         BFS shortest path between two nodes.
@@ -572,10 +588,19 @@ class PropertyGraph:
             to_id: Target node identifier.
             relation: Restrict traversal to this relation type; None = all.
             max_depth: Maximum path length to search.
+            direction: Edges to follow — ``"outgoing"`` (default, follows the
+                relation as stored), ``"incoming"``, or ``"both"``. #13474 added
+                the parameter: "how are these two things connected" is usually an
+                undirected question, but only half the memory graph's relations
+                are mirrored (``create_relation(bidirectional=True)``), so a
+                caller that cannot cross an edge backwards gets "no path" for
+                pairs that are in fact one hop apart.
 
         Returns:
-            Ordered list of ``{node, edge}`` dicts representing the path
-            (excluding the start node), or None if no path found.
+            Ordered list of ``{node, edge, direction}`` dicts representing the
+            path (excluding the start node), or None if no path found. Each
+            step's ``direction`` records how that edge was crossed, which is the
+            only way to read a ``direction="both"`` path unambiguously.
         """
         if from_id == to_id:
             return []
@@ -590,12 +615,12 @@ class PropertyGraph:
             if len(path) >= max_depth:
                 continue
 
-            neighbours = await self.get_neighbors(current_id, relation=relation, direction="outgoing")
+            neighbours = await self.get_neighbors(current_id, relation=relation, direction=direction)
             for entry in neighbours:
                 neighbour_id = entry["node"].get("id")
                 if not neighbour_id:
                     continue
-                new_path = path + [entry]
+                new_path = path + [_traversal_step(entry, current_id)]
                 if neighbour_id == to_id:
                     return new_path
                 if neighbour_id not in visited:

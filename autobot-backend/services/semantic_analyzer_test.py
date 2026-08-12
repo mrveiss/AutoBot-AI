@@ -237,7 +237,7 @@ def test_suggest_imports_for_logger() -> None:
     patterns = ["logger"]
     suggestions = analyzer.suggest_imports(patterns)
 
-    assert any("logging" in s for s in suggestions)
+    assert any("from autobot_shared.logging_manager import get_logger" == s for s in suggestions)
 
 
 def test_suggest_imports_for_fastapi() -> None:

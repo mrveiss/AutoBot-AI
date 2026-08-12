@@ -22,6 +22,14 @@ const logger = createLogger('useVoiceOutput')
 
 const STORAGE_KEY = 'autobot-voice-output-enabled'
 
+// #13215: chunked TTS wire format. The backend answers /voice/synthesize with
+// `[4-byte big-endian length][WAV]` frames when `stream=true` is sent, marked
+// by this header, so the first ~250ms can play while the rest is still being
+// synthesized. Must stay in step with api/voice.py's AUDIO_STREAM_FRAMING*.
+const FRAMING_HEADER = 'X-Audio-Framing'
+const FRAMING_VALUE = 'length-prefixed-wav'
+const FRAME_HEADER_BYTES = 4
+
 // #9999: user-visible message when a deployment has no TTS voices installed
 // (e.g. no tts-worker provisioned in small topologies). Without this, TTS
 // no-ops silently and the operator gets no feedback.
@@ -44,6 +52,84 @@ let _currentSource: AudioBufferSourceNode | null = null
 let _scheduledSources: AudioBufferSourceNode[] = []
 let _nextStartTime = 0
 let _activeChunkCount = 0
+
+// ── #12460: adaptive pre-roll so a below-real-time worker still plays smoothly ──
+//
+// Gapless scheduling only holds while the worker produces audio at least as fast
+// as it is consumed. On a loaded host it does not: 19 of 19 measured syntheses
+// ran at 0.09x-0.83x real time. Each chunk is then already late when it arrives,
+// _scheduleGaplessChunk re-anchors it to ctx.currentTime, and the listener hears
+// ~250ms of speech per gap — the reported stutter.
+//
+// Fix: hold decoded chunks until enough audio is buffered for the REST of the
+// utterance to play out continuously. For an utterance of D audio-seconds
+// produced at r audio-seconds per wall-second, playback that starts with B
+// seconds buffered stays gapless iff B >= (1 - r) * D — consumed time t must
+// never exceed produced audio B + r*t, and the binding case is t = D.
+//
+// D is estimated from the utterance text; r is measured from chunk arrivals and
+// carried ACROSS utterances, because it is a property of the worker and its host,
+// not of the sentence. With no measurement yet (first utterance of a session) or
+// a worker at/above real time, nothing is held back and the #13215 first-audio
+// latency is untouched.
+//
+// Audio still scheduled ahead of the playhead is lead-in too, but it is NOT
+// worth its own duration: while A seconds of an earlier sentence play out, the
+// worker adds only r*A. Extending the derivation over A + D of playout gives
+// B >= (1 - r) * D - r * A, so scheduled-ahead audio is credited at r*A.
+const _RTF_TARGET = 1.0
+// Upper bound on the lead-in in AUDIO-seconds.
+const _PREROLL_MAX_SEC = 8
+// ...and the bound that actually caps latency. Buffering B audio-seconds at rate
+// r costs B/r of WALL time, so an audio-seconds cap alone is not a wait bound: at
+// the 0.09x measured in #12460 an 8s target is ~90s of silence before speech.
+// Affordable buffer within this wait is MAX_WAIT*r, so the slowest workers buy
+// less lead-in rather than an unbounded delay — they stutter, and the
+// below-real-time alert is what surfaces the real problem.
+const _PREROLL_MAX_WAIT_SEC = 8
+// Stall watchdog, NOT a cap on filling the lead-in: filling T audio-seconds at
+// rate r legitimately takes T/r wall-seconds, so a total-duration timer would
+// force-release exactly the slow workers this exists for. Re-armed on every held
+// chunk, it only fires when the worker has genuinely stopped producing.
+const _PREROLL_STALL_MS = 10_000
+// Audio-seconds per character, used to size D before any audio exists. Measured
+// on the deploy in #12460: 49 chars -> ~3.3s, 209 chars -> ~11.4s of audio.
+const _SEC_PER_CHAR = 0.06
+// Weight of the newest per-utterance sample in the carried real-time factor.
+const _RTF_SMOOTHING = 0.3
+// Shortest window a production rate may be derived from. Two chunks that
+// arrive coalesced a few ms apart otherwise compute as ~100x, drive the
+// target to zero and release the pre-roll for good — the mirror image of the
+// transient gap already handled below.
+const _RTF_MIN_WINDOW_SEC = 0.5
+
+// Carried production rate in audio-seconds per wall-second; null until measured.
+let _measuredRtf: number | null = null
+// Decoded chunks held back during the current utterance's lead-in.
+let _pendingBuffers: AudioBuffer[] = []
+let _pendingSec = 0
+let _utteranceHolding = false
+let _utterancePrerollSec = 0
+let _utteranceEstimateSec = 0
+// Rate this utterance is being sized against — the carried rate, lowered if the
+// utterance turns out to be producing even more slowly than that.
+let _utteranceRtf = 0
+// Bumped per utterance so a chunk that finishes decoding after its own
+// utterance ended is not folded into the next one's buffer or rate.
+let _utteranceSeq = 0
+// Bumped by every explicit stop, so a chunk decoded after a barge-in is
+// dropped rather than spoken as a fragment of the superseded reply.
+let _stopSeq = 0
+let _prerollTimer: ReturnType<typeof setTimeout> | null = null
+// Arrival wall-clock of this utterance's FIRST chunk. Time-to-first-chunk is
+// model warm-up, not production rate, so the rate is measured from chunk 2 on.
+let _rtfFirstChunkAt = 0
+let _rtfProducedSec = 0
+// Arrival of the LAST observed chunk. The carried rate is measured to here, not
+// to tts_end: the final chunk is often still decoding when the utterance ends,
+// so measuring to "now" left its arrival interval in the window with its audio
+// missing and biased the worker slow.
+let _rtfLastChunkAt = 0
 
 // Single shared WebSocket to /api/voice/stream (#6788).
 // Was: useVoiceOutput + useVoiceConversation each opened their own socket to the
@@ -204,6 +290,12 @@ function _stopCurrentAudio(): void {
   // drain loop stops instead of continuing to speak a superseded reply.
   _speakQueue.length = 0
   _speakController?.abort()
+  // #12460: audio still inside the pre-roll buffer belongs to the superseded
+  // reply — dropping it here is what makes barge-in immediate. Bumping the stop
+  // sequence also discards chunks still being decoded, which no flag could
+  // otherwise reach.
+  _stopSeq++
+  _resetPreroll()
   if (_currentSource) {
     try { _currentSource.stop() } catch { /* already stopped */ }
     _currentSource = null
@@ -254,28 +346,37 @@ async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
   })
 }
 
-/**
- * Schedule an audio chunk for gapless playback on the AudioContext timeline (#1527).
- * Instead of awaiting each chunk sequentially (which causes gaps during decode),
- * we decode immediately and schedule at the next available time slot.
- */
-async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
-  const ctx = _getOrCreateContext()
-  if (ctx.state === 'suspended') {
-    // A resume() from the WS onmessage handler is not a user gesture; try once,
-    // then bail if the context stays suspended (#12503).
-    await ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+/** Discard the pre-roll buffer and its timer without playing anything (#12460). */
+function _resetPreroll(): void {
+  if (_prerollTimer) {
+    clearTimeout(_prerollTimer)
+    _prerollTimer = null
   }
-  if (ctx.state === 'suspended') {
-    // Autoplay policy still blocks playback — no audio will be heard. Re-arm a
-    // one-time gesture listener + surface a hint, and DON'T set isSpeaking so the
-    // indicator can't stick with no sound (#12503).
-    _armGestureUnlock()
-    _notifyTapToEnableAudio()
-    return
-  }
+  _pendingBuffers = []
+  _pendingSec = 0
+  _utteranceHolding = false
+  _utterancePrerollSec = 0
+  _utteranceEstimateSec = 0
+  _utteranceRtf = 0
+  _rtfFirstChunkAt = 0
+  _rtfProducedSec = 0
+  _rtfLastChunkAt = 0
+}
 
-  const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+/**
+ * Lead-in credited to this utterance (#12460): what is held in the pre-roll
+ * buffer, plus what the worker will produce while audio already scheduled ahead
+ * plays out — r*A, not A. Crediting scheduled-ahead audio at full value would
+ * release a follow-on sentence far too early, since a sentence queued behind
+ * 5 seconds of playout still only gains 5*r seconds of production from it.
+ */
+function _leadSec(rtf: number): number {
+  const ahead = _audioContext ? Math.max(0, _nextStartTime - _audioContext.currentTime) : 0
+  return _pendingSec + rtf * ahead
+}
+
+/** Place one decoded buffer on the gapless timeline (#1527). */
+function _scheduleBuffer(ctx: AudioContext, audioBuffer: AudioBuffer): void {
   const source = ctx.createBufferSource()
   source.buffer = audioBuffer
 
@@ -298,7 +399,10 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
     _activeChunkCount--
     if (_activeChunkCount <= 0) {
       _activeChunkCount = 0
-      isSpeaking.value = false
+      // Not idle if the NEXT sentence is already buffering: clearing here fires
+      // watch(isSpeaking) in useVoiceConversation, which reopens the mic in the
+      // gap between sentences (#12460).
+      if (!_utteranceHolding) isSpeaking.value = false
     }
   }
 
@@ -307,6 +411,195 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   // RUNNING context — never before decode/resume — so the indicator reflects
   // real audio and a suspended/failed chunk cannot leave it stuck on.
   isSpeaking.value = true
+}
+
+/** Hand every held chunk to the timeline and stop holding back (#12460). */
+function _releasePending(): void {
+  if (_prerollTimer) {
+    clearTimeout(_prerollTimer)
+    _prerollTimer = null
+  }
+  _utteranceHolding = false
+  if (_pendingBuffers.length === 0) {
+    _pendingSec = 0
+    return
+  }
+  const ctx = _getOrCreateContext()
+  const buffers = _pendingBuffers
+  _pendingBuffers = []
+  _pendingSec = 0
+  if (ctx.state === 'suspended') {
+    // The context was running when these chunks were held but the tab has been
+    // backgrounded since. Starting sources on a frozen timeline never fires
+    // onended, which is exactly how the indicator used to stick (#12503).
+    // Put them back rather than discarding them: this can be up to the whole
+    // lead-in, i.e. the opening of the reply. The next chunk, the end of the
+    // utterance, or an explicit stop retries or clears them — no timer is
+    // re-armed here, so a still-suspended context cannot spin.
+    _pendingBuffers = buffers
+    _pendingSec = buffers.reduce((total, buffer) => total + buffer.duration, 0)
+    _utteranceHolding = true
+    _armGestureUnlock()
+    _notifyTapToEnableAudio()
+    if (_activeChunkCount <= 0) isSpeaking.value = false
+    return
+  }
+  for (const buffer of buffers) _scheduleBuffer(ctx, buffer)
+}
+
+/** (Re)arm the stall watchdog for the current hold (#12460). */
+function _armStallTimer(): void {
+  if (_prerollTimer) clearTimeout(_prerollTimer)
+  _prerollTimer = setTimeout(() => {
+    _prerollTimer = null
+    logger.warn('TTS pre-roll stalled; playing what is buffered')
+    _releasePending()
+  }, _PREROLL_STALL_MS)
+}
+
+/**
+ * Fold one chunk into the production-rate measurement and return the live rate
+ * for this utterance, or null while it is not yet measurable (#12460).
+ */
+function _observeChunkRate(durationSec: number): number | null {
+  const now = Date.now()
+  _rtfLastChunkAt = now
+  if (_rtfFirstChunkAt === 0) {
+    _rtfFirstChunkAt = now
+    return null
+  }
+  _rtfProducedSec += durationSec
+  const elapsedSec = (now - _rtfFirstChunkAt) / 1000
+  if (elapsedSec < _RTF_MIN_WINDOW_SEC) return null
+  return _rtfProducedSec / elapsedSec
+}
+
+/** Blend an utterance's measured production rate into the carried one (#12460). */
+function _recordRtfSample(sample: number): void {
+  _measuredRtf =
+    _measuredRtf === null ? sample : _measuredRtf + _RTF_SMOOTHING * (sample - _measuredRtf)
+}
+
+/** Lead-in needed for `estimateSec` of audio produced at `rtf` (#12460). */
+function _prerollTargetSec(rtf: number, estimateSec: number): number {
+  if (rtf >= _RTF_TARGET || rtf <= 0) return 0
+  const derived = (1 - rtf) * estimateSec
+  // Bounded by audio-seconds AND by what fits in the wall-clock wait budget.
+  return Math.max(0, Math.min(derived, _PREROLL_MAX_SEC, _PREROLL_MAX_WAIT_SEC * rtf))
+}
+
+/**
+ * Open an utterance: decide from the carried real-time factor whether its audio
+ * must be pre-rolled before playback starts (#12460).
+ */
+function _beginUtterance(text: string): void {
+  // A previous utterance's held audio is never dropped on a boundary — only an
+  // explicit stop discards it.
+  _releasePending()
+  _resetPreroll()
+  _utteranceSeq++
+  const rtf = _measuredRtf
+  if (rtf === null) return
+  _utteranceRtf = rtf
+  _utteranceEstimateSec = text.trim().length * _SEC_PER_CHAR
+  _utterancePrerollSec = _prerollTargetSec(rtf, _utteranceEstimateSec)
+  if (_utterancePrerollSec <= 0) return
+  _utteranceHolding = true
+  // The watchdog is armed by the first held chunk, NOT here: a slow first chunk
+  // would otherwise fire it against an empty buffer, and that release clears
+  // _utteranceHolding — silently disabling pre-roll for the whole utterance.
+}
+
+/**
+ * Close an utterance: flush whatever is still held — a short utterance may never
+ * reach its lead-in target, and its tail must still be spoken (#12460) — then
+ * carry the measured production rate to the next utterance.
+ */
+function _endUtterance(): void {
+  _releasePending()
+  const elapsedSec =
+    _rtfFirstChunkAt > 0 && _rtfLastChunkAt > _rtfFirstChunkAt
+      ? (_rtfLastChunkAt - _rtfFirstChunkAt) / 1000
+      : 0
+  if (elapsedSec > 0 && _rtfProducedSec > 0) {
+    _recordRtfSample(_rtfProducedSec / elapsedSec)
+  }
+  _rtfFirstChunkAt = 0
+  _rtfProducedSec = 0
+  _rtfLastChunkAt = 0
+  _utterancePrerollSec = 0
+  _utteranceEstimateSec = 0
+  _utteranceRtf = 0
+}
+
+/**
+ * Schedule an audio chunk for gapless playback on the AudioContext timeline (#1527).
+ * Instead of awaiting each chunk sequentially (which causes gaps during decode),
+ * we decode immediately and schedule at the next available time slot.
+ *
+ * #12460: while the utterance is pre-rolling, the decoded chunk is held instead,
+ * and everything held is released the moment the lead-in covers the rest of the
+ * utterance at the observed production rate.
+ */
+async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
+  const seq = _utteranceSeq
+  const stopSeq = _stopSeq
+  const ctx = _getOrCreateContext()
+  if (ctx.state === 'suspended') {
+    // A resume() from the WS onmessage handler is not a user gesture; try once,
+    // then bail if the context stays suspended (#12503).
+    await ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+  }
+  if (ctx.state === 'suspended') {
+    // Autoplay policy still blocks playback — no audio will be heard. Re-arm a
+    // one-time gesture listener + surface a hint, and DON'T set isSpeaking so the
+    // indicator can't stick with no sound (#12503).
+    _armGestureUnlock()
+    _notifyTapToEnableAudio()
+    return
+  }
+
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+
+  if (stopSeq !== _stopSeq) {
+    // A stop / barge-in landed while this chunk was decoding. It belongs to a
+    // reply the user has already dismissed, so it is dropped outright — playing
+    // it would speak a fragment and flip isSpeaking back on after stopSpeaking().
+    return
+  }
+
+  if (seq !== _utteranceSeq) {
+    // Decoding is genuinely async, so the previous utterance's last chunk often
+    // resolves after the next tts_start. It belongs to the reply already being
+    // played — schedule it straight through rather than holding it with, and
+    // skewing the rate of, an utterance it is not part of.
+    _scheduleBuffer(ctx, audioBuffer)
+    return
+  }
+
+  const liveRtf = _observeChunkRate(audioBuffer.duration)
+
+  if (!_utteranceHolding) {
+    _scheduleBuffer(ctx, audioBuffer)
+    return
+  }
+
+  _pendingBuffers.push(audioBuffer)
+  _pendingSec += audioBuffer.duration
+  // #12460: the reply IS being spoken — it is buffering, not finished. Leaving
+  // isSpeaking false here would fire watch(isSpeaking) in useVoiceConversation,
+  // expiring the TTS echo cooldown and reopening the mic mid-reply.
+  isSpeaking.value = true
+  _armStallTimer()
+  if (liveRtf !== null) {
+    // Track the live rate in both directions. _observeChunkRate is cumulative
+    // over the utterance, so it is already smooth; ratcheting it downward instead
+    // let one transient arrival gap pin the target at the cap for the rest of
+    // the utterance with no way to recover.
+    _utteranceRtf = liveRtf
+    _utterancePrerollSec = _prerollTargetSec(liveRtf, _utteranceEstimateSec)
+  }
+  if (_leadSec(_utteranceRtf) >= _utterancePrerollSec) _releasePending()
 }
 
 /** Decode base64 audio and schedule for gapless playback (#1527). */
@@ -403,8 +696,15 @@ function _connectTtsWs(): Promise<WebSocket> {
         return
       }
       // Internal: audio playback owned here.
-      if (msg.type === 'tts_audio' && msg.data) {
+      if (msg.type === 'tts_start') {
+        // #12460: the utterance's text sizes its pre-roll before any audio exists.
+        _beginUtterance(typeof msg.text === 'string' ? msg.text : '')
+      } else if (msg.type === 'tts_audio' && msg.data) {
         void _playAudioChunkFromBase64(msg.data)
+      } else if (msg.type === 'tts_end') {
+        // #12460: the backend sends tts_end even on a mid-stream failure, so this
+        // is also what guarantees held audio is never stranded.
+        _endUtterance()
       } else if (msg.type === 'error') {
         logger.warn('Voice WS server error:', msg.message)
       }
@@ -418,9 +718,71 @@ function _connectTtsWs(): Promise<WebSocket> {
 }
 
 /**
+ * Read the backend's `[4-byte big-endian length][WAV]` framing, scheduling each
+ * mini-WAV the instant it arrives (#13215).
+ *
+ * The chunks are separate, independently-decodable WAV files — concatenating
+ * them and handing the result to decodeAudioData would only ever decode the
+ * first one, so they must be split here and scheduled individually on the same
+ * gapless timeline the WebSocket path uses.
+ */
+async function _playFramedAudioStream(body: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = body.getReader()
+  let buffer = new Uint8Array(0)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (value?.length) {
+        const merged = new Uint8Array(buffer.length + value.length)
+        merged.set(buffer)
+        merged.set(value, buffer.length)
+        buffer = merged
+      }
+      // Drain every complete frame currently buffered before reading again.
+      for (;;) {
+        if (buffer.length < FRAME_HEADER_BYTES) break
+        const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+        const size = view.getUint32(0, false)
+        if (buffer.length < FRAME_HEADER_BYTES + size) break
+        // A zero-length frame is reachable: readexactly(0) returns b'' without
+        // raising, so a 0 header from the worker propagates an empty chunk.
+        // decodeAudioData rejects on it, which would abandon every remaining
+        // frame of the utterance — skip it instead.
+        if (size === 0) {
+          buffer = buffer.slice(FRAME_HEADER_BYTES)
+          continue
+        }
+        const wav = buffer.slice(FRAME_HEADER_BYTES, FRAME_HEADER_BYTES + size)
+        buffer = buffer.slice(FRAME_HEADER_BYTES + size)
+        // One undecodable frame must not silence the rest of the reply — the
+        // WebSocket path already guards per-chunk this way.
+        try {
+          await _scheduleGaplessChunk(wav.buffer as ArrayBuffer)
+        } catch (error) {
+          logger.warn('TTS frame decode failed; skipping frame', error)
+        }
+      }
+      if (done) break
+    }
+  } finally {
+    // Releases the response body on an abort or a throw; without this the
+    // stream stays locked and the connection is never cancelled.
+    reader.cancel().catch(() => {})
+  }
+  if (buffer.length > 0) {
+    logger.warn('TTS stream ended mid-frame; dropped', buffer.length, 'trailing bytes')
+  }
+}
+
+/**
  * Synthesize `text` via the HTTP TTS endpoint and play it to completion.
  * Shared by the one-shot speak() and the sequential fallback drainer (#12502).
  * The caller owns the AbortController so it can cancel this request.
+ *
+ * Requests the chunked variant (#13215): the backend then emits each ~250ms
+ * mini-WAV as the worker produces it instead of buffering the whole utterance,
+ * which is what made every spoken reply start after 4.7–10.1s of silence. A
+ * runtime without ReadableStream support still gets the whole-blob response.
  */
 async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<void> {
   const { effectiveVoiceId } = useVoiceProfiles()
@@ -434,6 +796,7 @@ async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<vo
   if (language) {
     formData.append('language', language)
   }
+  formData.append('stream', 'true')
   const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, { // fetchWithAuth retained: binary audio blob + FormData body — exempt (#6256)
     method: 'POST',
     body: formData,
@@ -444,6 +807,22 @@ async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<vo
     // #9999: 404/503 here means no TTS service/voices on this deployment.
     if (response.status === 404 || response.status === 503) {
       _notifyNoVoices()
+    }
+    return
+  }
+  if (response.headers.get(FRAMING_HEADER) === FRAMING_VALUE && response.body) {
+    // Chunks are scheduled on the shared gapless timeline and are still
+    // sounding when this resolves, so isSpeaking is left to the per-source
+    // onended handler — clearing it here would drop the indicator (and fire
+    // watch(isSpeaking)) while audio is mid-utterance.
+    // #12460: the end of the framed body IS the end of the utterance, so the
+    // pre-roll is closed in `finally` — an abort or a truncated stream must
+    // still flush whatever was held rather than swallow it.
+    _beginUtterance(text)
+    try {
+      await _playFramedAudioStream(response.body)
+    } finally {
+      _endUtterance()
     }
     return
   }
@@ -514,7 +893,10 @@ export function useVoiceOutput() {
   // sequential fallback queue so sentences never abort each other (#12502).
   async function speak(text: string, force?: boolean): Promise<void> {
     if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
-    if (isSpeaking.value) _stopCurrentAudio()
+    // #12460: a superseded reply may be mid-pre-roll rather than mid-playback.
+    // Without the holding check the stop is skipped, and _beginUtterance's
+    // release then speaks the superseded audio first — the #12502 failure.
+    if (isSpeaking.value || _utteranceHolding) _stopCurrentAudio()
 
     // #9999: surface a clear message instead of failing silently when the
     // deployment has no TTS voices installed.

@@ -44,6 +44,7 @@ class MatrixAdapter(BaseAdapter):
         relates_to = content.get("m.relates_to", {})
 
         metadata["event_id"] = event_id
+        metadata["message_id"] = event_id
         metadata["msgtype"] = content.get("msgtype", "m.text")
         metadata["relates_to"] = relates_to
         metadata["e2ee"] = self._e2ee
@@ -59,6 +60,7 @@ class MatrixAdapter(BaseAdapter):
             message=content.get("body", ""),
             timestamp=float(raw_message.get("origin_server_ts", 0)) / 1000,
             metadata=metadata,
+            message_id=event_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:

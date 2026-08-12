@@ -22,6 +22,9 @@ recur silently.
 
 from __future__ import annotations
 
+import sys
+import types
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -136,18 +139,75 @@ async def test_generate_ai_response_does_not_call_legacy_generate_response(make_
     llm_service.chat.assert_awaited_once()
 
 
-def test_get_llm_service_imports_canonical_module_path() -> None:
-    """Regression pin: the lazy import inside ``get_llm_service`` must
-    resolve to ``services.llm_service.LLMService`` (the canonical post-#3185
-    location), not a non-existent top-level ``llm_service`` module.
+class TestGetLlmServiceResolvesTheCanonicalModule:
+    """#7047's first defect: a function-scoped ``from llm_service import ...``
+    naming a module that does not exist, so it raised ModuleNotFoundError on
+    the first chat request rather than at import time.
+
+    This used to assert the import *statement* appeared in
+    ``inspect.getsource(get_llm_service)`` (#13311) -- which passes when the
+    literal sits in a dead branch and fails on any refactor that moves it.
+    Swapping the module in ``sys.modules`` and observing which class the
+    accessor constructs proves the lookup actually happens, and where.
     """
-    import inspect
 
-    from api import chat
+    @pytest.fixture
+    def canonical_module(self, monkeypatch):
+        """Install a sentinel at the canonical path and yield its class."""
+        sentinel_cls = type("SentinelLLMService", (), {})
+        module = types.ModuleType("services.llm_service")
+        module.LLMService = sentinel_cls
+        monkeypatch.setitem(sys.modules, "services.llm_service", module)
+        return sentinel_cls
 
-    src = inspect.getsource(chat.get_llm_service)
-    assert "from services.llm_service import LLMService" in src, (
-        "get_llm_service must import from services.llm_service "
-        "(canonical post-#3185 path); the older 'from llm_service import' "
-        "raises ModuleNotFoundError at first call."
-    )
+    @staticmethod
+    def _request():
+        return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+
+    def test_constructs_the_class_from_services_llm_service(self, canonical_module) -> None:
+        from api.chat import get_llm_service
+
+        service = get_llm_service(self._request())
+
+        assert isinstance(service, canonical_module), (
+            "get_llm_service resolved something other than "
+            "services.llm_service.LLMService -- the canonical post-#3185 path"
+        )
+
+    def test_result_is_cached_on_app_state(self, canonical_module) -> None:
+        """Lazy init is what let the broken import fire late; the caching half
+        of that contract still has to hold."""
+        from api.chat import get_llm_service
+
+        request = self._request()
+        first = get_llm_service(request)
+        second = get_llm_service(request)
+
+        assert first is second
+        assert request.app.state.llm_service is first
+
+    # A ``pytest.raises(ModuleNotFoundError): import_module("llm_service")``
+    # check lived here and was dropped: its premise is a global sys.path /
+    # sys.modules property that conftest's ``services.llm_service`` stub and
+    # sibling suites can invalidate, so it passed alone and failed in the
+    # sharded run. It was also redundant --
+    # ``test_constructs_the_class_from_services_llm_service`` above already
+    # goes red when the import is pointed at the legacy module name.
+
+    def test_a_broken_import_surfaces_rather_than_silently_returning_none(self, monkeypatch) -> None:
+        """``lazy_init_singleton`` swallows factory exceptions and returns None.
+
+        That is exactly how #7047 stayed invisible, so pin the observable:
+        a caller must be able to tell resolution failed.
+        """
+        from api.chat import get_llm_service
+
+        broken = types.ModuleType("services.llm_service")
+
+        def _explode(*_args, **_kwargs):
+            raise ModuleNotFoundError("No module named 'llm_service'")
+
+        broken.LLMService = _explode
+        monkeypatch.setitem(sys.modules, "services.llm_service", broken)
+
+        assert get_llm_service(self._request()) is None

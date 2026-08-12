@@ -409,7 +409,7 @@ class TrustScoreManager:
         )
         record.current_level = new_level
         record.last_level_change_at = time.time()
-        self._snapshot(record, old_level, new_level)
+        self._snapshot(record, old_level, new_level, reason=reason)
 
     # ------------------------------------------------------------------
     # Redis persistence

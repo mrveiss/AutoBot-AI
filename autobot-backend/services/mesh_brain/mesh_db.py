@@ -171,7 +171,7 @@ class MeshDB:
             updates.append("origin = :origin")
             params["origin"] = origin
         sql = text(
-            f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid"  # nosec B608 - column names are
+            f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid"  # nosec B608  # column names are
         )
         async with self.engine.begin() as conn:
             await conn.execute(sql, params)

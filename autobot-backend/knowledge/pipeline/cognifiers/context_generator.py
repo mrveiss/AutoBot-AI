@@ -48,7 +48,11 @@ class ContextGeneratorCognifier(BaseCognifier):
 
     def __init__(self, model=None, ttl_days=None):
         self.model = model or config.context_model
-        days = ttl_days or int(config.context_summary_ttl_days)
+        # #13386: the config field is typed ``int`` now, so no parse happens
+        # here. It previously read ``int(config.context_summary_ttl_days)`` on a
+        # ``str`` field whose default was "", which made constructing this
+        # cognifier raise anywhere a .env was absent.
+        days = ttl_days or config.context_summary_ttl_days
         self.ttl_seconds = days * 86400
         self.llm = get_llm_service()
 

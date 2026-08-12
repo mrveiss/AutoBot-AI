@@ -36,6 +36,7 @@ from api.schemas_knowledge import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 
@@ -86,7 +87,7 @@ def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: 
     content = rel["target_fact"].get("content", "")[:300]
     if total_length + len(content) > max_length:
         return total_length
-    rel_type = rel.get("relation_type", "relates_to")
+    rel_type = rel.get("relation_type", "related_to")
     context_parts.append(f"- [{rel_type}] {content}\n")
     return total_length + len(content)
 
@@ -634,7 +635,7 @@ def _create_fact_node(fact: Dict[str, Any]) -> Dict[str, Any]:
         "type": "fact",
         "observations": [content],
         "metadata": {
-            "category": fact.get("category", "general"),
+            "category": fact.get("category", CategoryDefaults.GENERAL),
             "source": fact.get("source", "knowledge_base"),
             "confidence": fact.get("confidence", 1.0),
         },
@@ -714,14 +715,14 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
                         {
                             "from": fact_id,
                             "to": target_id,
-                            "type": rel.get("relation_type", "relates_to"),
+                            "type": rel.get("relation_type", "related_to"),
                             "strength": rel.get("strength", 0.8),
                         }
                     )
 
             if len(relations) >= max_relations:
                 break
-        except Exception:  # nosec B112 - continue on single fact failure is intentional
+        except Exception:  # nosec B112  # continue on single fact failure is intentional
             continue
 
     return relations
@@ -749,7 +750,7 @@ def _create_dynamic_category_nodes(facts: List[Dict[str, Any]], nodes: List[Dict
     seen_categories: Set[str] = set()
 
     for fact in facts:
-        category = fact.get("category", "general")
+        category = fact.get("category", CategoryDefaults.GENERAL)
         if category and category not in seen_categories:
             seen_categories.add(category)
             node_id = f"cat_{category}"
@@ -837,7 +838,7 @@ def _process_facts_into_nodes(
         fact_ids.append(node["id"])
 
         # Create edge from category to fact
-        category = fact.get("category", "general")
+        category = fact.get("category", CategoryDefaults.GENERAL)
         cat_node_id = category_map.get(category)
         if cat_node_id:
             edges.append(

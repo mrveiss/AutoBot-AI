@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
 
@@ -515,7 +516,7 @@ class CommandManualManager:
             "development": ["development", "programming", "code", "build"],
         }
 
-        best_category = "general"
+        best_category = CategoryDefaults.GENERAL
         best_score = 0
 
         for category, keywords in category_keywords.items():
@@ -723,9 +724,10 @@ class CommandManualManager:
             return None
 
         try:
-            result = subprocess.run(
+            # command_name validated by _VALID_COMMAND_NAME_RE above.
+            result = subprocess.run(  # nosec B603 B607
                 ["man", command_name], capture_output=True, text=True, timeout=10
-            )  # nosec B603 B607 - command_name validated by _VALID_COMMAND_NAME_RE above
+            )
 
             if result.returncode == 0:
                 return result.stdout

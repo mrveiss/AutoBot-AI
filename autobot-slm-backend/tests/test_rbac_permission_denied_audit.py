@@ -16,6 +16,7 @@ into sys.modules before loading the module under test via importlib.
 """
 
 import importlib.util
+import logging
 import sys
 import types
 import uuid
@@ -93,21 +94,42 @@ _audit_mod.AuditLog = _AuditLog
 _audit_mod.AuditAction = _AuditAction
 _audit_mod.AuditResourceType = _AuditResourceType
 
-# Load the module under test
-_SPEC = importlib.util.spec_from_file_location(
-    "user_management.middleware.rbac_middleware",
-    _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
-)
-_rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
-_SPEC.loader.exec_module(_rbac_mod)
+# autobot_shared.logging_manager / .ssot_constants are imported by rbac_middleware
+# but were missing from _MOCK_NAMES (#13312): a bare MagicMock has no submodule
+# for either, so exec_module() below raised ModuleNotFoundError *before* the
+# restore block ran, permanently leaving sys.modules["autobot_shared"] as a
+# path-less MagicMock for the rest of the pytest session — every later test file
+# that does a real `from autobot_shared.X import Y` then failed the same way.
+# get_logger must resolve to the real stdlib logging.getLogger (not a MagicMock):
+# rbac_middleware.py's module-level `logger = get_logger(__name__)` is then a
+# genuine stdlib Logger, so logger.error(...) reaches caplog. A MagicMock logger
+# swallows every call silently, so test_db_failure_logs_error (which asserts on
+# caplog.records) could never pass with the old stub (#13312).
+_logging_manager_mod = MagicMock()
+_logging_manager_mod.get_logger = logging.getLogger
+sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
+_ssot_constants_mod = MagicMock()
+_ssot_constants_mod.TTL_5_MINUTES = 300
+sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 
-# #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
-for _k in list(sys.modules):
-    if _k not in _PRE_BOOTSTRAP_MODULES:
-        del sys.modules[_k]
-    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
-        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
-del _PRE_BOOTSTRAP_MODULES
+# Load the module under test. The restore block MUST run even if exec_module()
+# raises, or a bad stub here (or a future import added to rbac_middleware.py)
+# leaks these MagicMocks into every test collected afterward (#13312).
+try:
+    _SPEC = importlib.util.spec_from_file_location(
+        "user_management.middleware.rbac_middleware",
+        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+    )
+    _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
+    _SPEC.loader.exec_module(_rbac_mod)
+finally:
+    # #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
+    for _k in list(sys.modules):
+        if _k not in _PRE_BOOTSTRAP_MODULES:
+            del sys.modules[_k]
+        elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+            sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+    del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------

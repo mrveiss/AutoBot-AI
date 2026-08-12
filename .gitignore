@@ -1,7 +1,23 @@
 # === PYTHON VIRTUAL ENVIRONMENT ===
 # Virtual environment directories (created by setup_agent.sh)
+#
+# The entries below carry a trailing slash, which matches a DIRECTORY only. A
+# worktree that reaches the shared interpreter through a `venv` *symlink* was
+# therefore not ignored, and a `git add -A` committed it (#14133). With
+# `core.symlinks=false` — which this repo sets — checking that out replaces the
+# real venv directory with a 40-byte text file containing its own path,
+# destroying the interpreter for every tree that pulls.
+#
+# The slashless entries match a file, a directory or a symlink of that name.
+#
+# This stops a REPEAT of that instance; it does not stop a NEW tracked
+# symlink or a narrowed pattern in this section from doing the same thing
+# again. autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+# and pre-commit-no-gitignore-shadow guard those cases directly (#14137).
 AutoBot/
+venv
 venv/
+venvs
 venvs/
 bin/
 lib/
@@ -96,6 +112,11 @@ ssh_host_*
 *.password
 *.passwd
 credentials*
+# Note: ansible task files are code, not credential data. `credentials*`
+# silently swallowed roles/postgresql/tasks/credentials_reconcile.yml — the
+# tests passed locally off the working copy while the file never reached the
+# remote, which is the same "green but not delivered" failure #12959 is about.
+!**/ansible/roles/*/tasks/credentials*.yml
 # Note: secrets.py and secrets_service.py are legitimate code files for secrets management
 # Only exclude actual secret/password data files:
 *.secrets
@@ -486,3 +507,12 @@ docs/.obsidian/core-plugins.json
 # Claims audit generated output
 .claude/skills/claims-audit/extracted-claims.json
 .superpowers/
+
+# .paperclip/ holds a generated per-machine config ("$meta.source": "configure").
+# It carried five absolute machine paths, including a master-key location, into a
+# public repository, and regenerates on demand — so it is not tracked (#13429).
+.paperclip/
+# Sibling scratch dirs the same tooling creates. The pattern above matches only
+# the exact ".paperclip" name, so .paperclip-work/ was tracked — it carried a
+# design doc at the repo root instead of docs/archives/plans/.
+.paperclip-*/

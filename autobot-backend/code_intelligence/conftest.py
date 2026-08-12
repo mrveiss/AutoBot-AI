@@ -117,6 +117,20 @@ for _key in list(sys.modules.keys()):
 importlib.import_module("code_intelligence.security")
 
 
+def _is_conftest_stub(mod: object) -> bool:
+    """True when *mod* is one of the top-level conftest's MagicMock package stubs.
+
+    #13233: ``_make_pkg_stub`` installs a PEP 562 module-level ``__getattr__`` that
+    returns a MagicMock singleton for ANY attribute the stub does not really have —
+    dunders included. So ``getattr(stub, "__file__", None)`` yields that MagicMock
+    and never ``None``, which makes the obvious ``getattr(...) is None`` stub test
+    report "this is already a real module" for every stub. Reading ``__dict__``
+    directly is the only lookup ``__getattr__`` cannot intercept: a real module
+    always carries ``__file__`` there, a stub never does.
+    """
+    return vars(mod).get("__file__") is None if hasattr(mod, "__dict__") else True
+
+
 def _load_real_submodule(leaf: str) -> None:
     """Real-load ``code_intelligence.<leaf>`` over the top-level conftest's stub.
 
@@ -171,13 +185,25 @@ _load_real_submodule("bug_predictor")
 # tools/parallel/executor.py — which imported that module object back at top-level-conftest
 # time — keeps referencing the SAME DiffGenerator class object. Re-executing diff.py would
 # mint a second class and break isinstance identity for the earlier importer (#12839).
+# _is_conftest_stub — NOT `getattr(..., "__file__", None) is None` — decides what to drop:
+# the stub's catch-all __getattr__ answers "__file__" with a MagicMock, so the getattr form
+# kept the stub, importlib.import_module handed it straight back, and llm_code_generator
+# re-exported 25 MagicMocks (#13233).
 _cg_pkg = sys.modules.get("code_intelligence.code_generation")
-if _cg_pkg is not None and getattr(_cg_pkg, "__file__", None) is None:
+if _cg_pkg is not None and _is_conftest_stub(_cg_pkg):
     del sys.modules["code_intelligence.code_generation"]
 _cg_diff = sys.modules.get("code_intelligence.code_generation.diff")
-if _cg_diff is not None and getattr(_cg_diff, "__file__", None) is None:
+if _cg_diff is not None and _is_conftest_stub(_cg_diff):
     del sys.modules["code_intelligence.code_generation.diff"]
 _real_cg = importlib.import_module("code_intelligence.code_generation")
+if _is_conftest_stub(_real_cg):
+    # Fail loudly rather than let llm_code_generator re-export MagicMocks again (#13233):
+    # a stub here silently turns every assertion in llm_code_generator_test.py into a
+    # comparison against mock attributes, which reads as 68 ordinary test failures.
+    raise RuntimeError(
+        "code_intelligence.code_generation is still a conftest stub after real-load; "
+        "llm_code_generator would re-export MagicMocks (#13233)"
+    )
 setattr(sys.modules["code_intelligence"], "code_generation", _real_cg)
 if "code_intelligence.code_generation.diff" in sys.modules:
     setattr(_real_cg, "diff", sys.modules["code_intelligence.code_generation.diff"])

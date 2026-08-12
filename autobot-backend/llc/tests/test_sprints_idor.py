@@ -41,6 +41,7 @@ import uuid
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -276,6 +277,21 @@ def _make_app(
     return TestClient(app, raise_server_exceptions=True)
 
 
+@pytest.fixture(autouse=True)
+def _stop_make_app_patches():
+    """Undo every patch ``_make_app`` starts, for each test in this module.
+
+    ``_make_app`` is called from test bodies, not from a fixture, so it has no
+    teardown of its own.  Cleanup used to live in a per-class
+    ``teardown_method``; a class added without one leaked
+    ``KbCollectionManager.ensure_collection`` as an ``AsyncMock(return_value=None)``
+    into the rest of the pytest session (#13674).  Doing it here means a new
+    class cannot reintroduce that.
+    """
+    yield
+    patch.stopall()
+
+
 # ---------------------------------------------------------------------------
 # Tests: company_id-keyed routes
 # ---------------------------------------------------------------------------
@@ -283,9 +299,6 @@ def _make_app(
 
 class TestSprintsIdorCompanyRoutes:
     """Routes that take company_id in the URL path."""
-
-    def teardown_method(self, _method):
-        patch.stopall()
 
     # -- list portfolios --
 
@@ -345,9 +358,6 @@ class TestSprintsIdorCompanyRoutes:
 
 
 class TestSprintsIdorTimeline:
-    def teardown_method(self, _method):
-        patch.stopall()
-
     def test_get_project_timeline_own_company_returns_200(self):
         org = str(uuid.uuid4())
         client = _make_app(caller_org_id=org, project_company_id=org)

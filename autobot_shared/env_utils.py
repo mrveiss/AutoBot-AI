@@ -41,8 +41,16 @@ def env_raw(name: str) -> str | None:
 
     Collapsing blank to ``None`` here means callers get their default rather than
     an empty string that only fails later, at parse time or at use.
+
+    :func:`blank_to_none` decides *whether* the value is blank — one definition of
+    "blank" for both routes — but the value itself is returned verbatim. Returning
+    ``blank_to_none``'s stripped text instead silently trimmed every real env var
+    (#12899), which corrupts any value whose surrounding whitespace is significant,
+    such as a password or a delimiter. Numeric parsing is unaffected either way:
+    ``int``/``float``/:func:`truthy` all tolerate surrounding whitespace.
     """
-    return blank_to_none(os.environ.get(name))
+    raw = os.environ.get(name)
+    return raw if blank_to_none(raw) is not None else None
 
 
 def env_str(name: str, default: str) -> str:

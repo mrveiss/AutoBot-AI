@@ -32,6 +32,13 @@ fi
 
 MATCHES=""
 
+# NOTE (#12513): patterns below embed a literal single quote via the
+# '"'"' idiom. They previously used `\x27`, which GNU grep does not recognise as
+# an escape — it collapses to a literal `x`, so `["\x27]` matched the class
+# {", x, 2, 7} and never matched a single-quoted value at all. The generic
+# credential rule therefore did not fire on `token: 'literal'`, silently, which
+# is the worst way for a secret scanner to fail.
+
 # ──────────────────────────────────────────────
 # Cloud provider keys
 # ──────────────────────────────────────────────
@@ -42,7 +49,7 @@ if echo "$CONTENT" | grep -qE 'AKIA[0-9A-Z]{16}'; then
 fi
 
 # AWS Secret Access Keys
-if echo "$CONTENT" | grep -qiE '(aws_secret_access_key|secret_key)[[:space:]]*[=:][[:space:]]*["\x27]?[A-Za-z0-9/+=]{40}'; then
+if echo "$CONTENT" | grep -qiE '(aws_secret_access_key|secret_key)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9/+=]{40}'; then
   MATCHES="$MATCHES AWS secret key;"
 fi
 
@@ -79,14 +86,30 @@ fi
 # ──────────────────────────────────────────────
 
 # Connection strings with embedded credentials
-if echo "$CONTENT" | grep -qE '(mongodb|postgres|mysql|redis|amqp|smtp)(\+[a-z]+)?://[^:[:space:]]+:[^@[:space:]]+@'; then
+#
+# #12513: `postgresql` must be listed BEFORE `postgres`, and listed at all. The
+# alternation only had `postgres`, so `postgresql://` left `ql` before the `://`
+# and did not match -- and `postgresql://` is the scheme this repo actually uses
+# everywhere (10 occurrences under ansible/ + autobot_shared/, plus the
+# `postgresql+asyncpg://` DSNs in every credential block). The rule caught a
+# scheme the codebase does not use and missed the one it does.
+#
+# The username is `*` not `+` because a password-only userinfo is a real DSN
+# shape -- `redis://:password@host:6379/0` is what a Redis URL with AUTH looks
+# like, and requiring a username let it through.
+if echo "$CONTENT" | grep -qE '(mongodb|postgresql|postgres|mysql|mariadb|rediss|redis|amqps|amqp|smtps|smtp)(\+[a-z]+)?://[^:@[:space:]]*:[^@[:space:]]+@'; then
   MATCHES="$MATCHES connection string with credentials;"
 fi
 
 # Generic password/secret/token assignments with literal values
-# Excludes env var references (process.env, os.environ, getenv, ${...})
-if echo "$CONTENT" | grep -qiE '(password|secret|token|api_key|apikey|api_secret)[[:space:]]*[=:][[:space:]]*["\x27][^"\x27]{8,}["\x27]' && \
-   ! echo "$CONTENT" | grep -qiE '(password|secret|token|api_key|apikey|api_secret)[[:space:]]*[=:][[:space:]]*["\x27]?(process\.env|os\.environ|getenv|\$\{|ENV\[|env\(|config\.)'; then
+# Excludes indirection, which is never a literal: env var references
+# (process.env, os.environ, getenv, ${...}) and Jinja/Ansible expressions
+# ({{ ... }}). #12513: without the Jinja arm every Ansible task of the shape
+#   backend_chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
+# was blocked as a hardcoded credential -- a false positive on the very pattern
+# that exists to AVOID hardcoding one, and it fires on the whole ansible tree.
+if echo "$CONTENT" | grep -qiE '(password|secret|token|api_key|apikey|api_secret)[[:space:]]*[=:][[:space:]]*["'"'"'][^"'"'"']{8,}["'"'"']' && \
+   ! echo "$CONTENT" | grep -qiE '(password|secret|token|api_key|apikey|api_secret)[[:space:]]*[=:][[:space:]]*["'"'"']?(process\.env|os\.environ|getenv|\$\{|\{\{|ENV\[|env\(|config\.)'; then
   MATCHES="$MATCHES hardcoded credential;"
 fi
 

@@ -11,7 +11,6 @@ import asyncio
 
 from fastapi import APIRouter
 
-from api.schemas_common import DataResponse
 from api.schemas_knowledge import KnowledgeFreshStatsData, KnowledgeRebuildIndexData
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -21,7 +20,7 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
-@router.get("/test/fresh_stats", response_model=DataResponse[KnowledgeFreshStatsData])
+@router.get("/test/fresh_stats", response_model=KnowledgeFreshStatsData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fresh_kb_stats",
@@ -57,7 +56,7 @@ async def get_fresh_kb_stats():
         }
 
 
-@router.post("/test/rebuild_index", response_model=DataResponse[KnowledgeRebuildIndexData])
+@router.post("/test/rebuild_index", response_model=KnowledgeRebuildIndexData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_rebuild_search_index",

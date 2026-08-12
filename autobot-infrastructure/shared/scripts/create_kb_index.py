@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_list
 
 
 def _drop_existing_indexes(r) -> None:
@@ -86,12 +87,18 @@ def _verify_index_creation(r) -> None:
     """Verify index was created correctly.
 
     Helper for create_index_with_correct_dimensions (Issue #825).
+
+    ``get_redis_client`` returns a ``decode_responses=True`` client
+    (``autobot_shared/redis_management/config.py:61,153``), so ``FT.INFO``
+    elements arrive as ``str``, not the ``bytes`` this used to index with
+    (#13290) — decode defensively so the walk also works if a caller ever
+    passes a non-decoding client.
     """
-    info = r.execute_command("FT.INFO", INDEX_NAME)
+    info = decode_redis_list(r.execute_command("FT.INFO", INDEX_NAME))
     logger.info("\nIndex created with attributes:")
-    for attr in info[info.index(b"attributes") + 1]:
-        if b"vector" in attr and b"dim" in attr:
-            dim_index = attr.index(b"dim")
+    for attr in info[info.index("attributes") + 1]:
+        if "vector" in attr and "dim" in attr:
+            dim_index = attr.index("dim")
             logger.info(f"  Vector dimension: {attr[dim_index + 1]}")
 
 

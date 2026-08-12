@@ -51,8 +51,9 @@ class KnowledgeBase(
 ):
     """Unified Knowledge Base composed from 14 specialised mixins."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config_manager=None):
+        """Compose the knowledge base, optionally with an injected ConfigManager (#13162)."""
+        super().__init__(config_manager=config_manager)
         logger.debug("KnowledgeBase instance created (composed from 14 mixins)")
 
     async def initialize(self) -> bool:

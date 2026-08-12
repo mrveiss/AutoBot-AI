@@ -151,9 +151,9 @@ async def get_user_bundle(
     try:
         from sqlalchemy import text  # noqa: PLC0415
 
-        from user_management.database import get_async_session  # noqa: PLC0415
+        from user_management.database import db_session_context  # noqa: PLC0415
 
-        async with get_async_session() as session:
+        async with db_session_context() as session:
             row = await session.execute(
                 text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
                 {"uid": user_id},
@@ -209,9 +209,9 @@ async def set_user_bundle(
     try:
         from sqlalchemy import text  # noqa: PLC0415
 
-        from user_management.database import get_async_session  # noqa: PLC0415
+        from user_management.database import db_session_context  # noqa: PLC0415
 
-        async with get_async_session() as session:
+        async with db_session_context() as session:
             if body.bundle_name is None:
                 await session.execute(
                     text("DELETE FROM user_voice_bundle WHERE user_id = :uid"),

@@ -182,6 +182,39 @@ class KbCollectionManager:
             )
             raise RuntimeError(f"Failed to archive KB collection {original_name}") from e
 
+    async def drop_collection(
+        self,
+        entity_type: str,
+        entity_id: uuid.UUID | str,
+        suffix: Optional[str] = None,
+    ) -> bool:
+        """Drop an entity's collection when the entity itself is deleted (#13920).
+
+        Returns True if a collection was removed, False if there was nothing to
+        remove. Never raises: deleting a work item must not fail because its KB
+        collection is already gone, or because ChromaDB is momentarily
+        unreachable. The entity is the source of truth; a stranded collection is
+        a tidiness problem, a failed delete is a correctness one.
+
+        Before this, the only ``delete_collection`` under ``llc/`` was the
+        archive/rename path, so a deleted entity left its collection behind
+        permanently.
+        """
+        collection_name = self.collection_name(entity_type, entity_id, suffix)
+
+        try:
+            kb = await _get_kb()
+            client = kb._async_chroma_client
+            if await client.get_collection_or_none(collection_name) is None:
+                return False
+            await client.delete_collection(collection_name)
+        except Exception as exc:  # noqa: BLE001 - see the docstring
+            logger.warning("Could not drop KB collection %s: %s", collection_name, exc)
+            return False
+
+        logger.info("Dropped KB collection %s with its entity", collection_name)
+        return True
+
     async def merge_collection(
         self,
         src_entity_type: str,

@@ -35,8 +35,23 @@ async def client(tmp_path):
     a.include_router(projects_router, prefix="/api/transcriber")
     a.include_router(recordings_router, prefix="/api/transcriber")
 
-    async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
-        yield c
+    try:
+        try:
+            async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
+                yield c
+        finally:
+            # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+            # fixture that connects and never closes keeps the interpreter alive after the
+            # suite has passed. Under xdist the execnet worker exits hard and hides it; in a
+            # serial invocation the job hangs until CI cancels it, with no failure to look at.
+            await db.close()
+    finally:
+        # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+        # fixture that connects and never closes keeps the interpreter alive after
+        # the suite has passed. Under xdist the execnet worker exits hard and hides
+        # it; in a serial invocation — co-located-smoke is exactly that — the job
+        # hangs until CI cancels it, with no failure to look at.
+        await db.close()
 
 
 @pytest.mark.asyncio
@@ -114,6 +129,10 @@ async def test_upload_recording_with_relative_upload_dir(tmp_path, monkeypatch):
     files = list(saved.iterdir())
     assert len(files) == 1, files
     assert files[0].read_bytes().startswith(b"RIFF")
+
+    # #13861: aiosqlite's worker thread is non-daemon, so an unclosed
+    # connection keeps the interpreter alive after the test passes.
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -224,6 +243,10 @@ async def test_upload_recording_cancelled_mid_write_cleans_up(tmp_path):
 
     # No orphan left behind — cleanup ran despite the BaseException.
     assert list(upload_dir.iterdir()) == []
+
+    # #13861: aiosqlite's worker thread is non-daemon, so an unclosed
+    # connection keeps the interpreter alive after the test passes.
+    await db.close()
 
 
 @pytest.mark.asyncio

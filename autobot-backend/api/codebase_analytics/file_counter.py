@@ -12,16 +12,19 @@ from pathlib import Path
 from typing import Tuple
 
 from autobot_shared.logging_manager import get_logger
-from utils.file_categorization import SKIP_DIRS
+from utils.file_categorization import is_skipped_path
 
 logger = get_logger(__name__)
 
 
-def _should_count_file(file_path: Path) -> bool:
-    """Check if file should be counted for progress tracking (Issue #315)."""
+def _should_count_file(file_path: Path, root_path_obj: Path) -> bool:
+    """Check if file should be counted for progress tracking (Issue #315).
+
+    #13602: takes the scan root so the skip check is relative to it.
+    """
     if not file_path.is_file():
         return False
-    return not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS)
+    return not is_skipped_path(file_path, root_path_obj)
 
 
 def _count_scannable_files_sync(root_path_obj: Path) -> Tuple[int, list]:
@@ -34,7 +37,7 @@ def _count_scannable_files_sync(root_path_obj: Path) -> Tuple[int, list]:
     """
     all_files = list(root_path_obj.rglob("*"))
     # Filter to only scannable files to avoid iterating through 200K files
-    scannable_files = [f for f in all_files if _should_count_file(f)]
+    scannable_files = [f for f in all_files if _should_count_file(f, root_path_obj)]
     return len(scannable_files), scannable_files
 
 

@@ -12,7 +12,7 @@
 - Search for existing implementations: `grep`/`glob` or `git log --oneline --grep="<topic>"`
 - Check existing docs: `ls docs/`, `gh issue list`, recent commits
 - Review related files in the same module/directory
-- Search Memory MCP: `mcp__memory__search_nodes` for prior decisions
+- Search session memory for prior decisions — the file-based store lives in the agent's own memory directory, outside this repo
 - Only after confirming nothing exists should you write new code or docs
 
 **Before implementing anything, verify:**
@@ -149,9 +149,9 @@ Rules:
 **Logging:**
 
 ```python
-# Backend
-import logging
-logger = logging.getLogger(__name__)
+# Backend — the canonical logger
+from autobot_shared.logging_manager import get_logger
+logger = get_logger(__name__)
 logger.info("Message: %s", data)
 ```
 
@@ -163,17 +163,28 @@ const logger = createLogger('ComponentName')
 
 No `console.*` or `print()` — pre-commit blocks these.
 
+Bare `logging.getLogger(__name__)` is the **exception, not the pattern**: it is permitted
+only where a config-mocking test harness cannot tolerate the manager's import-time config
+read (see `autobot_shared/user_management/password_epoch.py`). New backend code uses
+`get_logger`.
+
 > Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
 
 ---
 
 ## Rule 4: Clarify Requirements Before Starting
 
-**Before touching any code, ensure requirements are complete:**
+**This rule is scoped to *ambiguous* work.** When the issue is clear, implement — a brief plan
+then code, per `CLAUDE_WORKFLOW.md` "General Workflow". Clarification is the gate for genuine
+ambiguity, not a preamble to every task.
+
+**When requirements are incomplete:**
 
 - Read the full issue/PRD and identify every gap, ambiguity, or missing edge case
 - Ask all clarifying questions UP FRONT in a single pass — not mid-implementation
 - Do not start until you can describe the complete expected end result in concrete terms
+- In an autonomous `/loop`, asking means **posting** the question with a recommendation and
+  continuing — never blocking the tick
 
 **Simplicity First — always prefer the simplest approach:**
 
@@ -272,8 +283,13 @@ Create issue + DEFER (don't ask):
 - Genuinely unrelated bugs far from the current change
 - Speculative optimizations with no measured impact (e.g. bounded analyzer loops)
 
-**One Issue Per Session Rule:**
-When an issue is complete, wait for explicit user instruction before starting new work.
+**Filing is never blocked.** Not by a rate limit, not by queue depth, not by any governor. A
+finding you cannot file is a finding lost. Ratios inform what you *work on*; they never stop
+you recording a problem.
+
+**When an issue is complete, start the next one.** Push the PR and pick up the next
+non-colliding issue rather than waiting on CI — see the never-idle order in the global
+instructions.
 
 > Violation: Noticing a broken error handler and not creating a GitHub issue because "it's not my task."
 
@@ -283,7 +299,7 @@ When an issue is complete, wait for explicit user instruction before starting ne
 
 **Extraction PRs (pulling a duplicated pattern into a shared composable/utility + migrating N sites) MUST grep for the *behavior*, not just the *symbol*, and document before/after hit counts in the PR description.**
 
-**Why:** The issue body enumerates sites by symbol name at filing time. Symbol names drift (rename, different convention per consumer); behavior does not. Symbol-only greps underreport consistently — **~50% of extraction PRs this session shipped incomplete migrations** and required follow-up PRs.
+**Why:** The issue body enumerates sites by symbol name at filing time. Symbol names drift (rename, different convention per consumer); behavior does not. Symbol-only greps underreport consistently — **~50% of extraction PRs in one session shipped incomplete migrations** and required follow-up PRs.
 
 **Required PR section:**
 
@@ -305,9 +321,47 @@ $ <same grep>
 
 **Rule of thumb:** Match the pattern body (e.g. `key === 'Tab'` and `shiftKey &&` for focus-trap code), cast wider than the issue's enumeration, and run **twice** — once loose, once tight — to catch the delta.
 
-Full Phase 0d specification and concrete examples: [`skills/batch-implement.md` §Phase 0d](skills/batch-implement.md).
+Full Phase 0d specification and concrete examples: the `batch-implement` skill, Phase 0d.
 
 > Violation: Filing a follow-up issue #5410 for 2 dialogs that the original #5371 grep should have surfaced, because #5371 grepped for `handleKeydown` (symbol) instead of `key === 'Tab'` (behavior).
+
+---
+
+## Rule 8: Outbound HTTP Goes Through the Guarded Fetch (#13625)
+
+**Every outbound connector/integration HTTP request MUST declare an egress policy. Never build a bare `aiohttp.ClientSession`, and never call the shared client without `guard_egress`, against a host that came from stored config or user input.**
+
+Two mechanisms, and which one you need depends on redirects:
+
+| You need | Use |
+|---|---|
+| A request that must NOT follow redirects | `get_http_client().tracked_request(..., guard_egress=...)` |
+| A request that MUST follow redirects | `ssrf_guard.pinned_request_with_redirects` |
+
+`guard_egress` validates the URL and then **refuses redirects** — it raises if you pass `allow_redirects=True`. That is deliberate: validating a URL and then letting aiohttp follow a 302 elsewhere is worse than no guard, because it reads as protected. `pinned_request_with_redirects` is the one that re-resolves and re-pins *every hop*.
+
+**Why:** This rule previously existed only as a docstring inside `ssrf_guard.py`. Six connectors — Confluence, Jira, GitLab, Gitea, Nextcloud and the `integrations/base.py` session builder — were written against bare `aiohttp` with a host string-concatenated from stored config, and a grep for `is_public_url|ssrf_guard|pinned_connector` across all six returned **zero hits**. A rule nobody can find is a rule nobody follows.
+
+**The private-network opt-in:**
+
+A self-hosted Confluence/GitLab/Nextcloud instance legitimately lives on an RFC-1918 address, so a public-only guard would break the feature it protects. `AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS` (default **off**) permits that range — and *only* that range:
+
+| Target | Flag off | Flag on |
+|---|---|---|
+| Public address | allowed | allowed |
+| RFC-1918 / IPv6 ULA | blocked | **allowed** |
+| Loopback | blocked | blocked |
+| Link-local, incl. `169.254.169.254` cloud metadata | blocked | blocked |
+| Multicast, reserved, unspecified | blocked | blocked |
+
+**Two constraints that are not negotiable:**
+
+1. The opt-in applies to the **operator-configured instance host only**. User-supplied content and download URLs are validated public-only, unconditionally — a connector that fetches an attachment from a URL inside a document must not inherit the instance host's exemption.
+2. Config-store-time validation is still the goal (**#13625 item 3, not yet built**). Today the check is per-request, which costs a DNS lookup per call and does not close the rebind race between the check and the connect — `pinned_connector` is what closes that, and it does not yet thread the private-network opt-in. Do not read this rule as claiming the race is handled.
+
+**When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop. And if you are calling `tracked_request` without `guard_egress`, that is the same mistake with fewer characters.
+
+**`urljoin` does not pin a host.** `urljoin(base, path)` returns `https://evil.example.com/x` for a path of `//evil.example.com/x`, and the caller's credentials go with it. If a path segment can come from stored data or a server response, assert the result still starts with the base.
 
 ---
 
@@ -397,6 +451,8 @@ To add a new variable:
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
 | `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
+| `AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD` | voice | float | `0.7` | Fallback confidence threshold for VoiceProcessor when the multimodal.voice config section omits it (#13207). Range: 0.0–1.0. |
+| `AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT` | voice | int | `30` | Fallback processing timeout in seconds for VoiceProcessor when the multimodal.voice config section omits it (#13207). |
 | `AUTOBOT_OLLAMA_BASE_URL` | ai | str | *(none)* | Base URL of the local Ollama API (e.g. http://localhost:11434). |
 | `AUTOBOT_ORCHESTRATOR_MODEL` | ai | str | `'llama3.2:1b'` | Ollama model name used for the main orchestrator/routing loop. |
 | `AUTOBOT_OTEL_ENABLED` | otel | bool | false | Enable OpenTelemetry tracing when truthy. |
@@ -418,7 +474,10 @@ To add a new variable:
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
 | `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
+| `AUTOBOT_REQUIRE_CLASSIFICATION` | orchestrator | bool | false | Fail orchestrator construction when request classification is unavailable. Default (off) degrades gracefully: every request is defaulted to COMPLEX and the reason is reported in the orchestration status. Deployments that depend on classification set this so the failure is loud instead of silent (#13807). |
 | `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
+| `AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD` | voice | float | `0.8` | Decoder no-speech probability at or above which an STT transcript is discarded as a silence hallucination (#13104). Range: 0.0–1.0. |
+| `AUTOBOT_STT_SILENCE_RMS_THRESHOLD` | voice | float | `0.005` | Audio RMS below which the waveform is treated as silence, so any STT transcript over it is a hallucination rather than a user turn (#13104). Range: 0.0–1.0. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
 | `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
@@ -426,5 +485,5 @@ To add a new variable:
 | `AUTOBOT_TRUSTED_PROXIES` | network | str | `""` | Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges for X-Forwarded-For header trust. |
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 
-*42 variables registered as of last generation.*
+*47 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

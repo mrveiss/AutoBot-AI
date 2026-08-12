@@ -92,8 +92,15 @@ except Exception:
 
 try:
     tokens = list(tokenize.tokenize(io.BytesIO(src).readline))
-except tokenize.TokenError:
-    # Untokenisable file — fall back to skipping it silently.
+except (tokenize.TokenError, SyntaxError, ValueError) as exc:
+    # Untokenisable file — skip it. GH#13936: IndentationError is a SyntaxError,
+    # NOT a TokenError, so it escaped this handler, killed the interpreter with a
+    # non-zero exit, and the shell wrapper counted that as a Redis violation. A
+    # file that is not parseable Python cannot contain a Python redis.Redis()
+    # call worth flagging, and reporting a parse failure as a credential-policy
+    # violation is worse than not scanning it. Announce the skip so a genuinely
+    # broken Python file is visible rather than silently unscanned.
+    print(f"  SKIP  {path}: not parseable as Python ({type(exc).__name__})", file=sys.stderr)
     sys.exit(0)
 
 # Lines that belong exclusively to comments or string literals.

@@ -44,6 +44,12 @@ backend_stop_timeout_sec: 45
 # the broken state stays visible either way — see tasks/core_capture.yml.
 backend_core_capture: false
 backend_core_dir: /var/lib/autobot/cores
+# #13047: was relied on solely through an inline Jinja `default('infinity')` in
+# the unit template, so the one tunable controlling how much process memory may
+# be written to disk was invisible to anyone reading defaults/ — where every
+# other knob in this role is documented. Only consulted when
+# backend_core_capture is true; the unit omits LimitCORE entirely otherwise.
+backend_core_limit: infinity
 
 # Celery worker settings (Issue #863)
 celery_concurrency: 4  # Number of worker processes

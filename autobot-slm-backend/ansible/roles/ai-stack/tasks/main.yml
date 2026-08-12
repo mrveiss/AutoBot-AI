@@ -229,23 +229,16 @@
     - autobot_shared
   tags: ['ai', 'deploy']
 
-- name: Deploy ChromaDB systemd service
-  ansible.builtin.template:
-    src: autobot-chromadb.service.j2
-    dest: /etc/systemd/system/autobot-chromadb.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart chromadb
-
-- name: Deploy AI Stack API systemd service
-  ansible.builtin.template:
-    src: autobot-ai-stack.service.j2
-    dest: /etc/systemd/system/autobot-ai-stack.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart ai-stack
+# #12513: see roles/redis/tasks/chromadb.yml — same read, same reason. Whichever
+# of the two roles owns chroma on this topology must land the same credential the
+# backend sends, so both defer to the SLM-generated value.
+# #13460: these service files are defined once, in code_only.yml, so the
+# builtin updater can deliver them without re-running provisioning. Copying
+# them into the playbook instead is the inline-vs-role duplication that made
+# this role undeliverable in the first place (#12959).
+- name: "AI Stack | Deploy service files"
+  ansible.builtin.include_tasks: code_only.yml
+  tags: ['ai', 'deploy']
 
 - name: Enable and start ChromaDB service
   ansible.builtin.systemd:

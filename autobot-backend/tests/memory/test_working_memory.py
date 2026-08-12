@@ -171,7 +171,7 @@ def test_manager_exposes_working_memory_property():
     from memory.manager import MemoryManager
 
     mgr = MemoryManager(
-        db_path="/tmp/test_wm_manager.db"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        db_path="/tmp/test_wm_manager.db"  # nosec B108  # test/controlled code uses tmpdir intentionally
     )
     svc = mgr.working_memory
     assert isinstance(svc, WorkingMemoryService)

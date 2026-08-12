@@ -375,6 +375,45 @@ class TestProjectRoot:
         assert PROJECT_ROOT.is_dir()
 
 
+class TestMCPAuthDefaults:
+    """#13263: the #7437 migration dropped both MCP authentication defaults.
+
+    ``AUTOBOT_MCP_TOKEN`` shipped as ``dev`` and ``MCP_RUN_JWT_ENFORCE`` as ``1``.
+    Declaring them ``""`` made the MCP server compare an incoming token's secret
+    segment against the empty string, and turned run-scoped JWT enforcement off in
+    every bridge worker. Neither var is set by any env template, so the shipped
+    default is the effective value everywhere.
+    """
+
+    def test_mcp_token_has_no_working_default(self) -> None:
+        """#13263: a non-empty default is itself a working credential.
+
+        The pre-#7437 value was ``dev``, but the secret *is* the whole check and
+        that string is published in this repo — restoring it would let any caller
+        present ``dev:<scopes>`` and choose their own privileges. Empty means
+        unconfigured, and ``_validate_token`` fails closed on it.
+        """
+        from autobot_shared.ssot_config import MiscConfig
+
+        # _env_file=None so the true field default is asserted, not a local .env.
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_token == ""
+
+    def test_mcp_run_jwt_enforce_default_documents_the_regression(self) -> None:
+        """#13263: enforcement shipped ON ("1"); #7437 dropped it to "".
+
+        Restoring it is blocked on #13265 — mcp_dispatch does not propagate
+        run_jwt to out-of-process bridges, so switching enforcement on would
+        fail every filesystem/browser/vnc tool call with -32001. This pins the
+        current (regressed) value deliberately, so the flip is a conscious edit
+        against a passing test rather than a silent change.
+        """
+        from autobot_shared.ssot_config import MiscConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_run_jwt_enforce == ""
+
+
 class TestChatCitationInstructionAliasChoices:
     """#10736: Both env vars set chat_citation_instruction_enabled correctly."""
 
@@ -461,3 +500,198 @@ class TestEnvIntSafeParse:
             with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": raw}):
                 importlib.reload(c)
                 assert c.PLAN_BEST_OF_N_COUNT == expected
+
+
+class TestCheckoutRootDetection:
+    """The checkout-root fallback that keeps PROJECT_ROOT real (#13572, #13149).
+
+    ``.env`` is git-ignored, so a fresh clone, a container build and every CI job
+    fall past the ``.env`` walk. Before this step they landed on the packaged
+    install location, which does not exist there — failing
+    ``TestProjectRoot::test_project_root_exists`` and pointing the module's
+    ``env_file=str(PROJECT_ROOT / ".env")`` declarations at production config
+    from a source tree.
+    """
+
+    def test_recognises_a_normal_clone(self, tmp_path) -> None:
+        """A clone has .git as a directory."""
+        from autobot_shared.paths import is_checkout_root
+
+        root = tmp_path / "clone"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").mkdir()
+
+        assert is_checkout_root(root) is True
+
+    def test_recognises_a_git_worktree(self, tmp_path) -> None:
+        """In a worktree .git is a FILE, not a directory.
+
+        Tested explicitly because this repository's whole workflow runs from
+        worktrees, and an ``is_dir()`` check would have excluded every one.
+        """
+        from autobot_shared.paths import is_checkout_root
+
+        root = tmp_path / "worktree"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+
+        assert is_checkout_root(root) is True
+
+    def test_requires_both_markers(self, tmp_path) -> None:
+        """Either marker alone is not enough.
+
+        ``.git`` alone would match an unrelated repository this package had been
+        vendored into; ``autobot_shared`` alone matches ordinary parent
+        directories in some layouts.
+        """
+        from autobot_shared.paths import is_checkout_root
+
+        git_only = tmp_path / "other-repo"
+        (git_only / ".git").mkdir(parents=True)
+        pkg_only = tmp_path / "vendored"
+        (pkg_only / "autobot_shared").mkdir(parents=True)
+
+        assert is_checkout_root(git_only) is False
+        assert is_checkout_root(pkg_only) is False
+
+    def test_a_configured_checkout_resolves_to_itself(self, tmp_path) -> None:
+        """A directory holding both a .env and the markers resolves to itself.
+
+        Note the rule is **nearest ancestor wins**, not ".env is searched before
+        the markers". The resolver makes a single pass and returns the first
+        ancestor satisfying *either* condition (#13149); the two-pass form it
+        replaced is what let a worktree escape to the main tree's ``.env``.
+        Where both signals sit in the same directory — an ordinary configured
+        checkout — the two orderings agree, which is what this pins.
+        """
+        from autobot_shared.paths import is_checkout_root, resolve_project_root
+
+        root = tmp_path / "deployed"
+        (root / "autobot_shared").mkdir(parents=True)
+        (root / ".git").mkdir()
+        (root / ".env").write_text("X=1\n", encoding="utf-8")
+
+        assert is_checkout_root(root) is True
+        assert resolve_project_root(root / "autobot_shared" / "mod.py") == root
+
+    def test_a_nearer_checkout_beats_a_farther_env(self, tmp_path, monkeypatch) -> None:
+        """The case the old two-pass walk got wrong, asserted on resolution.
+
+        An outer directory carries the ``.env``; an inner one carries only the
+        markers. Walking every ancestor for ``.env`` first would return the
+        outer directory — which is exactly how every worktree resolved to the
+        main checkout before #13149.
+        """
+        from autobot_shared.paths import PROJECT_ROOT_ENV, resolve_project_root
+
+        monkeypatch.delenv(PROJECT_ROOT_ENV, raising=False)
+
+        outer = tmp_path / "main"
+        (outer / "autobot_shared").mkdir(parents=True)
+        (outer / ".git").mkdir()
+        (outer / ".env").write_text("X=1\n", encoding="utf-8")
+
+        inner = outer / ".worktrees" / "issue-1"
+        (inner / "autobot_shared").mkdir(parents=True)
+        (inner / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+        assert not (inner / ".env").exists()
+
+        assert resolve_project_root(inner / "autobot_shared" / "mod.py") == inner
+
+
+class TestPathConfigLazyDefaults:
+    """#14050: base_dir and code_source_dir now resolve lazily via
+    project_root() instead of freezing "/opt/autobot" as an import-time
+    literal.
+
+    ``PathConfig`` is the canonical SSOT config, so its defaults are what
+    every consumer inherits when no ``AUTOBOT_*`` override is set. A frozen
+    literal here silently outranked #13149's module-level fixes elsewhere.
+    """
+
+    def test_base_dir_resolves_to_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.base_dir == str(project_root())
+        assert not cfg.base_dir.startswith("/opt/autobot")
+
+    def test_base_dir_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        """Only the *unset* case changes — a deployment setting AUTOBOT_BASE_DIR
+        must resolve exactly as it did before this fix."""
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_BASE_DIR", "/opt/autobot")
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.base_dir == "/opt/autobot"
+
+    def test_code_source_dir_resolves_to_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_CODE_SOURCE", raising=False)
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.code_source_dir == str(project_root())
+        assert not cfg.code_source_dir.startswith("/opt/autobot")
+
+    def test_code_source_dir_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_CODE_SOURCE", "/opt/autobot/code_source")
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.code_source_dir == "/opt/autobot/code_source"
+
+
+class TestAuditLogFileLazyDefault:
+    """#14050: MiscConfig.audit_log_file is the field security_layer.py's own
+    project_root()-derived fallback (#13149) was silently overridden by —
+    ``_resolve_audit_log_file()`` only ever reaches its fallback when
+    ``config.audit_log_file`` is falsy, and a hardcoded "/opt/autobot/..."
+    default here was never falsy.
+    """
+
+    def test_resolves_under_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+
+        cfg = MiscConfig(_env_file=None)
+
+        assert cfg.audit_log_file == str(project_root() / "logs" / "audit.log")
+        assert not cfg.audit_log_file.startswith("/opt/autobot")
+
+    def test_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.setenv("AUTOBOT_AUDIT_LOG_FILE", "/opt/autobot/logs/audit.log")
+
+        cfg = MiscConfig(_env_file=None)
+
+        assert cfg.audit_log_file == "/opt/autobot/logs/audit.log"
+
+
+class TestNoHardcodedLiveInstallLiterals:
+    """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default literal may
+    return to this file. A regex over the source, not an import-time check,
+    so it also catches new fields nobody wrote a dedicated test for."""
+
+    def test_no_field_default_hardcodes_the_live_install(self) -> None:
+        import re
+
+        from autobot_shared import ssot_config
+
+        source = Path(ssot_config.__file__).read_text(encoding="utf-8")
+        offenders = re.findall(r'default(?:_factory)?\s*=\s*"[^"]*/opt/autobot[^"]*"', source)
+
+        assert offenders == [], f"hardcoded /opt/autobot Field default(s) found: {offenders}"

@@ -44,7 +44,9 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/memory/privacy", tags=["memory-privacy"])
 
-_VALID_STORES = frozenset({"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner"})
+# #13705: "general" is the SQLite memory_entries store. Without it here the
+# list endpoint returns items the delete endpoint then rejects as 422.
+_VALID_STORES = frozenset({"verbatim", "trajectory", "working_memory", "graph", "retrieval_learner", "general"})
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +117,7 @@ async def list_memories(
     """List all memory items stored for the authenticated user.
 
     Returns items from every store (verbatim, trajectory, working_memory,
-    graph, retrieval_learner) with provenance and timestamps.
+    graph, retrieval_learner, general) with provenance and timestamps.
     """
     from memory.transparency import list_user_memories
 
@@ -148,15 +150,39 @@ async def forget_everywhere(
     target_user_id: Optional[str] = Query(None),
     current_user: Dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Cascade-delete a memory item from every store.
+    """Cascade-delete a memory item from the store that owns it.
 
     Returns a per-store map of ``{store: true/false}`` indicating whether the
     item existed in that store.  A True value means it was deleted from there.
+
+    Raises:
+        409: the id exists in more than one store (#13739). Deleting from all of
+            them destroys unrelated data and picking one is a guess, so the
+            caller re-issues against ``DELETE /{store}/{memory_id}``. The
+            response names the candidate stores.
     """
+    from memory.transparency import AmbiguousMemoryId  # noqa: PLC0415
     from memory.transparency import forget_everywhere as _forget_everywhere
 
     user_id = _resolve_target_user(current_user, target_user_id, request)
-    results = await _forget_everywhere(user_id, memory_id)
+    try:
+        results = await _forget_everywhere(user_id, memory_id)
+    except AmbiguousMemoryId as exc:
+        await audit_log(
+            "memory.privacy.forget_everywhere",
+            result="rejected",
+            user_id=current_user.get("user_id") or current_user.get("username"),
+            resource=f"memory:{memory_id}",
+            details={"target_user": user_id, "ambiguous_stores": exc.stores},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "This memory id exists in more than one store; delete it per store.",
+                "memory_id": memory_id,
+                "stores": exc.stores,
+            },
+        ) from exc
     deleted_from = [s for s, ok in results.items() if ok]
 
     await audit_log(

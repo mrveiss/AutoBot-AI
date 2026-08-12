@@ -83,6 +83,7 @@ from orchestration.causal_error_analyzer import (  # noqa: E402
 from orchestration.causal_error_recovery import (  # noqa: E402
     CausalErrorRecovery,
     RecoveryAction,
+    RecoveryAction_,
     RecoveryPlan,
 )
 from services.failure_pattern_detector import (  # noqa: E402
@@ -90,10 +91,49 @@ from services.failure_pattern_detector import (  # noqa: E402
     FailurePatternDetector,
 )
 
+# ---------------------------------------------------------------------------
+# Real-symbol anchor (#13162).
+#
+# Displacing the stubs above is only half the contract: the names this module
+# imported must still be the REAL ones when the tests run. If anything replaces
+# a symbol in the loaded module's globals with a MagicMock (the shape the root
+# conftest's stub decoration used to have), the real ``recommend_recovery()``
+# keeps running but returns ``RecoveryPlan(...)`` as a mock — ``plan.error_type``
+# compares a MagicMock against a string, and ``plan.causal_chain.encode()``
+# reaches ``hashlib.md5`` as a non-buffer. Both were live CI failures whose
+# tracebacks pointed at production code that was in fact behaving correctly.
+#
+# Assert the identity once, at import, so any future clobber is a single loud
+# error here instead of two misleading failures deep inside the recovery system.
+# ---------------------------------------------------------------------------
+
+_CER = sys.modules["orchestration.causal_error_recovery"]
+assert _CER.RecoveryPlan is RecoveryPlan and _CER.CausalErrorRecovery is CausalErrorRecovery, (
+    "orchestration.causal_error_recovery symbols were replaced after import — "
+    "the module in sys.modules no longer matches what this test imported, so the "
+    "recovery system under test would be exercised through mocks."
+)
+
+# The real modules this file just imported, captured once so the fixture below can
+# re-install them (#13551). Teardown puts the conftest stubs back, and CI runs
+# pytest-xdist with ``--dist loadscope``: each CLASS in this file is its own scope
+# group, so one worker can run a class here, finalise the module fixture, run
+# something else, then run another class of this same file. On that second entry
+# the fixture used to set up with the stubs reinstalled — module-level names stayed
+# real (they are bound already), but any RUN-time
+# ``from orchestration.causal_error_recovery import …`` resolved against the stub
+# and handed the test a MagicMock. That is how a genuine ``RecoveryPlan`` ended up
+# holding mock ``recommended_actions`` and died inside the real ``to_dict()`` with
+# "asdict() should be called on dataclass instances".
+_REAL_MODULES: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():
-    """Restore the displaced parent-conftest stubs after this module's tests.
+    """Install the real modules for this module's tests, restore the stubs after.
+
+    Setup and teardown are symmetric so the fixture is re-entrant: see
+    ``_REAL_MODULES`` above for why re-entry happens under ``--dist loadscope``.
 
     #11796: the old teardown also popped every key our module-scope imports
     happened to add (``_KEYS_OUR_IMPORTS_ADDED``) — but this fixture tears
@@ -108,6 +148,8 @@ def _restore_conftest_stubs():
     sibling type-only orchestration tests patch by name; everything else
     stays as the run left it.
     """
+    for _name, _mod in _REAL_MODULES.items():
+        sys.modules[_name] = _mod  # type: ignore[assignment]
     yield
     for _name, _mod in _SAVED_STUBS.items():
         if _name.startswith("orchestration."):
@@ -646,8 +688,6 @@ class TestRecoverySystemSmoke:
     @pytest.mark.asyncio
     async def test_recovery_plan_serialization(self):
         """Test that recovery plans can be serialized/deserialized."""
-        from orchestration.causal_error_recovery import RecoveryAction_
-
         plan = RecoveryPlan(
             error_id="test_1",
             error_type="TimeoutError",

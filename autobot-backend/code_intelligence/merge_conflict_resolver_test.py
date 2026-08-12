@@ -452,3 +452,40 @@ class TestRepositoryAnalysis:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestConflictSeverityOrdering:
+    """Severity must be comparable, or safe mode silently stops working (#13162).
+
+    `_select_strategy` asks `severity >= ConflictSeverity.COMPLEX`. On a plain
+    `Enum` that raises TypeError, so safe mode crashed instead of requiring
+    review — the control existed but never fired.
+    """
+
+    def test_severity_is_ordered_low_to_high(self):
+        assert ConflictSeverity.TRIVIAL < ConflictSeverity.SIMPLE
+        assert ConflictSeverity.SIMPLE < ConflictSeverity.MODERATE
+        assert ConflictSeverity.MODERATE < ConflictSeverity.COMPLEX
+        assert ConflictSeverity.COMPLEX < ConflictSeverity.CRITICAL
+
+    def test_the_comparison_safe_mode_actually_makes(self):
+        """`severity >= COMPLEX` — the exact expression that used to raise."""
+        assert ConflictSeverity.COMPLEX >= ConflictSeverity.COMPLEX
+        assert ConflictSeverity.CRITICAL >= ConflictSeverity.COMPLEX
+        assert not ConflictSeverity.MODERATE >= ConflictSeverity.COMPLEX
+
+    def test_string_values_are_unchanged(self):
+        """The values are the serialized form — ordering must not alter them."""
+        assert ConflictSeverity.CRITICAL.value == "critical"
+        assert [s.value for s in ConflictSeverity] == [
+            "trivial",
+            "simple",
+            "moderate",
+            "complex",
+            "critical",
+        ]
+
+    def test_every_level_is_ranked(self):
+        """A level added without ranking must fail loudly, not sort wrong."""
+        for severity in ConflictSeverity:
+            assert isinstance(severity.rank, int)

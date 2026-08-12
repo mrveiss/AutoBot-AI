@@ -12,7 +12,7 @@ no module-level sys.modules surgery, so nothing leaks into sibling analytics sui
 
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -27,7 +27,13 @@ def _project(code_source_id=None):
 async def test_dispose_deletes_children_then_project_and_source():
     project = _project(code_source_id="src-1")
     session = AsyncMock()
-    session.execute = AsyncMock()
+    # #13920: dispose() now SELECTs the child work-item and sprint ids before
+    # deleting them, so their KB collections can be dropped. A bare AsyncMock
+    # makes result.scalars() a coroutine; shape the result so `.scalars().all()`
+    # returns a real (empty) list.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=_result)
     non_shared_source = SimpleNamespace(id="src-1", shared_with=[])
     with (
         patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=non_shared_source)),
@@ -38,14 +44,21 @@ async def test_dispose_deletes_children_then_project_and_source():
         await dispose(project, session)
     del_src.assert_awaited_once_with("src-1")
     # Exactly three bulk-delete statements: work-items, sprints, then project.
-    assert session.execute.await_count == 3
+    # 3 deletes + the 2 id SELECTs added by #13920
+    assert session.execute.await_count == 5
 
 
 @pytest.mark.asyncio
 async def test_dispose_keeps_shared_source():
     project = _project(code_source_id="src-2")
     session = AsyncMock()
-    session.execute = AsyncMock()
+    # #13920: dispose() now SELECTs the child work-item and sprint ids before
+    # deleting them, so their KB collections can be dropped. A bare AsyncMock
+    # makes result.scalars() a coroutine; shape the result so `.scalars().all()`
+    # returns a real (empty) list.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=_result)
     shared = SimpleNamespace(id="src-2", shared_with=["someone-else"])
     with (
         patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=shared)),
@@ -59,7 +72,13 @@ async def test_dispose_keeps_shared_source():
 async def test_dispose_no_source_is_noop_on_source():
     project = _project(code_source_id=None)
     session = AsyncMock()
-    session.execute = AsyncMock()
+    # #13920: dispose() now SELECTs the child work-item and sprint ids before
+    # deleting them, so their KB collections can be dropped. A bare AsyncMock
+    # makes result.scalars() a coroutine; shape the result so `.scalars().all()`
+    # returns a real (empty) list.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=_result)
     with patch("api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock()) as del_src:
         await dispose(project, session)
     del_src.assert_not_awaited()

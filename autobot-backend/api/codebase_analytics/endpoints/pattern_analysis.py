@@ -41,7 +41,7 @@ class PatternAnalysisRequest(BaseModel):
     """Request model for pattern analysis."""
 
     path: str = Field(
-        default=str(PATH.PROJECT_ROOT),
+        default_factory=lambda: str(PATH.PROJECT_ROOT),
         description="Path to analyze (defaults to project root)",
     )
     source_id: str | None = Field(
@@ -230,7 +230,7 @@ async def clear_all_tasks() -> Dict[str, str]:
 
 @router.get("/patterns/summary", response_model=PatternSummary)
 async def get_pattern_summary(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ) -> PatternSummary:
     """Get a quick summary of patterns in the codebase.
 
@@ -263,7 +263,7 @@ async def get_pattern_summary(
 
 @router.post("/patterns/summary/analyze")
 async def start_pattern_summary_analysis(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ):
     """Enqueue pattern summary analysis as a Celery task (GH#6505)."""
     result = run_pattern_summary_analysis.delay(path)
@@ -290,7 +290,7 @@ async def clear_stuck_summary_tasks(
 
 @router.get("/patterns/duplicates")
 async def get_duplicate_patterns(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get duplicate code patterns in the codebase.
@@ -319,7 +319,7 @@ async def get_duplicate_patterns(
 
 @router.get("/patterns/regex-opportunities")
 async def get_regex_opportunities(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get regex optimization opportunities.
@@ -348,7 +348,7 @@ async def get_regex_opportunities(
 
 @router.get("/patterns/complexity-hotspots")
 async def get_complexity_hotspots(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
     min_complexity: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
@@ -386,7 +386,7 @@ async def get_complexity_hotspots(
 
 @router.get("/patterns/refactoring-suggestions")
 async def get_refactoring_suggestions(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get prioritized refactoring suggestions.
@@ -416,7 +416,7 @@ async def get_refactoring_suggestions(
 
 @router.get("/patterns/report")
 async def get_pattern_report(
-    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     format: str = Query(default="json", description="Output format: json or markdown"),
 ) -> Any:
     """Generate a comprehensive pattern analysis report.

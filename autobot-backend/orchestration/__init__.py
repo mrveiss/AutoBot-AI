@@ -15,7 +15,13 @@ This package contains:
   WorkflowDependencies, FALLBACK_TIERS, ...)
 - agent_registry: Agent registration and management
 - agent_router: TaskAgentScorer / AgentRouter — workflow-task scoring (#6819)
-- workflow_planner: Map capability requirements to available agents
+- workflow_planner: Map capability requirements to available agents. DEPRECATED
+  (#13751) — zero callers on every public method; the planner half of the engine
+  run_workflow stopped using at #5058, missed when #12373 deprecated the
+  executor half. Holds no capability the canonical path lacks: planning +
+  scored capability-to-agent selection are orchestrator.create_workflow_plan
+  and AgentRouter.get_agent_recommendations_scored. Kept in place, code intact;
+  do not wire it in — that would recreate a second planning path.
 - workflow_planning: StrategyPlanner — multi-agent strategy & plan building
 - workflow_runner: WorkflowRunner — multi-agent execution engine (#5058)
 - workflow_executor: Execute a single workflow step by step. DEPRECATED (#12373)

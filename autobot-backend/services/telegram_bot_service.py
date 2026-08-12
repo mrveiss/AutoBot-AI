@@ -23,9 +23,12 @@ logger = get_logger(__name__)
 
 # Redis keys for storing Telegram bot config
 TELEGRAM_BOT_TOKEN_KEY = (
-    "autobot:settings:telegram_bot_token"  # nosec B105 - Redis key name for storing the token, not the token itself
+    "autobot:settings:telegram_bot_token"  # nosec B105  # Redis key name for storing the token, not the token itself
 )
-TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105 - Redis key name for storing the
+TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105  # Redis key name for storing the
+# The bot's own numeric Telegram user id (getMe().id), not a secret — feeds
+# the Gateway ingest self-filter (#14028), see api/telegram_bot.py.
+TELEGRAM_BOT_ID_KEY = "autobot:settings:telegram_bot_id"
 
 # Sentinel prefix for encrypted values (backward compatibility)
 _ENCRYPTED_PREFIX = "enc:"
@@ -345,15 +348,22 @@ class TelegramBotService:
             logger.info(f"Sent document to Telegram chat {chat_id}")
             return result
 
-    async def verify_token(self) -> bool:
+    async def get_me(self) -> Optional[Dict[str, Any]]:
         """
-        Verify that the bot token is valid by calling getMe.
+        Call Telegram's getMe to fetch this bot's own account info.
+
+        Backs both token verification (``verify_token``) and resolving the
+        bot's own numeric id for the Gateway ingest self-filter (#14028) —
+        Telegram does not normally echo a bot's own outbound message back
+        through its own inbound webhook, but deriving and persisting the real
+        id (``api/telegram_bot.py::configure_telegram_bot``) is still cheaper
+        and more correct than leaving that guard unconfigured by default.
 
         Returns:
-            True if token is valid, False otherwise
+            Telegram's ``result`` object (id, username, …), or None on failure.
         """
         if not self.bot_token or not self.base_url:
-            return False
+            return None
 
         try:
             url = f"{self.base_url}/getMe"
@@ -361,13 +371,24 @@ class TelegramBotService:
                 if response.status == 200:
                     result = await response.json()
                     if result.get("ok"):
-                        bot_info = result.get("result", {})
-                        logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
-                        return True
-            return False
+                        return result.get("result", {})
+            return None
         except Exception as exc:
-            logger.error(f"Failed to verify Telegram bot token: {exc}")
-            return False
+            logger.error(f"Failed to call Telegram getMe: {exc}")
+            return None
+
+    async def verify_token(self) -> bool:
+        """
+        Verify that the bot token is valid by calling getMe.
+
+        Returns:
+            True if token is valid, False otherwise
+        """
+        bot_info = await self.get_me()
+        if bot_info is not None:
+            logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
+            return True
+        return False
 
 
 async def save_telegram_bot_token(bot_token: str) -> None:
@@ -417,6 +438,40 @@ async def get_telegram_bot_token() -> Optional[str]:
             logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
             return bot_token
     return None
+
+
+async def save_telegram_bot_id(bot_id: str) -> None:
+    """
+    Persist this bot's own Telegram user id (#14028 ingest self-filter).
+
+    Not a secret — stored in plaintext, unlike the token/webhook secret.
+
+    Args:
+        bot_id: Numeric Telegram user id from getMe()
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        raise RuntimeError("Redis client not available")
+    await redis.set(TELEGRAM_BOT_ID_KEY, bot_id)
+    logger.info("Saved Telegram bot id to Redis")
+
+
+async def get_telegram_bot_id() -> Optional[str]:
+    """
+    Get this bot's own Telegram user id, resolved at ``configure_telegram_bot``
+    time (#14028).
+
+    Returns:
+        The bot's numeric Telegram user id as a string, or None if not yet resolved.
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        return None
+
+    bot_id = await redis.get(TELEGRAM_BOT_ID_KEY)
+    if bot_id is None:
+        return None
+    return bot_id.decode("utf-8") if isinstance(bot_id, bytes) else bot_id
 
 
 async def save_telegram_webhook_secret(secret: str) -> None:

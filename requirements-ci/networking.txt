@@ -3,3 +3,4 @@ requests==2.34.2
 aiohttp==3.14.3
 httpx==0.28.1
 aiofiles==25.1.0
+asyncssh>=2.24.0,<3.0.0   # production dep (requirements.txt); pki/distributor.py + pki/configurator.py import it unconditionally, so pki/test_renewal.py fails collection without it (#13086)

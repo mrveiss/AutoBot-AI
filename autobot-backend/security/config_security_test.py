@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from autobot_shared.logging_manager import get_logger
-from config.loader import load_yaml_config
+from config.loader import _convert_env_value, load_yaml_config
 from config.manager import ConfigManager as ConfigManager
 
 
@@ -52,10 +52,16 @@ class TestConfigurationSecurity:
             assert result["backend"]["llm"]["local"]["provider"] == "ollama"
 
     def test_environment_variable_injection_protection(self):
-        """Test protection against environment variable injection"""
-        config_manager = ConfigManager()
+        """Environment overrides are allowlisted, and applied verbatim.
 
-        # Test with potentially malicious environment variables
+        #13162: this test used to assume ConfigManager derived config keys
+        from arbitrary ``AUTOBOT_*`` variable names. It never did, and it
+        must not: ``config.loader.apply_env_overrides()`` walks a fixed
+        ``ENV_VAR_MAPPINGS`` allowlist (loader.py:27-71), which *is* the
+        injection protection. Pin both halves — unmapped names are ignored
+        entirely, and a mapped name carrying a shell payload is stored as an
+        inert string.
+        """
         with patch.dict(
             os.environ,
             {
@@ -63,19 +69,22 @@ class TestConfigurationSecurity:
                 "AUTOBOT_SCRIPT_INJECTION": "$(malicious_command)",
                 "AB_XSS_ATTEMPT": '<script>alert("xss")</script>',
                 "SHELL_INJECTION": "; malicious_command; echo",
+                # Allowlisted name (ENV_VAR_MAPPINGS -> ["ui", "theme"]).
+                "AUTOBOT_UI_THEME": "$(malicious_command)",
             },
         ):
-            # Environment variables should be returned as-is but not executed
-            dangerous_cmd = config_manager.get("dangerous.command")
-            script_injection = config_manager.get("script.injection")
-            xss_attempt = config_manager.get("xss.attempt")
-            shell_injection = config_manager.get("shell.injection", "default")
+            # Constructed inside the patch: overrides are applied on load.
+            config_manager = ConfigManager()
 
-            # Values should be retrieved but not interpreted as commands
-            assert dangerous_cmd == "rm -rf /"  # Raw value, not executed
-            assert script_injection == "$(malicious_command)"  # Not evaluated
-            assert xss_attempt == '<script>alert("xss")</script>'  # Not sanitized at config level
-            assert shell_injection == "default"  # Should use default if not found
+            # Unmapped names never become config keys, under any spelling.
+            assert config_manager.get_nested("dangerous.command") is None
+            assert config_manager.get_nested("script.injection") is None
+            assert config_manager.get_nested("xss.attempt") is None
+            assert config_manager.get("shell.injection", "default") == "default"
+            assert "AUTOBOT_DANGEROUS_COMMAND" not in config_manager.to_dict()
+
+            # Mapped names land at their mapped path as raw, unevaluated text.
+            assert config_manager.get_nested("ui.theme") == "$(malicious_command)"
 
     def test_yaml_deserialization_safety(self):
         """Test YAML deserialization safety against malicious payloads"""
@@ -121,17 +130,20 @@ args: [["echo", "exploit"]]
         """Test that sensitive data is not accidentally exposed"""
         config_manager = ConfigManager()
 
-        # Set some sensitive data
-        config_manager.set("database.password", "super_secret_password")
-        config_manager.set("api.keys.openai", "sk-very-secret-key")
-        config_manager.set("security.secrets_key", "encryption_key_123")
+        # #13162: set()/get() are the flat key pair and set_nested()/
+        # get_nested() the dot-notation pair (config/sync_ops.py:36-76).
+        # Nested assertions need the nested setters.
+        config_manager.set_nested("database.password", "super_secret_password")
+        config_manager.set_nested("api.keys.openai", "sk-very-secret-key")
+        config_manager.set_nested("security.secrets_key", "encryption_key_123")
 
-        # Test that get_all_config doesn't expose everything by default in logs
-        all_config = config_manager.get_all_config()
+        # #13162: get_all_config() never existed; to_dict() (config/
+        # sync_ops.py:133) is the whole-config accessor.
+        all_config = config_manager.to_dict()
 
         # Sensitive data should be accessible via direct key access
-        assert config_manager.get("database.password") == "super_secret_password"
-        assert config_manager.get("api.keys.openai") == "sk-very-secret-key"
+        assert config_manager.get_nested("database.password") == "super_secret_password"
+        assert config_manager.get_nested("api.keys.openai") == "sk-very-secret-key"
 
         # But should be present in all_config (caller responsible for handling)
         assert "database" in all_config
@@ -155,15 +167,20 @@ args: [["echo", "exploit"]]
         }
 
         for key, value in malicious_configs.items():
-            config_manager.set(key, value)
+            config_manager.set_nested(key, value)
 
-        # Validation should identify potential issues
-        issues = config_manager.validate_config()
+        # Validation should complete and report structurally, not raise.
+        # #13162: validate_config() returns a status *dict* whose "issues"
+        # key holds the list (config/validation.py:218-237) — the old
+        # `isinstance(status, list)` assertion predates that shape.
+        status = config_manager.validate_config()
 
-        # Should validate without throwing errors
-        assert isinstance(issues, list)
-        # Note: The current validation doesn't check for malicious hosts,
-        # but it should at least complete without errors
+        assert isinstance(status, dict)
+        assert status["config_loaded"] is True
+        assert isinstance(status["issues"], list)
+        # Malicious values are stored verbatim, never executed or resolved.
+        assert config_manager.get_nested("redis.host") == "attacker-redis.com"
+        assert config_manager.get_nested("security.allowed_commands") == ["rm -rf /"]
 
     def test_config_file_permissions_handling(self):
         """Test handling of config files with various permissions"""
@@ -204,10 +221,12 @@ backend:
             os.rmdir(tmp_dir)
 
     def test_environment_variable_name_sanitization(self):
-        """Test that environment variable names are properly sanitized"""
-        config_manager = ConfigManager()
+        """Odd env var names cannot manufacture config keys.
 
-        # Test with various potentially problematic env var names
+        #13162: name matching is exact against ENV_VAR_MAPPINGS, so no
+        name — however it is punctuated — is ever *derived* into a config
+        path. Loading with these variables present must also not raise.
+        """
         with patch.dict(
             os.environ,
             {
@@ -217,13 +236,19 @@ backend:
                 "AUTOBOT_KEY_WITH_123": "numbered_value",
             },
         ):
-            # Normal key should work
-            assert config_manager.get("normal.key") == "normal_value"
+            config_manager = ConfigManager()
 
-            # Keys with special characters should be handled
-            # The _get_env_var method should handle conversion properly
-            dotted_value = config_manager.get("key.with.dots")
-            assert dotted_value in ["dotted_value", None]  # Depends on conversion logic
+            for derived_key in (
+                "normal.key",
+                "key.with.dots",
+                "key-with-dashes",
+                "key.with.123",
+            ):
+                assert config_manager.get_nested(derived_key) is None
+                assert config_manager.get(derived_key) is None
+
+            # The load itself stays healthy — defaults are still in place.
+            assert config_manager.get_nested("backend.llm.local.provider") == "ollama"
 
     def test_config_injection_via_yaml_anchors(self):
         """Test protection against YAML anchor-based injection"""
@@ -326,33 +351,27 @@ section_b:
             os.rmdir(tmp_dir)
 
     def test_environment_variable_type_confusion(self):
-        """Test protection against type confusion in environment variables"""
-        config_manager = ConfigManager()
+        """Env value coercion is total and never raises.
 
-        # Test with environment variables that might cause type confusion
-        with patch.dict(
-            os.environ,
-            {
-                "AUTOBOT_FAKE_BOOL": "True",  # Capital T, might be confused with bool
-                "AUTOBOT_FAKE_INT": "123abc",  # Starts with number but has letters
-                "AUTOBOT_FAKE_FLOAT": "3.14.159",  # Invalid float format
-                "AUTOBOT_FAKE_LIST": "item1,item2,",  # Trailing comma
-            },
-        ):
-            # Should handle type parsing errors gracefully
-            fake_bool = config_manager.get("fake.bool")
-            fake_int = config_manager.get("fake.int")
-            fake_float = config_manager.get("fake.float")
-            fake_list = config_manager.get("fake.list")
+        #13162: the old body read unmapped ``AUTOBOT_FAKE_*`` names, which
+        never enter config at all. The coercion that *does* run on every
+        allowlisted override is ``config.loader._convert_env_value()``
+        (loader.py:158-173): "true"/"false" -> bool, all-digits -> int,
+        anything else -> the untouched string. Exercise that directly with
+        the ambiguous payloads.
+        """
+        assert _convert_env_value("True") is True  # case-insensitive bool
+        assert _convert_env_value("false") is False
+        assert _convert_env_value("123") == 123  # pure digits -> int
+        assert _convert_env_value("123abc") == "123abc"  # letters -> stays a string
+        assert _convert_env_value("3.14.159") == "3.14.159"  # invalid float -> string
+        assert _convert_env_value("item1,item2,") == "item1,item2,"  # never split
+        assert _convert_env_value("") == ""  # empty is not an error
 
-            # Should return parsed values or original strings without errors
-            assert fake_bool in [
-                True,
-                "True",
-            ]  # Might be parsed as bool or kept as string
-            assert fake_int == "123abc"  # Should remain string due to letters
-            assert fake_float == "3.14.159"  # Should remain string due to invalid format
-            assert isinstance(fake_list, (list, str))  # Should handle trailing comma
+        # And the mapped path receives exactly that coerced value.
+        with patch.dict(os.environ, {"AUTOBOT_REDIS_ENABLED": "false"}):
+            config_manager = ConfigManager()
+            assert config_manager.get_nested("memory.redis.enabled") is False
 
     def test_config_backup_and_recovery_security(self):
         """Test security of config backup and recovery operations"""
@@ -431,11 +450,12 @@ class TestSecretsHandlingInConfig:
         import yaml
 
         config_manager = ConfigManager()
-        config_manager.set("public.setting", "public_value")
-        config_manager.set("secret.api_key", "secret_key_value")
+        config_manager.set_nested("public.setting", "public_value")
+        config_manager.set_nested("secret.api_key", "secret_key_value")
 
-        # Get all config
-        all_config = config_manager.get_all_config()
+        # #13162: to_dict() is the whole-config accessor; get_all_config()
+        # never existed on ConfigManager.
+        all_config = config_manager.to_dict()
 
         # Verify secrets are in the config (as expected)
         assert all_config["secret"]["api_key"] == "secret_key_value"

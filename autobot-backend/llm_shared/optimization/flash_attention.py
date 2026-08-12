@@ -213,19 +213,31 @@ class GrowingKVCache:
     Args:
         chunk_size: Number of positions to add per growth step.
         device: Torch device for cache tensors.
-        dtype: Torch dtype for cache tensors.
+        dtype: Torch dtype for cache tensors. ``None`` (the default) adopts the
+            dtype of the first tensor stored — see below.
+
+    Issue #13162: ``dtype`` used to default to ``float16`` regardless of what
+    was actually stored. ``_write_entries`` assigns into the cache slice, and
+    that assignment casts silently, so an fp32 model handed this cache fp32
+    keys/values, got them rounded to half precision on the way in, and read
+    back a ``Half`` tensor it could no longer combine with its own ``Float``
+    query without an explicit cast. Only the one value-comparing test caught it
+    (``RuntimeError: Half did not match Float``); every shape-only test passed
+    over the truncation. Adopting the stored dtype keeps an fp16 caller on fp16
+    (unchanged) and stops the silent downcast for everyone else; passing
+    ``dtype`` explicitly still forces a specific precision.
     """
 
     def __init__(
         self,
         chunk_size: int = 256,
         device: torch.device | None = None,
-        dtype: torch.dtype = None,
+        dtype: torch.dtype | None = None,
     ):
         _t = _get_torch()
         self.chunk_size = chunk_size
         self.device = device or _t.device("cuda" if _t.cuda.is_available() else "cpu")
-        self.dtype = dtype if dtype is not None else _t.float16
+        self.dtype = dtype
         self._state = KVCacheState(chunk_size=chunk_size)
 
     @property
@@ -264,7 +276,7 @@ class GrowingKVCache:
             num_heads,
             head_dim,
             device=self.device,
-            dtype=self.dtype,
+            dtype=self.dtype if self.dtype is not None else new_kv.dtype,
         )
 
     def _grow_if_needed(self, new_kv: torch.Tensor, needed: int) -> None:
@@ -284,7 +296,9 @@ class GrowingKVCache:
             num_heads,
             head_dim,
             device=self.device,
-            dtype=self.dtype,
+            # Match what is already allocated: torch.cat rejects mixed dtypes,
+            # and self.dtype is None whenever the cache adopted the stored one.
+            dtype=self._state.cache.dtype,
         )
         self._state.cache = _t.cat([self._state.cache, extension], dim=1)
         logger.debug(

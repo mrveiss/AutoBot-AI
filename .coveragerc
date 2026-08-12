@@ -1,0 +1,38 @@
+# Coverage configuration (#10691).
+#
+# This file exists because coverage.py NEVER reads pytest.ini. It looks only at
+# .coveragerc, .coveragerc.toml, setup.cfg, tox.ini and pyproject.toml, and this
+# repo had none of them — so the [coverage:run] / [coverage:report] sections
+# that lived in pytest.ini had never taken effect a single time. The visible
+# consequence: `omit = *_test.py` was inert, so every test file counted as
+# measured source. Measured on the first run that ever produced a combined
+# figure: test files contributed 199,158 of 486,299 statements at 86.64%
+# coverage, dragging the reported total UP from 51.02% to 65.61%.
+#
+# Deliberately NOT carried over from pytest.ini: the `source = ...` list. Scope
+# is defined by the `--cov=` flags on each pytest invocation, which is the
+# single place it should live; re-declaring it here would change the
+# denominator (coverage would report on never-imported files too) in a way
+# nobody has measured. If that is wanted, measure it first.
+
+[run]
+omit =
+    *_test.py
+    */test_*
+    */venv/*
+    */__pycache__/*
+
+[report]
+precision = 2
+skip_empty = True
+# The real, measured figure for production code with the omit above applied.
+#
+# 70 was aspirational and had never once been evaluated (#13300: the step
+# carrying --cov-fail-under never ran). The first genuine measurement is
+# 51.02%, so the gate is set just under it to leave room for run-to-run
+# variation — which is real here, because the suite has standing failures and
+# which code executes shifts between runs.
+#
+# This number is a RATCHET: raise it as coverage improves, never lower it to
+# make a red run go green.
+fail_under = 50

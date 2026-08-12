@@ -387,14 +387,18 @@ async def change_password(
     """Change user password with rate limiting and session invalidation."""
     rate_limiter = PasswordChangeRateLimiter()
 
-    # Check rate limit before attempting password change
+    # Check rate limit before attempting password change.
+    # The limiter's message carries the caller-facing retry window ("Too many
+    # attempts. Try again in N minutes.") and discloses nothing sensitive, so
+    # it is returned verbatim — the previous "Internal server error" detail
+    # contradicted the 429 status and stripped the retry guidance.
     try:
         await rate_limiter.check_rate_limit(user_id)
-    except RateLimitExceeded:
+    except RateLimitExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Internal server error",
-        )
+            detail=str(exc),
+        ) from exc
 
     try:
         # Extract current token to preserve this session

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from media.document.extraction import extract_docx, extract_pdf
 
 logger = get_logger(__name__)
 
@@ -122,42 +123,29 @@ class DocumentParser:
             return "", metadata
 
     def _parse_pdf(self, file_path: Path, metadata: Dict) -> str:
-        """Extract text from PDF using pypdf"""
-        from pypdf import PdfReader
+        """Extract text from PDF via the canonical extractor (#13893).
 
-        reader = PdfReader(str(file_path))
-        metadata["page_count"] = len(reader.pages)
-
-        text_parts = []
-        for page_num, page in enumerate(reader.pages, 1):
-            try:
-                text = page.extract_text()
-                if text.strip():
-                    text_parts.append(f"--- Page {page_num} ---\n{text}")
-            except Exception as e:
-                logger.warning("Failed to extract page %s: %s", page_num, e)
-
-        return "\n\n".join(text_parts)
+        Used to carry its own pypdf loop with a ``--- Page N ---`` marker; now
+        shares the one implementation and the one ``## Page N`` convention.
+        """
+        extracted = extract_pdf(file_path.read_bytes())
+        metadata["page_count"] = extracted.page_count
+        return extracted.text
 
     def _parse_docx(self, file_path: Path, metadata: Dict) -> str:
-        """Extract text from DOCX using python-docx"""
-        from docx import Document
+        """Extract text and tables from DOCX via the canonical extractor (#13893)."""
+        extracted = extract_docx(file_path.read_bytes())
 
-        doc = Document(str(file_path))
-
-        # Extract paragraphs
-        paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
-
-        # Extract text from tables
+        paragraphs = [line for line in extracted.text.split("\n") if line.strip()]
         table_text = []
-        for table in doc.tables:
-            for row in table.rows:
-                row_text = " | ".join(cell.text.strip() for cell in row.cells)
+        for table in extracted.tables:
+            for row in table:
+                row_text = " | ".join(row)
                 if row_text.strip():
                     table_text.append(row_text)
 
         metadata["paragraph_count"] = len(paragraphs)
-        metadata["table_count"] = len(doc.tables)
+        metadata["table_count"] = len(extracted.tables)
 
         all_text = paragraphs + (["--- Tables ---"] if table_text else []) + table_text
         return "\n".join(all_text)

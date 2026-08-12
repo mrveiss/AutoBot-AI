@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
 from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
@@ -21,9 +22,12 @@ from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 class AutoResearchConfig:
     """Configuration for the autoresearch experiment runner."""
 
-    # Path to the cloned autoresearch repo on the GPU node
+    # Path to the cloned autoresearch repo on the GPU node.
+    # #13149: falls back to the canonical project root instead of a hardcoded
+    # `/opt/autobot` literal, so a dev checkout resolves under the checkout
+    # rather than the live install when AUTOBOT_AUTORESEARCH_DIR is unset.
     autoresearch_dir: Path = field(
-        default_factory=lambda: Path(config.misc.autoresearch_dir or "/opt/autobot/autoresearch")
+        default_factory=lambda: Path(config.misc.autoresearch_dir or str(project_root() / "autoresearch"))
     )
 
     # Training defaults
@@ -72,9 +76,10 @@ class AutoResearchConfig:
     meta_agent_test_timeout: int = field(default_factory=lambda: int(config.meta_agent_test_timeout))
     meta_agent_approval_threshold: float = field(default_factory=lambda: float(config.meta_agent_approval_threshold))
 
-    # Data directory for experiment outputs
+    # Data directory for experiment outputs.
+    # #13149: same checkout-relative fallback as autoresearch_dir above.
     data_dir: Path = field(
-        default_factory=lambda: Path(config.misc.autoresearch_data_dir or "/opt/autobot/autoresearch/data")
+        default_factory=lambda: Path(config.misc.autoresearch_data_dir or str(project_root() / "autoresearch" / "data"))
     )
 
     # Human-in-the-loop research checkpoints (issue #3291)

@@ -118,8 +118,9 @@ Refresh an expiring JWT token.
 
 ```json
 {
+  "success": true,
   "token": "eyJhbGciOiJIUzI1NiIs...",
-  "expires_in": 3600
+  "expiresIn": 3600
 }
 ```
 

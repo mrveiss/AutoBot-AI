@@ -789,9 +789,15 @@
    * badge (--text-on-warning carries an OKLCH override that would drift).
    * --wfcanvas-node-switch: cyan header fill for the "switch" node type —
    * no existing exact token (--chart-cyan is a different cyan).
+   * --wfcanvas-node-vision-from/-to: the violet gradient stops on vision-*
+   * node headers. Missed by #11977 because the pair sits inside a
+   * linear-gradient() rather than a bare color declaration; the stylelint
+   * changed-file gate surfaced them once #13936 touched this file (#13961).
    * ============================================ */
   --wfcanvas-on-warning: #000;      /* experimental badge text on warning bg */
   --wfcanvas-node-switch: #0891b2;  /* "switch" node-type header fill */
+  --wfcanvas-node-vision-from: #7c3aed;  /* vision-* header gradient start */
+  --wfcanvas-node-vision-to: #6d28d9;    /* vision-* header gradient end */
 
   /* ============================================
    * INTERACTIVE SCREENSHOT TOKENS

@@ -872,6 +872,7 @@
       "loadFailed": "Falha ao carregar memórias. O backend pode estar indisponível.",
       "forgetFailed": "Falha ao esquecer o item de memória.",
       "forgetEverywhereFailed": "Falha ao excluir em cascata o item de memória.",
+      "forgetEverywhereAmbiguous": "Esta memória existe em mais de um armazenamento — utilize antes a eliminação por armazenamento na linha.",
       "exportDownloaded": "Exportação de memória baixada.",
       "exportFailed": "A exportação falhou. Tente novamente."
     },
@@ -1423,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Análises do projeto"
+      },
+      "impact": {
+        "title": "Análise de impacto",
+        "hint": "O que chama transitivamente um nó — use antes de alterar ou remover.",
+        "nodeIdPlaceholder": "ex. pacote.modulo.NomeClasse",
+        "nodeIdLabel": "ID do nó do grafo",
+        "analyze": "Analisar",
+        "analyzing": "A analisar…",
+        "notIndexedTitle": "Grafo de código não construído",
+        "notIndexedBody": "Indexe esta fonte antes de analisar o impacto.",
+        "partialTitle": "Resultado parcial — é um limite inferior",
+        "partialDepth": "A travessia parou na profundidade {depth} com {frontier} nó(s) por expandir. Pode haver mais chamadores.",
+        "partialUnresolved": "{count} aresta(s) não puderam ser resolvidas, pelo que podem faltar chamadores.",
+        "callers": "chamadores",
+        "callersAtLeast": "chamadores (pelo menos)",
+        "callersHeading": "Chamadores alcançados",
+        "edgesResolved": "arestas resolvidas",
+        "edgesUnresolved": "arestas não resolvidas",
+        "depth": "profundidade alcançada",
+        "noCallersTitle": "Nenhum chamador encontrado",
+        "noCallersBody": "Nada no grafo indexado chama este nó.",
+        "skippedHeading": "Mostrar {count} aresta(s) não resolvida(s)"
       }
     },
     "patterns": {
@@ -2824,7 +2847,8 @@
       "entitiesAndRelations": "{entities} entidades, {relations} relações",
       "success": "Sucesso",
       "failedStatus": "Falhou",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "tabPath": "Caminho de ligação"
     },
     "failedVectorizations": {
       "title": "Vetorizações com falha",
@@ -4080,6 +4104,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Tem certeza de que deseja excluir esta pasta monitorada?"
+    },
+    "graphPath": {
+      "title": "Caminho de ligação",
+      "description": "Encontre a cadeia mais curta de relações que liga duas entidades.",
+      "fromEntity": "Entidade de origem",
+      "fromEntityPlaceholder": "Nome da entidade inicial...",
+      "toEntity": "Entidade de destino",
+      "toEntityPlaceholder": "Nome da entidade alvo...",
+      "swap": "Trocar entidades",
+      "direction": "Direção",
+      "directionBoth": "Qualquer direção",
+      "directionOutgoing": "Seguir relações para a frente",
+      "directionIncoming": "Seguir relações para trás",
+      "directionHint": "As relações são frequentemente guardadas apenas num sentido.",
+      "maxDepth": "Profundidade máxima",
+      "hops": "{count} saltos",
+      "relation": "Relação",
+      "relationHint": "(opcional)",
+      "relationPlaceholder": "Seguir apenas este tipo de relação...",
+      "findPath": "Procurar caminho",
+      "searching": "A procurar...",
+      "connectedIn": "Ligadas em {count} salto | Ligadas em {count} saltos",
+      "sameEntity": "Ambos os nomes correspondem à mesma entidade: {name}",
+      "fuzzyMatch": "Nenhuma entidade se chama {names} — o caminho abaixo refere-se à correspondência mais próxima. | Nenhuma entidade se chama {names} — o caminho abaixo refere-se às correspondências mais próximas.",
+      "crossedForwards": "para a frente",
+      "crossedBackwards": "para trás",
+      "unnamedRelation": "relacionado com",
+      "noPathFound": "Nenhuma ligação encontrada entre estas entidades.",
+      "noPathHint": "Experimente aumentar a profundidade, permitir qualquer direção ou remover o filtro de relação.",
+      "entityNotFound": "Estes nomes não corresponderam a nenhuma entidade:",
+      "entityNotFoundHint": "Verifique a ortografia ou extraia entidades primeiro para que existam no grafo.",
+      "errorEnterBoth": "Introduza uma entidade de origem e uma de destino.",
+      "notInGraph": "Estas entidades ainda não estão no grafo de relações.",
+      "notInGraphHint": "Existem, mas não têm ligações no grafo, pelo que não é possível traçar qualquer ligação. Execute novamente a extração de entidades."
     }
   },
   "workflow": {
@@ -4203,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "A abrir a automação da sua empresa…",
+      "companyRequired": "Selecione uma empresa para abrir a automação."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7780,7 +7840,8 @@
       "generating": "Gerando código QR...",
       "expired": "Expirado",
       "refresh": "Obter novo código",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "manualCode": "Não consegue digitalizar? Introduza este código manualmente:"
     }
   },
   "llmKeys": {
@@ -8153,13 +8214,16 @@
       "title": "Organograma",
       "hireAgent": "Contratar agente",
       "loading": "Carregando…",
-      "empty": "Nenhum agente encontrado.",
+      "empty": "Nenhuma pessoa ou agente encontrado.",
       "retry": "Tentar novamente",
       "agentDetail": "Detalhe do agente",
+      "personDetail": "Detalhes da pessoa",
+      "humanNoAgentControls": "Os controlos de agente não se aplicam a pessoas.",
       "human": "Humano",
       "aiAgent": "Agente de IA",
       "never": "Nunca",
       "adapter": "Adaptador",
+      "role": "Função",
       "type": "Tipo",
       "lastHeartbeat": "Último sinal",
       "budget": "Orçamento",
@@ -8168,7 +8232,13 @@
       "pauseAgent": "Pausar agente",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Modo de visualização",
+      "viewTree": "Árvore",
+      "viewCanvas": "Tela",
+      "canvasTabAll": "Todas as unidades",
+      "canvasUnit": "Unidade {name}",
+      "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes."
     },
     "goals": {
       "title": "Árvore de objetivos",
@@ -8394,15 +8464,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {

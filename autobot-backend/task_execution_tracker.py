@@ -358,9 +358,11 @@ class TaskExecutionTracker:
             agent_counts[agent_type] = agent_counts.get(agent_type, 0) + 1
         return agent_counts
 
-    def add_markdown_reference(self, task_id: str, markdown_file: str, ref_type: str = "documentation"):
-        """Add markdown reference to a task"""
-        return self.memory_manager.add_markdown_reference(task_id, markdown_file, ref_type)
+    def add_markdown_reference(
+        self, task_id: str, markdown_file: str, ref_type: str = "documentation", *, user_id: str
+    ):
+        """Add markdown reference to a task (#13688: owner-scoped)"""
+        return self.memory_manager.add_markdown_reference(task_id, markdown_file, ref_type, user_id=user_id)
 
     def store_task_embedding(
         self,
@@ -368,13 +370,16 @@ class TaskExecutionTracker:
         content: str,
         embedding_model: str,
         embedding_vector: List[float],
+        *,
+        user_id: str,
     ):
-        """Store embedding for task-related content"""
+        """Store embedding for task-related content (#13688: owner-scoped)"""
         return self.memory_manager.store_embedding(
             content=content,
             content_type=f"task_{task_id}",
             embedding_model=embedding_model,
             embedding_vector=embedding_vector,
+            user_id=user_id,
         )
 
     def _aggregate_task_stats(self, history: List[TaskExecutionRecord]) -> Dict[str, Dict[str, Any]]:
@@ -563,13 +568,15 @@ class TaskExecutionContext:
             metadata=self.metadata.copy(),
         )
 
-    def add_markdown_reference(self, markdown_file: str, ref_type: str = "documentation"):
-        """Add markdown file reference to current task"""
-        return self.tracker.add_markdown_reference(self.task_id, markdown_file, ref_type)
+    def add_markdown_reference(self, markdown_file: str, ref_type: str = "documentation", *, user_id: str):
+        """Add markdown file reference to current task (#13688: owner-scoped)"""
+        return self.tracker.add_markdown_reference(self.task_id, markdown_file, ref_type, user_id=user_id)
 
-    def store_embedding(self, content: str, embedding_model: str, embedding_vector: List[float]):
-        """Store embedding related to current task"""
-        return self.tracker.store_task_embedding(self.task_id, content, embedding_model, embedding_vector)
+    def store_embedding(self, content: str, embedding_model: str, embedding_vector: List[float], *, user_id: str):
+        """Store embedding related to current task (#13688: owner-scoped)"""
+        return self.tracker.store_task_embedding(
+            self.task_id, content, embedding_model, embedding_vector, user_id=user_id
+        )
 
 
 get_task_tracker = lazy_singleton(TaskExecutionTracker)

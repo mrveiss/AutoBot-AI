@@ -10,28 +10,18 @@
 """Document processing pipeline for text documents, PDFs, DOCX, etc."""
 
 import base64
-import io
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
-
-# PDF support via pypdf (required)
-try:
-    from pypdf import PdfReader
-
-    _PYPDF_AVAILABLE = True
-except ImportError:
-    _PYPDF_AVAILABLE = False
-
-# DOCX support via python-docx (required)
-try:
-    from docx import Document as DocxDocument
-
-    _DOCX_AVAILABLE = True
-except ImportError:
-    _DOCX_AVAILABLE = False
+from media.document.extraction import (
+    DocumentDependencyError,
+    DocumentExtractionError,
+    ExtractedDocument,
+    detect_format,
+    extract_document,
+)
 
 logger = get_logger(__name__)
 
@@ -59,16 +49,21 @@ class DocumentPipeline(BasePipeline):
         )
 
     async def _process_document(self, media_input: MediaInput) -> Dict[str, Any]:
-        """Dispatch to format-specific processor based on MIME type or content."""
+        """Extract via the canonical core and adapt the result to this pipeline's shape."""
         raw_bytes = self._decode_input(media_input.data)
         mime_type = (media_input.mime_type or "").lower()
-        detected = self._detect_format(raw_bytes, mime_type)
 
-        if detected == "pdf":
-            return self._extract_pdf(raw_bytes, media_input.metadata)
-        if detected == "docx":
-            return self._extract_docx(raw_bytes, media_input.metadata)
-        return self._extract_text(raw_bytes, mime_type, media_input.metadata)
+        try:
+            extracted = extract_document(raw_bytes, mime_type)
+        except DocumentDependencyError as exc:
+            # A missing library is a deployment gap, not a bad upload — keep the
+            # two distinguishable so one is never diagnosed as the other.
+            return self._unavailable_result(detect_format(raw_bytes, mime_type), str(exc), media_input.metadata)
+        except DocumentExtractionError as exc:
+            logger.warning("Document extraction failed: %s", exc)
+            return self._error_result(detect_format(raw_bytes, mime_type), str(exc), media_input.metadata)
+
+        return self._to_result(extracted, media_input.metadata)
 
     # ------------------------------------------------------------------
     # Decoding helpers
@@ -87,125 +82,102 @@ class DocumentPipeline(BasePipeline):
                     return fh.read()
         raise ValueError(f"Unsupported document data type: {type(data)}")
 
-    def _detect_format(self, raw_bytes: bytes, mime_type: str) -> str:
-        """Detect document format from magic bytes or MIME type."""
-        if raw_bytes[:4] == b"%PDF":
-            return "pdf"
-        if raw_bytes[:2] == b"PK" and b"word/" in raw_bytes[:2000]:
-            return "docx"
-        if "pdf" in mime_type:
-            return "pdf"
-        if "docx" in mime_type or "officedocument.wordprocessingml" in mime_type:
-            return "docx"
-        return "text"
-
     # ------------------------------------------------------------------
-    # Format-specific extractors
+    # Result adaptation
     # ------------------------------------------------------------------
 
-    def _extract_pdf(self, raw_bytes: bytes, metadata: Dict) -> Dict[str, Any]:
-        """Extract text and metadata from a PDF file using pypdf."""
-        if not _PYPDF_AVAILABLE:
-            return self._unavailable_result("pdf", "pypdf not installed", metadata)
-
-        try:
-            reader = PdfReader(io.BytesIO(raw_bytes))
-            pages_text = [page.extract_text() or "" for page in reader.pages]
-            full_text = "\n\n".join(pages_text)
-            info = reader.metadata or {}
-            tables = self._extract_pdf_tables(reader)
-            return {
-                "type": "document_analysis",
-                "format": "pdf",
-                "extracted_text": full_text,
-                "page_count": len(reader.pages),
-                "tables": tables,
-                "document_info": {
-                    "title": info.get("/Title", ""),
-                    "author": info.get("/Author", ""),
-                    "subject": info.get("/Subject", ""),
-                    "creator": info.get("/Creator", ""),
-                },
-                "confidence": 0.95,
-                "metadata": metadata,
-            }
-        except Exception as exc:
-            logger.warning("PDF extraction failed: %s", exc)
-            return self._error_result("pdf", str(exc), metadata)
-
-    def _extract_pdf_tables(self, reader: Any) -> List[Dict]:
-        """Best-effort table extraction from PDF annotations."""
-        # pypdf doesn't natively extract tables; return placeholder structure
-        # Full table extraction would require pdfplumber
-        return []
-
-    def _extract_docx(self, raw_bytes: bytes, metadata: Dict) -> Dict[str, Any]:
-        """Extract text and tables from a DOCX file using python-docx."""
-        if not _DOCX_AVAILABLE:
-            return self._unavailable_result("docx", "python-docx not installed", metadata)
-
-        try:
-            doc = DocxDocument(io.BytesIO(raw_bytes))
-            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-            full_text = "\n".join(paragraphs)
-            tables = self._extract_docx_tables(doc)
-            core_props = self._extract_docx_properties(doc)
-            return {
-                "type": "document_analysis",
-                "format": "docx",
-                "extracted_text": full_text,
-                "page_count": None,  # python-docx doesn't expose page count
-                "paragraph_count": len(paragraphs),
-                "tables": tables,
-                "document_info": core_props,
-                "confidence": 0.95,
-                "metadata": metadata,
-            }
-        except Exception as exc:
-            logger.warning("DOCX extraction failed: %s", exc)
-            return self._error_result("docx", str(exc), metadata)
-
-    def _extract_docx_tables(self, doc: Any) -> List[List[List[str]]]:
-        """Extract tables from DOCX as list-of-rows-of-cells."""
-        tables = []
-        for table in doc.tables:
-            rows = []
-            for row in table.rows:
-                rows.append([cell.text.strip() for cell in row.cells])
-            tables.append(rows)
-        return tables
-
-    def _extract_docx_properties(self, doc: Any) -> Dict[str, str]:
-        """Extract core document properties (author, title, etc.)."""
-        try:
-            props = doc.core_properties
-            return {
-                "title": props.title or "",
-                "author": props.author or "",
-                "subject": props.subject or "",
-                "keywords": props.keywords or "",
-            }
-        except Exception:
-            return {}
-
-    def _extract_text(self, raw_bytes: bytes, mime_type: str, metadata: Dict) -> Dict[str, Any]:
-        """Extract text from plain text file (UTF-8 with latin-1 fallback)."""
-        try:
-            text = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw_bytes.decode("latin-1", errors="replace")
-
-        lines = text.splitlines()
-        return {
+    def _to_result(self, extracted: ExtractedDocument, metadata: Dict) -> Dict[str, Any]:
+        """Adapt a canonical ExtractedDocument to this pipeline's result dict."""
+        # Resolved once and threaded through, rather than each helper reading
+        # ``has_usable_text_layer`` (and re-resolving the config knobs behind
+        # it) independently — that used to emit a misconfigured-value warning
+        # twice per document (#13884 review).
+        usable_content = extracted.has_usable_content
+        result: Dict[str, Any] = {
             "type": "document_analysis",
-            "format": "text",
-            "extracted_text": text,
-            "page_count": None,
-            "line_count": len(lines),
-            "char_count": len(text),
-            "confidence": 1.0,
+            "format": extracted.format,
+            "extracted_text": extracted.text,
+            "page_count": extracted.page_count,
+            "confidence": self._confidence_for(extracted, usable_content),
             "metadata": metadata,
         }
+        result.update(self._format_fields(extracted))
+        result.update(self._text_layer_fields(extracted, usable_content))
+        return result
+
+    def _text_layer_fields(self, extracted: ExtractedDocument, usable_content: bool) -> Dict[str, Any]:
+        """Report what was actually readable, so empty is never mistaken for blank.
+
+        Two distinct failure shapes get two distinct statuses (#13884):
+        ``no_text_layer`` for a paginated document (a PDF) with nothing
+        usable — a scan, where OCR is the fix — and ``empty_document`` for an
+        unpaginated one (a blank ``.txt``/``.md``, or a DOCX with neither text
+        nor tables), where OCR does not apply at all. A DOCX whose content is
+        entirely a table is neither: its data lives in ``tables``, and
+        ``usable_content`` reflects that.
+        """
+        fields: Dict[str, Any] = {}
+
+        # Report unreadable pages even when the document as a whole is usable: a
+        # 40-page contract with one scanned addendum still has a hole in it, and
+        # the caller can only OCR what it knows is missing.
+        if extracted.pages and extracted.empty_page_numbers:
+            fields["empty_pages"] = list(extracted.empty_page_numbers)
+            fields["text_page_ratio"] = round(extracted.text_page_ratio, 4)
+            fields["chars_per_page"] = round(extracted.avg_chars_per_page, 1)
+
+        if usable_content:
+            return fields
+
+        if extracted.pages:
+            fields["processing_status"] = "no_text_layer"
+            fields["text_layer_reason"] = (
+                "No recoverable text layer — the document is most likely scanned or image-only and needs OCR."
+            )
+            fields.setdefault("text_page_ratio", round(extracted.text_page_ratio, 4))
+            fields.setdefault("chars_per_page", round(extracted.avg_chars_per_page, 1))
+            logger.info(
+                "Document has no usable text layer (format=%s, pages=%s, text_page_ratio=%.2f, chars_per_page=%.1f)",
+                extracted.format,
+                extracted.page_count,
+                extracted.text_page_ratio,
+                extracted.avg_chars_per_page,
+            )
+        else:
+            fields["processing_status"] = "empty_document"
+            fields["text_layer_reason"] = "The document contains no extractable text or table content."
+            logger.info("Document has no extractable content (format=%s)", extracted.format)
+        return fields
+
+    def _format_fields(self, extracted: ExtractedDocument) -> Dict[str, Any]:
+        """Per-format fields that are not part of the canonical result."""
+        if extracted.format == "text":
+            return {
+                "line_count": len(extracted.text.splitlines()),
+                "char_count": extracted.char_count,
+            }
+
+        fields: Dict[str, Any] = {
+            "tables": [list(table) for table in extracted.tables],
+            "document_info": dict(extracted.info),
+        }
+        if extracted.format == "docx":
+            fields["paragraph_count"] = len([line for line in extracted.text.split("\n") if line.strip()])
+        return fields
+
+    def _confidence_for(self, extracted: ExtractedDocument, usable_content: bool) -> float:
+        """Score what was recovered, not merely that parsing did not raise.
+
+        A document with no usable text layer *and* no tables scores 0.0:
+        previously an image-only PDF returned 0.95 with an empty
+        ``extracted_text``, which asserted the document was blank rather than
+        unread (#13884). A DOCX whose content is entirely a table still scores
+        like a success — its data is real, it just lives in ``tables`` rather
+        than ``extracted_text``.
+        """
+        if not usable_content:
+            return 0.0
+        return 1.0 if extracted.format == "text" else 0.95
 
     # ------------------------------------------------------------------
     # Error/fallback helpers

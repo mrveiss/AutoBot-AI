@@ -100,7 +100,7 @@ class TestDesktopTracking:
         result = await track_screenshot_capture(
             db=mock_db,
             user_id=user_id,
-            screenshot_path="/tmp/screenshot.png",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            screenshot_path="/tmp/screenshot.png",  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
 
         assert result == activity_id
@@ -109,7 +109,7 @@ class TestDesktopTracking:
         assert call_kwargs["action"] == "screenshot"
         assert (
             call_kwargs["screenshot_path"]
-            == "/tmp/screenshot.png"  # nosec B108 - test/controlled code uses tmpdir intentionally
+            == "/tmp/screenshot.png"  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
 
     @patch("integrations.desktop_tracking.track_desktop_activity")

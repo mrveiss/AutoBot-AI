@@ -17,6 +17,7 @@ from .boards import router as boards_router
 from .budget import cost_events_router, costs_by_model_router
 from .budget import router as budget_router
 from .companies import router as companies_router
+from .contacts import router as contacts_router
 from .context import router as context_router
 from .controls import router as controls_router
 from .costs import router as costs_router
@@ -49,6 +50,7 @@ router.include_router(budget_router)
 router.include_router(cost_events_router)
 router.include_router(costs_by_model_router)
 router.include_router(companies_router)
+router.include_router(contacts_router)
 router.include_router(agent_hires_router)
 router.include_router(goals_router)
 router.include_router(health_router)

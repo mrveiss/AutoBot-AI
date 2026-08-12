@@ -5,8 +5,26 @@
 # Composite action: Setup Python + install CI dependencies (GH#7086)
 #
 # Encapsulates the repeated "setup Python + pip bootstrap + install deps"
-# pattern shared across ci.yml, code-quality.yml, and other workflows.
-# Eliminates ~15 lines of duplicated YAML per job.
+# pattern, so the interpreter version, pip cache and dependency install live in
+# one place rather than a copy per workflow.
+#
+# #13517: this previously claimed to be "shared across ci.yml, code-quality.yml,
+# and other workflows" while having ZERO callers — neither of those files used
+# it, and nothing else did either. A description that names callers it does not
+# have is worse than none: it reads as load-bearing shared infrastructure, so
+# nobody checks, and the three expression-injection sites it carried (#13516)
+# sat unreviewed because the file looked established.
+#
+# Current callers (keep this list honest — it is the only thing standing between
+# this file and being orphaned again):
+#   api-wiring.yml            enforce-precommit.yml   migration-gate.yml
+#   auto-fix-formatting.yml   marker-tests.yml        startup-import-smoke.yml
+#   canonical-audit.yml       constraint-drift.yml    coverage.yml
+#
+# 12 workflows still call actions/setup-python directly. Converting them is
+# worthwhile but not required for this action to be legitimate — each needs its
+# own cache-dependency-path carried across, which is why it is going in
+# tranches rather than one sweep.
 #
 # Usage:
 #   - uses: ./.github/actions/setup-python-ci
@@ -31,6 +49,13 @@ inputs:
     description: 'Space-separated list of additional pip packages to install after requirements-file.'
     required: false
     default: ''
+  cache-dependency-path:
+    description: >-
+      Files whose hashes key pip's download cache. Most callers pin this to their
+      own requirements files; without it setup-python keys on a default glob, so
+      unrelated workflows share and evict each other's cache entries (#13517).
+    required: false
+    default: ''
 
 outputs:
   python-version:
@@ -45,16 +70,32 @@ runs:
   steps:
     - name: Set up Python ${{ inputs.python-version }}
       id: setup
-      uses: actions/setup-python@1d6f8c11a0e30b87a6af51d0d78681a80e55c65a  # v5
+      # #13517: was pinned to a v5 SHA while every workflow in this repo is
+      # already on v7. Adopting the action as-was would have silently
+      # downgraded setup-python across 21 jobs.
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
+    # #13516: every input reaches the shell through `env:`, never inline
+    # `${{ }}` in a `run:` body. Inline interpolation is textual substitution
+    # into the script *before* bash sees it, so a value containing shell
+    # metacharacters becomes code rather than data. The `env:` hop makes it a
+    # variable, which bash cannot re-interpret.
+    #
+    # These were unreachable while this action had no callers (#13517). They are
+    # fixed FIRST precisely so wiring it up cannot turn `pip install -r $X` into
+    # RCE on the runner.
     - name: Compute cache key
       id: cache-key
       shell: bash
+      env:
+        PY_VERSION: ${{ inputs.python-version }}
+        REQ_HASH: ${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
       run: |
-        echo "value=python-${{ inputs.python-version }}-pip-${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}" >> "$GITHUB_OUTPUT"
+        echo "value=python-${PY_VERSION}-pip-${REQ_HASH}" >> "$GITHUB_OUTPUT"
 
     - name: Upgrade pip, setuptools, wheel
       shell: bash
@@ -63,9 +104,16 @@ runs:
     - name: Install requirements file
       if: inputs.requirements-file != ''
       shell: bash
-      run: python -m pip install -r ${{ inputs.requirements-file }} --prefer-binary
+      env:
+        REQ_FILE: ${{ inputs.requirements-file }}
+      run: python -m pip install -r "$REQ_FILE" --prefer-binary
 
     - name: Install extra packages
       if: inputs.extra-packages != ''
       shell: bash
-      run: python -m pip install ${{ inputs.extra-packages }}
+      env:
+        EXTRA_PKGS: ${{ inputs.extra-packages }}
+      # Deliberately unquoted: this input is a space-separated package list and
+      # word-splitting is the intent. The `env:` hop still defeats expression
+      # injection — the value can no longer become shell syntax, only arguments.
+      run: python -m pip install $EXTRA_PKGS

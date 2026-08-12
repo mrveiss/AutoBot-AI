@@ -17,14 +17,26 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp.autobot_server import AutoBotMCPServer
+from autobot_shared.ssot_config import config
+from mcp.autobot_server import AutoBotMCPServer, _stdio_bearer_token
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-VALID_TOKEN = "dev:kb,memory,agents"
-KB_TOKEN = "dev:kb"
+# #13263: these tests configure their own secret rather than relying on a
+# shipped default. AUTOBOT_MCP_TOKEN now defaults to "" (unconfigured, fails
+# closed) because any non-empty default is itself a working credential.
+TEST_SECRET = "test-mcp-secret"
+VALID_TOKEN = f"{TEST_SECRET}:kb,memory,agents"
+KB_TOKEN = f"{TEST_SECRET}:kb"
+
+
+@pytest.fixture(autouse=True)
+def _configure_mcp_secret():
+    """Give every test in this module a configured secret to authenticate against."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET):
+        yield
 
 
 def make_server() -> AutoBotMCPServer:
@@ -147,6 +159,37 @@ async def test_missing_token_returns_401():
 async def test_wrong_secret_returns_401():
     server = make_server()
     resp = await server.handle_request("tools/list", {}, "wrongsecret:kb,memory,agents")
+    assert "error" in resp
+    assert resp["error"]["code"] == -32001
+
+
+def test_empty_secret_rejected_with_configured_secret():
+    """#13263: ``":<scopes>"`` carries no secret and must never authenticate."""
+    assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+
+
+def test_empty_secret_rejected_when_configured_secret_is_blank():
+    """#13263: the check fails closed even when AUTOBOT_MCP_TOKEN is blank.
+
+    Before the fix ``expected`` was ``""`` by default, so ``secret_part != expected``
+    was False for a token beginning with ``:`` — the caller was authenticated and
+    granted exactly the scopes it named for itself.
+    """
+    with patch.object(config.misc, "mcp_token", ""):
+        assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+        assert AutoBotMCPServer._validate_token(":") is None
+        assert AutoBotMCPServer._validate_token("dev:kb,memory,agents") is None
+
+
+@pytest.mark.asyncio
+async def test_empty_secret_token_returns_401_end_to_end():
+    """#13263: the empty-secret token is rejected through the full request path."""
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", ""),
+        patch.object(AutoBotMCPServer, "_validate_redis_token", new=AsyncMock(return_value=None)),
+    ):
+        resp = await server.handle_request("tools/list", {}, ":kb,memory,agents")
     assert "error" in resp
     assert resp["error"]["code"] == -32001
 
@@ -287,3 +330,243 @@ async def test_legacy_token_still_works_without_run_jwt():
     assert "result" in resp
     tool_names = {t["name"] for t in resp["result"]["tools"]}
     assert "kb.search" in tool_names
+
+
+# ---------------------------------------------------------------------------
+# #13266: AUTOBOT_MCP_TOKEN has exactly one meaning (the secret segment)
+# ---------------------------------------------------------------------------
+
+
+def test_stdio_bearer_is_composed_from_secret_plus_scopes():
+    """#13266: stdio composes "<secret>:<scopes>" instead of reusing the secret as a bearer."""
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory"),
+    ):
+        assert _stdio_bearer_token() == f"{TEST_SECRET}:kb,memory"
+
+
+@pytest.mark.asyncio
+async def test_stdio_bearer_authenticates_end_to_end():
+    """#13266: the token stdio presents is accepted by the validator it is checked against.
+
+    Before the fix no value of AUTOBOT_MCP_TOKEN satisfied both readings, so
+    every stdio request was rejected with -32001 in every configuration.
+    """
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory,agents"),
+    ):
+        resp = await server.handle_request("tools/list", {}, _stdio_bearer_token(), req_id=7, client_ip="stdio")
+
+    assert "error" not in resp, resp
+    assert {t["name"] for t in resp["result"]["tools"]} & {"kb.search"}
+
+
+def test_stdio_refuses_to_run_without_a_configured_secret():
+    """#13266/#13263: no default credential — an unset secret is fatal, not permissive."""
+    with patch.object(config.misc, "mcp_token", ""):
+        with pytest.raises(RuntimeError, match="AUTOBOT_MCP_TOKEN"):
+            _stdio_bearer_token()
+
+
+def test_stdio_refuses_to_run_with_no_scopes():
+    """An empty scope list would compose a token that grants nothing; fail loudly instead."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET), patch.object(config.misc, "mcp_stdio_scopes", " , "):
+        with pytest.raises(RuntimeError, match="scopes"):
+            _stdio_bearer_token()
+
+
+def test_stdio_rejects_the_overloaded_full_token_form():
+    """#13266: a '<secret>:<scopes>' value in AUTOBOT_MCP_TOKEN is named, not silently broken."""
+    with patch.object(config.misc, "mcp_token", f"{TEST_SECRET}:kb,memory,agents"):
+        with pytest.raises(RuntimeError, match="SECRET SEGMENT ONLY"):
+            _stdio_bearer_token()
+
+
+# ---------------------------------------------------------------------------
+# memory.path — #13474 exposes the shortest-path traversal as an MCP tool
+# ---------------------------------------------------------------------------
+
+
+def test_memory_path_is_declared_under_the_memory_scope():
+    """The tool must exist in the manifest, or no MCP client can ever call it."""
+    server = make_server()
+    assert "memory.path" in server.TOOLS
+    schema = server.TOOLS["memory.path"]["inputSchema"]
+    assert schema["required"] == ["from_entity", "to_entity"]
+    assert schema["properties"]["direction"]["enum"] == ["outgoing", "incoming", "both"]
+
+
+@pytest.mark.asyncio
+async def test_memory_path_hidden_from_kb_only_token():
+    server = make_server()
+    resp = await server.handle_request("tools/list", {}, KB_TOKEN, req_id=1)
+    assert "memory.path" not in {t["name"] for t in resp["result"]["tools"]}
+
+
+@pytest.mark.asyncio
+async def test_memory_path_delegates_to_find_path():
+    """No duplicated traversal: the tool calls AutoBotMemoryGraph.find_path (#13474)."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.find_path = AsyncMock(return_value={"found": True, "hops": 2, "path": []})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_path(
+            from_entity="Redis Config",
+            to_entity="Incident 7",
+            relation="CAUSED",
+        )
+
+    assert result["hops"] == 2
+    fake_graph.initialize.assert_awaited_once()
+    fake_graph.find_path.assert_awaited_once_with(
+        from_entity="Redis Config",
+        to_entity="Incident 7",
+        relation="CAUSED",
+        max_depth=6,
+        direction="both",
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_path_clamps_max_depth():
+    """An untrusted caller must not be able to request an unbounded traversal."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.find_path = AsyncMock(return_value={"found": False})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        await server._memory_path("A", "B", max_depth=9999)
+        assert fake_graph.find_path.await_args.kwargs["max_depth"] == 10
+
+        await server._memory_path("A", "B", max_depth=0)
+        assert fake_graph.find_path.await_args.kwargs["max_depth"] == 1
+
+
+@pytest.mark.asyncio
+async def test_memory_path_rejects_unknown_direction_without_traversing():
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_path("A", "B", direction="sideways")
+
+    assert result["error"] == "Invalid direction"
+    fake_graph.find_path.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_memory_path_dispatches_end_to_end():
+    """Handler name must match the tool name so _dispatch_tool resolves it."""
+    server = make_server()
+
+    with patch(
+        "mcp.autobot_server.AutoBotMCPServer._memory_path",
+        new=AsyncMock(return_value={"found": True, "hops": 1, "path": [{"relation": "CAUSED"}]}),
+    ):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.path", "arguments": {"from_entity": "A", "to_entity": "B"}},
+            VALID_TOKEN,
+        )
+
+    assert "result" in resp, resp
+    import json
+
+    content = json.loads(resp["result"]["content"][0]["text"])
+    assert content["found"] is True
+    assert content["hops"] == 1
+
+
+# ---------------------------------------------------------------------------
+# memory.* argument validation — #13762
+#
+# The REST surface bounds these strings with Pydantic; the MCP surface passed
+# them straight through to a RediSearch query that does no escaping.
+# ---------------------------------------------------------------------------
+
+
+_OVER_LONG = "x" * 5000
+
+
+@pytest.mark.asyncio
+async def test_over_long_entity_name_is_invalid_arguments_not_an_internal_error():
+    """#13762: JSON-RPC -32602, and the traversal never starts."""
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.path", "arguments": {"from_entity": _OVER_LONG, "to_entity": "B"}},
+            VALID_TOKEN,
+        )
+
+    assert resp["error"]["code"] == -32602, resp
+    fake_graph.find_path.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("memory.entity_lookup", {"name": _OVER_LONG}),
+        ("memory.timeline", {"entity": _OVER_LONG}),
+        ("memory.related", {"entity": _OVER_LONG}),
+        ("memory.verbatim_search", {"query": _OVER_LONG}),
+    ],
+)
+async def test_every_memory_tool_bounds_its_strings(tool, arguments):
+    """#13762: the bound is on the seam, not re-implemented per tool.
+
+    The message is asserted too, not just the code: these handlers already
+    returned -32602 for an over-long string by *accidentally* raising TypeError
+    deeper in the traversal, so the code alone does not distinguish "rejected at
+    the boundary" from "blew up halfway through".
+    """
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with (
+        patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph),
+        patch("memory.verbatim_store.VerbatimStore", return_value=AsyncMock()),
+    ):
+        resp = await server.handle_request("tools/call", {"name": tool, "arguments": arguments}, VALID_TOKEN)
+
+    assert resp["error"]["code"] == -32602, resp
+    assert "String should have at most" in resp["error"]["message"], resp
+    fake_graph.initialize.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_whitespace_only_entity_name_is_rejected():
+    """A name that is only whitespace is not a name — REST already refuses it."""
+    server = make_server()
+    fake_graph = AsyncMock()
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "memory.entity_lookup", "arguments": {"name": "   "}},
+            VALID_TOKEN,
+        )
+
+    assert resp["error"]["code"] == -32602, resp
+    fake_graph.get_entity.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_valid_arguments_still_reach_the_graph():
+    """The bound must not turn ordinary lookups into errors."""
+    server = make_server()
+    fake_graph = AsyncMock()
+    fake_graph.get_entity = AsyncMock(return_value={"id": "e1", "name": "Redis Config"})
+
+    with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=fake_graph):
+        result = await server._memory_entity_lookup("  Redis Config  ")
+
+    assert result["name"] == "Redis Config"
+    fake_graph.get_entity.assert_awaited_once_with(entity_name="Redis Config", include_relations=True)

@@ -13,7 +13,7 @@ Issue #424: Added periodic task for incremental man page updates.
 import asyncio
 import fnmatch
 import os
-import subprocess  # nosec B404 - used for internal script execution only
+import subprocess  # nosec B404  # used for internal script execution only
 import sys
 import time
 from pathlib import Path
@@ -85,7 +85,7 @@ def _run_indexing_subprocess() -> dict:
     dict.  On non-zero exit returns a 'failed' dict; on success returns a
     'success' dict with commands_indexed and total_facts.
     """
-    result = subprocess.run(  # nosec B603 - uses sys.executable with fixed internal script path
+    result = subprocess.run(  # nosec B603  # uses sys.executable with fixed internal script path
         [sys.executable, "scripts/utilities/index_all_man_pages.py"],
         capture_output=True,
         text=True,
@@ -690,6 +690,33 @@ def _resolve_cache_directories() -> list:
         PATH.DATA_DIR / "cache",
         PATH.TEMP_DIR,
     ]
+
+    # #13865: spilled tool-output artifacts (#13692). These are written in full,
+    # deduped per run only, and nothing else deletes them — without this entry
+    # the directory grows without bound for the life of the install. It is
+    # neither `cache` nor `temp`, so the sweep above missed it.
+    #
+    # Resolved through the writer's own helper, not `DATA_DIR / "..."`, so the
+    # sweep cannot clean an empty directory while the real root grows.
+    #
+    # `sweepable_spill_root` returns None for an operator-chosen root: this
+    # sweep recursively unlinks by mtime alone, and every other candidate is
+    # AutoBot-owned by construction. Only the default under DATA_DIR is swept.
+    #
+    # Swept at `knowledge_cache_ttl_days` (default 7, mtime-based). A run
+    # outliving that is not a real case, but dropping the TTL to hours would
+    # start deleting artifacts a live run can still re-read.
+    try:
+        from agent_loop.tool_output_spill import sweepable_spill_root
+
+        spill_root = sweepable_spill_root()
+        if spill_root is not None:
+            candidates.append(spill_root)
+    except Exception:  # pragma: no cover - the sweep must not depend on the agent loop
+        # Warned, not debugged: silence here restores the unbounded growth this
+        # entry exists to prevent.
+        logger.warning("tool-output spill root unavailable; skipping it in cleanup", exc_info=True)
+
     return [p for p in candidates if isinstance(p, Path) and p.exists()]
 
 

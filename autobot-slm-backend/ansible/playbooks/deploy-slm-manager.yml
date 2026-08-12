@@ -28,7 +28,7 @@
 #
 # When GitHub is unreachable from SLM, pass controller_repo_root to push
 # the local checkout to SLM before provisioning (#3604):
-#   ansible-playbook ... -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
+#   ansible-playbook ... -e "controller_repo_root=/path/to/AutoBot-AI"
 ---
 - name: Deploy SLM Manager
   hosts: slm_server

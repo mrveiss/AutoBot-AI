@@ -9,6 +9,12 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
@@ -16,7 +22,7 @@ while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
 done
 source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 
-BASE_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+BASE_DIR="${PROJECT_ROOT}"
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 KB_API="http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base/add_text"

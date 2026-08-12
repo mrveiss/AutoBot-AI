@@ -13,6 +13,7 @@ Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
 Extended with MCPWorkerMetricsRecorder for worker restart budget tracking (Issue #4109).
 Extended with VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics (Issue #7421).
 Extended with MobileDeviceMetricsRecorder for mobile device pairing metrics (GH#4463).
+Extended with TTSMetricsRecorder for TTS synthesis throughput metrics (Issue #12460).
 
 Package Structure:
 - base.py: Base recorder class with shared functionality
@@ -34,6 +35,9 @@ Package Structure:
 # Issue #10778: HTTP API request counter
 from .api_requests import ApiRequestsMetricsRecorder
 from .base import BaseMetricsRecorder
+
+# Issue #13765: cgroup memory-throttling pressure collector
+from .cgroup_memory import CgroupMemoryCollector
 
 # Phase 4 (#7590): Chat SSOT observability recorder
 from .chat import ChatMetricsRecorder
@@ -60,6 +64,9 @@ from .redis import RedisMetricsRecorder
 from .service_health import ServiceHealthMetricsRecorder
 from .system import SystemMetricsRecorder
 from .task import TaskMetricsRecorder
+
+# Issue #12460: TTS worker synthesis throughput (real-time factor)
+from .tts import TTSMetricsRecorder
 from .voice_realtime import VoiceRealtimeMetricsRecorder
 from .websocket import WebSocketMetricsRecorder
 from .workflow import WorkflowMetricsRecorder
@@ -69,6 +76,7 @@ __all__ = [
     # Issue #10778: HTTP API request counter
     "ApiRequestsMetricsRecorder",
     # Phase 4 (#7590): Chat SSOT observability
+    "CgroupMemoryCollector",
     "ChatMetricsRecorder",
     "WorkflowMetricsRecorder",
     "GitHubMetricsRecorder",
@@ -90,6 +98,8 @@ __all__ = [
     "MCPWorkerMetricsRecorder",
     # Issue #7421: Voice Realtime WebRTC session metrics
     "VoiceRealtimeMetricsRecorder",
+    # Issue #12460: TTS synthesis throughput metrics
+    "TTSMetricsRecorder",
     # GH#4463: Mobile device pairing and push notification metrics
     "MobileDeviceMetricsRecorder",
 ]

@@ -11,6 +11,7 @@ GET /api/capabilities endpoint is accessible and returns the expected structure.
 
 import pytest
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from fastapi.testclient import TestClient
 
 from api.self_capabilities import router
@@ -164,12 +165,19 @@ def test_self_capabilities_unique_paths_count(client: TestClient):
 
 
 def test_self_capabilities_endpoint_registration(app: FastAPI):
-    """Verify that the router was properly registered with the app."""
-    # Check that the app has the capabilities route
-    routes = [route for route in app.routes if "/capabilities" in route.path]
-    assert len(routes) > 0, "Expected /api/capabilities route to be registered"
+    """Verify that the router was properly registered with the app.
 
-    # Verify the route method
-    assert any(
-        "GET" in str(route.methods) for route in routes if "/capabilities" in route.path
-    ), "Expected GET method on /api/capabilities"
+    Read the route table through ``get_openapi()`` rather than walking
+    ``app.routes`` directly (#13551). From fastapi>=0.139 ``include_router()``
+    no longer flattens its routes onto ``app.routes`` — it leaves a lazy
+    ``_IncludedRouter`` wrapper with no ``.path``, so the old walk raised
+    ``AttributeError`` on the pinned fastapi and, once guarded with
+    ``hasattr``, would have silently found nothing instead. ``get_openapi()``
+    is FastAPI's own supported view of the same table and is exactly what the
+    router under test uses, so it stays correct across versions.
+    """
+    schema = get_openapi(title=app.title, version=app.version, description=app.description or "", routes=app.routes)
+    paths = {path: item for path, item in schema.get("paths", {}).items() if "/capabilities" in path}
+    assert paths, f"Expected /api/capabilities route to be registered; got {sorted(schema.get('paths', {}))}"
+
+    assert any("get" in item for item in paths.values()), f"Expected GET method on /api/capabilities; got {paths}"

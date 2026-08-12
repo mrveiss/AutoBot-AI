@@ -25,6 +25,10 @@ from unittest.mock import patch
 
 import pytest
 
+# #13702: create_connector derives the credential owner from the authenticated
+# caller; a direct call must supply one or it 401s, same as a real request.
+_TEST_USER = {"user_id": "admin-1"}
+
 import knowledge.connectors.confluence  # noqa: F401 — register confluence
 import knowledge.connectors.jira  # noqa: F401 — register jira
 import knowledge.connectors.slack  # noqa: F401 — register slack
@@ -170,7 +174,7 @@ async def _create_via_api(request: CreateConnectorRequest, http_client_patch_tar
         patch.object(mod, "_save_connector", _fake_save),
         patch(http_client_patch_target, return_value=fake_client),
     ):
-        result = await mod.create_connector(request)
+        result = await mod.create_connector(request, user=_TEST_USER)
     return result, saved["cfg"]
 
 

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
+from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
 from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
@@ -1546,7 +1546,7 @@ class ThresholdUpdate(BaseModel):
     category: str
     metric: str
     threshold: float
-    comparison: str = Field(..., pattern="^(gt|lt|eq)$")
+    comparison: str = Field(..., pattern=r"^(gt|lt|eq)\z")
 
 
 # ---------------------------------------------------------------------------
@@ -3006,8 +3006,8 @@ class ProcessThoughtRequest(BaseModel):
     """Request model for processing a thought in structured framework."""
 
     thought: str = Field(..., description="The content of the thought")
-    thought_number: int = Field(..., ge=1, description="Position in the thinking sequence")
-    total_thoughts: int = Field(..., ge=1, description="Expected total number of thoughts")
+    thought_number: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Position in the thinking sequence")
+    total_thoughts: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Expected total number of thoughts")
     next_thought_needed: bool = Field(..., description="Whether more thoughts will follow")
     stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
     tags: List[str] | None = Field(None, description="Keywords or categories for this thought")
@@ -3197,8 +3197,16 @@ class FileOperation(BaseModel):
 
     @field_validator("path")
     @classmethod
-    def validate_path(cls, v):
-        """Validate path to prevent directory traversal attacks."""
+    def reject_traversal_in_path(cls, v):
+        """Validate path to prevent directory traversal attacks.
+
+        #13518: renamed off ``validate_path``. That is the name of the canonical
+        containment helper in ``autobot_shared/security/path_validator.py``, so
+        a reviewer grepping it to audit path handling got this field validator
+        as a false hit. This is a shape check on a request field, not
+        containment — it never resolves anything and must not be mistaken for
+        the helper.
+        """
         if not v or ".." in v or v.startswith("/"):
             raise ValueError("Invalid path")
         return v
@@ -3503,9 +3511,9 @@ class SecretType(str, Enum):
     """Secret type enumeration."""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    PASSWORD = "password"  # nosec B105  # enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
-    TOKEN = "token"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    TOKEN = "token"  # nosec B105  # enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"

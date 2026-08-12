@@ -91,6 +91,102 @@ def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_sche
     _validate_config_against_schema(plugin_name, config, config_schema)
 
 
+def _module_is_importable(module_name: str) -> bool:
+    """True if ``module_name`` resolves to an importable module (#13966).
+
+    Takes a MODULE name, not a distribution name — `pillow` is installed but
+    imports as `PIL`, so the manifest must say `PIL`.
+
+    Note that for a dotted name this DOES import the parent packages, because
+    `find_spec("a.b")` must import `a` to find `b`. Third-party `__init__` code
+    therefore executes during a dependency check, and it can raise anything at
+    all — so every Exception means "not importable" rather than propagating out
+    of discovery, where it would produce the #14000 wedge.
+    """
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except Exception:  # noqa: BLE001 — a third-party __init__ may raise anything
+        return False
+
+
+def is_non_production_module(name: str) -> bool:
+    """True for package modules that must never be imported at plugin-load time.
+
+    Importing the package's own tests drags pytest into the production process
+    (~100ms), and where pytest is absent the import fails, is swallowed, and —
+    because failed imports are not cached — retries for every plugin on every
+    startup. A `conftest.py` would do the same; it has no trigger in this
+    package today, which is exactly why the rule is stated here where it can be
+    tested rather than inlined where it cannot (#13677 review).
+    """
+    return name.endswith("_test") or name.startswith("test_") or name == "conftest"
+
+
+def canonicalise_plugin_sdk() -> List[str]:
+    """Make ``plugin_sdk.*`` and ``autobot_shared.plugin_sdk.*`` the SAME modules (#13677).
+
+    `docs/developer/PLUGIN_SDK.md` tells plugin authors to write
+    ``from plugin_sdk.base import BasePlugin``, and every core plugin does. That
+    bare name resolves — autobot_shared is installed editable and exposes
+    ``plugin_sdk`` as a second top-level package over the same source — but it
+    resolves to a SECOND set of module objects, so
+    ``plugin_sdk.base.BasePlugin`` and ``autobot_shared.plugin_sdk.base.BasePlugin``
+    are different classes.
+
+    The loader checks ``issubclass(attr, BasePlugin)`` against the canonical one,
+    so a plugin subclassing the documented one fails the check and the loader
+    reports "No plugin class found in module" — for a class sitting right there
+    in the module it just imported. Six of seven core plugins failed this way,
+    and the message sends the reader hunting for the wrong thing.
+
+    Aliasing the parent alone is not enough: a later ``import plugin_sdk.base``
+    would load a fresh module object from the canonical path and reintroduce the
+    split. Every submodule is aliased too.
+
+    Returns the names bound, for logging.
+    """
+    import pkgutil
+    import sys
+
+    import autobot_shared.plugin_sdk as canonical
+
+    bound: List[str] = []
+    prefix = "autobot_shared.plugin_sdk."
+
+    # Submodules FIRST, parent last. Binding the parent first means any submodule
+    # imported during this loop that does `from plugin_sdk.X import ...` loads a
+    # fresh X from the canonical path AND sets it as an attribute on the parent —
+    # which is by then the canonical package. Repairing sys.modules afterwards
+    # does not repair that attribute, so `autobot_shared.plugin_sdk.registry`
+    # ended up holding a SECOND Registry class with its own singleton, undoing
+    # what #11636 fixed (#13677 review).
+    for _finder, name, _ispkg in pkgutil.iter_modules(canonical.__path__):
+        if is_non_production_module(name):
+            continue
+
+        alias = f"plugin_sdk.{name}"
+        full = f"{prefix}{name}"
+        module = sys.modules.get(full)
+        if module is None:
+            try:
+                module = importlib.import_module(full)
+            except Exception as exc:  # noqa: BLE001 - a broken submodule must not stop the rest
+                logger.debug("plugin_sdk canonicalisation skipped %s: %s", full, exc)
+                continue
+        if sys.modules.get(alias) is not module:
+            sys.modules[alias] = module
+            bound.append(alias)
+        # Re-assert the parent attribute: an import during this loop may have
+        # replaced it with a duplicate module object.
+        setattr(canonical, name, module)
+
+    if sys.modules.get("plugin_sdk") is not canonical:
+        sys.modules["plugin_sdk"] = canonical
+        bound.append("plugin_sdk")
+
+    return bound
+
+
 class PluginLoader:
     """
     Plugin discovery and loading system.
@@ -109,6 +205,8 @@ class PluginLoader:
         self.registry = PluginRegistry()
         # Maps plugin name -> directory containing its plugin.json (set during discover_plugins)
         self._manifest_dirs: Dict[str, Path] = {}
+        #: Plugin names claimed by more than one directory (#13677 review).
+        self.name_conflicts: List[str] = []
 
     def discover_plugins(self) -> List[PluginManifest]:
         """
@@ -118,6 +216,19 @@ class PluginLoader:
             List of plugin manifests found
         """
         manifests = []
+        # name -> resolved dir of the manifest we KEPT. Deduping here rather than
+        # in the caller is the point: `_manifest_dirs` decides which code runs and
+        # the manifest list decides what is registered, so they must agree. When
+        # they disagreed — manifest first-wins in the caller, directory last-wins
+        # here — two plugins sharing a name ran one's CODE under the other's
+        # MANIFEST, and the load report called it healthy (#13677 review).
+        self.name_conflicts = []
+        # Reset with them: never cleared, `_manifest_dirs` became a superset of
+        # the manifest list across repeated calls (the /plugins/discover admin
+        # endpoint calls this on a module-level singleton), re-establishing the
+        # very "these two must agree" invariant this method exists to enforce.
+        self._manifest_dirs = {}
+        kept_dirs: Dict[str, Path] = {}
 
         for plugin_dir in self.plugin_dirs:
             if not plugin_dir.exists():
@@ -131,8 +242,36 @@ class PluginLoader:
                         data = json.load(f)
 
                     manifest = PluginManifest(**data)
+                    here = manifest_file.parent.resolve()
+                    already = kept_dirs.get(manifest.name)
+                    if already is not None:
+                        if already == here:
+                            # The same plugin reached twice through overlapping
+                            # plugin_dirs — benign, and the common case: lifespan
+                            # passes the deployed root AND the dev fallback.
+                            logger.debug(
+                                "Plugin %s already discovered at %s — ignoring duplicate path",
+                                manifest.name,
+                                here,
+                            )
+                        else:
+                            # Genuinely different plugins claiming one name. First
+                            # wins, as before; what changes is that it is no longer
+                            # silent.
+                            self.name_conflicts.append(manifest.name)
+                            logger.warning(
+                                "Plugin name conflict: %r found at BOTH %s and %s — "
+                                "keeping the first; the second is ignored entirely, "
+                                "including its code",
+                                manifest.name,
+                                already,
+                                here,
+                            )
+                        continue
+
+                    kept_dirs[manifest.name] = here
                     # Remember where on disk this plugin lives (needed for file-path fallback)
-                    self._manifest_dirs[manifest.name] = manifest_file.parent
+                    self._manifest_dirs[manifest.name] = here
                     manifests.append(manifest)
                     logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 
@@ -274,18 +413,31 @@ class PluginLoader:
 
     def _check_dependencies(self, manifest: PluginManifest) -> List[str]:
         """
-        Check if plugin dependencies are loaded.
+        Check that required plugins are loaded and required modules importable.
+
+        #13966: `dependencies` was resolved against the plugin registry only, so
+        a pip distribution name could never be satisfied no matter what was
+        installed — `telemetry-prompt-middleware` declared `aiohttp` and was
+        structurally unloadable, failing with a message that reads like a
+        missing plugin. The manifest field is documented as "Required plugin
+        names", so the checker matched the schema; the author's intent had
+        nowhere to go. `python_dependencies` is that somewhere.
 
         Args:
             manifest: Plugin manifest
 
         Returns:
-            List of missing dependency names
+            List of missing dependency names, prefixed so the two kinds are
+            distinguishable in the error — the old message named a module and
+            left the operator looking for a plugin.
         """
         missing = []
         for dep in manifest.dependencies:
             if not self.registry.get_plugin(dep):
-                missing.append(dep)
+                missing.append(f"plugin:{dep}")
+        for module in manifest.python_dependencies:
+            if not _module_is_importable(module):
+                missing.append(f"python:{module}")
         return missing
 
     def _check_required_env(self, manifest: PluginManifest) -> Tuple[List[str], List[str]]:
@@ -353,6 +505,13 @@ class PluginLoader:
         Returns:
             Plugin class or None on failure
         """
+        # #13677: bind the documented `plugin_sdk.*` names to the canonical
+        # modules BEFORE the plugin imports them, so the class it subclasses is
+        # the one this loader will test against.
+        bound = canonicalise_plugin_sdk()
+        if bound:
+            logger.debug("Canonicalised plugin_sdk aliases: %s", bound)
+
         module = None
 
         try:
@@ -395,9 +554,15 @@ class PluginLoader:
         # Candidate file paths, most-canonical first.
         candidates: List[Path] = []
 
+        # The module filename is the entry point's LAST segment, not always
+        # "main". telemetry-prompt-middleware declares
+        # `...telemetry_prompt_middleware.plugin` and ships plugin.py, so a
+        # hardcoded main.py could never find it (#10294).
+        module_filename = f"{entry_point.rsplit('.', 1)[-1]}.py"
+
         # 1. Use the stored manifest directory directly (most reliable).
         if plugin_dir is not None:
-            candidates.append(plugin_dir / "main.py")
+            candidates.append(plugin_dir / module_filename)
 
         # 2. Derive the path from the entry_point by mapping underscores -> hyphens
         #    for each segment, then looking inside every configured plugin_dir.
@@ -408,7 +573,7 @@ class PluginLoader:
         # Drop the leading "plugins" segment and the trailing "main" module name.
         inner_parts = parts[1:-1] if len(parts) >= 3 else parts[:-1]
         hyphenated_parts = [p.replace("_", "-") for p in inner_parts]
-        rel_path = Path(*hyphenated_parts) / "main.py" if hyphenated_parts else None
+        rel_path = Path(*hyphenated_parts) / module_filename if hyphenated_parts else None
 
         for base_dir in self.plugin_dirs:
             if rel_path is not None:
@@ -417,11 +582,18 @@ class PluginLoader:
         for path in candidates:
             if not path.exists():
                 continue
+            synthesised: List[str] = []
             try:
                 spec = importlib.util.spec_from_file_location(entry_point, path)
                 if spec is None or spec.loader is None:
                     continue
                 module = importlib.util.module_from_spec(spec)
+                # #10294: locating the file was never the whole problem. The
+                # module's OWN imports reference `plugins.core_plugins.*`, and
+                # those parent packages exist in no sys.modules, so exec_module
+                # raised ModuleNotFoundError even though the right file had been
+                # found — which read as "the fallback failed to load the file".
+                synthesised = self._synthesise_parent_packages(entry_point, path)
                 # Register before exec so intra-plugin dataclasses/relative refs resolve.
                 sys.modules[entry_point] = module
                 spec.loader.exec_module(module)  # type: ignore[union-attr]
@@ -430,9 +602,57 @@ class PluginLoader:
             except Exception as exc:
                 logger.warning("File-path fallback failed for %r at %s: %s", entry_point, path, exc)
                 sys.modules.pop(entry_point, None)
+                for name in synthesised:
+                    sys.modules.pop(name, None)
                 continue
 
         return None
+
+    def _synthesise_parent_packages(self, entry_point: str, module_path: Path) -> List[str]:
+        """Make `plugins.core_plugins.<name>` importable for the plugin's own imports.
+
+        The entry point is a dotted path whose packages do not exist on disk
+        under those names — `core_plugins` is the directory `core-plugins`, and
+        neither carries an ``__init__.py``. A plugin that imports its own
+        siblings by absolute path therefore fails at ``exec_module`` even when
+        the loader has located exactly the right file (#10294).
+
+        Each parent gets a namespace module whose ``__path__`` points at the
+        matching real directory, walked up from the module file so the hyphen /
+        underscore mapping never has to be guessed.
+
+        Returns the names created, so a failed exec can withdraw them rather
+        than leave half a package tree behind for the next import to trip on.
+        """
+        import sys
+
+        parents = entry_point.split(".")[:-1]
+        if not parents:
+            return []
+
+        # Walk up from the module's own directory: the innermost package is the
+        # plugin dir, its parent is core-plugins, and so on.
+        directories: List[Path] = []
+        current = module_path.parent
+        for _ in parents:
+            directories.append(current)
+            current = current.parent
+        directories.reverse()
+
+        created: List[str] = []
+        for depth, _part in enumerate(parents):
+            name = ".".join(parents[: depth + 1])
+            if name in sys.modules:
+                continue
+            package = ModuleType(name)
+            package.__path__ = [str(directories[depth])]  # type: ignore[attr-defined]
+            package.__package__ = name
+            sys.modules[name] = package
+            created.append(name)
+
+        if created:
+            logger.debug("Synthesised namespace packages for %s: %s", entry_point, created)
+        return created
 
     def get_loaded_plugins(self) -> Dict[str, BasePlugin]:
         """Get all loaded plugins."""

@@ -50,6 +50,11 @@ WantedBy=multi-user.target
 EOF
 
 # Update noVNC service
+# #13076: /opt/novnc, matching autobot-slm-backend/ansible/roles/vnc/defaults/
+# main.yml novnc_path — NOT the distro /usr/share/novnc, which roles/vnc
+# removes (#13069) and which otherwise serves a stale pre-VeNCrypt client
+# (#13060). This script does not install noVNC itself; run the vnc role (or
+# an equivalent pinned install) first so /opt/novnc exists.
 cat > /etc/systemd/system/novnc.service << 'EOF'
 [Unit]
 Description=noVNC Web Interface
@@ -60,8 +65,8 @@ Requires=x11vnc.service
 Type=simple
 User=kali
 Group=kali
-WorkingDirectory=/usr/share/novnc
-ExecStart=/usr/bin/websockify --web /usr/share/novnc \
+WorkingDirectory=/opt/novnc
+ExecStart=/usr/bin/websockify --web /opt/novnc \
     --cert=/etc/autobot/certs/server-cert.pem \
     --key=/etc/autobot/certs/server-key.pem \
     --ssl-only \

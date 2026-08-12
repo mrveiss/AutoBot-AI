@@ -96,6 +96,18 @@ finally:
 
 
 @pytest.fixture(autouse=True)
+def _clean_deletion_preview():
+    """Default every test to "the resolve would delete nothing" (#13851).
+
+    The resolve paths now dry-run rsync first; unpatched that is a real
+    subprocess in a unit test (#13312 guard). The refusal behaviour itself is
+    covered by tests/api/test_resolve_deletion_guard_13851.py.
+    """
+    with patch.object(_CS, "_preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _pin_private_code_sync():
     """Resolve patch("api.code_sync.…") / in-test imports to the private module."""
     saved = {

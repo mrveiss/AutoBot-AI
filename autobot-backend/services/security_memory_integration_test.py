@@ -112,10 +112,13 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(call_args[1]["metadata"]["port"], 80)
             self.assertEqual(call_args[1]["metadata"]["type"], "service")
 
+            # The security-layer "runs" type is mapped onto the base graph's
+            # RELATION_TYPES vocabulary before it reaches create_relation —
+            # AutoBotMemoryGraph rejects anything outside that set.
             self.mock_memory_graph.create_relation.assert_called_once_with(
                 from_entity="Host: 192.168.1.10",
                 to_entity="Service: 192.168.1.10:80/tcp (http)",
-                relation_type="runs",
+                relation_type="contains",
                 strength=1.0,
             )
 
@@ -150,6 +153,12 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(call_args[1]["metadata"]["type"], "vulnerability")
 
             self.assertEqual(self.mock_memory_graph.create_relation.call_count, 2)
+            # Both relations must reach the graph under a type it accepts.
+            # "relates_to" is not in autobot_memory_graph RELATION_TYPES, so
+            # emitting it made create_relation raise and silently drop every
+            # vulnerability edge.
+            for call in self.mock_memory_graph.create_relation.call_args_list:
+                self.assertEqual(call.kwargs["relation_type"], "related_to")
             mock_index.assert_called_once()
             self.assertIn("CVE-2024-1234", result["name"])
 
@@ -176,10 +185,10 @@ class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
             await self.integration.create_host_entity(assessment_id="test-001", ip="10.0.0.1", status="up")
 
             mock_index.assert_called_once()
-            call_args = mock_index.call_args
-            self.assertIn("host_test-001_10.0.0.1", call_args[0][0])
-            self.assertIn("Host 10.0.0.1", call_args[0][1])
-            self.assertEqual(call_args[0][2]["type"], "host")
+            call_kwargs = mock_index.call_args.kwargs
+            self.assertIn("host_test-001_10.0.0.1", call_kwargs["finding_id"])
+            self.assertIn("Host 10.0.0.1", call_kwargs["text"])
+            self.assertEqual(call_kwargs["metadata"]["type"], "host")
 
     async def test_chromadb_failure_doesnt_break_flow(self) -> None:
         """Test ChromaDB errors are handled gracefully."""

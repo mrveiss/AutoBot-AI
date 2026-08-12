@@ -65,7 +65,7 @@ def _load_playbook_executor():
 
 def test_written_file_is_0600_and_round_trips(tmp_path):
     ib = _load_inventory_builder()
-    vars_in = {"tts_hf_token": "hf_dummy_value", "plain": "x"}  # nosec B106 - test fixture, not a credential
+    vars_in = {"tts_hf_token": "hf_dummy_value", "plain": "x"}  # nosec B106  # test fixture, not a credential
     path = ib.write_temp_extra_vars(vars_in, uid_tmp_dir=str(tmp_path))
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
@@ -95,10 +95,10 @@ def test_unique_file_per_call(tmp_path):
 def _build_command(extra_vars_file):
     pe = _load_playbook_executor()
     executor = pe.PlaybookExecutor.__new__(pe.PlaybookExecutor)  # skip __init__ (env probing)
-    executor.inventory_path = Path("/tmp/inv.yml")  # nosec B108 - test fixture path
+    executor.inventory_path = Path("/tmp/inv.yml")  # nosec B108  # test fixture path
     executor._find_ansible_playbook = lambda: "ansible-playbook"
     return executor._build_ansible_command(
-        Path("/tmp/play.yml"),  # nosec B108 - test fixture path
+        Path("/tmp/play.yml"),  # nosec B108  # test fixture path
         limit=["node-1"],
         tags=None,
         extra_vars_file=extra_vars_file,
@@ -107,13 +107,13 @@ def _build_command(extra_vars_file):
 
 
 def test_command_uses_at_file_reference():
-    cmd = _build_command(Path("/tmp/evars.json"))  # nosec B108 - test fixture path
+    cmd = _build_command(Path("/tmp/evars.json"))  # nosec B108  # test fixture path
     assert "-e" in cmd
     assert "@/tmp/evars.json" in cmd
 
 
 def test_no_key_value_pairs_in_argv():
-    cmd = _build_command(Path("/tmp/evars.json"))  # nosec B108 - test fixture path
+    cmd = _build_command(Path("/tmp/evars.json"))  # nosec B108  # test fixture path
     joined = " ".join(cmd)
     assert "=" not in joined.replace("@/tmp/evars.json", ""), f"argv leaks key=value: {cmd}"
 

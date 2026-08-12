@@ -15,6 +15,7 @@ Covers:
 - Performance: <5ms p99 on 1KB message (benchmarked via timeit)
 """
 
+import time
 import timeit
 import unittest
 
@@ -346,7 +347,15 @@ class TestIntegration(unittest.TestCase):
 
 class TestPerformance(unittest.TestCase):
     def test_pipeline_under_5ms_p99(self):
-        """Pipeline overhead on 1KB payload must be <5ms p99 (measured over 200 runs)."""
+        """Pipeline overhead on 1KB payload must be <5ms p99 (measured over 200 runs).
+
+        Issue #13162: measured with ``time.thread_time`` (CPU time consumed by
+        this thread) rather than wall clock.  ``scrub()`` is pure regex work
+        with no I/O, so its cost is exactly its CPU time; wall clock also
+        charges the pipeline for every unrelated process the machine happens
+        to be running, which made the budget report false regressions when the
+        suite ran alongside other tests.  The 5ms budget is unchanged.
+        """
         payload = "Task update: " + "x" * 1000  # ~1KB, no PII matches
         pipeline = PIIPipeline()
 
@@ -357,9 +366,9 @@ class TestPerformance(unittest.TestCase):
         for _ in range(10):
             _run()
 
-        times = timeit.repeat(_run, number=1, repeat=200)
+        times = timeit.repeat(_run, number=1, repeat=200, timer=time.thread_time)
         p99_ms = sorted(times)[197] * 1000  # 99th percentile in ms
-        self.assertLess(p99_ms, 5.0, f"p99 latency {p99_ms:.2f}ms exceeds 5ms budget")
+        self.assertLess(p99_ms, 5.0, f"p99 CPU latency {p99_ms:.2f}ms exceeds 5ms budget")
 
 
 if __name__ == "__main__":

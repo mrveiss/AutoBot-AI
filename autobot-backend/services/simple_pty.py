@@ -9,11 +9,11 @@ Simple synchronous PTY implementation that works reliably
 import os
 import pty
 import queue
-import select
 import signal
 import subprocess
 import threading
 
+from autobot_shared.fd_poll import poll_readable, seconds_to_poll_timeout_ms
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -22,6 +22,10 @@ logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
+
+# Issue #13219: same 10 ms wait the read loop always used, expressed in the
+# milliseconds poll() takes instead of the seconds select() took.
+_READ_POLL_TIMEOUT_MS = seconds_to_poll_timeout_ms(TimingConstants.POLL_INTERVAL)
 
 
 def _read_pty_data(fd: int) -> tuple:
@@ -133,7 +137,7 @@ class SimplePTY:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
         self.process = (
-            subprocess.Popen(  # nosec B603 - bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
+            subprocess.Popen(  # nosec B603  # bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
                 bash_cmd,
                 stdin=slave_fd,
                 stdout=slave_fd,
@@ -190,10 +194,10 @@ class SimplePTY:
                 if fd is None:
                     break
 
-                # Check for data with select (0.01s = 10ms for responsive input)
-                ready, _, _ = select.select([fd], [], [], 0.01)
-
-                if ready:
+                # Check for data with poll (10ms for responsive input). poll()
+                # has no FD_SETSIZE ceiling, so a PTY fd >= 1024 still works
+                # where select() raised "filedescriptor out of range" (#13219).
+                if poll_readable(fd, _READ_POLL_TIMEOUT_MS):
                     event_type, content, should_break = _read_pty_data(fd)
                     if event_type in _PTY_OUTPUT_EVENTS:
                         self.output_queue.put((event_type, content))

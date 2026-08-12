@@ -1,0 +1,49 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The service files that carry code changes: the worker env and the VNC /
+# Playwright systemd units. Split out of main.yml (#13460) so the builtin updater
+# can deliver unit changes without re-running provisioning (apt, Playwright
+# browser downloads, VNC password setup).
+#
+# The VNC tasks keep their original `install_vnc` / `node_roles` guards: a node
+# that does not run VNC must not acquire a VNC unit just because it was updated.
+#
+# Handlers (`reload systemd`, `restart vnc`, `restart playwright`) live in the
+# role, so this file is only usable via include_role/import_role.
+
+- name: "Browser | Deploy /etc/autobot/autobot-browser-worker.env"
+  ansible.builtin.template:
+    src: autobot-browser-worker.env.j2
+    dest: /etc/autobot/autobot-browser-worker.env
+    mode: "0640"
+    owner: root
+    group: "{{ browser_group }}"
+  tags: ['browser', 'config']
+
+- name: "Browser | Create VNC systemd service"
+  ansible.builtin.template:
+    src: vnc.service.j2
+    dest: /etc/systemd/system/autobot-vnc.service
+    mode: '0644'
+  become: true
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
+  notify:
+    - reload systemd
+    - restart vnc
+  tags: ['browser', 'systemd', 'vnc']
+
+- name: "Browser | Create Playwright systemd service"
+  ansible.builtin.template:
+    src: playwright.service.j2
+    dest: /etc/systemd/system/autobot-playwright.service
+    mode: '0644'
+  become: true
+  notify:
+    - reload systemd
+    - restart playwright
+  tags: ['browser', 'systemd']

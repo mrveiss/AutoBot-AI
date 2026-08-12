@@ -51,7 +51,7 @@ class VulnerabilityType(Enum):
     TEMPLATE_INJECTION = "template_injection"
 
     # Sensitive Data Exposure (OWASP A02:2021)
-    # nosec B105 - These are vulnerability TYPE NAMES, not actual secrets
+    # nosec B105  # These are vulnerability TYPE NAMES, not actual secrets
     HARDCODED_SECRET = "hardcoded_secret"  # nosec B105
     HARDCODED_PASSWORD = "hardcoded_password"  # nosec B105
     HARDCODED_API_KEY = "hardcoded_api_key"  # nosec B105
@@ -94,7 +94,7 @@ class VulnerabilityType(Enum):
     INTEGER_OVERFLOW_RISK = "integer_overflow_risk"
 
     # Authentication Issues
-    # nosec B105 - These are vulnerability TYPE NAMES, not actual secrets
+    # nosec B105  # These are vulnerability TYPE NAMES, not actual secrets
     WEAK_PASSWORD_POLICY = "weak_password_policy"  # nosec B105
     MISSING_RATE_LIMITING = "missing_rate_limiting"
     SESSION_FIXATION_RISK = "session_fixation_risk"

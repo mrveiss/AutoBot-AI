@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, SENSITIVE_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
@@ -53,6 +53,18 @@ CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES"
 # (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
 # tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
 # Approval-wait polling knobs (mirrors terminal-command approval loop).
+#
+# #13481: this is how long THIS TURN waits, not how long the approval lives.
+# The distinction was invisible before and is the whole of #13216's confusion:
+# the approval is persisted, and approving after this budget still executes the
+# command. Exhausting it means "stop holding the request/generator open", never
+# "the command failed" and never "the approval expired".
+#
+# There is deliberately NO approval-expiry knob here. The reported expectation —
+# that approval should not expire — is the behaviour, so nothing discards a
+# pending approval on a timer. A real expiry policy, if ever wanted, belongs
+# next to the approval's own storage with its own message ("this approval
+# expired, re-request it"), not as a side effect of how long a coroutine lives.
 CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
 CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
@@ -125,6 +137,53 @@ EXECUTE_COMMAND_SCHEMA: dict = {
     },
     "required": ["command"],
 }
+
+READ_SPILLED_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "anchor": {
+            "type": "string",
+            "description": (
+                "The anchor from a spilled tool result's note, e.g. " "'autobot:spill:<run>:<tool>:<digest>'."
+            ),
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Character offset to read from. Page forward while the reply reports has_more.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": ("Characters to return. Capped server-side — a window, not the whole artifact."),
+        },
+    },
+    "required": ["anchor"],
+}
+
+#: What to tell the model when an anchor does not resolve, by reason.
+#: Module-level rather than rebuilt per call.
+_SPILL_MISS_ADVICE: dict[str, str] = {
+    # Bad offset/limit — the model can fix this itself, so mirror the
+    # self-correction hint the schema gate gives.
+    "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
+    # No run is bound to this context: an anchor cannot resolve here at all,
+    # and a different anchor would fare no better.
+    "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
+    # The artifact is genuinely gone or never existed.
+    "not_found": "Do not retry this anchor.",
+}
+
+#: The default, for a miss whose cause the reader could not determine.
+#:
+#: `read_spilled` swallows every exception into `None`, and a cross-run refusal
+#: returns `None` too, so an unknown reason covers a truncated artifact mid-write
+#: (spill_if_oversized writes with a bare write_text, no temp+rename, to a
+#: content-addressed path a re-spill rewrites), a transient OSError, a
+#: PermissionError, and a run-scope refusal. In every one of those the output is
+#: still on disk. Telling the model "do not retry" there is a permanent verdict
+#: on a cause nobody established — the shape this whole issue is about.
+_SPILL_MISS_UNKNOWN_ADVICE = (
+    "The read did not report why it failed. This may be transient — retrying once is reasonable."
+)
 
 WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
@@ -482,6 +541,7 @@ _INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
 # is unchanged.
 _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "execute_command": EXECUTE_COMMAND_SCHEMA,
+    "read_spilled_output": READ_SPILLED_OUTPUT_SCHEMA,
     "web_search": WEB_SEARCH_SCHEMA,
     "navigate": NAVIGATE_SCHEMA,
     "click": CLICK_SCHEMA,
@@ -615,7 +675,18 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     BROWSER_TOOL_NAMES
     | WEB_RESEARCH_TOOL_NAMES
     | LIVE_PAGE_EXTRACT_TOOL_NAMES
-    | frozenset({"web_search", "execute_command"})
+    # #13919: read_spilled_output is dispatchable unconditionally, so a run that
+    # spilled before AUTOBOT_TOOL_OUTPUT_SPILL was turned off can still resolve
+    # its anchors — `read_spilled_window` does not consult the flag.
+    #
+    # This DOES leak into prompt content, contrary to an earlier version of this
+    # comment: `_build_unknown_tool_error` derives `known_tools` from this set,
+    # so a model that fumbles any tool name is told this one exists even with the
+    # feature off. Accepted deliberately — the alternative is a flag-dependent
+    # membership set, which would make routing depend on import-time env state
+    # and is a worse trade than one extra name in an error hint. With the flag
+    # off nothing spills, so following the hint reports not-found.
+    | frozenset({"web_search", "execute_command", "read_spilled_output"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -797,6 +868,39 @@ def _match_repairable_error(combined: str, command: str, error: str) -> Repairab
     return None
 
 
+def _record_failed_step(
+    execution_results: list[dict[str, Any]] | None,
+    command: str,
+    result: dict[str, Any],
+    error: str,
+    stderr: str,
+) -> None:
+    """Record a failed command as a step the model can read (#14141).
+
+    Without this a failing command was **absent** from the continuation prompt
+    entirely: `_handle_command_error` never touched `execution_results`, and the
+    `additional_response_parts` entry it does append is created locally in
+    `execute_tool_calls` and never yielded. The model saw the steps before the
+    failure, then nothing — no status, no output, no sign a command had run.
+
+    `stdout` matters most here. The motivating case is a test runner writing its
+    report to stdout and exiting non-zero, so the report is the one thing worth
+    carrying and was the one thing being dropped.
+    """
+    if execution_results is None:
+        return
+    execution_results.append(
+        {
+            "command": command,
+            "stdout": result.get("stdout", ""),
+            "stderr": stderr,
+            "return_code": result.get("return_code", 1),
+            "status": "error",
+            "error": error,
+        }
+    )
+
+
 def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
     """Create standardized execution result record (Issue #315: extracted).
 
@@ -809,15 +913,40 @@ def _create_execution_result(command: str, host: str, result: dict[str, Any], ap
     Returns:
         Standardized execution result dict for continuation loop
     """
+    # #14141: `status` is derived from the exit code, not hardcoded. It used to
+    # be the literal "success" regardless of `return_code`, and this dict feeds
+    # `_format_execution_step`, which prints `- Status: {status}` straight into
+    # the model's continuation prompt. So a command that failed was reported to
+    # the model as having succeeded, with stderr as the only hint — and a test
+    # runner writes its failure report to *stdout*, so the model saw a
+    # full-looking report under "success" and no signal that the suite failed.
+    return_code = result.get("return_code", 0)
     return {
         "command": command,
         "host": host,
         "stdout": result.get("stdout", ""),
         "stderr": result.get("stderr", ""),
-        "return_code": result.get("return_code", 0),
-        "status": "success",
+        "return_code": return_code,
+        "status": _status_for_return_code(return_code),
         "approved": approved,
     }
+
+
+def _status_for_return_code(return_code: Any) -> str:
+    """Map an exit code to the status the model is shown (#14141).
+
+    Only an exit code that is *known* to be 0 reports success. `None` — the
+    shape an execution path produces when it never captured one — and anything
+    unparseable both report ``error``, because "we do not know whether that
+    worked" is far closer to failure than to success as far as the next turn is
+    concerned. Reporting an unknown outcome as success is the defect this
+    function exists to remove, and defaulting it would reintroduce it.
+    """
+    try:
+        return "success" if int(return_code) == 0 else "error"
+    except (TypeError, ValueError):
+        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
+        return "error"
 
 
 def _build_mcp_approval_message(
@@ -1453,25 +1582,55 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        while elapsed_time < max_wait_time:
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-            poll_count += 1
+        # #13480: claim interpretation for this turn. The approve path skips its
+        # own interpretation while this is set, so the same command is not
+        # interpreted twice — two LLM calls, two persisted interpretations.
+        await self._claim_interpretation(terminal_session_id, True)
 
-            try:
-                session_info = await self.terminal_tool.get_session_info(terminal_session_id)
-                self._log_polling_status(poll_count, session_info, elapsed_time)
+        try:
+            while elapsed_time < max_wait_time:
+                await asyncio.sleep(poll_interval)
+                elapsed_time += poll_interval
+                poll_count += 1
 
-                result_data, status_msg, should_break = self._check_approval_completion(
-                    session_info, command, elapsed_time, max_wait_time
-                )
-                if should_break:
-                    yield (result_data, status_msg)
-                    return
-            except Exception as check_error:
-                logger.error("Error checking approval status: %s", check_error)
+                try:
+                    session_info = await self.terminal_tool.get_session_info(terminal_session_id)
+                    self._log_polling_status(poll_count, session_info, elapsed_time)
 
-        yield (None, None)
+                    result_data, status_msg, should_break = self._check_approval_completion(
+                        session_info, command, elapsed_time, max_wait_time
+                    )
+                    if should_break:
+                        yield (result_data, status_msg)
+                        return
+                except Exception as check_error:
+                    logger.error("Error checking approval status: %s", check_error)
+
+            yield (None, None)
+        finally:
+            # Load-bearing, and the reason this is a `finally` rather than a line
+            # after the loop: the claim MUST be released on every exit — timeout,
+            # decision, an exception, or the consumer closing this generator
+            # early (GeneratorExit runs finally). A leaked claim means the approve
+            # path keeps skipping while no turn is listening, so a late approval
+            # produces no interpretation at all — silently re-breaking #13479 in
+            # exactly the case it was filed for.
+            await self._claim_interpretation(terminal_session_id, False)
+
+    async def _claim_interpretation(self, terminal_session_id: str, live: bool) -> None:
+        """Mark/unmark this turn as the interpreter for a pending approval (#13480).
+
+        Never raises: failing to claim only costs a duplicate interpretation,
+        and failing to release is already guarded by the approve path treating an
+        absent marker as "interpret". Neither is worth failing the turn over.
+        """
+        service = getattr(self.terminal_tool, "agent_terminal_service", None)
+        if service is None or not hasattr(service, "set_live_turn_interpreting"):
+            return
+        try:
+            await service.set_live_turn_interpreting(terminal_session_id, live)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not %s interpretation claim: %s", "set" if live else "release", exc)
 
     async def _handle_pending_approval(
         self,
@@ -1607,13 +1766,27 @@ class ToolHandlerMixin:
     ) -> tuple[WorkflowMessage, str]:
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
-        Handle approval denial or timeout.
+        Handle approval denial, or this turn giving up on waiting for a decision.
+
+        #13481: those two are NOT the same outcome and used to be reported
+        identically, as ``type="error"``. A denial is a real, final failure. The
+        no-decision case is not a failure at all — the approval is still pending
+        and still executable:
+
+        * the poll timing out does not clear it (``clear_pending_and_resume()``
+          runs only on the approve/deny paths);
+        * ``AgentTerminalService._approve_command_internal`` executes on approve
+          with no coroutine waiting, so approving later still runs the command.
+
+        So ``Approval timeout for command: ls -la`` claimed a command had failed
+        when it had neither failed nor run, and the user could still make it run.
+        That wording is what made the reported behaviour unreadable.
 
         Returns:
             Tuple of (WorkflowMessage, additional_text)
         """
         if approval_result:
-            error = approval_result.get("error", "Command was denied or failed")
+            error = approval_result.get("error") or "Command was denied or failed"
             return (
                 WorkflowMessage(
                     type="error",
@@ -1622,15 +1795,27 @@ class ToolHandlerMixin:
                 ),
                 f"\n\n❌ {error}",
             )
-        else:
-            return (
-                WorkflowMessage(
-                    type="error",
-                    content=f"Approval timeout for command: {command}",
-                    metadata={"command": command, "timeout": True},
-                ),
-                f"\n\n⏱️ Approval timeout for command: {command}",
-            )
+
+        still_pending = (
+            f"Still waiting on your approval for: `{command}`\n"
+            "This turn stopped waiting, but the request is still open — "
+            "approving it will run the command."
+        )
+        return (
+            WorkflowMessage(
+                type="response",
+                content=still_pending,
+                metadata={
+                    "command": command,
+                    "message_type": "approval_still_pending",
+                    # #13481: kept so existing consumers keying on it keep working,
+                    # but it now means "this turn stopped waiting", not "expired".
+                    "timeout": True,
+                    "approval_still_actionable": True,
+                },
+            ),
+            f"\n\n⏳ {still_pending}",
+        )
 
     async def _handle_approval_workflow(
         self,
@@ -1840,7 +2025,9 @@ class ToolHandlerMixin:
             ):
                 yield msg
         elif status == "error":
-            async for msg in self._handle_command_error(command, result, additional_response_parts, session_id):
+            async for msg in self._handle_command_error(
+                command, result, additional_response_parts, session_id, execution_results
+            ):
                 yield msg
 
     async def _process_single_command(
@@ -1917,6 +2104,7 @@ class ToolHandlerMixin:
         result: dict[str, Any],
         additional_response_parts: list,
         session_id: str = "",
+        execution_results: list[dict[str, Any]] | None = None,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -1934,8 +2122,14 @@ class ToolHandlerMixin:
         """
         from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
 
-        error = result.get("error", "Unknown error")
+        # #14148: `.get(key, default)` does NOT apply the default when the key
+        # exists holding None — and `terminal_tool._format_execution_result`
+        # constructs exactly that. `or` coalesces both shapes.
+        error = result.get("error") or "Unknown error"
         stderr = result.get("stderr", "")
+
+        _record_failed_step(execution_results, command, result, error, stderr)
+
         repairable_error = self._classify_command_error(command, error, stderr)
 
         if repairable_error:
@@ -1988,7 +2182,11 @@ class ToolHandlerMixin:
         Returns:
             RepairableException if error is recoverable, None if critical
         """
-        combined = f"{error.lower()} {stderr.lower()}"
+        # #14148: a classifier crashing the turn is never the right answer to an
+        # unexpected value. `None` reached here through a `.get()` default that
+        # did not apply, and the bare `raise` upstream propagated the
+        # AttributeError out of the tool-call generator.
+        combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
         # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):
@@ -2099,6 +2297,8 @@ class ToolHandlerMixin:
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
         parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
         try:
             result = await run_delegated_subtask(
                 task,
@@ -2106,6 +2306,7 @@ class ToolHandlerMixin:
                 depth=depth,
                 engine=engine,
                 parent_agent_id=parent_agent_id,
+                auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
             )
             execution_results.append(
                 {
@@ -2131,16 +2332,20 @@ class ToolHandlerMixin:
                 metadata={"message_type": "delegate_tool", "error": True},
             )
 
-    def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
+    async def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
         """Validate browser tool params. Returns a user-friendly block notice or None.
 
         #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
         outcome, so the returned text reads as a friendly notice (rendered as a
         normal assistant message, not a scary error banner — see _handle_browser_tool).
+
+        #13236 step 5: ``is_url_allowed`` became async when it stopped matching
+        URL prefixes with a regex and started resolving the host, so this is
+        async too. The caller already awaits inside an async method.
         """
         from api.browser_mcp import is_script_safe, is_url_allowed
 
-        if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
+        if tool_name == "navigate" and not await is_url_allowed(params.get("url", "")):
             url = params.get("url", "")
             return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
         if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
@@ -2175,7 +2380,7 @@ class ToolHandlerMixin:
         )
 
         try:
-            validation_error = self._validate_browser_params(tool_name, params)
+            validation_error = await self._validate_browser_params(tool_name, params)
             if validation_error:
                 # Keep status="error" so the agent loop still knows the tool didn't run.
                 execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})
@@ -2684,6 +2889,81 @@ class ToolHandlerMixin:
                 metadata={"tool": "extract_content", "error": True},
             )
 
+    async def _handle_read_spilled_output(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ):
+        """Re-read a window of a tool result that was spilled out of context (#13919).
+
+        #13692 writes oversized tool output aside and leaves a bounded excerpt
+        plus an anchor, and the excerpt's note tells the model to call this tool.
+        #13754 made it dispatchable through ``ToolRegistry.execute_tool`` — which
+        has no production callers, so at this seam, the one every real tool call
+        funnels through, the instruction still named something unreachable. An
+        agent following it landed in ``_build_unknown_tool_error`` and burned its
+        invalid-call budget.
+
+        The run is bound server-side by the agent loop, never taken from
+        arguments: the anchor carries its owning run id in plaintext, so a
+        ``task_id`` parameter would let any holder of an anchor read the run it
+        came from by echoing the id back.
+
+        Yields:
+            WorkflowMessage for the read result.
+        """
+        params = tool_call.get("params", {})
+        anchor = str(params.get("anchor", ""))
+
+        try:
+            from agent_loop.tool_output_spill import read_spilled_window
+
+            # Off the event loop. read_spilled reads and json-parses the WHOLE
+            # artifact (up to SPILL_MAX_ARTIFACT_CHARS, 5,000,000) before
+            # slicing out at most 8,000 chars, so paging a large artifact means
+            # re-reading and re-parsing it once per call. The write side already
+            # took this decision — spill_results_async exists because a blocking
+            # write_text stalls every other coroutine in the process.
+            window = await asyncio.to_thread(
+                read_spilled_window, anchor, offset=params.get("offset", 0), limit=params.get("limit")
+            )
+        except Exception as exc:
+            logger.error("[#13919] read_spilled_output failed: %s", exc)
+            execution_results.append({"tool": "read_spilled_output", "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"read_spilled_output failed: {exc}",
+                metadata={"tool": "read_spilled_output", "error": True},
+            )
+            return
+
+        if not window.get("found"):
+            # The miss reasons need different responses. Flattening them into
+            # "do not retry" tells a model to abandon an anchor over a
+            # self-correctable argument error, or over a transient one.
+            reason = window.get("reason", "unknown")
+            advice = _SPILL_MISS_ADVICE.get(reason, _SPILL_MISS_UNKNOWN_ADVICE)
+            execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
+            yield WorkflowMessage(
+                type="command_output",
+                content=f"No spilled output for anchor {anchor!r} ({reason}). {advice}",
+                metadata={"tool": "read_spilled_output", "status": reason},
+            )
+            return
+
+        execution_results.append({"tool": "read_spilled_output", "status": "success", "output": window["content"]})
+        yield WorkflowMessage(
+            type="command_output",
+            content=window["content"],
+            metadata={
+                "tool": "read_spilled_output",
+                "status": "success",
+                "offset": window["offset"],
+                "total_chars": window["total_chars"],
+                "has_more": window["has_more"],
+            },
+        )
+
     async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
         """Read (html, url) off the browser session's *current* page. Issue #11540.
 
@@ -2952,8 +3232,12 @@ class ToolHandlerMixin:
         Resolves the acting agent id from ``ctx.agent_context`` and matches the tool
         against that agent's manifest via the shared ``match_forbidden_tool`` matcher.
         Records the failure in ``execution_results`` and returns an error
-        ``WorkflowMessage`` when the tool is forbidden, else ``None``. Profile-less
-        agents resolve to an empty manifest and are never blocked here.
+        ``WorkflowMessage`` when the tool is forbidden, else ``None``.
+
+        An empty manifest here means exactly one thing (GH#13588): there is no agent
+        identity on the ctx, i.e. the plain ungoverned chat agent, or the id names a
+        declared executor. An id the registry does not recognise resolves to the
+        default boundary rather than to nothing, so a typo cannot buy free rein.
         """
         from orchestration.agent_registry import match_forbidden_tool, resolve_forbidden_tools
 
@@ -3055,6 +3339,145 @@ class ToolHandlerMixin:
             metadata={"tool": name, "error": True, "fact_forcing": True},
         )
 
+    async def _enforce_pre_action_verifier(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Run the adversarial pre-action verifier on a sensitive tool call (#14031).
+
+        ``PreActionVerifier`` (#10547) existed only inside the dormant ``AgentLoop``
+        (no production caller — #13587/#14031); this is its first production
+        caller. Scope matches the original: only tools in the canonical
+        ``SENSITIVE_TOOLS`` set are verified, the same set ``AgentLoop._sensitive_tool_name``
+        gated on. Gated on ``pre_action_verifier_enabled``, resolved through the
+        guard profile (defaults ``True`` — ``agent_loop/types.py:266``).
+
+        A BLOCK verdict with ``VERIFIER_HARD_BLOCK=1`` hard-blocks the call,
+        preserving the original semantics exactly. Without hard-block, the call
+        is held pending approval with the verifier's rationale attached — the
+        same ``pending_approval`` shape ``_enforce_work_item_approval`` already
+        uses at this seam. A broken or unavailable verifier fails open
+        (SKIP/PASS via ``PreActionVerifier.verify``) and never blocks the loop.
+        """
+        from autobot_shared.pre_action_verifier_guard import (
+            HARD_BLOCK,
+            PreActionVerifier,
+            VerifierVerdict,
+            pre_action_verifier_enabled,
+        )
+
+        tool_name = tool_call.get("name", "")
+        if match_tool_name(tool_name, SENSITIVE_TOOLS) is None:
+            return None
+        if not pre_action_verifier_enabled():
+            return None
+
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        if not isinstance(args, dict):
+            args = {"value": repr(args)}
+        reason = tool_call.get("reason", "")
+        # `session_id` is only used as an opaque trajectory/log identifier here —
+        # optional like `requires_approval_before` above, so a ctx double missing
+        # it (as several existing seam tests use) must not crash the guard.
+        task_id = getattr(ctx, "session_id", None) if ctx is not None else None
+
+        result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
+        if result.verdict != VerifierVerdict.BLOCK:
+            return None
+
+        if HARD_BLOCK:
+            error = (
+                f"Tool '{tool_name}' was hard-blocked by the adversarial verifier "
+                f"(prob={result.refutation_probability:.2f}): {result.rationale}"
+            )
+            logger.warning("[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120])
+            execution_results.append(
+                {"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True}
+            )
+            return WorkflowMessage(
+                type="error",
+                content=error,
+                metadata={"tool": tool_name, "error": True, "verifier_hard_block": True},
+            )
+
+        msg = (
+            f"Action '{tool_name}' requires approval before proceeding — the adversarial "
+            f"verifier flagged it (prob={result.refutation_probability:.2f}): {result.rationale}"
+        )
+        logger.warning("[#14031] verifier held tool '%s' pending approval — %s", tool_name, result.rationale[:120])
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "pending_approval",
+                "reason": msg,
+                "verifier_rationale": result.rationale,
+                "verifier_refutation_probability": result.refutation_probability,
+            }
+        )
+        return WorkflowMessage(
+            type="approval_required",
+            content=msg,
+            metadata={
+                "tool": tool_name,
+                "approval_required": True,
+                "verifier_rationale": result.rationale,
+            },
+        )
+
+    def _enforce_repetition(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Halt a looping or stagnating agent at the live seam (#13590).
+
+        The guard existed in ``agent_loop/`` and ran nowhere; the live path had
+        only a prompt sentence and a counter for *malformed* calls. Counting is
+        keyed on ``(call fingerprint, result hash)``, so a polling loop whose
+        result moves is never halted — only a call reproducing a result it
+        already has.
+
+        State lives on ``ctx.context``, which is per-turn and per-session; the
+        seam is concurrent across sessions, so nothing here may be module-global.
+        A missing ``ctx`` is a no-op, matching the other enforcers.
+        """
+        from autobot_shared.repetition_guard import (  # noqa: PLC0415
+            REPETITION_STATE_KEY,
+            STAGNATION_STATE_KEY,
+            repetition_halt_reason,
+            stagnation_halt_reason,
+        )
+
+        if ctx is None:
+            return None
+
+        rep_state = ctx.context.setdefault(REPETITION_STATE_KEY, {})
+        reason = repetition_halt_reason(tool_call, execution_results, rep_state)
+        halt_kind = "repetition_halt"
+
+        if reason is None:
+            # Repetition catches one call re-issued; stagnation catches a run of
+            # different calls whose results say nothing new. Distinct reasons,
+            # because "you are repeating a call" and "you are learning nothing"
+            # ask the agent for different corrections.
+            stag_state = ctx.context.setdefault(STAGNATION_STATE_KEY, {})
+            reason = stagnation_halt_reason(execution_results, stag_state)
+            halt_kind = "stagnation_halt"
+
+        if reason is None:
+            return None
+
+        name = tool_call.get("name", "")
+        execution_results.append({"tool": name, "status": "error", "error": reason, halt_kind: True})
+        return WorkflowMessage(
+            type="error",
+            content=reason,
+            metadata={"tool": name, "error": True, halt_kind: True},
+        )
+
     def _enforce_work_item_approval(
         self,
         tool_call: dict[str, Any],
@@ -3146,11 +3569,31 @@ class ToolHandlerMixin:
             yield fact_msg
             return
 
+        # #14031: adversarial pre-action verifier — an independent, differently
+        # prompted model tries to REFUTE a sensitive action before it executes.
+        # Runs before the approval hold below so a HARD_BLOCK verdict short-circuits
+        # without ever reaching the human approval step, matching the original
+        # AgentLoop._check_approvals ordering.
+        verifier_msg = await self._enforce_pre_action_verifier(tool_call, ctx, execution_results)
+        if verifier_msg is not None:
+            yield verifier_msg
+            return
+
         # GH#11160: hold a tool the work item declared as approval-gated
         # (requires_approval_before) pending approval, at the same seam.
         approval_msg = self._enforce_work_item_approval(tool_call, ctx, execution_results)
         if approval_msg is not None:
             yield approval_msg
+            return
+
+        # #13590: halt a stagnating agent — same tool, same args, same result —
+        # at the profile's max_identical_tool_calls. Placed last of the
+        # enforcers so a call blocked for a *policy* reason above is not also
+        # counted as repetition; those blocks are the agent being stopped, not
+        # the agent looping.
+        repetition_msg = self._enforce_repetition(tool_call, ctx, execution_results)
+        if repetition_msg is not None:
+            yield repetition_msg
             return
 
         # GH#11568: sandboxed Python composition tool (main-chat only).
@@ -3258,6 +3701,8 @@ class ToolHandlerMixin:
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
             return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+        if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
+            return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,
@@ -3412,9 +3857,17 @@ class ToolHandlerMixin:
         """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
 
         async def _dispatch(tool: str, params: dict) -> Any:
+            from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
             sub_results: list[dict[str, Any]] = []
             sub_call = {"name": tool, "params": params}
-            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
+            # #13821: a tool called from inside a compose script is still the same
+            # authenticated caller. Omitting the role here left this one path on
+            # the "user" default — the very bug this issue fixes, unfixed.
+            role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
+            async for _ in self._dispatch_tool_call(
+                sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx, role=role
+            ):
                 pass
             last = sub_results[-1] if sub_results else {}
             if last.get("status") == "error":
@@ -3562,6 +4015,15 @@ class ToolHandlerMixin:
         break_loop_requested = False
         respond_content = None
 
+        # #13821: forward the authenticated role. #2629 wired `role` as far as
+        # _dispatch_tool_call's signature and stopped here, so the `role="user"`
+        # default won every call and MCPDispatcher never saw who was signed in —
+        # an admin was denied the admin-only tools they are entitled to, and the
+        # #13228 shadow inventory could only ever contain user rows.
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
+        role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
+
         for tool_call in tool_calls:
             async for result in self._dispatch_tool_call(
                 tool_call,
@@ -3572,6 +4034,7 @@ class ToolHandlerMixin:
                 execution_results,
                 additional_response_parts,
                 ctx=ctx,
+                role=role,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result

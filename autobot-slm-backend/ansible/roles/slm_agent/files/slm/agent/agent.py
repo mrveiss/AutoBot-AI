@@ -404,7 +404,7 @@ class SLMAgent:
                     placeholders = ",".join("?" * len(ids))
                     query = (
                         "UPDATE event_buffer SET synced = 1 "
-                        f"WHERE id IN ({placeholders})"  # nosec B608 - only
+                        f"WHERE id IN ({placeholders})"  # nosec B608  # only
                     )
                     conn.execute(query, ids)
                     conn.commit()

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import sys
+import types
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -46,6 +47,21 @@ def _mock_llm_service(return_values: list[str]) -> MagicMock:
     responses = [_make_llm_response(v) for v in return_values]
     svc.chat = AsyncMock(side_effect=responses)
     return svc
+
+
+def _stub_semantic_chunker(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """Return the module ``extract()``'s local ``get_semantic_chunker`` import resolves to.
+
+    The real ``utils.semantic_chunker`` drags sentence-transformers in, so a
+    hollow stand-in answers for it when it is absent.  ``monkeypatch.setitem``
+    owns the removal: a bare assignment left the stand-in — and the hollow
+    ``utils`` package under it — shadowing the real on-disk packages for every
+    node the session handled afterwards (#13450).
+    """
+    for name in ("utils", "utils.semantic_chunker"):
+        if name not in sys.modules:
+            monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    return sys.modules["utils.semantic_chunker"]
 
 
 @contextmanager
@@ -369,7 +385,7 @@ async def test_validation_error_triggers_retry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chunk_merge_combines_fields() -> None:
+async def test_chunk_merge_combines_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     """Oversized input is split; per-chunk dicts are merged (last-non-null wins)."""
     from .structured_ops import extract
 
@@ -393,34 +409,19 @@ async def test_chunk_merge_combines_fields() -> None:
     fake_chunker.chunk_text = AsyncMock(return_value=[chunk_a, chunk_b])
 
     ops_mod = sys.modules["llm_shared.structured_ops"]
-    # get_semantic_chunker is a local import inside extract(); ensure the stub
-    # module exists in sys.modules then set the attribute before extract() runs.
-    import types as _types
-
-    if "utils" not in sys.modules:
-        sys.modules["utils"] = _types.ModuleType("utils")
-    if "utils.semantic_chunker" not in sys.modules:
-        sys.modules["utils.semantic_chunker"] = _types.ModuleType("utils.semantic_chunker")
-    chunker_mod = sys.modules["utils.semantic_chunker"]
-    original_gsc = getattr(chunker_mod, "get_semantic_chunker", None)
-    chunker_mod.get_semantic_chunker = MagicMock(return_value=fake_chunker)
-    try:
-        with (
-            _patch_llm_service(svc),
-            patch.object(ops_mod, "EXTRACT_CHUNK_THRESHOLD_CHARS", 5),
-        ):
-            # The chunker is fully mocked, so the input content is irrelevant —
-            # only its length matters (> patched threshold of 5) to trigger the
-            # chunked code path.
-            result = await extract("a" * 10, schema, chunking="auto")
-    finally:
-        if original_gsc is None:
-            try:
-                del chunker_mod.get_semantic_chunker
-            except AttributeError:
-                pass
-        else:
-            chunker_mod.get_semantic_chunker = original_gsc
+    # get_semantic_chunker is a local import inside extract(); the module it
+    # resolves has to carry the attribute before extract() runs. Both the module
+    # entry and the attribute are undone at teardown (#13450).
+    chunker_mod = _stub_semantic_chunker(monkeypatch)
+    monkeypatch.setattr(chunker_mod, "get_semantic_chunker", MagicMock(return_value=fake_chunker), raising=False)
+    with (
+        _patch_llm_service(svc),
+        patch.object(ops_mod, "EXTRACT_CHUNK_THRESHOLD_CHARS", 5),
+    ):
+        # The chunker is fully mocked, so the input content is irrelevant —
+        # only its length matters (> patched threshold of 5) to trigger the
+        # chunked code path.
+        result = await extract("a" * 10, schema, chunking="auto")
 
     assert result["title"] == "Better Title"  # type: ignore[index]
     assert set(result["tags"]) == {"a", "b", "c"}  # type: ignore[index]

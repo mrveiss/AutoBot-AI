@@ -459,6 +459,33 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
 
+  # No tracked symlink entries — mode 120000 checks out as a plain file
+  # under this repo's core.symlinks=false, silently clobbering whatever
+  # real path was there (Issue #14137)
+  - repo: local
+    hooks:
+      - id: no-tracked-symlink
+        name: No Tracked Symlink Entries (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a NEW tracked mode-120000 entry — a symlink materialises as a plain file under core.symlinks=false, silently overwriting whatever real path was there"
+
+  # No tracked path shadows a name in .gitignore's virtualenv section
+  # (Issue #14137) — the other half of how the venv symlink got in
+  - repo: local
+    hooks:
+      - id: no-gitignore-shadow
+        name: No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
@@ -467,6 +494,19 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
         types: [python, ts, vue]
+        # Generated clients are machine-produced from the OpenAPI schema; a
+        # "hardcoded value" in one is a symptom of the schema, not of code
+        # anyone wrote, so scanning them finds nothing actionable.
+        #
+        # It is also ruinously slow. Measured 2026-08-11 on this hook:
+        #   3 changed .py files ........  3.7s
+        #   generated/api.ts alone .....  >240s (173,665 lines, timed out)
+        # Every PR that touches an API response model regenerates that file,
+        # which drags it into the changed set and turns `code-quality` — a
+        # REQUIRED check — into a 40-70 minute job. Observed on #13976.
+        #
+        # Same pattern the line-length hook above already uses.
+        exclude: ^(.*(_generated|generated)/)
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"
@@ -673,6 +713,22 @@ repos:
         exclude: ^(\.worktrees/|node_modules/|repo_tests/lint/canonical/fixtures/)
         stages: [pre-commit]
         description: "Pluggable canonical-pattern checks for shell/YAML files (#7458)"
+
+      - id: lint-conventions
+        name: Repo conventions — third-party names, doc cross-links (#13876)
+        entry: scripts/lint-conventions.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Enforces anonymisation and research-doc cross-linking. The denylist lives outside the repo (CONVENTIONS_DENYLIST) — committing it would violate the rule it enforces (#13876)"
+
+      - id: lint-commit-subject
+        name: Commit subject format — type(scope) + issue ref (#13876)
+        entry: scripts/lint-conventions.sh --commit-msg
+        language: system
+        stages: [commit-msg]
+        description: "Runs at the commit-msg stage against the real message file. At pre-commit time COMMIT_EDITMSG still holds the PREVIOUS subject, and in a linked worktree .git is a file so the path does not resolve at all (#13876)"
 
 # Configuration for specific file types
 default_language_version:

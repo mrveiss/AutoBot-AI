@@ -11,7 +11,7 @@
  * Routes available:
  * - /chat - AI Assistant (includes chat terminal with agent access)
  * - /knowledge - Knowledge Base
- * - /automation - Workflow Builder
+ * - /automation - Workflow Builder (forwards to /llc/companies/:companyId/automation, GH#13939)
  * - /analytics - Codebase & Business Analytics
  * - /secrets - Secrets Manager (user credentials for chat/agent)
  *
@@ -376,55 +376,27 @@ export const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  // GH#13939: Company OS absorbed the automation module — the workflow builder
+  // and every one of its sections now resolve under
+  // /llc/companies/:companyId/automation/*. These two entries keep the main-nav
+  // item and every existing /automation/* bookmark working by resolving the
+  // active company and forwarding to the company-scoped route.
   {
     path: '/automation',
     name: 'automation',
-    component: WorkflowBuilderView,
+    component: () => import('@/views/llc/AutomationCompanyRedirectView.vue'),
     meta: {
       title: 'Workflow Automation',
       icon: 'fas fa-project-diagram',
       description: 'Visual workflow builder and automation (Issue #585)',
       requiresAuth: true
-    },
-    // Child routes render inside WorkflowBuilderView's <router-view /> (#2368)
-    children: [
-      {
-        path: '',
-        redirect: '/automation/overview'
-      },
-      {
-        path: 'browser-automation',
-        name: 'browser-automation',
-        component: () => import('@/views/BrowserAutomationView.vue'),
-        meta: {
-          title: 'Browser Automation',
-          icon: 'fas fa-globe',
-          description: 'Control browser workers and automate web tasks',
-          requiresAuth: true
-        }
-      },
-      // Issue #9890: Vision Automation panel — dedicated component route
-      {
-        path: 'vision-automation',
-        name: 'vision-automation',
-        component: () => import('@/views/VisionAutomationView.vue'),
-        meta: {
-          title: 'Vision Automation',
-          description: 'Screen analysis, element detection, OCR, and automation opportunities',
-          requiresAuth: true
-        }
-      },
-      // GH#8750: URL-routed sections — rendered inline in WorkflowBuilderView via route.params.section
-      {
-        path: ':section',
-        name: 'automation-section',
-        component: { render: () => null },
-        meta: {
-          sectionRoute: true,
-          requiresAuth: true
-        }
-      }
-    ]
+    }
+  },
+  {
+    path: '/automation/:pathMatch(.*)*',
+    name: 'automation-legacy',
+    component: () => import('@/views/llc/AutomationCompanyRedirectView.vue'),
+    meta: { requiresAuth: true, hideInNav: true }
   },
   // Redirect old path (#2367)
   {
@@ -1184,6 +1156,57 @@ export const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'llc-company-dashboard', component: () => import('@/views/llc/CompanyDashboard.vue'), props: true, meta: { title: 'Company Dashboard', requiresAuth: true } },
       { path: 'goals', name: 'llc-company-goals', component: () => import('@/views/llc/GoalTree.vue'), props: true, meta: { title: 'Goal Tree', requiresAuth: true } },
       { path: 'org-chart', name: 'llc-company-org-chart', component: () => import('@/views/llc/OrgChart.vue'), props: true, meta: { title: 'Org Chart', requiresAuth: true } },
+      // GH#13939: the automation module, moved here from /automation/*. Route
+      // names are preserved so deep links and the builder's own active-state
+      // checks keep working. Child routes render inside WorkflowBuilderView's
+      // <router-view /> (#2368); ':section' is rendered inline via
+      // route.params.section (GH#8750).
+      {
+        path: 'automation',
+        name: 'llc-company-automation',
+        component: WorkflowBuilderView,
+        meta: { title: 'Workflow Automation', requiresAuth: true, hideInNav: true },
+        children: [
+          {
+            // Named so vue-router does not warn about an unnamed empty-path
+            // child under a named parent.
+            path: '',
+            name: 'llc-company-automation-index',
+            redirect: (to) => `/llc/companies/${to.params.companyId}/automation/overview`
+          },
+          {
+            path: 'browser-automation',
+            name: 'browser-automation',
+            component: () => import('@/views/BrowserAutomationView.vue'),
+            meta: {
+              title: 'Browser Automation',
+              icon: 'fas fa-globe',
+              description: 'Control browser workers and automate web tasks',
+              requiresAuth: true
+            }
+          },
+          // Issue #9890: Vision Automation panel — dedicated component route
+          {
+            path: 'vision-automation',
+            name: 'vision-automation',
+            component: () => import('@/views/VisionAutomationView.vue'),
+            meta: {
+              title: 'Vision Automation',
+              description: 'Screen analysis, element detection, OCR, and automation opportunities',
+              requiresAuth: true
+            }
+          },
+          {
+            path: ':section',
+            name: 'automation-section',
+            component: { render: () => null },
+            meta: {
+              sectionRoute: true,
+              requiresAuth: true
+            }
+          }
+        ]
+      },
     ],
   },
   // Issue #9044: Transcriber — audio/video transcription module

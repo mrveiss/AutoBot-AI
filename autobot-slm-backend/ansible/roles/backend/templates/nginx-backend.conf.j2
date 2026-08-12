@@ -7,6 +7,15 @@
 # Firewall evaluates the rule once (for nginx), not on every uvicorn restart.
 # uvicorn binds plain HTTP on {{ backend_host }}:{{ backend_port }} (localhost only).
 
+# WebSocket Upgrade/Connection map (http context) — #13604.
+# "upgrade" for a real handshake, "close" for plain HTTP ($http_upgrade is empty
+# there), which is what lets the server-level headers below apply to every
+# location without affecting REST. See the frontend vhost for the full rationale.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen {{ backend_nginx_port }} ssl;
     listen [::]:{{ backend_nginx_port }} ssl;
@@ -28,6 +37,11 @@ server {
     proxy_set_header   X-Real-IP         $remote_addr;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header   X-Forwarded-Proto https;
+    # #13604: set at server level so EVERY location upgrades, including the
+    # catch-all `location /` below. A WebSocket route no longer needs its own
+    # block to work at all — only to override the read timeout.
+    proxy_set_header   Upgrade           $http_upgrade;
+    proxy_set_header   Connection        $connection_upgrade;
 
     proxy_connect_timeout 60s;
     proxy_send_timeout    300s;
@@ -39,33 +53,33 @@ server {
         proxy_pass http://127.0.0.1:{{ backend_port }};
     }
 
-    # WebSocket paths — must set Upgrade/Connection headers
+    # WebSocket paths — these exist ONLY to raise the read timeout (#13604).
+    #
+    # The Upgrade/Connection headers moved to server level above, so these no
+    # longer carry their own proxy_set_header. That also repairs a real bug:
+    # nginx's proxy_set_header is replace-not-merge, so a location declaring any
+    # proxy_set_header discards EVERY inherited one. Each of these blocks used
+    # to set Upgrade/Connection and thereby drop Host, X-Real-IP,
+    # X-Forwarded-For and X-Forwarded-Proto — every WebSocket through this vhost
+    # reached uvicorn without them, while its HTTP siblings had them.
     location /ws {
         proxy_pass         http://127.0.0.1:{{ backend_port }};
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection "upgrade";
         proxy_read_timeout 86400s;
     }
 
     location /api/ws {
         proxy_pass         http://127.0.0.1:{{ backend_port }};
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection "upgrade";
         proxy_read_timeout 86400s;
     }
 
     location /api/terminal/ws {
         proxy_pass         http://127.0.0.1:{{ backend_port }};
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
     # Issue #1105: Voice stream WebSocket
     location /api/voice/stream {
         proxy_pass         http://127.0.0.1:{{ backend_port }};
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection "upgrade";
         proxy_read_timeout 86400s;
     }
 

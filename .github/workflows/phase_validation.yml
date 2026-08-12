@@ -129,8 +129,13 @@ jobs:
         echo "Generating validation dashboard..."
         python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 
+    # #13516: `github.ref` through `env:`. Not attacker-settable — on
+    # `pull_request` it resolves to `refs/pull/<N>/merge` (a number), and `push`
+    # is branch-filtered — so defence in depth.
     - name: Phase Validation Gate
       shell: bash
+      env:
+        GH_REF: ${{ github.ref }}
       run: |
         set -euo pipefail
         echo "Checking phase validation gate..."
@@ -141,7 +146,7 @@ jobs:
         echo "System maturity: ${MATURITY}%"
 
         # Set minimum maturity threshold for different branches
-        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+        if [ "$GH_REF" == "refs/heads/main" ]; then
           THRESHOLD=80
           echo "Main branch - requiring ${THRESHOLD}% maturity"
         else

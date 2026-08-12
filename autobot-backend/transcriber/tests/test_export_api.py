@@ -63,8 +63,16 @@ async def seeded(tmp_path):
     await db.create_segment(rid, spk_id, 0.0, 3.5, "Hello from segment one.")
     await db.create_segment(rid, spk_id, 4.0, 7.0, "Hello from segment two.")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c, rid
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c, rid
+    finally:
+        # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+        # fixture that connects and never closes keeps the interpreter alive after
+        # the suite has passed. Under xdist the execnet worker exits hard and hides
+        # it; in a serial invocation — co-located-smoke is exactly that — the job
+        # hangs until CI cancels it, with no failure to look at.
+        await db.close()
 
 
 @pytest.mark.asyncio

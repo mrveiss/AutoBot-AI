@@ -48,6 +48,11 @@
         <GraphRAGQuery />
       </div>
 
+      <!-- Connection Path Tab (#13474) -->
+      <div v-if="activeTab === 'path'" class="tab-panel">
+        <GraphConnectionPath />
+      </div>
+
       <!-- Statistics Tab -->
       <div v-if="activeTab === 'stats'" class="tab-panel">
         <div class="stats-section">
@@ -201,6 +206,7 @@ import { useRouter } from 'vue-router'
 import { useKnowledgeEntityGraph } from '@/composables/knowledge/useKnowledgeEntityGraph'
 import EntityExtractor from './EntityExtractor.vue'
 import GraphRAGQuery from './GraphRAGQuery.vue'
+import GraphConnectionPath from './GraphConnectionPath.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -243,6 +249,7 @@ const {
 const tabs = computed<Tab[]>(() => [
   { id: 'extract', label: t('knowledge.entityGraph.tabExtract'), icon: 'brain' },
   { id: 'query', label: t('knowledge.entityGraph.tabQuery'), icon: 'search-plus' },
+  { id: 'path', label: t('knowledge.entityGraph.tabPath'), icon: 'sitemap' },
   { id: 'stats', label: t('knowledge.entityGraph.tabStatistics'), icon: 'chart-bar' }
 ])
 

@@ -9,10 +9,25 @@ import asyncio
 import sys
 import time
 
+import pytest
+
 from autobot_shared.ssot_config import config
 
 # Add AutoBot to path
 sys.path.insert(0, config.project_root)
+
+# #13284: this module is a GPU throughput probe, not a unit test — it loads the
+# real embedding model behind `get_optimized_semantic_chunker()`, chunks a
+# sample text and prints sentences/sec. Model load is the 133.00s the durations
+# report attributes to `test_direct_optimization` (3% of the suite), and the
+# number it produces is meaningless on a CI runner with no RTX 4070.
+#
+# Nothing is asserted: every path is wrapped in `try/except` that prints and
+# returns False, so the check cannot fail today and the PR gate loses no
+# verification. `performance` is the accurate marker (the file measures
+# throughput) and is already excluded by both pytest invocations in
+# .github/workflows/ci.yml.
+pytestmark = pytest.mark.performance
 
 
 async def test_direct_optimization():

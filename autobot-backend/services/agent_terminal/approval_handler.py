@@ -232,10 +232,10 @@ class ApprovalHandler:
         status_text = "✅ Command approved and executed" if approved else "❌ Command denied"
         await self.chat_history_manager.add_message(
             session_id=session.conversation_id,
-            role="system",
+            sender="system",
             text=f"{status_text}: `{command}`" + (f" - {comment}" if comment else ""),
             message_type="command_approval_response",
-            metadata={
+            raw_data={
                 "command": command,
                 "terminal_session_id": session.session_id,
                 "approval_status": "approved" if approved else "denied",

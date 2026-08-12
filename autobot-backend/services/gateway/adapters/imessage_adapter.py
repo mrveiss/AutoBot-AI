@@ -46,7 +46,8 @@ class IMessageAdapter(BaseAdapter):
         """Convert macOS relay webhook payload to unified schema."""
         metadata = await self.extract_metadata(raw_message)
 
-        metadata["message_id"] = raw_message.get("id") or raw_message.get("guid")
+        message_id = str(raw_message.get("id") or raw_message.get("guid") or "")
+        metadata["message_id"] = message_id
         metadata["is_group"] = raw_message.get("is_group", False)
         metadata["service"] = raw_message.get("service", "iMessage")
         metadata["macos_only"] = True
@@ -61,6 +62,7 @@ class IMessageAdapter(BaseAdapter):
             message=raw_message.get("text") or raw_message.get("body", ""),
             timestamp=float(raw_message.get("timestamp", 0)),
             metadata=metadata,
+            message_id=message_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:

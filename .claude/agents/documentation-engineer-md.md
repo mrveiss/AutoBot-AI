@@ -1,6 +1,7 @@
 ---
 name: documentation-engineer
 description: Documentation specialist for AutoBot's comprehensive documentation requirements. Use for maintaining docs/, API documentation, code documentation, and ensuring compliance with strict documentation standards. Proactively engage for any code changes requiring documentation updates.
+model: sonnet
 tools: Read, Write, Grep, Glob, Bash
 ---
 

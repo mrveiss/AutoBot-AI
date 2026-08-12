@@ -872,6 +872,7 @@
       "loadFailed": "Erinnerungen konnten nicht geladen werden. Das Backend ist möglicherweise nicht verfügbar.",
       "forgetFailed": "Erinnerungseintrag konnte nicht vergessen werden.",
       "forgetEverywhereFailed": "Erinnerungseintrag konnte nicht kaskadierend gelöscht werden.",
+      "forgetEverywhereAmbiguous": "Diese Erinnerung existiert in mehr als einem Speicher — verwenden Sie stattdessen das speicherbezogene Löschen in der Zeile.",
       "exportDownloaded": "Speicher-Export heruntergeladen.",
       "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen."
     },
@@ -1423,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projektanalysen"
+      },
+      "impact": {
+        "title": "Auswirkungsanalyse",
+        "hint": "Was einen Knoten transitiv aufruft — vor Änderung oder Entfernung prüfen.",
+        "nodeIdPlaceholder": "z. B. paket.modul.KlassenName",
+        "nodeIdLabel": "Graph-Knoten-ID",
+        "analyze": "Analysieren",
+        "analyzing": "Analysiere…",
+        "notIndexedTitle": "Code-Graph nicht erstellt",
+        "notIndexedBody": "Indexieren Sie diese Quelle, bevor Sie die Auswirkungen analysieren.",
+        "partialTitle": "Teilergebnis — dies ist eine Untergrenze",
+        "partialDepth": "Der Durchlauf endete bei Tiefe {depth}; {frontier} Knoten wurden nicht expandiert. Es kann mehr Aufrufer geben.",
+        "partialUnresolved": "{count} Kante(n) konnten nicht aufgelöst werden, daher fehlen möglicherweise Aufrufer.",
+        "callers": "Aufrufer",
+        "callersAtLeast": "Aufrufer (mindestens)",
+        "callersHeading": "Erreichte Aufrufer",
+        "edgesResolved": "aufgelöste Kanten",
+        "edgesUnresolved": "nicht aufgelöste Kanten",
+        "depth": "erreichte Tiefe",
+        "noCallersTitle": "Keine Aufrufer gefunden",
+        "noCallersBody": "Nichts im indexierten Graphen ruft diesen Knoten auf.",
+        "skippedHeading": "{count} nicht aufgelöste Kante(n) anzeigen"
       }
     },
     "patterns": {
@@ -2824,7 +2847,8 @@
       "entitiesAndRelations": "{entities} Entitäten, {relations} Beziehungen",
       "success": "Erfolgreich",
       "failedStatus": "Fehlgeschlagen",
-      "retry": "Wiederholen"
+      "retry": "Wiederholen",
+      "tabPath": "Verbindungspfad"
     },
     "failedVectorizations": {
       "title": "Fehlgeschlagene Vektorisierungen",
@@ -4080,6 +4104,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Möchten Sie diesen überwachten Ordner wirklich löschen?"
+    },
+    "graphPath": {
+      "title": "Verbindungspfad",
+      "description": "Finden Sie die kürzeste Kette von Beziehungen zwischen zwei Entitäten.",
+      "fromEntity": "Von Entität",
+      "fromEntityPlaceholder": "Name der Startentität...",
+      "toEntity": "Zu Entität",
+      "toEntityPlaceholder": "Name der Zielentität...",
+      "swap": "Entitäten tauschen",
+      "direction": "Richtung",
+      "directionBoth": "Beliebige Richtung",
+      "directionOutgoing": "Beziehungen vorwärts folgen",
+      "directionIncoming": "Beziehungen rückwärts folgen",
+      "directionHint": "Beziehungen werden oft nur in eine Richtung gespeichert.",
+      "maxDepth": "Maximale Tiefe",
+      "hops": "{count} Sprünge",
+      "relation": "Beziehung",
+      "relationHint": "(optional)",
+      "relationPlaceholder": "Nur diesem Beziehungstyp folgen...",
+      "findPath": "Pfad finden",
+      "searching": "Suche läuft...",
+      "connectedIn": "Verbunden in {count} Sprung | Verbunden in {count} Sprüngen",
+      "sameEntity": "Beide Namen verweisen auf dieselbe Entität: {name}",
+      "fuzzyMatch": "Keine Entität heißt {names} — der folgende Pfad bezieht sich stattdessen auf die nächstliegende Übereinstimmung. | Keine Entitäten heißen {names} — der folgende Pfad bezieht sich stattdessen auf die nächstliegenden Übereinstimmungen.",
+      "crossedForwards": "vorwärts",
+      "crossedBackwards": "rückwärts",
+      "unnamedRelation": "verbunden mit",
+      "noPathFound": "Keine Verbindung zwischen diesen Entitäten gefunden.",
+      "noPathHint": "Erhöhen Sie die Tiefe, erlauben Sie jede Richtung oder entfernen Sie den Beziehungsfilter.",
+      "entityNotFound": "Diese Namen stimmen mit keiner Entität überein:",
+      "entityNotFoundHint": "Prüfen Sie die Schreibweise oder extrahieren Sie zuerst Entitäten, damit sie im Graphen existieren.",
+      "errorEnterBoth": "Bitte geben Sie sowohl eine Quell- als auch eine Zielentität ein.",
+      "notInGraph": "Diese Entitäten sind noch nicht im Beziehungsgraphen.",
+      "notInGraphHint": "Sie existieren, haben aber keine Graphverknüpfungen — daher lässt sich keine Verbindung verfolgen. Führen Sie die Entitätsextraktion erneut aus."
     }
   },
   "workflow": {
@@ -4203,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7780,7 +7840,8 @@
       "generating": "QR-Code wird generiert...",
       "expired": "Abgelaufen",
       "refresh": "Neuen Code erhalten",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "manualCode": "Scannen nicht möglich? Geben Sie diesen Code manuell ein:"
     }
   },
   "llmKeys": {
@@ -8153,13 +8214,16 @@
       "title": "Organigramm",
       "hireAgent": "Agent einstellen",
       "loading": "Wird geladen…",
-      "empty": "Keine Agenten gefunden.",
+      "empty": "Keine Personen oder Agenten gefunden.",
       "retry": "Erneut versuchen",
       "agentDetail": "Agentendetails",
+      "personDetail": "Personendetails",
+      "humanNoAgentControls": "Agentensteuerung gilt nicht für Personen.",
       "human": "Mensch",
       "aiAgent": "KI-Agent",
       "never": "Nie",
       "adapter": "Adapter",
+      "role": "Rolle",
       "type": "Typ",
       "lastHeartbeat": "Letzter Heartbeat",
       "budget": "Budget",
@@ -8168,7 +8232,13 @@
       "pauseAgent": "Agent pausieren",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Ansicht",
+      "viewTree": "Baum",
+      "viewCanvas": "Leinwand",
+      "canvasTabAll": "Alle Einheiten",
+      "canvasUnit": "Einheit {name}",
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
     },
     "goals": {
       "title": "Zielbaum",
@@ -8394,15 +8464,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {

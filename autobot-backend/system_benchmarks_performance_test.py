@@ -6,14 +6,16 @@ Tests performance characteristics, resource usage, and scalability
 """
 
 import asyncio
+import os
 import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
 
+from autobot_shared.env_utils import env_flag, env_float, env_int, env_str
 from config.manager import ConfigManager as ConfigManager
-from memory import MemoryManager
+from memory import MemoryManager, TaskPriority
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -21,6 +23,14 @@ from multimodal_processor import (
     ProcessingIntent,
 )
 from services.config_service import ConfigService
+
+# #13162: every test in this module asserts a wall-clock budget (ms elapsed) or
+# an RSS delta — there is not one functional-only test here, and the filename
+# already declares it (`*_performance_test.py`). That makes the module a
+# benchmark suite, so it belongs to the `performance` selection rather than the
+# unit selection, where a millisecond budget measures the CI runner's
+# contention instead of the code. No budget in this file was changed.
+pytestmark = pytest.mark.performance
 
 
 class TestSystemPerformanceBenchmarks:
@@ -81,23 +91,31 @@ class TestSystemPerformanceBenchmarks:
         assert bulk_time < 50.0, f"Bulk config access too slow: {bulk_time}ms"
 
         # Test section retrieval performance
-        _, section_time = self.measure_execution_time(config_manager.get_section, "multimodal")
+        # #13199: the section reader on ConfigManager is get_config_section()
+        # (dot-path traversal via get_nested); get_section() belongs to ConfigRegistry.
+        _, section_time = self.measure_execution_time(config_manager.get_config_section, "multimodal")
         assert section_time < 2.0, f"Section retrieval too slow: {section_time}ms"
 
     def test_config_service_caching_performance(self):
         """Test config service caching performance"""
+        # #13162: the cached reader is get_full_config() — get_all_settings()
+        # has never existed on ConfigService. The cache is class-level, so the
+        # benchmark clears it first to guarantee the first call is a real build.
         config_service = ConfigService()
+        config_service.clear_cache()
 
         # First call should be slower (no cache)
-        _, first_call_time = self.measure_execution_time(config_service.get_all_settings)
+        first_config, first_call_time = self.measure_execution_time(config_service.get_full_config)
 
         # Second call should be faster (cached)
-        _, cached_call_time = self.measure_execution_time(config_service.get_all_settings)
+        cached_config, cached_call_time = self.measure_execution_time(config_service.get_full_config)
 
-        # Cached call should be at least 50% faster
-        assert (
-            cached_call_time < first_call_time * 0.5
-        ), f"Caching not effective: first={first_call_time}ms, cached={cached_call_time}ms"
+        # #13162: prove the cache by the property that defines it rather than by
+        # racing two wall clocks. The previous `cached < first * 0.5` compared
+        # two sub-millisecond samples, so a single scheduler hiccup on the
+        # second call inverted the ratio under parallel load. A cache hit hands
+        # back the very object it stored; a rebuild produces a fresh dict.
+        assert cached_config is first_config, "Second get_full_config() rebuilt the config instead of serving the cache"
 
         # Cached calls should be very fast
         assert cached_call_time < 5.0, f"Cached config access too slow: {cached_call_time}ms"
@@ -148,18 +166,40 @@ class TestSystemPerformanceBenchmarks:
             for i in range(10)
         ]
 
-        # Mock processors for consistent results
-        with patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process:
-            mock_process.return_value = Mock(
-                success=True,
-                confidence=0.8,
-                processing_time=0.05,
-                result_data={"decision": "test"},
-                modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
-                result_id="test",
-            )
+        mock_result = Mock(
+            success=True,
+            confidence=0.8,
+            processing_time=0.05,
+            result_data={"decision": "test"},
+            modality_type=ModalityType.TEXT,
+            intent=ProcessingIntent.DECISION_MAKING,
+            result_id="test",
+        )
 
+        # #13162: prove concurrency directly instead of inferring it from the
+        # clock. The counter records how many calls were inside the modality
+        # processor at once; if `process()` ever serialized, the peak would
+        # collapse to 1 no matter how fast the run happened to be.
+        in_flight = 0
+        peak_in_flight = 0
+
+        async def tracked_process(_input_data):
+            nonlocal in_flight, peak_in_flight
+            in_flight += 1
+            peak_in_flight = max(peak_in_flight, in_flight)
+            await asyncio.sleep(0)  # yield so siblings can enter
+            in_flight -= 1
+            return mock_result
+
+        # Mock processors for consistent results. #13162: `_store_result` is
+        # also mocked — it writes each result to the shared SQLite memory
+        # database, and concurrent writers serialize on that file's lock, so
+        # leaving it live made this benchmark measure disk contention rather
+        # than the processor's own concurrency. Budgets below are unchanged.
+        with (
+            patch.object(processor.context_processor, "process", side_effect=tracked_process),
+            patch.object(processor, "_store_result", new_callable=AsyncMock),
+        ):
             # Process all inputs concurrently
             start_time = time.time()
             tasks = [processor.process(inp) for inp in inputs]
@@ -170,6 +210,7 @@ class TestSystemPerformanceBenchmarks:
 
             # Concurrent processing should be faster than sequential
             assert total_time < 500.0, f"Concurrent processing too slow: {total_time}ms"
+            assert peak_in_flight == 10, f"Processing serialized: peak concurrency was {peak_in_flight}, expected 10"
             assert len(results) == 10
             assert all(r.success for r in results)
 
@@ -177,20 +218,21 @@ class TestSystemPerformanceBenchmarks:
         """Test memory manager performance"""
         memory_manager = MemoryManager()
 
-        # Test memory usage during task storage
+        # Test memory usage during task storage.
+        # #13162: MemoryManager has no store_task() and no TaskPriority
+        # attribute. Task records are created through create_task_record(),
+        # which is synchronous — the asyncio.run() per iteration was spinning up
+        # and tearing down 50 event loops purely to call it.  TaskPriority is
+        # exported by the memory package.
         def store_multiple_tasks():
             for i in range(50):
-                asyncio.run(
-                    memory_manager.store_task(
-                        task_id=f"perf_task_{i}",
-                        task_type="performance_test",
-                        description=f"Performance test task {i}",
-                        status="completed",
-                        priority=memory_manager.TaskPriority.MEDIUM,
-                        subtasks=[],
-                        context={"test": f"data_{i}"},
-                        execution_details={"result": f"success_{i}"},
-                    )
+                memory_manager.create_task_record(
+                    task_name=f"perf_task_{i}",
+                    description=f"Performance test task {i}",
+                    priority=TaskPriority.MEDIUM,
+                    agent_type="performance_test",
+                    inputs={"test": f"data_{i}"},
+                    metadata={"result": f"success_{i}"},
                 )
 
         _, memory_usage = self.measure_memory_usage(store_multiple_tasks)
@@ -218,28 +260,38 @@ class TestSystemPerformanceBenchmarks:
 
     def test_environment_variable_parsing_performance(self):
         """Test environment variable parsing performance"""
-        config_manager = ConfigManager()
-
-        # Test parsing different value types
-        test_values = [
-            ("true", bool),
-            ("false", bool),
-            ("12345", int),
-            ("3.14159", float),
-            ("item1,item2,item3", list),
-            ("simple_string", str),
+        # #13162: ConfigManager._parse_env_value no longer exists — env values
+        # are coerced by the canonical autobot_shared.env_utils helpers, which
+        # read the variable and apply the type themselves. The benchmark now
+        # measures those, one case per coercion the retired helper covered.
+        # (Comma-separated values have no canonical list helper; env_str is the
+        # current behaviour for them.)
+        parse_cases = [
+            ("AUTOBOT_BENCH_BOOL_TRUE", "true", lambda name: env_flag(name, False)),
+            ("AUTOBOT_BENCH_BOOL_FALSE", "false", lambda name: env_flag(name, True)),
+            ("AUTOBOT_BENCH_INT", "12345", lambda name: env_int(name, 0)),
+            ("AUTOBOT_BENCH_FLOAT", "3.14159", lambda name: env_float(name, 0.0)),
+            ("AUTOBOT_BENCH_LIST", "item1,item2,item3", lambda name: env_str(name, "")),
+            ("AUTOBOT_BENCH_STR", "simple_string", lambda name: env_str(name, "")),
         ]
 
-        total_parse_time = 0
-        for value, expected_type in test_values:
-            _, parse_time = self.measure_execution_time(config_manager._parse_env_value, value)
-            total_parse_time += parse_time
+        for name, value, _parse in parse_cases:
+            os.environ[name] = value
 
-            # Each parse should be very fast
-            assert parse_time < 1.0, f"Environment value parsing too slow: {parse_time}ms for {value}"
+        try:
+            total_parse_time = 0.0
+            for name, value, parse in parse_cases:
+                _, parse_time = self.measure_execution_time(parse, name)
+                total_parse_time += parse_time
 
-        # Total parsing time should be minimal
-        assert total_parse_time < 5.0, f"Total parsing time too slow: {total_parse_time}ms"
+                # Each parse should be very fast
+                assert parse_time < 1.0, f"Environment value parsing too slow: {parse_time}ms for {value}"
+
+            # Total parsing time should be minimal
+            assert total_parse_time < 5.0, f"Total parsing time too slow: {total_parse_time}ms"
+        finally:
+            for name, _value, _parse in parse_cases:
+                os.environ.pop(name, None)
 
     @pytest.mark.asyncio
     async def test_system_startup_performance(self):
@@ -280,20 +332,18 @@ class TestSystemPerformanceBenchmarks:
             for i in range(20)
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(large_config, f)
-            config_file = f.name
+        # #13162: ConfigManager takes a config *directory* (config_dir), not a
+        # config_file — it loads <config_dir>/config.yaml alongside
+        # settings.json. The old NamedTemporaryFile handed it a path it has
+        # never accepted, so nothing was ever loaded here.
+        with tempfile.TemporaryDirectory(prefix="autobot-config-benchmark-") as config_dir:
+            with open(os.path.join(config_dir, "config.yaml"), "w", encoding="utf-8") as f:
+                yaml.dump(large_config, f)
 
-        try:
             # Test loading performance
-            _, load_time = self.measure_execution_time(ConfigManager, config_file=config_file)
+            _, load_time = self.measure_execution_time(ConfigManager, config_dir=config_dir)
 
             assert load_time < 1000.0, f"Large config file loading too slow: {load_time}ms"
-
-        finally:
-            import os
-
-            os.unlink(config_file)
 
     def test_statistics_tracking_performance(self):
         """Test performance statistics tracking overhead"""
@@ -395,8 +445,15 @@ class TestScalabilityBenchmarks:
             for i in range(num_inputs)
         ]
 
-        # Mock processor for consistent results
-        with patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process:
+        # Mock processor for consistent results. #13162: `_store_result` is
+        # mocked for the same reason as in the concurrency benchmark above — it
+        # writes every result to the shared SQLite memory database, whose write
+        # lock serializes concurrent callers, so it measured disk contention
+        # rather than the processor's scalability. The budget is unchanged.
+        with (
+            patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
+            patch.object(processor, "_store_result", new_callable=AsyncMock),
+        ):
             mock_process.return_value = Mock(
                 success=True,
                 confidence=0.8,
@@ -423,25 +480,32 @@ class TestScalabilityBenchmarks:
         import gc
 
         config_manager = ConfigManager()
+        # #13199: pin the sync cache — get_nested() would otherwise reload from disk
+        # after CACHE_DURATION (30s) and discard the keys written below, making the
+        # loop measure an empty config instead of a populated one.
+        config_manager.CACHE_DURATION = float("inf")
         process = psutil.Process()
 
         # Get baseline memory
         gc.collect()
         initial_memory = process.memory_info().rss / 1024 / 1024
 
-        # Perform many operations
+        # Perform many operations.
+        # #13199: use the nested writer/readers consistently — get_config_section()
+        # traverses dot paths, so keys written with the flat set()/get() pair were
+        # invisible to it and the section loop would have measured empty dicts.
         for iteration in range(10):
             # Add many configs
             for i in range(100):
-                config_manager.set(f"memory_test.iter_{iteration}.key_{i}", f"data_{i}")
+                config_manager.set_nested(f"memory_test.iter_{iteration}.key_{i}", f"data_{i}")
 
             # Get many configs
             for i in range(100):
-                config_manager.get(f"memory_test.iter_{iteration}.key_{i}")
+                config_manager.get_nested(f"memory_test.iter_{iteration}.key_{i}")
 
             # Get sections
             for i in range(10):
-                config_manager.get_section(f"memory_test.iter_{iteration}")
+                config_manager.get_config_section(f"memory_test.iter_{iteration}")
 
         # Check final memory
         gc.collect()

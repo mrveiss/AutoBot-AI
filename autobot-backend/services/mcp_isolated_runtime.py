@@ -38,6 +38,37 @@ _WORKER_ENV_ALLOW = frozenset(
 )
 
 
+def _resolve_run_jwt_secret() -> str:
+    """Resolve the run-JWT signing secret to hand to a worker (#13265).
+
+    Resolves ``RUN_JWT_SECRET`` ONLY — the dedicated run-JWT key — from the
+    environment first and then from the SSOT config (which reads ``.env``, the
+    same value by a different source).
+
+    ``AUTOBOT_JWT_SECRET`` / ``config.jwt_secret`` are deliberately NOT consulted.
+    That is the platform's user-session signing key: ``auth_middleware`` verifies
+    user auth JWTs with it and ``slm_client`` mints service tokens with it.  The
+    recipients here are ``filesystem_mcp``, ``browser_mcp`` and ``vnc_mcp`` — the
+    bridges ``resolve_mode()`` forces into subprocess isolation precisely because
+    they handle untrusted content.  Exporting the platform key into that child
+    would let a compromised bridge read ``/proc/self/environ`` and forge session
+    JWTs for any user or role: a full authentication bypass reached from the
+    largest untrusted-input surface in the system.  A dedicated, separately
+    rotatable secret is the only thing that may cross this boundary.
+
+    The worker validates the run JWT it is handed per request, and verifying an
+    HMAC requires the key.  The child's inherited environment is scrubbed to
+    ``_WORKER_ENV_ALLOW``, so the secret is provisioned explicitly here — the
+    same way cpu/mem/nofile limits are — rather than by widening that allow-list,
+    which would also leak every other matching variable.  The run JWT itself is
+    still passed per request and never via the environment.
+
+    Returns an empty string when unset; the caller warns and spawns without it,
+    and the worker then rejects isolated calls whenever enforcement is on.
+    """
+    return os.environ.get("RUN_JWT_SECRET", "") or config.run_jwt_secret or ""
+
+
 class IsolatedBridgeClient:
     """Client for a single bridge running as a subprocess worker."""
 
@@ -52,6 +83,32 @@ class IsolatedBridgeClient:
         self._last_restart_ts = 0.0
         self._permanently_failed = False
 
+    def _build_worker_env(self) -> Dict[str, str]:
+        """Build the scrubbed child environment for a worker subprocess.
+
+        Inherited variables are filtered to ``_WORKER_ENV_ALLOW``; everything the
+        worker actually needs is set explicitly below.
+        """
+        env = {k: v for k, v in os.environ.items() if k in _WORKER_ENV_ALLOW}
+        env["MCP_WORKER_CPU_SECONDS"] = str(self._policy.cpu_seconds)
+        env["MCP_WORKER_MEM_MB"] = str(self._policy.memory_mb)
+        env["MCP_WORKER_NOFILE"] = str(self._policy.nofile)
+        env["MCP_WORKER_LOG_LEVEL"] = config.log_level
+        # #13265: without the signing secret the worker cannot verify the run JWT
+        # it receives, and MCP_RUN_JWT_ENFORCE=1 would reject every isolated call.
+        # Only the dedicated run-JWT key may cross this boundary — never the
+        # platform user-session key (see _resolve_run_jwt_secret).
+        run_jwt_secret = _resolve_run_jwt_secret()
+        if run_jwt_secret:
+            env["RUN_JWT_SECRET"] = run_jwt_secret
+        else:
+            logger.warning(
+                "mcp_isolation: no run-JWT signing secret resolved for bridge %s — "
+                "isolated calls will be rejected if MCP_RUN_JWT_ENFORCE is set",
+                self._bridge,
+            )
+        return env
+
     async def start(self) -> None:
         """Spawn the worker subprocess with scrubbed env."""
         if self._proc is not None and self._proc.returncode is None:
@@ -59,11 +116,7 @@ class IsolatedBridgeClient:
         if self._permanently_failed:
             raise RuntimeError("bridge " + self._bridge + " exceeded restart_max")
 
-        env = {k: v for k, v in os.environ.items() if k in _WORKER_ENV_ALLOW}
-        env["MCP_WORKER_CPU_SECONDS"] = str(self._policy.cpu_seconds)
-        env["MCP_WORKER_MEM_MB"] = str(self._policy.memory_mb)
-        env["MCP_WORKER_NOFILE"] = str(self._policy.nofile)
-        env["MCP_WORKER_LOG_LEVEL"] = config.log_level
+        env = self._build_worker_env()
 
         logger.info(
             "mcp_isolation: spawning worker bridge=%s cpu=%ss mem=%sMB nofile=%s",

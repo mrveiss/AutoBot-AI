@@ -58,7 +58,10 @@ def get_knowledge_base(config: ConfigManager = Depends(get_config)):
     """
     from knowledge_base import KnowledgeBase as KnowledgeBase
 
-    return KnowledgeBase()
+    # #13162: the resolved config was previously accepted and then discarded —
+    # every request-scoped KnowledgeBase silently read the global singleton,
+    # so a dependency_overrides[get_config] in tests had no effect here.
+    return KnowledgeBase(config_manager=config)
 
 
 def get_llm_interface(config: ConfigManager = Depends(get_config)):
@@ -96,11 +99,11 @@ def get_orchestrator(
     # Lazy import to reduce startup time
     from orchestrator import Orchestrator
 
-    # #6983: Orchestrator.__init__ takes only ``config_mgr``; the previous
-    # call passed three extra args (llm_interface, knowledge_base, diagnostics)
-    # that have no matching parameter — would TypeError at first invocation.
-    # Orchestrator self-instantiates its sub-components from the config.
-    return Orchestrator(config_mgr=config)
+    # #13162: the constructor parameter is now named for the attribute it sets
+    # (``config_manager``), so this provider and get_cached_orchestrator below
+    # finally agree with it. Orchestrator self-instantiates the collaborators
+    # this provider does not supply.
+    return Orchestrator(config_manager=config)
 
 
 def get_security_layer(config: ConfigManager = Depends(get_config)):
@@ -169,7 +172,8 @@ def get_cached_knowledge_base(config: ConfigManager = Depends(get_config)):
     """
     from knowledge_base import KnowledgeBase as KnowledgeBase
 
-    return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase())
+    # #13162: same dropped-config bug as get_knowledge_base above.
+    return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase(config_manager=config))
 
 
 def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):

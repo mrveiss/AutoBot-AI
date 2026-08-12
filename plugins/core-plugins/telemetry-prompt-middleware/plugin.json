@@ -7,7 +7,8 @@
   "entry_point": "plugins.core_plugins.telemetry_prompt_middleware.plugin",
   "capabilities": ["network:outbound", "system:env"],
   "trust_tier": "official",
-  "dependencies": ["aiohttp"],
+  "dependencies": [],
+  "python_dependencies": ["aiohttp"],
   "config_schema": {
     "type": "object",
     "properties": {

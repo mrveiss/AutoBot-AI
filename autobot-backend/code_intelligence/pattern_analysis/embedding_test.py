@@ -190,3 +190,57 @@ class TestGenerateEmbeddingHashFallback:
             result = await analyzer._generate_embedding(code)
 
         assert len(result) == 768
+
+
+class TestCacheWriteFailureDoesNotDiscardTheEmbedding:
+    """#13437: the cache is an optimisation — its failure must not change the result.
+
+    Generation and the cache write shared one ``try/except Exception``, so a
+    failing ``EmbeddingCache.put`` threw away a perfectly good vector and
+    returned the SHA-256 pseudo-embedding instead. Every pattern written while
+    the cache misbehaved was indexed under a vector encoding nothing about the
+    code, silently degrading ``code_patterns`` similarity search.
+
+    This is the third defect of this shape in this one function — #12407 (a
+    nonexistent method swallowed by the same broad except) and #12374 before
+    it. The tests above cover generation; this covers the write.
+    """
+
+    async def test_returns_the_real_embedding_when_the_cache_write_fails(self, pa, analyzer):
+        code = "def cache_write_boom(): return 3"
+        analyzer._embedding_cache.put = AsyncMock(side_effect=RuntimeError("cache down"))
+
+        with patch.object(
+            npu_client_module,
+            "generate_embedding_with_fallback",
+            new=AsyncMock(return_value=FAKE_EMBEDDING),
+        ):
+            result = await analyzer._generate_embedding(code)
+
+        assert result == FAKE_EMBEDDING, "a failed cache write discarded the real embedding"
+        assert len(result) != 768, "fell through to the SHA-256 pseudo-embedding"
+
+    async def test_still_falls_back_when_generation_itself_fails(self, pa, analyzer):
+        """The fallback must remain reachable — this narrows the except, not removes it."""
+        code = "def generation_boom(): return 4"
+
+        with patch.object(
+            npu_client_module,
+            "generate_embedding_with_fallback",
+            new=AsyncMock(side_effect=RuntimeError("npu down")),
+        ):
+            result = await analyzer._generate_embedding(code)
+
+        assert len(result) == 768, "hash fallback should still be used when generation fails"
+
+    async def test_still_falls_back_when_generation_returns_nothing(self, pa, analyzer):
+        code = "def generation_empty(): return 5"
+
+        with patch.object(
+            npu_client_module,
+            "generate_embedding_with_fallback",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await analyzer._generate_embedding(code)
+
+        assert len(result) == 768

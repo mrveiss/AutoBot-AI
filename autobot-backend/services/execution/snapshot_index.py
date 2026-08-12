@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
 
-_DEFAULT_SNAPSHOT_PATH = "/opt/autobot/snapshots"
+# #13149: derived from the canonical project root instead of a hardcoded
+# `/opt/autobot` literal, so a dev checkout stores its snapshot index under
+# the checkout rather than the live install's snapshot directory.
+_DEFAULT_SNAPSHOT_PATH = str(project_root() / "snapshots")
 _INDEX_FILENAME = "snapshot_index.json"
 
 _SNAPSHOT_STORAGE_PATH: str = os.getenv("AUTOBOT_SNAPSHOT_STORAGE_PATH", _DEFAULT_SNAPSHOT_PATH)
@@ -37,7 +41,7 @@ def _resolve_storage_path() -> Path:
         )
         raw = _DEFAULT_SNAPSHOT_PATH
     path = Path(raw)
-    if str(path).startswith("/tmp"):  # nosec B108 - intentional check to warn operator about non-persistent tmp path
+    if str(path).startswith("/tmp"):  # nosec B108  # intentional check to warn operator about non-persistent tmp path
         logger.warning(
             "Snapshot storage path %s is under /tmp — snapshots will not survive a host restart. "
             "Set AUTOBOT_SNAPSHOT_STORAGE_PATH to a persistent directory (e.g. /opt/autobot/snapshots).",

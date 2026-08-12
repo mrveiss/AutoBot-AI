@@ -77,7 +77,7 @@ class WorkflowSecretService:
         name: str,
         value: str,
         owner_id: str,
-        secret_type: str = "api_key",  # nosec B107 - secret_type category, not a password
+        secret_type: str = "api_key",  # nosec B107  # secret_type category, not a password
         workflow_id: str | None = None,
         description: str | None = None,
     ) -> Dict:

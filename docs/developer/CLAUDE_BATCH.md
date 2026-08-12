@@ -21,13 +21,14 @@ Default behavior:
 
 ## Pre-Implementation Validation
 
-**Before spawning agents, verify:**
+**Run the canonical pre-flight first:** [`CLAUDE_GIT.md`](CLAUDE_GIT.md) "Pre-Flight
+Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply.
 
-1. `git branch --show-current` — must be `Dev_new_gui`
-2. `git status --porcelain` — if dirty, commit or stash before spawning
-3. Issue not already resolved: check `git log origin/Dev_new_gui --grep="#<issue>"`
-4. No stale worktrees: clean up existing `.worktrees/issue-<number>/` directories
-5. Issue preconditions resolved
+**Then the batch-specific additions:**
+
+1. No stale worktree already claims `.worktrees/issue-<number>/` — inventory it; never
+   clobber or reuse another session's tree
+2. Issue preconditions resolved (blockers named in its Implementation Order have landed)
 
 ---
 
@@ -35,7 +36,7 @@ Default behavior:
 
 1. **Main session stays on `Dev_new_gui`** throughout — never switches
 2. **Agents work in isolated worktrees** — no cross-contamination
-3. **Batch size: 3 agents max** — avoid API rate limiting (529 errors), wait between batches
+3. **Batch size: 3 implementation agents max** — avoid API rate limiting (529 errors), wait between batches. The cap is on *implementation* agents; read-only Haiku sweeps are cheap and may fan out wider
 4. **Agents commit locally only** — do NOT push; main session handles all pushes
 5. **After each batch:** `/batch-implement` auto-detects failures:
    - API 529 → wait 60s, retry
@@ -43,6 +44,22 @@ Default behavior:
    - Already resolved → skip
    - Agent crash → retry up to 3 times
    - Only escalate unresolvable issues
+
+---
+
+## Which Tier Runs the Batch
+
+Every agent definition in `.claude/agents/` declares its own tier — read it there, never
+restate it here. Two rules govern dispatch:
+
+- **An agent with no `model:` in its frontmatter inherits the session model**, so a mechanical
+  agent dispatched from an Opus session bills at Opus rates. Unpinned is a bug, not a default.
+- **The batch's mechanical scaffolding is Haiku work** — the pre-flight sweep, per-issue
+  "already resolved?" checks, per-PR CI verdicts, the leftover audit. Fan those out to Haiku
+  in parallel; keep the implementation itself on the tier its agent declares.
+
+When delegation pays (and when it does not) is defined once in
+[`CLAUDE_WORKFLOW.md`](CLAUDE_WORKFLOW.md) "Agent Delegation".
 
 ---
 

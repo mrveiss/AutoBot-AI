@@ -29,7 +29,14 @@ kb_index = _load_module()
 
 
 class FakeRedis:
-    """Records every command, and answers FT.INFO like a freshly built index."""
+    """Records every command, and answers FT.INFO like a freshly built index.
+
+    ``get_redis_client`` returns a ``decode_responses=True`` client
+    (``autobot_shared/redis_management/config.py:61,153``), so a live
+    ``FT.INFO`` reply is a nested list of ``str``, never ``bytes`` — mocking
+    ``bytes`` here would let a bytes-literal-indexing bug pass vacuously
+    (#13290).
+    """
 
     def __init__(self, drop_error: Exception | None = None):
         self.commands: list[tuple] = []
@@ -40,7 +47,7 @@ class FakeRedis:
         if args[0] == "FT.DROPINDEX" and self._drop_error is not None:
             raise self._drop_error
         if args[0] == "FT.INFO":
-            return [b"attributes", [[b"vector", b"dim", str(kb_index.VECTOR_DIM).encode()]]]
+            return ["attributes", [["identifier", "vector", "attribute", "vector", "dim", str(kb_index.VECTOR_DIM)]]]
         return "OK"
 
     def command_names(self) -> list[str]:
@@ -114,3 +121,19 @@ def test_unreachable_redis_reports_failure(monkeypatch):
     monkeypatch.setattr(kb_index, "get_redis_client", lambda **_: None)
 
     assert kb_index.create_index_with_correct_dimensions() is False
+
+
+def test_verify_index_creation_reads_a_decoded_ft_info_reply(caplog):
+    """#13290: bytes-literal indexing on a decoded FT.INFO reply raised ValueError.
+
+    Drives ``_verify_index_creation`` directly against the realistic
+    ``decode_responses=True`` shape (str elements throughout) and asserts the
+    dimension is actually logged rather than the walk raising or silently
+    finding nothing.
+    """
+    client = FakeRedis()
+
+    with caplog.at_level("INFO", logger=kb_index.logger.name):
+        kb_index._verify_index_creation(client)
+
+    assert f"Vector dimension: {kb_index.VECTOR_DIM}" in caplog.text

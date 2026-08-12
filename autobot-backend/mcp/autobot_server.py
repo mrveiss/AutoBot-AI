@@ -15,14 +15,24 @@ Architecture:
         └── agents.*   → AgentDiaryService + agents/ directory listing
 
 Auth:
-    HTTP transport: ``Authorization: Bearer <token>`` header.
-    stdio transport: ``AUTOBOT_MCP_TOKEN`` environment variable.
-    Tokens carry comma-separated scopes: ``kb``, ``memory``, ``agents``.
-    Dev/test override: set ``AUTOBOT_MCP_TOKEN=dev:kb,memory,agents``.
+    Bearer tokens have the form ``<secret>:<scope1>,<scope2>`` and carry the
+    scopes ``kb``, ``memory``, ``agents``.
+
+    ``AUTOBOT_MCP_TOKEN`` is the SECRET SEGMENT ONLY — never the whole bearer
+    token (#13266).  It has no default: an unconfigured secret rejects every
+    request rather than authenticating everyone.
+
+    HTTP transport:  caller supplies ``Authorization: Bearer <secret>:<scopes>``.
+    stdio transport: composes its own bearer from ``AUTOBOT_MCP_TOKEN`` plus
+                     ``AUTOBOT_MCP_STDIO_SCOPES`` (see _stdio_bearer_token).
 
 Rate limiting:
-    Simple in-memory token-bucket: 50 req/min per token.
-    Excess requests receive a JSON-RPC error (code -32029).
+    Pre-auth (#13268): failed authentications are counted per client IP *and*
+    against an endpoint-wide ceiling before any validation work runs, so the
+    secret cannot be brute-forced unmetered and failed attempts cannot be used
+    as a Redis amplifier.  See mcp/auth_throttle.py.
+    Post-auth: in-memory token bucket per token prefix.
+    Both reject with JSON-RPC error code -32029.
 
 Observability:
     Every tool call is logged at INFO level with token-prefix, tool name,
@@ -31,13 +41,17 @@ Observability:
 
 import asyncio
 import json
+import secrets
 import time
 from typing import Any, Dict, List, Optional, Tuple
+
+from pydantic import ValidationError as PydanticValidationError
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from mcp.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
 from services.run_jwt import validate_run_jwt
 
 logger = get_logger(__name__)
@@ -77,6 +91,48 @@ def _ok(result: Any, req_id: Any = None) -> Dict[str, Any]:
 
 def _err(code: int, message: str, req_id: Any = None) -> Dict[str, Any]:
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+
+
+# ---------------------------------------------------------------------------
+# stdio bearer composition (#13266)
+# ---------------------------------------------------------------------------
+
+
+def _stdio_bearer_token() -> str:
+    """Compose the bearer token the stdio transport presents to itself.
+
+    #13266: ``AUTOBOT_MCP_TOKEN`` used to be read two incompatible ways — as the
+    whole ``<secret>:<scopes>`` bearer here, and as the secret segment alone in
+    ``_validate_token``. No value satisfied both, so every stdio request was
+    rejected. The comparison site is the security boundary, so it keeps owning
+    the meaning: ``AUTOBOT_MCP_TOKEN`` is the SECRET, and stdio composes its
+    bearer from that secret plus ``AUTOBOT_MCP_STDIO_SCOPES``.
+
+    Raises:
+        RuntimeError: if no secret is configured. Deliberately fatal rather than
+            defaulted — a shipped default credential authenticates everyone
+            exactly as the empty secret did, and this process is the only thing
+            standing in front of the kb/memory/agents scopes.
+    """
+    secret = (config.mcp_token or "").strip()
+    if not secret:
+        raise RuntimeError(
+            "AUTOBOT_MCP_TOKEN is not set. The stdio transport has no default "
+            "credential by design; set it to the shared MCP secret to start."
+        )
+    if ":" in secret:
+        # The overloaded pre-#13266 form. _validate_token splits on the first
+        # colon, so this value can never match itself; say so instead of
+        # emitting an opaque -32001 on every request.
+        raise RuntimeError(
+            "AUTOBOT_MCP_TOKEN contains ':' — it holds the SECRET SEGMENT ONLY, "
+            "not a full '<secret>:<scopes>' token. Move the scopes to "
+            "AUTOBOT_MCP_STDIO_SCOPES."
+        )
+    scopes = ",".join(s.strip() for s in (config.mcp_stdio_scopes or "").split(",") if s.strip())
+    if not scopes:
+        raise RuntimeError("AUTOBOT_MCP_STDIO_SCOPES resolved to no scopes; stdio transport would grant nothing.")
+    return f"{secret}:{scopes}"
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +239,35 @@ _TOOLS: Dict[str, Dict[str, Any]] = {
                 },
             },
             "required": ["entity"],
+        },
+    },
+    "memory.path": {
+        "description": (
+            "Find the shortest relationship path between two memory-graph entities — "
+            "answers how two things are connected, not just what is near one of them."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "from_entity": {"type": "string", "description": "Source entity name"},
+                "to_entity": {"type": "string", "description": "Target entity name"},
+                "relation": {
+                    "type": "string",
+                    "description": "Optional relation type to restrict the traversal to",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "default": 6,
+                    "description": "Maximum path length in hops (1-10)",
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["outgoing", "incoming", "both"],
+                    "default": "both",
+                    "description": "Edge direction to follow; 'both' treats relations as undirected",
+                },
+            },
+            "required": ["from_entity", "to_entity"],
         },
     },
     "memory.verbatim_search": {
@@ -302,14 +387,16 @@ class AutoBotMCPServer:
     def _validate_token(token: str) -> List[str] | None:
         """Return the list of granted scopes for *token*, or None if invalid.
 
-        Token format: ``<secret>:<scope1>,<scope2>`` where the secret
-        portion is checked against the ``AUTOBOT_MCP_TOKEN`` env var (prefix
-        before the first colon).  The dev override ``dev:kb,memory,agents``
-        is always accepted when the env var is not set.
+        Token format: ``<secret>:<scope1>,<scope2>``.  The secret portion (the
+        prefix before the first colon) is compared against ``AUTOBOT_MCP_TOKEN``,
+        which holds the secret segment ONLY — this is the single meaning of that
+        variable (#13266).  There is no dev override and no default credential.
 
-        For production use, set ``AUTOBOT_MCP_TOKEN`` to the shared secret;
-        scopes are always taken from the token string itself so that the
-        issuer controls access.
+        Scopes are taken from the token string itself so that the issuer
+        controls access.
+
+        Fails closed (#13263): an empty configured secret rejects every token
+        rather than matching the empty secret segment of ``":<scopes>"``.
         """
         if not token:
             return None
@@ -317,8 +404,18 @@ class AutoBotMCPServer:
             secret_part, scopes_part = token.split(":", 1)
         except ValueError:
             return None
-        expected = config.mcp_token
-        if secret_part != expected:
+        # #13263: strip so a stray space in .env cannot become the secret —
+        # " " is truthy, so " :kb,memory,agents" would otherwise authenticate.
+        expected = (config.mcp_token or "").strip()
+        # #13263: never authenticate against an unset secret — without this a
+        # blank AUTOBOT_MCP_TOKEN would accept ":kb,memory,agents" from anyone,
+        # with the scopes chosen by the caller. The `not expected` test must stay
+        # first so the empty case never reaches the comparison.
+        #
+        # compare_digest because this is a long-lived shared secret checked on an
+        # endpoint with no other auth layer (CWE-208); same primitive as
+        # middleware/service_auth_enforcement.py.
+        if not expected or not secrets.compare_digest(secret_part, expected):
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None
@@ -366,6 +463,66 @@ class AutoBotMCPServer:
             logger.warning("_validate_redis_token: unexpected error: %s", exc)
             return None
 
+    @staticmethod
+    def _pre_auth_gate(method: str, client_ip: str, req_id: Any) -> Dict[str, Any] | None:
+        """Reject *client_ip* if it has exhausted its failed-auth budget (#13268).
+
+        Runs BEFORE any validation work: ahead of _validate_redis_token so a
+        locked-out caller cannot drive a Redis GET per request, and ahead of the
+        secret comparison so guessing the secret is metered.
+
+        Returns a JSON-RPC error to send, or None to continue.
+        """
+        blocked, reason = get_pre_auth_throttle().check(client_ip)
+        if not blocked:
+            return None
+        logger.warning("mcp_auth: pre-auth throttle blocked method=%s — %s", method or "<none>", reason)
+        return _err(-32029, f"Too many failed authentication attempts: {reason}", req_id)
+
+    async def _authenticate(
+        self,
+        params: Dict[str, Any],
+        auth_token: str,
+        req_id: Any,
+        client_ip: str,
+    ) -> Tuple[List[str] | None, bool, Dict[str, Any] | None]:
+        """Resolve granted scopes, metering failures against the pre-auth throttle.
+
+        SEC-2 Phase 2 (#6473): a run JWT in ``params`` takes precedence over the
+        legacy static token. Agents pass it as a top-level JSON-RPC param; the
+        scheduler also exposes it via AUTOBOT_RUN_JWT for in-process callers.
+
+        Returns ``(scopes, using_run_jwt, error_response)`` — exactly one of
+        *scopes* and *error_response* is non-None.
+        """
+        run_jwt_token = params.pop("run_jwt", None) if isinstance(params, dict) else None
+
+        if run_jwt_token:
+            scopes, error = await self._resolve_run_jwt(run_jwt_token)
+            if error:
+                return None, False, self._reject_auth(client_ip, error, req_id)
+            get_pre_auth_throttle().record_success(client_ip)
+            return scopes, True, None
+
+        scopes = self._validate_token(auth_token)
+        if scopes is None:
+            # Fallback: check Redis-issued tokens (Issue #6453)
+            scopes = await self._validate_redis_token(auth_token)
+        if scopes is None:
+            return None, False, self._reject_auth(client_ip, "Unauthorized: invalid or missing token", req_id)
+        get_pre_auth_throttle().record_success(client_ip)
+        return scopes, False, None
+
+    @staticmethod
+    def _reject_auth(client_ip: str, message: str, req_id: Any) -> Dict[str, Any]:
+        """Count one failed authentication and build its JSON-RPC error (#13268).
+
+        Never silent: every rejection is logged with its reason before returning.
+        """
+        get_pre_auth_throttle().record_failure(client_ip)
+        logger.warning("mcp_auth: rejected MCP request — %s", message)
+        return _err(-32001, message, req_id)
+
     def _check_scope(self, scopes: List[str], tool_name: str) -> bool:
         """Return True if *scopes* grants access to *tool_name*."""
         prefix = tool_name.split(".")[0]  # "kb", "memory", "agents"
@@ -390,6 +547,7 @@ class AutoBotMCPServer:
         params: Dict[str, Any],
         auth_token: str,
         req_id: Any = None,
+        client_ip: str | None = None,
     ) -> Dict[str, Any]:
         """Dispatch a JSON-RPC method call.
 
@@ -403,33 +561,32 @@ class AutoBotMCPServer:
             params:     JSON-RPC params dict.
             auth_token: Bearer token (validated here).
             req_id:     JSON-RPC ``id`` (echoed in response).
+            client_ip:  Caller address for the pre-auth throttle (#13268).
+                        Transports resolve it; ``None`` collapses to a shared
+                        ``UNKNOWN_IP`` bucket, which throttles more, never less.
 
         Returns:
             JSON-RPC response dict (always includes ``jsonrpc`` and ``id``).
         """
-        # SEC-2 Phase 2 (#6473): prefer run JWT over legacy static token.
-        # Agents pass run_jwt as a top-level JSON-RPC param; the scheduler also
-        # exposes it via AUTOBOT_RUN_JWT for in-process callers (base_agent.get_mcp_token).
-        run_jwt_token = params.pop("run_jwt", None) if isinstance(params, dict) else None
+        ip = client_ip or UNKNOWN_IP
+        throttled = self._pre_auth_gate(method, ip, req_id)
+        if throttled is not None:
+            return throttled
 
-        using_run_jwt = False
-        if run_jwt_token:
-            scopes, error = await self._resolve_run_jwt(run_jwt_token)
-            if error:
-                return _err(-32001, error, req_id)
-            using_run_jwt = True
-            rate_key = run_jwt_token[:16]
-        else:
-            scopes = self._validate_token(auth_token)
-            if scopes is None:
-                # Fallback: check Redis-issued tokens (Issue #6453)
-                scopes = await self._validate_redis_token(auth_token)
-            if scopes is None:
-                return _err(-32001, "Unauthorized: invalid or missing token", req_id)
-            rate_key = auth_token[:16]
+        # Bucket key is captured before _authenticate pops run_jwt out of params.
+        run_jwt_preview = params.get("run_jwt") if isinstance(params, dict) else None
+        rate_key = (run_jwt_preview or auth_token or "")[:16]
 
+        scopes, using_run_jwt, auth_error = await self._authenticate(params, auth_token, req_id, ip)
+        if auth_error is not None:
+            return auth_error
+
+        # Post-auth bucket stays keyed on the token prefix: it is only reachable
+        # by an authenticated caller, so the key space cannot be grown by an
+        # anonymous attacker (#13268).
         if self._is_rate_limited(rate_key):
-            return _err(-32029, "Rate limit exceeded (50 req/min)", req_id)
+            logger.warning("mcp_auth: post-auth rate limit exceeded for method=%s", method or "<none>")
+            return _err(-32029, f"Rate limit exceeded ({_RATE_LIMIT} req/{int(_WINDOW_SECONDS)}s)", req_id)
 
         if method in ("initialize", "tools/list"):
             return _ok(
@@ -479,7 +636,11 @@ class AutoBotMCPServer:
             elapsed = time.monotonic() - t0
             logger.info("mcp tool_call tool=%s elapsed=%.3fs", tool_name, elapsed)
             return _ok({"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, req_id)
-        except TypeError as exc:
+        except (TypeError, PydanticValidationError) as exc:
+            # #13762: a handler that validates its arguments through a request
+            # model raises ValidationError, which is an invalid-arguments error
+            # (-32602), not an internal one. Without this it fell to -32603 and
+            # read to the caller as a server fault.
             logger.warning("mcp bad_arguments tool=%s error=%s", tool_name, exc)
             return _err(-32602, f"Invalid arguments: {exc}", req_id)
         except Exception as exc:
@@ -530,8 +691,10 @@ class AutoBotMCPServer:
     # ------------------------------------------------------------------
 
     async def _memory_entity_lookup(self, name: str) -> Any:
+        from api.schemas_knowledge import MemoryEntityLookupRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
+        name = MemoryEntityLookupRequest(name=name).name
         graph = AutoBotMemoryGraph()
         await graph.initialize()
         entity = await graph.get_entity(entity_name=name, include_relations=True)
@@ -540,8 +703,11 @@ class AutoBotMCPServer:
         return entity
 
     async def _memory_timeline(self, entity: str, range: str | None = None) -> Any:
+        from api.schemas_knowledge import MemoryTimelineRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
+        args = MemoryTimelineRequest(entity=entity, range=range)
+        entity, range = args.entity, args.range
         graph = AutoBotMemoryGraph()
         await graph.initialize()
         base = await graph.get_entity(entity_name=entity, include_relations=True)
@@ -578,9 +744,14 @@ class AutoBotMCPServer:
         return {"entity": base, "timeline": neighbours, "count": len(neighbours)}
 
     async def _memory_related(self, entity: str, depth: int = 2) -> Any:
+        from api.schemas_knowledge import MemoryRelatedRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
-        depth = max(1, min(depth, 5))
+        # #13762: the entity name was unbounded. ``depth`` keeps its existing
+        # clamp rather than becoming a rejection, so the model's ge/le is the
+        # declared contract and the clamp is what enforces it.
+        args = MemoryRelatedRequest(entity=entity, depth=max(1, min(depth, 5)))
+        entity, depth = args.entity, args.depth
         graph = AutoBotMemoryGraph()
         await graph.initialize()
 
@@ -615,11 +786,57 @@ class AutoBotMCPServer:
             "count": len(visited),
         }
 
+    async def _memory_path(
+        self,
+        from_entity: str,
+        to_entity: str,
+        relation: str | None = None,
+        max_depth: int = 6,
+        direction: str = "both",
+    ) -> Any:
+        """Shortest relationship path between two entities (#13474).
+
+        Delegates to AutoBotMemoryGraph.find_path so name resolution and path
+        serialisation are not duplicated against the Graph-RAG ``/path``
+        endpoint. #13762 extends that to the input contract: the arguments go
+        through ``GraphRAGPathRequest``, the same model the REST route binds, so
+        the two surfaces cannot drift on what a valid request is. ``max_depth``
+        stays clamped rather than rejected — an untrusted caller must not be
+        able to request an unbounded traversal, but asking for too much is not
+        an error the way an unbounded entity name is.
+        """
+        from api.schemas_knowledge import GraphRAGPathRequest
+        from autobot_memory_graph import AutoBotMemoryGraph
+
+        allowed_directions = ("outgoing", "incoming", "both")
+        if direction not in allowed_directions:
+            return {"error": "Invalid direction", "direction": direction, "allowed": list(allowed_directions)}
+
+        args = GraphRAGPathRequest(
+            from_entity=from_entity,
+            to_entity=to_entity,
+            relation=relation,
+            max_depth=max(1, min(max_depth, 10)),
+            direction=direction,
+        )
+
+        graph = AutoBotMemoryGraph()
+        await graph.initialize()
+        return await graph.find_path(
+            from_entity=args.from_entity,
+            to_entity=args.to_entity,
+            relation=args.relation,
+            max_depth=args.max_depth,
+            direction=args.direction,
+        )
+
     async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
+        from api.schemas_knowledge import MemoryVerbatimSearchRequest
         from memory.verbatim_store import VerbatimStore
 
+        args = MemoryVerbatimSearchRequest(query=query, session_filter=session_filter)
         store = VerbatimStore()
-        results = await store.search(query, session_filter=session_filter)
+        results = await store.search(args.query, session_filter=args.session_filter)
         return {"results": results, "count": len(results)}
 
     # ------------------------------------------------------------------
@@ -644,7 +861,7 @@ class AutoBotMCPServer:
         """Read JSON-RPC requests from stdin line-by-line, write responses to stdout."""
         import sys
 
-        token = config.mcp_token
+        token = _stdio_bearer_token()
         loop = asyncio.get_event_loop()
 
         reader = asyncio.StreamReader()
@@ -673,7 +890,7 @@ class AutoBotMCPServer:
                 method = msg.get("method", "")
                 params = msg.get("params") or {}
                 req_id = msg.get("id")
-                response = await self.handle_request(method, params, token, req_id)
+                response = await self.handle_request(method, params, token, req_id, client_ip="stdio")
             out = json.dumps(response, default=str) + "\n"
             writer_transport.write(out.encode("utf-8"))
 
@@ -684,7 +901,7 @@ class AutoBotMCPServer:
     async def serve_http(
         self,
         host: str = "0.0.0.0",
-        port: int = 8200,  # nosec B104 - intentional bind to all interfaces for service/test
+        port: int = 8200,  # nosec B104  # intentional bind to all interfaces for service/test
     ) -> None:
         """Run an aiohttp server accepting ``POST /mcp/tool`` requests."""
         from aiohttp import web
@@ -703,7 +920,7 @@ class AutoBotMCPServer:
             method = body.get("method", "")
             params = body.get("params") or {}
             req_id = body.get("id")
-            response = await self.handle_request(method, params, token, req_id)
+            response = await self.handle_request(method, params, token, req_id, client_ip=request.remote)
             status = 200
             if "error" in response:
                 code = response["error"].get("code", -32000)

@@ -159,6 +159,12 @@ class MultiModalProcessor:
             # Update statistics
             self._update_stats(result)
 
+            # #13688: stamp the owner from the input in one place, so the memory
+            # write is tenant-scoped without touching every ProcessingResult
+            # construction site.
+            if result.user_id is None:
+                result.user_id = input_data.user_id
+
             # Store result in memory
             await self._store_result(result)
 
@@ -534,9 +540,21 @@ class MultiModalProcessor:
             # use store_memory() with EXECUTION category instead.
             from memory.enums import MemoryCategory
 
+            if not result.user_id:
+                # #13688: the plane refuses unowned writes. Say so loudly — the
+                # old behaviour was an untenanted row, and the failure mode this
+                # replaces was a swallowed TypeError that silently stopped
+                # persisting every result.
+                self.logger.warning(
+                    "Not persisting multi-modal result %s: no owner on the input (#13688)",
+                    result.result_id,
+                )
+                return
+
             await self.memory_manager.store_memory(
                 category=MemoryCategory.EXECUTION,
                 content=f"Multi-modal processing: {result.modality_type.value}",
+                user_id=result.user_id,
                 metadata={
                     "result_id": result.result_id,
                     "task_type": "multimodal_processing",

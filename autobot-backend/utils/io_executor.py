@@ -23,6 +23,7 @@ remain responsive even during heavy background processing.
 """
 
 import asyncio
+import functools
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, TypeVar
@@ -62,7 +63,7 @@ def _get_log_io_executor() -> ThreadPoolExecutor:
     return _LOG_IO_EXECUTOR
 
 
-async def run_in_log_executor(func: Callable[..., T], *args: Any) -> T:
+async def run_in_log_executor(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     """Run a function in the dedicated log I/O thread pool.
 
     Issue #718: Uses dedicated thread pool to prevent blocking when the main
@@ -70,13 +71,17 @@ async def run_in_log_executor(func: Callable[..., T], *args: Any) -> T:
 
     Args:
         func: Function to run
-        *args: Arguments to pass to the function
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function (#13162 — bound
+            with functools.partial because run_in_executor is positional-only)
 
     Returns:
         Result of the function call
     """
     loop = asyncio.get_running_loop()
     executor = _get_log_io_executor()
+    if kwargs:
+        func = functools.partial(func, **kwargs)
     return await loop.run_in_executor(executor, func, *args)
 
 
@@ -108,21 +113,32 @@ def _get_file_io_executor() -> ThreadPoolExecutor:
     return _FILE_IO_EXECUTOR
 
 
-async def run_in_file_executor(func: Callable[..., T], *args: Any) -> T:
+async def run_in_file_executor(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     """Run a function in the dedicated file I/O thread pool.
 
     Issue #718: Uses dedicated thread pool to prevent blocking when the main
     asyncio thread pool is saturated by indexing operations.
 
+    #13162: ``loop.run_in_executor()`` takes positional arguments only, so
+    keyword arguments are bound with ``functools.partial`` first — same fix
+    ``chat_history/file_io.run_in_chat_io_executor`` received for #2958. Without
+    it a call like ``run_in_file_executor(os.makedirs, p, exist_ok=True)`` bound
+    ``exist_ok`` to *this* function and raised TypeError before the thread pool
+    was ever reached, which is why POST /api/filesystem/mcp/create_directory
+    always answered 500.
+
     Args:
         func: Function to run
-        *args: Arguments to pass to the function
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
 
     Returns:
         Result of the function call
     """
     loop = asyncio.get_running_loop()
     executor = _get_file_io_executor()
+    if kwargs:
+        func = functools.partial(func, **kwargs)
     return await loop.run_in_executor(executor, func, *args)
 
 
@@ -154,7 +170,7 @@ def get_analytics_executor() -> ThreadPoolExecutor:
     return _ANALYTICS_EXECUTOR
 
 
-async def run_in_analytics_executor(func: Callable[..., T], *args: Any) -> T:
+async def run_in_analytics_executor(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     """Run a function in the dedicated analytics thread pool.
 
     Issue #1233: Uses dedicated thread pool to prevent heavy analytics
@@ -163,13 +179,17 @@ async def run_in_analytics_executor(func: Callable[..., T], *args: Any) -> T:
 
     Args:
         func: Function to run
-        *args: Arguments to pass to the function
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function (#13162 — bound
+            with functools.partial because run_in_executor is positional-only)
 
     Returns:
         Result of the function call
     """
     loop = asyncio.get_running_loop()
     executor = get_analytics_executor()
+    if kwargs:
+        func = functools.partial(func, **kwargs)
     return await loop.run_in_executor(executor, func, *args)
 
 

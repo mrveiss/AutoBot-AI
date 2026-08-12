@@ -26,7 +26,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import re
-import subprocess  # nosec B404 - code review tools require subprocess
+import subprocess  # nosec B404  # code review tools require subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -876,7 +876,7 @@ class CodeReviewEngine(_BaseClass):
                     logger.warning("Rejected invalid git diff argument: %s", arg)
                     return ""
             cmd = ["git", "diff"] + split_args
-            result = subprocess.run(  # nosec B603 - argv validated by _VALID_GIT_DIFF_ARG_RE above
+            result = subprocess.run(  # nosec B603  # argv validated by _VALID_GIT_DIFF_ARG_RE above
                 cmd,
                 capture_output=True,
                 text=True,

@@ -6,6 +6,12 @@
 
 set -e  # Exit on any error
 
+# #13149: the "Expected:" hint below named the deployed install rather than
+# the tree this script actually runs in, sending anyone who hit it to the wrong
+# directory. PROJECT_ROOT comes from the shared resolver.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/lib/project_root.sh"
+
 # Source SSOT configuration (#808)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=infrastructure/shared/scripts/lib/ssot-config.sh
@@ -50,7 +56,7 @@ fi
 if [[ ! -f "autobot-slm-frontend/package.json" ]]; then
     echo -e "${RED}❌ Error: Must run from AutoBot root directory${NC}"
     echo "Current directory: $(pwd)"
-    echo "Expected: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    echo "Expected: ${PROJECT_ROOT}"
     exit 1
 fi
 

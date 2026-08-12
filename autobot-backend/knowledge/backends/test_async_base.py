@@ -16,6 +16,7 @@ from typing import Callable
 
 import pytest
 
+from knowledge.backends._chromadb_support import require_real_chromadb
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
 from knowledge.backends.async_memory_adapter import AsyncInMemoryClient
@@ -33,7 +34,7 @@ def _memory_client(tmp_path) -> AsyncBaseClient:  # tmp_path unused
 
 
 def _chromadb_client(tmp_path) -> AsyncBaseClient:
-    chromadb = pytest.importorskip("chromadb")
+    chromadb = require_real_chromadb()
     from utils.async_chromadb_client import AsyncChromaClient
 
     raw_sync = chromadb.PersistentClient(path=str(tmp_path))

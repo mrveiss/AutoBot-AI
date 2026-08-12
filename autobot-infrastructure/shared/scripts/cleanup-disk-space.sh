@@ -26,7 +26,14 @@ IFS=$'\n\t'
 # CONSTANTS
 # ============================================================================
 
-readonly AUTOBOT_ROOT="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+# #13149: this defaulted to the deployed install, and line ~693 `cd`s into it —
+# so running the cleanup from a checkout operated on the LIVE install instead of
+# this tree. That is the #13092 failure class. The shared helper resolves from
+# this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
+readonly AUTOBOT_ROOT="${PROJECT_ROOT}"
 readonly BYTES_TO_MB=1048576
 readonly BYTES_TO_KB=1024
 readonly PROGRESS_THRESHOLD=100  # Show progress if >100 files
@@ -716,7 +723,7 @@ fi
 # Safety check: verify we're in AutoBot directory
 if [[ ! -f "CLAUDE.md" ]] || [[ ! -f "install.sh" ]]; then
     format_message "ERROR" "Not in AutoBot root directory!"
-    echo "Expected: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/"
+    echo "Expected: ${AUTOBOT_ROOT}/"
     echo "Current: $(pwd)"
     exit 1
 fi

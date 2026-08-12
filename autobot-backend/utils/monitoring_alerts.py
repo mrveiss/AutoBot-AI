@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.alert_cooldown import AlertCooldownManager, AlertTier
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import Severity
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -38,13 +39,18 @@ def _severity_to_tier(severity) -> AlertTier:
     return _SEVERITY_TO_TIER.get(key, AlertTier.ROUTINE)
 
 
-class AlertSeverity(Enum):
-    """Alert severity levels"""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+# Alert severity levels (#13597).
+#
+# Was a local `Enum` with LOW/MEDIUM/HIGH/CRITICAL — an exact subset of the
+# canonical `Severity`, identical base class, no added behaviour. Aliased rather
+# than removed so existing `AlertSeverity.HIGH` call sites keep working, matching
+# the `WorkflowStatus = TaskStatus` precedent in the canonical module.
+#
+# `_SEVERITY_TO_TIER` above and the emoji map in `LogNotificationChannel` are
+# both `.get(..., default)` lookups keyed on the four original members, so the
+# three additional ones (UNKNOWN, INFO, MINIMAL) fall through to the existing
+# defaults instead of raising.
+AlertSeverity = Severity
 
 
 class AlertStatus(Enum):

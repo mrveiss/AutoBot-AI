@@ -477,6 +477,24 @@ async def get_agent_capabilities(
         raise HTTPException(status_code=500, detail="Failed to get capabilities")
 
 
+def _classification_status() -> dict:
+    """Report whether request classification is actually working (#13807).
+
+    Two fields because two different things go wrong: the classifier may fail to
+    build at all, or build and then raise on every request. The second case
+    reports ``enabled: true`` and still classifies nothing, so availability
+    alone would call it healthy.
+    """
+    last = getattr(orchestrator, "last_classification_state", None)
+    availability = getattr(orchestrator, "classification_availability", None)
+    return {
+        "enabled": bool(getattr(orchestrator, "classification_agent", None)),
+        "availability": availability.value if availability else "unknown",
+        "last_request_state": last.value if last else None,
+        "detail": getattr(orchestrator, "classification_detail", None),
+    }
+
+
 @router.get("/status", response_model=DataResponse[OrchestrationStatusResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -524,6 +542,11 @@ async def get_orchestration_status(
                     "automatic_failover": True,
                     "resource_optimization": True,
                 },
+                # #13807: request classification degrades silently — an absent
+                # provider or a classifier that raises both just yield COMPLEX.
+                # This is the only route an operator can reach it from; the
+                # endpoint is admin-gated, so the reason is safe to include.
+                "classification": _classification_status(),
             },
         )
 

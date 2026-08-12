@@ -37,7 +37,7 @@ def get_url() -> str:
             default_host="autobot-postgres",
             default_user="autobot",
             default_db="autobot",
-            password_default="autobot",  # nosec B106 — dev-env placeholder, not a real credential
+            password_default="autobot",  # nosec B106  # dev-env placeholder, not a real credential
         )
 
 

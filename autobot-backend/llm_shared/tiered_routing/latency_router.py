@@ -136,7 +136,12 @@ class LatencyRouter:
             key = f"llm:latency:{model}"
             try:
                 members = await redis.zrangebyscore(key, cutoff, "+inf")
-                latencies = [float(m.decode().split(":", 1)[1]) for m in members if b":" in m]
+                # decode_responses=True means members are str. The old code tested
+                # `b":" in m` against a str, raising TypeError before .decode() ran;
+                # the except below swallowed it and _p95_cache never populated, so
+                # routing silently used _DEFAULT_P95_MS forever (issue #13272).
+                decoded = [m.decode() if isinstance(m, bytes) else m for m in members]
+                latencies = [float(m.split(":", 1)[1]) for m in decoded if ":" in m]
                 if latencies:
                     latencies.sort()
                     idx = int(_P95_PERCENTILE * len(latencies))

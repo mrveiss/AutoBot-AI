@@ -26,6 +26,8 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # #12572: import api.code_sync with real Pydantic schema stand-ins installed
 # then removed.  On the dev host models.schemas is a MagicMock, which makes
@@ -216,14 +218,23 @@ def test_pip_returns_false_on_failure(tmp_path) -> None:
 def test_run_post_sync_steps_pip_ok_false_on_pip_failure() -> None:
     """When pip returns False, _run_post_sync_steps returns pip_ok=False."""
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
-        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=False)),
-        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _, _, pip_ok = _run(
             _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
@@ -234,19 +245,32 @@ def test_run_post_sync_steps_pip_ok_false_on_pip_failure() -> None:
 def test_run_post_sync_steps_pip_ok_true_on_success() -> None:
     """When pip returns True, _run_post_sync_steps returns pip_ok=True."""
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
-        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
-        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)) as wait_mock,
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _, _, pip_ok = _run(
             _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
         )
     assert pip_ok is True
+    # #13312: _run_post_sync_steps forwards _ensure_venv_python's return as
+    # slow_start.  Assert the window selection instead of leaving it to a mock
+    # default — a bare AsyncMock() is truthy and silently picks the 180s window.
+    assert wait_mock.await_args.kwargs["slow_start"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -503,14 +527,23 @@ def test_run_post_sync_steps_calls_deploy_repo_root_requirements() -> None:
         called.append(True)
 
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", side_effect=_fake_deploy),
-        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
-        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
 
@@ -618,15 +651,23 @@ def test_run_post_sync_steps_provisions_python_before_venv() -> None:
         order.append("venv")
 
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", side_effect=_provision),
         patch("api.code_sync._ensure_venv_python", side_effect=_venv),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
-        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
 
@@ -880,9 +921,17 @@ def test_build_returns_false_on_npm_ci_failure(tmp_path) -> None:
 def test_run_post_sync_steps_pip_ok_false_on_npm_failure() -> None:
     """When npm build returns False, _run_post_sync_steps returns pip_ok=False."""
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._build_npm_frontend_for_component", AsyncMock(return_value=False)),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _, _, pip_ok = _run(
             _run_post_sync_steps(
@@ -897,9 +946,17 @@ def test_run_post_sync_steps_pip_ok_false_on_npm_failure() -> None:
 def test_run_post_sync_steps_pip_ok_true_on_npm_success() -> None:
     """When npm build returns True, _run_post_sync_steps returns pip_ok=True."""
     with (
+        # #13312: _run_post_sync_steps' side-effecting helpers must ALL be mocked.
+        # _snapshot_component rsyncs the live deployed dir, _ensure_target_python_installed
+        # can shell out to ansible, and _wait_component_healthy polls a real HTTP
+        # endpoint until its window expires (~180s of dead wait on a host where
+        # nothing is listening). None of them is what these tests assert.
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._build_npm_frontend_for_component", AsyncMock(return_value=True)),
         patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _, _, pip_ok = _run(
             _run_post_sync_steps(
@@ -1440,6 +1497,9 @@ def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
         patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 5.0),  # #11458/#11467: default slow_start uses the fast window
         patch("httpx.AsyncClient", return_value=_FakeClient()),
+        # #13312: the poll checks systemd BEFORE probing, so without this the
+        # test spawns a real `systemctl is-failed` against the host's units.
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
     ):
         result = _run(_wait_component_healthy("autobot-backend", steps))
 
@@ -1784,6 +1844,42 @@ def test_wait_component_healthy_returns_false_when_unit_failed_during_poll() -> 
     assert any("failed" in s for s in steps)
 
 
+def test_unmocked_health_poll_fails_fast_instead_of_dead_waiting() -> None:
+    """#13312: an unmocked live health poll must fail immediately, not dead-wait.
+
+    _wait_component_healthy retries until _HEALTH_POLL_TIMEOUT (180s) expires and
+    swallows every per-attempt error, so a test that forgets to mock it used to
+    cost ~3 minutes of real network I/O and still pass.  The tests/api conftest
+    guard replaces httpx.AsyncClient for this module with a stand-in that calls
+    pytest.fail; this asserts the guard is armed and that it escapes the poll's
+    broad ``except Exception``.
+    """
+    steps: list[str] = []
+    started = time.monotonic()
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
+        pytest.raises(pytest.fail.Exception),
+    ):
+        _run(_wait_component_healthy("autobot-backend", steps, slow_start=True))
+
+    assert time.monotonic() - started < 5.0, "guard must abort the poll, not wait out the window"
+
+
+def test_unmocked_subprocess_fails_fast_instead_of_touching_the_host() -> None:
+    """#13312: an unmocked shell-out must fail immediately, not run for real.
+
+    _is_systemd_unit_failed returns False on any exception, so a real
+    `systemctl` that is missing, slow or answering about the host's actual units
+    produced a green test either way.  The tests/api conftest guard replaces
+    asyncio.create_subprocess_exec with a stand-in that calls pytest.fail, which
+    escapes that broad handler.
+    """
+    with pytest.raises(pytest.fail.Exception):
+        _run(_is_systemd_unit_failed("autobot-backend"))
+
+
 def test_is_systemd_unit_failed_returns_true_on_failed_output() -> None:
     """_is_systemd_unit_failed returns True only when systemctl prints 'failed' (#11413)."""
 
@@ -1825,7 +1921,9 @@ def test_run_post_sync_steps_does_not_roll_back_on_slow_start() -> None:
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
-        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        # #13312: bare AsyncMock() returns a truthy MagicMock, which
+        # _run_post_sync_steps forwards as slow_start=True — the 180s window.
+        patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
         patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),

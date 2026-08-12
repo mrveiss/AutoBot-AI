@@ -58,7 +58,8 @@ Every plugin must have a `plugin.json` manifest at the root of its directory. Th
 | `category` | string | Yes | One of the valid category slugs (see Categories section). |
 | `tags` | array of strings | No | Additional search keywords. Searched by the catalog full-text filter. Defaults to `[]`. |
 | `entry_point` | string | Yes | Python dotted-path to the module containing the `Plugin` class (e.g. `plugins.core_plugins.my_plugin.main`). |
-| `dependencies` | array of strings | No | Plugin `name` slugs that must be loaded before this plugin. Defaults to `[]`. |
+| `dependencies` | array of strings | No | Plugin `name` slugs that must be loaded before this plugin. **Not pip packages** — a distribution name here can never be satisfied (#13966). Defaults to `[]`. |
+| `python_dependencies` | array of strings | No | Importable **module** names this plugin needs, checked with `importlib.util.find_spec` at load time. Module, not distribution: Pillow is declared as `PIL`. Defaults to `[]`. |
 | `hooks` | array of strings | No | Hook names this plugin registers. Informational — used in catalog display and future permission scoping. Defaults to `[]`. |
 | `config_schema` | object | No | JSON Schema object describing the plugin's configuration. Validated at load time when config is provided via `POST /api/plugins/{name}/load`. |
 | `source_url` | string | No | URL to the plugin source code. Shown in the marketplace UI. Auto-generated for core plugins via `_plugin_source_url()`. |

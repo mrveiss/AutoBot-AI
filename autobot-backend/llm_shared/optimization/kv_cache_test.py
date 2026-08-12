@@ -335,8 +335,15 @@ class TestLayerKVCacheTrim:
         with pytest.raises(ValueError, match="max_len"):
             cache.trim_to_length(-1)
 
-    def test_trim_preserves_content_up_to_limit(self):
-        """After trim, the remaining content should match the original."""
+    def test_trim_retains_the_newest_positions_not_the_oldest(self):
+        """Trim must keep the tail of the sequence (#13033).
+
+        This assertion used to read ``k[:, :6]`` — the *oldest* six — and passed,
+        because the implementation only moved ``filled_len`` back. Both were
+        wrong in the same direction, so the test confirmed the bug instead of
+        catching it. A sliding window needs the most recent positions; keeping
+        the oldest gives a context that never advances.
+        """
         cfg = _make_config(num_heads=2, head_dim=8, max_seq_len=64)
         cache = LayerKVCache(cfg)
         k, v = _make_kv(seq=12, heads=2, head_dim=8)
@@ -346,8 +353,51 @@ class TestLayerKVCacheTrim:
 
         r = cache.get(0)
         assert r is not None
-        assert torch.allclose(r[0], k[:, :6, :, :])
-        assert torch.allclose(r[1], v[:, :6, :, :])
+        assert torch.allclose(r[0], k[:, 6:, :, :])
+        assert torch.allclose(r[1], v[:, 6:, :, :])
+        # And explicitly not the head, so a symmetric window cannot pass by luck.
+        assert not torch.allclose(r[0], k[:, :6, :, :])
+
+    def test_trim_then_update_appends_after_the_retained_window(self):
+        """The write pointer must follow the retained window, not the old end.
+
+        Guards the other half of the fix: if ``filled_len`` were moved without
+        relocating the data (or the reverse), the next ``update()`` would either
+        overwrite live positions or leave a hole of stale tokens between the
+        window and the new ones.
+        """
+        cfg = _make_config(num_heads=2, head_dim=8, max_seq_len=64)
+        cache = LayerKVCache(cfg)
+        k, v = _make_kv(seq=10, heads=2, head_dim=8)
+        cache.update(0, k, v)
+        cache.trim_to_length(4)
+
+        nk, nv = _make_kv(seq=3, heads=2, head_dim=8)
+        cache.update(0, nk, nv)
+
+        r = cache.get(0)
+        assert r is not None and r[0].shape[1] == 7
+        assert torch.allclose(r[0][:, :4, :, :], k[:, 6:, :, :])
+        assert torch.allclose(r[0][:, 4:, :, :], nk)
+
+    def test_trim_with_overlapping_source_and_destination(self):
+        """max_len > filled_len/2 makes the move overlap itself.
+
+        Copying a tensor onto an overlapping view of itself is undefined, so the
+        implementation clones the source first. With seq=10 and max_len=7 the
+        ranges [3:10] and [0:7] overlap across four positions.
+        """
+        cfg = _make_config(num_heads=2, head_dim=8, max_seq_len=64)
+        cache = LayerKVCache(cfg)
+        k, v = _make_kv(seq=10, heads=2, head_dim=8)
+        cache.update(0, k, v)
+
+        cache.trim_to_length(7)
+
+        r = cache.get(0)
+        assert r is not None
+        assert torch.allclose(r[0], k[:, 3:, :, :])
+        assert torch.allclose(r[1], v[:, 3:, :, :])
 
 
 # ---------------------------------------------------------------------------

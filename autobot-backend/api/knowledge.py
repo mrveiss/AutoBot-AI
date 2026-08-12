@@ -34,6 +34,7 @@ Related modules:
 import asyncio
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import (
     APIRouter,
@@ -61,7 +62,7 @@ from api.system_health import ComponentHealth, KnownProbes, register_health_prob
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -137,6 +138,9 @@ except ImportError:
 # Set up logging
 logger = get_logger(__name__)
 
+if TYPE_CHECKING:  # pragma: no cover - type-only import, avoids a module-level dependency
+    from media.document.extraction import ExtractedDocument
+
 # Cache TTL constants (seconds)
 CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
 
@@ -196,7 +200,7 @@ def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
         "content": fact.get("content", ""),
         "title": metadata.get("title", "Untitled"),
         "source": metadata.get("source", "unknown"),
-        "category": metadata.get("category", "general"),
+        "category": metadata.get("category", CategoryDefaults.GENERAL),
         "type": metadata.get("type", "document"),
         "created_at": metadata.get("created_at"),
         "metadata": metadata,
@@ -555,7 +559,7 @@ def _extract_add_text_fields(request: dict) -> tuple:
     text = request.get("text", "")
     title = request.get("title", "")
     source = request.get("source", "manual")
-    category = request.get("category", "general")
+    category = request.get("category", CategoryDefaults.GENERAL)
     # Issue #685: hierarchical access fields
     access_level = request.get("access_level", "user")
     visibility = request.get("visibility", "private")
@@ -980,8 +984,14 @@ async def _fetch_and_extract_url(url: str, fallback_title: str) -> "tuple[str, s
 
     from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
 
+    # Imported locally rather than at module scope: `config` is already a local
+    # name in add_watch_folder (a WatchFolderConfig), so a module-level import
+    # would be silently shadowed there. Kept outside the try so an ImportError
+    # surfaces as itself instead of as a fetch failure.
+    from autobot_shared.ssot_config import config
+
     try:
-        status, body_bytes, _ = await fetch_safe_url(url, timeout=30.0)
+        status, body_bytes, _ = await fetch_safe_url(url, timeout=config.timeout.default_request)
     except SSRFError:
         raise HTTPException(status_code=400, detail="Request failed")
     except aiohttp.ClientError:
@@ -1062,67 +1072,69 @@ async def add_url_to_knowledge(
     )
 
 
-def _extract_pdf_content(filename: str, file_content: bytes) -> str:
+def _extract_pdf_document(filename: str, file_content: bytes) -> "ExtractedDocument":
     """
-    Extract text content from PDF file.
+    Extract the structured result from a PDF file.
 
-    Issue #620.
+    Issue #620. Returns the structured :class:`ExtractedDocument` rather than
+    its flattened text so the caller can consult ``has_usable_text_layer``
+    instead of a ``.strip()`` check a page-number-stamped scan would pass
+    (#13884) — and so ``_no_text_detail`` can reuse this parse instead of
+    running a second one (#13884 review).
 
     Args:
         filename: Name of the file for error logging
         file_content: Raw PDF bytes
 
     Returns:
-        Extracted text content
+        The structured extraction
 
     Raises:
         HTTPException: If pypdf library is missing or parsing fails
     """
-    import io
+    from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_pdf
 
     try:
-        import pypdf
-
-        pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
-        return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
-    except ImportError:
+        return extract_pdf(file_content)
+    except DocumentDependencyError as e:
+        logger.error("PDF support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
-    except Exception as e:
+    except DocumentExtractionError as e:
         logger.error("PDF parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse PDF file")
 
 
-def _extract_docx_content(filename: str, file_content: bytes) -> str:
+def _extract_docx_document(filename: str, file_content: bytes) -> "ExtractedDocument":
     """
-    Extract text content from DOCX file.
+    Extract the structured result from a DOCX file.
 
-    Issue #620.
+    Issue #620. Structured for the same reason as :func:`_extract_pdf_document`
+    — a DOCX whose content is entirely a table has no text layer but is a
+    successful extraction, which only the structured result can say (#13884).
 
     Args:
         filename: Name of the file for error logging
         file_content: Raw DOCX bytes
 
     Returns:
-        Extracted text content
+        The structured extraction
 
     Raises:
         HTTPException: If python-docx library is missing or parsing fails
     """
-    import io
+    from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_docx
 
     try:
-        import docx
-
-        doc = docx.Document(io.BytesIO(file_content))
-        return "\n".join(para.text for para in doc.paragraphs)
-    except ImportError:
+        return extract_docx(file_content)
+    except DocumentDependencyError as e:
+        logger.error("DOCX support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
-    except Exception as e:
+    except DocumentExtractionError as e:
         logger.error("DOCX parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
 
 
-def _extract_file_content(filename: str, file_content: bytes) -> str:
+def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, ExtractedDocument | None]":
     """
     Extract text content from uploaded file based on extension.
 
@@ -1131,7 +1143,10 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
         file_content: Raw file bytes
 
     Returns:
-        Extracted text content
+        The flattened text, plus the structured extraction for pdf/docx
+        (``None`` for formats with no page/table structure) so the caller can
+        tell a stamped scan or a table-only document from genuinely empty
+        content instead of relying on ``text.strip()`` alone (#13884).
 
     Raises:
         HTTPException: If file cannot be parsed or library is missing
@@ -1141,28 +1156,72 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     ext = os.path.splitext(filename.lower())[1]
 
     if ext in {".txt", ".md", ".csv"}:
-        return file_content.decode("utf-8", errors="replace")
+        return file_content.decode("utf-8", errors="replace"), None
 
     if ext == ".html":
         html_text = file_content.decode("utf-8", errors="replace")
         content, _ = _sanitize_html_content(html_text)
-        return content
+        return content, None
 
     if ext == ".json":
         try:
             data = json.loads(file_content.decode("utf-8"))
-            return json.dumps(data, indent=2)
+            return json.dumps(data, indent=2), None
         except json.JSONDecodeError:
-            return file_content.decode("utf-8", errors="replace")
+            return file_content.decode("utf-8", errors="replace"), None
 
     if ext == ".pdf":
-        return _extract_pdf_content(filename, file_content)
+        extracted = _extract_pdf_document(filename, file_content)
+        return extracted.text, extracted
 
     if ext == ".docx":
-        return _extract_docx_content(filename, file_content)
+        extracted = _extract_docx_document(filename, file_content)
+        return extracted.text, extracted
 
     # Default: treat as text
-    return file_content.decode("utf-8", errors="replace")
+    return file_content.decode("utf-8", errors="replace"), None
+
+
+def _has_usable_content(content: str, extracted: "ExtractedDocument | None") -> bool:
+    """Decide whether an upload has anything worth storing (#13884).
+
+    A page-number/Bates stamp on every page of a scan passes ``content.strip()``
+    — every page technically "has text". For pdf/docx, consult the structured
+    extraction's ratio + per-page character floor instead of the flattened
+    string; other formats (no structure available) keep the plain check. Kept
+    to ``has_usable_text_layer`` rather than ``has_usable_content``: this
+    endpoint only ever stores the flattened text, so a table-only DOCX is
+    correctly rejected here even though its data is real — there is nowhere
+    for that data to go through this path.
+    """
+    if extracted is not None:
+        return extracted.has_usable_text_layer
+    return bool(content.strip())
+
+
+def _no_text_detail(extracted: "ExtractedDocument | None") -> str:
+    """Explain *why* no text was extracted, not merely that none was (#13884).
+
+    Consumes the extraction ``_extract_file_content`` already performed
+    instead of re-parsing the file: a second ``extract_pdf`` call doubled
+    parse cost on a user-triggerable path and used a different dispatch route
+    (magic-byte sniffing) than the extension-based one above it, which could
+    disagree with it.
+
+    A paginated document that parsed cleanly but carries no text layer is a
+    scan; telling the user that is the difference between "try OCR" and "try
+    another file". A DOCX or a non-document format gets the generic message —
+    OCR is not the fix for an empty markdown file.
+    """
+    if extracted is None or extracted.format != "pdf":
+        return "No text content could be extracted from file"
+
+    if extracted.page_count:
+        return (
+            f"No text layer found in any of the {extracted.page_count} page(s). "
+            "The document appears to be scanned or image-only and needs OCR."
+        )
+    return "No text content could be extracted from file"
 
 
 def _parse_upload_tags(tags_str) -> list:
@@ -1220,9 +1279,12 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    content = _extract_file_content(filename, file_content)
-    if not content.strip():
-        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+    content, extracted_doc = _extract_file_content(filename, file_content)
+    if not _has_usable_content(content, extracted_doc):
+        # #13884: distinguish "we could not read it" from "it is empty". A scanned
+        # PDF parses fine and yields nothing, and a generic message left the user
+        # with no way to tell that OCR — not a different file — is what is needed.
+        raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
 
     # Issue #5064: sanitize uploaded document content against prompt injection
     # before the text reaches the KB / embedding pipeline.
@@ -1916,7 +1978,7 @@ async def search_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     query: str = None,
-    limit: int = 10,
+    limit: int = QueryDefaults.DEFAULT_SEARCH_LIMIT,
 ):
     """Search specifically for man pages in knowledge base
 
@@ -2355,7 +2417,7 @@ def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> tup
         content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
         content = _decode_bytes(content_raw)
         source = metadata.get("source", "")
-        category = get_category_for_source(source).value if source else "general"
+        category = get_category_for_source(source).value if source else CategoryDefaults.GENERAL
         title = metadata.get("title", metadata.get("command", "Untitled"))
         fact_type = metadata.get("type", "unknown")
         return (fact_key, category, title, content, fact_type, metadata)
@@ -2757,9 +2819,9 @@ async def get_documentation_categories(
             try:
                 category = detect_category(Path(file_path))
             except Exception:
-                category = "general"
+                category = CategoryDefaults.GENERAL
         else:
-            category = "general"
+            category = CategoryDefaults.GENERAL
 
         category_counts[category] = category_counts.get(category, 0) + 1
 
@@ -2830,7 +2892,7 @@ async def get_documentation_stats(
             "total_indexed_entries": len(all_docs),
             "total_chunks": total_chunks,
             "latest_indexed": latest_indexed,
-            "categories_count": len(set(doc.get("category", "general") for doc in all_docs)),
+            "categories_count": len(set(doc.get("category", CategoryDefaults.GENERAL) for doc in all_docs)),
         },
     }
 

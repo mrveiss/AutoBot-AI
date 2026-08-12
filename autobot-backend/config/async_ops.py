@@ -99,6 +99,7 @@ class AsyncOperationsMixin:
 
         try:
             from autobot_shared.redis_client import get_async_redis_client
+            from autobot_shared.redis_utils import decode_redis_value
 
             cache_key = self._get_redis_cache_key(config_type)
             redis_client = await get_async_redis_client(database="main")
@@ -106,7 +107,7 @@ class AsyncOperationsMixin:
             if redis_client:
                 cached_data = await redis_client.get(cache_key)
                 if cached_data:
-                    data = json.loads(cached_data.decode())
+                    data = json.loads(decode_redis_value(cached_data))
                     logger.debug("Loaded %s config from Redis cache", config_type)
                     return data
 

@@ -1,0 +1,55 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Ansible repo-path reference guard (#13744).
+#
+# The deploy syncs the repository to /opt/autobot/src/, so a play referencing a
+# path under that prefix is referencing a repo path. `deploy-native-services.yml`
+# installed the NPU worker from /opt/autobot/src/docker/npu-worker/requirements.txt
+# — a directory that has never existed here — and nothing caught it, because a
+# wrong path in a play is only discovered by running the play on a host.
+#
+# This turns "the documented deploy command cannot work" into a failing check on
+# the PR that breaks it, rather than an error the next operator finds.
+#
+# Security: no untrusted event data is interpolated into run: commands.
+
+name: ansible-file-references
+
+on:
+  pull_request:
+    paths:
+      - '**/ansible/**/*.yml'
+      - '**/ansible/**/*.yaml'
+      - 'scripts/check_ansible_file_references.py'
+      - '.github/workflows/ansible-file-references.yml'
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - '**/ansible/**/*.yml'
+      - '**/ansible/**/*.yaml'
+      - 'scripts/check_ansible_file_references.py'
+
+permissions:
+  contents: read
+
+jobs:
+  ansible-file-references:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # #13517: shared composite action, so the interpreter version, pip cache
+      # and dependency install live in one place rather than 21 copies.
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          # pyyaml: the guard parses inventories. pytest-asyncio: pytest.ini sets
+          # --asyncio-mode=auto, so the plugin is required even though these
+          # tests are synchronous.
+          extra-packages: pyyaml pytest pytest-asyncio
+
+      - name: Check ansible plays reference files that exist
+        run: python3 scripts/check_ansible_file_references.py
+
+      - name: Guard the guard
+        run: python3 -m pytest scripts/check_ansible_file_references_test.py -q

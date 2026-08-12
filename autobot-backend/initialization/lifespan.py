@@ -13,6 +13,7 @@ Handles application startup and shutdown with 2-phase initialization:
 import asyncio
 import json
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -269,6 +270,67 @@ async def _init_config(app: FastAPI) -> None:
         )
 
 
+async def _init_secrets_store(app: FastAPI) -> None:
+    """Run the one-time secrets-store legacy->canonical migration explicitly,
+    at a controlled startup point (#14081 review round 4, #14110).
+
+    Both ``SecretsManager`` (api/secrets.py) and ``SecretsService``
+    (services/secrets_service.py) resolve their storage through
+    ``ssot_config.path.data_path`` and, on an existing deployment, may need
+    to migrate real key/secret material off the legacy CWD-relative
+    location (``utils/secrets_store_migration.py``). ``SecretsManager`` in
+    particular used to do this from a module-level singleton's constructor,
+    which runs at Python import time: any failure there -- an ambiguous
+    legacy/canonical split, or (the failure that actually broke
+    ``hardened-smoke-test`` on PR #14110) a read-only canonical data
+    directory -- crashed the interpreter mid-import, before FastAPI's
+    startup ordering existed to report it. Running it here instead means a
+    failure surfaces through this phase's structured error handling and
+    ``/api/health`` reporting.
+
+    ``AmbiguousSecretsStoreError`` and filesystem/database I/O errors
+    (``OSError``, ``sqlite3.OperationalError``) are deliberately NOT fatal
+    here. Both are environment states a human must resolve -- refusing to
+    guess which store is authoritative, or refusing to write into a
+    filesystem that rejects the write, are the right calls -- but crashing
+    the container on every boot until someone edits code is not a
+    recoverable failure mode for an operator to work from. Logged at
+    CRITICAL with the underlying error and startup continues; secrets
+    operations backed by the affected store will keep failing until the
+    operator resolves the environment issue (message from the raised
+    error explains what to do). Any other exception is a genuine bug and
+    still aborts startup as before.
+    """
+    from api.secrets import secrets_manager
+    from services.secrets_service import get_secrets_service
+    from utils.secrets_store_migration import AmbiguousSecretsStoreError
+
+    logger.info("✅ [ 12%] Secrets store: running legacy-to-canonical migration check...")
+    _recoverable = (AmbiguousSecretsStoreError, OSError, sqlite3.OperationalError)
+    try:
+        await asyncio.to_thread(secrets_manager.ensure_initialized)
+    except _recoverable as store_err:
+        logger.critical(
+            "Secrets manager storage could not be initialized and was left "
+            "untouched: %s. Continuing startup; secrets-backed operations "
+            "will fail until the underlying environment issue is resolved.",
+            store_err,
+        )
+
+    # SecretsService shares the same encryption key file SecretsManager just
+    # migrated/created above -- must run after it, not in parallel.
+    try:
+        await asyncio.to_thread(get_secrets_service)
+    except _recoverable as store_err:
+        logger.critical(
+            "Secrets service storage could not be initialized and was left "
+            "untouched: %s. Continuing startup; secrets-backed operations "
+            "will fail until the underlying environment issue is resolved.",
+            store_err,
+        )
+    logger.info("✅ [ 12%] Secrets store: migration check complete")
+
+
 async def _init_security_layer(app: FastAPI) -> None:
     """Helper for initialize_critical_services. Ref: #1088."""
     logger.info("✅ [ 15%] Security: Initializing security layer...")
@@ -483,8 +545,9 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #3015: Group init steps into dependency tiers and run each
         # tier concurrently with asyncio.gather() to reduce startup latency.
         #
-        # Tier 0 (sequential): env drift check + config — must complete before
-        #         anything else since all services may read global config.
+        # Tier 0 (sequential): env drift check + config + secrets-store
+        #         migration — must complete before anything else since all
+        #         services may read global config or secrets.
         # Tier 1 (parallel): security, database, telemetry — independent of
         #         each other, only need the module-level global config manager.
         # Tier 2 (parallel): chat managers — independent of each other; benefit
@@ -496,6 +559,12 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #2650: check .env drift before any service initialisation
         await _check_env_drift()
         await _init_config(app)
+
+        # #14081/#14110: explicit secrets-store migration, before Tier 1's
+        # security layer (which may read secrets) and sequential so
+        # SecretsService's encryption-key fallback can rely on
+        # SecretsManager's key file already being in place.
+        await _init_secrets_store(app)
 
         # --- Tier 1: independent infrastructure (parallel) ---
         await asyncio.gather(
@@ -1695,40 +1764,21 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
     Uses the MeshDB adapter stored on app.state.mesh_db by _init_graph_rag_service.
     NON-CRITICAL: clustering failures do not affect request handling.
+
+    Backed by CommunityClusteringScheduler (#13210) rather than a hand-rolled
+    loop, so it shares PollLoopScheduler's cancellation-safety contract with
+    every other LLC scheduler instead of a second, divergent copy of it.
     """
     mesh_db = getattr(app.state, "mesh_db", None)
     if mesh_db is None:
         logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
         return
 
-    from llc.scheduler.base import honour_pending_cancellation
-    from services.mesh_brain.community_clusterer import CommunityClusterer
+    from llc.scheduler.community_cluster_scheduler import CommunityClusteringScheduler
 
-    _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
-
-    async def _loop() -> None:
-        # Allow startup to complete before first expensive clustering pass
-        await asyncio.sleep(300)  # 5 minutes
-        while True:
-            try:
-                promoted = await CommunityClusterer(mesh_db).run()
-                logger.info(
-                    "CommunityClusterer periodic run: %d anchors promoted",
-                    len(promoted),
-                )
-            except Exception as exc:
-                logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
-                # #13085: run() drives DB work that can mask the CancelledError
-                # cleanup_services() sent. Without this the loop would start a
-                # fresh 6-hour sleep and cleanup's gather() would never return.
-                honour_pending_cancellation()
-            await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
-
-    app.state.community_cluster_task = asyncio.create_task(_loop())
-    logger.info(
-        "CommunityClusterer: periodic loop started (interval=%dh)",
-        _CLUSTER_INTERVAL_SECONDS // 3600,
-    )
+    scheduler = CommunityClusteringScheduler(mesh_db)
+    scheduler.start()
+    app.state.community_cluster_scheduler = scheduler
 
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
@@ -1892,11 +1942,27 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         ]
 
         plugin_manager = PluginManager(plugin_dirs)
-        await plugin_manager.startup()
+        # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
+        # one thing — a crashed discovery from an empty tree — and on a crash the
+        # manager was discarded before it ever reached app.state, so the only
+        # state that key exists to report was unobservable in production. A
+        # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
-        logger.info("PluginManager started — %s", plugin_manager.get_plugin_status())
+        await plugin_manager.startup()
+        # #13677: the load tally, not just per-plugin statuses. A status map
+        # nobody totals is why 0-of-7 read the same as "no plugins installed".
+        logger.info(
+            "PluginManager started — %s | %s",
+            plugin_manager.get_load_report(),
+            plugin_manager.get_plugin_status(),
+        )
     except Exception as pm_err:
         logger.warning("Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True)
+        # Report the tally here too: this is the crashed-discovery path, and it
+        # is the only place `completed=False` can be seen.
+        manager = getattr(app.state, "plugin_manager", None)
+        if manager is not None:
+            logger.warning("PluginManager load report after failure: %s", manager.get_load_report())
 
 
 async def _init_content_reach_registry(app: FastAPI) -> None:
@@ -2023,6 +2089,17 @@ async def cleanup_services(app: FastAPI):
             logger.warning("Background init task raised during cancellation: %s", _bg_init_err)
         logger.info("✅ Phase-2 background init task cancelled before shutdown")
 
+    # #12866: the code-analysis process pool holds spawned children. They are not
+    # daemons, so leaving them behind keeps the unit in "deactivating" until
+    # systemd's timeout expires and SIGKILLs it. Torn down here, before the
+    # thread pool drains, because the shutdown call itself runs in a thread.
+    try:
+        from code_intelligence.shared.process_offload import shutdown_scan_pool
+
+        await shutdown_scan_pool()
+    except Exception as _pool_err:  # noqa: BLE001
+        logger.warning("Code-analysis process pool shutdown raised: %s", _pool_err)
+
     try:
         # GH#9044: Close transcriber DB connection
         transcriber_db = getattr(app.state, "transcriber_db", None)
@@ -2142,13 +2219,24 @@ async def cleanup_services(app: FastAPI):
         # close_database() disposes the engine further down, and its interval
         # wait was left for whoever tore the event loop down. aclose() drains it
         # here, where shutdown can observe it.
+        #
+        # #13203: each drain is guarded individually, for the same reason the
+        # MeshBrainScheduler stop below is — see the comment there. stop() was
+        # synchronous and could neither raise nor suspend; await …aclose() can
+        # do both, so an unguarded drain would abort the rest of the teardown.
         if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
-            await app.state.llc_liveness_monitor.aclose()
-            logger.info("✅ LLC liveness monitor stopped")
+            try:
+                await app.state.llc_liveness_monitor.aclose()
+                logger.info("✅ LLC liveness monitor stopped")
+            except Exception as liveness_stop_error:
+                logger.warning("LLC liveness monitor stop failed (non-fatal): %s", liveness_stop_error)
         # GH#9029: Stop LLC budget watchdog
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
-            await app.state.llc_budget_watchdog.aclose()
-            logger.info("✅ LLC budget watchdog stopped")
+            try:
+                await app.state.llc_budget_watchdog.aclose()
+                logger.info("✅ LLC budget watchdog stopped")
+            except Exception as budget_stop_error:
+                logger.warning("LLC budget watchdog stop failed (non-fatal): %s", budget_stop_error)
         # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
         # start() spawned, so none survive shutdown.
         #
@@ -2165,8 +2253,11 @@ async def cleanup_services(app: FastAPI):
                 logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
         # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
-            await app.state.llc_session_checkpointer.aclose()
-            logger.info("✅ LLC session checkpointer stopped")
+            try:
+                await app.state.llc_session_checkpointer.aclose()
+                logger.info("✅ LLC session checkpointer stopped")
+            except Exception as checkpointer_stop_error:
+                logger.warning("LLC session checkpointer stop failed (non-fatal): %s", checkpointer_stop_error)
 
         # GH#8257: Stop LLC outbound sync service
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
@@ -2207,12 +2298,16 @@ async def cleanup_services(app: FastAPI):
             await app.state.llm_key_rotation_scheduler.stop()
             logger.info("✅ LLM key rotation scheduler stopped")
 
-        # Issue #4946: Cancel community clustering background task
-        task = getattr(app.state, "community_cluster_task", None)
-        if task and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
-            logger.info("✅ Community cluster task cancelled")
+        # Issue #4946: Drain community clustering background task (#13210:
+        # bounded + shielded via aclose(), guarded individually like its
+        # sibling schedulers above — see the comment on those for why.
+        scheduler = getattr(app.state, "community_cluster_scheduler", None)
+        if scheduler:
+            try:
+                await scheduler.aclose()
+                logger.info("✅ Community cluster task cancelled")
+            except Exception as cluster_stop_error:
+                logger.warning("Community cluster task drain failed (non-fatal): %s", cluster_stop_error)
 
         # Issue #1748: Stop process adapter dispatcher
         if hasattr(app.state, "process_adapter_service") and app.state.process_adapter_service:
@@ -2418,6 +2513,16 @@ def create_lifespan_manager():
         # Configure logging
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
+
+        # #13738: the interpreter floor and free-disk gate ran nowhere. The
+        # floor is load-bearing — llc/scheduler/base.py calls
+        # asyncio.Task.cancelling() with no fallback, so below it every LLC
+        # poll loop dies after one tick with an AttributeError nothing
+        # retrieves (#13727). This is the first thing after logging so the
+        # failure is legible: refusing to boot beats degrading silently.
+        from startup_validator import enforce_system_requirements
+
+        enforce_system_requirements()
 
         # #11279: run the non-fatal startup file-integrity check (mirrors the
         # autobot-slm-backend lifespan wiring). No-op unless

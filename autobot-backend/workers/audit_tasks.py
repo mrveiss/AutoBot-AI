@@ -19,12 +19,13 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 import json
 import os
 import re
-import subprocess  # nosec B404 — internal git/gh CLI calls only
+import subprocess  # nosec B404  # internal git/gh CLI calls only
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
@@ -50,12 +51,29 @@ except ValueError:
 
 # GitHub repo used for filing issues
 _GH_REPO = "mrveiss/AutoBot-AI"
+# #13859: the KEY the issue-filing credential is stored under in the SYSTEM
+# vault. Not the credential — see _resolve_filing_token, which reads it.
+#
+# Named for what it is after both scanners disagreed with the old name
+# `_FILING_TOKEN_SECRET`: bandit raised B105 (hardcoded password) and CodeQL
+# raised two high-severity clear-text-logging alerts, because logging this
+# constant looked like logging a secret. They were reacting to a genuinely
+# misleading name, so the name changed rather than the warnings being
+# suppressed. A scanner-suppression comment here would have taught the next
+# reader that this file logs secrets and that we decided not to mind.
+_FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
 
 # Max characters of gh output kept in logs on failure
 _MAX_LOG_CHARS = 500
+
+# Cap on the full-findings dump written when the dead-letter queue itself cannot
+# be persisted (#13570). Generous: at that point the log IS the queue, and a
+# truncated finding is still better than none — but an unbounded dump could
+# itself take out the log.
+_MAX_DEFERRED_LOG_CHARS = 100_000
 
 
 # ---------------------------------------------------------------------------
@@ -84,17 +102,28 @@ def _redis_get(redis, key: str) -> Any | None:
         return None
 
 
-def _redis_set(redis, key: str, value: Any, ttl: int = 86400 * 14) -> None:
-    """Persist JSON-serialisable value in Redis with a 14-day TTL."""
+def _redis_set(redis, key: str, value: Any, ttl: int | None = 86400 * 14) -> bool:
+    """Persist a JSON-serialisable value in Redis. Returns True when it landed.
+
+    #13570: this used to swallow every failure and return None, so a caller had
+    no way to tell a successful write from a no-op. The dead-letter queue then
+    reported findings as "deferred ... instead of being filed or lost" while
+    nothing had been stored — a reassuring message about preservation that did
+    not happen, which is worse than an error.
+
+    ``ttl=None`` stores the key without expiry.
+    """
     if redis is None:
-        return
+        return False
     try:
         redis.set(key, json.dumps(value, default=str), ex=ttl)
-    except Exception:
-        pass
+        return True
+    except Exception as exc:  # noqa: BLE001 - a telemetry write must not kill the task
+        logger.error("audit: Redis write to %s failed: %s", key, exc)
+        return False
 
 
-def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
+def _run(cmd: list[str], cwd: str | None = None, env: dict[str, str] | None = None) -> tuple[int, str, str]:
     """Run *cmd*, return (returncode, stdout, stderr). Never raises."""
     try:
         result = subprocess.run(  # nosec B603
@@ -102,11 +131,120 @@ def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
             capture_output=True,
             text=True,
             cwd=cwd,
+            env=env,
             timeout=60,
         )
         return result.returncode, result.stdout, result.stderr
     except Exception as exc:
         return 1, "", str(exc)
+
+
+def _resolve_filing_token() -> str | None:
+    """Read the issue-filing token from the SYSTEM vault (#13859).
+
+    The worker used to rely entirely on ambient `gh` CLI auth for whichever
+    account Celery happened to run as. Nothing owned that credential, nothing
+    rotated it, nothing audited its use, and the only place its absence showed
+    up was a log line — which is exactly how it lapsed unnoticed in #13570.
+
+    SYSTEM vault and `PrincipalKind.SERVICE`: this is a background task, not a
+    user session, so there is no user vault it could belong to and the audit
+    trail should attribute filings to the service rather than to whoever last
+    logged into the host. `VaultKind.SYSTEM` is documented as the home for
+    "admin-only system secrets (provider keys, internal tokens)".
+
+    Returns None when no token is stored — the caller decides what that means,
+    and says so loudly rather than silently continuing on ambient state.
+    """
+    try:
+        return run_or_schedule(_read_filing_token())
+    except Exception as exc:  # noqa: BLE001 — a vault outage must not kill the audit run
+        # Class name only, never the exception text. This is a secrets path, and
+        # a message that happens to interpolate a value would put it in the log.
+        # CodeQL flags it as clear-text-logging-sensitive-data and is right to:
+        # the guarantee should be structural, not a reader having audited every
+        # exception type these calls can raise.
+        logger.warning("audit: vault lookup for the filing token failed (%s)", type(exc).__name__)
+        return None
+
+
+async def _read_filing_token() -> str | None:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from api.user_management.dependencies import get_async_session  # noqa: PLC0415
+    from autobot_shared.secrets_vault import VaultKind, VaultRef  # noqa: PLC0415
+    from models.secret import Secret  # noqa: PLC0415
+    from services.envelope_secrets_service import (  # noqa: PLC0415
+        EnvelopeSecretsService,
+        SecretAccessError,
+        SecretNotFoundError,
+    )
+
+    owner = VaultRef(kind=VaultKind.SYSTEM)
+    owner_str = owner.to_str()
+    async for session in get_async_session():
+        result = await session.execute(
+            select(Secret).where(Secret.name == _FILING_CREDENTIAL_VAULT_KEY, Secret.owner_vault == owner_str)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        try:
+            raw = await EnvelopeSecretsService().read(session, secret_id=row.id, accessible_vaults=[owner])
+        except (SecretNotFoundError, SecretAccessError) as exc:
+            # Class name only — same reason as above.
+            logger.warning("audit: filing token present but unreadable (%s)", type(exc).__name__)
+            return None
+        return raw.decode("utf-8").strip() or None
+    return None
+
+
+# (env, came_from_vault) — one fact, cached together. Deriving the second from
+# the first is what made the detector lie (#13859 review).
+_gh_env_cache: tuple[dict[str, str], bool] | None = None
+
+
+def reset_gh_env_cache() -> None:
+    """Drop the cached credential so the next run re-reads the vault (#13859).
+
+    Called at the start of every audit task. Celery workers are long-lived, so
+    without this a rotated or revoked token would keep working for the life of
+    the process — which would defeat the revocation this issue is about.
+    """
+    global _gh_env_cache
+    _gh_env_cache = None
+
+
+def _gh_env() -> tuple[dict[str, str], bool]:
+    """Subprocess environment for every `gh` call, and whether the vault
+    supplied the token (#13859).
+
+    Mirrors the LLC Copilot adapter: both GH_TOKEN and GITHUB_TOKEN, because
+    different gh subcommands read different ones.
+
+    Returns the flag rather than letting callers test `"GH_TOKEN" in env`. That
+    test answers "does this process have a token anywhere?", which is a
+    different question: the env starts as a copy of os.environ, and an ambient
+    GH_TOKEN is exactly what the pre-#13859 CRITICAL log told operators to set
+    — docker-compose injects an empty one unconditionally. Deriving the flag
+    that way reported ambient state as vault-owned, suppressed the warning this
+    change exists to emit, and told the operator the credential came from the
+    vault while asking them to put one there.
+
+    Cached per run: a task files one issue per finding, and a vault round-trip
+    per finding would be pure waste.
+    """
+    global _gh_env_cache
+    if _gh_env_cache is not None:
+        env, from_vault = _gh_env_cache
+        return dict(env), from_vault
+    env = dict(os.environ)
+    token = _resolve_filing_token()
+    if token:
+        env["GH_TOKEN"] = token
+        env["GITHUB_TOKEN"] = token
+    _gh_env_cache = (env, bool(token))
+    return dict(env), bool(token)
 
 
 def _repo_root() -> Path:
@@ -131,7 +269,7 @@ def _list_open_issues(label: str | None = None) -> list[str]:
     ]
     if label:
         cmd += ["--label", label]
-    code, out, _ = _run(cmd)
+    code, out, _ = _run(cmd, env=_gh_env()[0])
     if code != 0:
         return []
     try:
@@ -145,8 +283,41 @@ def _gh_available() -> bool:
 
     Checked once per task run so a missing credential produces a single CRITICAL
     log instead of one ERROR per lost finding (#12319).
+
+    #13570: reported unconditionally, not only when there are findings to lose.
+    The credential lapsed for the service account and the first symptom was a
+    run that happened to produce findings — every clean run in between looked
+    identical to a healthy one, so there was no way to tell when filing broke or
+    how much had been deferred since.
     """
-    code, _, _ = _run(["gh", "auth", "status"])
+    env, vault_backed = _gh_env()
+    if not vault_backed:
+        # #13859: ambient CLI auth is not an owned credential. Nothing rotates
+        # it, nothing audits its use, and nothing can revoke it — which is how
+        # it lapsed unnoticed in #13570. Say so on every run, even when the
+        # ambient session happens to work, or the gap stays invisible until the
+        # day it does not.
+        logger.warning(
+            "audit worker has no vault-owned filing credential: falling back to "
+            "ambient `gh` CLI auth for whichever account this worker runs as. "
+            "Store a token as '%s' in the system vault to get grant, audit and "
+            "revocation. (#13859)",
+            _FILING_CREDENTIAL_VAULT_KEY,
+        )
+    code, out, err = _run(["gh", "auth", "status"], env=env)
+    if code != 0:
+        logger.critical(
+            "audit worker cannot file issues: `gh auth status` failed (%s, "
+            "credential source: %s). Every finding this run produces will be "
+            "queued instead of filed. Fix: store a token as '%s' in the system "
+            "vault, or authenticate gh for the service account. gh said: %s",
+            _GH_REPO,
+            "system vault" if vault_backed else "ambient CLI auth",
+            _FILING_CREDENTIAL_VAULT_KEY,
+            # stdout as well as stderr: gh routes this message to stderr today,
+            # but a build that changed that would gut the diagnostic silently.
+            ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
+        )
     return code == 0
 
 
@@ -165,7 +336,8 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
             body,
             "--label",
             labels,
-        ]
+        ],
+        env=_gh_env()[0],
     )
     if code != 0:
         logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
@@ -173,10 +345,40 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     return True
 
 
-def _load_deferred(redis) -> list[dict]:
-    """Return the dead-letter queue of findings awaiting a retry."""
+def _load_deferred(redis) -> tuple[list[dict], bool]:
+    """Return (queued findings, read_was_observed) for the dead-letter queue.
+
+    #13570 review: a failed GET and an empty queue were indistinguishable, and
+    the caller then overwrote the key with whatever it had. A GET timing out
+    while the SET succeeds — or a value that is not a list — therefore WIPED the
+    queue, silently, and reported ``issues_deferred: 0`` as a success. Same
+    defect class as the incident this issue is about: acting on an outcome that
+    was never observed. Removing the TTL made it worse, because the key now
+    holds more.
+
+    ``read_was_observed`` is False when the queue could not be read; the caller
+    must not persist over a queue it could not see.
+    """
+    if redis is None:
+        return [], False
     queued = _redis_get(redis, _DEFERRED_FINDINGS_KEY)
-    return queued if isinstance(queued, list) else []
+    if queued is None:
+        # Genuinely absent (never written) reads the same as unreachable, so a
+        # missing key is checked explicitly before assuming the worst.
+        try:
+            if not redis.exists(_DEFERRED_FINDINGS_KEY):
+                return [], True
+        except Exception as exc:  # noqa: BLE001 - fall through to "unobserved"
+            logger.error("audit: cannot determine whether %s exists: %s", _DEFERRED_FINDINGS_KEY, exc)
+        return [], False
+    if not isinstance(queued, list):
+        logger.error(
+            "audit: %s holds a %s, not a list — refusing to overwrite it",
+            _DEFERRED_FINDINGS_KEY,
+            type(queued).__name__,
+        )
+        return [], False
+    return queued, True
 
 
 def _persist_deferred(redis, deferred: list[dict]) -> int:
@@ -201,8 +403,45 @@ def _persist_deferred(redis, deferred: list[dict]) -> int:
             [f["title"] for f in dropped],
         )
 
-    _redis_set(redis, _DEFERRED_FINDINGS_KEY, unique)
+    # #13570: no TTL on the dead-letter queue. It carried the module's default
+    # 14 days, so a filing credential that stayed broken for a fortnight — the
+    # exact situation the queue exists for — silently expired everything in it.
+    # Note this does NOT make the key durable: every deployment runs
+    # maxmemory-policy allkeys-lru, which evicts untimed keys too. It removes a
+    # guaranteed fortnightly loss, not the possibility of loss.
+    if not _redis_set(redis, _DEFERRED_FINDINGS_KEY, unique, ttl=None):
+        _log_unwritable_queue(unique, "Redis is unavailable or the write was rejected")
+        return 0
+
     return len(unique)
+
+
+def _log_unwritable_queue(findings: list[dict], why: str) -> None:
+    """Dump findings that could not be queued, so the log is the queue (#13570).
+
+    A bare count would leave nothing recoverable. Emits nothing when there is
+    nothing to lose — an empty write is the normal drain path, and paging
+    someone about zero lost findings is its own false alarm.
+    """
+    if not findings:
+        return
+    dump = json.dumps(findings, default=str)
+    truncated = ""
+    if len(dump) > _MAX_DEFERRED_LOG_CHARS:
+        # Say so explicitly: a message promising "full findings" that silently
+        # cuts off mid-JSON is the same lie this issue is about.
+        truncated = f" [TRUNCATED at {_MAX_DEFERRED_LOG_CHARS} chars — not all of the {len(findings)} shown]"
+        dump = dump[:_MAX_DEFERRED_LOG_CHARS]
+    logger.critical(
+        "audit: FAILED to persist %d deferred finding(s) to %s — they are NOT queued "
+        "and will not be retried (%s). Findings follow so they are recoverable from "
+        "this log%s: %s",
+        len(findings),
+        _DEFERRED_FINDINGS_KEY,
+        why,
+        truncated,
+        dump,
+    )
 
 
 def _dedupe_and_file(
@@ -223,7 +462,7 @@ def _dedupe_and_file(
     non-duplicate finding drawn from both the queue and *findings*.
     """
     gh_ok = _gh_available()
-    pending = _load_deferred(redis)
+    pending, queue_readable = _load_deferred(redis)
 
     filed = 0
     still_deferred: list[dict] = []
@@ -243,18 +482,44 @@ def _dedupe_and_file(
     for finding in findings:
         _attempt(finding["title"], finding["body"], label)
 
-    if not gh_ok and still_deferred:
+    # #13570: persist FIRST, then report what actually happened. The old order
+    # logged "deferred to the Redis dead-letter queue instead of being filed or
+    # lost" before the write was attempted, so the reassuring message stood even
+    # when the queue was empty — `LLEN audit:deferred_findings` was 0 on a host
+    # whose logs claimed findings were preserved. A message about preservation
+    # must be emitted only by the code path that observed it succeed.
+    if queue_readable:
+        deferred_count = _persist_deferred(redis, still_deferred)
+    else:
+        deferred_count = 0
+        _log_unwritable_queue(still_deferred, "the existing queue could not be read")
+
+    _report_deferral_outcome(gh_ok, still_deferred, deferred_count)
+    return filed, deferred_count
+
+
+def _report_deferral_outcome(gh_ok: bool, still_deferred: list[dict], deferred_count: int) -> None:
+    """Say what actually happened to unfileable findings (#13570)."""
+    if gh_ok or not still_deferred:
+        return
+    if deferred_count:
         logger.critical(
-            "gh CLI unauthenticated — %d audit finding(s) deferred to the Redis "
+            "gh CLI unauthenticated — %d audit finding(s) queued to the Redis "
             "dead-letter queue (%s) instead of being filed or lost. Configure a "
-            "GH_TOKEN for the worker to restore issue filing; deferred findings "
+            "GH_TOKEN for the worker to restore issue filing; queued findings "
             "are retried automatically once it is available.",
-            len(still_deferred),
+            deferred_count,
             _DEFERRED_FINDINGS_KEY,
         )
-
-    deferred_count = _persist_deferred(redis, still_deferred)
-    return filed, deferred_count
+        return
+    # The findings have already been dumped; this names the consequence so the
+    # two failures are not read as one bad Redis blip.
+    logger.critical(
+        "gh CLI unauthenticated AND the dead-letter queue could not be written — "
+        "%d audit finding(s) are LOST except for the dump above. Both the filing "
+        "credential and Redis need attention.",
+        len(still_deferred),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +612,12 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
 @celery_app.task(bind=True, name="workers.audit_testgaps")
 def audit_testgaps(self) -> dict:
     """Every-6h task: find Python modules changed since last run that lack tests."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_run = _redis_get(redis, _TESTGAPS_LAST_RUN_KEY)
     run_at = utc_timestamp()
@@ -412,6 +683,12 @@ def _dead_code_fingerprint(line: str) -> str:
 @celery_app.task(bind=True, name="workers.audit_dead_code")
 def audit_dead_code(self) -> dict:
     """Daily task: run vulture, file issues only for findings new since last run."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_inventory: list[str] = _redis_get(redis, _DEAD_CODE_INVENTORY_KEY) or []
     last_set = set(last_inventory)
@@ -549,6 +826,12 @@ def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -
 @celery_app.task(bind=True, name="workers.audit_claims")
 def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
     run_at = utc_timestamp()

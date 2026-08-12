@@ -75,6 +75,24 @@ def _make_scheduler(extractor=None, proposer=None) -> SkillDistillationScheduler
     return scheduler
 
 
+def _epoch(iso: str) -> float:
+    """#13948: the cursor stores epoch seconds, not the ISO string.
+
+    These tests assert which conversation the cursor names, not how it is
+    serialised — comparing the stored bytes pinned a format that had to change,
+    because ISO strings are naive local time and stop ordering at a DST fallback.
+    """
+    from datetime import datetime
+
+    return datetime.fromisoformat(iso).timestamp()
+
+
+def _stored_cursor(redis) -> float | None:
+    from services.skill_management.skill_distillation_scheduler import _cursor_to_epoch
+
+    return _cursor_to_epoch(redis.store.get("skills:distillation:cursor"))
+
+
 def _with_sessions(scheduler, sessions, history=None):
     """Point the scheduler at a fake chat history manager."""
     manager = MagicMock()
@@ -160,7 +178,7 @@ class TestDistillationPass:
 
         proposer.propose_skills.assert_not_awaited()
         assert result["sessions_distilled"] == 1
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
 
     @pytest.mark.asyncio
     async def test_existing_skills_are_passed_as_prior_art(self, redis):
@@ -190,7 +208,7 @@ class TestDurableCursor:
 
         await scheduler.run_once()
 
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
 
     @pytest.mark.asyncio
     async def test_failed_proposal_leaves_the_cursor_untouched(self, redis):
@@ -248,7 +266,84 @@ class TestDurableCursor:
         result = await scheduler.run_once()
 
         assert result["sessions_distilled"] == 1
-        assert redis.store["skills:distillation:cursor"] == "2026-07-27T10:00:00"
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
+
+    @pytest.mark.asyncio
+    async def test_each_conversation_gets_its_own_position_not_the_first(self, redis):
+        """#13925: the cursor must carry the position of the conversation just
+        completed.
+
+        The tests above assert the cursor *stops* correctly. None asserted the
+        *value* written per conversation, so writing `pending[0]`'s timestamp
+        every time — a plausible off-by-one — left the suite green while every
+        conversation after the first was re-distilled on the next run, forever.
+        """
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(return_value={"proposed": ["deploy_service"]})
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [
+                {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
+                {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
+                {"id": "chat-c", "updatedAt": "2026-07-27T12:00:00"},
+            ],
+        )
+
+        await scheduler.run_once()
+
+        assert _stored_cursor(redis) == _epoch("2026-07-27T12:00:00")
+
+    @pytest.mark.asyncio
+    async def test_the_cursor_advances_per_conversation_not_once_at_the_end(self, redis):
+        """#13925: a crash mid-pass must leave the cursor on the last completed
+        conversation, which only holds if it is written as the pass goes.
+
+        Batching the write to the end of the loop passes every value-based
+        assertion — the final cursor is identical — while losing the whole
+        pass's progress to a crash. Only the write *sequence* distinguishes them.
+        """
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(return_value={"proposed": ["deploy_service"]})
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [
+                {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
+                {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
+            ],
+        )
+
+        # Wrapped rather than replaced, so serialisation still runs for real.
+        written: list[float] = []
+        real_write = scheduler._write_cursor
+
+        async def _recording(updated_at):
+            written.append(updated_at)
+            await real_write(updated_at)
+
+        scheduler._write_cursor = _recording
+
+        await scheduler.run_once()
+
+        assert written == [_epoch("2026-07-27T10:00:00"), _epoch("2026-07-27T11:00:00")]
+        assert _stored_cursor(redis) == _epoch("2026-07-27T11:00:00")
+
+    @pytest.mark.asyncio
+    async def test_an_empty_pass_leaves_the_cursor_alone(self, redis):
+        """#13925: nothing pending must not touch the cursor. Writing a default
+        would move it over unprocessed conversations."""
+        scheduler = _make_scheduler(MagicMock(), MagicMock())
+        _with_sessions(scheduler, [])
+
+        result = await scheduler.run_once()
+
+        assert result == {"sessions_seen": 0, "sessions_distilled": 0, "proposed": []}
+        assert _stored_cursor(redis) is None
 
 
 class TestLifecycle:

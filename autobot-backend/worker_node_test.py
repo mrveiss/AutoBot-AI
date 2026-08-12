@@ -9,7 +9,10 @@ Verifies that the refactored execute_task method maintains
 all original functionality while reducing nesting depth.
 """
 
+import ast
+import inspect
 import sys
+import textwrap
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -180,41 +183,49 @@ class TestWorkerNodeRefactored:
         assert result["status"] == "error"
         assert "parameter" in result["message"].lower()
 
+    # #13311 triage: these two stay source-level. They are *complexity metrics*,
+    # not behavioural contracts asserted by grep — "how deeply nested is this
+    # function" has no runtime observable, so measuring the code is the only
+    # way to measure it. What changed is that they now measure the syntax tree
+    # rather than leading whitespace: a wrapped argument list or a black
+    # reformat used to move the number without changing the nesting at all.
+
+    MAX_BLOCK_DEPTH = 6
+    MAX_STATEMENTS = 100
+
+    @staticmethod
+    def _execute_task_ast() -> ast.AST:
+        return ast.parse(textwrap.dedent(inspect.getsource(WorkerNode.execute_task))).body[0]
+
+    @classmethod
+    def _block_depth(cls, node, depth: int = 0) -> int:
+        """Deepest nesting of control-flow blocks, ignoring line wrapping."""
+        nesting = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try)
+        deepest = depth
+        for child in ast.iter_child_nodes(node):
+            child_depth = depth + 1 if isinstance(child, nesting) else depth
+            deepest = max(deepest, cls._block_depth(child, child_depth))
+        return deepest
+
     def test_reduced_nesting_depth(self):
-        """
-        Verify that the refactored execute_task has reduced nesting.
+        """The refactoring goal: nesting well below the original 21 levels."""
+        depth = self._block_depth(self._execute_task_ast())
 
-        This is a structural test to ensure the refactoring goal is met.
-        """
-        import inspect
+        assert depth <= self.MAX_BLOCK_DEPTH, f"execute_task nests {depth} blocks deep (limit {self.MAX_BLOCK_DEPTH})"
 
-        source = inspect.getsource(WorkerNode.execute_task)
-        lines = source.split("\n")
+    def test_the_depth_metric_counts_nesting_not_indentation(self):
+        """Guard the guard: a metric that always returns 0 passes everything."""
+        deep = ast.parse("def f():\n if a:\n  for b in c:\n   while d:\n    pass\n").body[0]
+        wrapped = ast.parse("def f():\n return g(\n  1,\n  2,\n )\n").body[0]
 
-        # Count maximum indentation depth
-        max_indent = 0
-        for line in lines:
-            if line.strip():  # Ignore empty lines
-                indent = len(line) - len(line.lstrip())
-                max_indent = max(max_indent, indent)
-
-        # Maximum nesting should be significantly reduced from original 21
-        # New implementation should have max depth around 4-6
-        assert max_indent <= 24, f"Nesting depth too high: {max_indent} spaces"
+        assert self._block_depth(deep) == 3
+        assert self._block_depth(wrapped) == 0, "line wrapping must not read as nesting"
 
     def test_line_count_reduction(self):
-        """
-        Verify that execute_task method has significantly fewer lines.
+        """Original was 424 lines; the refactor targeted roughly 60."""
+        statements = sum(1 for node in ast.walk(self._execute_task_ast()) if isinstance(node, ast.stmt))
 
-        Original was 424 lines, new version should be ~60 lines.
-        """
-        import inspect
-
-        source = inspect.getsource(WorkerNode.execute_task)
-        lines = [line for line in source.split("\n") if line.strip()]
-
-        # Allow some buffer, but should be dramatically reduced
-        assert len(lines) < 100, f"execute_task method still too long: {len(lines)} lines"
+        assert statements < self.MAX_STATEMENTS, f"execute_task still has {statements} statements"
 
 
 class TestGUIControllerPlatformGate:

@@ -872,6 +872,7 @@
       "loadFailed": "فشل تحميل الذكريات. قد تكون الخلفية غير متاحة.",
       "forgetFailed": "فشل نسيان عنصر الذاكرة.",
       "forgetEverywhereFailed": "فشل حذف عنصر الذاكرة بشكل متتالٍ.",
+      "forgetEverywhereAmbiguous": "هذه الذاكرة موجودة في أكثر من مخزن — استخدم الحذف لكل مخزن في الصف بدلاً من ذلك.",
       "exportDownloaded": "تم تنزيل تصدير الذاكرة.",
       "exportFailed": "فشل التصدير. يرجى المحاولة مرة أخرى."
     },
@@ -1423,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "تحليلات المشروع"
+      },
+      "impact": {
+        "title": "تحليل الأثر",
+        "hint": "ما الذي يستدعي عقدة بشكل غير مباشر — استخدمه قبل التغيير أو الحذف.",
+        "nodeIdPlaceholder": "مثال: package.module.ClassName",
+        "nodeIdLabel": "معرّف عقدة الرسم البياني",
+        "analyze": "تحليل",
+        "analyzing": "جارٍ التحليل…",
+        "notIndexedTitle": "لم يتم بناء رسم الشيفرة",
+        "notIndexedBody": "قم بفهرسة هذا المصدر قبل تحليل الأثر.",
+        "partialTitle": "نتيجة جزئية — هذا حد أدنى",
+        "partialDepth": "توقف المسار عند العمق {depth} مع {frontier} عقدة غير موسّعة. قد يوجد مستدعون أكثر.",
+        "partialUnresolved": "تعذّر حل {count} حافة، لذا قد يكون بعض المستدعين مفقودًا.",
+        "callers": "المستدعون",
+        "callersAtLeast": "المستدعون (على الأقل)",
+        "callersHeading": "المستدعون الذين تم الوصول إليهم",
+        "edgesResolved": "حواف تم حلها",
+        "edgesUnresolved": "حواف لم تُحل",
+        "depth": "العمق المُدرك",
+        "noCallersTitle": "لا يوجد مستدعون",
+        "noCallersBody": "لا شيء في الرسم المفهرس يستدعي هذه العقدة.",
+        "skippedHeading": "إظهار {count} حافة غير محلولة"
       }
     },
     "patterns": {
@@ -2824,7 +2847,8 @@
       "entitiesAndRelations": "{entities} entities, {relations} relations",
       "success": "نجاح",
       "failedStatus": "فشل",
-      "retry": "إعادة المحاولة"
+      "retry": "إعادة المحاولة",
+      "tabPath": "مسار الاتصال"
     },
     "failedVectorizations": {
       "title": "Failed Vectorizations",
@@ -4080,6 +4104,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "مسار الاتصال",
+      "description": "ابحث عن أقصر سلسلة من العلاقات تربط بين كيانين.",
+      "fromEntity": "من الكيان",
+      "fromEntityPlaceholder": "اسم كيان البداية...",
+      "toEntity": "إلى الكيان",
+      "toEntityPlaceholder": "اسم الكيان الهدف...",
+      "swap": "تبديل الكيانين",
+      "direction": "الاتجاه",
+      "directionBoth": "أي اتجاه",
+      "directionOutgoing": "تتبع العلاقات للأمام",
+      "directionIncoming": "تتبع العلاقات للخلف",
+      "directionHint": "غالبًا ما تُخزَّن العلاقات في اتجاه واحد فقط.",
+      "maxDepth": "أقصى عمق",
+      "hops": "{count} قفزات",
+      "relation": "العلاقة",
+      "relationHint": "(اختياري)",
+      "relationPlaceholder": "تتبع هذا النوع من العلاقات فقط...",
+      "findPath": "ابحث عن المسار",
+      "searching": "جارٍ البحث...",
+      "connectedIn": "متصلان خلال قفزة {count} | متصلان خلال {count} قفزات",
+      "sameEntity": "كلا الاسمين يشيران إلى الكيان نفسه: {name}",
+      "fuzzyMatch": "لا توجد كيان باسم {names} — المسار أدناه يخص أقرب تطابق بدلاً من ذلك. | لا توجد كيانات بأسماء {names} — المسار أدناه يخص أقرب التطابقات بدلاً من ذلك.",
+      "crossedForwards": "للأمام",
+      "crossedBackwards": "للخلف",
+      "unnamedRelation": "مرتبط بـ",
+      "noPathFound": "لم يتم العثور على اتصال بين هذين الكيانين.",
+      "noPathHint": "جرّب زيادة العمق، أو السماح بأي اتجاه، أو إزالة مرشّح العلاقة.",
+      "entityNotFound": "هذه الأسماء لا تطابق أي كيان:",
+      "entityNotFoundHint": "تحقق من الإملاء، أو استخرج الكيانات أولاً لتصبح موجودة في الرسم البياني.",
+      "errorEnterBoth": "يرجى إدخال كيان المصدر وكيان الهدف معًا.",
+      "notInGraph": "هذه الكيانات ليست بعد في رسم العلاقات البياني.",
+      "notInGraphHint": "إنها موجودة لكن بلا روابط في الرسم البياني، لذا لا يمكن تتبع أي اتصال. أعد تشغيل استخراج الكيانات."
     }
   },
   "workflow": {
@@ -4203,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
+      "companyRequired": "اختر شركة لفتح الأتمتة."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7780,7 +7840,8 @@
       "generating": "جاري إنشاء رمز QR...",
       "expired": "انتهت صلاحيته",
       "refresh": "الحصول على رمز جديد",
-      "retry": "حاول مرة أخرى"
+      "retry": "حاول مرة أخرى",
+      "manualCode": "لا يمكنك المسح الضوئي؟ أدخل هذا الرمز يدويًا:"
     }
   },
   "llmKeys": {
@@ -8153,13 +8214,16 @@
       "title": "Org Chart",
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
-      "empty": "No agents found.",
+      "empty": "لم يتم العثور على أشخاص أو وكلاء.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
+      "personDetail": "تفاصيل الشخص",
+      "humanNoAgentControls": "لا تنطبق عناصر التحكم بالوكيل على الأشخاص.",
       "human": "Human",
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "الدور",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",
@@ -8168,7 +8232,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "وضع العرض",
+      "viewTree": "شجرة",
+      "viewCanvas": "لوحة",
+      "canvasTabAll": "كل الوحدات",
+      "canvasUnit": "وحدة {name}",
+      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
     },
     "goals": {
       "title": "Goal Tree",
@@ -8394,15 +8464,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {

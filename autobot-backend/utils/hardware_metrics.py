@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess  # nosec B404 - Required for nvidia-smi GPU queries
+import subprocess  # nosec B404  # Required for nvidia-smi GPU queries
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
@@ -221,7 +221,7 @@ class HardwarePerformanceMonitor:
     def _check_gpu_availability(self) -> bool:
         """Check if NVIDIA GPU is available and accessible"""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
+            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,
@@ -306,7 +306,7 @@ class HardwarePerformanceMonitor:
 
         try:
             # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
+            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.used,memory.total,utilization.gpu,"

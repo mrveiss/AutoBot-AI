@@ -65,14 +65,25 @@ def elu_feature_map(x: Any) -> Any:
 
     Guarantees strictly-positive features so denominators never vanish.
 
+    Issue #13162: ``elu`` saturates at EXACTLY ``-1.0`` in finite precision
+    (float32: every ``x`` below roughly ``-88``; float16: below roughly ``-12``),
+    so the textbook ``elu(x) + 1`` returns exactly ``0.0`` there and the strict
+    positivity this map exists to provide is lost. A zero feature row makes the
+    linear-attention normaliser ``Σ φ(K)`` vanish, and the kernel then divides
+    by an ``eps`` floor instead of by a real mass — silently turning that
+    query's attention into noise. Lift only the collapsed tail to the smallest
+    positive normal of the working dtype: values that did not saturate are
+    returned bit-identical, so the associative and direct forms still agree.
+
     Args:
         x: Tensor ``[..., dim]``.
 
     Returns:
-        Tensor of the same shape with φ applied elementwise.
+        Tensor of the same shape with φ applied elementwise, strictly > 0.
     """
     torch = _get_torch()
-    return torch.nn.functional.elu(x) + 1.0
+    features = torch.nn.functional.elu(x) + 1.0
+    return features.clamp_min(torch.finfo(features.dtype).tiny)
 
 
 # ---------------------------------------------------------------------------

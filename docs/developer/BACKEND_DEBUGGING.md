@@ -212,13 +212,16 @@ source /opt/autobot/autobot-backend/venv/bin/activate
 python --version
 ```
 
-### Python 3.13 + aioredis compatibility
+### aioredis compatibility
 
 If you see `ModuleNotFoundError: No module named 'aioredis'`:
 
 ```bash
-# Create compatibility shim
-cat > /opt/autobot/venv/lib/python3.13/site-packages/aioredis.py << 'EOF'
+# Create compatibility shim. Resolve site-packages from the venv itself rather
+# than hardcoding the minor version — the backend runs 3.14, and a hardcoded
+# python3.13 path silently writes the shim where nothing will import it.
+SITE_PACKAGES=$(/opt/autobot/venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+cat > "$SITE_PACKAGES/aioredis.py" << 'EOF'
 """Compatibility shim: aioredis merged into redis package."""
 from redis import asyncio as aioredis  # noqa: F401
 EOF
@@ -366,6 +369,37 @@ Or set in `/etc/wsl.conf` on the WSL instance:
 options = "metadata"
 ```
 
+### Why a COMMITTED symlink is worse than a broken one (#14137, #14149)
+
+The above is about a symlink already tracked correctly that *breaks on checkout*
+in this WSL2 shape. A different, more dangerous failure is *committing* a new
+symlink at all while `core.symlinks=false` is set:
+
+- Git cannot create a real symlink under that setting, so a tracked entry with
+  mode `120000` is materialised as a **regular file whose entire content is
+  the target path** — 30-40 bytes of text, silently overwriting whatever real
+  file or directory previously occupied that path.
+- Nothing errors at checkout. The failure surfaces later, elsewhere, and looks
+  unrelated (`Not a directory`, `ModuleNotFoundError`, or — #14149 — a config
+  loader silently receiving an empty/scalar file where it expected structured
+  content).
+- A code review cannot catch it either: `git show`/`git diff` on the commit
+  prints a plausible one-line path string, indistinguishable from a harmless
+  text file. Only the **index mode** (`git ls-files -s <path>` reporting
+  `120000`) reveals it.
+
+Two pre-commit/CI guards close this: `pre-commit-no-tracked-symlink` fails a
+commit or CI run the moment a *newly* tracked entry has mode `120000` (see the
+script's own header for the inside-vs-outside-the-tree classification), and
+`pre-commit-no-gitignore-shadow` fails when a tracked path shadows a name in
+`.gitignore`'s virtualenv section. Both live in
+`autobot-infrastructure/shared/scripts/hooks/`.
+
+If you are on a Linux-native clone with `core.symlinks=true`, a symlink you
+create locally still works for you — the guard exists because this repo's
+default clone shape (WSL2) does not, and a symlink that looks fine on your
+machine breaks silently on every other tree that pulls it.
+
 ---
 
 ## Related Issues
@@ -374,6 +408,8 @@ options = "metadata"
 |-------|---------|-----------|
 | [#881](https://github.com/mrveiss/AutoBot-AI/issues/881) | Backend deadlock / no response | UFW firewall blocking port |
 | [#886](https://github.com/mrveiss/AutoBot-AI/issues/886) | WSL2 symlink issues | `core.symlinks=false` |
+| [#14137](https://github.com/mrveiss/AutoBot-AI/issues/14137) | Committed `venv` symlink destroyed the interpreter on checkout | `core.symlinks=false` materialises mode `120000` as a text file, overwriting the real path |
+| [#14149](https://github.com/mrveiss/AutoBot-AI/issues/14149) | Ansible test inventory silently had zero variables | Same mechanism, on a tracked `group_vars/all.yml` symlink |
 | [#887](https://github.com/mrveiss/AutoBot-AI/issues/887) | UFW default rules | Needed explicit port rule |
 | [#888](https://github.com/mrveiss/AutoBot-AI/issues/888) | Requirements.txt conflicts | Pinning incompatibility |
 | [#868](https://github.com/mrveiss/AutoBot-AI/issues/868) | Backend crash-looping | Missing .env, aioredis compat, PYTHONPATH |

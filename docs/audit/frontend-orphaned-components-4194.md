@@ -6,6 +6,10 @@
 **Commit:** 1600bbfad (refactor(frontend): audit orphaned Vue components)  
 **Issue:** [#4194 - refactor(frontend): audit design-implementation gap for 24 orphaned components](https://github.com/mrveiss/AutoBot-AI/issues/4194)
 
+> **Superseded by [[2026-08-09-orphaned-frontend-components]] (2026-08-09).** The conclusions below are stale: both
+> components this audit named as true orphans — `CodeEvolutionTimeline` and `OperationDetail` — have since been wired in.
+> Kept for the method and the historical count; do not act on its component list.
+
 ---
 
 ## Executive Summary

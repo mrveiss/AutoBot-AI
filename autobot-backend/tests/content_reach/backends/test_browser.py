@@ -58,7 +58,7 @@ async def test_browser_probe_reflects_playwright_available_false(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_fetch_maps_research_result(monkeypatch):
+async def test_browser_fetch_maps_research_result(monkeypatch, stub_browser_manager):
     stub_manager = _StubManager(
         {
             "success": True,
@@ -69,9 +69,8 @@ async def test_browser_fetch_maps_research_result(monkeypatch):
             "title": "T",
         }
     )
-    import content_reach.backends.browser as browser_mod
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: stub_manager)
+    stub_browser_manager(stub_manager)
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(url="https://example.com", query="")
@@ -85,10 +84,9 @@ async def test_browser_fetch_maps_research_result(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_fetch_raises_without_url(monkeypatch):
-    import content_reach.backends.browser as browser_mod
+async def test_browser_fetch_raises_without_url(monkeypatch, stub_browser_manager):
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: _StubManager({}))
+    stub_browser_manager(_StubManager({}))
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(query="x")  # url defaults to ""
@@ -97,11 +95,10 @@ async def test_browser_fetch_raises_without_url(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_fetch_raises_on_unsuccessful(monkeypatch):
+async def test_browser_fetch_raises_on_unsuccessful(monkeypatch, stub_browser_manager):
     stub_manager = _StubManager({"success": False, "error": "Failed to create browser session"})
-    import content_reach.backends.browser as browser_mod
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: stub_manager)
+    stub_browser_manager(stub_manager)
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(url="https://example.com")
@@ -110,16 +107,15 @@ async def test_browser_fetch_raises_on_unsuccessful(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_fetch_distinguishes_guard_rejection_from_generic_failure(monkeypatch):
+async def test_browser_fetch_distinguishes_guard_rejection_from_generic_failure(monkeypatch, stub_browser_manager):
     """Issue #13018: a navigate_to guard rejection (blocked_by_guard=True) must
     raise a distinctly-worded BackendError, not the generic navigation-failure
     message used for other research_url failures."""
     stub_manager = _StubManager(
         {"success": False, "error": "blocked by SSRF guard: non-public address", "blocked_by_guard": True}
     )
-    import content_reach.backends.browser as browser_mod
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: stub_manager)
+    stub_browser_manager(stub_manager)
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(url="https://example.com")
@@ -133,7 +129,7 @@ async def test_browser_fetch_distinguishes_guard_rejection_from_generic_failure(
 
 
 @pytest.mark.asyncio
-async def test_browser_search_builds_ddg_url(monkeypatch):
+async def test_browser_search_builds_ddg_url(monkeypatch, stub_browser_manager):
     stub_manager = _StubManager(
         {
             "success": True,
@@ -141,9 +137,8 @@ async def test_browser_search_builds_ddg_url(monkeypatch):
             "title": "DDG",
         }
     )
-    import content_reach.backends.browser as browser_mod
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: stub_manager)
+    stub_browser_manager(stub_manager)
 
     backend = BrowserSearchBackend(source_type=SourceType.WEB_SEARCH)
     request = ContentRequest(query="cats dogs")

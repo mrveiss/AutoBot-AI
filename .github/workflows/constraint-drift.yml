@@ -39,12 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      # #13517: shared composite action, so the interpreter version, pip cache
+      # and dependency install live in one place rather than 21 copies.
+      - uses: ./.github/actions/setup-python-ci
         with:
-          python-version: '3.14'
-
-      - name: Install guard dependencies
-        run: python3 -m pip install --quiet packaging
+          extra-packages: packaging
 
       - name: Check single-source constraint compliance
         run: python3 scripts/check_constraint_drift.py

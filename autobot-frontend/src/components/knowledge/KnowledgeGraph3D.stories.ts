@@ -50,7 +50,7 @@ export const LargeGraph: Story = {
     edges: Array.from({ length: 15 }, (_, i) => ({
       from: `entity-${i % 10}`,
       to: `entity-${(i + 3) % 20}`,
-      type: 'relates_to',
+      type: 'related_to',
     })),
   },
 }

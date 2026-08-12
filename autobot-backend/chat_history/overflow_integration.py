@@ -64,6 +64,10 @@ async def handle_message_completion(
             - warning_triggered: bool
             - summary_created: bool
             - summary_text: str (if summary created)
+            - summary_error: str — non-empty when compaction was attempted and
+              failed. ``summary_created is False`` alone cannot distinguish
+              "not attempted" from "attempted and failed"; check this to
+              degrade visibly instead of continuing on a lie (#14065).
             - current_fill_percentage: float
             - total_tokens: int
             - context_limit: int
@@ -116,6 +120,17 @@ async def handle_message_completion(
         logger.info(
             "Context auto-compressed for session %s: summary created",
             session_id,
+        )
+    elif status.get("summary_error"):
+        # #14065: previously unreachable — a failed summarization returned a
+        # placeholder that made this branch report success. A caller reading
+        # only summary_created cannot tell "not attempted" from "attempted and
+        # destroyed the history", so the error is surfaced separately.
+        logger.error(
+            "Context auto-compression FAILED for session %s at %.1f%% fill: %s",
+            session_id,
+            status["current_fill_percentage"] * 100,
+            status["summary_error"],
         )
 
     return status

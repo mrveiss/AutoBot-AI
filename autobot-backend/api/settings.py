@@ -732,13 +732,17 @@ _SYNC_MAX_PAYLOAD_BYTES: int = 256 * 1024  # 256 KiB
 def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
     """Return True when *obj* exceeds ``_SYNC_MAX_DEPTH`` nesting levels.
 
-    Only recurses into dict values; non-dict values always return False.
+    Only dict nesting counts towards the depth: the scalar stored at the
+    bottom of a chain of dicts is a value, not another level.  Testing the
+    limit before the ``isinstance`` check counted that leaf as one extra
+    level, so a payload nested exactly ``_SYNC_MAX_DEPTH`` deep — the depth
+    the 400 response advertises as permitted — was rejected (Issue #3881).
     """
+    if not isinstance(obj, dict):
+        return False
     if current_depth > _SYNC_MAX_DEPTH:
         return True
-    if isinstance(obj, dict):
-        return any(_exceeds_depth(v, current_depth + 1) for v in obj.values())
-    return False
+    return any(_exceeds_depth(v, current_depth + 1) for v in obj.values())
 
 
 def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:

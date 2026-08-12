@@ -1040,7 +1040,7 @@ async def update_performance_threshold(
 )
 async def export_metrics(
     admin_check: bool = Depends(check_admin_permission),
-    format: str = Query("json", pattern="^(json|csv)$"),
+    format: str = Query("json", pattern=r"^(json|csv)\z"),
     time_range_hours: int = Query(1, ge=1, le=168),  # Max 1 week
 ):
     """Export performance metrics in JSON or CSV format. Issue #744: Requires admin authentication."""

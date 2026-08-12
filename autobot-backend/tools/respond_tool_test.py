@@ -12,6 +12,8 @@ Tests verify:
 4. Regular execute_command tools still work as before
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 # Test fixtures for tool call parsing
@@ -63,7 +65,14 @@ class TestRespondToolParsing:
         assert tool_calls[0]["params"]["break_loop"] is False
 
     def test_parse_mixed_tool_calls(self):
-        """Test parsing both execute_command and respond tools."""
+        """A respond that trails an execute_command is deferred, not returned.
+
+        Issue #716 constrains a turn to a single execute_command so the agent sees
+        the command's real output before it decides anything else. The trailing
+        respond here claims "Found 10 files" before ``ls -la`` has run, so
+        honouring it would break_loop on a fabricated answer. #13162: this test
+        asserted the pre-#716 behaviour and expected both calls back.
+        """
         from chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
@@ -76,9 +85,29 @@ Now the final summary:
 """
         tool_calls = handler._parse_tool_calls(text)
 
-        assert len(tool_calls) == 2
+        assert len(tool_calls) == 1
         assert tool_calls[0]["name"] == "execute_command"
-        assert tool_calls[1]["name"] == "respond"
+        assert tool_calls[0]["params"]["command"] == "ls -la"
+        assert not any(call["name"] == "respond" for call in tool_calls)
+
+    def test_parse_respond_before_command_is_kept(self):
+        """The #716 cut-off is the command, so a respond ahead of it survives.
+
+        Guards the boundary of the rule above: parsing stops AT the first
+        execute_command, it does not discard everything but that call.
+        """
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        handler = ToolHandlerMixin()
+
+        text = """<TOOL_CALL name="respond" params='{"text":"Working on it","break_loop":false}'>Ack</TOOL_CALL>
+<TOOL_CALL name="execute_command" params='{"command":"ls -la"}'>List files</TOOL_CALL>
+<TOOL_CALL name="execute_command" params='{"command":"rm -rf /tmp/x"}'>Second command</TOOL_CALL>
+"""
+        tool_calls = handler._parse_tool_calls(text)
+
+        assert [call["name"] for call in tool_calls] == ["respond", "execute_command"]
+        assert tool_calls[1]["params"]["command"] == "ls -la"
 
     def test_parse_respond_tool_with_newlines_in_text(self):
         """Test respond tool with newlines in the text parameter."""
@@ -197,8 +226,15 @@ class TestRespondToolProcessing:
         assert break_loop_result[0] is False  # break_loop=False
 
     @pytest.mark.asyncio
-    async def test_process_unknown_tool_skipped(self):
-        """Test that unknown tools are skipped (not processed)."""
+    async def test_process_unknown_tool_reports_error_to_agent(self):
+        """An unregistered tool is reported back to the agent, never swallowed.
+
+        Issue #2305/#2310 replaced the original silent skip: a dropped tool call
+        left the agent looping on the same invalid name with no signal about why.
+        #13162: this test still asserted the pre-#2305 silence. The MCP registry is
+        patched out so the assertion covers the unknown-tool path deterministically
+        rather than depending on a bridge lookup over the network.
+        """
         from chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
@@ -207,19 +243,30 @@ class TestRespondToolProcessing:
         tool_calls = [{"name": "unknown_tool", "params": {"foo": "bar"}, "description": "Unknown"}]
 
         messages = []
-        async for item in handler._process_tool_calls(
-            tool_calls,
-            "session_1",
-            "terminal_1",
-            "http://localhost:11434",
-            "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
-        ):
-            if not isinstance(item, tuple):
-                messages.append(item)
+        with patch("chat_workflow.tool_handler._try_mcp_dispatch", AsyncMock(return_value=None)):
+            async for item in handler._process_tool_calls(
+                tool_calls,
+                "session_1",
+                "terminal_1",
+                "http://localhost:11434",
+                "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            ):
+                if not isinstance(item, tuple):
+                    messages.append(item)
 
-        # No messages should be yielded for unknown tools
-        # Only the final tuple is yielded
-        assert len(messages) == 0
+        errors = [m for m in messages if m.type == "error"]
+        assert len(errors) == 1, "the agent must be told the tool does not exist"
+        assert "unknown_tool" in errors[0].content
+        assert errors[0].metadata["message_type"] == "unknown_tool"
+        assert errors[0].metadata["tool_name"] == "unknown_tool"
+
+        # The failure is recorded so the iteration's summary reflects it.
+        summaries = [m for m in messages if "execution_results" in (m.metadata or {})]
+        assert len(summaries) == 1
+        results = summaries[0].metadata["execution_results"]
+        assert [r["tool"] for r in results] == ["unknown_tool"]
+        assert results[0]["status"] == "error"
+        assert summaries[0].metadata["successful_commands"] == 0
 
 
 class TestBreakLoopIntegration:

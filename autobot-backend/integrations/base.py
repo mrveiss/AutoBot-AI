@@ -130,6 +130,7 @@ class BaseIntegration(ABC):
         import aiohttp
 
         from autobot_shared.http_client import get_http_client
+        from knowledge.connectors.base import instance_host_egress
 
         merged_headers = headers or {}
         if self.config.api_key:
@@ -137,8 +138,17 @@ class BaseIntegration(ABC):
 
         try:
             timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # #13625 (Rule 8): the integration's configured base URL is operator
+            # config, so the private-network opt-in applies. The Authorization
+            # header above rides on this request, which is why it must not reach
+            # an address egress policy forbids.
             async with get_http_client().tracked_request(
-                method, url, headers=merged_headers, json=json_data, timeout=timeout_obj
+                method,
+                url,
+                headers=merged_headers,
+                json=json_data,
+                timeout=timeout_obj,
+                guard_egress=instance_host_egress(),
             ) as resp:
                 body = await resp.json()
                 return {

@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "ניתוחי פרויקט"
+      },
+      "impact": {
+        "title": "ניתוח השפעה",
+        "hint": "מה קורא לצומת באופן טרנזיטיבי — בדוק לפני שינוי או הסרה.",
+        "nodeIdPlaceholder": "לדוגמה package.module.ClassName",
+        "nodeIdLabel": "מזהה צומת בגרף",
+        "analyze": "נתח",
+        "analyzing": "מנתח…",
+        "notIndexedTitle": "גרף הקוד לא נבנה",
+        "notIndexedBody": "בצע אינדוקס למקור זה לפני ניתוח ההשפעה.",
+        "partialTitle": "תוצאה חלקית — זהו חסם תחתון",
+        "partialDepth": "המעבר נעצר בעומק {depth} עם {frontier} צמתים שלא הורחבו. ייתכנו קוראים נוספים.",
+        "partialUnresolved": "לא ניתן היה לפתור {count} קשתות, ולכן ייתכן שחסרים קוראים.",
+        "callers": "קוראים",
+        "callersAtLeast": "קוראים (לפחות)",
+        "callersHeading": "קוראים שנמצאו",
+        "edgesResolved": "קשתות שנפתרו",
+        "edgesUnresolved": "קשתות שלא נפתרו",
+        "depth": "עומק שהושג",
+        "noCallersTitle": "לא נמצאו קוראים",
+        "noCallersBody": "דבר בגרף המאונדקס אינו קורא לצומת זה.",
+        "skippedHeading": "הצג {count} קשתות שלא נפתרו"
       }
     },
     "patterns": {
@@ -2601,7 +2623,8 @@
       "graphRagService": "Graph-RAG Service",
       "refreshStats": "Refresh Stats",
       "retry": "Retry",
-      "relationTypes": "Relation Types"
+      "relationTypes": "Relation Types",
+      "tabPath": "נתיב חיבור"
     },
     "pipeline": {
       "runner": {
@@ -3480,6 +3503,40 @@
     },
     "watchFolders": {
       "confirmDelete": "Are you sure you want to delete this watch folder?"
+    },
+    "graphPath": {
+      "title": "נתיב חיבור",
+      "description": "מצא את שרשרת הקשרים הקצרה ביותר המחברת בין שתי ישויות.",
+      "fromEntity": "מישות",
+      "fromEntityPlaceholder": "שם ישות ההתחלה...",
+      "toEntity": "לישות",
+      "toEntityPlaceholder": "שם ישות היעד...",
+      "swap": "החלף ישויות",
+      "direction": "כיוון",
+      "directionBoth": "כל כיוון",
+      "directionOutgoing": "עקוב אחר קשרים קדימה",
+      "directionIncoming": "עקוב אחר קשרים אחורה",
+      "directionHint": "קשרים נשמרים לעיתים קרובות בכיוון אחד בלבד.",
+      "maxDepth": "עומק מרבי",
+      "hops": "{count} קפיצות",
+      "relation": "קשר",
+      "relationHint": "(אופציונלי)",
+      "relationPlaceholder": "עקוב רק אחר סוג קשר זה...",
+      "findPath": "מצא נתיב",
+      "searching": "מחפש...",
+      "connectedIn": "מחוברות בקפיצה {count} | מחוברות ב-{count} קפיצות",
+      "sameEntity": "שני השמות מפנים לאותה ישות: {name}",
+      "fuzzyMatch": "אין ישות בשם {names} — המסלול שלהלן מתייחס להתאמה הקרובה ביותר. | אין ישויות בשם {names} — המסלול שלהלן מתייחס להתאמות הקרובות ביותר.",
+      "crossedForwards": "קדימה",
+      "crossedBackwards": "אחורה",
+      "unnamedRelation": "קשור ל",
+      "noPathFound": "לא נמצא חיבור בין הישויות האלה.",
+      "noPathHint": "נסה להגדיל את העומק, לאפשר כל כיוון, או להסיר את מסנן הקשר.",
+      "entityNotFound": "השמות האלה לא תאמו אף ישות:",
+      "entityNotFoundHint": "בדוק את האיות, או חלץ ישויות תחילה כדי שיהיו קיימות בגרף.",
+      "errorEnterBoth": "נא להזין ישות מקור וישות יעד.",
+      "notInGraph": "ישויות אלה עדיין אינן בגרף הקשרים.",
+      "notInGraphHint": "הן קיימות אך אין להן קישורים בגרף, ולכן לא ניתן לאתר חיבור. הרץ מחדש את חילוץ הישויות."
     }
   },
   "reasoningTrace": {
@@ -3639,7 +3696,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "פותח את האוטומציה של החברה שלך…",
+      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה."
     },
     "runner": {
       "completed": "Completed",
@@ -6686,6 +6745,7 @@
       "loadFailed": "טעינת הזיכרונות נכשלה. ייתכן שהשרת אינו זמין.",
       "forgetFailed": "שכיחת פריט הזיכרון נכשלה.",
       "forgetEverywhereFailed": "מחיקת פריט הזיכרון באופן מדורג נכשלה.",
+      "forgetEverywhereAmbiguous": "זיכרון זה קיים ביותר ממאגר אחד — השתמשו במקום זאת במחיקה לפי מאגר בשורה.",
       "exportDownloaded": "ייצוא הזיכרון הורד.",
       "exportFailed": "הייצוא נכשל. אנא נסה שוב."
     },
@@ -7780,7 +7840,8 @@
       "generating": "יוצר קוד QR...",
       "expired": "פג תוקף",
       "refresh": "קבל קוד חדש",
-      "retry": "נסה שוב"
+      "retry": "נסה שוב",
+      "manualCode": "לא מצליח לסרוק? הזן קוד זה באופן ידני:"
     }
   },
   "llmKeys": {
@@ -8153,13 +8214,16 @@
       "title": "Org Chart",
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
-      "empty": "No agents found.",
+      "empty": "לא נמצאו אנשים או סוכנים.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
+      "personDetail": "פרטי אדם",
+      "humanNoAgentControls": "פקדי סוכן אינם חלים על אנשים.",
       "human": "Human",
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "תפקיד",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",
@@ -8168,7 +8232,13 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "מצב תצוגה",
+      "viewTree": "עץ",
+      "viewCanvas": "קנבס",
+      "canvasTabAll": "כל היחידות",
+      "canvasUnit": "יחידת {name}",
+      "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים."
     },
     "goals": {
       "title": "Goal Tree",
@@ -8394,15 +8464,8 @@
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
-    "pairNewDevice": "Pair new device",
     "paired": "Paired",
     "pairedDevices": "Paired devices",
-    "pairingInstructions": "Pairing instructions",
-    "pairingNote": "Pairing note",
-    "step1": "Step1",
-    "step2": "Step2",
-    "step3": "Step3",
-    "step4": "Step4",
     "unpair": "Unpair"
   },
   "imageCell": {

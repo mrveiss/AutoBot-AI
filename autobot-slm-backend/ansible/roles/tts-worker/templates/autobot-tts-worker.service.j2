@@ -15,6 +15,15 @@ EnvironmentFile={{ tts_install_dir }}/.env
 ExecStart={{ tts_install_dir }}/venv/bin/python {{ tts_install_dir }}/tts-worker.py
 Restart=always
 RestartSec=10
+# #4090: without these, a unit that can never exec restarts forever and stays
+# out of `systemctl --failed`, so the one thing an operator checks cannot see it
+# (chromadb: 1681 restarts over ~4h45m, invisible). systemd's OWN defaults do not
+# help — DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
+# restarts inside 10s, and RestartSec spaces them further apart than that, so the
+# rate never reaches the limit. The window has to be wider than
+# RestartSec * StartLimitBurst for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 StandardOutput=append:{{ tts_log_dir }}/tts-worker.log
 StandardError=append:{{ tts_log_dir }}/tts-worker-error.log
 

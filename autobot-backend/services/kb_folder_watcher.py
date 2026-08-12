@@ -449,7 +449,12 @@ class KBFolderWatcherService:
             # Ingest into KB
             from knowledge_base import get_knowledge_base
 
-            kb = get_knowledge_base()
+            # get_knowledge_base is a coroutine function. Calling it without
+            # await produced a coroutine, so every ingest raised
+            # AttributeError: 'coroutine' object has no attribute 'add_fact'
+            # into the handler below — watch-folder ingestion never once
+            # succeeded, it only incremented the error counter (#13551).
+            kb = await get_knowledge_base()
             await kb.add_fact(
                 content=content,
                 category=config.category,

@@ -41,9 +41,24 @@ Environment="PYTHONFAULTHANDLER=1"
 # #12777: systemd defaults RLIMIT_CORE to 0, so without this NO core is written
 # even once core_pattern points somewhere real — the capture opt-in
 # (backend_core_capture, roles/backend/tasks/core_capture.yml) would silently
-# produce nothing. Harmless while capture is off: the kernel still has nowhere
-# to put the core.
-LimitCORE={{ backend_core_limit | default('infinity') }}
+# produce nothing.
+#
+# #13047: gated on that same opt-in. It used to be emitted unconditionally, on
+# the reasoning that it is "harmless while capture is off: the kernel still has
+# nowhere to put the core". That holds only on a node whose core_pattern pipes
+# to a MISSING handler — the specific broken state of the #12777 node this was
+# tested against, not a general property. `systemd-coredump` is the distro
+# default on Ubuntu, Debian and Fedora, so on a stock node the unit flipped from
+# "never writes a core" to "writes a full process-memory image on every abort".
+#
+# That image contains AUTOBOT_JWT_SECRET, DB credentials, provider API keys and
+# Redis credentials in cleartext, written where the coredump handler decides and
+# retained by its policy — covered by none of this repo's redaction paths. #12777
+# also documents this process aborting every ~25-55 minutes, so it is an
+# unbounded disk-fill vector on the same nodes.
+{% if backend_core_capture | default(false) | bool %}
+LimitCORE={{ backend_core_limit }}
+{% endif %}
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # MVA-1633: Validate env vars before starting to prevent silent crashes

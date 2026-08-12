@@ -64,6 +64,51 @@
     mode: "0644"
   notify: Restart prometheus
 
+# #12460: the alert rules live in the repo under autobot-monitoring/ and were
+# never installed, so `rule_files` had nothing to point at on a fleet host.
+# Copied from the deployed checkout rather than duplicated into the role, so the
+# repo stays the single source for every alert.
+- name: Create Prometheus rules directory
+  ansible.builtin.file:
+    path: "{{ prometheus_config_dir }}/rules"
+    state: directory
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: "0755"
+
+- name: Find Prometheus alert rules in the repo
+  ansible.builtin.find:
+    paths: "{{ autobot_repo_dir }}/autobot-monitoring"
+    patterns: "alerts-*.yml"
+  register: _prometheus_alert_rules
+
+# `find` returns an empty list for a missing directory without failing, so a
+# monitoring-only node with no repo checkout would report green while installing
+# zero alerts — the same silent no-op this change exists to remove. Fail loudly
+# instead; a node that legitimately ships no rules sets the flag below.
+- name: Assert Prometheus alert rules were found
+  ansible.builtin.assert:
+    that: _prometheus_alert_rules.files | length > 0
+    fail_msg: >-
+      No alerts-*.yml found under {{ autobot_repo_dir }}/autobot-monitoring.
+      Prometheus would start with rule_files pointing at an empty directory and
+      no alert would ever fire. Check autobot_repo_dir, or set
+      prometheus_alert_rules_required=false for a node that intentionally has none.
+  when: prometheus_alert_rules_required | bool
+
+- name: Install Prometheus alert rules
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ prometheus_config_dir }}/rules/{{ item.path | basename }}"
+    remote_src: true
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: "0644"
+  loop: "{{ _prometheus_alert_rules.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  notify: Restart prometheus
+
 - name: Create Prometheus systemd service
   ansible.builtin.template:
     src: prometheus.service.j2

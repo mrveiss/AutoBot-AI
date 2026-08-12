@@ -27,48 +27,73 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# Stub langchain / langgraph so graph.py can be imported without those packages
-# being installed in the test environment.
+# Stand-ins for langchain / langgraph so graph.py can be exec'd without those
+# packages being installed in the test environment.
+#
+# Built here, registered per test (#13450). ``_load_graph`` runs inside every
+# test, so the window these have to cover is one test — and registering them at
+# module import time instead left them shadowing the real, installed packages
+# for every node the session collected afterwards, which each CI shard that
+# collected this file without a real langgraph import ahead of it reported as
+# a leak escaping autobot-backend/tests/unit/chat_workflow/.
+#
+# One object per key, built once: ``graph.py`` binds names off these on every
+# exec, and a fresh object per test would move the bindings under it.
 # ---------------------------------------------------------------------------
 
 _STUBS = {
-    "langchain_core": types.ModuleType("langchain_core"),
-    "langchain_core.messages": types.ModuleType("langchain_core.messages"),
-    "langchain_core.runnables": types.ModuleType("langchain_core.runnables"),
-    "xxhash": types.ModuleType("xxhash"),
-    "redis": types.ModuleType("redis"),
-    "redis.asyncio": types.ModuleType("redis.asyncio"),
-    "langgraph": types.ModuleType("langgraph"),
-    "langgraph.checkpoint": types.ModuleType("langgraph.checkpoint"),
-    "langgraph.checkpoint.redis": types.ModuleType("langgraph.checkpoint.redis"),
-    "langgraph.checkpoint.redis.aio": types.ModuleType("langgraph.checkpoint.redis.aio"),
-    "langgraph.graph": types.ModuleType("langgraph.graph"),
-    "langgraph.types": types.ModuleType("langgraph.types"),
-    "typing_extensions": types.ModuleType("typing_extensions"),
+    name: types.ModuleType(name)
+    for name in (
+        "langchain_core",
+        "langchain_core.messages",
+        "langchain_core.runnables",
+        "xxhash",
+        "redis",
+        "redis.asyncio",
+        "langgraph",
+        "langgraph.checkpoint",
+        "langgraph.checkpoint.redis",
+        "langgraph.checkpoint.redis.aio",
+        "langgraph.graph",
+        "langgraph.types",
+        "typing_extensions",
+    )
 }
 
-for _name, _stub in _STUBS.items():
-    sys.modules.setdefault(_name, _stub)
+# The names graph.py imports from each module. Applied only where the module
+# answering for the key does not already carry them, so a real package that is
+# installed keeps its own implementation.
+_STUB_ATTRS: dict[str, dict[str, object]] = {
+    "langgraph.graph": {attr: MagicMock() for attr in ("END", "START", "StateGraph")},
+    "langgraph.types": {"interrupt": MagicMock()},
+    "typing_extensions": {"TypedDict": typing.TypedDict},
+    "langchain_core.messages": {
+        attr: MagicMock() for attr in ("HumanMessage", "SystemMessage", "AIMessage", "BaseMessage")
+    },
+    "langchain_core.runnables": {"RunnableConfig": MagicMock()},
+}
 
-for _attr in ("END", "START", "StateGraph"):
-    if not hasattr(sys.modules["langgraph.graph"], _attr):
-        setattr(sys.modules["langgraph.graph"], _attr, MagicMock())
 
-if not hasattr(sys.modules["langgraph.types"], "interrupt"):
-    sys.modules["langgraph.types"].interrupt = MagicMock()
+@pytest.fixture(autouse=True)
+def _stub_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Answer for the langchain/langgraph keys while one test runs, and no longer.
 
-if not hasattr(sys.modules["typing_extensions"], "TypedDict"):
-    sys.modules["typing_extensions"].TypedDict = typing.TypedDict
+    ``monkeypatch`` restores every entry and attribute afterwards — deleting the
+    ones that were absent — so nothing this file installs reaches a sibling.
+    """
+    for name, stub in _STUBS.items():
+        if name not in sys.modules:
+            monkeypatch.setitem(sys.modules, name, stub)
+    for name, attrs in _STUB_ATTRS.items():
+        module = sys.modules[name]
+        for attr, value in attrs.items():
+            if not hasattr(module, attr):
+                monkeypatch.setattr(module, attr, value, raising=False)
+    # AsyncRedisSaver must exist so the try/except in graph.py sets
+    # _REDIS_CHECKPOINTER_AVAILABLE=True — set unconditionally, as the real
+    # saver would open a Redis connection.
+    monkeypatch.setattr(sys.modules["langgraph.checkpoint.redis.aio"], "AsyncRedisSaver", MagicMock(), raising=False)
 
-for _attr in ("HumanMessage", "SystemMessage", "AIMessage", "BaseMessage"):
-    if not hasattr(sys.modules["langchain_core.messages"], _attr):
-        setattr(sys.modules["langchain_core.messages"], _attr, MagicMock())
-
-if not hasattr(sys.modules["langchain_core.runnables"], "RunnableConfig"):
-    sys.modules["langchain_core.runnables"].RunnableConfig = MagicMock()
-
-# AsyncRedisSaver must exist so the try/except in graph.py sets _REDIS_CHECKPOINTER_AVAILABLE=True
-sys.modules["langgraph.checkpoint.redis.aio"].AsyncRedisSaver = MagicMock()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -342,8 +367,13 @@ class TestStructuredOutputInExtractClaims:
         ), "_extract_claims must pass structured_output=True to prevent silent JSON drops"
 
 
-class TestRouteAfterJudge:
-    """route_after_judge must never loop indefinitely (#11013)."""
+class TestRouteAfterJudgeRegenerationCap:
+    """route_after_judge must never loop indefinitely (#11013).
+
+    Renamed off ``TestRouteAfterJudge`` (#13450): a second class of that name
+    rebound the module attribute, so pytest only ever collected this one and
+    the four cases in the class above it were silently dropped from the suite.
+    """
 
     def test_routes_to_generate_for_exactly_one_regen(self) -> None:
         graph_mod = _load_graph()

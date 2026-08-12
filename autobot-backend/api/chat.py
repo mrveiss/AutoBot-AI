@@ -26,6 +26,8 @@ from autobot_shared.ssot_config import config
 # Reads env at import time (process restart required to change).
 _CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
 
+import uuid
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -48,6 +50,7 @@ from api.schemas_chat import (
     TranslateRequest,
 )
 from api.schemas_common import DataResponse
+from api.user_management.dependencies import require_org_context
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
@@ -55,6 +58,7 @@ from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
+from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -65,7 +69,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -817,6 +821,11 @@ async def process_chat_message(
             "fill_percentage": overflow_status.get("current_fill_percentage", 0),
             "total_tokens": overflow_status.get("total_tokens", 0),
             "context_limit": overflow_status.get("context_limit", 0),
+            # #14065: a failed compaction has to be visible to the user, not
+            # only to the log. Without this the session silently stays over
+            # threshold and the only symptom is the assistant contradicting
+            # earlier turns once history is eventually trimmed.
+            "compaction_failed": bool(overflow_status.get("summary_error")),
         }
 
     # Issue #10548: RAG grounding — query KB and attach structured citations by default.
@@ -1137,6 +1146,94 @@ async def set_session_role(
     return DataResponse(data={"session_id": session_id, "role": role})
 
 
+@router.put("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def set_session_work_item(
+    session_id: str,
+    work_item_id: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    ctx=Depends(require_org_context),
+    request: Request = None,
+):
+    """Bind a chat session to an LLC work item so L4 can render its goal chain (#13704).
+
+    Two checks, both required: the caller must own the *session*, and the work
+    item must belong to the caller's *company*. Only then is the binding stored
+    server-side, where it overrides any client-supplied ``work_item_id``.
+
+    This endpoint is the reason L4 can be wired at all (#13687). Reading the
+    work item from the chat request body instead would let any authenticated
+    caller name another company's work item and have its goal titles rendered
+    into their own prompt.
+    """
+    from llc.services.work_item_service import WorkItemService
+    from user_management.database import get_async_session_factory
+
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+
+    try:
+        uuid.UUID(str(work_item_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="work_item_id must be a UUID")
+
+    # `async with`, not `async for ... break`: breaking out of an async generator
+    # does not run its __aexit__, so the DB session would only return to the pool
+    # at GC time.
+    factory = get_async_session_factory()
+    async with factory() as db:
+        # SECURITY: company-scoped fetch — a work item owned by another company
+        # is indistinguishable from one that does not exist.
+        item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
+        if item is None:
+            raise HTTPException(status_code=404, detail="Work item not found")
+
+    # #13729: the authorised user is stored with the scope so the resolve path
+    # can confirm the authorisation still holds, instead of trusting it for the
+    # whole TTL after membership is revoked.
+    await SessionWorkItemService().set_work_item(
+        session_id, work_item_id, str(ctx.org_id), user_id=str(ctx.user_id) if ctx.user_id else None
+    )
+    return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})
+
+
+@router.get("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def get_session_work_item(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Return the session's bound work item, or ``None`` (#13704)."""
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    work_item_id = await SessionWorkItemService().get_work_item(session_id)
+    return DataResponse(data={"session_id": session_id, "work_item_id": work_item_id})
+
+
+@router.delete("/chat/sessions/{session_id}/work-item", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_session_work_item",
+    error_code_prefix="CHAT",
+)
+async def clear_session_work_item(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Remove the session's work-item binding (#13704)."""
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    await SessionWorkItemService().clear_work_item(session_id)
+    return DataResponse(data={"session_id": session_id, "work_item_id": None})
+
+
 @router.get("/chat/sessions/{session_id}/role", response_model=DataResponse[Dict[str, Any]])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1361,7 +1458,12 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
 
 
 async def _stream_chat_workflow_messages(
-    chat_workflow_manager, chat_id: str, message: str, context: dict, request_id: str
+    chat_workflow_manager,
+    chat_id: str,
+    message: str,
+    context: dict,
+    request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
@@ -1372,7 +1474,7 @@ async def _stream_chat_workflow_messages(
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
         async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context
+            session_id=chat_id, message=message, context=context, auth_role=auth_role
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
@@ -1406,6 +1508,7 @@ async def _stream_direct_response(
     message: str,
     remember_choice: bool,
     request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream direct response for approvals/denials (Issue #398: extracted)."""
     try:
@@ -1416,6 +1519,7 @@ async def _stream_direct_response(
             session_id=chat_id,
             message=message,
             context={"remember_choice": remember_choice},
+            auth_role=auth_role,
         ):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"
@@ -1510,6 +1614,10 @@ async def send_chat_message_by_id(
             message,
             context,
             request_id,
+            # #13821: the RBAC role from the authenticated session, NOT from
+            # request_data — `context` above is the caller's own bag and is
+            # explicitly not trusted for this.
+            auth_role=(current_user or {}).get("role"),
         )
     )
 
@@ -1681,6 +1789,30 @@ async def _merge_chat_messages(
         return new_messages
 
 
+async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
+    """Owner metadata to write when the save path creates a session (#14020).
+
+    `save_session` writes a `metadata` key only when one is passed, so saving to a
+    session id with no existing file produced a session with **no durable owner**.
+    Since #14018 made the file record authoritative, such a session reads as
+    unowned every time its Redis key lapses and is claimed by whoever visits next.
+
+    The write **mirrors the validator's own decision** rather than making an
+    independent one. `validate_chat_ownership` returns ``legacy_migration`` exactly
+    when it found no owner and granted the caller ownership — that is the only case
+    where stamping the file is recording what already happened.
+
+    It deliberately does NOT write on ``enforcement_disabled`` or ``auth_disabled``:
+    those fast paths authorise **without checking any owner at all** (and disabled
+    is the default today, #14010), so claiming there would let any authenticated
+    caller permanently stamp themselves onto an ownerless session — a claim that
+    would outlive the switch to enforced.
+    """
+    if not isinstance(ownership, dict) or ownership.get("reason") != "legacy_migration":
+        return None
+    return build_owner_metadata(ownership.get("user_data")) or None
+
+
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1717,7 +1849,10 @@ async def save_chat_by_id(
     )
 
     result = await chat_history_manager.save_session(
-        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
     )
 
     return JSONResponse(
@@ -1795,15 +1930,35 @@ async def send_direct_chat_response(
     Send direct user response to chat (Issue #398: refactored).
 
     Issue #744: Requires authenticated user.
+    Issue #13982: and must own the chat — see the ownership check below.
     """
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
+
+    # #13982: this endpoint carries approval and denial decisions, so without an
+    # ownership check any authenticated user could resolve another user's pending
+    # command approval — and with remember_choice, persist that decision for
+    # future turns in a chat they do not own.
+    #
+    # `Depends(validate_chat_ownership)` cannot be reused here: it resolves
+    # `chat_id` as a path parameter and this endpoint takes it from the body, so
+    # the dependency would validate a different value than the one used. The
+    # explicit call is the same pattern the session endpoints above use.
+    await validate_chat_ownership(chat_id, request)  # SECURITY: caller must own the session
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
 
     return _create_streaming_response(
-        _stream_direct_response(chat_workflow_manager, chat_id, message, remember_choice, request_id)
+        _stream_direct_response(
+            chat_workflow_manager,
+            chat_id,
+            message,
+            remember_choice,
+            request_id,
+            # #13821: server-side identity, same as the message endpoint.
+            auth_role=(current_user or {}).get("role"),
+        )
     )
 
 

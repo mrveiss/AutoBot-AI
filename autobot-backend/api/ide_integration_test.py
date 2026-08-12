@@ -57,11 +57,15 @@ def sample_context():
 
 
 @pytest.mark.anyio
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-async def test_completion_caching(mock_redis, mock_analyzer, engine, sample_request, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+async def test_completion_caching(mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context):
     """Test completion result caching."""
-    # Setup mocks
+    # Setup mocks — the module reaches Redis and the analyzer through lazy
+    # singleton accessors, so the accessor is patched and its return value
+    # is the client the engine actually talks to.
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
@@ -94,12 +98,17 @@ async def test_completion_caching(mock_redis, mock_analyzer, engine, sample_requ
 
 @pytest.mark.anyio
 @patch("api.ide_integration.HAS_ML", True)
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-@patch("api.ide_integration.trainer")
-async def test_ml_completions(mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+@patch("api.ide_integration._get_trainer")
+async def test_ml_completions(
+    mock_get_trainer, mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context
+):
     """Test ML-based completions."""
     # Setup mocks
+    mock_trainer = mock_get_trainer.return_value
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
@@ -121,11 +130,13 @@ async def test_ml_completions(mock_trainer, mock_redis, mock_analyzer, engine, s
 
 
 @pytest.mark.anyio
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-async def test_pattern_completions(mock_redis, mock_analyzer, engine, sample_request, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+async def test_pattern_completions(mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context):
     """Test pattern-based completions."""
     # Setup mocks
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
 
     # Context with logging import to trigger logging completions
@@ -178,11 +189,13 @@ def test_completion_ranking(engine):
 
 
 @pytest.mark.anyio
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-async def test_completion_max_limit(mock_redis, mock_analyzer, engine, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+async def test_completion_max_limit(mock_get_redis, mock_get_analyzer, engine, sample_context):
     """Test completion result limit."""
     # Setup mocks
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
@@ -201,14 +214,19 @@ async def test_completion_max_limit(mock_redis, mock_analyzer, engine, sample_co
 
 
 @pytest.mark.anyio
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-@patch("api.ide_integration.trainer")
-async def test_ml_timeout_fallback(mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+@patch("api.ide_integration._get_trainer")
+async def test_ml_timeout_fallback(
+    mock_get_trainer, mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context
+):
     """Test fallback to patterns when ML times out."""
     import time
 
     # Setup mocks
+    mock_trainer = mock_get_trainer.return_value
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
@@ -252,11 +270,13 @@ def test_pattern_relevance_filtering(engine):
 
 
 @pytest.mark.anyio
-@patch("api.ide_integration.context_analyzer")
-@patch("api.ide_integration.redis_client")
-async def test_completion_performance(mock_redis, mock_analyzer, engine, sample_request, sample_context):
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+async def test_completion_performance(mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context):
     """Test completion response time."""
     # Setup mocks
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
