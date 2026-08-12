@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
+from constants.threshold_constants import CategoryDefaults
 
 if TYPE_CHECKING:
     import aioredis
@@ -889,7 +890,7 @@ class BulkOperationsMixin:
                     "fact_id": row.get("fact_id"),
                     "content": row.get("content", ""),
                     "metadata": {
-                        "category": row.get("category", "general"),
+                        "category": row.get("category", CategoryDefaults.GENERAL),
                         "tags": [t.strip() for t in row.get("tags", "").split(",") if t.strip()],
                     },
                 }

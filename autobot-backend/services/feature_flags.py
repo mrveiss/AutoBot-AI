@@ -34,7 +34,7 @@ from enum import Enum
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from constants.threshold_constants import StringParsingConstants
+from constants.threshold_constants import CategoryDefaults, StringParsingConstants
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -367,7 +367,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to get rollout statistics: %s", e)
             return {
                 "error": "Failed to retrieve rollout statistics",
-                "current_mode": "unknown",
+                "current_mode": CategoryDefaults.UNKNOWN,
             }
 
     async def clear_all_flags(self) -> bool:
