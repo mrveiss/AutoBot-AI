@@ -501,6 +501,24 @@ repos:
         stages: [pre-commit]
         description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
 
+  # Shell SSOT library regression guard (#14041)
+  # 23 tracked scripts silently no-op'd for years because they sourced a path
+  # with a wrong directory segment (infrastructure/ instead of
+  # autobot-infrastructure/); the library itself never existed at all. Runs
+  # the library's own bash self-test -- including the "no tracked *.sh file
+  # sources the non-autobot- path" guard -- whenever a shell script changes,
+  # so the wrong path (or a broken library) cannot regrow silently again.
+  - repo: local
+    hooks:
+      - id: ssot-config-lib-guard
+        name: Shell SSOT Library Self-Test (#14041)
+        entry: bash autobot-infrastructure/shared/tests/test_ssot_config_lib.sh
+        language: system
+        files: \.sh$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Sources lib/ssot-config.sh under every known call shape and asserts no tracked *.sh file still points at the wrong infrastructure/ path (#14041)"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:

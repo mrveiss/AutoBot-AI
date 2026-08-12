@@ -211,6 +211,104 @@ class TestExcludedSubtreesUnit:
         assert fs_mcp.is_path_allowed(str(seed)) is True
 
 
+class TestEnvMatchingDefects:
+    """The two ``_is_excluded_path`` matching defects from #14125.
+
+    Both are bypasses of an exclusion that #14081 already intended to
+    enforce, so every assertion here is written to fail against the
+    pre-#14125 implementation and pass after it. They are driven through the
+    real ``is_path_allowed``/``_resolve_allowed_path`` seam, never against a
+    hand-rolled restatement of the predicate.
+    """
+
+    @staticmethod
+    def _make(project: Path, relative: str) -> Path:
+        """Create ``relative`` (with parents) under *project* and return it."""
+        target = project / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("PLACEHOLDER=not-a-real-secret\n", encoding="utf-8")
+        return target
+
+    # Defect 1: the template allowlist was checked against the whole path's
+    # basename, which returned early and skipped the component scan. A
+    # directory named ".env"/".envs" was therefore traversable whenever the
+    # leaf happened to be named like a template. The last three rows already
+    # behaved correctly before the fix and are here to pin that they still do
+    # -- an over-corrected component scan that denied everything would look
+    # identical to a fix on the first two rows alone.
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            "sub/.env/.env.example",
+            "sub/.envs/.env.sample",
+            "sub/.env.example.real",
+            "sub/.env.example/real.env",
+            "sub/.env.d/x.env",
+        ],
+    )
+    def test_env_component_is_denied_regardless_of_leaf_name(self, fake_project, relative):
+        """A ``.env*`` *directory* component is never excused by the leaf (#14125)."""
+        target = str(self._make(fake_project["project"], relative))
+
+        assert fs_mcp.is_path_allowed(target) is False
+        with pytest.raises(ValueError, match="excluded subtree"):
+            fs_mcp._resolve_allowed_path(target)
+
+    # Defect 2: fnmatch and the ``in parts`` test are case-sensitive on
+    # POSIX, so the exclusion was bypassable by changing the case of the
+    # request. On a case-insensitive mount these resolve to the real files.
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            ".GIT/config",
+            ".Git/config",
+            "sub/.ENV",
+            "sub/.Env",
+            "sub/.ENV.local",
+            "sub/.ENV/settings.json",
+        ],
+    )
+    def test_case_variants_are_denied(self, fake_project, relative):
+        """``.GIT``/``.ENV`` and friends are refused like their lower-case forms (#14125)."""
+        target = str(self._make(fake_project["project"], relative))
+
+        assert fs_mcp.is_path_allowed(target) is False
+        with pytest.raises(ValueError, match="excluded subtree"):
+            fs_mcp._resolve_allowed_path(target)
+
+    # The allowlist must survive both fixes: denying every ".env*" leaf would
+    # pass every assertion above while silently reverting #14081's review
+    # follow-up. Case-folding the leaf extends the allowlist to odd-cased
+    # template names rather than trapping them.
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            "sub/.env.example",
+            "sub/.env.sample",
+            "sub/.env.template",
+            "sub/.ENV.EXAMPLE",
+            "sub/.Env.Sample",
+        ],
+    )
+    def test_committed_templates_remain_reachable(self, fake_project, relative):
+        """Committed dotenv templates stay readable (#14081 follow-up, kept by #14125)."""
+        target = str(self._make(fake_project["project"], relative))
+
+        assert fs_mcp.is_path_allowed(target) is True
+        assert str(fs_mcp._resolve_allowed_path(target)) == str(Path(target).resolve())
+
+    def test_gitignore_and_github_are_not_swept_up_by_case_folding(self, fake_project):
+        """Case-folding must not widen ``.git`` into a prefix match (#14125).
+
+        ``.git`` is an exact component match, so ``.gitignore``, ``.GITHUB/``
+        and ``.gitattributes`` stay reachable. Without this, "fail closed"
+        would quietly become "refuse the repository's own metadata files".
+        """
+        for relative in (".gitignore", ".gitattributes", ".GITHUB/workflows/ci.yml"):
+            target = str(self._make(fake_project["project"], relative))
+            assert fs_mcp.is_path_allowed(target) is True, relative
+
+
 @pytest.fixture
 def client():
     """TestClient over a minimal app mounting the real filesystem_mcp router.

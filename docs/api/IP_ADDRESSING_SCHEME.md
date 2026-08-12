@@ -49,7 +49,7 @@ backend_url = config.network.backend_url   # resolved at startup from env
 
 In shell scripts use `ssot-config.sh`:
 ```bash
-source /opt/autobot/infrastructure/shared/scripts/lib/ssot-config.sh
+source /opt/autobot/autobot-infrastructure/shared/scripts/lib/ssot-config.sh
 curl "https://${AUTOBOT_BACKEND_HOST}:8443/api/system/health"
 ```
 

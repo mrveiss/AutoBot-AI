@@ -20,7 +20,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 INVENTORY_FILE="$SCRIPT_DIR/inventory/production.yml"
 PLAYBOOK_FILE="$SCRIPT_DIR/playbooks/deploy-hybrid-docker.yml"
 LOG_DIR="/tmp/autobot-deployment"
