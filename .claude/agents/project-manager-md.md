@@ -1,6 +1,7 @@
 ---
 name: project-manager
 description: Use for project planning, sprint organization, task breakdowns, requirement analysis, and coordinating development workflows. Proactively engage for multi-step feature implementations and release planning.
+model: fable
 tools: Read, Write, Grep, Glob, Bash
 ---
 
