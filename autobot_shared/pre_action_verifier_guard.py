@@ -41,6 +41,7 @@ from typing import Any
 
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)
@@ -316,8 +317,8 @@ async def _call_verifier_once(
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     request = LLMRequest(
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
+            {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
         ],
         max_tokens=VERIFIER_MAX_TOKENS,
         temperature=0.1,  # Low temperature for adversarial consistency
