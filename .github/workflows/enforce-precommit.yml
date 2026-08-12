@@ -27,6 +27,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          # fetch-depth: 2 (not the actions/checkout default of 1) so the PR
+          # base commit is present. On a pull_request the checkout is the
+          # merge commit: depth 2 supplies both parents — HEAD^1 (base tip)
+          # and HEAD^2 (PR head) — which the #14137 symlink-diff step below
+          # needs. Same reasoning as code-quality.yml (#13880).
+          fetch-depth: 2
 
       - name: Check for pre-commit config
         run: |
@@ -93,6 +100,55 @@ jobs:
           # in_scope()/EXCLUDE_RE in the script skip vendored/generated/.vue/
           # workflow/infrastructure paths (same scope as the original sweep).
           git ls-files -z | xargs -0 python3 tools/lint/check_spdx_header.py
+
+      - name: Block newly tracked symlinks into or out of the working tree (#14137)
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # BLOCKING, and diff-scoped rather than a full-tree scan: #14149
+          # found a PRE-EXISTING tracked symlink (already broken, tracked
+          # separately) that a full-tree scan would fail on every unrelated
+          # PR until it's fixed. Same changed-files scoping #13950/#14051
+          # established for the hardcoded-value and print guards — a NEWLY
+          # added or modified mode-120000 entry still fails; #14149's,
+          # untouched by a given PR, does not block that PR.
+          #
+          # Resolve through HEAD's own parents first (#13880): on a
+          # pull_request the checkout is the merge commit, so HEAD^1 is the
+          # base tip and HEAD^2 is the PR head — no event payload needed.
+          have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
+          if have 'HEAD^2' && have 'HEAD^1'; then
+            base="HEAD^1"
+          elif have "${PR_BASE_SHA:-x}"; then
+            base="$PR_BASE_SHA"
+          else
+            echo "::error::cannot resolve a base commit — refusing to report 0 changed files as clean"
+            exit 1
+          fi
+          # No extension pathspec: the destructive entries in both #14137
+          # (venv) and #14149 (all.yml) are exactly the shapes a
+          # source-extension filter would exclude — one has no extension at
+          # all, the other isn't a source file.
+          if ! raw_files=$(git diff --name-only "$base" HEAD); then
+            echo "::error::git diff failed for ${base}..HEAD — refusing to report clean."
+            exit 1
+          fi
+          if [ -z "$raw_files" ]; then
+            echo "No changed files — skipping pre-commit-no-tracked-symlink."
+            exit 0
+          fi
+          echo "$raw_files" | xargs -d '\n' bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+
+      - name: Block tracked paths shadowing the virtualenv ignore names (#14137)
+        run: |
+          # Full-tree (git ls-files inside the hook): zero pre-existing
+          # violations as of #14137 (verified — every currently-tracked
+          # bin/lib/venv-named path is covered by a .gitignore '!' negation),
+          # so unlike the symlink guard above there is nothing pre-existing
+          # to blame an unrelated PR for.
+          bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
 
   check-instructions:
     runs-on: ubuntu-latest

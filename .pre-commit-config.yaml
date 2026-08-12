@@ -459,6 +459,33 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
 
+  # No tracked symlink entries — mode 120000 checks out as a plain file
+  # under this repo's core.symlinks=false, silently clobbering whatever
+  # real path was there (Issue #14137)
+  - repo: local
+    hooks:
+      - id: no-tracked-symlink
+        name: No Tracked Symlink Entries (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a NEW tracked mode-120000 entry — a symlink materialises as a plain file under core.symlinks=false, silently overwriting whatever real path was there"
+
+  # No tracked path shadows a name in .gitignore's virtualenv section
+  # (Issue #14137) — the other half of how the venv symlink got in
+  - repo: local
+    hooks:
+      - id: no-gitignore-shadow
+        name: No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
