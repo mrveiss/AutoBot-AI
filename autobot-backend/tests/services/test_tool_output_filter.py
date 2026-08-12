@@ -866,7 +866,13 @@ def test_cap_tees_full_copy_and_links_it(tmp_path, monkeypatch):
     teed = list(tmp_path.glob("*.txt"))
     assert len(teed) == 1
     assert teed[0].read_text(encoding="utf-8") == oversized
-    assert str(teed[0]) in result
+    # #14142: the hint links the tee'd file by name, not by absolute path. The
+    # assertion here used to be `str(teed[0]) in result`, which passed only
+    # because the absolute host path was being written into model context --
+    # the defect. What this test is really for is that the cap tees a full copy
+    # and points at it, and that is what is asserted now.
+    assert teed[0].name in result
+    assert str(tmp_path) not in result, "the absolute host path is back in the prompt"
 
 
 def test_filter_applies_cap_when_no_rule_matches(tmp_path, monkeypatch):
