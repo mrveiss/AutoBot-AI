@@ -49,9 +49,18 @@ _DOCX_SNIFF_BYTES = 2000
 # mixed (title pages, plates, appendices of figures).
 DEFAULT_MIN_TEXT_PAGE_RATIO = 0.5
 
+# #13884 finding 1: the ratio above counts a page as readable when it carries a
+# single character, which a scanner/DMS/Bates page-number stamp satisfies on
+# every page. Measured against synthesized fixtures (reportlab + PIL): a
+# "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL"
+# stamp ~25; a genuine single-field born-digital page (an invoice with five
+# short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
+# the stamp cluster and the real-content cluster with margin on both sides.
+DEFAULT_MIN_CHARS_PER_PAGE = 50.0
+
 
 def min_text_page_ratio() -> float:
-    """Resolve the usable-text-layer threshold from config.
+    """Resolve the usable-text-layer ratio threshold from config.
 
     Resolved per call rather than captured at import so a deployment can retune
     it without a restart, and so tests can exercise the bounds.
@@ -75,6 +84,35 @@ def min_text_page_ratio() -> float:
             DEFAULT_MIN_TEXT_PAGE_RATIO,
         )
         return DEFAULT_MIN_TEXT_PAGE_RATIO
+    return value
+
+
+def min_chars_per_page() -> float:
+    """Resolve the characters-per-page floor from config.
+
+    Companion to :func:`min_text_page_ratio`, same ``blank_to_none`` handling
+    and the same "fall back to the default with a warning" contract for a
+    misconfigured value (#13884).
+    """
+    raw = blank_to_none(config.misc.document_min_chars_per_page)
+    if raw is None:
+        return DEFAULT_MIN_CHARS_PER_PAGE
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE=%r is not a number; falling back to %s",
+            raw,
+            DEFAULT_MIN_CHARS_PER_PAGE,
+        )
+        return DEFAULT_MIN_CHARS_PER_PAGE
+    if value < 0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE=%s must be >= 0; falling back to %s",
+            value,
+            DEFAULT_MIN_CHARS_PER_PAGE,
+        )
+        return DEFAULT_MIN_CHARS_PER_PAGE
     return value
 
 
@@ -153,13 +191,47 @@ class ExtractedDocument:
         return (len(self.pages) - len(self.empty_page_numbers)) / len(self.pages)
 
     @property
+    def avg_chars_per_page(self) -> float:
+        """Average characters of raw page text, page markers excluded.
+
+        :attr:`text_page_ratio` only asks whether a page has *any* text — one
+        character qualifies, which a page-number stamp, Bates number, or
+        filename footer satisfies on every page of a scan. This measures *how
+        much* text landed per page, which is what actually separates a
+        stamped scan from a page of real content (#13884).
+        """
+        if not self.pages:
+            return float(self.char_count)
+        return sum(len(page.text) for page in self.pages) / len(self.pages)
+
+    @property
     def has_usable_text_layer(self) -> bool:
         """Whether enough of the document was readable to treat it as extracted.
 
         Distinct from :attr:`has_text`: a document can carry text and still be
-        unusable, which is the case a scanned PDF with an OCR cover page hits.
+        unusable, which is the case a scanned PDF with an OCR cover page hits,
+        or one stamped with a page number or Bates number on every page.
+        Unpaginated formats (no ``pages``) have no ratio or per-page floor to
+        apply, so any recovered text is usable there.
         """
-        return self.has_text and self.text_page_ratio >= min_text_page_ratio()
+        if not self.has_text:
+            return False
+        if not self.pages:
+            return True
+        return self.text_page_ratio >= min_text_page_ratio() and self.avg_chars_per_page >= min_chars_per_page()
+
+    @property
+    def has_usable_content(self) -> bool:
+        """Whether the extraction recovered anything a consumer can use.
+
+        Distinct from :attr:`has_usable_text_layer`: a DOCX whose content is
+        entirely a table has no text layer at all and is still a complete,
+        successful extraction — its data lives in ``tables`` (#13884). PDF
+        table extraction is not implemented upstream (#13895), so ``tables``
+        is always empty there and this collapses back to the text-layer
+        check for PDFs.
+        """
+        return self.has_usable_text_layer or bool(self.tables)
 
 
 def render_pages(pages: Sequence[PageText], marker: str = PAGE_MARKER_TEMPLATE) -> str:

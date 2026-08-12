@@ -1526,6 +1526,14 @@ class MiscConfig(RedactedSettings):
         default="",
         alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
     )
+    # #13884: minimum average characters per page, alongside the ratio above.
+    # The ratio alone counts a page as readable when it carries a single
+    # character, which a page-number stamp, Bates number, or filename footer
+    # satisfies on every page of a scan. This floor catches that shape.
+    document_min_chars_per_page: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE",
+    )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
