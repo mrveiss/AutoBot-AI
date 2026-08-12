@@ -15,9 +15,13 @@ filename denylist missed:
   backup (``secrets.json.bak``) -- same plaintext-equivalent rows, different
   names
 - the SSO/SAML signing key (``security/sso_keys/private_key.pem``)
-- the threat-detection engine's pickle (``security/user_profiles.pkl``) --
-  the sharp one: ``pickle.load()`` on a bridge-writable file is arbitrary
-  code execution, not disclosure
+- the threat-detection engine's profile store (``security/user_profiles.pkl``)
+  -- the sharp one at the time: ``pickle.load()`` on a bridge-writable file
+  is arbitrary code execution, not disclosure. #14159 later replaced the
+  pickle format with schema-validated JSON (``user_profiles.json``); the
+  exclusion here is by *subtree*, not filename, so it still covers both the
+  current JSON store and any legacy ``.pkl`` left on disk (no data loss on
+  update -- the old file is never deleted)
 
 These tests build a synthetic project tree so the assertions do not depend
 on the real repository's contents, then verify:
@@ -109,10 +113,11 @@ def fake_project(tmp_path, monkeypatch):
     sso_private_key = sso_keys_dir / "private_key.pem"
     sso_private_key.write_text("placeholder-sso-signing-key-material\n", encoding="utf-8")
 
+    # Legacy filename (#14159 replaced pickle with JSON and never deletes an
+    # existing .pkl -- no data loss on update). Real content is irrelevant --
+    # the point under test is that the bridge never reads or writes this path
+    # at all, regardless of what pickle.load() would do with it.
     user_profiles_pkl = security_dir / "user_profiles.pkl"
-    # Real content is irrelevant -- the point under test is that the bridge
-    # never reads or writes this path at all, regardless of what pickle.load()
-    # would do with it.
     user_profiles_pkl.write_bytes(b"placeholder-pickle-stub-bytes")
 
     ordinary_file = project / "README.md"
@@ -457,9 +462,17 @@ class TestRealResolverAgreement:
         assert fs_mcp.is_path_allowed(str(sso_keys_dir / "private_key.pem")) is False
 
     def test_threat_detection_profile_storage_location_is_excluded(self):
-        """The exact path threat_detection/engine.py resolves for its pickle."""
-        profile_storage_path = fs_mcp.LEGACY_DATA_ROOT.get_data_path("security", "user_profiles.pkl")
+        """The exact path threat_detection/engine.py resolves for its JSON
+        profile store (#14159 replaced the pickle format with JSON)."""
+        profile_storage_path = fs_mcp.LEGACY_DATA_ROOT.get_data_path("security", "user_profiles.json")
         assert fs_mcp.is_path_allowed(str(profile_storage_path)) is False
+
+    def test_threat_detection_legacy_pickle_location_is_still_excluded(self):
+        """#14159 stopped reading this path but never deletes it (no data loss
+        on update) -- the subtree exclusion must still cover it even though
+        the engine itself no longer opens it."""
+        legacy_path = fs_mcp.LEGACY_DATA_ROOT.get_data_path("security", "user_profiles.pkl")
+        assert fs_mcp.is_path_allowed(str(legacy_path)) is False
 
     def test_secrets_manager_storage_is_excluded_by_the_real_bridge(self):
         import api.secrets as secrets_api

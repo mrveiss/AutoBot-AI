@@ -232,10 +232,13 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 # and material that other subsystems write under the same data directory
 # without going through the secrets manager at all -- the SSO/SAML signing
 # key (security/enterprise/sso_integration.py) and, sharpest of all, a
-# *pickle* the threat-detection engine loads with pickle.load()
-# (security/enterprise/threat_detection/engine.py) -- a bridge write there is
-# arbitrary code execution, not disclosure. A filename denylist can't keep
-# up with sidecars, backups, and subsystems that don't exist yet.
+# threat-detection profile store
+# (security/enterprise/threat_detection/engine.py). That store was a pickle
+# until #14159, so a bridge write there was arbitrary code execution rather
+# than mere disclosure; it is schema-validated JSON now, and this exclusion
+# covers both it and the legacy .pkl deliberately left on disk. A filename
+# denylist can't keep up with sidecars, backups, and subsystems that don't
+# exist yet.
 #
 # No production code path needs this LLM-facing bridge to reach anything
 # under the data directory: application state goes through purpose-built
