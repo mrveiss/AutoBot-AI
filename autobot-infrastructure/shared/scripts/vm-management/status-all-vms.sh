@@ -126,11 +126,25 @@ get_service_processes() {
 
     local process_count=0
 
+    # #14178 review: `${SERVICE_PORTS[$vm_name]}` on a key that does not exist
+    # expands to the EMPTY STRING under this script's `set -e` (there is no
+    # `set -u`), turning `pgrep -f 'python.*'` into a pattern that matches every
+    # python process — the probe would report the service UP whenever any python
+    # is running. That is worse than the literal-port bug this fix removes, so a
+    # missing key reports zero processes and says why, rather than matching
+    # everything or aborting the whole status run.
+    local svc_port="${SERVICE_PORTS[$vm_name]:-}"
+    if [ -z "$svc_port" ]; then
+        echo "status-all-vms: no SERVICE_PORTS entry for '$vm_name' -- reporting 0 processes, not probing" >&2
+        echo "0"
+        return
+    fi
+
     case "$vm_name" in
         "frontend")
             # Port comes from SERVICE_PORTS, the same map the health-check URL
             # above reads, so the two probes cannot name different ports (#14178).
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*${svc_port}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "redis")
             # FIXED: Check for redis-stack-server service specifically
@@ -138,16 +152,16 @@ get_service_processes() {
             ;;
         "npu-worker")
             # Service unit first, port probe as the fallback (#14178: port from SERVICE_PORTS).
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*${svc_port}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "ai-stack")
             # AI stack, not Ollama (11434) -- port from SERVICE_PORTS (#14178).
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${svc_port}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "browser")
             # 3000 was Grafana's port; the browser service is 9001 (#4052). Reading
             # SERVICE_PORTS removes the literal that disagreed with the URL probe (#14178).
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${svc_port}' | wc -l" 2>/dev/null || echo "0")
             ;;
     esac
 

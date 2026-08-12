@@ -214,12 +214,26 @@ if [ -f "$_status_script" ]; then
     _literals="$(grep -cE "pgrep -f '[^']*[0-9]{4}|vite\.\*[0-9]{4}" "$_status_script" || true)"
     check "status-all-vms.sh process probes carry no literal port" "$_literals" "0"
 
-    _derived="$(grep -c 'SERVICE_PORTS\[\$vm_name\]' "$_status_script" || true)"
+    # The four probes read one resolved local, `$svc_port`, rather than the array
+    # directly -- the review found that an unset key expands to EMPTY under this
+    # script's `set -e` (no `set -u`), which would make `pgrep -f 'python.*'`
+    # match every python process and report the service UP. So the guard checks
+    # both that the probes are derived AND that the empty-key path is defended.
+    _derived="$(grep -cE "pgrep -f '[^']*\\\$\\{svc_port\\}" "$_status_script" || true)"
     if [ "$_derived" -ge 4 ]; then
-        echo "PASS: process probes derive their port from SERVICE_PORTS ($_derived sites)"
+        echo "PASS: process probes derive their port from the resolved svc_port ($_derived sites)"
         pass=$((pass + 1))
     else
-        echo "FAIL: expected >=4 SERVICE_PORTS-derived probes, found $_derived"
+        echo "FAIL: expected >=4 svc_port-derived probes, found $_derived"
+        fail=$((fail + 1))
+    fi
+
+    if grep -q 'SERVICE_PORTS\[\$vm_name\]:-' "$_status_script" && \
+       grep -q 'reporting 0 processes, not probing' "$_status_script"; then
+        echo "PASS: a missing SERVICE_PORTS key reports zero, not a wildcard match"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: no empty-port defence -- an unset key would make pgrep match every python process"
         fail=$((fail + 1))
     fi
 else
