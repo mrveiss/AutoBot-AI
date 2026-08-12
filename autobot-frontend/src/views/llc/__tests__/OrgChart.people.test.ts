@@ -26,10 +26,13 @@ vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
 
+// Mutable so a test can exercise the "no company selected" path — the guard
+// that stops the People tab requesting /api/llc/contacts/undefined.
+const companyRef = { value: 'c1' as string | null }
 vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
   useLlcCompanyContext: () => ({
-    companyId: { value: 'c1' },
-    resolveCompanyId: () => Promise.resolve('c1'),
+    companyId: companyRef,
+    resolveCompanyId: () => Promise.resolve(companyRef.value),
   }),
 }))
 
@@ -101,6 +104,7 @@ type Fixture = {
   contacts?: unknown[]
   teams?: unknown[]
   contactsFail?: boolean
+  teamsFail?: boolean
 }
 
 function mockApi({
@@ -108,6 +112,7 @@ function mockApi({
   contacts = CONTACTS,
   teams = TEAMS,
   contactsFail = false,
+  teamsFail = false,
 }: Fixture = {}) {
   get.mockImplementation((url: string) => {
     if (url === '/api/llc/companies/c1/org-chart') {
@@ -119,7 +124,9 @@ function mockApi({
         : Promise.resolve(structuredClone(contacts))
     }
     if (url === '/api/llc/companies/c1/teams') {
-      return Promise.resolve({ teams: structuredClone(teams) })
+      return teamsFail
+        ? Promise.reject(new Error('teams unavailable'))
+        : Promise.resolve({ teams: structuredClone(teams) })
     }
     throw new Error(`unexpected GET ${url}`)
   })
@@ -221,6 +228,65 @@ describe('Org Chart People list shows all three kinds (#13938)', () => {
     expect(wrapper.text()).toContain(ar.llc.orgChart.peopleKind.contact)
     expect(wrapper.text()).toContain(ar.llc.orgChart.peopleNoTeam)
     expect(wrapper.text()).not.toContain(en.llc.orgChart.peopleKind.contact)
+  })
+})
+
+// `loadPeopleSources` documents an invariant — "a teams endpoint failure must
+// not blank the people" — and uses Promise.allSettled to keep a partial answer
+// partial. That branch was the only uncovered code in this change, i.e. a
+// documented promise with nothing holding it. #14064 is the same failure class:
+// a load failure that renders as a legitimately empty list.
+describe('A partial source failure stays partial (#13938)', () => {
+  it('still renders every person when the teams endpoint fails', async () => {
+    const wrapper = await mountPeople({ teamsFail: true })
+    const text = wrapper.text()
+
+    expect(text).toContain(AGENT_NAME)
+    expect(text).toContain(USER_NAME)
+    expect(text).toContain(CONTACT_NAME)
+    // The team grouping is what is lost — the people are not.
+    expect(text).not.toContain(TEAM_NAME)
+  })
+
+  it('still renders the team grouping when the contacts endpoint fails', async () => {
+    const wrapper = await mountPeople({ contactsFail: true })
+    const text = wrapper.text()
+
+    expect(text).toContain(USER_NAME)
+    expect(text).toContain(TEAM_NAME)
+    expect(text).not.toContain(CONTACT_NAME)
+  })
+
+  it('requests nothing when no company is selected', async () => {
+    companyRef.value = null
+    try {
+      const wrapper = await mountPeople()
+      await wrapper.get('[data-testid="org-view-people"]').trigger('click')
+      await flushPromises()
+
+      // Without the guard these become /api/llc/contacts/null.
+      const peopleCalls = get.mock.calls.filter(([url]) =>
+        String(url).includes('/contacts/') || String(url).includes('/teams'),
+      )
+      expect(peopleCalls).toEqual([])
+    } finally {
+      companyRef.value = 'c1'
+    }
+  })
+
+  it('fetches the people sources once, however often the tab is re-entered', async () => {
+    const wrapper = await mountPeople()
+    const countContactCalls = () =>
+      get.mock.calls.filter(([url]) => url === '/api/llc/contacts/c1').length
+    expect(countContactCalls()).toBe(1)
+
+    // Leave and come back twice — the guard must hold, or every tab switch
+    // re-fetches and the list flickers.
+    for (const mode of ['tree', 'people', 'canvas', 'people']) {
+      await wrapper.get(`[data-testid="org-view-${mode}"]`).trigger('click')
+      await flushPromises()
+    }
+    expect(countContactCalls()).toBe(1)
   })
 })
 
