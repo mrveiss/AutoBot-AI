@@ -35,15 +35,38 @@ PLAYBOOK_VARS = REPO / "autobot-slm-backend/ansible/playbooks/vars/role_active_f
 TEST_GROUP_VARS = REPO / "autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml"
 
 
+#: Keys that must stay identical across the copies but are NOT `role_*_active`
+#: folded scalars, so the pattern below cannot find them.
+#:
+#: #14152 review: the guard's own comments claimed the files were kept
+#: "byte-identical", but the regex only ever matched `role_\w+_active:` with a
+#: `>-` value. `chromadb_service_owner` is a single-line double-quoted scalar
+#: and was silently outside the comparison in all three files — so editing it
+#: canonically and forgetting the duplicates would have reported OK while the
+#: test inventory diverged. That is precisely the drift this guard exists to
+#: catch, and the overstated comment is what made the gap invisible.
+_EXTRA_SCALAR_KEYS = ("chromadb_service_owner",)
+
+
 def extract_facts(path: Path) -> dict:
-    """Extract role_X_active blocks (key + multiline `>-` value) from a file.
+    """Extract the shared facts (key + value) that must match across copies.
 
     Returns dict mapping fact name → normalized whitespace value.
     """
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(r"(role_\w+_active:\s*>-(?:\n[ \t]+.*)*)")
     blocks = pattern.findall(text)
-    return {re.match(r"(role_\w+_active)", b).group(1): re.sub(r"\s+", " ", b).strip() for b in blocks}
+    facts = {re.match(r"(role_\w+_active)", b).group(1): re.sub(r"\s+", " ", b).strip() for b in blocks}
+
+    # Single-line scalars the folded-block pattern cannot see. A key that is
+    # absent from one copy and present in another must NOT compare equal, so
+    # missing keys are recorded explicitly rather than skipped — an absent key
+    # comparing clean is the same "empty reads as identical" failure.
+    for key in _EXTRA_SCALAR_KEYS:
+        match = re.search(rf"^{re.escape(key)}:.*$", text, re.MULTILINE)
+        facts[key] = re.sub(r"\s+", " ", match.group(0)).strip() if match else "<ABSENT>"
+
+    return facts
 
 
 def compare(label_a: str, a: dict, label_b: str, b: dict) -> bool:
@@ -75,7 +98,7 @@ def main() -> int:
     if diverged:
         return 1
 
-    print(f"OK — {len(canonical)} role_*_active facts identical across all three files")
+    print(f"OK — {len(canonical)} shared facts identical across all three files")
     return 0
 
 
