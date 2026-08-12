@@ -8258,6 +8258,29 @@
       "peopleContactNotInHierarchy": "Kontaktpersonas nav pakļautības hierarhijas daļa — tām nav vadītāja, budžeta vai sirdspukstu.",
       "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka."
     },
+    "canvasRules": {
+      "legendTitle": "Apzīmējumi",
+      "colourBy": "Krāsot pēc",
+      "dimension": {
+        "status": "Statuss",
+        "owner": "Īpašnieks",
+        "tool": "Rīks"
+      },
+      "status": {
+        "active": "Aktīvs",
+        "idle": "Dīkstāvē",
+        "paused": "Apturēts",
+        "error": "Kļūda",
+        "terminated": "Pārtraukts",
+        "unknown": "Nezināms"
+      },
+      "owner": {
+        "unassigned": "Nav piešķirts"
+      },
+      "tool": {
+        "none": "Nav rīka"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

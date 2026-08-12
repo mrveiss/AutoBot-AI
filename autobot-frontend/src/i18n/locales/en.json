@@ -8246,6 +8246,29 @@
       "peopleContactNotInHierarchy": "Contacts are not part of the reporting hierarchy — they have no manager, budget or heartbeat.",
       "peopleEmpty": "This company has no people yet."
     },
+    "canvasRules": {
+      "legendTitle": "Legend",
+      "colourBy": "Colour by",
+      "dimension": {
+        "status": "Status",
+        "owner": "Owner",
+        "tool": "Tool"
+      },
+      "status": {
+        "active": "Active",
+        "idle": "Idle",
+        "paused": "Paused",
+        "error": "Error",
+        "terminated": "Terminated",
+        "unknown": "Unknown"
+      },
+      "owner": {
+        "unassigned": "Unassigned"
+      },
+      "tool": {
+        "none": "No tool"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",
