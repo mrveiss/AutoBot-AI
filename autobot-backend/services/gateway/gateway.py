@@ -271,9 +271,7 @@ class Gateway:
             # session/system control messages (SESSION_START, SYSTEM_ERROR,
             # heartbeats, …) don't represent a conversational turn.
             if message.message_type in _AGENT_MESSAGE_TYPES:
-                await ingest_governor.record_agent_send(
-                    platform=session.channel.value, channel_id=session.session_id
-                )
+                await ingest_governor.record_agent_send(platform=session.channel.value, channel_id=session.session_id)
 
         return success
 

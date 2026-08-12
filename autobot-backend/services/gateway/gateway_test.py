@@ -156,9 +156,7 @@ class TestChannelAdapterIngestGovernance:
 
         gateway, session = await _build_gateway_with_session()
         for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
-            await ingest_governor.record_agent_send(
-                platform=session.channel.value, channel_id=session.session_id
-            )
+            await ingest_governor.record_agent_send(platform=session.channel.value, channel_id=session.session_id)
 
         result = await gateway.receive_message({"message_id": "chain-ws-1", "content": "forwarded"}, session.session_id)
 

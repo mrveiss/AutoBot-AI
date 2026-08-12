@@ -1906,9 +1906,7 @@ class MiscConfig(RedactedSettings):
     # #14028: ingest governance stage in front of MessageRouter/agent routing —
     # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
     # window. See services/gateway/ingest_governor.py.
-    gateway_ingest_chain_window_seconds: str = Field(
-        default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS"
-    )
+    gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
     gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
     gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")

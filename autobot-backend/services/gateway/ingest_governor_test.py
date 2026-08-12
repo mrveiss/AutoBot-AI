@@ -144,9 +144,7 @@ class TestBotSelfFilter:
 
         governor.register_bot_id_resolver("telegram", _broken_resolver)
 
-        verdict = await governor.evaluate(
-            platform="telegram", channel_id="C1", message_id="m1", author_id="env-bot-id"
-        )
+        verdict = await governor.evaluate(platform="telegram", channel_id="C1", message_id="m1", author_id="env-bot-id")
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
@@ -193,9 +191,7 @@ class TestRecursionGuard:
         for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
             await governor.record_agent_send(platform="slack", channel_id="noisy-channel")
 
-        verdict = await governor.evaluate(
-            platform="slack", channel_id="quiet-channel", message_id="m1", author_id="u1"
-        )
+        verdict = await governor.evaluate(platform="slack", channel_id="quiet-channel", message_id="m1", author_id="u1")
 
         assert verdict.allowed is True
 
