@@ -48,6 +48,12 @@ class SignalAdapter(BaseAdapter):
         # metadata["message_id"] keeps signal-cli's native numeric timestamp;
         # the GatewayMessage.message_id dedup key (#14028) is a separate,
         # always-string value.
+        #
+        # CAUTION (#14028 review): this is a millisecond send timestamp, not a
+        # collision-proof id -- two group members posting within the same
+        # millisecond would produce the same dedup key on a channel with no
+        # webhook wired to live traffic yet, so this is a pre-existing risk
+        # inherited by the dedup guard rather than introduced by it.
         metadata["message_id"] = data_message.get("timestamp")
         message_id = str(data_message.get("timestamp") or "")
         metadata["group_id"] = group_info.get("groupId")

@@ -609,6 +609,17 @@ class TestIngestGovernanceWiring:
                 store[key] = value
                 return True
 
+            async def get(self, key):
+                return store.get(key)
+
+            async def incr(self, key):
+                value = int(store.get(key) or 0) + 1
+                store[key] = str(value)
+                return value
+
+            async def expire(self, key, seconds):
+                return key in store
+
         async def _get(*_a, **_k):
             return _FakeAsyncRedis()
 
@@ -691,17 +702,26 @@ class TestIngestGovernanceWiring:
 
     @pytest.mark.asyncio
     async def test_chain_over_recursion_ceiling_is_halted(self):
-        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+        """The recursion counter is server-side Redis state (#14028 review
+        correction) — record enough agent-authored sends in this channel via
+        the real ``record_agent_send`` seam, then confirm the next inbound
+        message is blocked. No payload field drives this; see
+        test_agent_to_agent_loop_terminates_across_a_real_platform_round_trip
+        for the full round-trip simulation."""
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH, ingest_governor
 
         gateway = GatewayManager()
+        channel = "chanC"
+        for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
+            await ingest_governor.record_agent_send(platform="discord", channel_id=channel)
+
         raw = {
             "platform": "discord",
             "author": {"id": "agent-a"},
-            "channel_id": "chanC",
+            "channel_id": channel,
             "content": "forwarded",
             "timestamp": time.time(),
             "id": "chain-check-1",
-            "chain_depth": INGEST_MAX_CHAIN_DEPTH + 1,
         }
 
         result = await gateway.normalize_message(raw)
@@ -714,11 +734,13 @@ class TestIngestGovernanceWiring:
         reply chain on a channel where NO real platform round-trips
         AutoBot-internal metadata -- every inbound webhook delivers a
         brand-new payload with no memory of prior turns, exactly like a real
-        Discord/Slack/Telegram event. A payload field the platform never
-        echoes back cannot be the recursion guard's source of truth; the
-        guard must terminate the chain using state that survives the
-        round-trip (#14028)."""
-        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+        Discord/Slack/Telegram event. The recursion guard must terminate the
+        chain using state that survives that round-trip: a server-side Redis
+        counter incremented by ``record_agent_send`` every time AutoBot posts
+        a reply, standing in here for the real send seam
+        (``api/telegram_bot.py::send_telegram_response``,
+        ``api/whatsapp.py::send_whatsapp_response``) (#14028)."""
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH, ingest_governor
 
         gateway = GatewayManager()
         platform, channel = "discord", "loop-channel-rt"
@@ -740,6 +762,8 @@ class TestIngestGovernanceWiring:
             if unified is None:
                 break
             turns_survived += 1
+            # AutoBot "replies" -- the real send path records the turn.
+            await ingest_governor.record_agent_send(platform=platform, channel_id=channel)
 
         assert turns_survived <= INGEST_MAX_CHAIN_DEPTH, (
             f"chain ran {turns_survived} turns with no platform ever carrying "

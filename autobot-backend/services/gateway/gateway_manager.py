@@ -148,7 +148,6 @@ class GatewayManager:
             channel_id=unified.channel_id,
             message_id=unified.message_id,
             author_id=unified.user_id,
-            chain_depth=int(unified.metadata.get("chain_depth", 0) or 0),
         )
         if not verdict.allowed:
             return None
@@ -218,6 +217,13 @@ class GatewayManager:
                 handler = self.response_handlers[unified_message.platform]
                 await handler(platform_response)
                 self.logger.debug(f"Routed response to {unified_message.platform} handler")
+                # Record this agent-authored send for the recursion guard
+                # (#14028) — must happen for every send seam, not just this
+                # one; see api/telegram_bot.py and api/whatsapp.py for the
+                # two seams that bypass this path today.
+                await ingest_governor.record_agent_send(
+                    platform=unified_message.platform, channel_id=unified_message.channel_id
+                )
         except Exception as e:
             self.logger.error(f"Error routing message: {e}", exc_info=True)
 

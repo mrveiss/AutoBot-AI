@@ -9,6 +9,9 @@ Covers the three guards directly against ``IngestGovernor`` — the wiring
 assertion that these guards actually run at the live ingest seams
 (``GatewayManager.normalize_message`` and ``Gateway.receive_message``) lives
 in ``tests/test_gateway_manager.py`` and ``services/gateway/gateway_test.py``.
+The round-trip regression test proving the recursion guard survives a real
+platform (no payload field carries state across the hop) also lives in
+``tests/test_gateway_manager.py``.
 """
 
 import logging
@@ -20,7 +23,7 @@ from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH, IngestGover
 
 
 class _FakeAsyncRedis:
-    """Minimal in-memory stand-in for the ``SET key val NX EX`` dedup call."""
+    """Minimal in-memory stand-in for the Redis calls the governor makes."""
 
     def __init__(self) -> None:
         self._store: dict[str, str] = {}
@@ -30,6 +33,26 @@ class _FakeAsyncRedis:
             return None  # redis-py returns None/falsy when NX prevents the set
         self._store[key] = value
         return True
+
+    async def get(self, key: str) -> str | None:
+        return self._store.get(key)
+
+    async def incr(self, key: str) -> int:
+        value = int(self._store.get(key) or 0) + 1
+        self._store[key] = str(value)
+        return value
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        return key in self._store
+
+
+def _fake_redis_factory(fake: "_FakeAsyncRedis | None" = None):
+    fake = fake or _FakeAsyncRedis()
+
+    async def _get(*_a, **_k):
+        return fake
+
+    return _get
 
 
 @pytest.fixture
@@ -80,34 +103,127 @@ class TestBotSelfFilter:
 
         assert verdict.allowed is True
 
+    @pytest.mark.asyncio
+    async def test_warns_once_per_platform_when_bot_id_unconfigured(self, governor, monkeypatch, caplog):
+        """A no-op filter must be loud, not silent (#14028 HIGH finding) — but
+        not spammy: one WARNING per platform per governor lifetime."""
+        monkeypatch.delenv("AUTOBOT_GATEWAY_BOT_ID_SLACK", raising=False)
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory())
+
+        with caplog.at_level(logging.WARNING):
+            await governor.evaluate(platform="slack", channel_id="C1", message_id="m1", author_id="u1")
+            await governor.evaluate(platform="slack", channel_id="C1", message_id="m2", author_id="u2")
+
+        occurrences = caplog.text.count("no bot identity resolved for platform=slack")
+        assert occurrences == 1
+
+    @pytest.mark.asyncio
+    async def test_registered_resolver_takes_precedence_over_env_var(self, governor, monkeypatch):
+        """Telegram's real wiring (#14028): a dynamic resolver (getMe() id
+        cached in Redis) beats a static env var when both are present."""
+        monkeypatch.setenv("AUTOBOT_GATEWAY_BOT_ID_TELEGRAM", "env-bot-id")
+
+        async def _resolver():
+            return "resolved-bot-id"
+
+        governor.register_bot_id_resolver("telegram", _resolver)
+
+        verdict = await governor.evaluate(
+            platform="telegram", channel_id="C1", message_id="m1", author_id="resolved-bot-id"
+        )
+
+        assert verdict.allowed is False
+        assert verdict.reason == "bot_self"
+
+    @pytest.mark.asyncio
+    async def test_resolver_exception_falls_back_to_env_var(self, governor, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_GATEWAY_BOT_ID_TELEGRAM", "env-bot-id")
+
+        async def _broken_resolver():
+            raise RuntimeError("redis down")
+
+        governor.register_bot_id_resolver("telegram", _broken_resolver)
+
+        verdict = await governor.evaluate(
+            platform="telegram", channel_id="C1", message_id="m1", author_id="env-bot-id"
+        )
+
+        assert verdict.allowed is False
+        assert verdict.reason == "bot_self"
+
 
 class TestRecursionGuard:
+    """The recursion counter is server-side Redis state, incremented by
+    ``record_agent_send`` and read (never trusted from the inbound payload)
+    at ingest — see the module docstring and the #14028 review correction:
+    no real platform round-trips an AutoBot-internal payload field back
+    through its own inbound webhook."""
+
     @pytest.mark.asyncio
-    async def test_chain_over_ceiling_is_halted(self, governor):
-        verdict = await governor.evaluate(
-            platform="slack",
-            channel_id="C1",
-            message_id="m1",
-            author_id="u1",
-            chain_depth=INGEST_MAX_CHAIN_DEPTH + 1,
-        )
+    async def test_chain_over_ceiling_is_halted(self, governor, monkeypatch):
+        fake = _FakeAsyncRedis()
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory(fake))
+
+        for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
+            await governor.record_agent_send(platform="slack", channel_id="C1")
+
+        verdict = await governor.evaluate(platform="slack", channel_id="C1", message_id="m1", author_id="u1")
 
         assert verdict.allowed is False
         assert verdict.reason == "recursion_ceiling"
 
     @pytest.mark.asyncio
     async def test_chain_at_ceiling_is_allowed(self, governor, monkeypatch):
-        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory())
+        fake = _FakeAsyncRedis()
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory(fake))
+
+        for _ in range(INGEST_MAX_CHAIN_DEPTH):
+            await governor.record_agent_send(platform="slack", channel_id="C1")
+
+        verdict = await governor.evaluate(platform="slack", channel_id="C1", message_id="m1", author_id="u1")
+
+        assert verdict.allowed is True
+
+    @pytest.mark.asyncio
+    async def test_counter_is_scoped_per_platform_and_channel(self, governor, monkeypatch):
+        """Sends in one channel must not trip the guard in a different one."""
+        fake = _FakeAsyncRedis()
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory(fake))
+
+        for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
+            await governor.record_agent_send(platform="slack", channel_id="noisy-channel")
 
         verdict = await governor.evaluate(
-            platform="slack",
-            channel_id="C1",
-            message_id="m1",
-            author_id="u1",
-            chain_depth=INGEST_MAX_CHAIN_DEPTH,
+            platform="slack", channel_id="quiet-channel", message_id="m1", author_id="u1"
         )
 
         assert verdict.allowed is True
+
+    @pytest.mark.asyncio
+    async def test_no_platform_payload_field_can_influence_the_recursion_check(self, governor, monkeypatch):
+        """The whole point of the fix: ``evaluate`` takes no chain_depth kwarg
+        at all — nothing an inbound payload carries can move this counter."""
+        fake = _FakeAsyncRedis()
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _fake_redis_factory(fake))
+
+        import inspect
+
+        signature = inspect.signature(governor.evaluate)
+        assert "chain_depth" not in signature.parameters
+
+
+class TestRecordAgentSend:
+    @pytest.mark.asyncio
+    async def test_fails_open_and_logs_when_redis_unavailable(self, governor, monkeypatch, caplog):
+        async def _none_client(*_a, **_k):
+            return None
+
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _none_client)
+
+        with caplog.at_level(logging.ERROR):
+            await governor.record_agent_send(platform="telegram", channel_id="chat1")
+
+        assert "recursion tracking degraded" in caplog.text
 
 
 class TestDedup:
@@ -148,15 +264,16 @@ class TestDedup:
 
 
 class TestRedisUnavailable:
-    """Deliberate decision (#14028): dedup FAILS OPEN when Redis is unavailable.
-
-    The bot-self filter and recursion guard are Redis-independent and keep
-    enforcing regardless — this test locks in that the *degradation* (not a
-    silent pass-through of the whole stage) is what happens, and that it logs.
+    """Deliberate decision (#14028): dedup and the recursion counter both
+    FAIL OPEN when Redis is unavailable; the bot-self filter alone is
+    Redis-independent and keeps enforcing regardless. Every fail-open is
+    both logged at ERROR and recorded via prometheus_metrics.record_error —
+    this test class locks in the *degradation* (not a silent pass-through
+    of the whole stage), that it logs, and that it emits a metric.
     """
 
     @pytest.mark.asyncio
-    async def test_client_returning_none_fails_open_and_logs(self, governor, monkeypatch, caplog):
+    async def test_dedup_client_returning_none_fails_open_and_logs(self, governor, monkeypatch, caplog):
         async def _none_client(*_a, **_k):
             return None
 
@@ -170,7 +287,7 @@ class TestRedisUnavailable:
         assert "FAILING OPEN" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_client_raising_fails_open_and_logs(self, governor, monkeypatch, caplog):
+    async def test_dedup_client_raising_fails_open_and_logs(self, governor, monkeypatch, caplog):
         async def _raising_client(*_a, **_k):
             raise ConnectionError("simulated Redis outage")
 
@@ -184,8 +301,28 @@ class TestRedisUnavailable:
         assert "FAILING OPEN" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_recursion_check_fails_open_and_logs_when_redis_down(self, governor, monkeypatch, caplog):
+        """Unlike the first PR revision, the recursion guard now depends on
+        Redis (server-side counter) — this locks in that an outage degrades
+        it visibly rather than either silently blocking every message or
+        silently never tripping."""
+
+        async def _none_client(*_a, **_k):
+            return None
+
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _none_client)
+
+        with caplog.at_level(logging.ERROR):
+            verdict = await governor.evaluate(platform="telegram", channel_id="chat1", message_id="m1", author_id="u1")
+
+        # Recursion check fails open (returns None -> falls through to dedup,
+        # which independently also fails open here) -- net allowed.
+        assert verdict.allowed is True
+        assert "recursion check FAILING OPEN" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_bot_self_filter_still_enforced_when_redis_down(self, governor, monkeypatch):
-        """The guard against the unbounded-loop failure mode must not depend on Redis."""
+        """The one guard that must not depend on Redis."""
         monkeypatch.setenv("AUTOBOT_GATEWAY_BOT_ID_SLACK", "BOT123")
 
         async def _none_client(*_a, **_k):
@@ -210,17 +347,7 @@ class TestNormalMessageStillRoutes:
             channel_id="chan1",
             message_id="ordinary-1",
             author_id="a-human",
-            chain_depth=0,
         )
 
         assert verdict.allowed is True
         assert verdict.reason == ""
-
-
-def _fake_redis_factory(fake: _FakeAsyncRedis | None = None):
-    fake = fake or _FakeAsyncRedis()
-
-    async def _get(*_a, **_k):
-        return fake
-
-    return _get

@@ -27,6 +27,15 @@ from .types import ChannelMessage, ChannelType, GatewaySession, MessageType
 
 logger = get_logger(__name__)
 
+# Message types that represent an agent-authored conversational turn, as
+# opposed to session/system control traffic (#14028 recursion guard).
+_AGENT_MESSAGE_TYPES = {
+    MessageType.AGENT_TEXT,
+    MessageType.AGENT_THOUGHT,
+    MessageType.AGENT_TOOL_CODE,
+    MessageType.AGENT_TOOL_OUTPUT,
+}
+
 
 class Gateway:
     """
@@ -258,6 +267,13 @@ class Gateway:
         if success:
             # Update session
             session.add_message(message_id=message.message_id)
+            # Record agent-authored sends for the recursion guard (#14028) —
+            # session/system control messages (SESSION_START, SYSTEM_ERROR,
+            # heartbeats, …) don't represent a conversational turn.
+            if message.message_type in _AGENT_MESSAGE_TYPES:
+                await ingest_governor.record_agent_send(
+                    platform=session.channel.value, channel_id=session.session_id
+                )
 
         return success
 
@@ -317,7 +333,6 @@ class Gateway:
             channel_id=session.session_id,
             message_id=message.message_id,
             author_id=session.user_id,
-            chain_depth=int(message.metadata.get("chain_depth", 0) or 0),
         )
         if not verdict.allowed:
             return None

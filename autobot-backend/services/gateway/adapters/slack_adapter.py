@@ -25,6 +25,15 @@ class SlackAdapter(BaseAdapter):
         # Slack's "ts" doubles as the message's unique id within a channel; fall
         # back to it (then to "timestamp", which every raw payload already
         # carries) when the caller doesn't supply an explicit "message_id" (#14028).
+        #
+        # CAUTION (#14028 review): no webhook wires this adapter to live traffic
+        # yet (see gateway_manager.py's registered-but-unwired platforms). The
+        # "timestamp" fallback is the same generic field GatewayMessage.timestamp
+        # uses -- NOT demonstrably Slack's real "ts". Before wiring a live Slack
+        # webhook, confirm the raw payload it builds carries the actual Slack
+        # "ts" (or an explicit "message_id"); if it's ever populated from
+        # receipt time instead, a redelivered message gets two different ids
+        # and dedup silently fails for exactly the case this guard exists for.
         message_id = str(raw_message.get("message_id") or raw_message.get("ts") or raw_message.get("timestamp") or "")
         metadata["message_id"] = message_id
         metadata["thread_ts"] = raw_message.get("thread_ts")

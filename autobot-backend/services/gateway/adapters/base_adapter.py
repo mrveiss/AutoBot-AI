@@ -118,14 +118,14 @@ class BaseAdapter(ABC):
 
         Can be overridden by subclasses for richer metadata extraction.
 
-        ``chain_depth`` (#14028) carries the agent-to-agent recursion counter
-        forward from the raw payload so a chain that re-enters the Gateway
-        (e.g. one agent's reply routed back in as another agent's inbound
-        turn) keeps incrementing rather than resetting to 0 at each hop.
+        No recursion/chain-depth field lives here (#14028 review correction):
+        a counter carried on the message cannot survive a real platform
+        round-trip — no platform hands an AutoBot-internal payload field back
+        through its own inbound webhook. The recursion guard instead reads a
+        server-side Redis counter, see ``services/gateway/ingest_governor.py``.
         """
         return {
             "raw_timestamp": raw_message.get("timestamp"),
             "thread_id": raw_message.get("thread_id"),
             "reply_to": raw_message.get("reply_to"),
-            "chain_depth": int(raw_message.get("chain_depth", 0) or 0),
         }

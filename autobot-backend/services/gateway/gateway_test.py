@@ -75,6 +75,17 @@ def fake_redis(monkeypatch):
             store[key] = value
             return True
 
+        async def get(self, key):
+            return store.get(key)
+
+        async def incr(self, key):
+            value = int(store.get(key) or 0) + 1
+            store[key] = str(value)
+            return value
+
+        async def expire(self, key, seconds):
+            return key in store
+
     async def _get(*_a, **_k):
         return _FakeAsyncRedis()
 
@@ -138,16 +149,42 @@ class TestChannelAdapterIngestGovernance:
 
     @pytest.mark.asyncio
     async def test_chain_over_recursion_ceiling_halted(self, fake_redis):
-        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+        """The recursion counter is server-side Redis state keyed on
+        (platform, channel) -- not a payload field, since no platform
+        round-trips one (#14028 review correction)."""
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH, ingest_governor
 
         gateway, session = await _build_gateway_with_session()
-        raw_data = {
-            "message_id": "chain-ws-1",
-            "content": "forwarded",
-            "metadata": {"chain_depth": INGEST_MAX_CHAIN_DEPTH + 1},
-        }
+        for _ in range(INGEST_MAX_CHAIN_DEPTH + 1):
+            await ingest_governor.record_agent_send(
+                platform=session.channel.value, channel_id=session.session_id
+            )
 
-        result = await gateway.receive_message(raw_data, session.session_id)
+        result = await gateway.receive_message({"message_id": "chain-ws-1", "content": "forwarded"}, session.session_id)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_send_message_records_agent_send_for_recursion_tracking(self, fake_redis):
+        """Wiring assertion for the send side: an AGENT_TEXT ``send_message``
+        call must increment the same counter ``receive_message`` reads
+        (#14028) -- drives the real seam, not a source-text check."""
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+        from services.gateway.types import ChannelMessage, MessageType
+
+        gateway, session = await _build_gateway_with_session()
+
+        for i in range(INGEST_MAX_CHAIN_DEPTH + 1):
+            reply = ChannelMessage(
+                session_id=session.session_id,
+                channel=session.channel,
+                message_type=MessageType.AGENT_TEXT,
+                content=f"agent reply {i}",
+            )
+            sent = await gateway.send_message(reply)
+            assert sent is True
+
+        result = await gateway.receive_message({"message_id": "post-loop-1", "content": "hi"}, session.session_id)
 
         assert result is None
 

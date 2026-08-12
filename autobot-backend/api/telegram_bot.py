@@ -24,10 +24,13 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.gateway.gateway_manager import GatewayManager
+from services.gateway.ingest_governor import ingest_governor
 from services.telegram_bot_service import (
     TelegramBotService,
+    get_telegram_bot_id,
     get_telegram_bot_token,
     get_telegram_webhook_secret,
+    save_telegram_bot_id,
     save_telegram_bot_token,
     save_telegram_webhook_secret,
 )
@@ -39,6 +42,11 @@ router = APIRouter(tags=["telegram-bot"])
 
 # Module-level gateway manager — shared, stateless
 gateway_manager = GatewayManager()
+
+# Resolve the bot's own Telegram user id for the Gateway ingest self-filter
+# (#14028) from Redis — set by configure_telegram_bot() via getMe() — rather
+# than requiring an operator to hand-configure AUTOBOT_GATEWAY_BOT_ID_TELEGRAM.
+ingest_governor.register_bot_id_resolver("telegram", get_telegram_bot_id)
 
 
 async def telegram_gateway_response_handler(platform_response: Dict[str, Any]) -> None:
@@ -366,9 +374,9 @@ async def configure_telegram_bot(
         # Create service with new token
         service = TelegramBotService(bot_token=request.bot_token)
 
-        # Verify token is valid
-        is_valid = await service.verify_token()
-        if not is_valid:
+        # Verify token is valid (also resolves the bot's own account info)
+        bot_info = await service.get_me()
+        if bot_info is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid Telegram bot token",
@@ -376,6 +384,15 @@ async def configure_telegram_bot(
 
         # Save token to Redis
         await save_telegram_bot_token(request.bot_token)
+
+        # Persist the bot's own numeric id for the Gateway ingest self-filter
+        # (#14028) — without this, the filter has nothing to compare inbound
+        # authors against and silently never fires.
+        bot_id = bot_info.get("id")
+        if bot_id is not None:
+            await save_telegram_bot_id(str(bot_id))
+        else:
+            logger.warning("Telegram getMe() response missing 'id' — ingest self-filter left unconfigured")
 
         # Set webhook if URL provided
         webhook_url = None
@@ -520,6 +537,12 @@ async def send_telegram_response(
                 logger.info(f"Sent response to Telegram chat {chat_id} thread {thread_id}")
             else:
                 logger.info(f"Sent response to Telegram chat {chat_id}")
+
+        # Record this agent-authored send for the recursion guard (#14028) —
+        # this is the actual live send seam (GatewayManager.route_message is
+        # not reached from this webhook path), so recording here is what
+        # makes the guard real rather than decorative.
+        await ingest_governor.record_agent_send(platform="telegram", channel_id=str(chat_id))
     except Exception:
         logger.exception("Failed to send Telegram response")
         raise
