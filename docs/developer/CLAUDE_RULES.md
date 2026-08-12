@@ -12,7 +12,7 @@
 - Search for existing implementations: `grep`/`glob` or `git log --oneline --grep="<topic>"`
 - Check existing docs: `ls docs/`, `gh issue list`, recent commits
 - Review related files in the same module/directory
-- Search session memory (the file-based store indexed by `MEMORY.md`) for prior decisions
+- Search session memory for prior decisions — the file-based store lives in the agent's own memory directory, outside this repo
 - Only after confirming nothing exists should you write new code or docs
 
 **Before implementing anything, verify:**
