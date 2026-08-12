@@ -70,7 +70,9 @@ gh api repos/mrveiss/AutoBot-AI/issues/<number>/comments -f body="✅ Closed wit
 
 ## Discovery Issues (File During Every Task)
 
-While implementing, if you notice **any** bug, inconsistency, dead code, missing test, hardcoded value, or tech debt NOT part of the current issue — file a GitHub issue immediately. Do not fix it inline, do not add a TODO comment.
+While implementing, if you notice **any** bug, inconsistency, dead code, missing test, hardcoded value, or tech debt NOT part of the current issue — file a GitHub issue immediately. Never add a TODO comment instead.
+
+**Then fix it if it is in scope.** Rule 6 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md) is the governing rule: a pre-existing bug in a file you are already modifying gets fixed in the same PR, with the tracking issue for visibility. File-and-move-on applies to what is genuinely out of scope — unrelated bugs far from the change, and anything needing an architecture decision or a wide blast radius.
 
 ```bash
 gh issue create --title "discovery(<area>): <what you found>" --body "..." --label "tech-debt"
