@@ -108,6 +108,118 @@ class TestSecretsManagerMigrationPreservesDecryption:
         assert oct((canonical_dir / "secrets.key").stat().st_mode)[-3:] == "600"
 
 
+class TestMigrationRunsAtStartupNotImport:
+    """#14081 review round 4 / #14110: the migration -- and any disk I/O
+    the module-level ``SecretsManager`` singleton used to do in its
+    constructor -- must never run as a side effect of importing
+    ``api.secrets``.
+
+    That was the actual cause of the ``hardened-smoke-test`` failure on PR
+    #14110: the hardened compose overlay's read-only root made the
+    canonical data directory unwritable, and ``SecretsManager.__init__``
+    running ``_initialize_encryption()`` at import time turned that into an
+    ``OSError`` no operator could see or recover from -- it crashed the
+    interpreter before FastAPI's startup ordering existed to report it.
+    """
+
+    def test_constructing_secrets_manager_touches_no_disk(self, tmp_path, monkeypatch):
+        """Regression guard for the exact #14110 failure.
+
+        This is the reproduction that must fail against the pre-fix
+        constructor: give it a legacy store to migrate and a canonical
+        directory, then merely *construct* ``SecretsManager()`` -- exactly
+        what ``secrets_manager = SecretsManager()`` does at import time --
+        without calling any method on it. Nothing must be read, moved, or
+        written.
+        """
+        import api.secrets as secrets_api
+
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(b"legacy-key-material")
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+
+        class _StubPathConfig:
+            data_path = canonical_dir
+
+        class _StubConfig:
+            path = _StubPathConfig()
+
+        monkeypatch.setattr(secrets_api, "ssot_config", _StubConfig())
+
+        secrets_api.SecretsManager()  # must not touch disk
+
+        assert list(canonical_dir.iterdir()) == [], "construction wrote to the canonical data dir"
+        assert (legacy_data_dir / "secrets.key").exists(), "construction moved the legacy store"
+
+    def test_importing_api_secrets_module_touches_no_disk(self, tmp_path, monkeypatch):
+        """The literal regression: importing the module alone -- what
+        ``secrets_manager = SecretsManager()`` running at import time means
+        in practice -- must not migrate or generate key material.
+
+        ``reload`` re-runs every module-level statement, including
+        ``secrets_manager = SecretsManager()``, exactly reproducing what a
+        fresh process import does -- without needing to stub ``ssot_config``
+        (construction no longer reads it at all; that is the fix).
+        """
+        import importlib
+
+        import api.secrets as secrets_api
+
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(b"legacy-key-material")
+
+        canonical_dir = _real_ssot_config.path.data_path
+        pre_existing_canonical = {p.name for p in canonical_dir.iterdir()} if canonical_dir.exists() else set()
+
+        importlib.reload(secrets_api)
+
+        new_canonical_files = (
+            {p.name for p in canonical_dir.iterdir()} - pre_existing_canonical if canonical_dir.exists() else set()
+        )
+        assert new_canonical_files == set(), "importing api.secrets wrote to the canonical data dir"
+        assert (legacy_data_dir / "secrets.key").exists(), "importing api.secrets moved the legacy store"
+
+    def test_ensure_initialized_is_idempotent(self, tmp_path, monkeypatch):
+        """Safe to call twice: the second call is a no-op, not a re-migration."""
+        import api.secrets as secrets_api
+
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(Fernet.generate_key())
+        (legacy_data_dir / "secrets.json").write_text("{}", encoding="utf-8")
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+
+        class _StubPathConfig:
+            data_path = canonical_dir
+
+        class _StubConfig:
+            path = _StubPathConfig()
+
+        monkeypatch.setattr(secrets_api, "ssot_config", _StubConfig())
+
+        manager = secrets_api.SecretsManager()
+        manager.ensure_initialized()
+        key_after_first_call = (canonical_dir / "secrets.key").read_bytes()
+
+        manager.ensure_initialized()  # must not raise, move, or regenerate
+        assert (canonical_dir / "secrets.key").read_bytes() == key_after_first_call
+
+
 class TestSecretsServiceMigrationPreservesDecryption:
     """SecretsService: legacy secrets.db -> canonical."""
 

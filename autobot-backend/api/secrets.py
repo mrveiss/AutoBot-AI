@@ -85,35 +85,80 @@ class SecretsManager:
     """Manages encrypted secrets with dual scope support"""
 
     def __init__(self):
-        """Initialize secrets manager with encryption and caching."""
-        # Canonical data directory (#14081): resolve through ssot_config
-        # directly rather than the legacy utils.paths_manager, which reads
-        # an unset config.yaml "paths" key and silently falls back to a
-        # CWD-relative "data/" -- landing the live secrets store outside
-        # the subtree the filesystem MCP bridge excludes in production.
-        data_dir = ssot_config.path.data_path
-        data_dir.mkdir(parents=True, exist_ok=True)
+        """Initialize secrets manager. Never touches disk (#14081 review
+        round 4).
 
-        # Get paths using centralized configuration
-        self.secrets_file = str(data_dir / "secrets.json")
-        self.key_file = str(data_dir / "secrets.key")
+        The module-level ``secrets_manager`` singleton below runs this
+        constructor at Python import time -- unavoidable without #14116's
+        larger lazy-singleton conversion, which is out of scope here -- so
+        any disk-touching failure here (a read-only canonical data
+        directory, the legacy-store migration's own
+        ``AmbiguousSecretsStoreError``) would previously crash every
+        process that merely imported this module, before FastAPI's startup
+        ordering exists to report it or an operator can act on it. That is
+        exactly what broke ``hardened-smoke-test`` on #14110: the hardened
+        compose overlay's read-only root made the canonical data directory
+        unwritable, and ``_initialize_encryption()`` running here raised
+        ``OSError`` straight out of the import of ``api.secrets``.
 
-        # One-time migration off the legacy CWD-relative resolver (#14081
-        # review, #14113): must run before _initialize_encryption() decides
-        # whether to load an existing key or mint a fresh one, or an
-        # existing deployment's real store is silently orphaned.
-        migrate_legacy_secrets_store(data_dir, ["secrets.key", "secrets.json"], "secrets manager")
-
-        self._initialize_encryption()
+        Real initialization (data dir, one-time legacy->canonical
+        migration, encryption key) is deferred to ``ensure_initialized()``,
+        called explicitly once at FastAPI startup
+        (``initialization/lifespan.py``) and, as a fallback for callers
+        outside the app lifecycle (tests, scripts), lazily by the first
+        method that actually touches the store.
+        """
+        self._init_lock = threading.RLock()
+        self._initialized = False
+        self.secrets_file: str | None = None
+        self.key_file: str | None = None
+        self.cipher: Fernet | None = None
 
         # Cache layer to reduce file I/O (Issue #327)
         self._secrets_cache: Dict[str, Dict] | None = None
         self._cache_lock = threading.RLock()  # Thread-safe access to cache
         self._cache_mtime: float | None = None  # Track file modification time
 
-    def _ensure_directories(self):
-        """Ensure the canonical data directory exists (#14081)."""
-        ssot_config.path.data_path.mkdir(parents=True, exist_ok=True)
+    def ensure_initialized(self) -> None:
+        """Resolve the canonical data directory, migrate the legacy store,
+        and load/generate the encryption key (#14081 review round 4).
+
+        Safe to call more than once, from more than one thread -- a no-op
+        after the first successful call.
+
+        Raises:
+            AmbiguousSecretsStoreError: both the legacy and canonical
+                secrets-manager storage locations hold data; a human must
+                resolve which is authoritative (see
+                utils.secrets_store_migration).
+            OSError: the canonical data directory could not be created or
+                written to (e.g. a read-only filesystem).
+        """
+        if self._initialized:
+            return
+        with self._init_lock:
+            if self._initialized:
+                return
+            # Canonical data directory (#14081): resolve through ssot_config
+            # directly rather than the legacy utils.paths_manager, which reads
+            # an unset config.yaml "paths" key and silently falls back to a
+            # CWD-relative "data/" -- landing the live secrets store outside
+            # the subtree the filesystem MCP bridge excludes in production.
+            data_dir = ssot_config.path.data_path
+            data_dir.mkdir(parents=True, exist_ok=True)
+
+            # Get paths using centralized configuration
+            self.secrets_file = str(data_dir / "secrets.json")
+            self.key_file = str(data_dir / "secrets.key")
+
+            # One-time migration off the legacy CWD-relative resolver (#14081
+            # review, #14113): must run before _initialize_encryption() decides
+            # whether to load an existing key or mint a fresh one, or an
+            # existing deployment's real store is silently orphaned.
+            migrate_legacy_secrets_store(data_dir, ["secrets.key", "secrets.json"], "secrets manager")
+
+            self._initialize_encryption()
+            self._initialized = True
 
     def _initialize_encryption(self):
         """Initialize or load encryption key"""
@@ -148,6 +193,7 @@ class SecretsManager:
         Returns:
             Deep copy of secrets dict to prevent race conditions
         """
+        self.ensure_initialized()
         with self._cache_lock:
             # Check if file exists
             if not os.path.exists(self.secrets_file):
@@ -199,6 +245,7 @@ class SecretsManager:
                 return obj.isoformat()
             return str(obj)
 
+        self.ensure_initialized()
         with self._cache_lock:
             with open(self.secrets_file, "w", encoding="utf-8") as f:
                 # Values in `secrets` are Fernet-encrypted (stored as

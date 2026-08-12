@@ -278,13 +278,13 @@ class TestRealResolverAgreement:
         """Clean up any secrets-store file this test session causes to be
         (re-)provisioned (#14081 review).
 
-        ``api.secrets`` provisions a module-level ``SecretsManager`` singleton
-        at import time (pre-existing design, unrelated to this fix), which
-        auto-generates a real encryption key the first time the module is
-        imported and no key file exists yet. Importing it here (to reach the
-        real, unmocked path-resolution code) can be that first import in an
-        isolated test run. Removes only files that did not exist before this
-        test and were created during it -- never touches a real,
+        ``api.secrets``'s module-level ``SecretsManager`` singleton no
+        longer touches disk at import time (#14081 review round 4, #14110)
+        -- but this class's own test still calls ``ensure_initialized()``
+        explicitly to reach the real, unmocked path-resolution code, which
+        auto-generates a real encryption key the first time it runs and no
+        key file exists yet. Removes only files that did not exist before
+        this test and were created during it -- never touches a real,
         pre-existing store.
         """
         data_dir = fs_mcp.config.path.data_path
@@ -299,12 +299,13 @@ class TestRealResolverAgreement:
         import api.secrets as secrets_api
 
         # api.secrets provisions a module-level singleton (`secrets_manager`)
-        # at import time (pre-existing design, tracked separately -- see
-        # #14081 PR discussion) -- reference it directly rather than
-        # constructing a second instance, so this test adds no additional
-        # encryption-key file I/O beyond what importing the module already
-        # does elsewhere in the suite.
+        # -- reference it directly rather than constructing a second
+        # instance. Construction no longer touches disk (#14081 review
+        # round 4, #14110): trigger the same one-time initialization the
+        # app's startup lifespan now runs explicitly, so
+        # key_file/secrets_file are populated.
         manager = secrets_api.secrets_manager
+        manager.ensure_initialized()
 
         assert fs_mcp.is_path_allowed(manager.key_file) is False, (
             f"SecretsManager's real encryption key path {manager.key_file!r} is "

@@ -98,6 +98,14 @@ services:
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+      # #14081/#14113: SecretsManager/SecretsService now resolve their
+      # storage through ssot_config.path.data_path, which with no
+      # AUTOBOT_BASE_DIR set (this compose topology) resolves to
+      # /opt/autobot/data -- not previously writable under read_only, so
+      # the backend crashed at import with "Read-only file system".
+      # tmpfs unblocks the smoke test but is ephemeral (secrets lost on
+      # restart) -- #14122 tracks giving this a real persistent volume.
+      - /opt/autobot/data:mode=1777
     deploy:
       resources:
         limits:
@@ -115,6 +123,9 @@ services:
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+      # See autobot-backend above (#14081/#14113/#14122) -- same image,
+      # same resolver, same crash if this worker imports the secrets store.
+      - /opt/autobot/data:mode=1777
     deploy:
       resources:
         limits:
