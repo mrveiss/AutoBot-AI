@@ -219,6 +219,61 @@ class TestOneDriveConnector:
         assert change.details["last_modified"] == last_modified
 
     @pytest.mark.asyncio
+    async def test_fetch_content_refuses_a_stamped_scan(self, onedrive_config):
+        """#13884 finding 1 / finding 2: the live sync path, not just a mock.
+
+        A page-number stamp on every page passes the old ``not text.strip()``
+        guard — every page technically "has text". Runs the real extractor
+        (nothing here is mocked past HTTP), so this proves the refusal fires
+        on the path a OneDrive sync actually takes.
+        """
+        pytest.importorskip("reportlab", reason="reportlab needed to synthesize a PDF fixture")
+        pytest.importorskip("PIL", reason="Pillow needed to synthesize an image-only page")
+        import io
+
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+
+        buffer = io.BytesIO()
+        pdf = canvas.Canvas(buffer)
+        blank_page = ImageReader(Image.new("RGB", (600, 800), "white"))
+        for i in range(1, 6):
+            pdf.drawImage(blank_page, 0, 0, width=400, height=500)
+            pdf.setFont("Helvetica", 9)
+            pdf.drawString(400, 20, f"Page {i} of 5")
+            pdf.showPage()
+        pdf.save()
+        stamped_scan_bytes = buffer.getvalue()
+
+        connector = OneDriveConnector(onedrive_config)
+        file_id = "stamped123"
+        source_id = f"onedrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "name": "Stamped Scan.pdf",
+                "size": 10240,
+                "lastModifiedDateTime": "2026-06-04T10:00:00Z",
+                "webUrl": "https://onedrive.example/stamped123",
+                "parentReference": {"path": "/drive/root:"},
+            },
+        }
+        mock_content = {"status_code": 200, "content": stamped_scan_bytes}
+
+        async def mock_request(method, url, **kwargs):
+            if url.endswith("/content"):
+                return mock_content
+            return mock_metadata
+
+        with patch.object(connector, "_graph_request", side_effect=mock_request):
+            with patch.object(connector, "_store_ts", return_value=None):
+                result = await connector.fetch_content(source_id)
+
+        assert result is None, "a stamp-only scan must not be ingested as a real document"
+
+    @pytest.mark.asyncio
     async def test_max_concurrency_default(self, onedrive_config):
         """Test default max_concurrency is 4."""
         connector = OneDriveConnector(onedrive_config)
