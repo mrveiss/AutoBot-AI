@@ -235,6 +235,20 @@ class TestTheGuardFailsClosedWhenItCannotRun:
 
     The marker-missing and empty-NAMES paths were already tested and already
     failed closed. These two were not tested, and did not.
+
+    GH#14151 review (round 2): the ARGV-mode git-failure test below was
+    approved as covering "a git failure" in general, but `.pre-commit-
+    config.yaml` sets `pass_filenames: false` for this hook — the REAL,
+    every-day local invocation is always NO-ARGV, which takes
+    get_staged_files()'s `git diff --cached` branch instead of the argv
+    branch this test exercises. That branch had its own, separate `|| true`
+    inside lib/_common.sh itself, independent of anything in THIS hook, and
+    it was still masking a git failure identically to "nothing staged"
+    after #14150 landed — proven by running the no-argv case against
+    Dev_new_gui HEAD (post-#14150, pre-#14151) below: RC=0, reports clean,
+    the symlink still ships. Fixed by #14151's lib/_common.sh change, not
+    by anything in this file — the test below exists so that fix can never
+    silently regress unnoticed.
     """
 
     def test_a_missing_common_lib_does_not_report_clean(self, tmp_path: Path) -> None:
@@ -252,12 +266,32 @@ class TestTheGuardFailsClosedWhenItCannotRun:
 
         assert result.returncode != 0, "the hook reported clean with a staged symlink and no dependency"
 
-    def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
+    def test_a_git_failure_does_not_report_clean_argv_mode(self, tmp_path: Path) -> None:
+        """CI invocation: an explicit file list, bypassing get_staged_files()'s
+        own git-diff branch entirely — the failure this test catches lives in
+        check_file()'s own `git ls-files -s` call, not in lib/_common.sh."""
         repo = _init_repo(tmp_path)
         _stage_symlink(repo, "venv", str(repo))
         # Corrupt the index so git errors rather than returning an empty answer.
         (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
 
         result = _run_hook(repo, "venv")
+
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+    def test_a_git_failure_does_not_report_clean_no_argv_mode(self, tmp_path: Path) -> None:
+        """Local pre-commit invocation: `.pre-commit-config.yaml` sets
+        `pass_filenames: false` for this hook, so no-argv is the path a real
+        commit always takes. This exercises get_staged_files()'s own
+        `git diff --cached` branch in lib/_common.sh — a DIFFERENT git call
+        than the argv-mode test above, and the one #14151 review found still
+        masked after #14150 (lib/_common.sh's own trailing `|| true` swallowed
+        the failure before this hook's `set -e` could ever see it)."""
+        repo = _init_repo(tmp_path)
+        _stage_symlink(repo, "venv", str(repo))
+        # Corrupt the index so git errors rather than returning an empty answer.
+        (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = _run_hook(repo)
 
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
