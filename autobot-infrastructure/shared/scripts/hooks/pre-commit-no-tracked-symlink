@@ -1,0 +1,209 @@
+#!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Pre-commit Hook: No Tracked Symlink Entries (Issue #14137)
+# =============================================================
+#
+# This repo commonly runs with `core.symlinks=false` (WSL2 — see
+# docs/developer/BACKEND_DEBUGGING.md). Under that setting git cannot
+# create a real symlink on checkout: a tracked entry with mode `120000`
+# is materialised as a REGULAR FILE containing the target path as bare
+# text, silently overwriting whatever real file or directory previously
+# occupied that path. #14137 lost a `venv/` this way — a self-referential
+# absolute-path symlink replaced the interpreter with 40 bytes of text,
+# and nothing errored at checkout. #14149 found a second, already-broken
+# instance: an Ansible `group_vars/all.yml` symlink whose checkout is a
+# 37-byte path string instead of ~14 KB of real YAML.
+#
+# The defect is invisible to a content review: `git show`/`git diff` on a
+# committed symlink prints a plausible one-line path string, indistinguishable
+# from a harmless text file. Only the INDEX MODE (`git ls-files -s`) reveals
+# it, which is why this is a dedicated guard rather than a grep pattern.
+#
+# Scope: this checks CHANGED entries only (staged, for pre-commit; the PR's
+# diff, for CI), not a full-tree scan. #14149 is a pre-existing, already
+# broken symlink that this exact guard would find in a full-tree scan — but
+# blocking every future commit until #14149 is fixed would stop unrelated
+# work over a defect this guard did not introduce. Reusing lib/_common.sh's
+# get_staged_files() picks up the change-scoping already proven for
+# pre-commit-hardcoded-values / pre-commit-no-print-console (#13950,
+# #14051): a NEWLY added or modified symlink entry still fails; #14149's
+# existing one, untouched by a given commit, does not block that commit.
+#
+# Classification (inside vs outside the working tree):
+#   INSIDE  — the target, resolved relative to the symlink's own directory
+#             (or, for an absolute target, compared against this checkout's
+#             own root), lands inside the repository. BLOCKING: this is the
+#             demonstrated destructive shape — both #14137 (self-referential
+#             absolute path) and #14149 (`../../../inventory/...`) are
+#             INSIDE, and both silently clobbered or starved real content.
+#   OUTSIDE — the target escapes the repository (absolute path elsewhere,
+#             or enough `..` to climb above the root). BLOCKING too, but
+#             reported distinctly: it can't clobber a REPO-owned path this
+#             way, but under core.symlinks=false it never functions as a
+#             link on ANY clone of this repo either — it is dead weight at
+#             best, and a route for a host-specific absolute path to leak
+#             into tracked history at worst (the concern
+#             pipeline-scripts/... "Block developer absolute-path
+#             regressions" already polices for text content, which a
+#             symlink's blob is not caught by since it usually carries no
+#             file extension).
+#
+# Resolution is purely lexical (string ops on the blob content), not a
+# filesystem stat: a broken symlink — or one whose target does not exist on
+# the machine running the hook — must still classify correctly.
+#
+# Issue: #14137
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+# CI: invoked with an explicit file list (see .github/workflows/enforce-precommit.yml)
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+    echo "FATAL: not inside a git working tree — cannot resolve symlink targets." >&2
+    exit 1
+fi
+
+VIOLATIONS_INSIDE=0
+VIOLATIONS_OUTSIDE=0
+
+# Resolve TARGET (a symlink blob's literal content) against the directory
+# containing SYMLINK_PATH, purely lexically. Echoes INSIDE or OUTSIDE.
+classify_target() {
+    local symlink_path="$1" target="$2"
+    local base_dir
+    base_dir="$(dirname -- "$symlink_path")"
+    [ "$base_dir" = "." ] && base_dir=""
+
+    # Absolute target: only INSIDE if it sits under THIS checkout's own
+    # root on THIS machine — exactly the #14137 shape (a self-referential
+    # absolute path). Any other absolute path cannot be inside a repo it
+    # doesn't share a root with, and is reported OUTSIDE.
+    case "$target" in
+        /*)
+            case "$target" in
+                "$REPO_ROOT"|"$REPO_ROOT"/*)
+                    echo "INSIDE"
+                    ;;
+                *)
+                    echo "OUTSIDE"
+                    ;;
+            esac
+            return
+            ;;
+    esac
+
+    local -a stack=()
+    local seg escaped=0
+    if [ -n "$base_dir" ]; then
+        local -a base_segs
+        IFS='/' read -ra base_segs <<< "$base_dir"
+        for seg in "${base_segs[@]}"; do
+            [ -n "$seg" ] && stack+=("$seg")
+        done
+    fi
+
+    local -a tgt_segs
+    IFS='/' read -ra tgt_segs <<< "$target"
+    for seg in "${tgt_segs[@]}"; do
+        case "$seg" in
+            ""|".")
+                continue
+                ;;
+            "..")
+                if [ "${#stack[@]}" -eq 0 ]; then
+                    escaped=1
+                else
+                    stack=("${stack[@]:0:$((${#stack[@]}-1))}")
+                fi
+                ;;
+            *)
+                stack+=("$seg")
+                ;;
+        esac
+    done
+
+    if [ "$escaped" -eq 1 ]; then
+        echo "OUTSIDE"
+    else
+        echo "INSIDE"
+    fi
+}
+
+check_file() {
+    local file="$1"
+
+    # `git ls-files -s` reports the INDEX mode — the mode that would be
+    # committed (pre-commit: staged; CI: the merge commit's checkout) —
+    # regardless of how core.symlinks materialised it on disk. A deleted
+    # path has no index entry and is silently skipped (removing a symlink
+    # is the fix direction, never a violation).
+    local ls_line mode blob_sha
+    ls_line="$(git ls-files -s -- "$file" 2>/dev/null | head -1)"
+    [ -n "$ls_line" ] || return 0
+
+    mode="$(printf '%s' "$ls_line" | awk '{print $1}')"
+    [ "$mode" = "120000" ] || return 0
+
+    blob_sha="$(printf '%s' "$ls_line" | awk '{print $2}')"
+    local target
+    target="$(git cat-file -p "$blob_sha" 2>/dev/null)"
+
+    local location
+    location="$(classify_target "$file" "$target")"
+
+    if [ "$location" = "INSIDE" ]; then
+        printf "%b✗ %s%b — tracked symlink (mode 120000) targets INSIDE the working tree\n" "$RED" "$file" "$NC"
+        printf "  target: %s\n" "$target"
+        printf "  %bcore.symlinks=false checks this out as a plain file containing that\n" "$YELLOW"
+        printf "  text, silently overwriting whatever real path was there (#14137, #14149).%b\n" "$NC"
+        VIOLATIONS_INSIDE=$((VIOLATIONS_INSIDE + 1))
+    else
+        printf "%b✗ %s%b — tracked symlink (mode 120000) targets OUTSIDE the working tree\n" "$RED" "$file" "$NC"
+        printf "  target: %s\n" "$target"
+        printf "  %bit cannot function as a link under this repo's core.symlinks=false, on\n" "$YELLOW"
+        printf "  any clone, and a host-specific absolute path may be leaking into history.%b\n" "$NC"
+        VIOLATIONS_OUTSIDE=$((VIOLATIONS_OUTSIDE + 1))
+    fi
+}
+
+main() {
+    # '.' matches every non-empty filename — this hook applies to ANY
+    # tracked path, not a file-extension subset (the destructive entries
+    # in both #14137 and #14149 carry no extension pre-commit `types:`
+    # filtering could key on).
+    local files
+    files="$(get_staged_files '.' "$@")"
+    [ -z "$files" ] && exit 0
+
+    while IFS= read -r f; do
+        [ -z "$f" ] || check_file "$f"
+    done <<< "$files"
+
+    local total=$((VIOLATIONS_INSIDE + VIOLATIONS_OUTSIDE))
+    if [ "$total" -gt 0 ]; then
+        printf "\n%b%bBLOCKED: %d tracked symlink entr%s (%d inside, %d outside the working tree)%b\n\n" \
+            "$RED" "$BOLD" "$total" "$([ "$total" -eq 1 ] && echo y || echo ies)" \
+            "$VIOLATIONS_INSIDE" "$VIOLATIONS_OUTSIDE" "$NC"
+        printf "A tracked symlink cannot round-trip through this repo's core.symlinks=false\n"
+        printf "(common under WSL2): checkout writes a plain file containing the target path\n"
+        printf "instead of a real link, clobbering anything real at that path (#14137).\n\n"
+        printf "Fix: untrack the entry and either commit real content at that path, or\n"
+        printf "restructure the reference so it doesn't depend on filesystem symlinks\n"
+        printf "(e.g. an explicit include/copy, per #14149's fix options).\n"
+        exit 1
+    fi
+
+    printf "%b%b✓ No tracked symlinks into or out of the working tree%b\n" "$GREEN" "$BOLD" "$NC"
+    exit 0
+}
+
+main "$@"

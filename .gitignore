@@ -9,6 +9,11 @@
 # destroying the interpreter for every tree that pulls.
 #
 # The slashless entries match a file, a directory or a symlink of that name.
+#
+# This stops a REPEAT of that instance; it does not stop a NEW tracked
+# symlink or a narrowed pattern in this section from doing the same thing
+# again. autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+# and pre-commit-no-gitignore-shadow guard those cases directly (#14137).
 AutoBot/
 venv
 venv/

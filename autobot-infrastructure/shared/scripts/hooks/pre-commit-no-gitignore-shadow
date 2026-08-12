@@ -1,0 +1,167 @@
+#!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Pre-commit Hook: No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)
+# ======================================================================================
+#
+# The other half of how #14137 happened: `.gitignore`'s virtualenv section
+# used to carry `venv/` with a trailing slash, which matches a DIRECTORY
+# only. A worktree that reached the shared interpreter through a `venv`
+# *symlink* was therefore never ignored, and `git add -A` swept it in.
+# #14138 made the entries slashless (`venv`, `venv/`, `venvs`, `venvs/`),
+# but nothing stopped a FUTURE edit to that section from reintroducing a
+# slash-only (or otherwise narrowed) pattern that stops covering a file or
+# symlink of the same name. This hook does not re-derive gitignore's own
+# matching semantics; it independently confirms the outcome that matters —
+# no tracked path anywhere in the repo is named after an entry in that
+# section — so a narrowed pattern is caught by what it fails to exclude,
+# not by re-implementing it.
+#
+# Scope: full-tree (`git ls-files`), not diff-scoped. Unlike
+# pre-commit-no-tracked-symlink (#14137's #14149 pre-existing instance),
+# there are zero pre-existing violations here as of #14137 — every path
+# already tracked under the section's bare names (`scripts/lib/`,
+# `autobot-infrastructure/shared/scripts/hooks/lib/`) is covered by an
+# explicit `!` negation in .gitignore, which this hook also honours.
+#
+# Matching: a bare gitignore entry with no slash matches a path SEGMENT
+# at any depth (git's own semantics), so this hook checks every path
+# component, not only the top-level or the basename.
+#
+# Issue: #14137
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+    echo "FATAL: not inside a git working tree." >&2
+    exit 1
+fi
+GITIGNORE="$REPO_ROOT/.gitignore"
+
+SECTION_MARKER='# === PYTHON VIRTUAL ENVIRONMENT ==='
+
+# Extracts the virtualenv section's positive entry names (no slash, no
+# `!`) into NAMES[], and negated entries' path prefixes into
+# NEGATED_PREFIXES[]. Bails out loudly if the marker itself is gone —
+# a silently-empty guard is worse than a guard that fails closed.
+declare -a NAMES=()
+declare -a NEGATED_PREFIXES=()
+
+load_virtualenv_section() {
+    if [ ! -f "$GITIGNORE" ]; then
+        echo "FATAL: $GITIGNORE not found." >&2
+        exit 1
+    fi
+    if ! grep -qF "$SECTION_MARKER" "$GITIGNORE"; then
+        echo "FATAL: '$SECTION_MARKER' marker not found in .gitignore — this hook can no" >&2
+        echo "  longer find the virtualenv section it is meant to guard. Update" >&2
+        echo "  SECTION_MARKER in $0 to match, or restore the marker." >&2
+        exit 1
+    fi
+
+    local in_section=0 line
+    while IFS= read -r line; do
+        if [ "$line" = "$SECTION_MARKER" ]; then
+            in_section=1
+            continue
+        fi
+        if [ "$in_section" -eq 1 ]; then
+            # The section ends at the next `# ===` header (or EOF).
+            case "$line" in
+                '# ==='*)
+                    break
+                    ;;
+            esac
+            # Skip blanks and ordinary comments.
+            case "$line" in
+                ''|'#'*)
+                    continue
+                    ;;
+            esac
+            if [ "${line:0:1}" = "!" ]; then
+                local prefix="${line:1}"
+                prefix="${prefix%/}"
+                [ -n "$prefix" ] && NEGATED_PREFIXES+=("$prefix")
+            else
+                local name="${line%/}"
+                [ -n "$name" ] && NAMES+=("$name")
+            fi
+        fi
+    done < "$GITIGNORE"
+
+    if [ "${#NAMES[@]}" -eq 0 ]; then
+        echo "FATAL: virtualenv section parsed to zero names — refusing to report clean" >&2
+        echo "  on an empty guard scope. Check the section format in .gitignore." >&2
+        exit 1
+    fi
+}
+
+# True (0) if PATH is covered by a `!` negation prefix.
+is_negated() {
+    local path="$1" prefix
+    for prefix in "${NEGATED_PREFIXES[@]:-}"; do
+        [ -z "$prefix" ] && continue
+        case "$path" in
+            "$prefix"|"$prefix"/*)
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+main() {
+    load_virtualenv_section
+
+    local violations=0
+    local tracked
+    tracked="$(git ls-files)"
+    [ -z "$tracked" ] && exit 0
+
+    while IFS= read -r path; do
+        [ -z "$path" ] && continue
+        is_negated "$path" && continue
+
+        local -a segs
+        IFS='/' read -ra segs <<< "$path"
+        local seg name matched=""
+        for seg in "${segs[@]}"; do
+            for name in "${NAMES[@]}"; do
+                if [ "$seg" = "$name" ]; then
+                    matched="$name"
+                    break 2
+                fi
+            done
+        done
+
+        if [ -n "$matched" ]; then
+            printf "%b✗ %s%b — shadows '%s' in .gitignore's virtualenv section\n" "$RED" "$path" "$NC" "$matched"
+            violations=$((violations + 1))
+        fi
+    done <<< "$tracked"
+
+    if [ "$violations" -gt 0 ]; then
+        printf "\n%b%bBLOCKED: %d tracked path(s) shadow a virtualenv-section ignore name%b\n\n" \
+            "$RED" "$BOLD" "$violations" "$NC"
+        printf "A path with the same name as a %s entry is either a virtualenv\n" "${NAMES[0]}"
+        printf "artifact that slipped past .gitignore (narrow it, or untrack the path), or\n"
+        printf "a legitimate path that needs a '!' negation in .gitignore next to it\n"
+        printf "(see the existing !scripts/lib/ / !autobot-infrastructure/.../lib/ entries).\n"
+        printf "Issue: #14137\n"
+        exit 1
+    fi
+
+    printf "%b%b✓ No tracked path shadows a virtualenv-section ignore name%b\n" "$GREEN" "$BOLD" "$NC"
+    exit 0
+}
+
+main "$@"
