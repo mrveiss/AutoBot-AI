@@ -81,3 +81,53 @@ if __name__ == "__main__":
     test_git_other_dir_unaffected()
     test_multiline_play_with_guard_passes()
     print("All tests passed.")
+
+
+# --- #14181: the pattern was blind to every Jinja name but `git_repo_root` ----
+
+
+def test_an_alternately_named_code_source_var_is_blocked() -> None:
+    """`{{ _code_source_dest }}` is the same directory under a different name.
+
+    The original target group accepted only the literal `{{ git_repo_root }}`
+    or the literal path, so three real unguarded sites in the update/deploy
+    path passed the rule — which is precisely where a `dubious ownership`
+    rc=128 aborts a deploy (#7150).
+    """
+    body = "        cmd: \"git -C {{ _code_source_dest }} log -1 --format='%h %s'\"\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "alt.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_a_filtered_code_source_var_is_blocked() -> None:
+    """A Jinja filter expression must not hide the target either."""
+    body = "          git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "filtered.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_the_same_alternately_named_vars_pass_once_guarded() -> None:
+    """Widening must not make the guarded form unrecognisable.
+
+    A widened matcher that flagged correctly-guarded lines would be worse than
+    the blind one — it would block every site #7150 already fixed.
+    """
+    bodies = [
+        "        cmd: \"git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1\"\n",
+        "          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}\n"
+        "          -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n",
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        for index, body in enumerate(bodies):
+            f = _write(Path(d), f"guarded{index}.yml", body)
+            assert find_violations(f) == [], body
+
+
+def test_an_unrelated_git_c_is_still_ignored() -> None:
+    """The widening keys on the *name*, not on `-C` alone."""
+    body = "      command: git -C {{ some_other_dir }} status\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "unrelated.yml", body)
+        assert find_violations(f) == []
