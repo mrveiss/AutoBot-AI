@@ -109,6 +109,32 @@ echo \"\$AUTOBOT_BACKEND_HOST:\$AUTOBOT_REDIS_HOST\"
 ")
 check ".env override wins; unset var keeps SSOT default" "$out" "10.0.0.5:127.0.0.1"
 
+# --- Guard: no tracked file may regrow the non-`autobot-` path (#14041) ----
+# 23 tracked shell scripts once sourced $_PROJECT_ROOT/infrastructure/... (a
+# wrong directory segment -- this repo has no top-level infrastructure/, only
+# autobot-infrastructure/). All 23 were fixed in the same PR that added this
+# guard; this asserts the wrong form cannot regrow silently. Anchored on
+# `git ls-files` so another session's worktree can never trip it -- ls-files
+# only lists this checkout's tracked files, never another worktree's.
+offenders=""
+while IFS= read -r f; do
+    hit=$(grep -n 'source.*infrastructure/shared/scripts/lib/ssot-config\.sh' "${REPO_ROOT}/${f}" 2>/dev/null \
+        | grep -v 'autobot-infrastructure/shared/scripts/lib/ssot-config\.sh')
+    if [ -n "$hit" ]; then
+        offenders="${offenders}${f}: ${hit}
+"
+    fi
+done < <(cd "$REPO_ROOT" && git ls-files -- '*.sh')
+
+if [ -n "$offenders" ]; then
+    echo "FAIL: tracked file(s) source the non-autobot- path:"
+    echo "$offenders"
+    fail=$((fail + 1))
+else
+    echo "PASS: no tracked *.sh file sources the non-autobot- infrastructure/ path"
+    pass=$((pass + 1))
+fi
+
 echo
 echo "=== $pass passed, $fail failed ==="
 [ "$fail" -eq 0 ]

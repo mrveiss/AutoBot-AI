@@ -31,9 +31,21 @@ exists, and which of those values differ from what the script does today.
 | A — `source PATH 2>/dev/null \|\| true` | 48 | Silent no-op; script runs entirely on literals | Library sourced; `${VAR:-literal}` now resolves to the library's value when it sets one |
 | B — two-path attempt then a `\|\| { ... }` block that falls back to sourcing `$PROJECT_ROOT/.env` directly (`check_status.sh`, `distributed/check-health.sh`, `utilities/check-time-sync.sh`, `utilities/setup-ssh-keys.sh`, `utilities/sync-all-vms.sh`) | 5 | One of the two path attempts always fails (wrong depth for that script's location); the other already resolves to the correct file location once it exists, so the `.env`-only fallback block was dead code whenever the library exists | First or second `source` attempt succeeds (library is at the depth one of the two guesses already assumes); the `.env` fallback block becomes genuinely unreachable, which is correct — it was written as a belt-and-braces path for a library that was never there |
 | C — unguarded `source PATH` under `set -e`, no `\|\| true` at all (`vm-management/status-all-vms.sh:21`) | 1 | Script **crashes on every invocation** — `set -e` + a failing `source` of a nonexistent file exits the script before it does anything | Script runs for the first time. This is the single largest behaviour change in the enumeration — not a fallback-literal swap, a script that currently cannot run at all |
-| D — wrong path segment: `$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh` (note: `infrastructure/`, not `autobot-infrastructure/` — this repo has no top-level `infrastructure/` directory) | 9 | Same as shape A — silent no-op, but for a *second*, independent reason: even a library placed at the canonical path would still not be found by these 9, because the path itself is wrong | Fixed as part of this change (the 9 files below) so the library is actually reachable; without the fix, these 9 would keep silently no-op'ing forever, same failure mode with an extra layer |
+| D — wrong path segment: `$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh` (note: `infrastructure/`, not `autobot-infrastructure/` — this repo has no top-level `infrastructure/` directory) | 23 | Same as shape A — silent no-op, but for a *second*, independent reason: even a library placed at the canonical path would still not be found by these, because the path itself is wrong | Fixed as part of this change so the library is actually reachable; without the fix, these would keep silently no-op'ing forever, same failure mode with an extra layer |
+
+**Scope-probe defect, corrected mid-PR:** the first pass found 9 shape-D files
+because the search was `grep`'d under `autobot-infrastructure/` only — the same
+"probe can't reach it" failure mode this whole issue family is about. A
+follow-up `git grep` scoped to the full tracked tree (`git ls-files`, not a bare
+recursive grep, to stay out of any other worktree) found **14 more** tracked
+files with the identical defect outside `autobot-infrastructure/`: 13 flagged in
+review plus `sync-frontend.sh` (repo root) found during the same sweep. All 23
+are fixed in this PR, and `test_ssot_config_lib.sh` now asserts no tracked file
+carries the non-`autobot-` path, so this can't regrow silently again.
 
 Shape D files (fixed in this PR — `infrastructure/` → `autobot-infrastructure/`):
+
+Originally in scope (`autobot-infrastructure/`, 9):
 `autobot-infrastructure/autobot-ai-stack/templates/ai-status.sh`,
 `autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh`,
 `autobot-infrastructure/shared/config/load_config.sh`,
@@ -43,6 +55,28 @@ Shape D files (fixed in this PR — `infrastructure/` → `autobot-infrastructur
 `autobot-infrastructure/shared/tests/performance/run_baseline.sh`,
 `autobot-infrastructure/shared/tests/run_phase9_tests.sh`,
 `autobot-infrastructure/shared/tests/test_crud_endpoints.sh`.
+
+Found by the full-tree sweep, outside `autobot-infrastructure/` (14):
+`autobot-frontend/start-frontend-dev.sh`,
+`autobot-frontend/scripts/knowledge_base/reload-documentation.sh`,
+`autobot-slm-frontend/scripts/sync-to-admin.sh`,
+`scripts/service-auth/validate-service-auth.sh`,
+`scripts/service-auth/circuit-breaker-ramp.sh`,
+`scripts/service-auth/emergency-rollback.sh`,
+`autobot-slm-backend/monitoring/start_monitoring.sh`,
+`autobot-slm-backend/ansible/deploy.sh`,
+`autobot-slm-backend/ansible/deploy-native.sh`,
+`autobot-slm-backend/ansible/deploy-hybrid.sh`,
+`autobot-slm-backend/ansible/deploy-autobot-native.sh`,
+`autobot-slm-backend/ansible/utils/backup.sh`,
+`autobot-slm-backend/ansible/utils/health-check.sh`,
+`sync-frontend.sh` (repo root).
+
+Two documentation/comment references to the same wrong path were also corrected
+for consistency (neither is executable, both would mislead a reader who copied
+them): `docs/api/IP_ADDRESSING_SCHEME.md` (an example `source` command) and
+`autobot-slm-backend/ansible/inventory/group_vars/infrastructure.yml` (a
+comment).
 
 Two more single-script special cases, found while enumerating:
 
