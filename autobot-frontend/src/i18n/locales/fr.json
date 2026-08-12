@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "Les contacts ne font pas partie de la hiérarchie de reporting : ils n'ont ni responsable, ni budget, ni battement de cœur.",
       "peopleEmpty": "Cette entreprise n'a encore aucune personne."
     },
+    "executorRollup": {
+      "title": "Récapitulatif des exécutants",
+      "totalItems": "{count} éléments de travail",
+      "unavailable": "Le récapitulatif des exécutants n'a pas pu être chargé. Il s'agit d'un problème de chargement, pas de zéro élément de travail.",
+      "empty": "Aucun élément de travail pour le moment.",
+      "statusColumn": "Statut",
+      "class": {
+        "user": "Personne",
+        "agent": "Agent IA",
+        "unassigned": "Non attribué"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Légende",
       "colourBy": "Colorer par",

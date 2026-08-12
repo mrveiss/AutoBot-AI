@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "جهات الاتصال ليست جزءًا من التسلسل الإداري — لا مدير لها ولا ميزانية ولا نبض.",
       "peopleEmpty": "لا يوجد أشخاص في هذه الشركة بعد."
     },
+    "executorRollup": {
+      "title": "ملخص المنفذين",
+      "totalItems": "{count} عنصر عمل",
+      "unavailable": "تعذر تحميل ملخص المنفذين. هذه مشكلة تحميل، وليست صفر عناصر عمل.",
+      "empty": "لا توجد عناصر عمل بعد.",
+      "statusColumn": "الحالة",
+      "class": {
+        "user": "شخص",
+        "agent": "وكيل ذكاء اصطناعي",
+        "unassigned": "غير مُسند"
+      }
+    },
     "canvasRules": {
       "legendTitle": "وسيلة الإيضاح",
       "colourBy": "التلوين حسب",

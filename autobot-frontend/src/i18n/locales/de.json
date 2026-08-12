@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
       "peopleEmpty": "Dieses Unternehmen hat noch keine Personen."
     },
+    "executorRollup": {
+      "title": "Ausführungs-Übersicht",
+      "totalItems": "{count} Arbeitselemente",
+      "unavailable": "Die Ausführungs-Übersicht konnte nicht geladen werden. Das ist ein Ladeproblem, nicht null Arbeitselemente.",
+      "empty": "Noch keine Arbeitselemente.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "KI-Agent",
+        "unassigned": "Nicht zugewiesen"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Legende",
       "colourBy": "Einfärben nach",

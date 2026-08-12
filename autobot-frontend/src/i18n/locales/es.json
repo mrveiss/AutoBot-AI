@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "Los contactos no forman parte de la jerarquía de reporte: no tienen responsable, presupuesto ni latido.",
       "peopleEmpty": "Esta empresa aún no tiene personas."
     },
+    "executorRollup": {
+      "title": "Resumen de ejecutores",
+      "totalItems": "{count} elementos de trabajo",
+      "unavailable": "No se pudo cargar el resumen de ejecutores. Es un problema de carga, no cero elementos de trabajo.",
+      "empty": "Aún no hay elementos de trabajo.",
+      "statusColumn": "Estado",
+      "class": {
+        "user": "Persona",
+        "agent": "Agente de IA",
+        "unassigned": "Sin asignar"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Leyenda",
       "colourBy": "Colorear por",
