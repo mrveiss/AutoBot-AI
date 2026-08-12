@@ -132,10 +132,16 @@ def test_comment_lines_ignored(tmp_path):
     assert result.returncode == 0
 
 
-def test_empty_file(tmp_path):
-    """No staged workflow files — hook exits cleanly."""
-    result = subprocess.run([str(HOOK_PATH)], capture_output=True, text=True)
-    assert result.returncode == 0
+def test_no_staged_files_in_a_real_repo_exits_cleanly(tmp_path):
+    """Nothing staged, inside an actual git repo — the real 'nothing to
+    check' case a git hook invocation always runs in. Replaces the old
+    test_empty_file, which ran the hook OUTSIDE any git repository at all;
+    that is not "no files staged", it is git itself failing to answer the
+    question — now covered by TestFailsClosedWhenGitCannotAnswer below
+    (GH#14151)."""
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    result = subprocess.run([str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_actions_path_allowed(tmp_path):
@@ -157,3 +163,60 @@ def test_actions_path_rejects_third_party_tag(tmp_path):
         rel=".github/actions/setup/action.yml",
     )
     assert result.returncode == 1
+
+
+# === GH#14151: fails closed when git itself cannot answer ===
+
+
+def _git(repo, *args):
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+
+
+def _init_repo(tmp_path):
+    _git(tmp_path, "init", "--quiet")
+    _git(tmp_path, "config", "user.email", "t@t")
+    _git(tmp_path, "config", "user.name", "t")
+    return tmp_path
+
+
+def _stage_tag_pinned_workflow(repo):
+    wf = repo / ".github" / "workflows" / "ci.yml"
+    wf.parent.mkdir(parents=True, exist_ok=True)
+    wf.write_text("jobs:\n  build:\n    steps:\n      - uses: dorny/paths-filter@v3\n", encoding="utf-8")
+    _git(repo, "add", ".github/workflows/ci.yml")
+
+
+class TestFailsClosedWhenGitCannotAnswer:
+    """GH#14151: `set -uo pipefail` (no `-e`) plus an unguarded `source
+    lib/_common.sh`, combined with get_staged_files()'s former blanket
+    `|| true`, meant a broken dependency OR a `git diff --cached` failure
+    degraded to an empty file list — read as "nothing to check" and exited
+    0 even with a genuinely staged tag-pinned action present. Unlike the
+    other hooks in this family, THIS one has no banner echo referencing a
+    color variable at the top of main(), so `set -u` alone never caught the
+    missing-lib case either — both reproductions below are genuine fail-open
+    bugs in the pre-fix script, not merely defense-in-depth.
+    """
+
+    def test_a_missing_common_lib_does_not_report_clean(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        _stage_tag_pinned_workflow(repo)
+
+        # A copy of the hook with no `lib/` beside it — the dependency is gone.
+        isolated = tmp_path.parent / "isolated-no-tag-pinned-action"
+        isolated.mkdir()
+        hook_copy = isolated / HOOK_PATH.name
+        hook_copy.write_bytes(HOOK_PATH.read_bytes())
+        hook_copy.chmod(0o755)
+
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+        assert result.returncode != 0, "the hook reported clean with a staged violation and no dependency"
+
+    def test_a_git_failure_does_not_report_clean(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        _stage_tag_pinned_workflow(repo)
+        # Corrupt the index so git errors rather than returning an empty answer.
+        (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = subprocess.run([str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

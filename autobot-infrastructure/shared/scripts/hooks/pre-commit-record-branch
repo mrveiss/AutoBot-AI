@@ -17,7 +17,7 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
 if [ -z "$GIT_DIR_PATH" ]; then

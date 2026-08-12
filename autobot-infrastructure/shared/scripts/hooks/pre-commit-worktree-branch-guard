@@ -23,11 +23,14 @@
 # Issue: #1654 - pre-commit stash pop can switch active branch
 # Related: #1503 - pre-commit stash/restore stages untracked files
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 main() {
     current_branch=$(git branch --show-current 2>/dev/null)
@@ -37,7 +40,20 @@ main() {
         exit 0
     fi
 
-    # Check if any other worktree has this branch checked out
+    # Check if any other worktree has this branch checked out.
+    # GH#14151 review: `done < <(git worktree list --porcelain)` is PROCESS
+    # substitution — its exit status never reaches this shell, so neither
+    # `set -e` nor `set -u` can see it fail. A corrupted `.git/worktrees`
+    # tree or disk pressure would make `git worktree list` fail silently,
+    # the while loop would just see zero lines of input, and this hook
+    # would report "no conflict" with a genuine one present. Captured via
+    # command substitution first so the failure is an ordinary non-zero
+    # return that `set -e` DOES observe.
+    wt_output="$(git worktree list --porcelain)" || {
+        echo "FATAL: git worktree list failed — refusing to report clean" >&2
+        exit 1
+    }
+
     conflict=""
     while IFS= read -r line; do
         # git worktree list --porcelain outputs:
@@ -57,7 +73,7 @@ main() {
                 break
             fi
         fi
-    done < <(git worktree list --porcelain 2>/dev/null)
+    done <<< "$wt_output"
 
     if [[ -z "$conflict" ]]; then
         exit 0
