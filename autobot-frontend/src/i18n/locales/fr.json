@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "Le transfert s'applique uniquement aux agents."
       }
     },
+    "executorRollup": {
+      "title": "Récapitulatif des exécutants",
+      "totalItems": "{count} éléments de travail",
+      "unavailable": "Le récapitulatif des exécutants n'a pas pu être chargé. Il s'agit d'un problème de chargement, pas de zéro élément de travail.",
+      "empty": "Aucun élément de travail pour le moment.",
+      "statusColumn": "Statut",
+      "class": {
+        "user": "Personne",
+        "agent": "Agent IA",
+        "unassigned": "Non attribué"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Légende",
       "colourBy": "Colorer par",

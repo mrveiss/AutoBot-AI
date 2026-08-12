@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "El traspaso se aplica solo a agentes."
       }
     },
+    "executorRollup": {
+      "title": "Resumen de ejecutores",
+      "totalItems": "{count} elementos de trabajo",
+      "unavailable": "No se pudo cargar el resumen de ejecutores. Es un problema de carga, no cero elementos de trabajo.",
+      "empty": "Aún no hay elementos de trabajo.",
+      "statusColumn": "Estado",
+      "class": {
+        "user": "Persona",
+        "agent": "Agente de IA",
+        "unassigned": "Sin asignar"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Leyenda",
       "colourBy": "Colorear por",

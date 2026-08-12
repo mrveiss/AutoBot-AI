@@ -28,6 +28,9 @@ import {
   groupPeopleByTeam,
 } from '@/composables/llc/orgPeople'
 import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
+import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
+import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
+import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -156,7 +159,7 @@ async function loadPeopleSources(): Promise<void> {
   // Claim the guard BEFORE the first await: two clicks in one tick would both
   // pass the check above and double-fire every request.
   peopleLoading.value = true
-  const cid = await resolveCompanyId()
+  const cid = await resolveCompanyIdOnce()
   if (!cid) {
     peopleLoading.value = false
     return
@@ -204,11 +207,36 @@ function onCanvasNodeSelected(nodeId: string | null) {
   if (node) openDrawer(node)
 }
 
+/**
+ * De-duplicate the in-flight company resolution (#13942 review).
+ *
+ * `fetchTree` and `loadExecutorRollup` both start with `await resolveCompanyIdOnce()`
+ * and `onMounted` fires them together. The composable has no in-flight
+ * de-duplication, so on the path it exists for — reached from a top-level nav
+ * entry carrying no company id — both raced into their own
+ * `GET /api/llc/companies/` fallback, doubling that request on the view most
+ * users land on. Harmless but wasteful, and invisible to CI: every test that
+ * mounts this view stubs the composable with a static resolver, so the real
+ * resolution path is never exercised.
+ *
+ * Only the *pending* promise is shared; it is released on settle, so a later
+ * call still re-resolves.
+ */
+let pendingCompanyId: Promise<string | null> | null = null
+function resolveCompanyIdOnce(): Promise<string | null> {
+  if (!pendingCompanyId) {
+    pendingCompanyId = Promise.resolve(resolveCompanyId()).finally(() => {
+      pendingCompanyId = null
+    })
+  }
+  return pendingCompanyId
+}
+
 async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const cid = await resolveCompanyId()
+    const cid = await resolveCompanyIdOnce()
     if (!cid) {
       tree.value = []
       return
@@ -221,6 +249,35 @@ async function fetchTree() {
     error.value = msg
   } finally {
     isLoading.value = false
+  }
+}
+
+// #13942: the executor rollup panel's own state — independent of `tree`
+// (people/agent nodes), since it counts work items, not org-chart nodes.
+const executorRollupMatrix = ref<ExecutorRollupMatrix>(buildExecutorRollupMatrix([]))
+const executorRollupLoading = ref(false)
+// A source that did not answer must never render as "zero work items"
+// (#14064's family, #14104's `peopleUnavailable` precedent).
+const executorRollupUnavailable = ref(false)
+
+async function loadExecutorRollup(): Promise<void> {
+  executorRollupLoading.value = true
+  executorRollupUnavailable.value = false
+  try {
+    const cid = await resolveCompanyIdOnce()
+    if (!cid) {
+      executorRollupMatrix.value = buildExecutorRollupMatrix([])
+      return
+    }
+    const resp = await api.get<{ cells: ExecutorRollupCell[] }>(
+      `/api/llc/companies/${cid}/work-items/executor-rollup`,
+    )
+    executorRollupMatrix.value = buildExecutorRollupMatrix(resp?.cells ?? [])
+  } catch (err: unknown) {
+    logger.error('Failed to fetch executor rollup:', err)
+    executorRollupUnavailable.value = true
+  } finally {
+    executorRollupLoading.value = false
   }
 }
 
@@ -283,7 +340,11 @@ function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   if (node) node.position = position
 }
 
-onMounted(fetchTree)
+onMounted(() => {
+  void fetchTree()
+  // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
+  void loadExecutorRollup()
+})
 </script>
 
 <template>
@@ -327,6 +388,17 @@ onMounted(fetchTree)
       @close="showHire = false"
       @hired="fetchTree"
     />
+
+    <!-- #13942: the executor rollup panel — always visible, independent of the
+         tree/canvas/people view mode below, since it counts work items rather
+         than org-chart nodes. -->
+    <div class="mb-4">
+      <ExecutorRollupPanel
+        :matrix="executorRollupMatrix"
+        :loading="executorRollupLoading"
+        :unavailable="executorRollupUnavailable"
+      />
+    </div>
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}

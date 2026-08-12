@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
       }
     },
+    "executorRollup": {
+      "title": "Ausführungs-Übersicht",
+      "totalItems": "{count} Arbeitselemente",
+      "unavailable": "Die Ausführungs-Übersicht konnte nicht geladen werden. Das ist ein Ladeproblem, nicht null Arbeitselemente.",
+      "empty": "Noch keine Arbeitselemente.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "KI-Agent",
+        "unassigned": "Nicht zugewiesen"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Legende",
       "colourBy": "Einfärben nach",

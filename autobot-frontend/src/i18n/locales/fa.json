@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "واگذاری فقط برای عامل‌ها اعمال می‌شود."
       }
     },
+    "executorRollup": {
+      "title": "خلاصه مجریان",
+      "totalItems": "{count} مورد کاری",
+      "unavailable": "خلاصه مجریان بارگذاری نشد. این یک مشکل بارگذاری است، نه صفر مورد کاری.",
+      "empty": "هنوز موردی کاری وجود ندارد.",
+      "statusColumn": "وضعیت",
+      "class": {
+        "user": "شخص",
+        "agent": "عامل هوش مصنوعی",
+        "unassigned": "واگذار نشده"
+      }
+    },
     "canvasRules": {
       "legendTitle": "راهنمای نمادها",
       "colourBy": "رنگ‌آمیزی بر اساس",

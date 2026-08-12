@@ -49597,6 +49597,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/work-items/executor-rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Work Item Executor Rollup
+         * @description Company-wide work-item counts by executor class and status (#13942).
+         *
+         *     Executor class is derived from the *item's own assignee* — ``assignee_type``
+         *     (typed via ``AssigneeType``, #13937) plus the matching id column — never a
+         *     new discriminator. There is no ``PersonKind``-style provenance derivation
+         *     here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type`` is
+         *     already a backend-typed value, not something only knowable from the
+         *     frontend, so counting it server-side introduces no honesty gap.
+         *
+         *     Grouped in SQL rather than paginated to the frontend and counted there:
+         *     ``GET /work-items`` caps at 500 rows per page, and a company can hold far
+         *     more than that — a client-side count over one page would silently be
+         *     a lie about companies past the cap. ``COUNT(*) ... GROUP BY`` has no such
+         *     ceiling.
+         */
+        get: operations["get_work_item_executor_rollup_api_llc_companies__company_id__work_items_executor_rollup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/teams": {
         parameters: {
             query?: never;
@@ -72275,6 +72308,32 @@ export interface components {
             task_id: string;
             /** Security Blocked */
             security_blocked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ExecutorRollupCell
+         * @description One (executor_class, status) count — one bar of the rollup panel.
+         *
+         *     ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
+         *     / ``_UNASSIGNED_EXECUTOR_CLASS`` — never a value invented for this endpoint
+         *     (#13942's "no parallel executor enum" constraint). ``status`` is a
+         *     ``WorkItemStatus`` value.
+         */
+        ExecutorRollupCell: {
+            /** Executor Class */
+            executor_class: string;
+            /** Status */
+            status: string;
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ExecutorRollupResponse */
+        ExecutorRollupResponse: {
+            /** Cells */
+            cells: components["schemas"]["ExecutorRollupCell"][];
         } & {
             [key: string]: unknown;
         };
@@ -167827,6 +167886,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgChartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_item_executor_rollup_api_llc_companies__company_id__work_items_executor_rollup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutorRollupResponse"];
                 };
             };
             /** @description Validation Error */
