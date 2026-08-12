@@ -161,3 +161,50 @@ def test_the_real_ssot_sentinels_are_excluded(guard):
     assert "AUTOBOT_SMTP_PORT" not in ports
     assert ports.get("AUTOBOT_BROWSER_SERVICE_PORT") == "9001", "the real port this guard exists for"
     assert ports.get("AUTOBOT_GRAFANA_PORT") == "3000", "3000 belongs to Grafana — the whole point of #14198"
+
+
+def test_an_all_sentinel_ssot_is_fatal_not_clean(guard, tmp_path, monkeypatch):
+    """The fatal check must run on the map actually used for comparison.
+
+    Review finding: the emptiness check ran on the *pre-filter* dict, so an
+    SSOT where every real port had been turned into `default=0` left it
+    non-empty while the comparison map was empty. Every fallback then read as
+    "no SSOT entry" and the guard printed a clean verdict. Reproduced against
+    the real code: a diverging `${AUTOBOT_BROWSER_SERVICE_PORT:-3000}` exited 0.
+    """
+    (tmp_path / "autobot_shared").mkdir()
+    (tmp_path / "autobot_shared" / "ssot_config.py").write_text(
+        'browser: int = Field(default=0, alias="AUTOBOT_BROWSER_SERVICE_PORT")\n'
+        'backend: int = Field(default=0, alias="AUTOBOT_BACKEND_PORT")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(guard, "_repo_root", lambda: tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        guard._ssot_ports(tmp_path)
+
+    assert "refusing to report clean" in str(excinfo.value)
+
+
+def test_the_diverging_fallback_still_fails_when_some_ports_are_sentinels(guard, tmp_path, monkeypatch):
+    """A mixed SSOT — some sentinels, some real — must still catch divergence.
+
+    Pins that the fatal check above did not over-correct into rejecting the
+    ordinary case the sentinel handling exists to support.
+    """
+    (tmp_path / "autobot_shared").mkdir()
+    (tmp_path / "autobot_shared" / "ssot_config.py").write_text(
+        'postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")\n'
+        'browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "bad.sh").write_text(
+        'psql -p "${AUTOBOT_POSTGRES_PORT:-5432}"\n'
+        'curl "http://h:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(guard, "_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(guard, "_shell_files", lambda root: ["bad.sh"])
+
+    assert guard.main([]) == 1

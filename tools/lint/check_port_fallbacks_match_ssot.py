@@ -73,7 +73,21 @@ def _ssot_ports(root: Path) -> dict[str, str]:
     # would fail a perfectly correct `${AUTOBOT_POSTGRES_PORT:-5432}` — a guard
     # that blocks correct code is worse than the gap it closes, so a sentinel
     # default makes the variable unverifiable rather than wrong.
-    return {var: value for var, value in parsed.items() if value != "0"}
+    comparable = {var: value for var, value in parsed.items() if value != "0"}
+    # Review finding on this PR: the fatal check above runs on `parsed`, BEFORE
+    # this filter. A mass edit that turned every real port field into
+    # `default=0` — a bad find/replace, a merge conflict, over-applying the
+    # sentinel convention — would leave `parsed` non-empty (so the check passes)
+    # and `comparable` empty. Every fallback then reads as "no SSOT entry", and
+    # the guard prints a clean verdict over a tree it never compared. Reproduced:
+    # a `:-3000` browser fallback was reported clean with exit 0. The invariant
+    # has to be asserted on the map that is actually used.
+    if not comparable:
+        sys.exit(
+            f"FATAL: every AUTOBOT_*_PORT field in {_SSOT_PATH} has the sentinel default=0 "
+            f"({len(parsed)} parsed) — nothing left to compare against, refusing to report clean"
+        )
+    return comparable
 
 
 def _shell_files(root: Path) -> list[str]:
