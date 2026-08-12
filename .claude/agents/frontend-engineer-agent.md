@@ -1,6 +1,7 @@
 ---
 name: frontend-engineer
 description: Vue 3 + TypeScript specialist for AutoBot platform. Use for UI components, WebSocket integration, workflow dashboards, multi-modal interfaces, and frontend architecture. Proactively engage for user interface development.
+model: sonnet
 tools: Read, Write, Grep, Glob, Bash, mcp__ide__getDiagnostics
 ---
 

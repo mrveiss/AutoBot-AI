@@ -88,16 +88,66 @@ class DocumentPipeline(BasePipeline):
 
     def _to_result(self, extracted: ExtractedDocument, metadata: Dict) -> Dict[str, Any]:
         """Adapt a canonical ExtractedDocument to this pipeline's result dict."""
+        # Resolved once and threaded through, rather than each helper reading
+        # ``has_usable_text_layer`` (and re-resolving the config knobs behind
+        # it) independently — that used to emit a misconfigured-value warning
+        # twice per document (#13884 review).
+        usable_content = extracted.has_usable_content
         result: Dict[str, Any] = {
             "type": "document_analysis",
             "format": extracted.format,
             "extracted_text": extracted.text,
             "page_count": extracted.page_count,
-            "confidence": self._confidence_for(extracted),
+            "confidence": self._confidence_for(extracted, usable_content),
             "metadata": metadata,
         }
         result.update(self._format_fields(extracted))
+        result.update(self._text_layer_fields(extracted, usable_content))
         return result
+
+    def _text_layer_fields(self, extracted: ExtractedDocument, usable_content: bool) -> Dict[str, Any]:
+        """Report what was actually readable, so empty is never mistaken for blank.
+
+        Two distinct failure shapes get two distinct statuses (#13884):
+        ``no_text_layer`` for a paginated document (a PDF) with nothing
+        usable — a scan, where OCR is the fix — and ``empty_document`` for an
+        unpaginated one (a blank ``.txt``/``.md``, or a DOCX with neither text
+        nor tables), where OCR does not apply at all. A DOCX whose content is
+        entirely a table is neither: its data lives in ``tables``, and
+        ``usable_content`` reflects that.
+        """
+        fields: Dict[str, Any] = {}
+
+        # Report unreadable pages even when the document as a whole is usable: a
+        # 40-page contract with one scanned addendum still has a hole in it, and
+        # the caller can only OCR what it knows is missing.
+        if extracted.pages and extracted.empty_page_numbers:
+            fields["empty_pages"] = list(extracted.empty_page_numbers)
+            fields["text_page_ratio"] = round(extracted.text_page_ratio, 4)
+            fields["chars_per_page"] = round(extracted.avg_chars_per_page, 1)
+
+        if usable_content:
+            return fields
+
+        if extracted.pages:
+            fields["processing_status"] = "no_text_layer"
+            fields["text_layer_reason"] = (
+                "No recoverable text layer — the document is most likely scanned or image-only and needs OCR."
+            )
+            fields.setdefault("text_page_ratio", round(extracted.text_page_ratio, 4))
+            fields.setdefault("chars_per_page", round(extracted.avg_chars_per_page, 1))
+            logger.info(
+                "Document has no usable text layer (format=%s, pages=%s, text_page_ratio=%.2f, chars_per_page=%.1f)",
+                extracted.format,
+                extracted.page_count,
+                extracted.text_page_ratio,
+                extracted.avg_chars_per_page,
+            )
+        else:
+            fields["processing_status"] = "empty_document"
+            fields["text_layer_reason"] = "The document contains no extractable text or table content."
+            logger.info("Document has no extractable content (format=%s)", extracted.format)
+        return fields
 
     def _format_fields(self, extracted: ExtractedDocument) -> Dict[str, Any]:
         """Per-format fields that are not part of the canonical result."""
@@ -115,13 +165,18 @@ class DocumentPipeline(BasePipeline):
             fields["paragraph_count"] = len([line for line in extracted.text.split("\n") if line.strip()])
         return fields
 
-    def _confidence_for(self, extracted: ExtractedDocument) -> float:
-        """Plain text decodes exactly; parsed formats keep the historical score.
+    def _confidence_for(self, extracted: ExtractedDocument, usable_content: bool) -> float:
+        """Score what was recovered, not merely that parsing did not raise.
 
-        PDF table extraction is still unimplemented upstream (#13895), so this
-        score continues to describe text recovery only — it is not a claim about
-        the ``tables`` field.
+        A document with no usable text layer *and* no tables scores 0.0:
+        previously an image-only PDF returned 0.95 with an empty
+        ``extracted_text``, which asserted the document was blank rather than
+        unread (#13884). A DOCX whose content is entirely a table still scores
+        like a success — its data is real, it just lives in ``tables`` rather
+        than ``extracted_text``.
         """
+        if not usable_content:
+            return 0.0
         return 1.0 if extracted.format == "text" else 0.95
 
     # ------------------------------------------------------------------
