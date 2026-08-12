@@ -109,6 +109,69 @@ echo \"\$AUTOBOT_BACKEND_HOST:\$AUTOBOT_REDIS_HOST\"
 ")
 check ".env override wins; unset var keeps SSOT default" "$out" "10.0.0.5:127.0.0.1"
 
+# --- :? guards must survive the library sourcing over them (#14041 review) -
+# bootstrap-slm.sh:406 (# 2224) deliberately aborts if AUTOBOT_REDIS_HOST is
+# unset, because it bakes the value into a REMOTE node's .env -- a loopback
+# default there silently points a distributed Redis at the wrong host. The
+# library now supplies that default at source time, so the guard must read
+# from a value captured BEFORE the source, not the variable the library just
+# populated. This reproduces bootstrap-slm.sh's own capture-then-guard idiom
+# directly (see :17-29 and :415) rather than re-describing it, so a future
+# edit that drops the capture trips this test.
+# Reads the ACTUAL capture and guard lines out of bootstrap-slm.sh rather than
+# reproducing the idiom by hand, so a future edit that drops the capture (or
+# points the guard back at the raw, library-populated AUTOBOT_REDIS_HOST) trips
+# this test instead of silently reintroducing #14041's regression.
+BOOTSTRAP="${REPO_ROOT}/autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh"
+capture_line=$(grep -m1 '^_OPERATOR_REDIS_HOST=' "$BOOTSTRAP")
+guard_line=$(grep -m1 'REDIS_HOST=\${_OPERATOR_REDIS_HOST:?' "$BOOTSTRAP")
+if [ -z "$capture_line" ] || [ -z "$guard_line" ]; then
+    echo "FAIL: bootstrap-slm.sh no longer has the capture-before-source guard this test expects (capture=[$capture_line] guard=[$guard_line])"
+    fail=$((fail + 1))
+else
+    out=$(bash -c "
+unset AUTOBOT_REDIS_HOST
+$capture_line
+source '$LIB'
+$guard_line
+echo unreachable
+" 2>/dev/null)
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ "$out" != "unreachable" ]; then
+        echo "PASS: bootstrap-slm.sh's :? guard still fires when operator never set AUTOBOT_REDIS_HOST"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: bootstrap-slm.sh's :? guard did not fire -- expected non-zero exit and no output, got rc=$rc out=[$out]"
+        fail=$((fail + 1))
+    fi
+fi
+
+out=$(bash -c "
+unset AUTOBOT_REDIS_HOST
+source '$LIB'
+REDIS_HOST=\${AUTOBOT_REDIS_HOST:?unset}
+echo \"\$REDIS_HOST\"
+" 2>/dev/null)
+check "REGRESSION CHECK: guarding the RAW (post-source) var must NOT fire -- proves why capture-before-source is required" "$out" "127.0.0.1"
+
+# --- library warns instead of killing a set -e caller on a broken .env -----
+tmp_root2="$(mktemp -d)"
+printf 'AUTOBOT_BACKEND_HOST=1.2.3.4\nBROKEN=$(exit 7)\n' > "$tmp_root2/.env"
+stderr_file="$(mktemp)"
+out=$(bash -c "
+set -e
+export PROJECT_ROOT='$tmp_root2'
+source '$LIB'
+echo \"survived:\$AUTOBOT_BACKEND_HOST:\$AUTOBOT_REDIS_HOST\"
+" 2>"$stderr_file")
+stderr_out=$(cat "$stderr_file" 2>/dev/null); rm -f "$stderr_file"
+check "broken .env: set -e caller survives (does not die silently)" "$out" "survived:1.2.3.4:127.0.0.1"
+case "$stderr_out" in
+    *"WARNING"*) echo "PASS: broken .env produces a stderr warning"; pass=$((pass + 1)) ;;
+    *) echo "FAIL: broken .env produced no stderr warning -- got: $stderr_out"; fail=$((fail + 1)) ;;
+esac
+rm -rf "$tmp_root2"
+
 # --- Guard: no tracked file may regrow the non-`autobot-` path (#14041) ----
 # 23 tracked shell scripts once sourced $_PROJECT_ROOT/infrastructure/... (a
 # wrong directory segment -- this repo has no top-level infrastructure/, only

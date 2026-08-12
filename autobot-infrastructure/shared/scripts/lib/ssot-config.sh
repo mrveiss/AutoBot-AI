@@ -69,11 +69,21 @@ export PROJECT_ROOT
 #    around a plain source, so every KEY=VALUE line becomes an exported var.
 #    A missing .env (dev checkout with no deployment configured) is normal --
 #    the defaults below cover that case.
+#
+#    Guarded, not bare: an ordinary authoring mistake in .env (an unescaped
+#    $(...) or backtick) executes as a command substitution and can fail. A
+#    bare `source` here would propagate that failure to a `set -e` caller and
+#    kill it with NO output (stderr was being discarded) -- the worst outcome
+#    for something like vm-management/status-all-vms.sh, a health-check
+#    script. `if ! source ...` catches the failure so `set -e` never sees an
+#    uncaught error, and a message goes to stderr either way.
 # ---------------------------------------------------------------------------
 if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a
     # shellcheck source=/dev/null
-    source "${PROJECT_ROOT}/.env" 2>/dev/null
+    if ! source "${PROJECT_ROOT}/.env"; then
+        echo "ssot-config.sh: WARNING: ${PROJECT_ROOT}/.env did not source cleanly (see the error above this line) -- continuing with whatever it set before failing, plus SSOT defaults for the rest" >&2
+    fi
     set +a
 fi
 

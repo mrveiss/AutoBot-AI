@@ -96,13 +96,17 @@ Two more single-script special cases, found while enumerating:
 
 ## Divergence table (Step 1 + Step 2)
 
-One row per distinct `${AUTOBOT_VAR:-literal}` pair found across the 56 scripts (30
-distinct pairs; several var names repeat the same literal across many files — see
-"Files" for the fan-out). SSOT column is `autobot_shared/ssot_config.py`'s Pydantic
-field default for that alias, which is what a `.env`-less deployment gets from the
-Python side too — the shell library mirrors it so both languages agree on the same
-unconfigured default. Ports/paths where the two agree are the safe majority; the
-`DIFFERS` rows are what changes on the day this lands.
+One row per distinct `${VAR:-literal}` pair found across the 56 scripts: **31 total**
+— 30 distinct `${AUTOBOT_VAR:-literal}` pairs plus the one non-`AUTOBOT_`-prefixed
+`${NETWORK_SUBNET:-}` pair (several var names repeat the same literal across many
+files — see "Files" for the fan-out; the table below bundles the four
+`AUTOBOT_VNC_*` names sharing one no-SSOT explanation into a single row for
+readability, so it has fewer rows than 31 while still covering all 31 pairs). SSOT
+column is `autobot_shared/ssot_config.py`'s Pydantic field default for that alias,
+which is what a `.env`-less deployment gets from the Python side too — the shell
+library mirrors it so both languages agree on the same unconfigured default.
+Ports/paths where the two agree are the safe majority; the `DIFFERS` rows are what
+changes on the day this lands.
 
 | Variable | Script literal | SSOT value | Differs? | Note |
 |---|---|---|---|---|
@@ -131,7 +135,7 @@ unconfigured default. Ports/paths where the two agree are the safe majority; the
 | `AUTOBOT_SSH_KEY` | `$HOME/.ssh/autobot_key` | **no field under this name** — canonical is `ssh_key_path` / alias `AUTOBOT_SSH_KEY_PATH` (legacy `SLM_SSH_KEY`), default `/etc/autobot/ssh/autobot_key` (#12429) | n/a — name mismatch, not a value mismatch | Library does **not** export `AUTOBOT_SSH_KEY` (would require inventing a name mapping the enumeration wasn't asked to decide). Literal stays exactly as today — safe. Flagged as a follow-up. |
 | `AUTOBOT_SSH_USER` | `autobot` | no field anywhere in `ssot_config.py`, `.env.example`, or the Ansible `group_vars` | n/a — no SSOT source | Library does not export it; literal unchanged. Follow-up candidate. |
 | `AUTOBOT_SLM_NODE_ID` | `00-SLM-Manager` | no field anywhere | n/a — no SSOT source | Same — unchanged, follow-up candidate. |
-| `AUTOBOT_VNC_SERVER_HOST` / `AUTOBOT_VNC_SERVER_PORT` / `AUTOBOT_VNC_WEB_HOST` / `AUTOBOT_VNC_WEB_PORT` | `localhost` / `5902` / `localhost` / `6080` | no fields under these names — only `AUTOBOT_VNC_PORT` (6080) exists in the SSOT | n/a — no SSOT source (4 separate unmodeled names, one probably a duplicate of `AUTOBOT_VNC_PORT`) | Library does not export these four; literals unchanged. Follow-up candidate — the four names look like an un-consolidated fork of `AUTOBOT_VNC_PORT` (`network/network-config.sh` is the only script that reads all four). |
+| `AUTOBOT_VNC_SERVER_HOST` / `AUTOBOT_VNC_SERVER_PORT` / `AUTOBOT_VNC_WEB_HOST` / `AUTOBOT_VNC_WEB_PORT` | `localhost` / `5902` / `localhost` / `6080` | no fields under these exact names. `AUTOBOT_VNC_PORT` (6080, `PortConfig`) is the closest match for the two `*_PORT` names; `AUTOBOT_VNC_HOST` (`ssot_config.py:1853`, `MiscConfig`, default `""`) is a closer name-match for the two `*_HOST` names than anything reported in the first pass of this doc | n/a — no SSOT source under these exact names (5 unmodeled/mismatched names total) | Library does not export any of the four; literals unchanged, behaviour provably identical. Follow-up (#14173, updated) — looks like an un-consolidated fork of `AUTOBOT_VNC_PORT` and `AUTOBOT_VNC_HOST` into four names (`network/network-config.sh` is the only script that reads all four). |
 
 **"Cosmetic" here means**: `localhost` and `127.0.0.1` both resolve to the loopback
 interface, so on a default single-host install there is no *observable* difference —
@@ -148,33 +152,47 @@ library (see above) — building it changes nothing about their runtime behaviou
 
 ## Recommendation: no staging needed
 
-Of the 30 distinct `${VAR:-literal}` pairs enumerated:
+Of the **31** distinct `${VAR:-literal}` pairs enumerated (30 `${AUTOBOT_VAR:-literal}`
++ 1 `${NETWORK_SUBNET:-}`), bucketed so the count reconciles against the table above:
 
-- **19 already match the SSOT exactly** (all ports, the Redis DB indices, the Redis
-  password, `NETWORK_SUBNET`, `AUTOBOT_NOVNC_PATH`).
-- **9 differ only in `localhost` vs `127.0.0.1`** — same effective host on every install
-  that has not overridden it, and the whole reason for this change is to let overrides
-  (a real `.env`) reach these scripts for the first time on distributed installs, where
-  today they cannot.
+- **14 already match the SSOT exactly** — 13 `AUTOBOT_` pairs (every port,
+  `AUTOBOT_NOVNC_PATH`, the Redis DB indices and password, plus the `127.0.0.1`-literal
+  variant of `AUTOBOT_BACKEND_HOST` and `AUTOBOT_OLLAMA_HOST`) + `NETWORK_SUBNET`.
+- **9 differ only in `localhost` vs `127.0.0.1`** (`AUTOBOT_AI_STACK_HOST`, the
+  `localhost`-literal variant of `AUTOBOT_BACKEND_HOST`, `AUTOBOT_BROWSER_SERVICE_HOST`,
+  `AUTOBOT_FRONTEND_HOST`, `AUTOBOT_NPU_WORKER_HOST`, the `localhost`-literal variant of
+  `AUTOBOT_OLLAMA_HOST`, `AUTOBOT_REDIS_HOST`, `AUTOBOT_SLM_HOST`, and
+  `AUTOBOT_BACKEND_URL`) — same effective host on every install that has not overridden
+  it, and the whole reason for this change is to let overrides (a real `.env`) reach
+  these scripts for the first time on distributed installs, where today they cannot.
 - **1 differs for real**: `AUTOBOT_BROWSER_SERVICE_PORT` (`3000` → `9001`), affecting 7
   scripts that currently health-check Grafana's port by accident. This is a **fix**, not
   a regression — landing the library corrects a wrong port a diagnostic script has always
   used, in scripts whose job is exactly to report service health accurately.
-- **7 pairs across 4 var families have no SSOT source at all** (`AUTOBOT_SSH_KEY`,
-  `AUTOBOT_SSH_USER`, `AUTOBOT_SLM_NODE_ID`, the four `AUTOBOT_VNC_*` names) — the
-  library does not export them, so these literals are provably unchanged by this PR.
+- **7 pairs across 5 var families have no SSOT source under their exact name**
+  (`AUTOBOT_SSH_KEY`, `AUTOBOT_SSH_USER`, `AUTOBOT_SLM_NODE_ID`, and the four
+  `AUTOBOT_VNC_*` names — two of which, `_SERVER_HOST`/`_WEB_HOST`, have a closer
+  name-match in `AUTOBOT_VNC_HOST`, still not exported) — the library does not export
+  any of these, so these 7 literals are provably unchanged by this PR.
 
-Given that split — no case where a script silently starts pointing somewhere materially
-different and wrong — this lands as a single change, not staged. The one real-value
-divergence (`AUTOBOT_BROWSER_SERVICE_PORT`) is a correction the scripts have needed
-since #4052 renumbered the port away from Grafana's.
+14 + 9 + 1 + 7 = 31. Given that split — no case where a script silently starts pointing
+somewhere materially different and wrong — this lands as a single change, not staged.
+The one real-value divergence (`AUTOBOT_BROWSER_SERVICE_PORT`) is a correction the
+scripts have needed since #4052 renumbered the port away from Grafana's.
 
 ## Follow-up (filed separately, not blocking this PR)
 
 - `AUTOBOT_SSH_KEY` (script convention) vs `AUTOBOT_SSH_KEY_PATH`/`SLM_SSH_KEY` (SSOT,
   #12429) is a naming split across the same concept — deciding whether to alias or
   rename is a scope call for the owner, not something to invent silently here.
-- `AUTOBOT_SSH_USER`, `AUTOBOT_SLM_NODE_ID`, and the four `AUTOBOT_VNC_*` names have no
-  SSOT entry anywhere (Python, `.env.example`, or Ansible `group_vars`) — either they
-  should be added to `autobot_shared/ssot_config.py`, or the scripts should stop
-  presenting them as SSOT-backed.
+- `AUTOBOT_SSH_USER` and `AUTOBOT_SLM_NODE_ID` have no SSOT entry anywhere (Python,
+  `.env.example`, or Ansible `group_vars`) — either they should be added to
+  `autobot_shared/ssot_config.py`, or the scripts should stop presenting them as
+  SSOT-backed.
+- The four `AUTOBOT_VNC_*` names have no field under their exact names, but two closer
+  candidates already exist and are just as unused by these scripts:
+  `AUTOBOT_VNC_PORT` (`PortConfig`, 6080) and `AUTOBOT_VNC_HOST`
+  (`ssot_config.py:1853`, `MiscConfig`, default `""`). Behaviour is unchanged either way
+  (the library still exports neither the four script-side names nor rewires them to the
+  two SSOT names), but this narrows the follow-up to "consolidate four names down to
+  two that already exist" rather than "invent new SSOT fields".
