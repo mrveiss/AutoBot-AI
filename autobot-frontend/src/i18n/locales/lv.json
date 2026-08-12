@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "Kontaktpersonas nav pakļautības hierarhijas daļa — tām nav vadītāja, budžeta vai sirdspukstu.",
       "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka."
     },
+    "executorRollup": {
+      "title": "Izpildītāju kopsavilkums",
+      "totalItems": "{count} darba vienības",
+      "unavailable": "Neizdevās ielādēt izpildītāju kopsavilkumu. Tā ir ielādes problēma, nevis nulle darba vienību.",
+      "empty": "Vēl nav darba vienību.",
+      "statusColumn": "Statuss",
+      "class": {
+        "user": "Persona",
+        "agent": "MI aģents",
+        "unassigned": "Nav piešķirts"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Apzīmējumi",
       "colourBy": "Krāsot pēc",

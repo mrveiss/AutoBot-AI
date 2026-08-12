@@ -27,6 +27,9 @@ import {
   groupPeopleByTeam,
 } from '@/composables/llc/orgPeople'
 import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
+import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
+import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
+import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -223,6 +226,35 @@ async function fetchTree() {
   }
 }
 
+// #13942: the executor rollup panel's own state — independent of `tree`
+// (people/agent nodes), since it counts work items, not org-chart nodes.
+const executorRollupMatrix = ref<ExecutorRollupMatrix>(buildExecutorRollupMatrix([]))
+const executorRollupLoading = ref(false)
+// A source that did not answer must never render as "zero work items"
+// (#14064's family, #14104's `peopleUnavailable` precedent).
+const executorRollupUnavailable = ref(false)
+
+async function loadExecutorRollup(): Promise<void> {
+  executorRollupLoading.value = true
+  executorRollupUnavailable.value = false
+  try {
+    const cid = await resolveCompanyId()
+    if (!cid) {
+      executorRollupMatrix.value = buildExecutorRollupMatrix([])
+      return
+    }
+    const resp = await api.get<{ cells: ExecutorRollupCell[] }>(
+      `/api/llc/companies/${cid}/work-items/executor-rollup`,
+    )
+    executorRollupMatrix.value = buildExecutorRollupMatrix(resp?.cells ?? [])
+  } catch (err: unknown) {
+    logger.error('Failed to fetch executor rollup:', err)
+    executorRollupUnavailable.value = true
+  } finally {
+    executorRollupLoading.value = false
+  }
+}
+
 async function toggleAgentPause(node: OrgNode) {
   if (!companyId.value) return
   const willPause = node.status !== 'paused'
@@ -283,7 +315,11 @@ function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   if (node) node.position = position
 }
 
-onMounted(fetchTree)
+onMounted(() => {
+  void fetchTree()
+  // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
+  void loadExecutorRollup()
+})
 </script>
 
 <template>
@@ -327,6 +363,17 @@ onMounted(fetchTree)
       @close="showHire = false"
       @hired="fetchTree"
     />
+
+    <!-- #13942: the executor rollup panel — always visible, independent of the
+         tree/canvas/people view mode below, since it counts work items rather
+         than org-chart nodes. -->
+    <div class="mb-4">
+      <ExecutorRollupPanel
+        :matrix="executorRollupMatrix"
+        :loading="executorRollupLoading"
+        :unavailable="executorRollupUnavailable"
+      />
+    </div>
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
