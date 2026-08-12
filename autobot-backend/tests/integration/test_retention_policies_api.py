@@ -410,3 +410,39 @@ async def test_filter_by_user_id(test_client_admin, test_db_session):
     data = response.json()
     assert data["count"] == 1
     assert data["policies"][0]["user_id"] == user_id_1
+
+
+@pytest.mark.asyncio
+async def test_retention_settings_endpoint_is_reachable(test_client_admin):
+    """`GET /retention-settings` answers — the guard the lint hook cannot provide.
+
+    #14181 fixed this endpoint's decorators: `@with_error_handling` sat above
+    `@router.get`, so FastAPI registered the raw function and the error wrapper
+    never ran. But `with_error_handling` is a decorator *factory*, and the fix
+    is only correct when it is **called**:
+
+        @router.get(...)          correct order, correct call   -> 200
+        @with_error_handling()
+
+        @router.get(...)          correct order, MISSING parens -> 422
+        @with_error_handling
+
+    In the second arrangement FastAPI registers the factory's inner
+    `decorator`, whose signature is `(func)`, and parses `func` as a required
+    query parameter. `tools/lint/check_decorator_order.py` checks decorator
+    *order* only — that arrangement has the correct order, so the hook emits
+    nothing and the regression ships silently.
+
+    This test is that second guard: it fails with 422 the moment the parens go
+    missing again, which no lint rule in the repo would catch.
+    """
+    response = test_client_admin.get("/api/admin/retention-settings")
+
+    assert response.status_code == 200, (
+        "GET /retention-settings did not answer — a 422 here means "
+        "@with_error_handling lost its parentheses and FastAPI registered the "
+        f"factory's inner decorator: {response.text}"
+    )
+    body = response.json()
+    assert isinstance(body, dict), f"expected the declared Dict[str, Any] response model, got {type(body).__name__}"
+    assert "config" in body, f"the endpoint answered but not with its own payload: {body}"
