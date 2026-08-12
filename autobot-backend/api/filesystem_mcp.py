@@ -194,6 +194,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
+from constants.path_constants import PATH as LEGACY_DATA_ROOT
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = get_logger(__name__)
@@ -211,7 +212,7 @@ ALLOWED_DIRECTORIES = [
 # Maximum file size for read operations (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
-# Security Configuration: Excluded Subtrees (#14081)
+# Security Configuration: Excluded Subtrees (#14081, widened by #14124)
 #
 # Since #14050, an unset AUTOBOT_BASE_DIR (every dev checkout and CI runner)
 # resolves ALLOWED_DIRECTORIES to the whole git checkout, and the only gate on
@@ -225,17 +226,45 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 # configured -- including a deployment that legitimately points it at a
 # directory containing these.
 #
-# _EXCLUDED_FILE_PATHS are the canonical secrets-manager storage locations
-# (services/secrets_service.py, api/secrets.py, auth_middleware.py's durable
-# JWT keypair) -- all resolved from config.path.data_path so they track
-# wherever AUTOBOT_DATA_DIR actually points, not a hardcoded literal.
-_EXCLUDED_FILE_PATHS = [
-    config.path.data_path / "secrets.key",  # SecretsManager encryption key
-    config.path.data_path / "secrets.json",  # SecretsManager encrypted store
-    config.path.data_path / "secrets.db",  # SecretsService encrypted store
-    config.path.data_path / "service-keys",  # durable JWT RSA keypair (.pem)
+# #14124: the original exclusion listed four exact filenames
+# (secrets.key/json/db, service-keys/). That missed SQLite sidecars
+# (secrets.db-journal, secrets.db-wal), a store backup (secrets.json.bak),
+# and material that other subsystems write under the same data directory
+# without going through the secrets manager at all -- the SSO/SAML signing
+# key (security/enterprise/sso_integration.py) and, sharpest of all, a
+# *pickle* the threat-detection engine loads with pickle.load()
+# (security/enterprise/threat_detection/engine.py) -- a bridge write there is
+# arbitrary code execution, not disclosure. A filename denylist can't keep
+# up with sidecars, backups, and subsystems that don't exist yet.
+#
+# No production code path needs this LLM-facing bridge to reach anything
+# under the data directory: application state goes through purpose-built
+# APIs (workflow scheduler, KB ingestion), and the one user-facing
+# file-management feature (api/files.py) is already sandboxed to its own
+# root under a *separate* security boundary, not this bridge. So the whole
+# data-directory subtree is excluded rather than allowlisting individual
+# survivors.
+#
+# Two resolvers name the data directory in this codebase and are not
+# structurally guaranteed to agree: ssot_config's ``config.path.data_path``
+# (honours AUTOBOT_BASE_DIR/AUTOBOT_DATA_DIR) and the restored
+# ``constants.path_constants.PATH`` (derives the root from this source
+# file's on-disk location, ignoring both env vars). The exact paths this
+# issue names -- the SSO/SAML signing key (sso_integration.py) and the
+# threat-detection pickle (threat_detection/engine.py) -- both resolve
+# through the *second* one. #14110's own history is a warning here: its
+# first attempt excluded a location the real secrets store never wrote to
+# because the exclusion and the writer used different resolvers. Excluding
+# both roots (they coincide in the common case; a topology where a base/data
+# dir env var points somewhere other than the checkout is exactly where they
+# would not) closes that gap without depending on every current and future
+# caller picking the same one.
+_EXCLUDED_DIR_PATHS = [
+    config.path.data_path,  # SSOT resolver: secrets manager/service storage
+    LEGACY_DATA_ROOT.DATA_DIR,  # legacy resolver: SSO keys, threat-detection
+    # pickle, security policies, tool-output spill -- see call sites above
 ]
-_EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_FILE_PATHS]
+_EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_DIR_PATHS]
 
 # Committed, non-secret dotenv templates (review follow-up on #14081): a
 # ".env*" basename denylist alone also blocks these commonly-committed
@@ -246,7 +275,7 @@ _ENV_TEMPLATE_ALLOWLIST = frozenset({".env.example", ".env.sample", ".env.templa
 
 
 def _is_excluded_path(resolved: Path) -> bool:
-    """Refuse ``.git/``, ``.env*`` and secrets-manager storage (#14081).
+    """Refuse ``.git/``, ``.env*`` and the whole data directory (#14081, #14124).
 
     Checked against the *resolved* (symlink-followed, canonicalized) path so
     a symlink or an encoded traversal that lands inside an excluded subtree
@@ -300,7 +329,7 @@ def _resolve_allowed_path(path: str):
         raise ValueError("Path contains a backslash; use '/' as the separator")
     resolved = validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
     if _is_excluded_path(resolved):
-        raise ValueError("Path is within an excluded subtree (.git, .env, or secrets storage)")
+        raise ValueError("Path is within an excluded subtree (.git, .env, or the data directory)")
     return resolved
 
 
