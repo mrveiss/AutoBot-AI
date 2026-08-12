@@ -39,7 +39,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 
 # Import Pydantic models from dedicated module
 from knowledge.schemas import (
@@ -103,7 +103,7 @@ def _process_fact_metadata(metadata_str, fact_key, created_at) -> dict | None:
             "fact_id": metadata.get("fact_id", fact_key.split(":")[1]),
             "fact_key": fact_key,
             "created_at": created_at or "1970-01-01T00:00:00",
-            "category": metadata.get("category", "unknown"),
+            "category": metadata.get("category", CategoryDefaults.UNKNOWN),
             "title": metadata.get("title", "unknown"),
         }
     except json.JSONDecodeError:
@@ -948,7 +948,7 @@ def _build_orphan_fact_info(key, fact_data: dict, metadata: dict, source_session
         "fact_key": fact_key,
         "session_id": source_session_id,
         "content_preview": content[:200] + ("..." if len(content) > 200 else ""),
-        "category": metadata.get("category", "unknown"),
+        "category": metadata.get("category", CategoryDefaults.UNKNOWN),
         "created_at": metadata.get("created_at"),
         "important": metadata.get("important", False),
         "preserve": metadata.get("preserve", False),

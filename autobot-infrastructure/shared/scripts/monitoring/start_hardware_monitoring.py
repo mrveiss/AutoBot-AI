@@ -16,6 +16,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from autobot_shared.ssot_constants import CategoryDefaults
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -271,7 +273,7 @@ class HardwareMonitoringManager:
             for alert in alerts:
                 self.alerts_triggered += 1
                 severity = alert.get("severity", "unknown")
-                category = alert.get("category", "unknown")
+                category = alert.get("category", CategoryDefaults.UNKNOWN)
                 message = alert.get("message", "No message")
 
                 log_level = logging.CRITICAL if severity == "critical" else logging.WARNING

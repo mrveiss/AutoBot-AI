@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from events.bus import PersistStrategy, publish_event
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
@@ -47,7 +48,7 @@ def _build_basic_info_section(tool_info: Dict[str, Any], tool_name: str) -> str:
 BASIC INFORMATION:
 - Name: {tool_name}
 - Type: {tool_info.get('type', 'command-line tool')}
-- Category: {tool_info.get('category', 'general')}
+- Category: {tool_info.get('category', CategoryDefaults.GENERAL)}
 - Platform: {tool_info.get('platform', 'linux')}
 - Purpose: {tool_info.get('purpose', 'N/A')}"""
 
