@@ -325,15 +325,17 @@ async def test_executor_rollup_counts_only_the_requested_company(app, client, se
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
-    assert sum(cell["count"] for cell in body["cells"]) == 1, (
-        f"company B's work items leaked into company A's rollup: {body}"
-    )
+    assert (
+        sum(cell["count"] for cell in body["cells"]) == 1
+    ), f"company B's work items leaked into company A's rollup: {body}"
     # And specifically: none of company B's three buckets appear at all.
     assert {cell["executor_class"] for cell in body["cells"] if cell["count"]} == {AssigneeType.USER.value}
 
 
 @pytest.mark.asyncio
-async def test_executor_rollup_legacy_untyped_assignee_counts_as_unassigned(app, client, session_factory):  # noqa: ANN001
+async def test_executor_rollup_legacy_untyped_assignee_counts_as_unassigned(
+    app, client, session_factory
+):  # noqa: ANN001
     """The pre-#13937 row shape: an assignee id with no discriminator.
 
     `WorkItemService.create()` set no `assignee_type` before #13937, so rows
@@ -363,9 +365,7 @@ async def test_executor_rollup_legacy_untyped_assignee_counts_as_unassigned(app,
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
-    assert sum(cell["count"] for cell in body["cells"]) == 2, (
-        f"a legacy row fell out of every bucket: {body}"
-    )
+    assert sum(cell["count"] for cell in body["cells"]) == 2, f"a legacy row fell out of every bucket: {body}"
     counted = _cell_map(body["cells"])
     assert counted[("unassigned", WorkItemStatus.BACKLOG.value)] == 2
 
