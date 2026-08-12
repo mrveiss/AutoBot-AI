@@ -14,6 +14,7 @@ Provides automatic context window management:
 Builds on #8990 (token usage tracking) and #3770 (compression service).
 """
 
+import os
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -31,6 +32,10 @@ _SUMMARY_MARKER_KEY_PREFIX = "chat:summary_marker:"
 # Default thresholds (can be overridden)
 _DEFAULT_WARNING_THRESHOLD = 0.80  # 80%
 _DEFAULT_COMPRESS_THRESHOLD = 0.90  # 90%
+
+# How long to skip compaction after it fails, so a rate-limited provider costs
+# one attempt per window instead of one per turn (#14065 review).
+_SUMMARY_FAILURE_BACKOFF_SECONDS = int(os.getenv("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", "300"))
 
 
 class SessionTokenTracker:
@@ -160,6 +165,54 @@ class SessionTokenTracker:
         except Exception as e:
             logger.error("Failed to reset session %s: %s", session_id, e)
 
+    async def mark_summarization_failed(self, session_id: str) -> None:
+        """Back off compaction for this session after a failure (#14065 review).
+
+        Without this, a failing provider wedges the session permanently.
+        Compaction is awaited *inline* on the chat request path, under the
+        ``chat_timeout`` budget (``api/chat.py``), and the token tracker is
+        correctly left un-reset on failure — so fill never drops and every
+        subsequent turn spends the same time failing the same way, timing out a
+        turn whose answer was already generated and stored.
+
+        The marker bounds that to one attempt per backoff window. It is
+        deliberately best-effort: with Redis down the marker cannot be written,
+        and retrying every turn is the safer of the two failures.
+        """
+        redis = await self._ensure_redis()
+        if not redis:
+            return
+
+        try:
+            await redis.setex(f"{_SUMMARY_MARKER_KEY_PREFIX}{session_id}", _SUMMARY_FAILURE_BACKOFF_SECONDS, "failed")
+        except Exception as e:
+            logger.error("Failed to mark summarization failure for session %s: %s", session_id, e)
+
+    async def summarization_recently_failed(self, session_id: str) -> bool:
+        """True while the backoff window from a previous failure is still open."""
+        redis = await self._ensure_redis()
+        if not redis:
+            return False
+
+        try:
+            return bool(await redis.exists(f"{_SUMMARY_MARKER_KEY_PREFIX}{session_id}"))
+        except Exception as e:
+            logger.error("Failed to read summarization marker for session %s: %s", session_id, e)
+            return False
+
+
+def _message_text(msg: object) -> str:
+    """The text of a message, for token estimation, on any input (#14065 review).
+
+    ``estimate_fast`` needs a string. A non-dict entry or a non-string ``text``
+    (a provider emitting ``None``, an int, a content-part list) used to raise
+    here — after the token tracker had already been reset.
+    """
+    if not isinstance(msg, dict):
+        return ""
+    text = msg.get("text", "")
+    return text if isinstance(text, str) else ""
+
 
 def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     """Drop orphaned tool messages and dangling assistant tool_calls.
@@ -172,6 +225,14 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     cleaned: List[Dict] = []
     in_batch = False
     for m in msgs:
+        # #14065 review: this runs outside summarize_messages' try, so a
+        # non-dict entry here would escape as an AttributeError and 500 a turn
+        # whose answer was already generated and stored. Malformed history is
+        # data, not a programming error — skip the entry and keep compacting.
+        if not isinstance(m, dict):
+            logger.warning("Skipping non-dict message during tool sanitization: %r", type(m).__name__)
+            in_batch = False
+            continue
         role = m.get("role")
         if role == "tool":
             if in_batch:
@@ -295,7 +356,7 @@ class ConversationSummarizer:
         logger.info(
             "Generated summary for %d messages (%d → %d tokens est.)",
             len(messages),
-            sum(len(m.get("text", "")) for m in messages) // 4,
+            sum(len(_message_text(m)) for m in messages) // 4,
             len(summary) // 4,
         )
         return summary
@@ -307,11 +368,20 @@ class ConversationSummarizer:
         """
         lines = []
         for msg in messages:
+            if not isinstance(msg, dict):
+                continue
             role = msg.get("role") or msg.get("sender", "unknown")
             content = msg.get("content") or msg.get("text", "")
             if isinstance(content, list):
+                # #14065 review: a multimodal part with ``text: None`` is a shape
+                # providers genuinely emit, and ``" ".join`` raises TypeError on
+                # it. This method runs outside the try, so that escaped as a 500
+                # on the live chat path. Skip the part instead — a summary
+                # missing one empty fragment is not a failure.
                 content = " ".join(
-                    p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
+                    p["text"]
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str)
                 )
             if role and content:
                 lines.append(f"{role}: {content}")
@@ -432,30 +502,7 @@ class ContextOverflowProtection:
         if mode == "auto" and fill_percentage >= self.compress_threshold:
             # Trigger auto-summarization
             if messages:
-                try:
-                    summary = await self._create_summary(session_id, messages, model_name)
-                except SummarizationFailed as exc:
-                    # The history is intact and the tracker was not reset, so the
-                    # session is still over threshold and the next turn retries.
-                    # Reporting this instead of swallowing it is the point: a
-                    # caller that cannot see the failure keeps talking to an
-                    # agent that has silently forgotten half the work (#14065).
-                    result["summary_error"] = str(exc)
-                    logger.error(
-                        "Auto-summarization FAILED for session %s: %s — history left intact, "
-                        "token counter not reset",
-                        session_id,
-                        exc,
-                    )
-                else:
-                    if summary:
-                        result["summary_created"] = True
-                        result["summary_text"] = summary
-                        logger.info(
-                            "Auto-summarized session %s: %d messages compressed",
-                            session_id,
-                            len(messages),
-                        )
+                await self._attempt_summary(session_id, messages, model_name, result)
             else:
                 logger.warning(
                     "Auto-summarization triggered but no messages provided for session %s",
@@ -463,6 +510,43 @@ class ContextOverflowProtection:
                 )
 
         return result
+
+    async def _attempt_summary(
+        self,
+        session_id: str,
+        messages: List[Dict[str, Any]],
+        model_name: str,
+        result: Dict[str, Any],
+    ) -> None:
+        """Run compaction once and record the outcome into *result* (#14065)."""
+        if await self.tracker.summarization_recently_failed(session_id):
+            # Compaction is awaited inline under the chat request's wall-clock
+            # budget. Retrying every turn against a provider that is already
+            # rate-limiting turns a degraded session into a dead one.
+            result["summary_error"] = "summarization recently failed; backing off"
+            logger.warning("Skipping auto-summarization for session %s: recent failure, backing off", session_id)
+            return
+
+        try:
+            summary = await self._create_summary(session_id, messages, model_name)
+        except SummarizationFailed as exc:
+            # The history is intact and the tracker was not reset, so the session
+            # is still over threshold. Reporting this instead of swallowing it is
+            # the point: a caller that cannot see the failure keeps talking to an
+            # agent that has silently forgotten half the work (#14065).
+            result["summary_error"] = str(exc)
+            await self.tracker.mark_summarization_failed(session_id)
+            logger.error(
+                "Auto-summarization FAILED for session %s: %s — history left intact, token counter not reset",
+                session_id,
+                exc,
+            )
+            return
+
+        if summary:
+            result["summary_created"] = True
+            result["summary_text"] = summary
+            logger.info("Auto-summarized session %s: %d messages compressed", session_id, len(messages))
 
     async def _get_context_limit(self, model_name: str) -> int:
         """Get context window limit for a model.
@@ -500,16 +584,22 @@ class ContextOverflowProtection:
         # what makes the next turn retry instead of proceeding on a lie.
         summary = await self.summarizer.summarize_messages(messages_to_summarize, model_name)
 
+        # Estimate BEFORE resetting. #14065 review: this loop used to run after
+        # the reset, so a malformed entry in the second half raised with the
+        # counter already cleared and the paid-for summary discarded — the same
+        # counter-reset-without-a-delivered-summary shape this method exists to
+        # prevent, one layer down and not a SummarizationFailed, so the caller's
+        # handler did not cover it.
+        #
+        # #13694: estimate_fast rather than an inline `len(text) // 4` — these
+        # are the numbers the 80/90% trigger runs on until the next provider
+        # response supplies an authoritative count, so they use the shared path.
+        retained_tokens = [estimate_fast(_message_text(msg)) for msg in messages[split_point:]]
+
         # Reset token tracker (conversation now starts from summary)
         await self.tracker.reset_session(session_id)
-
-        # Re-add tokens for remaining messages.
-        # #13694: was an inline `len(text) // 4` — a fourth estimator beside the
-        # three that already existed. These are the numbers the 80/90% trigger
-        # runs on until the next provider response supplies an authoritative
-        # count, so they use the shared fast path.
-        for msg in messages[split_point:]:
-            await self.tracker.add_message_tokens(session_id, prompt_tokens=estimate_fast(msg.get("text", "")))
+        for tokens in retained_tokens:
+            await self.tracker.add_message_tokens(session_id, prompt_tokens=tokens)
 
         return summary
 

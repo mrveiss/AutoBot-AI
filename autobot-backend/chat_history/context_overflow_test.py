@@ -173,6 +173,35 @@ class TestConversationSummarizer:
                 await summarizer.summarize_messages(messages, "gpt-4")
 
     @pytest.mark.asyncio
+    async def test_malformed_history_degrades_instead_of_500ing_the_turn(self):
+        """#14065 review: these helpers run outside the try, so they must be total.
+
+        A multimodal part with ``text: None`` is a shape providers genuinely
+        emit, and a non-dict entry can reach here from trimmed history. Both
+        used to raise past ``check_and_protect``'s ``except SummarizationFailed``
+        and land on ``@with_error_handling`` as a 500 — for a turn whose answer
+        had already been generated and stored.
+        """
+        summarizer = ConversationSummarizer()
+        messages = [
+            "not a dict at all",
+            {"role": "user", "content": [{"type": "text", "text": None}]},
+            {"role": "user", "content": "a real one"},
+        ]
+
+        mock_response = MagicMock()
+        mock_response.content = "Summary."
+        mock_gateway = AsyncMock()
+        mock_gateway.chat_completion.return_value = mock_response
+
+        with patch.object(summarizer, "_get_gateway", return_value=mock_gateway):
+            summary = await summarizer.summarize_messages(messages, "gpt-4")
+
+        assert summary == "Summary."
+        prompt = mock_gateway.chat_completion.call_args.kwargs["messages"][0]["content"]
+        assert "a real one" in prompt, "the well-formed message must still reach the summarizer"
+
+    @pytest.mark.asyncio
     async def test_a_formatting_bug_is_not_relabelled_a_summarization_failure(self):
         """#14065: the ``except Exception`` used to cover the whole body.
 
@@ -241,6 +270,10 @@ class TestContextOverflowProtection:
                 "completion_tokens": 306,
                 "message_count": 12,
             }
+            # #14065 review: without this a bare AsyncMock reports "recently
+            # failed" (truthy default) and this test would silently exercise the
+            # backoff path instead of the success path it is named for.
+            mock_tracker.summarization_recently_failed.return_value = False
             protection.tracker = mock_tracker
 
             # Mock summarizer
@@ -293,6 +326,10 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
             "completion_tokens": 306,
             "message_count": 12,
         }
+        # Explicit rather than left to AsyncMock's truthy default: a bare mock
+        # would report "recently failed" and every test here would silently
+        # exercise the backoff path instead of the one it names.
+        mock_tracker.summarization_recently_failed.return_value = False
         protection.tracker = mock_tracker
         return protection, mock_tracker
 
@@ -350,6 +387,43 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
 
         assert status["summary_text"] == ""
         assert "were summarized to preserve context" not in status["summary_error"]
+
+    @pytest.mark.asyncio
+    async def test_a_recent_failure_backs_off_instead_of_retrying_every_turn(self):
+        """#14065 review: compaction is awaited inline under the chat timeout.
+
+        Retrying on every turn against a provider that is already rate-limiting
+        spends the whole request budget failing, times out a turn whose answer
+        was already generated and stored, and — because the tracker is correctly
+        not reset — never recovers. The backoff bounds it to one attempt per
+        window without giving up the "stay over threshold and retry later"
+        property the issue asks for.
+        """
+        protection, mock_tracker = self._protection_at_92_percent()
+        mock_tracker.summarization_recently_failed.return_value = True
+
+        mock_summarizer = AsyncMock()
+        protection.summarizer = mock_summarizer
+
+        with patch.object(protection, "_get_context_limit", return_value=1000):
+            status = await protection.check_and_protect(
+                session_id="session-1",
+                model_name="gpt-4",
+                usage={"prompt_tokens": 10, "completion_tokens": 5},
+                mode="auto",
+                messages=[{"sender": "user", "text": f"Message {i}"} for i in range(10)],
+            )
+
+        mock_summarizer.summarize_messages.assert_not_awaited()
+        assert status["summary_created"] is False
+        assert "backing off" in status["summary_error"]
+        mock_tracker.reset_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_failure_arms_the_backoff_marker(self):
+        _, mock_tracker = await self._run_with_failing_summarizer(SummarizationFailed("provider 429"))
+
+        mock_tracker.mark_summarization_failed.assert_awaited_once_with("session-1")
 
     @pytest.mark.asyncio
     async def test_the_failure_survives_the_integration_seam(self):
@@ -461,3 +535,38 @@ class TestSummarizationFailureIsNotReportedAsSuccess:
             prompt_tokens=100,
             completion_tokens=50,
         )
+
+
+class TestTheTrackerIsNeverResetWithoutADeliveredSummary:
+    """#14065 review finding 3 — the same defect, one layer below the fix.
+
+    ``_create_summary`` reset the tracker and *then* re-added tokens for the
+    retained half. A malformed entry in that second half raised ``AttributeError``
+    with the counter already cleared and the paid-for summary discarded — not a
+    ``SummarizationFailed``, so ``check_and_protect``'s handler did not cover it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_malformed_retained_message_does_not_clear_the_counter(self):
+        protection = ContextOverflowProtection()
+        mock_tracker = AsyncMock()
+        protection.tracker = mock_tracker
+
+        mock_summarizer = AsyncMock()
+        mock_summarizer.summarize_messages.return_value = "Summary."
+        protection.summarizer = mock_summarizer
+
+        # The malformed entries sit in the retained (second) half only, so the
+        # summarizer's own helpers are not what raises.
+        messages = [{"sender": "user", "text": f"m{i}"} for i in range(4)] + [
+            "not a dict",
+            {"sender": "user", "text": None},
+            {"sender": "user", "text": 12345},
+            {"sender": "user", "text": "fine"},
+        ]
+
+        summary = await protection._create_summary("session-1", messages, "gpt-4")
+
+        assert summary == "Summary."
+        mock_tracker.reset_session.assert_awaited_once_with("session-1")
+        assert mock_tracker.add_message_tokens.await_count == 4

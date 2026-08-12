@@ -821,6 +821,11 @@ async def process_chat_message(
             "fill_percentage": overflow_status.get("current_fill_percentage", 0),
             "total_tokens": overflow_status.get("total_tokens", 0),
             "context_limit": overflow_status.get("context_limit", 0),
+            # #14065: a failed compaction has to be visible to the user, not
+            # only to the log. Without this the session silently stays over
+            # threshold and the only symptom is the assistant contradicting
+            # earlier turns once history is eventually trimmed.
+            "compaction_failed": bool(overflow_status.get("summary_error")),
         }
 
     # Issue #10548: RAG grounding — query KB and attach structured citations by default.
