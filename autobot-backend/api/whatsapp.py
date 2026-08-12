@@ -12,6 +12,8 @@ Telegram bot adapter (``api/telegram_bot.py``):
     Meta servers ──▶ POST /whatsapp/webhook
                        ├─ verify X-Hub-Signature-256 (app secret)
                        ├─ flatten Meta envelope ──▶ GatewayManager.normalize_message
+                       │    └─ ingest governance (#14028): bot-self filter / dedup /
+                       │       recursion guard — None means dropped, already logged
                        ├─ process_chat_message (AutoBot chat pipeline)
                        └─ WhatsAppIntegration.send_text_message (reply)
 
@@ -237,7 +239,12 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
                 len(media_bytes),
             )
 
+        # Normalize, then through ingest governance (bot-self filter / dedup /
+        # recursion guard, #14028). None means the message was dropped; already
+        # logged why — skip routing without erroring the whole webhook delivery.
         unified_message = await gateway_manager.normalize_message(raw_message)
+        if unified_message is None:
+            continue
         await _route_to_chat_and_reply(request, unified_message, media_bytes, media_mime_type, media_id)
 
     return JSONResponse({"status": "ok"})

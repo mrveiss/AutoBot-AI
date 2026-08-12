@@ -275,6 +275,7 @@ class TestGatewayManager:
             "channel_id": "main",
             "message": "Test message",
             "timestamp": time.time(),
+            "message_id": "msg-web-1",
         }
 
         start = time.time()
@@ -556,6 +557,7 @@ class TestGatewayIntegration:
                 "channel_id": "main",
                 "message": "Web message",
                 "timestamp": time.time(),
+                "message_id": "msg-web-multi",
             },
             {
                 "platform": "slack",
@@ -583,3 +585,157 @@ class TestGatewayIntegration:
         assert results[0].platform == "web"
         assert results[1].platform == "slack"
         assert results[2].platform == "discord"
+
+
+class TestIngestGovernanceWiring:
+    """#14028: bot-self filter, dedup, and recursion guard at the shared
+    ``GatewayManager.normalize_message`` seam — the seam every registered
+    platform adapter goes through, so this covers all 9 without per-adapter
+    tests (a newly registered adapter inherits it for free)."""
+
+    @pytest.fixture(autouse=True)
+    def _fake_redis(self, monkeypatch):
+        """A real-enough async Redis stand-in so dedup exercises its happy path
+        instead of always fail-opening (conftest.py stubs the real client to
+        return None for every backend unit test)."""
+        from services.gateway import ingest_governor as governor_module
+
+        store: dict = {}
+
+        class _FakeAsyncRedis:
+            async def set(self, key, value, nx=False, ex=None):
+                if nx and key in store:
+                    return None
+                store[key] = value
+                return True
+
+        async def _get(*_a, **_k):
+            return _FakeAsyncRedis()
+
+        monkeypatch.setattr(governor_module, "get_async_redis_client", _get)
+        yield store
+
+    @pytest.mark.asyncio
+    async def test_governance_stage_actually_runs_on_the_live_seam(self, monkeypatch):
+        """Not a source-text substring check: wraps the real ``evaluate`` with a
+        spy, drives ``normalize_message`` for real, and asserts the stage was
+        actually invoked with this message's identity. Fails if a future
+        change stops calling it, even if normalize_message otherwise still
+        returns a message (#14028)."""
+        from services.gateway import ingest_governor as governor_module
+
+        real_evaluate = governor_module.ingest_governor.evaluate
+        calls = []
+
+        async def _spy(**kwargs):
+            calls.append(kwargs)
+            return await real_evaluate(**kwargs)
+
+        monkeypatch.setattr(governor_module.ingest_governor, "evaluate", _spy)
+
+        gateway = GatewayManager()
+        raw = {
+            "platform": "discord",
+            "author": {"id": "user1"},
+            "channel_id": "chanZ",
+            "content": "hello",
+            "timestamp": time.time(),
+            "id": "wire-check-1",
+        }
+        unified = await gateway.normalize_message(raw)
+
+        assert unified is not None
+        assert len(calls) == 1
+        assert calls[0]["platform"] == "discord"
+        assert calls[0]["message_id"] == "wire-check-1"
+        assert calls[0]["author_id"] == "user1"
+
+    @pytest.mark.asyncio
+    async def test_bot_self_authored_message_dropped_before_routing(self, monkeypatch):
+        """A synthetic echo of the bot's own outbound message never reaches
+        the caller as a routable message."""
+        monkeypatch.setenv("AUTOBOT_GATEWAY_BOT_ID_DISCORD", "the-bot")
+        gateway = GatewayManager()
+        raw = {
+            "platform": "discord",
+            "author": {"id": "the-bot"},
+            "channel_id": "chanA",
+            "content": "echo of my own post",
+            "timestamp": time.time(),
+            "id": "self-echo-1",
+        }
+
+        result = await gateway.normalize_message(raw)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_duplicate_message_id_produces_exactly_one_pass_through(self):
+        """The same (platform, channel, message_id) delivered twice yields
+        exactly one message that would start an agent turn."""
+        gateway = GatewayManager()
+        raw = {
+            "platform": "discord",
+            "author": {"id": "user1"},
+            "channel_id": "chanB",
+            "content": "hi",
+            "timestamp": time.time(),
+            "id": "dup-check-1",
+        }
+
+        first = await gateway.normalize_message(dict(raw))
+        second = await gateway.normalize_message(dict(raw))
+
+        assert first is not None
+        assert second is None
+
+    @pytest.mark.asyncio
+    async def test_chain_over_recursion_ceiling_is_halted(self):
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+
+        gateway = GatewayManager()
+        raw = {
+            "platform": "discord",
+            "author": {"id": "agent-a"},
+            "channel_id": "chanC",
+            "content": "forwarded",
+            "timestamp": time.time(),
+            "id": "chain-check-1",
+            "chain_depth": INGEST_MAX_CHAIN_DEPTH + 1,
+        }
+
+        result = await gateway.normalize_message(raw)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_normal_message_still_routes(self):
+        """The governance stage must not break the working path."""
+        gateway = GatewayManager()
+        raw = {
+            "platform": "discord",
+            "author": {"id": "a-human"},
+            "channel_id": "chanD",
+            "content": "hello there",
+            "timestamp": time.time(),
+            "id": "normal-check-1",
+        }
+
+        result = await gateway.normalize_message(raw)
+
+        assert result is not None
+        assert result.message == "hello there"
+
+    @pytest.mark.asyncio
+    async def test_missing_message_id_is_rejected_fail_closed(self):
+        gateway = GatewayManager()
+        raw = {
+            "platform": "web",
+            "user_id": "webuser",
+            "channel_id": "main",
+            "message": "no id supplied",
+            "timestamp": time.time(),
+        }
+
+        with pytest.raises(ValueError, match="missing required author id or message id"):
+            await gateway.normalize_message(raw)

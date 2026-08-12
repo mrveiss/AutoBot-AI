@@ -312,8 +312,13 @@ async def telegram_webhook(
         # Add platform identifier for gateway
         raw_message = {**update, "platform": "telegram"}
 
-        # Normalize message via TelegramAdapter
+        # Normalize message via TelegramAdapter, then through ingest governance
+        # (bot-self filter / dedup / recursion guard, #14028). None means the
+        # governance stage dropped it; already logged why.
         unified_message = await gateway_manager.normalize_message(raw_message)
+        if unified_message is None:
+            return JSONResponse({"status": "ok"})
+
         logger.info(
             "Received Telegram message from user %s in chat %s",
             unified_message.user_id,

@@ -22,6 +22,11 @@ class SlackAdapter(BaseAdapter):
     async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert Slack message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
+        # Slack's "ts" doubles as the message's unique id within a channel; fall
+        # back to it (then to "timestamp", which every raw payload already
+        # carries) when the caller doesn't supply an explicit "message_id" (#14028).
+        message_id = str(raw_message.get("message_id") or raw_message.get("ts") or raw_message.get("timestamp") or "")
+        metadata["message_id"] = message_id
         metadata["thread_ts"] = raw_message.get("thread_ts")
         metadata["is_thread_reply"] = bool(raw_message.get("thread_ts"))
 
@@ -32,6 +37,7 @@ class SlackAdapter(BaseAdapter):
             message=raw_message["text"],
             timestamp=float(raw_message.get("timestamp", 0)),
             metadata=metadata,
+            message_id=message_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:

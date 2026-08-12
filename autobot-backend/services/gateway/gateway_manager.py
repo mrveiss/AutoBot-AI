@@ -20,7 +20,7 @@ Features:
 """
 
 import time
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
@@ -38,6 +38,7 @@ from .adapters import (
     WebAdapter,
     WhatsAppAdapter,
 )
+from .ingest_governor import ingest_governor
 from .message_queue import MessageQueue
 
 logger = get_logger(__name__)
@@ -96,9 +97,12 @@ class GatewayManager:
         self.response_handlers[platform] = handler
         self.logger.info(f"Registered response handler for platform: {platform}")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> Optional[GatewayMessage]:
         """
-        Normalize a raw platform-specific message to unified schema.
+        Normalize a raw platform-specific message to unified schema, then run it
+        through the ingest governance stage (#14028): bot-self filter, dedup,
+        recursion guard. This is the single seam every registered adapter shares,
+        so a newly added adapter inherits governance without per-adapter wiring.
 
         Performance target: <50ms including validation and metadata extraction.
 
@@ -106,10 +110,14 @@ class GatewayManager:
             raw_message: Platform-specific message dict with 'platform' key
 
         Returns:
-            GatewayMessage in normalized format
+            GatewayMessage in normalized format, or None if the ingest governance
+            stage dropped the message (self-echo, duplicate delivery, or a chain
+            past the recursion ceiling — each already logged with its reason).
 
         Raises:
-            ValueError: If platform not supported or validation fails
+            ValueError: If platform not supported, validation fails, or the
+                adapter could not resolve a required author/message id
+                (fail-closed on an unknown payload shape, #14028).
         """
         start_time = time.time()
 
@@ -128,6 +136,22 @@ class GatewayManager:
 
         # Normalize to unified schema
         unified = await adapter.normalize_message(raw_message)
+
+        if not unified.user_id or not unified.message_id:
+            raise ValueError(
+                f"Rejecting {platform} message: missing required author id or message id "
+                "(fail-closed on unknown payload shape, #14028)"
+            )
+
+        verdict = await ingest_governor.evaluate(
+            platform=unified.platform,
+            channel_id=unified.channel_id,
+            message_id=unified.message_id,
+            author_id=unified.user_id,
+            chain_depth=int(unified.metadata.get("chain_depth", 0) or 0),
+        )
+        if not verdict.allowed:
+            return None
 
         elapsed_ms = (time.time() - start_time) * 1000
         if elapsed_ms > 50:
@@ -222,6 +246,9 @@ class GatewayManager:
         async def message_processor(raw_message: Dict[str, Any]) -> None:
             try:
                 unified = await self.normalize_message(raw_message)
+                if unified is None:
+                    # Ingest governance dropped this message; already logged why.
+                    return
                 await self.route_message(unified, agent_handler)
             except Exception as e:
                 self.logger.error(

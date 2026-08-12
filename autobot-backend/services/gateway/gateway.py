@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 
 from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
+from .ingest_governor import ingest_governor
 from .message_router import MessageRouter
 from .session_manager import SessionManager
 from .types import ChannelMessage, ChannelType, GatewaySession, MessageType
@@ -273,7 +274,10 @@ class Gateway:
             session_id: Session receiving the message
 
         Returns:
-            Parsed ChannelMessage or None
+            Parsed ChannelMessage, or None if the session/adapter is missing,
+            the rate limit is exceeded, or the ingest governance stage (#14028)
+            dropped the message (self-echo, duplicate delivery, or a chain past
+            the recursion ceiling — each already logged with its reason).
         """
         # Get session
         session = await self.session_manager.get_session(session_id)
@@ -302,9 +306,23 @@ class Gateway:
 
         # Parse message
         message = await adapter.receive_message(raw_data, session)
-        if message:
-            session.add_message(message_id=message.message_id)
+        if not message:
+            return None
 
+        # Ingest governance stage (#14028) — same guard as the platform-adapter
+        # seam (GatewayManager.normalize_message), applied here so this second
+        # ingest stack inherits it too rather than drifting.
+        verdict = await ingest_governor.evaluate(
+            platform=session.channel.value,
+            channel_id=session.session_id,
+            message_id=message.message_id,
+            author_id=session.user_id,
+            chain_depth=int(message.metadata.get("chain_depth", 0) or 0),
+        )
+        if not verdict.allowed:
+            return None
+
+        session.add_message(message_id=message.message_id)
         return message
 
     async def route_and_process(

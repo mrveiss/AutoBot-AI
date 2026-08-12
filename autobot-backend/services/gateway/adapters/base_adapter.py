@@ -20,7 +20,14 @@ logger = get_logger(__name__)
 
 @dataclass
 class GatewayMessage:
-    """Raw inbound platform payload normalized from all platform adapters."""
+    """Raw inbound platform payload normalized from all platform adapters.
+
+    ``message_id`` is mandatory (#14028): the ingest governance stage in
+    ``GatewayManager.normalize_message`` dedups on
+    ``(platform, channel_id, message_id)`` and rejects any message where the
+    adapter could not resolve one, fail-closed, rather than routing it with
+    the field silently absent.
+    """
 
     user_id: str
     platform: str  # 'web', 'slack', 'discord', 'whatsapp', 'teams'
@@ -28,6 +35,7 @@ class GatewayMessage:
     message: str
     timestamp: float
     metadata: Dict[str, Any]  # Platform-specific data
+    message_id: str = ""
 
 
 @dataclass
@@ -59,6 +67,13 @@ class BaseAdapter(ABC):
     async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """
         Convert platform-specific message to unified schema.
+
+        Both ``GatewayMessage.user_id`` (author id) and ``.message_id`` are
+        mandatory (#14028) — ``user_id`` always has been (a required, no-default
+        field every adapter already populates); ``message_id`` is the field this
+        contract adds so the ingest governance stage in
+        ``GatewayManager.normalize_message`` has a stable dedup key on every
+        platform, not just the ones that happened to carry one in metadata.
 
         Args:
             raw_message: Platform-specific message object
@@ -102,9 +117,15 @@ class BaseAdapter(ABC):
         Extract platform-specific metadata from message.
 
         Can be overridden by subclasses for richer metadata extraction.
+
+        ``chain_depth`` (#14028) carries the agent-to-agent recursion counter
+        forward from the raw payload so a chain that re-enters the Gateway
+        (e.g. one agent's reply routed back in as another agent's inbound
+        turn) keeps incrementing rather than resetting to 0 at each hop.
         """
         return {
             "raw_timestamp": raw_message.get("timestamp"),
             "thread_id": raw_message.get("thread_id"),
             "reply_to": raw_message.get("reply_to"),
+            "chain_depth": int(raw_message.get("chain_depth", 0) or 0),
         }

@@ -45,7 +45,11 @@ class SignalAdapter(BaseAdapter):
         source = envelope.get("source", "")
         group_info = data_message.get("groupInfo") or {}
 
+        # metadata["message_id"] keeps signal-cli's native numeric timestamp;
+        # the GatewayMessage.message_id dedup key (#14028) is a separate,
+        # always-string value.
         metadata["message_id"] = data_message.get("timestamp")
+        message_id = str(data_message.get("timestamp") or "")
         metadata["group_id"] = group_info.get("groupId")
         metadata["is_group"] = bool(group_info)
         metadata["quote"] = data_message.get("quote")
@@ -60,6 +64,7 @@ class SignalAdapter(BaseAdapter):
             message=data_message.get("message", ""),
             timestamp=float(data_message.get("timestamp", 0)) / 1000,
             metadata=metadata,
+            message_id=message_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
