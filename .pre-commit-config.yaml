@@ -218,6 +218,20 @@ repos:
       # machine that introduced it and only breaks a fresh checkout. It has
       # reached CI twice (#14151's sweep, #14162), and #14181 records the 16
       # hooks it found already dormant.
+      # #14198: 19 sites fell back to ${AUTOBOT_BROWSER_SERVICE_PORT:-3000} --
+      # Grafana's port, not the browser service's 9001 (#4052). Dead while
+      # lib/ssot-config.sh loads (it assigns the SSOT value with := first), and
+      # live the moment it does not, because every source line is `|| true`.
+      # Bans divergence, not the shape: 145 other fallbacks agree with the SSOT.
+      - id: port-fallbacks-match-ssot
+        name: Shell port fallbacks must agree with the SSOT (#14198)
+        entry: tools/lint/check_port_fallbacks_match_ssot.py
+        language: python
+        files: (\.sh|ssot_config\.py)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
+
       - id: hook-exec-bits
         name: Pre-commit hook entries must be tracked executable (#14171)
         entry: pipeline-scripts/check_hook_exec_bits.py

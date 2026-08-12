@@ -33,7 +33,7 @@ declare -A SERVICES=(
     ["NPU Worker VM"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
     ["Frontend VM"]="${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}"
     ["AI Stack VM"]="${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
-    ["Browser VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
+    ["Browser VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"
     ["Ollama (Local)"]="${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}/api/tags"
 )
 
@@ -66,7 +66,7 @@ echo "  Frontend: http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_
 echo "  Redis Insight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
 echo "  AI Stack: http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}"
 echo "  NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
-echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 echo "  Ollama: http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}"
 echo "  VNC Desktop: http://${AUTOBOT_BACKEND_HOST:-127.0.0.1}:${AUTOBOT_VNC_PORT:-6080}"
 
