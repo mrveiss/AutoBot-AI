@@ -55,10 +55,32 @@ VIOLATIONS=0
 # Normalize a line via lib/strip-significant.awk — see that file for the
 # per-language rules and the keep_comment contract. `sq` is passed in rather
 # than embedded so this invocation never has to quote a literal single quote.
+# Deliberately does NOT try to `exit` here on awk failure: every call site
+# captures this function's output via command substitution, which runs it in
+# a SUBSHELL — an exit inside would only end that subshell, silently
+# returning empty output to the caller instead of the intended hard stop.
+# The actual enforcement is _self_test_strip_significant below.
 _strip_significant() {
     local lang="$1" keep_comment="$2" line="$3"
     awk -v lang="$lang" -v keep_comment="$keep_comment" -v sq="'" \
         -f "$SCRIPT_DIR/lib/strip-significant.awk" <<< "$line"
+}
+
+# One-shot startup check (#14051 review round 3, finding 4): a missing or
+# unparseable strip-significant.awk must not read as "line is empty, nothing
+# matches" — a silent fail-OPEN that would make every check pass. Runs
+# directly from main() (not subshelled), so its own `exit 2` on failure
+# actually terminates the script — unlike a failure inside _strip_significant
+# itself, see above. Covers the case reproduced in review: the lib file
+# missing or containing invalid awk, both persistent for the whole run.
+_self_test_strip_significant() {
+    local result
+    result=$(_strip_significant py 1 'print("x")')
+    if [ "$result" != 'print()' ]; then
+        echo "FATAL: strip-significant.awk self-test failed (got: '${result}')." >&2
+        echo "  Check that lib/strip-significant.awk exists and is parseable by awk." >&2
+        exit 2
+    fi
 }
 
 _strip_py_for_balance() { _strip_significant py 0 "$1"; }
@@ -78,19 +100,26 @@ _paren_balance() {
 
 # Bounded forward scan: a print(/console.*( call that reads as still-open at
 # the end of the matched line may close (and carry its noqa) several lines
-# later. Balance is tracked on NORMALIZED text so a comment's or a regex
-# literal's stray '(' cannot hold the window open past the real closing
-# paren (#14051 review round 2). Stops at the first line where balance
-# returns to zero — never accepts a suppression past where the call actually
-# closes — and is capped so a line the strip still can't balance (should not
-# happen post-fix, kept as a fail-closed backstop) doesn't scan to EOF.
+# later. A suppression is accepted ONLY on a line where the running balance
+# actually reaches zero on THAT line — i.e. only the call's true closing
+# line, matching the "opening line or closing-paren line" contract in this
+# file's header comment (#14051 review round 3, finding 3: a noqa found on
+# an INTERMEDIATE line — one the call is still open past, even if a
+# tokenizer gap misjudged that — must never suppress; this is a second,
+# independent layer under the normalization fix, not a replacement for it —
+# a Python triple-quoted argument or a TS '!'/'++'/'--' before a division
+# can still fool the balance count, but can no longer reach an unrelated
+# noqa several lines down, because no line's noqa is even inspected until
+# the call is confirmed closed).
 #
-# Populates LAST_CALL_CLOSE_LINE (1-based, out-parameter): the line the
-# suppression was found on, the line the call's parens actually balanced on,
-# or the matched line itself if neither happened — used by the caller to
-# report a line RANGE for multi-line violations. Without the range, deleting
-# a closing-line noqa left the CI wrapper's added-line scoping blind to it,
-# since the reported (opening) line never changed (#14051 review finding 4).
+# Populates LAST_CALL_CLOSE_LINE (1-based, out-parameter): the line the call
+# closed and was found suppressed on. If the scan exits WITHOUT the balance
+# ever reaching zero (bound hit, or EOF), it is set to the LAST line
+# actually scanned — not left at the opening line — so the caller reports a
+# too-WIDE range rather than a too-NARROW one. A single-line (opening-line)
+# key there was invisible to the CI wrapper's added-line scoping when only
+# the true closing line was edited (#14051 review finding 4 — round 1's
+# fix for this collapsed back to a single line exactly on this path).
 MULTILINE_NOQA_SCAN_LIMIT=20
 LAST_CALL_CLOSE_LINE=0
 
@@ -109,16 +138,16 @@ suppressed_in_multiline_call() {
     local scanned=0 j="$next_idx" total="${#_lines_ref[@]}"
     while [ "$balance" -gt 0 ] && [ "$j" -lt "$total" ] && [ "$scanned" -lt "$MULTILINE_NOQA_SCAN_LIMIT" ]; do
         local candidate="${_lines_ref[$j]}" candidate_line=$((j + 1))
-        if "$noqa_fn" "$candidate" | grep -qE "$noqa_regex"; then
-            LAST_CALL_CLOSE_LINE="$candidate_line"
-            return 0
-        fi
         balance=$((balance + $(_paren_balance "$("$balance_fn" "$candidate")")))
-        [ "$balance" -le 0 ] && LAST_CALL_CLOSE_LINE="$candidate_line"
+        if [ "$balance" -le 0 ]; then
+            LAST_CALL_CLOSE_LINE="$candidate_line"
+            "$noqa_fn" "$candidate" | grep -qE "$noqa_regex" && return 0
+        fi
         j=$((j + 1))
         scanned=$((scanned + 1))
     done
 
+    [ "$balance" -gt 0 ] && LAST_CALL_CLOSE_LINE="$j"
     return 1
 }
 
@@ -214,6 +243,8 @@ check_ts_console() {
 }
 
 main() {
+    _self_test_strip_significant
+
     echo -e "${BOLD}${CYAN}Pre-commit: No print()/console.* in Production Code${NC}"
     echo "Issue #1082 - Logging Standard Enforcement"
     echo "================================================"

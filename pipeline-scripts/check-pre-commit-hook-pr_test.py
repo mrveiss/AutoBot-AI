@@ -18,6 +18,7 @@ the wrapper with BASE_SHA/HEAD_SHA pointing at it.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -458,9 +459,12 @@ class TestMultilineScanDoesNotOverreach:
     lines. Wherever raw parens diverged from real syntax — a trailing
     comment's stray '(', a regex literal, a noqa-shaped string of characters
     inside a string ARGUMENT — the window stayed open past the real closing
-    paren and could accept an unrelated noqa or hide a live violation. Every
-    case here failed (exit 0 — wrongly suppressed) against the hook at
-    63e957e2d and must fail (exit 1) here.
+    paren and could accept an unrelated noqa or hide a live violation. Most
+    cases here failed (exit 0 — wrongly suppressed) against the hook at
+    63e957e2d and must fail (exit 1) here. Exception:
+    test_scan_bound_fails_closed guards MULTILINE_NOQA_SCAN_LIMIT itself
+    (already correct in round 1, not a round-2 regression) — see its own
+    docstring.
     """
 
     def test_unrelated_noqa_below_does_not_suppress_backtick_call(self, tmp_path: Path) -> None:
@@ -515,10 +519,137 @@ class TestMultilineScanDoesNotOverreach:
 
     def test_scan_bound_fails_closed(self, tmp_path: Path) -> None:
         """A call that never resolves within the bound must still fail, not
-        read as suppressed just because the window ran out."""
+        read as suppressed just because the window ran out.
+
+        NOT a round-2 regression case, unlike its siblings in this class:
+        MULTILINE_NOQA_SCAN_LIMIT existed since round 1, and this property
+        already held against the hook at 63e957e2d. This test guards the
+        bound itself — it goes red if MULTILINE_NOQA_SCAN_LIMIT is raised
+        past 25 (verified by hand: raising it to 1000 flips this to a
+        false-suppressed exit 0), not against round 2's fixes."""
         lines = ["print("] + [f"    arg{i}," for i in range(25)] + [")  # noqa: print"]
         (tmp_path / "m.py").write_text("\n".join(lines) + "\n", encoding="utf-8")
         result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
+
+
+@pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
+class TestVueAttributeQuotesAreNotStrings:
+    """#14051 code review round 3, finding 1: `"` inside a .vue <template> or
+    a Vue template embedded as a backtick string (a .stories.ts render())
+    delimits an HTML ATTRIBUTE, not a JS string. The generic tokenizer built
+    for TS/JS syntax was eating the whole attribute body, hiding a live
+    console.* call inside it — a regression against BASE (unscoped, no
+    stripping at all), which caught these. There was no .vue-shaped case in
+    the suite at all before this.
+    """
+
+    def test_inline_click_handler_in_vue_template(self, tmp_path: Path) -> None:
+        (tmp_path / "m.vue").write_text(
+            '<template>\n  <button @click="console.log(x)">Go</button>\n</template>\n', encoding="utf-8"
+        )
+        result = _run_hook(tmp_path, "m.vue")
+        assert result.returncode == 1, result.stdout
+
+    def test_inline_arrow_handler_in_vue_template(self, tmp_path: Path) -> None:
+        (tmp_path / "m.vue").write_text(
+            '<template>\n  <button :on="() => console.warn(1)">Go</button>\n</template>\n', encoding="utf-8"
+        )
+        result = _run_hook(tmp_path, "m.vue")
+        assert result.returncode == 1, result.stdout
+
+    def test_vue_template_embedded_as_backtick_string_in_stories_ts(self, tmp_path: Path) -> None:
+        """The exact real-code shape: autobot-frontend .../NpuWorkerPairConfirmDialog.stories.ts
+        carries this inside a `template: \\`...\\`` render() property."""
+        (tmp_path / "m.ts").write_text(
+            "const story = {\n"
+            "  render: () => ({\n"
+            "    template: `\n"
+            "      <Dialog @confirm=\"(p) => console.log('confirmed', p)\" />\n"
+            "    `,\n"
+            "  }),\n"
+            "};\n",
+            encoding="utf-8",
+        )
+        result = _run_hook(tmp_path, "m.ts")
+        assert result.returncode == 1, result.stdout
+
+    def test_normal_spaced_assignment_is_still_a_string_not_an_attribute(self, tmp_path: Path) -> None:
+        """Regression guard for the fix itself: `x = "text"` (this codebase's
+        Prettier convention — spaces around `=`) must NOT be misread as an
+        attribute, or finding 1/2's round-2 fixes (noqa hidden inside a
+        string) would be undone by the attribute heuristic."""
+        (tmp_path / "m.ts").write_text(
+            'const msg = "write // noqa: console to skip";\nconsole.log("live violation");\n',
+            encoding="utf-8",
+        )
+        result = _run_hook(tmp_path, "m.ts")
+        assert result.returncode == 1, result.stdout
+
+
+@pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
+class TestUnresolvedBalanceReportsAWideRange:
+    """#14051 code review round 3, finding 2: when the forward scan exits
+    WITHOUT the balance ever reaching zero (bound hit, or a tokenizer gap —
+    e.g. Python's triple-quoted strings have no dedicated state, so a third
+    `"` re-opens a single-quoted span that runs to EOL), LAST_CALL_CLOSE_LINE
+    must widen to the last line actually scanned, not collapse back to the
+    opening line. A single-line key there reproduced round 1's finding 4
+    bypass through a different, narrower trigger.
+    """
+
+    def test_unresolved_triple_quote_reports_a_range_not_a_single_line(self, tmp_path: Path) -> None:
+        (tmp_path / "m.py").write_text('print("""\n    line 0\n    line 1\n""")\n', encoding="utf-8")
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1
+        assert re.search(r"m\.py:\d+-\d+", result.stdout), f"expected a RANGE key:\n{result.stdout}"
+
+    def test_deleting_a_noqa_past_an_unresolved_triple_quote_is_still_caught(self, tmp_path: Path) -> None:
+        """End-to-end through the scoped wrapper: the finding-4 shape,
+        reached via the triple-quote gap instead of a stray comment paren.
+        density like autobot-backend/cli/service_registry_cli.py (near-every
+        print line carries a noqa) makes an unrelated noqa within 20 lines
+        the norm, not the exception, once balance stops resolving."""
+        base_lines = ['print("""', "    line 0", "    line 1", '""")', "other_call()  # noqa"]
+        base, _ = _amend_pr(tmp_path, {"m.py": "\n".join(base_lines) + "\n"})
+        pr_lines = ['print("""', "    line 0", "    line 1", '""")', "other_call2()  # noqa"]
+        (tmp_path / "m.py").write_text("\n".join(pr_lines) + "\n", encoding="utf-8")
+        head = _commit_pr(tmp_path)
+
+        result = _run_scoped(tmp_path, "pre-commit-no-print-console", base, head)
+
+        assert result.returncode == 1, f"unrelated edit near an unresolved call was not caught:\n{result.stdout}"
+
+
+@pytest.mark.skipif(not NO_PRINT_CONSOLE_HOOK.exists(), reason="hook script not found")
+class TestSuppressionOnlyOnTheTrueClosingLine:
+    """#14051 code review round 3, finding 3: a noqa is accepted only on a
+    line where the running balance genuinely reaches zero — not on any line
+    a tokenizer gap left inside an apparently-still-open window. This is a
+    SECOND, independent layer under the round-2 normalization fix: even a
+    line the tokenizer still misjudges (a triple-quoted argument, `!`/`++`/
+    `--` before a real division) can no longer reach an unrelated noqa,
+    because no candidate line's noqa is inspected until the call is
+    confirmed closed on that exact line.
+    """
+
+    def test_triple_quoted_argument_does_not_let_an_unrelated_noqa_through(self, tmp_path: Path) -> None:
+        (tmp_path / "m.py").write_text(
+            'print("""\n    has an unbalanced "quote below\n""")\nother = 1  # noqa\n', encoding="utf-8"
+        )
+        result = _run_hook(tmp_path, "m.py")
+        assert result.returncode == 1, result.stdout
+
+    def test_non_null_assertion_before_division_does_not_let_an_unrelated_noqa_through(self, tmp_path: Path) -> None:
+        """`val!` then ` / ` is TS non-null assertion + division, not a
+        regex literal — `!` sits in the tokenizer's regex-open punct set. The
+        false regex-open swallows the REST OF THE LINE, including the call's
+        own real closing paren, so the call misreads as still-open even
+        though it's a complete, single-line, unsuppressed call — exactly the
+        shape that reached an unrelated noqa on the next line under round 2
+        alone (confirmed: exit 0 against bc2f1babd, exit 1 here)."""
+        (tmp_path / "m.ts").write_text("console.log(val! / 2);\nconst other = 1;  // noqa: console\n", encoding="utf-8")
+        result = _run_hook(tmp_path, "m.ts")
         assert result.returncode == 1, result.stdout
 
 

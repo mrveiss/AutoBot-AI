@@ -27,8 +27,20 @@
 #   this only protects OUR call's balance; a real call embedded in an
 #   interpolation is simply not analyzed by this pass. '//' starts the
 #   comment. Known limitation, like Python's triple-quoted strings: this is
-#   a heuristic, not a full lexer (e.g. a '/' inside a regex character class
-#   is not modeled) — add an explicit noqa if a line is still misread.
+#   a heuristic, not a full lexer (e.g. a '/' inside a regex character class,
+#   or a '!'/'++'/'--' immediately before a real division, is not modeled) —
+#   add an explicit noqa if a line is still misread.
+#
+# ts ATTRIBUTE quotes (#14051 review round 3, finding 1): a '"' immediately
+# preceded by '=' with NO space (`@click="console.log(x)"`) is Vue/HTML
+# attribute-value syntax, not a JS string — a .vue <template> region, or a
+# Vue template embedded as a backtick string in a .stories.ts render(), both
+# hit this. Content is emitted VERBATIM (not stripped) up to the matching
+# quote, so the call inside stays visible. A JS assignment with normal
+# spacing (`x = "text"`, this codebase's Prettier convention) has a SPACE
+# before the quote and is unaffected; a compact `x="text"` with no space
+# would be misread as an attribute — same class of tradeoff as the
+# regex-vs-division heuristic above.
 
 BEGIN {
     punct = "([{,;:=&|!?+-*%^~<>"
@@ -37,10 +49,15 @@ BEGIN {
     n = length($0)
     out = ""
     in_str = 0; str_ch = ""
-    in_tmpl = 0; in_regex = 0
+    in_tmpl = 0; in_regex = 0; in_attr = 0; attr_ch = ""
     prev_sig = ""
     for (i = 1; i <= n; i++) {
         c = substr($0, i, 1)
+        if (in_attr) {
+            out = out c
+            if (c == attr_ch) in_attr = 0
+            continue
+        }
         if (in_str) {
             if (c == "\\") { i++; continue }
             if (c == str_ch) in_str = 0
@@ -55,6 +72,9 @@ BEGIN {
             if (c == "\\") { i++; continue }
             if (c == "/") { in_regex = 0; prev_sig = "/" }
             continue
+        }
+        if (lang == "ts" && (c == "\"" || c == sq) && i > 1 && substr($0, i - 1, 1) == "=") {
+            in_attr = 1; attr_ch = c; out = out c; continue
         }
         if (c == "\"" || c == sq) { in_str = 1; str_ch = c; continue }
         if (lang == "ts" && c == "`") { in_tmpl = 1; continue }
