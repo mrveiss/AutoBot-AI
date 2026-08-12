@@ -41,21 +41,27 @@ from autobot_shared.pre_action_verifier_guard import (
     threshold_for_tool,
 )
 
-__all__ = [
+# flake8 reports F822 against this assignment line, not against the individual
+# entries, so a per-entry `# noqa` never applies — it has to live here. The
+# scalar names below are resolved live through the module `__getattr__` defined
+# further down rather than bound statically, because `agent_loop/loop.py`
+# re-imports `HARD_BLOCK` fresh on every call and a static copy would go stale
+# against the source module. See the module docstring.
+__all__ = [  # noqa: F822
     "PreActionVerifier",
     "VerifierResult",
     "VerifierVerdict",
-    "THRESHOLD_DEPLOY",  # noqa: F822 — resolved via module __getattr__, see below
-    "THRESHOLD_MUTATE",  # noqa: F822
-    "THRESHOLD_NETWORK",  # noqa: F822
-    "THRESHOLD_EXEC",  # noqa: F822
-    "THRESHOLD_DEFAULT",  # noqa: F822
-    "HARD_BLOCK",  # noqa: F822
-    "PANEL_SIZE",  # noqa: F822
-    "PANEL_QUORUM",  # noqa: F822
-    "VERIFIER_ENABLED",  # noqa: F822
-    "VERIFIER_MAX_TOKENS",  # noqa: F822
-    "VERIFIER_TIMEOUT_S",  # noqa: F822
+    "THRESHOLD_DEPLOY",
+    "THRESHOLD_MUTATE",
+    "THRESHOLD_NETWORK",
+    "THRESHOLD_EXEC",
+    "THRESHOLD_DEFAULT",
+    "HARD_BLOCK",
+    "PANEL_SIZE",
+    "PANEL_QUORUM",
+    "VERIFIER_ENABLED",
+    "VERIFIER_MAX_TOKENS",
+    "VERIFIER_TIMEOUT_S",
     "determine_verdict",
     "panel_decision",
     "threshold_for_tool",
