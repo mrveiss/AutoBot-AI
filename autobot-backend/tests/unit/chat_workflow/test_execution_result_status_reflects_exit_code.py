@@ -29,9 +29,21 @@ from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.tool_handler import _create_execution_result
 
 
+#: A command that matches **no** rule in ``config/tool_output_filters.yaml``.
+#:
+#: This test started out using ``pytest -q`` and failed for an instructive
+#: reason: that file's ``^(python -m )?pytest`` rule has no separator after the
+#: verb, so the filter's five-state test-runner parser fired and rewrote the
+#: body to "All tests passed" — the status assertions passed, the *content*
+#: assertions did not. Correct behaviour for a shell entry, and exactly the
+#: latent hazard noted while reviewing #14120. Naming the command something
+#: inert keeps this file about status derivation rather than about the filter.
+_INERT_COMMAND = "./run-suite"
+
+
 def _entry(return_code: Any, stdout: str = "", stderr: str = "") -> Dict[str, Any]:
     return _create_execution_result(
-        "pytest -q",
+        _INERT_COMMAND,
         "localhost",
         {"stdout": stdout, "stderr": stderr, "return_code": return_code},
     )
@@ -95,7 +107,7 @@ class TestTheWorkingPathIsUnchanged:
     def test_the_other_fields_are_untouched(self):
         entry = _entry(0, stdout="out", stderr="err")
 
-        assert entry["command"] == "pytest -q"
+        assert entry["command"] == _INERT_COMMAND
         assert entry["host"] == "localhost"
         assert entry["stdout"] == "out"
         assert entry["stderr"] == "err"
