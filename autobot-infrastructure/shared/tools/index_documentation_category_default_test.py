@@ -12,8 +12,9 @@ behaviour is asserted via the logged "Chunks by category" breakdown.
 import logging
 from unittest.mock import MagicMock, patch
 
-from constants.threshold_constants import CategoryDefaults
 from index_documentation import get_collection_stats
+
+from constants.threshold_constants import CategoryDefaults
 
 
 def _mock_indexer(metadatas):

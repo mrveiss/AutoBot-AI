@@ -8,8 +8,9 @@ The category is an unconditional template literal (no caller-supplied
 override path) -- only the fallback value itself is asserted.
 """
 
-from constants.threshold_constants import CategoryDefaults
 from manage_system_knowledge import _build_workflows_template
+
+from constants.threshold_constants import CategoryDefaults
 
 
 def test_workflows_template_category_defaults_to_general():

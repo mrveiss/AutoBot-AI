@@ -58,9 +58,7 @@ class TestProcessFactsIntoNodes:
         edges: list = []
         category_map = {CategoryDefaults.GENERAL: "cat_general"}
 
-        fact_ids = _process_facts_into_nodes(
-            [{"content": "hello", "id": "f1"}], nodes, edges, category_map
-        )
+        fact_ids = _process_facts_into_nodes([{"content": "hello", "id": "f1"}], nodes, edges, category_map)
 
         assert fact_ids == ["f1"]
         assert edges == [{"from": "cat_general", "to": "f1", "type": "contains", "strength": 0.6}]

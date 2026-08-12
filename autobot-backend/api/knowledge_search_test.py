@@ -15,8 +15,6 @@ def test_missing_category_defaults_to_general():
 
 
 def test_explicit_category_overrides_default():
-    docs = _convert_results_to_documents(
-        [{"content": "hi", "metadata": {"category": "security"}}], "query"
-    )
+    docs = _convert_results_to_documents([{"content": "hi", "metadata": {"category": "security"}}], "query")
 
     assert docs[0]["metadata"]["category"] == "security"

@@ -23,9 +23,7 @@ def test_missing_category_defaults_to_unknown():
 
     monitor._push_alerts_to_prometheus([{"severity": "warning"}])
 
-    monitor._prometheus.record_performance_alert.assert_called_once_with(
-        CategoryDefaults.UNKNOWN, "warning"
-    )
+    monitor._prometheus.record_performance_alert.assert_called_once_with(CategoryDefaults.UNKNOWN, "warning")
 
 
 def test_explicit_category_overrides_default():

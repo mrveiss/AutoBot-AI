@@ -22,9 +22,7 @@ def test_missing_category_defaults_to_unknown():
 def test_explicit_category_overrides_default():
     manager = ErrorBoundaryManager(redis_client=MagicMock())
 
-    categories, _severities, _components = manager._calculate_error_groupings(
-        [{"category": "network"}]
-    )
+    categories, _severities, _components = manager._calculate_error_groupings([{"category": "network"}])
 
     assert categories == {"network": 1}
     assert CategoryDefaults.UNKNOWN not in categories

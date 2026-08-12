@@ -251,9 +251,7 @@ class TestMapElitesCategoryDefault:
         explicit_unknown = _mapelites_sr(0.5, category="unknown", source_path="docs/b.md")
         other = _mapelites_sr(0.1, category="other", source_path="other/c.md")
 
-        selected = optimizer._map_elites_select(
-            [no_category, explicit_unknown, other], max_results=2
-        )
+        selected = optimizer._map_elites_select([no_category, explicit_unknown, other], max_results=2)
 
         # explicit_unknown collided into the same cell as no_category and lost
         # the in-cell tie-break (lower hybrid_score) -> dropped from selection.

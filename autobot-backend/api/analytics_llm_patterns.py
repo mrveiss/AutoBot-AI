@@ -47,13 +47,13 @@ from api.schemas_analytics import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from constants.threshold_constants import CategoryDefaults
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
     MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
+from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)

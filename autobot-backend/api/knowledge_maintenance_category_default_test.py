@@ -34,8 +34,6 @@ class TestBuildOrphanFactInfo:
         assert info["category"] == CategoryDefaults.UNKNOWN
 
     def test_explicit_category_overrides_default(self):
-        info = _build_orphan_fact_info(
-            "fact:f1", {"content": b"hello"}, {"category": "security"}, "session-1"
-        )
+        info = _build_orphan_fact_info("fact:f1", {"content": b"hello"}, {"category": "security"}, "session-1")
 
         assert info["category"] == "security"

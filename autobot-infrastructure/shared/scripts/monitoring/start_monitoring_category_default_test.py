@@ -8,9 +8,9 @@
 import logging
 
 import pytest
+from start_monitoring import PerformanceMonitoringManager
 
 from constants.threshold_constants import CategoryDefaults
-from start_monitoring import PerformanceMonitoringManager
 
 
 @pytest.mark.asyncio
@@ -28,8 +28,6 @@ async def test_explicit_category_overrides_default(caplog):
     manager = PerformanceMonitoringManager()
 
     with caplog.at_level(logging.WARNING):
-        await manager._handle_performance_alert(
-            [{"severity": "warning", "category": "cpu", "message": "high load"}]
-        )
+        await manager._handle_performance_alert([{"severity": "warning", "category": "cpu", "message": "high load"}])
 
     assert "[WARNING] cpu: high load" in caplog.text

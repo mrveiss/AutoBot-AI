@@ -616,9 +616,7 @@ class AdvancedRAGOptimizer:
 
         # Compute grid keys for all results
         def _cell_key(r: SearchResult) -> tuple:
-            category = (
-                r.metadata.get("category") or r.metadata.get("chunk_category") or CategoryDefaults.UNKNOWN
-            )
+            category = r.metadata.get("category") or r.metadata.get("chunk_category") or CategoryDefaults.UNKNOWN
             source_parts = r.source_path.replace("\\", "/").split("/")
             domain = source_parts[0] if source_parts else "unknown"
             return (str(category), str(domain))
