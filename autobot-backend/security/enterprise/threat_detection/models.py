@@ -259,7 +259,6 @@ class ThreatEvent:
     mitigation_actions: List[str]
 
 
-
 def _is_finite_number(value: object) -> bool:
     """True for a real, finite int/float -- rejecting bool, NaN and Infinity.
 
@@ -276,6 +275,7 @@ def _is_finite_number(value: object) -> bool:
       a strict JSON reader.
     """
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
 
 @dataclass
 class UserProfile:
@@ -358,8 +358,7 @@ class UserProfile:
 
         baseline_actions = data.get("baseline_actions", {})
         if not isinstance(baseline_actions, dict) or not all(
-            isinstance(k, str) and _is_finite_number(v)
-            for k, v in baseline_actions.items()
+            isinstance(k, str) and _is_finite_number(v) for k, v in baseline_actions.items()
         ):
             logger.warning("Skipping user profile %s: invalid baseline_actions", user_id)
             return None
@@ -391,8 +390,7 @@ class UserProfile:
 
         api_usage_patterns = data.get("api_usage_patterns", {})
         if not isinstance(api_usage_patterns, dict) or not all(
-            isinstance(k, str) and _is_finite_number(v)
-            for k, v in api_usage_patterns.items()
+            isinstance(k, str) and _is_finite_number(v) for k, v in api_usage_patterns.items()
         ):
             logger.warning("Skipping user profile %s: invalid api_usage_patterns", user_id)
             return None
