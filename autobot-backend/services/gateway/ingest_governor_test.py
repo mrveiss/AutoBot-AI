@@ -163,9 +163,7 @@ class TestRedisUnavailable:
         monkeypatch.setattr(governor_module, "get_async_redis_client", _none_client)
 
         with caplog.at_level(logging.ERROR):
-            verdict = await governor.evaluate(
-                platform="telegram", channel_id="chat1", message_id="m1", author_id="u1"
-            )
+            verdict = await governor.evaluate(platform="telegram", channel_id="chat1", message_id="m1", author_id="u1")
 
         assert verdict.allowed is True
         assert verdict.reason == "redis_unavailable_fail_open"
@@ -179,9 +177,7 @@ class TestRedisUnavailable:
         monkeypatch.setattr(governor_module, "get_async_redis_client", _raising_client)
 
         with caplog.at_level(logging.ERROR):
-            verdict = await governor.evaluate(
-                platform="telegram", channel_id="chat1", message_id="m1", author_id="u1"
-            )
+            verdict = await governor.evaluate(platform="telegram", channel_id="chat1", message_id="m1", author_id="u1")
 
         assert verdict.allowed is True
         assert verdict.reason == "redis_unavailable_fail_open"
@@ -197,9 +193,7 @@ class TestRedisUnavailable:
 
         monkeypatch.setattr(governor_module, "get_async_redis_client", _none_client)
 
-        verdict = await governor.evaluate(
-            platform="slack", channel_id="C1", message_id="m1", author_id="BOT123"
-        )
+        verdict = await governor.evaluate(platform="slack", channel_id="C1", message_id="m1", author_id="BOT123")
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
