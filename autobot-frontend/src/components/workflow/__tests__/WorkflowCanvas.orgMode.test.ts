@@ -138,7 +138,10 @@ describe('WorkflowCanvas read-only org mode (#13939)', () => {
     expect(person.text()).toContain('Ada')
     expect(person.text()).toContain('CEO')
     expect(person.text()).toContain('claude')
-    expect(person.find('.org-status.status-paused').exists()).toBe(true)
+    // GH#13941: the bare status dot signalled by colour alone; it is now a rule
+    // chip carrying the swatch, a marker shape and the rule's translated name.
+    expect(person.attributes('data-rule-id')).toBe('status-paused')
+    expect(person.get('.rule-chip').text()).toBe(en.llc.canvasRules.status.paused)
   })
 
   it('does not print adapter vocabulary on a human node (#13936)', () => {

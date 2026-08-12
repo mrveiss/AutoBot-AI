@@ -1518,6 +1518,22 @@ class MiscConfig(RedactedSettings):
         default="",
         alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
     )
+    # #13884: fraction of a paginated document's pages that must carry a text
+    # layer before the extraction is treated as usable. Below it the document is
+    # reported as having no usable text layer rather than as a successful
+    # extraction that happens to be empty.
+    document_min_text_page_ratio: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
+    )
+    # #13884: minimum average characters per page, alongside the ratio above.
+    # The ratio alone counts a page as readable when it carries a single
+    # character, which a page-number stamp, Bates number, or filename footer
+    # satisfies on every page of a scan. This floor catches that shape.
+    document_min_chars_per_page: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE",
+    )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
@@ -1887,6 +1903,12 @@ class MiscConfig(RedactedSettings):
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    # #14028: ingest governance stage in front of MessageRouter/agent routing —
+    # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
+    # window. See services/gateway/ingest_governor.py.
+    gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
+    gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
+    gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
     gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
     gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")

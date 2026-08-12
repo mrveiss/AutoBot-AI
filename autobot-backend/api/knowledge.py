@@ -34,6 +34,7 @@ Related modules:
 import asyncio
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import (
     APIRouter,
@@ -136,6 +137,9 @@ except ImportError:
 
 # Set up logging
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover - type-only import, avoids a module-level dependency
+    from media.document.extraction import ExtractedDocument
 
 # Cache TTL constants (seconds)
 CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
@@ -1068,18 +1072,22 @@ async def add_url_to_knowledge(
     )
 
 
-def _extract_pdf_content(filename: str, file_content: bytes) -> str:
+def _extract_pdf_document(filename: str, file_content: bytes) -> "ExtractedDocument":
     """
-    Extract text content from PDF file.
+    Extract the structured result from a PDF file.
 
-    Issue #620.
+    Issue #620. Returns the structured :class:`ExtractedDocument` rather than
+    its flattened text so the caller can consult ``has_usable_text_layer``
+    instead of a ``.strip()`` check a page-number-stamped scan would pass
+    (#13884) — and so ``_no_text_detail`` can reuse this parse instead of
+    running a second one (#13884 review).
 
     Args:
         filename: Name of the file for error logging
         file_content: Raw PDF bytes
 
     Returns:
-        Extracted text content
+        The structured extraction
 
     Raises:
         HTTPException: If pypdf library is missing or parsing fails
@@ -1087,7 +1095,7 @@ def _extract_pdf_content(filename: str, file_content: bytes) -> str:
     from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_pdf
 
     try:
-        return extract_pdf(file_content).text
+        return extract_pdf(file_content)
     except DocumentDependencyError as e:
         logger.error("PDF support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
@@ -1096,18 +1104,20 @@ def _extract_pdf_content(filename: str, file_content: bytes) -> str:
         raise HTTPException(status_code=400, detail="Failed to parse PDF file")
 
 
-def _extract_docx_content(filename: str, file_content: bytes) -> str:
+def _extract_docx_document(filename: str, file_content: bytes) -> "ExtractedDocument":
     """
-    Extract text content from DOCX file.
+    Extract the structured result from a DOCX file.
 
-    Issue #620.
+    Issue #620. Structured for the same reason as :func:`_extract_pdf_document`
+    — a DOCX whose content is entirely a table has no text layer but is a
+    successful extraction, which only the structured result can say (#13884).
 
     Args:
         filename: Name of the file for error logging
         file_content: Raw DOCX bytes
 
     Returns:
-        Extracted text content
+        The structured extraction
 
     Raises:
         HTTPException: If python-docx library is missing or parsing fails
@@ -1115,7 +1125,7 @@ def _extract_docx_content(filename: str, file_content: bytes) -> str:
     from media.document.extraction import DocumentDependencyError, DocumentExtractionError, extract_docx
 
     try:
-        return extract_docx(file_content).text
+        return extract_docx(file_content)
     except DocumentDependencyError as e:
         logger.error("DOCX support unavailable for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
@@ -1124,7 +1134,7 @@ def _extract_docx_content(filename: str, file_content: bytes) -> str:
         raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
 
 
-def _extract_file_content(filename: str, file_content: bytes) -> str:
+def _extract_file_content(filename: str, file_content: bytes) -> "tuple[str, ExtractedDocument | None]":
     """
     Extract text content from uploaded file based on extension.
 
@@ -1133,7 +1143,10 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
         file_content: Raw file bytes
 
     Returns:
-        Extracted text content
+        The flattened text, plus the structured extraction for pdf/docx
+        (``None`` for formats with no page/table structure) so the caller can
+        tell a stamped scan or a table-only document from genuinely empty
+        content instead of relying on ``text.strip()`` alone (#13884).
 
     Raises:
         HTTPException: If file cannot be parsed or library is missing
@@ -1143,28 +1156,72 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     ext = os.path.splitext(filename.lower())[1]
 
     if ext in {".txt", ".md", ".csv"}:
-        return file_content.decode("utf-8", errors="replace")
+        return file_content.decode("utf-8", errors="replace"), None
 
     if ext == ".html":
         html_text = file_content.decode("utf-8", errors="replace")
         content, _ = _sanitize_html_content(html_text)
-        return content
+        return content, None
 
     if ext == ".json":
         try:
             data = json.loads(file_content.decode("utf-8"))
-            return json.dumps(data, indent=2)
+            return json.dumps(data, indent=2), None
         except json.JSONDecodeError:
-            return file_content.decode("utf-8", errors="replace")
+            return file_content.decode("utf-8", errors="replace"), None
 
     if ext == ".pdf":
-        return _extract_pdf_content(filename, file_content)
+        extracted = _extract_pdf_document(filename, file_content)
+        return extracted.text, extracted
 
     if ext == ".docx":
-        return _extract_docx_content(filename, file_content)
+        extracted = _extract_docx_document(filename, file_content)
+        return extracted.text, extracted
 
     # Default: treat as text
-    return file_content.decode("utf-8", errors="replace")
+    return file_content.decode("utf-8", errors="replace"), None
+
+
+def _has_usable_content(content: str, extracted: "ExtractedDocument | None") -> bool:
+    """Decide whether an upload has anything worth storing (#13884).
+
+    A page-number/Bates stamp on every page of a scan passes ``content.strip()``
+    — every page technically "has text". For pdf/docx, consult the structured
+    extraction's ratio + per-page character floor instead of the flattened
+    string; other formats (no structure available) keep the plain check. Kept
+    to ``has_usable_text_layer`` rather than ``has_usable_content``: this
+    endpoint only ever stores the flattened text, so a table-only DOCX is
+    correctly rejected here even though its data is real — there is nowhere
+    for that data to go through this path.
+    """
+    if extracted is not None:
+        return extracted.has_usable_text_layer
+    return bool(content.strip())
+
+
+def _no_text_detail(extracted: "ExtractedDocument | None") -> str:
+    """Explain *why* no text was extracted, not merely that none was (#13884).
+
+    Consumes the extraction ``_extract_file_content`` already performed
+    instead of re-parsing the file: a second ``extract_pdf`` call doubled
+    parse cost on a user-triggerable path and used a different dispatch route
+    (magic-byte sniffing) than the extension-based one above it, which could
+    disagree with it.
+
+    A paginated document that parsed cleanly but carries no text layer is a
+    scan; telling the user that is the difference between "try OCR" and "try
+    another file". A DOCX or a non-document format gets the generic message —
+    OCR is not the fix for an empty markdown file.
+    """
+    if extracted is None or extracted.format != "pdf":
+        return "No text content could be extracted from file"
+
+    if extracted.page_count:
+        return (
+            f"No text layer found in any of the {extracted.page_count} page(s). "
+            "The document appears to be scanned or image-only and needs OCR."
+        )
+    return "No text content could be extracted from file"
 
 
 def _parse_upload_tags(tags_str) -> list:
@@ -1222,9 +1279,12 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    content = _extract_file_content(filename, file_content)
-    if not content.strip():
-        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+    content, extracted_doc = _extract_file_content(filename, file_content)
+    if not _has_usable_content(content, extracted_doc):
+        # #13884: distinguish "we could not read it" from "it is empty". A scanned
+        # PDF parses fine and yields nothing, and a generic message left the user
+        # with no way to tell that OCR — not a different file — is what is needed.
+        raise HTTPException(status_code=400, detail=_no_text_detail(extracted_doc))
 
     # Issue #5064: sanitize uploaded document content against prompt injection
     # before the text reaches the KB / embedding pipeline.

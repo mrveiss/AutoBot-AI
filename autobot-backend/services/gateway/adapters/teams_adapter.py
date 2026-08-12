@@ -22,7 +22,8 @@ class TeamsAdapter(BaseAdapter):
     async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert Teams message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
-        metadata["message_id"] = raw_message.get("id")
+        message_id = str(raw_message.get("id") or "")
+        metadata["message_id"] = message_id
         metadata["reply_to_id"] = raw_message.get("replyToId")
 
         return GatewayMessage(
@@ -32,6 +33,7 @@ class TeamsAdapter(BaseAdapter):
             message=raw_message["text"],
             timestamp=float(raw_message.get("timestamp", 0)),
             metadata=metadata,
+            message_id=message_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:

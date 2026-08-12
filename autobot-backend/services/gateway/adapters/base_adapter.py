@@ -20,7 +20,14 @@ logger = get_logger(__name__)
 
 @dataclass
 class GatewayMessage:
-    """Raw inbound platform payload normalized from all platform adapters."""
+    """Raw inbound platform payload normalized from all platform adapters.
+
+    ``message_id`` is mandatory (#14028): the ingest governance stage in
+    ``GatewayManager.normalize_message`` dedups on
+    ``(platform, channel_id, message_id)`` and rejects any message where the
+    adapter could not resolve one, fail-closed, rather than routing it with
+    the field silently absent.
+    """
 
     user_id: str
     platform: str  # 'web', 'slack', 'discord', 'whatsapp', 'teams'
@@ -28,6 +35,7 @@ class GatewayMessage:
     message: str
     timestamp: float
     metadata: Dict[str, Any]  # Platform-specific data
+    message_id: str = ""
 
 
 @dataclass
@@ -59,6 +67,13 @@ class BaseAdapter(ABC):
     async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """
         Convert platform-specific message to unified schema.
+
+        Both ``GatewayMessage.user_id`` (author id) and ``.message_id`` are
+        mandatory (#14028) — ``user_id`` always has been (a required, no-default
+        field every adapter already populates); ``message_id`` is the field this
+        contract adds so the ingest governance stage in
+        ``GatewayManager.normalize_message`` has a stable dedup key on every
+        platform, not just the ones that happened to carry one in metadata.
 
         Args:
             raw_message: Platform-specific message object
@@ -102,6 +117,12 @@ class BaseAdapter(ABC):
         Extract platform-specific metadata from message.
 
         Can be overridden by subclasses for richer metadata extraction.
+
+        No recursion/chain-depth field lives here (#14028 review correction):
+        a counter carried on the message cannot survive a real platform
+        round-trip — no platform hands an AutoBot-internal payload field back
+        through its own inbound webhook. The recursion guard instead reads a
+        server-side Redis counter, see ``services/gateway/ingest_governor.py``.
         """
         return {
             "raw_timestamp": raw_message.get("timestamp"),

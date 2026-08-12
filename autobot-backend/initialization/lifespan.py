@@ -13,6 +13,7 @@ Handles application startup and shutdown with 2-phase initialization:
 import asyncio
 import json
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -269,6 +270,67 @@ async def _init_config(app: FastAPI) -> None:
         )
 
 
+async def _init_secrets_store(app: FastAPI) -> None:
+    """Run the one-time secrets-store legacy->canonical migration explicitly,
+    at a controlled startup point (#14081 review round 4, #14110).
+
+    Both ``SecretsManager`` (api/secrets.py) and ``SecretsService``
+    (services/secrets_service.py) resolve their storage through
+    ``ssot_config.path.data_path`` and, on an existing deployment, may need
+    to migrate real key/secret material off the legacy CWD-relative
+    location (``utils/secrets_store_migration.py``). ``SecretsManager`` in
+    particular used to do this from a module-level singleton's constructor,
+    which runs at Python import time: any failure there -- an ambiguous
+    legacy/canonical split, or (the failure that actually broke
+    ``hardened-smoke-test`` on PR #14110) a read-only canonical data
+    directory -- crashed the interpreter mid-import, before FastAPI's
+    startup ordering existed to report it. Running it here instead means a
+    failure surfaces through this phase's structured error handling and
+    ``/api/health`` reporting.
+
+    ``AmbiguousSecretsStoreError`` and filesystem/database I/O errors
+    (``OSError``, ``sqlite3.OperationalError``) are deliberately NOT fatal
+    here. Both are environment states a human must resolve -- refusing to
+    guess which store is authoritative, or refusing to write into a
+    filesystem that rejects the write, are the right calls -- but crashing
+    the container on every boot until someone edits code is not a
+    recoverable failure mode for an operator to work from. Logged at
+    CRITICAL with the underlying error and startup continues; secrets
+    operations backed by the affected store will keep failing until the
+    operator resolves the environment issue (message from the raised
+    error explains what to do). Any other exception is a genuine bug and
+    still aborts startup as before.
+    """
+    from api.secrets import secrets_manager
+    from services.secrets_service import get_secrets_service
+    from utils.secrets_store_migration import AmbiguousSecretsStoreError
+
+    logger.info("✅ [ 12%] Secrets store: running legacy-to-canonical migration check...")
+    _recoverable = (AmbiguousSecretsStoreError, OSError, sqlite3.OperationalError)
+    try:
+        await asyncio.to_thread(secrets_manager.ensure_initialized)
+    except _recoverable as store_err:
+        logger.critical(
+            "Secrets manager storage could not be initialized and was left "
+            "untouched: %s. Continuing startup; secrets-backed operations "
+            "will fail until the underlying environment issue is resolved.",
+            store_err,
+        )
+
+    # SecretsService shares the same encryption key file SecretsManager just
+    # migrated/created above -- must run after it, not in parallel.
+    try:
+        await asyncio.to_thread(get_secrets_service)
+    except _recoverable as store_err:
+        logger.critical(
+            "Secrets service storage could not be initialized and was left "
+            "untouched: %s. Continuing startup; secrets-backed operations "
+            "will fail until the underlying environment issue is resolved.",
+            store_err,
+        )
+    logger.info("✅ [ 12%] Secrets store: migration check complete")
+
+
 async def _init_security_layer(app: FastAPI) -> None:
     """Helper for initialize_critical_services. Ref: #1088."""
     logger.info("✅ [ 15%] Security: Initializing security layer...")
@@ -483,8 +545,9 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #3015: Group init steps into dependency tiers and run each
         # tier concurrently with asyncio.gather() to reduce startup latency.
         #
-        # Tier 0 (sequential): env drift check + config — must complete before
-        #         anything else since all services may read global config.
+        # Tier 0 (sequential): env drift check + config + secrets-store
+        #         migration — must complete before anything else since all
+        #         services may read global config or secrets.
         # Tier 1 (parallel): security, database, telemetry — independent of
         #         each other, only need the module-level global config manager.
         # Tier 2 (parallel): chat managers — independent of each other; benefit
@@ -496,6 +559,12 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #2650: check .env drift before any service initialisation
         await _check_env_drift()
         await _init_config(app)
+
+        # #14081/#14110: explicit secrets-store migration, before Tier 1's
+        # security layer (which may read secrets) and sequential so
+        # SecretsService's encryption-key fallback can rely on
+        # SecretsManager's key file already being in place.
+        await _init_secrets_store(app)
 
         # --- Tier 1: independent infrastructure (parallel) ---
         await asyncio.gather(

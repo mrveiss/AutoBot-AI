@@ -43,6 +43,7 @@
 
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { CATEGORY_DEFAULTS } from '@/config/ssot-config'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -66,7 +67,7 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  category: 'general',
+  category: CATEGORY_DEFAULTS.GENERAL,
   isSelected: false,
   clickable: true,
   dismissible: false,

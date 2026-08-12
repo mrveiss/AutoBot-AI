@@ -8258,6 +8258,29 @@
       "peopleContactNotInHierarchy": "אנשי קשר אינם חלק מהיררכיית הדיווח — אין להם מנהל, תקציב או פעימת לב.",
       "peopleEmpty": "לחברה הזו אין עדיין אנשים."
     },
+    "canvasRules": {
+      "legendTitle": "מקרא",
+      "colourBy": "צביעה לפי",
+      "dimension": {
+        "status": "סטטוס",
+        "owner": "בעלים",
+        "tool": "כלי"
+      },
+      "status": {
+        "active": "פעיל",
+        "idle": "במנוחה",
+        "paused": "מושהה",
+        "error": "שגיאה",
+        "terminated": "הופסק",
+        "unknown": "לא ידוע"
+      },
+      "owner": {
+        "unassigned": "לא הוקצה"
+      },
+      "tool": {
+        "none": "אין כלי"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

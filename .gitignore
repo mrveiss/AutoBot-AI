@@ -1,7 +1,23 @@
 # === PYTHON VIRTUAL ENVIRONMENT ===
 # Virtual environment directories (created by setup_agent.sh)
+#
+# The entries below carry a trailing slash, which matches a DIRECTORY only. A
+# worktree that reaches the shared interpreter through a `venv` *symlink* was
+# therefore not ignored, and a `git add -A` committed it (#14133). With
+# `core.symlinks=false` — which this repo sets — checking that out replaces the
+# real venv directory with a 40-byte text file containing its own path,
+# destroying the interpreter for every tree that pulls.
+#
+# The slashless entries match a file, a directory or a symlink of that name.
+#
+# This stops a REPEAT of that instance; it does not stop a NEW tracked
+# symlink or a narrowed pattern in this section from doing the same thing
+# again. autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+# and pre-commit-no-gitignore-shadow guard those cases directly (#14137).
 AutoBot/
+venv
 venv/
+venvs
 venvs/
 bin/
 lib/

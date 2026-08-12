@@ -21,6 +21,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.token_count import estimate_fast
+from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
 
@@ -260,7 +261,7 @@ class EssentialStoryGenerator:
         lines = ["## Essential Context"]
         for fact in facts:
             meta = fact.get("metadata") or {}
-            category = meta.get("category", "general")
+            category = meta.get("category", CategoryDefaults.GENERAL)
             content = fact.get("content", "").strip()
             if content:
                 lines.append(f"[{category}] {content}")

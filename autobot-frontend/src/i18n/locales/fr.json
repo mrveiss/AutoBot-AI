@@ -8258,6 +8258,29 @@
       "peopleContactNotInHierarchy": "Les contacts ne font pas partie de la hiérarchie de reporting : ils n'ont ni responsable, ni budget, ni battement de cœur.",
       "peopleEmpty": "Cette entreprise n'a encore aucune personne."
     },
+    "canvasRules": {
+      "legendTitle": "Légende",
+      "colourBy": "Colorer par",
+      "dimension": {
+        "status": "Statut",
+        "owner": "Propriétaire",
+        "tool": "Outil"
+      },
+      "status": {
+        "active": "Actif",
+        "idle": "Inactif",
+        "paused": "En pause",
+        "error": "Erreur",
+        "terminated": "Arrêté",
+        "unknown": "Inconnu"
+      },
+      "owner": {
+        "unassigned": "Non attribué"
+      },
+      "tool": {
+        "none": "Aucun outil"
+      }
+    },
     "goals": {
       "title": "Arbre des objectifs",
       "retry": "Réessayer",

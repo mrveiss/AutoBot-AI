@@ -95,6 +95,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import { CATEGORY_DEFAULTS } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -120,7 +121,7 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  category: 'general',
+  category: CATEGORY_DEFAULTS.GENERAL,
   isHighlighted: false,
   maxContentLength: 300
 })

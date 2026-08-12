@@ -8258,6 +8258,29 @@
       "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
       "peopleEmpty": "Dieses Unternehmen hat noch keine Personen."
     },
+    "canvasRules": {
+      "legendTitle": "Legende",
+      "colourBy": "Einfärben nach",
+      "dimension": {
+        "status": "Status",
+        "owner": "Inhaber",
+        "tool": "Werkzeug"
+      },
+      "status": {
+        "active": "Aktiv",
+        "idle": "Leerlauf",
+        "paused": "Pausiert",
+        "error": "Fehler",
+        "terminated": "Beendet",
+        "unknown": "Unbekannt"
+      },
+      "owner": {
+        "unassigned": "Nicht zugewiesen"
+      },
+      "tool": {
+        "none": "Kein Werkzeug"
+      }
+    },
     "goals": {
       "title": "Zielbaum",
       "retry": "Erneut versuchen",
