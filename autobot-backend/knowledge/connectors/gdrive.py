@@ -249,8 +249,7 @@ class GoogleDriveConnector(AbstractConnector):
             # page passes the ``not text.strip()`` check below, so the scan
             # would otherwise reach the KB as an unsearchable document.
             self.logger.warning(
-                "Skipping %s (%s): no usable text layer — the document is scanned or "
-                "image-only and needs OCR.",
+                "Skipping %s (%s): no usable text layer — the document is scanned or " "image-only and needs OCR.",
                 file_name,
                 file_id,
             )
