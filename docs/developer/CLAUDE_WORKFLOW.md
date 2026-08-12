@@ -138,7 +138,24 @@ git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-bac
 
 ## Agent Delegation
 
-**Prefer direct implementation over subagents** — reserve for exploration/research.
+**Split by output type, not by convenience.**
+
+- **Deliverables — implement directly.** Code, fixes, reviews, acceptance criteria: do them in
+  the main session. Round-tripping a deliverable through a subagent adds a translation layer
+  and loses the context that makes it correct.
+- **Mechanical work — delegate to a Haiku agent.** Sweeps, inventories, per-PR status checks,
+  log triage, caller traces, "which of these N files does X". Mechanical means deterministic,
+  verifiable from its output, and requiring no judgement that ships.
+
+**Delegation is not free** — a subagent costs a spawn, a prompt and its own context. For a
+single deterministic command, run it inline. Delegate mechanical work only when it is also
+**high-volume** (output would flood this context), **repeated** (N independent checks that can
+fan out in parallel), or **high-discard** (most of what is read is thrown away). Full routing
+table and the never-hand-to-Haiku list: the model-tiers doc in the global instructions.
+
+**Verify what comes back.** A subagent's report is an assertion, not evidence — more so the
+cheaper the model. Confirm the artifacts (`git log`, `gh pr list`, read the file) before
+acting on it. No artifacts ⇒ the work did not happen; resume it yourself.
 
 **Worktree Isolation Warning:**
 Do NOT use `isolation: "worktree"` for agents that create PRs. Instead, create manual worktrees:
