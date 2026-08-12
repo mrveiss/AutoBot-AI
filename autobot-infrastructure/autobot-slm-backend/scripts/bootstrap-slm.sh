@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-source "$PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 INFRA_ROOT="${PROJECT_ROOT}/infrastructure"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
