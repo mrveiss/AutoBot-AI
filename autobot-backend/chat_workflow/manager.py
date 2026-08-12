@@ -167,6 +167,26 @@ def _model_supports_vision(model_name: str) -> bool:
     return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
 
 
+def _as_output_text(value: Any) -> str:
+    """Render an execution-result field as prompt text (#14120).
+
+    ``stdout``/``stderr`` are strings, but ``output`` is whatever the tool
+    produced — ``web_search`` records a list of results, others record a dict.
+    A bare ``.strip()`` raised on those, which is why this reads every field
+    through one converter rather than assuming the shell shape.
+
+    ``None`` and the empty string both render empty, so the caller's ``or``
+    chain falls through to the next candidate.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple)):
+        return "\n".join(_as_output_text(item) for item in value if _as_output_text(item))
+    return str(value).strip()
+
+
 def _extract_latest_tool_screenshot(execution_history: List[Dict[str, Any]]) -> str | None:
     """Return the single most recent base64 screenshot from recent tool results (#11538).
 
@@ -1822,13 +1842,25 @@ class ChatWorkflowManager(
 
         Issue #650: Increased output limit from 500 to 2000 chars for better LLM context.
         Truncated output is clearly marked to help LLM understand when data is incomplete.
+
+        #14120: this reads two field vocabularies, because two exist. Shell
+        execution records ``command``/``stdout``; ``web_search``, web research,
+        browser success, ``extract_content`` and ``read_spilled_output`` all
+        record ``tool``/``output`` (``tool_handler.py:2328,2523,2579,2609,2747``
+        and the spill handler). Reading only the first set rendered every one of
+        those as ``Step N: `unknown` — Status: success — (no output)``: the model
+        was not told the result was unavailable, it was told the tool ran fine
+        and returned nothing, which makes answering from memory the rational
+        next move. Very likely #12508's mechanism.
         """
-        cmd = result.get("command", "unknown")
-        stdout = result.get("stdout", "").strip()
-        stderr = result.get("stderr", "").strip()
+        cmd = result.get("command") or result.get("tool") or "unknown"
+        stdout = _as_output_text(result.get("stdout"))
+        stderr = _as_output_text(result.get("stderr"))
         status = result.get("status", "unknown")
 
-        output_text = stdout if stdout else "(no output)"
+        # `stdout` first so a shell result is unchanged; `output` only fills in
+        # where there is no stdout at all, never overriding it.
+        output_text = stdout or _as_output_text(result.get("output")) or "(no output)"
         if stderr:
             output_text += f"\nStderr: {stderr}"
 
