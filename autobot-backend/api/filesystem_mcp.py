@@ -269,13 +269,14 @@ _EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_DIR_PATHS]
 # Committed, non-secret dotenv templates (review follow-up on #14081): a
 # ".env*" basename denylist alone also blocks these commonly-committed
 # examples, which is over-broad -- they carry no real credential material by
-# convention. Checked against the basename only, so a directory genuinely
-# named e.g. ".env.example" (not a file) stays denied.
+# convention. Checked against the case-folded *leaf* only, so a directory
+# genuinely named e.g. ".env.example" stays denied no matter what the file
+# inside it is called (#14125).
 _ENV_TEMPLATE_ALLOWLIST = frozenset({".env.example", ".env.sample", ".env.template"})
 
 
 def _is_excluded_path(resolved: Path) -> bool:
-    """Refuse ``.git/``, ``.env*`` and the whole data directory (#14081, #14124).
+    """Refuse ``.git/``, ``.env*`` and the data directory (#14081, #14124, #14125).
 
     Checked against the *resolved* (symlink-followed, canonicalized) path so
     a symlink or an encoded traversal that lands inside an excluded subtree
@@ -290,9 +291,26 @@ def _is_excluded_path(resolved: Path) -> bool:
     defence-in-depth against a caller who only has bridge access, not a hole
     in the boundary the bridge actually enforces.
     """
-    if ".git" in resolved.parts:
+    # Lower-cased for every comparison below (#14125). ``fnmatch`` and the
+    # ``in parts`` test are case-sensitive on POSIX, so ".GIT/config" and
+    # ".ENV" walked straight past this gate; on a case-insensitive mount
+    # (WSL DrvFs, macOS, SMB) they resolve to the *real* ``.git``/``.env``,
+    # making the exclusion bypassable by changing the case of the request.
+    # Refusing the odd-cased names on a case-sensitive filesystem too is the
+    # fail-closed direction and costs nothing real.
+    lowered = [part.lower() for part in resolved.parts]
+    if ".git" in lowered:
         return True
-    if resolved.name not in _ENV_TEMPLATE_ALLOWLIST and any(fnmatch.fnmatch(part, ".env*") for part in resolved.parts):
+    # The template allowlist applies to the *leaf only* (#14125). Applied to
+    # the whole path it short-circuited the component scan, so a directory
+    # named ".env" or ".envs" became traversable whenever the leaf happened
+    # to be named like a template (``<root>/.env/.env.example`` was allowed).
+    # A directory is never a template, so every non-leaf component is denied
+    # unconditionally.
+    if any(fnmatch.fnmatch(part, ".env*") for part in lowered[:-1]):
+        return True
+    leaf = lowered[-1] if lowered else ""
+    if leaf not in _ENV_TEMPLATE_ALLOWLIST and fnmatch.fnmatch(leaf, ".env*"):
         return True
     for excluded_root in _EXCLUDED_ROOTS:
         try:
