@@ -228,14 +228,55 @@ if [ -f "$_status_script" ]; then
         fail=$((fail + 1))
     fi
 
-    if grep -q 'SERVICE_PORTS\[\$vm_name\]:-' "$_status_script" && \
-       grep -q 'reporting 0 processes, not probing' "$_status_script"; then
-        echo "PASS: a missing SERVICE_PORTS key reports zero, not a wildcard match"
-        pass=$((pass + 1))
-    else
-        echo "FAIL: no empty-port defence -- an unset key would make pgrep match every python process"
-        fail=$((fail + 1))
-    fi
+    # BEHAVIOURAL, not a grep. The review defeated the previous text-presence
+    # version with `if false && [ -z "$svc_port" ]` -- dead code that keeps both
+    # substrings, so the guard passed while the wildcard vulnerability was live.
+    # A guard for a fail-closed path has to actually run the path.
+    #
+    # The function is extracted and executed with `ssh` stubbed to echo its
+    # command, so nothing reaches a network. An unknown service must produce
+    # exactly "0" and must NOT produce a pgrep pattern at all.
+    _probe_out="$(
+        {
+            sed -n '/^get_service_processes() {/,/^}/p' "$_status_script"
+            cat <<'STUB'
+# NOTE: "browser" is deliberately ABSENT while the probe is called WITH it.
+# A name that matches no `case` branch would return "0" via fall-through, so a
+# dead guard would look identical to a live one -- the review defeated the
+# previous version exactly that way.
+declare -A SERVICE_PORTS=( ["frontend"]="5173" )
+SSH_KEY="$(mktemp)"; SSH_USER=nobody
+ssh() { echo "SSH_WOULD_RUN: $*"; }
+timeout() { shift; "$@"; }
+get_service_processes 192.0.2.1 browser
+STUB
+        } | bash 2>/dev/null
+    )"
+    check "a case-matched service with no port entry reports exactly 0" "$_probe_out" "0"
+
+    _wildcard_out="$(
+        {
+            sed -n '/^get_service_processes() {/,/^}/p' "$_status_script"
+            cat <<'STUB'
+# NOTE: "browser" is deliberately ABSENT while the probe is called WITH it.
+# A name that matches no `case` branch would return "0" via fall-through, so a
+# dead guard would look identical to a live one -- the review defeated the
+# previous version exactly that way.
+declare -A SERVICE_PORTS=( ["frontend"]="5173" )
+SSH_KEY="$(mktemp)"; SSH_USER=nobody
+ssh() { echo "SSH_WOULD_RUN: $*"; }
+timeout() { shift; "$@"; }
+get_service_processes 192.0.2.1 browser
+STUB
+        } | bash 2>&1 | grep -c "pgrep -f 'python\.\*'" || true
+    )"
+    check "a missing port never builds a bare 'python.*' pattern" "$_wildcard_out" "0"
+
+    # Quote-agnostic literal check: the earlier single-quote-only regex was
+    # defeated by writing the same literal in double quotes.
+    _dq_literals="$(grep -cE "pgrep -f \"[^\"]*[0-9]{4}" "$_status_script" || true)"
+    check "no double-quoted literal port in a process probe" "$_dq_literals" "0"
+
 else
     echo "FAIL: status-all-vms.sh not found -- refusing to report clean on a missing target"
     fail=$((fail + 1))
