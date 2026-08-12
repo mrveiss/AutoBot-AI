@@ -12,6 +12,8 @@ Telegram bot adapter (``api/telegram_bot.py``):
     Meta servers ──▶ POST /whatsapp/webhook
                        ├─ verify X-Hub-Signature-256 (app secret)
                        ├─ flatten Meta envelope ──▶ GatewayManager.normalize_message
+                       │    └─ ingest governance (#14028): bot-self filter / dedup /
+                       │       recursion guard — None means dropped, already logged
                        ├─ process_chat_message (AutoBot chat pipeline)
                        └─ WhatsAppIntegration.send_text_message (reply)
 
@@ -32,6 +34,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.gateway.gateway_manager import GatewayManager
+from services.gateway.ingest_governor import ingest_governor
 from services.whatsapp_service import (
     build_integration,
     download_whatsapp_media,
@@ -63,6 +66,19 @@ async def send_whatsapp_response(to: str, response_text: str) -> None:
         logger.error("Cannot send WhatsApp reply — channel not configured")
         return
     await integration.send_text_message({"to": to, "body": response_text})
+
+    # Record this agent-authored send for the recursion guard (#14028) — the
+    # actual live send seam (GatewayManager.route_message is not reached from
+    # this webhook path).
+    #
+    # No bot-id resolver is registered for "whatsapp" (unlike Telegram):
+    # WhatsApp Cloud API's identity spaces differ structurally — an inbound
+    # message's "from" is always the user's phone number, never our
+    # phone_number_id, so a bot-self comparison could never fire regardless
+    # of what it's set to. The recursion guard (this call) and dedup remain
+    # the real defenses on this platform; the ingest_governor warn-once log
+    # documents the bot-self filter being a no-op here rather than hiding it.
+    await ingest_governor.record_agent_send(platform="whatsapp", channel_id=to)
 
 
 async def _route_to_chat_and_reply(
@@ -237,7 +253,12 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
                 len(media_bytes),
             )
 
+        # Normalize, then through ingest governance (bot-self filter / dedup /
+        # recursion guard, #14028). None means the message was dropped; already
+        # logged why — skip routing without erroring the whole webhook delivery.
         unified_message = await gateway_manager.normalize_message(raw_message)
+        if unified_message is None:
+            continue
         await _route_to_chat_and_reply(request, unified_message, media_bytes, media_mime_type, media_id)
 
     return JSONResponse({"status": "ok"})
