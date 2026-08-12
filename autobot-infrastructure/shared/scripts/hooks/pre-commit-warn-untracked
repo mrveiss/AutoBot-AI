@@ -30,7 +30,19 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+# GH#14161: this hook's own contract is "warning only, never blocks a commit"
+# (see header above). The old unguarded `source` let a missing/broken
+# lib/_common.sh fall through silently under `set -uo pipefail` (no `-e`,
+# so a failed source did not itself stop the script) — but the very next
+# reference to ${BOLD}/${YELLOW}/${NC} below is an unbound-variable error
+# under `set -u`, which DOES abort the script regardless of `-e`. At the
+# prepare-commit-msg stage that non-zero exit aborts the commit — the exact
+# opposite of this hook's documented contract. A missing dependency must
+# degrade to "skip the warning silently" (still exit 0), never to a hard
+# stop; #14151's fail-CLOSED direction is deliberately not applied here.
+if ! source "$SCRIPT_DIR/lib/_common.sh" 2>/dev/null; then
+    exit 0
+fi
 
 SOURCE_PATTERN='\.py$|\.ts$|\.vue$|\.js$'
 
