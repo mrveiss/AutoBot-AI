@@ -262,8 +262,8 @@ async def _count_kb_facts() -> int:
         return 0
 
 
-@with_error_handling
 @router.get("/retention-settings", response_model=Dict[str, Any])
+@with_error_handling()
 async def get_retention_settings(
     request: Request,
     _admin: bool = Depends(require_role("admin", "superadmin")),
