@@ -254,25 +254,25 @@ async def test_executor_rollup_counts_by_class_and_status(app, client, session_f
     # Person bucket: exactly the two cleanly-assigned items, nothing more.
     assert cells[(AssigneeType.USER.value, WorkItemStatus.BACKLOG.value)] == 1
     assert cells[(AssigneeType.USER.value, WorkItemStatus.DONE.value)] == 1
-    assert cells.get((AssigneeType.USER.value, WorkItemStatus.READY.value), 0) == 0, (
-        "the dangling user-typed/NULL-id row must not count as a person"
-    )
+    assert (
+        cells.get((AssigneeType.USER.value, WorkItemStatus.READY.value), 0) == 0
+    ), "the dangling user-typed/NULL-id row must not count as a person"
 
     # Agent bucket: exactly the three cleanly-assigned items.
     assert cells[(AssigneeType.AGENT.value, WorkItemStatus.IN_PROGRESS.value)] == 1
     assert cells[(AssigneeType.AGENT.value, WorkItemStatus.DONE.value)] == 2
-    assert cells.get((AssigneeType.AGENT.value, WorkItemStatus.READY.value), 0) == 0, (
-        "the dangling agent-typed/NULL-id row must not count as an agent"
-    )
+    assert (
+        cells.get((AssigneeType.AGENT.value, WorkItemStatus.READY.value), 0) == 0
+    ), "the dangling agent-typed/NULL-id row must not count as an agent"
 
     # Unassigned bucket: the two genuine nulls + the mistyped row + the two
     # dangling rows = 5. Asserted directly, not as a remainder.
-    assert cells[("unassigned", WorkItemStatus.BACKLOG.value)] == 2, (
-        "one genuine null + one mistyped 'bogus' row, both BACKLOG"
-    )
-    assert cells[("unassigned", WorkItemStatus.READY.value)] == 3, (
-        "one genuine null + the two dangling user/agent rows, all READY"
-    )
+    assert (
+        cells[("unassigned", WorkItemStatus.BACKLOG.value)] == 2
+    ), "one genuine null + one mistyped 'bogus' row, both BACKLOG"
+    assert (
+        cells[("unassigned", WorkItemStatus.READY.value)] == 3
+    ), "one genuine null + the two dangling user/agent rows, all READY"
 
     total = sum(cells.values())
     assert total == 10, "every seeded item must be counted exactly once"
