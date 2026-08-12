@@ -54,6 +54,13 @@ ALLOWLIST: frozenset[str] = frozenset(
         # The facts themselves must check both forms for backward compat.
         "autobot-slm-backend/ansible/inventory/group_vars/all.yml",
         "autobot-slm-backend/ansible/playbooks/vars/role_active_facts.yml",
+        # #14181: the test inventory is a deliberate BYTE-IDENTICAL duplicate of
+        # inventory/group_vars/all.yml -- a real file rather than a symlink
+        # because `core.symlinks=false` materializes symlinks as plain text
+        # (#14149). `tests/check_test_inventory_group_vars.py` enforces that
+        # identity in CI, so "fixing" the OR-chains here would break the very
+        # check that keeps it in sync with the file already allowlisted above.
+        "autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml",
         # This file and its test.
         "tools/lint/check_canonical_role_names.py",
         "tools/lint/check_canonical_role_names_test.py",
@@ -68,8 +75,16 @@ ALLOWLIST: frozenset[str] = frozenset(
 #   ('ai-stack' in node_roles)
 # Not matched (canonical):
 #   'autobot-backend' in node_roles
+# #14181: `\s+node_roles` required the variable to follow `in` directly, so the
+# parenthesised spelling `'X' in (node_roles | default([]))` was invisible. That
+# form is the one the OR-chains in group_vars/all.yml use 18 times — allowlisted
+# there deliberately — and a gate written that way anywhere else would have
+# passed the rule silently. Zero such sites exist outside the allowlist today;
+# the widening is so none can appear.
 _ROLE_PAT = re.compile(
-    r"""['"](""" + "|".join(re.escape(k) for k in DEPRECATED_SHORT_FORMS) + r""")['"]\s+in\s+node_roles"""
+    r"""['"]("""
+    + "|".join(re.escape(k) for k in DEPRECATED_SHORT_FORMS)
+    + r""")['"]\s+in\s+\(?\s*node_roles"""
 )
 
 
