@@ -138,6 +138,53 @@ EXECUTE_COMMAND_SCHEMA: dict = {
     "required": ["command"],
 }
 
+READ_SPILLED_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "anchor": {
+            "type": "string",
+            "description": (
+                "The anchor from a spilled tool result's note, e.g. " "'autobot:spill:<run>:<tool>:<digest>'."
+            ),
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Character offset to read from. Page forward while the reply reports has_more.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": ("Characters to return. Capped server-side — a window, not the whole artifact."),
+        },
+    },
+    "required": ["anchor"],
+}
+
+#: What to tell the model when an anchor does not resolve, by reason.
+#: Module-level rather than rebuilt per call.
+_SPILL_MISS_ADVICE: dict[str, str] = {
+    # Bad offset/limit — the model can fix this itself, so mirror the
+    # self-correction hint the schema gate gives.
+    "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
+    # No run is bound to this context: an anchor cannot resolve here at all,
+    # and a different anchor would fare no better.
+    "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
+    # The artifact is genuinely gone or never existed.
+    "not_found": "Do not retry this anchor.",
+}
+
+#: The default, for a miss whose cause the reader could not determine.
+#:
+#: `read_spilled` swallows every exception into `None`, and a cross-run refusal
+#: returns `None` too, so an unknown reason covers a truncated artifact mid-write
+#: (spill_if_oversized writes with a bare write_text, no temp+rename, to a
+#: content-addressed path a re-spill rewrites), a transient OSError, a
+#: PermissionError, and a run-scope refusal. In every one of those the output is
+#: still on disk. Telling the model "do not retry" there is a permanent verdict
+#: on a cause nobody established — the shape this whole issue is about.
+_SPILL_MISS_UNKNOWN_ADVICE = (
+    "The read did not report why it failed. This may be transient — retrying once is reasonable."
+)
+
 WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -494,6 +541,7 @@ _INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
 # is unchanged.
 _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "execute_command": EXECUTE_COMMAND_SCHEMA,
+    "read_spilled_output": READ_SPILLED_OUTPUT_SCHEMA,
     "web_search": WEB_SEARCH_SCHEMA,
     "navigate": NAVIGATE_SCHEMA,
     "click": CLICK_SCHEMA,
@@ -627,7 +675,18 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     BROWSER_TOOL_NAMES
     | WEB_RESEARCH_TOOL_NAMES
     | LIVE_PAGE_EXTRACT_TOOL_NAMES
-    | frozenset({"web_search", "execute_command"})
+    # #13919: read_spilled_output is dispatchable unconditionally, so a run that
+    # spilled before AUTOBOT_TOOL_OUTPUT_SPILL was turned off can still resolve
+    # its anchors — `read_spilled_window` does not consult the flag.
+    #
+    # This DOES leak into prompt content, contrary to an earlier version of this
+    # comment: `_build_unknown_tool_error` derives `known_tools` from this set,
+    # so a model that fumbles any tool name is told this one exists even with the
+    # feature off. Accepted deliberately — the alternative is a flag-dependent
+    # membership set, which would make routing depend on import-time env state
+    # and is a worse trade than one extra name in an error hint. With the flag
+    # off nothing spills, so following the hint reports not-found.
+    | frozenset({"web_search", "execute_command", "read_spilled_output"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -2759,6 +2818,81 @@ class ToolHandlerMixin:
                 metadata={"tool": "extract_content", "error": True},
             )
 
+    async def _handle_read_spilled_output(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ):
+        """Re-read a window of a tool result that was spilled out of context (#13919).
+
+        #13692 writes oversized tool output aside and leaves a bounded excerpt
+        plus an anchor, and the excerpt's note tells the model to call this tool.
+        #13754 made it dispatchable through ``ToolRegistry.execute_tool`` — which
+        has no production callers, so at this seam, the one every real tool call
+        funnels through, the instruction still named something unreachable. An
+        agent following it landed in ``_build_unknown_tool_error`` and burned its
+        invalid-call budget.
+
+        The run is bound server-side by the agent loop, never taken from
+        arguments: the anchor carries its owning run id in plaintext, so a
+        ``task_id`` parameter would let any holder of an anchor read the run it
+        came from by echoing the id back.
+
+        Yields:
+            WorkflowMessage for the read result.
+        """
+        params = tool_call.get("params", {})
+        anchor = str(params.get("anchor", ""))
+
+        try:
+            from agent_loop.tool_output_spill import read_spilled_window
+
+            # Off the event loop. read_spilled reads and json-parses the WHOLE
+            # artifact (up to SPILL_MAX_ARTIFACT_CHARS, 5,000,000) before
+            # slicing out at most 8,000 chars, so paging a large artifact means
+            # re-reading and re-parsing it once per call. The write side already
+            # took this decision — spill_results_async exists because a blocking
+            # write_text stalls every other coroutine in the process.
+            window = await asyncio.to_thread(
+                read_spilled_window, anchor, offset=params.get("offset", 0), limit=params.get("limit")
+            )
+        except Exception as exc:
+            logger.error("[#13919] read_spilled_output failed: %s", exc)
+            execution_results.append({"tool": "read_spilled_output", "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"read_spilled_output failed: {exc}",
+                metadata={"tool": "read_spilled_output", "error": True},
+            )
+            return
+
+        if not window.get("found"):
+            # The miss reasons need different responses. Flattening them into
+            # "do not retry" tells a model to abandon an anchor over a
+            # self-correctable argument error, or over a transient one.
+            reason = window.get("reason", "unknown")
+            advice = _SPILL_MISS_ADVICE.get(reason, _SPILL_MISS_UNKNOWN_ADVICE)
+            execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
+            yield WorkflowMessage(
+                type="command_output",
+                content=f"No spilled output for anchor {anchor!r} ({reason}). {advice}",
+                metadata={"tool": "read_spilled_output", "status": reason},
+            )
+            return
+
+        execution_results.append({"tool": "read_spilled_output", "status": "success", "output": window["content"]})
+        yield WorkflowMessage(
+            type="command_output",
+            content=window["content"],
+            metadata={
+                "tool": "read_spilled_output",
+                "status": "success",
+                "offset": window["offset"],
+                "total_chars": window["total_chars"],
+                "has_more": window["has_more"],
+            },
+        )
+
     async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
         """Read (html, url) off the browser session's *current* page. Issue #11540.
 
@@ -3496,6 +3630,8 @@ class ToolHandlerMixin:
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
             return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+        if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
+            return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,
