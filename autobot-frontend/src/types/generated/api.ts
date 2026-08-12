@@ -49597,6 +49597,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Teams
+         * @description Return the company's teams and their member user ids (#13938).
+         *
+         *     Company-scoped by path parameter through the same shared
+         *     :func:`assert_company_access` guard the rest of the LLC router uses, rather
+         *     than by the ambient org context that ``/teams`` relies on — a platform
+         *     admin viewing another company's Org Chart must see that company's teams,
+         *     not their own.
+         *
+         *     Two queries, both bounded by the company: teams, then the memberships of
+         *     those teams. Soft-deleted teams are excluded, matching every other team
+         *     listing.
+         */
+        get: operations["get_company_teams_api_llc_companies__company_id__teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/agents/search": {
         parameters: {
             query?: never;
@@ -63217,6 +63247,39 @@ export interface components {
         CompanyStatusTransitionRequest: {
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyTeam
+         * @description One team of a company, with the user ids that belong to it.
+         *
+         *     Read-only projection of ``teams`` / ``team_memberships`` — the team data
+         *     plane that already exists (#6042). No new table, no migration, and no new
+         *     vocabulary: a company inside AutoBot *is* an ``Organization`` (see
+         *     ``CompanyService.delete``, which soft-deletes ``Organization.deleted_at``),
+         *     so ``Team.org_id == company_id`` is the company's own team list.
+         *
+         *     Only ``member_user_ids`` is returned because teams cover exactly one of the
+         *     three person kinds the Org Chart shows: account holders. Hired agents
+         *     (``agent_org_nodes``) and contacts (``llc_contacts``) carry no team column,
+         *     so inventing a team for them would be fabricated grouping. The frontend
+         *     renders them under an explicit "not in a team" bucket instead.
+         */
+        CompanyTeam: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Member User Ids */
+            member_user_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** CompanyTeamsResponse */
+        CompanyTeamsResponse: {
+            /** Teams */
+            teams: components["schemas"]["CompanyTeam"][];
         } & {
             [key: string]: unknown;
         };
@@ -167764,6 +167827,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgChartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_teams_api_llc_companies__company_id__teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyTeamsResponse"];
                 };
             };
             /** @description Validation Error */

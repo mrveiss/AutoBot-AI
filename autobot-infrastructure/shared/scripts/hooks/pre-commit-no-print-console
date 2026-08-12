@@ -43,12 +43,15 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 VIOLATIONS=0
 
@@ -162,15 +165,23 @@ report_violation() {
         echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
     fi
     echo "    ${code:0:100}"
-    ((VIOLATIONS++))
+    VIOLATIONS=$((VIOLATIONS + 1))
 }
 
 # Get Python files to scan (production code only).
 # Uses get_staged_files (#7185) for the staged-files lookup with positional-args
 # override (#6785: same hook runs as local pre-commit AND CI gate). The
 # multi-stage allowlist below is hook-specific and must remain.
+# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
+# used to be masked by the trailing `|| true` below, which existed only to
+# tolerate "the filters matched nothing" — a real git failure looked
+# identical. Captured separately so get_staged_files' non-zero return
+# propagates (set -e turns that into a hard stop); the later filter chain's
+# `|| true` still only ever tolerates an empty *result*, not a git error.
 get_staged_python_files() {
-    get_staged_files '\.py$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.py$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
@@ -181,8 +192,11 @@ get_staged_python_files() {
 
 # Get TypeScript/Vue files to scan (production code only).
 # Same #7185 + #6785 pattern as get_staged_python_files.
+# GH#14151: same masking fix as get_staged_python_files above.
 get_staged_ts_files() {
-    get_staged_files '\.(ts|vue|js)$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.(ts|vue|js)$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(node_modules|\.venv|venv|archive|temp|dist)' | \
         grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
         grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \

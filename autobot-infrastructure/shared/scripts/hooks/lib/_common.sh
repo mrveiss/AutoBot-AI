@@ -46,6 +46,15 @@ NC='\033[0m'
 # tokenizer, and the resulting IndentationError was reported to the user as
 # "1 direct Redis connection(s) found" in a file containing no Redis at all.
 # The pattern now applies to both branches, so the two invocation paths agree.
+# GH#14151: the no-argv branch used to pipe `git diff --cached` straight into
+# `grep ... || true` — the trailing `|| true` swallowed BOTH "grep matched
+# nothing" (normal) AND "git diff itself failed" (e.g. a corrupted index)
+# identically, returning empty output either way. Every caller's own
+# `[ -z "$files" ] && exit 0` then read a broken git as "nothing staged" and
+# reported clean. `git diff`'s own exit status is now captured separately so
+# a real git failure propagates as get_staged_files' own non-zero return
+# (which `set -e` in every caller turns into a hard stop), while an empty-but
+# -successful diff still yields empty output via the same `|| true` as before.
 get_staged_files() {
     local pattern="$1"
     shift
@@ -53,7 +62,10 @@ get_staged_files() {
         printf '%s\n' "$@" | grep -E "$pattern" || true
         return
     fi
-    git diff --cached --name-only --diff-filter=ACMRT \
-        | grep -E "$pattern" \
-        || true
+    local diff_output
+    diff_output="$(git diff --cached --name-only --diff-filter=ACMRT)" || {
+        echo "FATAL: git diff --cached failed — cannot determine staged files, refusing to report clean" >&2
+        return 1
+    }
+    printf '%s\n' "$diff_output" | grep -E "$pattern" || true
 }
