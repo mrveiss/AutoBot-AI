@@ -3173,7 +3173,10 @@ class ToolHandlerMixin:
         if not isinstance(args, dict):
             args = {"value": repr(args)}
         reason = tool_call.get("reason", "")
-        task_id = ctx.session_id if ctx is not None else None
+        # `session_id` is only used as an opaque trajectory/log identifier here —
+        # optional like `requires_approval_before` above, so a ctx double missing
+        # it (as several existing seam tests use) must not crash the guard.
+        task_id = getattr(ctx, "session_id", None) if ctx is not None else None
 
         result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
         if result.verdict != VerifierVerdict.BLOCK:

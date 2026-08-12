@@ -32,7 +32,19 @@ def _mixin() -> ToolHandlerMixin:
 
 
 def _ctx() -> SimpleNamespace:
-    return SimpleNamespace(session_id="sess-1", context={})
+    # `agent_context`/`requires_approval_before`/`consecutive_invalid_tool_calls`
+    # are only touched by the OTHER stops on the seam (forbidden_work,
+    # work-item approval, the unknown-tool fallback) — included here so this
+    # stand-in also survives a full `_dispatch_tool_call` drive that falls
+    # through past the verifier (e.g. under the mutation test below), not just
+    # direct `_enforce_pre_action_verifier` calls.
+    return SimpleNamespace(
+        session_id="sess-1",
+        context={},
+        agent_context=None,
+        requires_approval_before=None,
+        consecutive_invalid_tool_calls=0,
+    )
 
 
 def _call(name: str = "write_file", **args) -> dict:
@@ -48,13 +60,58 @@ def _verdict(verdict: VerifierVerdict, prob: float = 0.9, rationale: str = "flaw
     )
 
 
-def test_the_guard_is_reached_from_the_dispatch_seam() -> None:
-    """`_dispatch_tool_call` must actually call it — a guard nothing invokes is #14031 all over again."""
+def test_the_call_site_still_names_the_enforcer() -> None:
+    """Rename guard, NOT a wiring guard (see `test_the_live_dispatch_seam_...` below).
+
+    A source-text substring check proves the call is *written*, not that it is
+    *reached* — it stays green if the call sits after an early `return`, behind
+    a condition that is never true, or is otherwise made dead while the text
+    stays in the file. It exists only to catch the call site being renamed or
+    deleted outright; it is deliberately NOT relied on for wiring proof.
+    """
     import inspect
 
     source = inspect.getsource(ToolHandlerMixin._dispatch_tool_call)
 
     assert "_enforce_pre_action_verifier(" in source
+
+
+@pytest.mark.asyncio
+async def test_the_live_dispatch_seam_reaches_and_awaits_the_verifier() -> None:
+    """Behavioural wiring proof: drive the REAL `_dispatch_tool_call`, not a text scan.
+
+    Patches `PreActionVerifier.verify` and asserts it was awaited with the
+    call the seam should have passed it, end to end through the actual
+    enforcer chain (forbidden_work -> config_protection -> fact_forcing ->
+    verifier -> ...). This is what catches the failure mode a source-text
+    check cannot: the call site present in the file but unreachable.
+    """
+    verify_mock = AsyncMock(return_value=_verdict(VerifierVerdict.BLOCK, prob=0.9, rationale="flawed"))
+    execution_results: list = []
+    messages = []
+
+    with patch("autobot_shared.pre_action_verifier_guard.PreActionVerifier.verify", new=verify_mock):
+        async for item in _mixin()._dispatch_tool_call(
+            _call("write_file", path="/tmp/a"),
+            "session-1",
+            "term-1",
+            "http://localhost:11434",
+            "test-model",
+            execution_results,
+            [],
+            ctx=_ctx(),
+        ):
+            messages.append(item)
+
+    verify_mock.assert_awaited_once()
+    awaited = verify_mock.await_args
+    assert awaited.args[0] == "write_file"
+    assert awaited.args[1] == {"path": "/tmp/a"}
+    assert awaited.kwargs.get("task_id") == "sess-1"
+    # The BLOCK verdict short-circuits dispatch — only the verifier's own
+    # message is yielded, proving the call was reached mid-seam, not bypassed.
+    assert len(messages) == 1
+    assert messages[0].type == "approval_required"
 
 
 @pytest.mark.asyncio
