@@ -118,6 +118,11 @@ function mockApi({
     if (url === '/api/llc/companies/c1/org-chart') {
       return Promise.resolve({ nodes: structuredClone(nodes) })
     }
+    // #13942: OrgChart also loads the executor rollup on mount, independent
+    // of the People tab — every fixture in this file must answer it.
+    if (url === '/api/llc/companies/c1/work-items/executor-rollup') {
+      return Promise.resolve({ cells: [] })
+    }
     if (url === '/api/llc/contacts/c1') {
       return contactsFail
         ? Promise.reject(new Error('contacts unavailable'))
@@ -425,8 +430,11 @@ describe('People list loading behaviour (#13938)', () => {
     mockApi()
     const wrapper = await mountChart()
 
-    expect(get).toHaveBeenCalledTimes(1)
+    // #13942: mount now issues two requests — the tree and the (independent,
+    // always-on) executor rollup — neither of which touches contacts/teams.
+    expect(get).toHaveBeenCalledTimes(2)
     expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/org-chart')
+    expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/work-items/executor-rollup')
 
     await wrapper.get('[data-testid="org-view-people"]').trigger('click')
     await flushPromises()
