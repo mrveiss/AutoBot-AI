@@ -195,7 +195,33 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
                     f"{name}: an unguarded `git -C <code_source>` is visible to the checker:\n  {line.strip()[:120]}"
                 )
 
-    assert visible >= 20, (
-        f"only {visible} `git -C <code_source>` sites are visible to the checker; "
-        "a guarded command folded across lines drops out of view entirely"
-    )
+    # Two weaker forms were tried and both let the mutation through, so they
+    # are recorded rather than repeated: a `visible >= 20` floor still passed
+    # when re-splitting one site dropped the count to 20, and "each file has at
+    # least one visible site" still passed because update-all-nodes.yml has ten
+    # other guarded sites. The assertion has to name the *specific* command
+    # each fix guards.
+    must_be_visible = {
+        "autobot-slm-backend/ansible/playbooks/sync-code-source.yml": "_code_source_dest",
+        # Marker must be UNIQUE to the guarded site. "rev-parse HEAD" is not:
+        # update-all-nodes.yml:150 contains "rev-parse HEAD~", which matches as a
+        # substring, so re-splitting line 274 still found a "matching" line and the
+        # mutation passed. "code_source_dir" appears only on the sites this fix
+        # guards; the other ten use git_repo_root.
+        "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml": "code_source_dir",
+        "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml": "code_source_dir",
+    }
+    for name, marker in sorted(must_be_visible.items()):
+        path = REPO_ROOT / name
+        if not path.is_file():  # pragma: no cover - file moved
+            continue
+        hits = [line for line in path.read_text(encoding="utf-8").splitlines() if PATTERN.search(line)]
+        matching = [line for line in hits if marker in line]
+        assert matching, (
+            f"{name}: the `{marker}` command is no longer visible to the checker. "
+            "A guarded command folded across physical lines drops out of view entirely — "
+            "the command stays correct while the guard stops watching it."
+        )
+        assert all(SAFE_FLAG.search(line) for line in matching), f"{name}: `{marker}` lost its safe.directory guard"
+
+    assert visible >= len(must_be_visible), f"expected at least {len(must_be_visible)} visible sites, found {visible}"
