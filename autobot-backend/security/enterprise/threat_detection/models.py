@@ -16,9 +16,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
 from .types import FILE_OPERATION_ACTIONS, ThreatCategory, ThreatLevel
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -289,6 +292,113 @@ class UserProfile:
     def is_high_risk(self) -> bool:
         """Check if user is considered high risk"""
         return self.risk_score > 0.7
+
+    # === Issue #14159: JSON (de)serialization, replacing pickle ===
+
+    def to_dict(self) -> Dict:
+        """Serialize to a JSON-safe dict.
+
+        ``typical_ips`` is a ``set`` (JSON has no set type) so it is
+        serialized as a sorted list; ``from_dict`` restores it to a set.
+        ``last_updated`` is serialized as an ISO-8601 string.
+        """
+        return {
+            "user_id": self.user_id,
+            "baseline_actions": dict(self.baseline_actions),
+            "typical_hours": list(self.typical_hours),
+            "typical_ips": sorted(self.typical_ips),
+            "command_patterns": list(self.command_patterns),
+            "file_access_patterns": dict(self.file_access_patterns),
+            "api_usage_patterns": dict(self.api_usage_patterns),
+            "risk_score": self.risk_score,
+            "last_updated": self.last_updated.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "UserProfile | None":
+        """Build a ``UserProfile`` from a parsed-JSON dict, validating every field.
+
+        Returns ``None`` (and logs a warning) instead of raising when the
+        entry does not validate, so one corrupt or hand-edited profile
+        degrades to "that profile is dropped" -- never to "the process
+        dies" and never to "unvalidated data is trusted" (#14159).
+        """
+        if not isinstance(data, dict):
+            logger.warning(
+                "Skipping user profile entry: expected a JSON object, got %s",
+                type(data).__name__,
+            )
+            return None
+
+        user_id = data.get("user_id")
+        if not isinstance(user_id, str) or not user_id:
+            logger.warning("Skipping user profile entry: missing or invalid user_id")
+            return None
+
+        baseline_actions = data.get("baseline_actions", {})
+        if not isinstance(baseline_actions, dict) or not all(
+            isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+            for k, v in baseline_actions.items()
+        ):
+            logger.warning("Skipping user profile %s: invalid baseline_actions", user_id)
+            return None
+
+        typical_hours = data.get("typical_hours", [])
+        if not isinstance(typical_hours, list) or not all(
+            isinstance(h, int) and not isinstance(h, bool) for h in typical_hours
+        ):
+            logger.warning("Skipping user profile %s: invalid typical_hours", user_id)
+            return None
+
+        typical_ips = data.get("typical_ips", [])
+        if not isinstance(typical_ips, list) or not all(isinstance(ip, str) for ip in typical_ips):
+            logger.warning("Skipping user profile %s: invalid typical_ips", user_id)
+            return None
+
+        command_patterns = data.get("command_patterns", [])
+        if not isinstance(command_patterns, list) or not all(isinstance(c, str) for c in command_patterns):
+            logger.warning("Skipping user profile %s: invalid command_patterns", user_id)
+            return None
+
+        file_access_patterns = data.get("file_access_patterns", {})
+        if not isinstance(file_access_patterns, dict) or not all(
+            isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool)
+            for k, v in file_access_patterns.items()
+        ):
+            logger.warning("Skipping user profile %s: invalid file_access_patterns", user_id)
+            return None
+
+        api_usage_patterns = data.get("api_usage_patterns", {})
+        if not isinstance(api_usage_patterns, dict) or not all(
+            isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+            for k, v in api_usage_patterns.items()
+        ):
+            logger.warning("Skipping user profile %s: invalid api_usage_patterns", user_id)
+            return None
+
+        risk_score = data.get("risk_score", 0.5)
+        if not isinstance(risk_score, (int, float)) or isinstance(risk_score, bool):
+            logger.warning("Skipping user profile %s: invalid risk_score", user_id)
+            return None
+
+        last_updated_raw = data.get("last_updated")
+        try:
+            last_updated = parse_utc_iso(last_updated_raw) if last_updated_raw is not None else now_utc()
+        except (TypeError, ValueError) as exc:
+            logger.warning("Skipping user profile %s: invalid last_updated (%s)", user_id, exc)
+            return None
+
+        return cls(
+            user_id=user_id,
+            baseline_actions=dict(baseline_actions),
+            typical_hours=list(typical_hours),
+            typical_ips=set(typical_ips),
+            command_patterns=list(command_patterns),
+            file_access_patterns=dict(file_access_patterns),
+            api_usage_patterns=dict(api_usage_patterns),
+            risk_score=float(risk_score),
+            last_updated=last_updated,
+        )
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
