@@ -72,6 +72,20 @@ class AgentOrgNode(Base):
     adapter_config = Column(JSONB, nullable=True)
     context_mode = Column(String(16), nullable=False, default="thin", server_default=text("'thin'"))
 
+    # Pause/resume/terminate lifecycle state — migration 20260812_073 (#14108).
+    # ``controls_service.py`` wrote these through raw SQL since GH#8256; they
+    # were never mapped here (and, per #14108, never migrated at all — see
+    # 20260812_073's docstring), so the org-chart composition in
+    # ``llc/api/companies.py`` had no ORM-reachable column to read and fell
+    # back to deriving status purely from the latest heartbeat run, silently
+    # discarding pause/terminate on every reload.
+    # Default mirrors llc.models.enums.LLCAgentStatus.AVAILABLE ("available");
+    # not imported to avoid a models/ -> llc/ dependency (models/ is the
+    # lower layer other packages, including llc/, import from).
+    status = Column(String(32), nullable=False, default="available", server_default=text("'available'"))
+    pause_reason = Column(Text, nullable=True)
+    paused_at = Column(DateTime(timezone=True), nullable=True)
+
     # Pause/resume state — migration 20260525_039 (GH#8256, #9899)
     pre_pause_status = Column(String(32), nullable=True)
 
