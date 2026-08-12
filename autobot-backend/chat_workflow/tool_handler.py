@@ -181,7 +181,9 @@ _SPILL_MISS_ADVICE: dict[str, str] = {
 #: PermissionError, and a run-scope refusal. In every one of those the output is
 #: still on disk. Telling the model "do not retry" there is a permanent verdict
 #: on a cause nobody established — the shape this whole issue is about.
-_SPILL_MISS_UNKNOWN_ADVICE = "The read did not report why it failed. This may be transient — retrying once is reasonable."
+_SPILL_MISS_UNKNOWN_ADVICE = (
+    "The read did not report why it failed. This may be transient — retrying once is reasonable."
+)
 
 WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
