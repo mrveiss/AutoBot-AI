@@ -35,6 +35,21 @@ export const RULE_DIMENSIONS = ['status', 'owner', 'tool'] as const
 export type CanvasRuleDimension = (typeof RULE_DIMENSIONS)[number]
 
 /**
+ * The dimensions actually offered in the UI.
+ *
+ * `tool` is implemented and tested but **not offered yet**: the org-chart
+ * endpoint sends `org_role` in the field named `adapter_type` (#14109), so the
+ * control would title a legend reading `worker` / `manager` / `cto` as "Tool".
+ * The rule layer is correct over the *declared* contract — when #14109 makes the
+ * payload honest, delete this list and iterate `RULE_DIMENSIONS` again. Nothing
+ * else needs to change.
+ *
+ * #13941 asked for status and owner; tool was additional scope, so gating it
+ * costs none of the issue's acceptance criteria.
+ */
+export const SELECTABLE_RULE_DIMENSIONS = ['status', 'owner'] as const satisfies readonly CanvasRuleDimension[]
+
+/**
  * The non-colour half of a rule's signal. Colour is never allowed to be the
  * only differentiator, so every rule also selects a marker shape — and the
  * label text is rendered next to it, on the node and in the legend alike.

@@ -23,7 +23,7 @@
         <div v-if="hasOrgNodes" class="rule-mode" role="group" :aria-label="$t('llc.canvasRules.colourBy')">
           <span class="rule-mode-label">{{ $t('llc.canvasRules.colourBy') }}</span>
           <button
-            v-for="dimension in RULE_DIMENSIONS"
+            v-for="dimension in SELECTABLE_RULE_DIMENSIONS"
             :key="dimension"
             type="button"
             class="rule-mode-btn"
@@ -257,7 +257,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
-  RULE_DIMENSIONS,
+  SELECTABLE_RULE_DIMENSIONS,
   activeRules,
   matchRule,
   orgNodeFacts,
@@ -682,6 +682,9 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 
 /* The accent stripe. Selection still reads on the remaining three sides plus
    the focus ring, so a coloured node never hides which node is selected. */
+/* Must stay AFTER `.workflow-node.selected`: equal specificity (0,2,0), so the
+   inline-start accent wins on source order alone. Move this above it and the
+   stripe silently vanishes on the selected node. */
 .workflow-node.org-person { border-inline-start-width: 6px; border-inline-start-color: var(--rule-accent, var(--border-default)); }
 
 .rule-chip { display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
@@ -701,7 +704,9 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .rule-mode-btn.active { background: var(--bg-tertiary); border-color: var(--color-primary); color: var(--text-primary); }
 .rule-mode-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
-.canvas-legend { position: absolute; bottom: var(--spacing-3); inset-inline-start: var(--spacing-3); max-width: 240px; padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+/* max-height: one legend entry per distinct value, so a large company would
+   otherwise grow the box up over the nodes it is explaining. */
+.canvas-legend { position: absolute; bottom: var(--spacing-3); inset-inline-start: var(--spacing-3); max-width: 240px; max-height: 220px; overflow-y: auto; padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
 .canvas-legend-title { display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--spacing-1); }
 .canvas-legend-items { list-style: none; margin: var(--spacing-0); padding: var(--spacing-0); display: flex; flex-direction: column; gap: var(--spacing-1); }
 .canvas-legend-item { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-secondary); }

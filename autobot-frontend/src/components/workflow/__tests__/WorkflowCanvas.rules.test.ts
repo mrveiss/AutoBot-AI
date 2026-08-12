@@ -44,10 +44,22 @@ function person(id: string, data: Record<string, unknown>): CanvasNode {
  * display vocabulary and which carries no adapter at all.
  */
 const ORG_NODES: CanvasNode[] = [
+  // NOTE the adapter values. `'claude'` / `'ollama'` are what this field is
+  // *declared* to carry; #14109 records that the org-chart endpoint actually
+  // sends `org_role` here, so a real payload reads `worker` / `manager`. The
+  // fixture below keeps one honest value so the corpus shows today's reality
+  // rather than an aspirational shape — writing fixtures that assert a payload
+  // the backend never sends is exactly how #13993 stayed invisible for months.
   person('ada', { status: 'active', adapter_type: 'claude', is_human: false }),
   person('bo', { status: 'paused', adapter_type: 'ollama', is_human: false }),
   person('cy', { status: 'idle', adapter_type: 'human', is_human: true }),
   person('dee', { status: 'on_leave', adapter_type: '', is_human: false }),
+]
+
+/** What the API sends today (#14109): the org role, in the adapter field. */
+const ORG_NODES_TODAYS_PAYLOAD: CanvasNode[] = [
+  person('ada', { status: 'active', adapter_type: 'worker', is_human: false }),
+  person('bo', { status: 'paused', adapter_type: 'manager', is_human: false }),
 ]
 
 const WORKFLOW_NODES: CanvasNode[] = [
@@ -190,16 +202,29 @@ describe('the colour dimension is switchable (#13941)', () => {
     await wrapper.get(`[data-testid="rule-mode-${dimension}"]`).trigger('click')
   }
 
-  it('offers the three dimensions, with status selected by default', () => {
+  it('offers status and owner, with status selected by default', () => {
     const wrapper = mountCanvas({ nodes: ORG_NODES })
     const buttons = wrapper.findAll('.rule-mode-btn')
 
     expect(buttons.map((button) => button.text())).toEqual([
       RULES.dimension.status,
       RULES.dimension.owner,
-      RULES.dimension.tool,
     ])
     expect(buttons[0].attributes('aria-pressed')).toBe('true')
+  })
+
+  it('does not offer the tool dimension while the payload is dishonest (#14109)', () => {
+    // The rule layer implements `tool` correctly over the *declared* contract,
+    // but the endpoint sends `org_role` in the `adapter_type` field — so the
+    // control would title a legend of `worker` / `manager` as "Tool". Gated
+    // until #14109 lands; this test is what makes un-gating a deliberate act.
+    const wrapper = mountCanvas({ nodes: ORG_NODES_TODAYS_PAYLOAD })
+
+    expect(wrapper.find('[data-testid="rule-mode-tool"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(RULES.dimension.tool)
+    // …and nothing on screen presents a role as though it were a tool.
+    expect(legendLabels(wrapper)).not.toContain('worker')
+    expect(legendLabels(wrapper)).not.toContain('manager')
   })
 
   it('re-colours by owner kind and re-derives the legend', async () => {
@@ -220,27 +245,13 @@ describe('the colour dimension is switchable (#13941)', () => {
     ])
   })
 
-  it('re-colours by tool, labelling each bucket with the adapter itself', async () => {
-    const wrapper = mountCanvas({ nodes: ORG_NODES })
-
-    await switchTo(wrapper, 'tool')
-
-    expect(ruleIds(wrapper)).toEqual(['tool-claude', 'tool-ollama', 'tool-none', 'tool-none'])
-    expect(legendLabels(wrapper)).toEqual(['claude', 'ollama', RULES.tool.none])
-    // A person's adapter_type is the literal "human" (#13936) — it must never
-    // become a tool bucket of its own.
-    expect(legendLabels(wrapper)).not.toContain('human')
-  })
-
-  it('assigns distinct palette swatches to distinct tools', async () => {
-    const wrapper = mountCanvas({ nodes: ORG_NODES })
-
-    await switchTo(wrapper, 'tool')
-    const [ada, bo] = wrapper.findAll('.workflow-node.org-person')
-
-    expect(ada.classes()).toContain('rule-tool-1')
-    expect(bo.classes()).toContain('rule-tool-2')
-  })
+  // The two component tests that drove `rule-mode-tool` are gone with the
+  // control (#14109). Nothing is uncovered by that: the tool rule layer is
+  // exercised directly in `canvasNodeRules.test.ts` — one rule per distinct
+  // adapter in sorted order, raw-value labels, palette wrap, and the guard that
+  // a person's `adapter_type: 'human'` never becomes a bucket of its own. Those
+  // keep the implementation honest while it is not on screen; restore the two
+  // UI tests here when the dimension is un-gated.
 })
 
 describe('workflow authoring is untouched by the rule layer (#13941)', () => {
