@@ -72,7 +72,6 @@ _KNOWN_DORMANT = frozenset(
         "tools/lint/check_canonical_role_names.py",
         "tools/lint/check_git_safe_directory.py",
         "tools/lint/check_no_blocking_io_in_async.py",
-        "tools/lint/check_no_deprecated_ansible_facts.py",
         "tools/lint/check_no_kb_aioredis_access.py",
         "tools/lint/check_no_local_schemas.py",
         "tools/lint/check_no_utcnow_isoformat.py",
