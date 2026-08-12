@@ -12,6 +12,17 @@ Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
+# #13870: three settings the redis role's unit had and this one did not. Which
+# template won was decided by role order, so a host could run chroma with any
+# combination of them — and nothing made that visible.
+#
+# Chroma's telemetry is ON by default and posts to an external endpoint. Nobody
+# chose that; the other unit had already opted out.
+Environment="ANONYMIZED_TELEMETRY=FALSE"
+# StandardOutput below appends to a FILE, which is fully buffered rather than
+# line-buffered. Without this, chroma's own diagnostics sit in a 4-8KB buffer —
+# so the log an operator reads during an incident lags the incident.
+Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 # #12513: chroma's server-side token auth. The credential is deliberately NOT
 # inlined here as Environment=: this unit is deployed 0644 and world-readable, so
@@ -43,6 +54,18 @@ RestartSec=10
 # RestartSec * StartLimitBurst for the limit to be reachable at all.
 StartLimitIntervalSec=120
 StartLimitBurst=5
+# #13870/#13765: without a cgroup limit, `memory.max` reads "max" and the
+# headroom metric #13765 added has nothing to divide by — the unit is invisible
+# to the alerting built for exactly this failure. MemoryHigh throttles and feeds
+# `memory.events high`; MemoryMax is left unset by default because a hard cap on
+# a service that has never had one kills it the moment it exceeds the number.
+MemoryAccounting=yes
+{% if chromadb_memory_high %}
+MemoryHigh={{ chromadb_memory_high }}
+{% endif %}
+{% if chromadb_memory_max %}
+MemoryMax={{ chromadb_memory_max }}
+{% endif %}
 StandardOutput=append:{{ ai_log_dir }}/chromadb.log
 StandardError=append:{{ ai_log_dir }}/chromadb-error.log
 

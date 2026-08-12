@@ -91,3 +91,10 @@ chromadb_authn_env_file: /etc/autobot/chromadb.env
 # fixed. The both-roles case is resolved one precedence level up, by
 # `chromadb_service_owner` in group_vars/all.yml.
 chromadb_service_owner: "redis"
+
+# #13870/#13765: this unit already caps with MemoryMax, but a hard cap alone
+# produces no `memory.events high` — the reclaim counter that reached 21,052 in
+# the #13765 incident while systemd still reported the service active. MemoryHigh
+# is what generates it, and it must sit BELOW MemoryMax to mean anything.
+chromadb_memory_high: "3G"
+chromadb_memory_max: "4G"

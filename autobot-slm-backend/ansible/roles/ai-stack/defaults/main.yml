@@ -87,3 +87,16 @@ ai_system_commands_model: "dolphin-llama3:8b"
 # fixed. The both-roles case is resolved one precedence level up, by
 # `chromadb_service_owner` in group_vars/all.yml.
 chromadb_service_owner: "ai-stack"
+
+# #13870: cgroup memory accounting for chroma on the ai-stack topology.
+#
+# MemoryHigh, not MemoryMax, and that is the point. MemoryHigh is a THROTTLE:
+# exceeding it drives reclaim and increments `memory.events high`, which is the
+# counter #13765 built alerting on — it reached 21,052 on a host that systemd
+# still reported as `active`. MemoryMax is a KILL: setting a hard cap on a
+# service that has never had one OOM-kills it the moment it exceeds the number,
+# so introducing one blind would trade an observability gap for an outage.
+#
+# Set chromadb_memory_max explicitly once a host's real ceiling is known.
+chromadb_memory_high: "4G"
+chromadb_memory_max: ""

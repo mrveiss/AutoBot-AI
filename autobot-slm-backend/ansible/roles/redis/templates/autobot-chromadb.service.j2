@@ -50,7 +50,14 @@ StartLimitIntervalSec=120
 StartLimitBurst=5
 TimeoutStartSec=30
 TimeoutStopSec=30
-MemoryMax=4G
+# #13870/#13765: MemoryHigh throttles and feeds `memory.events high`, the
+# reclaim counter the #13765 alerting reads. A hard cap alone produces none of
+# it — the service is either fine or killed, with nothing in between to observe.
+MemoryAccounting=yes
+{% if chromadb_memory_high %}
+MemoryHigh={{ chromadb_memory_high }}
+{% endif %}
+MemoryMax={{ chromadb_memory_max | default("4G") }}
 
 PrivateTmp=true
 NoNewPrivileges=true
