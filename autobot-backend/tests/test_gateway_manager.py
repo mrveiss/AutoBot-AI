@@ -709,6 +709,44 @@ class TestIngestGovernanceWiring:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_agent_to_agent_loop_terminates_across_a_real_platform_round_trip(self):
+        """Simulates the actual failure mode from the issue: an agent-to-agent
+        reply chain on a channel where NO real platform round-trips
+        AutoBot-internal metadata -- every inbound webhook delivers a
+        brand-new payload with no memory of prior turns, exactly like a real
+        Discord/Slack/Telegram event. A payload field the platform never
+        echoes back cannot be the recursion guard's source of truth; the
+        guard must terminate the chain using state that survives the
+        round-trip (#14028)."""
+        from services.gateway.ingest_governor import INGEST_MAX_CHAIN_DEPTH
+
+        gateway = GatewayManager()
+        platform, channel = "discord", "loop-channel-rt"
+        max_turns = INGEST_MAX_CHAIN_DEPTH + 5
+
+        turns_survived = 0
+        for i in range(max_turns):
+            # A brand-new raw payload each turn, with no AutoBot-internal
+            # field -- real platforms never round-trip one.
+            raw = {
+                "platform": platform,
+                "author": {"id": "the-other-agent"},
+                "channel_id": channel,
+                "content": f"turn {i}",
+                "timestamp": time.time(),
+                "id": f"loop-rt-{i}",
+            }
+            unified = await gateway.normalize_message(raw)
+            if unified is None:
+                break
+            turns_survived += 1
+
+        assert turns_survived <= INGEST_MAX_CHAIN_DEPTH, (
+            f"chain ran {turns_survived} turns with no platform ever carrying "
+            "chain_depth in its payload -- the recursion guard did not terminate it"
+        )
+
+    @pytest.mark.asyncio
     async def test_normal_message_still_routes(self):
         """The governance stage must not break the working path."""
         gateway = GatewayManager()
