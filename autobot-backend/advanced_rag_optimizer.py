@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
+from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
@@ -615,7 +616,7 @@ class AdvancedRAGOptimizer:
 
         # Compute grid keys for all results
         def _cell_key(r: SearchResult) -> tuple:
-            category = r.metadata.get("category") or r.metadata.get("chunk_category") or "unknown"
+            category = r.metadata.get("category") or r.metadata.get("chunk_category") or CategoryDefaults.UNKNOWN
             source_parts = r.source_path.replace("\\", "/").split("/")
             domain = source_parts[0] if source_parts else "unknown"
             return (str(category), str(domain))

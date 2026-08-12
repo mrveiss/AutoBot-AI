@@ -36,6 +36,7 @@ from api.schemas_knowledge import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 
@@ -634,7 +635,7 @@ def _create_fact_node(fact: Dict[str, Any]) -> Dict[str, Any]:
         "type": "fact",
         "observations": [content],
         "metadata": {
-            "category": fact.get("category", "general"),
+            "category": fact.get("category", CategoryDefaults.GENERAL),
             "source": fact.get("source", "knowledge_base"),
             "confidence": fact.get("confidence", 1.0),
         },
@@ -749,7 +750,7 @@ def _create_dynamic_category_nodes(facts: List[Dict[str, Any]], nodes: List[Dict
     seen_categories: Set[str] = set()
 
     for fact in facts:
-        category = fact.get("category", "general")
+        category = fact.get("category", CategoryDefaults.GENERAL)
         if category and category not in seen_categories:
             seen_categories.add(category)
             node_id = f"cat_{category}"
@@ -837,7 +838,7 @@ def _process_facts_into_nodes(
         fact_ids.append(node["id"])
 
         # Create edge from category to fact
-        category = fact.get("category", "general")
+        category = fact.get("category", CategoryDefaults.GENERAL)
         cat_node_id = category_map.get(category)
         if cat_node_id:
             edges.append(
