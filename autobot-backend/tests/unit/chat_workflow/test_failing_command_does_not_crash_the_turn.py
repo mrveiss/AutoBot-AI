@@ -30,6 +30,7 @@ would leave the others a refactor away from reintroducing it.
 import pytest
 
 from chat_workflow.tool_handler import ToolHandlerMixin
+from services.agent_terminal.command_executor import CommandExecutor
 from tools.terminal_tool import TerminalTool
 
 
@@ -115,18 +116,39 @@ class TestTheRealBoundaryFromPtyResultToPrompt:
 
     @staticmethod
     def _pty_result(return_code: int, stdout: str) -> dict:
-        """Exactly what `command_executor._build_pty_result` emits.
+        """Whatever `command_executor._build_pty_result` emits -- by calling it.
 
-        Note `stderr: ""` and no `error` key — the PTY combines the streams.
+        #14141 round 4: this used to be a hand-written restatement whose
+        docstring claimed it was "exactly what `_build_pty_result` emits". A
+        restatement is only true on the day it is written; the producer can
+        rename a key, stop setting one, or start setting `error`, and every
+        assertion downstream keeps passing against a shape nothing produces.
+        That is the same defect rounds 1 and 2 failed on, one layer further
+        out -- so the producer is called instead of described.
+
+        Note `stderr: ""` and no `error` key -- the PTY combines the streams.
         Those two facts are why the old fallback chain always degraded to its
         literal, and why a hand-built dict with an `error` key hid the bug.
         """
-        return {
-            "status": "success" if return_code == 0 else "error",
-            "stdout": stdout,
-            "stderr": "",
-            "return_code": return_code,
-        }
+        return CommandExecutor._build_pty_result(CommandExecutor.__new__(CommandExecutor), stdout, return_code)
+
+    def test_the_producer_still_derives_status_from_the_exit_code(self):
+        """The invariant #14141 is really about, asserted at its origin.
+
+        `_create_execution_result` also maps an exit code to a status, but both
+        of its call sites are gated on ``status == "success"`` upstream, so that
+        mapping is unreachable and cannot be what protects this. The single
+        reachable decision is here, in the producer: everything downstream --
+        `_format_execution_result`'s branch, `_dispatch_command_by_status`'s
+        routing, and the ``Status:`` line the model reads -- propagates it
+        rather than re-deriving it. If this line ever reports success for a
+        non-zero exit, every one of those layers reports success too.
+        """
+        assert self._pty_result(0, "ok")["status"] == "success"
+        for code in (1, 2, 127, 139, 255):
+            result = self._pty_result(code, "output")
+            assert result["status"] == "error", f"exit {code} was reported to the model as success"
+            assert result["return_code"] == code
 
     @pytest.mark.asyncio
     async def test_a_failing_runners_report_survives_the_whole_chain(self):
