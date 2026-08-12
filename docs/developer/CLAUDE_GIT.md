@@ -60,13 +60,28 @@ merge.
 
 ---
 
-## Pre-Flight Checklist (Before Parallel Work)
+## Pre-Flight Checklist
 
-1. `git branch --show-current` — must be `Dev_new_gui`. If on a feature branch, STOP.
-2. Confirm Bash is approved in main session — sub-agents inherit from parent.
-3. `git status --porcelain` — if any files are dirty, commit or stash before spawning agents. Uncommitted edits are silently discarded when a subagent commits and upstream is merged (#4969).
-4. Verify issue isn't already resolved: `git log origin/Dev_new_gui --oneline --grep="#XXXX"`
-5. For architectural decisions, state in 1–2 sentences and wait for confirmation.
+**Universal — before ANY code change**, including inside your own worktree:
+
+1. `git status --porcelain` — if any files are dirty, commit them before going further.
+   Uncommitted edits are silently discarded when a subagent commits and upstream is merged
+   (#4969).
+2. `git stash list` — if it is non-empty, **ask before proceeding**. The stash stack is shared
+   across every worktree in the clone, so an entry may belong to another session.
+3. `git fetch origin Dev_new_gui` — do this *before* step 4, or the check below reads a stale
+   ref and reports work as unlanded when it already merged.
+4. Verify the issue isn't already resolved:
+   `git log origin/Dev_new_gui --oneline --grep="#XXXX"`
+
+**Additionally, before spawning agents or starting batch work:**
+
+5. `git branch --show-current` — the **main session** must be on `Dev_new_gui`. This step is
+   scoped to the dispatching session only; a worktree session is on `issue-XXXX` by mandate
+   and must not "correct" itself onto the base.
+6. Confirm Bash is approved in the main session — sub-agents inherit from the parent.
+7. No stale worktree already claims the target path (see the preflight above).
+8. For architectural decisions, state them in 1–2 sentences and wait for confirmation.
 
 ---
 

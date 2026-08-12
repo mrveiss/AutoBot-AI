@@ -21,13 +21,14 @@ Default behavior:
 
 ## Pre-Implementation Validation
 
-**Before spawning agents, verify:**
+**Run the canonical pre-flight first:** [`CLAUDE_GIT.md`](CLAUDE_GIT.md) "Pre-Flight
+Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply.
 
-1. `git branch --show-current` — must be `Dev_new_gui`
-2. `git status --porcelain` — if dirty, commit or stash before spawning
-3. Issue not already resolved: check `git log origin/Dev_new_gui --grep="#<issue>"`
-4. No stale worktrees: clean up existing `.worktrees/issue-<number>/` directories
-5. Issue preconditions resolved
+**Then the batch-specific additions:**
+
+1. No stale worktree already claims `.worktrees/issue-<number>/` — inventory it; never
+   clobber or reuse another session's tree
+2. Issue preconditions resolved (blockers named in its Implementation Order have landed)
 
 ---
 
@@ -57,8 +58,8 @@ restate it here. Two rules govern dispatch:
   "already resolved?" checks, per-PR CI verdicts, the leftover audit. Fan those out to Haiku
   in parallel; keep the implementation itself on the tier its agent declares.
 
-Delegate mechanical work only when it is also high-volume, repeated N times, or high-discard
-— one deterministic command is cheaper run inline than handed to an agent.
+When delegation pays (and when it does not) is defined once in
+[`CLAUDE_WORKFLOW.md`](CLAUDE_WORKFLOW.md) "Agent Delegation".
 
 ---
 

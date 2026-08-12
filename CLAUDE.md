@@ -12,7 +12,7 @@ repeated here; where the two disagree, **this file wins**.
 | Starting a task — the 8 core rules in full | [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) |
 | Branching, worktree collisions, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
 | Labels, `gh` workarounds, deployment, pre-merge gates | [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) |
-| Reviewing a PR, or about to merge one | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) |
+| Opening, reviewing, or merging a PR (incl. the required body headings) | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) |
 | Closing an issue | [`CLAUDE_CLOSURE.md`](docs/developer/CLAUDE_CLOSURE.md) |
 | Running parallel agents or a batch | [`CLAUDE_BATCH.md`](docs/developer/CLAUDE_BATCH.md) |
 | Need a service, port, or architecture fact | [`AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md) |
@@ -24,10 +24,11 @@ Correctness → Speed → Maintainability. No wasted motion, no speculative work
 Parallelize independent calls · minimal surface area · async-first · ≤3 exploration commands
 then act.
 
-**The 6 core rules** — full text in [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md):
+**The 8 core rules** — full text in [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md):
 1 Check before writing · 2 Reuse from `autobot_shared/` · 3 Standardize (≤30-line functions,
 no `_v2`/`_fix` suffixes) · 4 Clarify ambiguous architecture before coding · 5 Verify with
-evidence · 6 Report **and fix** every discovered problem.
+evidence · 6 Report **and fix** every discovered problem · 7 Grep the *behavior*, not the
+symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egress policy).
 
 ## Never violate
 

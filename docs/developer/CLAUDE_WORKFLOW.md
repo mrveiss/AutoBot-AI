@@ -13,6 +13,11 @@
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
+- **Long analyses go to a file, not the response.** Start every one in a scratch path *outside*
+  the repo, written incrementally as produced; the reply is the path plus a short summary.
+  Filing an umbrella issue or a design doc is the trigger to move it into
+  `docs/research/<topic>.md` (or `docs/audit/`, `docs/design/`) and cross-link it both ways.
+  An interrupted or token-capped response must never lose the work
 
 ---
 
@@ -66,10 +71,9 @@ branch cannot be deleted while a worktree has it checked out.
 
 Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh`
 
-**Pre-flight checks** before any code change: see [`CLAUDE_GIT.md`](CLAUDE_GIT.md)
-"Pre-Flight Checklist" — the canonical list. Dirty files must be committed before spawning
-subagents; uncommitted edits are silently discarded when a subagent commits and upstream is
-merged (#4969).
+**Pre-flight checks:** [`CLAUDE_GIT.md`](CLAUDE_GIT.md) "Pre-Flight Checklist" is the
+canonical list. Steps 1-4 are universal and apply inside your own worktree; steps 5-8 apply
+only when dispatching agents or starting batch work.
 
 ---
 
@@ -150,8 +154,20 @@ git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-bac
 **Delegation is not free** — a subagent costs a spawn, a prompt and its own context. For a
 single deterministic command, run it inline. Delegate mechanical work only when it is also
 **high-volume** (output would flood this context), **repeated** (N independent checks that can
-fan out in parallel), or **high-discard** (most of what is read is thrown away). Full routing
-table and the never-hand-to-Haiku list: the model-tiers doc in the global instructions.
+fan out in parallel), or **high-discard** (most of what is read is thrown away).
+
+**Tiers — pick by output type, not task difficulty.** This is the in-repo copy; the extended
+routing table and the never-hand-to-Haiku list live in the global model-tiers doc.
+
+| Tier | Model | Use for |
+|---|---|---|
+| Haiku | `claude-haiku-4-5-20251001` | mechanical work — sweeps, status checks, inventories, capture |
+| Fable | `claude-fable-5` | plans and design documents — PRDs, architecture proposals |
+| Sonnet | `claude-sonnet-5` | deliverables — code, reviews, acceptance criteria, approvals |
+
+Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
+its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which
+is a bug rather than a default.
 
 **Verify what comes back.** A subagent's report is an assertion, not evidence — more so the
 cheaper the model. Confirm the artifacts (`git log`, `gh pr list`, read the file) before
@@ -189,6 +205,11 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 - **Priority:** `priority: critical`, `priority: high`, `priority: medium`, `priority: low`
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
+
+**Update the issue as work progresses — not only at closure.** Post the pickup (what is being
+attempted, and the base SHA), any decision taken under a `Decision` heading, and the state you
+stopped in if the session dies. The issue is the only record that survives a lost worktree or
+a different machine.
 
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
 
