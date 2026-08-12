@@ -67,8 +67,9 @@ class TestTheErrorBranchNeverEmitsANoneError:
     def test_a_pty_failure_with_no_error_key_still_carries_a_message(self):
         formatted = TerminalTool._format_execution_result(
             TerminalTool.__new__(TerminalTool),
-            "./run-suite",
             {"status": "error", "stderr": "segfault", "return_code": 139},
+            "./run-suite",
+            None,
         )
 
         assert formatted["error"] is not None
@@ -77,8 +78,9 @@ class TestTheErrorBranchNeverEmitsANoneError:
     def test_a_failure_with_neither_error_nor_stderr_still_carries_a_message(self):
         formatted = TerminalTool._format_execution_result(
             TerminalTool.__new__(TerminalTool),
-            "./run-suite",
             {"status": "error", "return_code": 1},
+            "./run-suite",
+            None,
         )
 
         assert formatted["error"], "an empty error message is what the default was meant to prevent"
@@ -86,8 +88,9 @@ class TestTheErrorBranchNeverEmitsANoneError:
     def test_an_explicit_error_message_is_preserved(self):
         formatted = TerminalTool._format_execution_result(
             TerminalTool.__new__(TerminalTool),
-            "./run-suite",
             {"status": "error", "error": "the real reason", "stderr": "noise"},
+            "./run-suite",
+            None,
         )
 
         assert formatted["error"] == "the real reason"
