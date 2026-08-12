@@ -29,6 +29,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 from typing import AsyncIterator, Optional
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -303,6 +304,189 @@ async def test_org_chart_status_mapping(app, client, session_factory):  # noqa: 
     assert status_by_id[running_agent] == "active"
     # No heartbeat run at all → idle.
     assert status_by_id[no_run_agent] == "idle"
+
+
+# ---------------------------------------------------------------------------
+# 2b. Pause/terminate survive a reload (#14108) — the persisted lifecycle
+# state must win over a stale/live heartbeat run, not merely be writable.
+# ---------------------------------------------------------------------------
+
+
+def _mock_redis() -> AsyncMock:
+    """A permissive Redis stand-in for ControlsService's best-effort flag set.
+
+    ``get_async_redis_client`` is itself ``async def``, so ``patch(...)``
+    replaces it with an ``AsyncMock`` automatically (autodetected from the
+    patched target) — this helper only needs to be the *return value* of
+    that awaited call, matching ``llc/tests/test_controls.py``'s pattern.
+    """
+    redis = AsyncMock()
+    redis.set = AsyncMock()
+    redis.delete = AsyncMock()
+    return redis
+
+
+def _mock_activity_log() -> AsyncMock:
+    """``llc_activity_log`` FKs to ``organizations``, which this module's
+    minimal loop schema (``harness.create_loop_schema``) never creates —
+    mocked out exactly like ``llc/tests/test_controls.py``'s
+    ``_activity_log_mock``, since activity logging is not what these tests
+    exercise.
+    """
+    from llc.services.activity_log import LLCActivityLogService
+
+    log = AsyncMock(spec=LLCActivityLogService)
+    log.record = AsyncMock()
+    return log
+
+
+@pytest.mark.asyncio
+async def test_org_chart_pause_survives_reload(app, client, session_factory):  # noqa: ANN001
+    """Pause an agent via the real ControlsService, then reload the org
+    chart: the node must still read "paused", not the heartbeat-derived
+    status of a "running" run recorded before the pause (#14108).
+
+    Drives the same code path production traffic uses — ControlsService
+    against a real (SQLite) session — rather than asserting the response
+    schema, per the issue's acceptance criteria.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    agent_id = await _seed_org_node(session_factory, company_id, name="Worker")
+    # A "running" heartbeat run would derive "active" if nothing overrode it.
+    await _seed_run(session_factory, company_id, agent_id, LLCRunStatus.RUNNING.value)
+
+    from llc.services.controls_service import ControlsService
+
+    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+        async with session_factory() as session:
+            # .hex, not str(): SQLite stores UUIDs as 32-char hex (#10032 pattern,
+            # see test_agent_id_keyspace.py); ControlsService's raw SQL WHERE
+            # would not match the dashed form under the SQLite test engine.
+            await ControlsService(activity_log=_mock_activity_log()).pause_agent(
+                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID), reason="test pause"
+            )
+            await session.commit()
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
+    assert resp.status_code == 200, resp.text
+    nodes = resp.json()["nodes"]
+    assert len(nodes) == 1
+    assert nodes[0]["status"] == "paused", "a paused agent must not read back as the derived heartbeat status"
+
+
+@pytest.mark.asyncio
+async def test_org_chart_terminate_survives_reload(app, client, session_factory):  # noqa: ANN001
+    """Terminate an agent via the real ControlsService, then reload: the
+    node must still read "terminated" (#14108), never "active"/"idle" from
+    a stale run.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    agent_id = await _seed_org_node(session_factory, company_id, name="Worker")
+    await _seed_run(session_factory, company_id, agent_id, LLCRunStatus.RUNNING.value)
+
+    from llc.services.controls_service import ControlsService
+
+    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+        async with session_factory() as session:
+            # .hex — see the pause test above for why.
+            await ControlsService(activity_log=_mock_activity_log()).terminate_agent(
+                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID), reason="test terminate"
+            )
+            await session.commit()
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
+    assert resp.status_code == 200, resp.text
+    nodes = resp.json()["nodes"]
+    assert len(nodes) == 1
+    assert nodes[0]["status"] == "terminated", "a terminated agent must never read back as active/idle"
+
+
+@pytest.mark.asyncio
+async def test_org_chart_resume_falls_back_to_heartbeat(app, client, session_factory):  # noqa: ANN001
+    """After resume, the persisted status is no longer a stop state, so the
+    org chart falls back to the heartbeat-derived status again (#14108) —
+    resume does not freeze the node at "paused" nor invent a display status
+    of its own.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    agent_id = await _seed_org_node(session_factory, company_id, name="Worker")
+    await _seed_run(session_factory, company_id, agent_id, LLCRunStatus.COMPLETED.value)
+
+    from llc.services.controls_service import ControlsService
+
+    svc = ControlsService(activity_log=_mock_activity_log())
+    with patch("llc.services.controls_service.get_async_redis_client", return_value=_mock_redis()):
+        async with session_factory() as session:
+            await svc.pause_agent(session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID))
+            await session.commit()
+        async with session_factory() as session:
+            await svc.resume_agent(session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID))
+            await session.commit()
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
+    assert resp.status_code == 200, resp.text
+    nodes = resp.json()["nodes"]
+    assert nodes[0]["status"] == "idle"  # heartbeat-derived, not stuck at "paused"
+
+
+# ---------------------------------------------------------------------------
+# 2c. adapter_type is honest, not org_role (#14109).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_org_chart_adapter_type_is_the_real_adapter(app, client, session_factory):  # noqa: ANN001
+    """The response's ``adapter_type`` must carry ``agent_org_nodes.adapter_type``,
+    not ``org_role``. Seeds a node whose role and adapter deliberately differ
+    (a test asserting only "non-empty" would pass on the pre-fix payload)."""
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    agent_id = str(uuid.uuid4())
+    async with session_factory() as session:
+        session.add(
+            AgentOrgNode(
+                id=uuid.uuid4(),
+                agent_id=agent_id,
+                name="Coordinator with a Claude adapter",
+                org_role=OrgRole.COORDINATOR.value,
+                adapter_type="claude_code",
+                company_id=company_id,
+            )
+        )
+        await session.commit()
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
+    assert resp.status_code == 200, resp.text
+    node = resp.json()["nodes"][0]
+    assert node["adapter_type"] == "claude_code"
+    assert node["adapter_type"] != OrgRole.COORDINATOR.value
+
+
+@pytest.mark.asyncio
+async def test_org_chart_adapter_type_null_is_empty_not_role(app, client, session_factory):  # noqa: ANN001
+    """A NULL ``adapter_type`` renders as "" — the documented fallback — never
+    the role (#14109's fix must not reintroduce the role as a fallback)."""
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    agent_id = await _seed_org_node(session_factory, company_id, name="No Adapter", role=OrgRole.SPECIALIST.value)
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
+    assert resp.status_code == 200, resp.text
+    node = next(n for n in resp.json()["nodes"] if n["id"] == agent_id)
+    assert node["adapter_type"] == ""
 
 
 # ---------------------------------------------------------------------------
