@@ -480,7 +480,17 @@ class PreActionVerifier:
 
         for r in panel_results:
             if isinstance(r, Exception):
+                # One panellist failing is a degraded panel, not a failed one —
+                # panel_decision works on however many probabilities arrived.
                 continue
+            if isinstance(r, BaseException):
+                # `return_exceptions=True` also captures BaseExceptions that are
+                # NOT Exceptions — asyncio.CancelledError above all. Swallowing
+                # a cancellation would keep this coroutine running after its
+                # caller gave up, so it propagates. This is also what mypy's
+                # "BaseException object is not iterable" was pointing at: the
+                # narrowing above left that case reaching the unpack below.
+                raise r
             prob, rat, p, m = r
             probs.append(prob)
             rationales.append(rat)
