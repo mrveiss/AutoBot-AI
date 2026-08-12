@@ -161,3 +161,38 @@ def test_missing_gitignore_fails_closed(tmp_path: Path) -> None:
     (repo / ".gitignore").unlink()
     result = _run_hook(repo)
     assert result.returncode != 0
+
+
+class TestTheGuardFailsClosedWhenItCannotRun:
+    """Companion to the same class in the symlink hook's tests.
+
+    This hook already failed closed for a missing marker and for a virtualenv
+    section parsing to zero names — both deliberately tested. The two paths
+    nobody tested were a missing `lib/_common.sh` and `git ls-files` erroring,
+    and those reported clean (#14150 review).
+
+    The pattern is worth naming: the failure modes that were considered were
+    handled; the ones that were not considered were not. Testing what you
+    already thought about proves the least.
+    """
+
+    def test_a_missing_common_lib_does_not_report_clean(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+
+        isolated = tmp_path / "isolated"
+        isolated.mkdir()
+        hook_copy = isolated / HOOK_PATH.name
+        hook_copy.write_bytes(HOOK_PATH.read_bytes())
+        hook_copy.chmod(0o755)
+
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+
+        assert result.returncode != 0, "the hook reported clean without its dependency"
+
+    def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = _run_hook(repo)
+
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

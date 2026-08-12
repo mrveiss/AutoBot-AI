@@ -217,3 +217,47 @@ def test_hook_script_exists_and_is_executable() -> None:
     import os
 
     assert os.access(HOOK_PATH, os.X_OK), f"{HOOK_PATH} is not executable on disk"
+
+
+class TestTheGuardFailsClosedWhenItCannotRun:
+    """Review of #14150 found both hooks failing OPEN — reporting clean while a
+    genuinely staged symlink was present.
+
+    `set -uo pipefail` (no `-e`) plus an unguarded `source` meant a missing
+    dependency degraded to an empty result, which the scripts read as "nothing
+    to check" and exited 0. The same shape via `git` erroring: `check_file`'s
+    `[ -n "$ls_line" ] || return 0` treats "git failed" and "no index entry"
+    identically.
+
+    That is #14051's defect verbatim, in the hook built to stop that class. A
+    guard reporting green because it never ran is worse than no guard — it
+    manufactures confidence.
+
+    The marker-missing and empty-NAMES paths were already tested and already
+    failed closed. These two were not tested, and did not.
+    """
+
+    def test_a_missing_common_lib_does_not_report_clean(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        _stage_symlink(repo, "venv", str(repo))
+
+        # A copy of the hook with no `lib/` beside it — the dependency is gone.
+        isolated = tmp_path / "isolated"
+        isolated.mkdir()
+        hook_copy = isolated / HOOK_PATH.name
+        hook_copy.write_bytes(HOOK_PATH.read_bytes())
+        hook_copy.chmod(0o755)
+
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+
+        assert result.returncode != 0, "the hook reported clean with a staged symlink and no dependency"
+
+    def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        _stage_symlink(repo, "venv", str(repo))
+        # Corrupt the index so git errors rather than returning an empty answer.
+        (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = _run_hook(repo, "venv")
+
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
