@@ -65,10 +65,15 @@ def _ssot_ports(root: Path) -> dict[str, str]:
     path = root / _SSOT_PATH
     if not path.is_file():
         sys.exit(f"FATAL: {_SSOT_PATH} not found — refusing to report clean without the SSOT")
-    ports = {m.group(2): m.group(1) for m in _SSOT_FIELD.finditer(path.read_text(encoding="utf-8"))}
-    if not ports:
+    parsed = {m.group(2): m.group(1) for m in _SSOT_FIELD.finditer(path.read_text(encoding="utf-8"))}
+    if not parsed:
         sys.exit(f"FATAL: no AUTOBOT_*_PORT fields parsed from {_SSOT_PATH} — the pattern has drifted")
-    return ports
+    # `default=0` is a "not configured" sentinel, not a port. `AUTOBOT_POSTGRES_PORT`
+    # and `AUTOBOT_SMTP_PORT` both use it. Comparing a shell fallback against 0
+    # would fail a perfectly correct `${AUTOBOT_POSTGRES_PORT:-5432}` — a guard
+    # that blocks correct code is worse than the gap it closes, so a sentinel
+    # default makes the variable unverifiable rather than wrong.
+    return {var: value for var, value in parsed.items() if value != "0"}
 
 
 def _shell_files(root: Path) -> list[str]:

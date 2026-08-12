@@ -128,3 +128,36 @@ def test_an_empty_file_listing_is_fatal_not_clean(guard, monkeypatch):
         guard._shell_files(Path("."))
 
     assert "refusing to report clean" in str(excinfo.value)
+
+
+def test_a_sentinel_zero_default_does_not_fail_a_real_port(guard, tmp_path, monkeypatch):
+    """`default=0` means "not configured", not "port zero".
+
+    `AUTOBOT_POSTGRES_PORT` and `AUTOBOT_SMTP_PORT` both use it in the real
+    SSOT. Comparing `${AUTOBOT_POSTGRES_PORT:-5432}` against 0 would fail
+    correct code — the guard would block the very shape it exists to permit.
+    """
+    (tmp_path / "autobot_shared").mkdir()
+    (tmp_path / "autobot_shared" / "ssot_config.py").write_text(
+        'postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")\n'
+        'browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "pg.sh").write_text('psql -p "${AUTOBOT_POSTGRES_PORT:-5432}"\n', encoding="utf-8")
+
+    monkeypatch.setattr(guard, "_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(guard, "_shell_files", lambda root: ["pg.sh"])
+
+    assert guard.main([]) == 0
+
+
+def test_the_real_ssot_sentinels_are_excluded(guard):
+    """Pins the two sentinel variables against the actual SSOT, so this stops
+    being an assumption if either gains a real default later."""
+    root = guard._repo_root()
+    ports = guard._ssot_ports(root)
+
+    assert "AUTOBOT_POSTGRES_PORT" not in ports, "a sentinel default leaked into the comparison map"
+    assert "AUTOBOT_SMTP_PORT" not in ports
+    assert ports.get("AUTOBOT_BROWSER_SERVICE_PORT") == "9001", "the real port this guard exists for"
+    assert ports.get("AUTOBOT_GRAFANA_PORT") == "3000", "3000 belongs to Grafana — the whole point of #14198"
