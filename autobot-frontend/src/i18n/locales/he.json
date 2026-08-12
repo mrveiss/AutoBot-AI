@@ -8240,6 +8240,29 @@
       "canvasUnit": "יחידת {name}",
       "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים."
     },
+    "canvasRules": {
+      "legendTitle": "מקרא",
+      "colourBy": "צביעה לפי",
+      "dimension": {
+        "status": "סטטוס",
+        "owner": "בעלים",
+        "tool": "כלי"
+      },
+      "status": {
+        "active": "פעיל",
+        "idle": "במנוחה",
+        "paused": "מושהה",
+        "error": "שגיאה",
+        "terminated": "הופסק",
+        "unknown": "לא ידוע"
+      },
+      "owner": {
+        "unassigned": "לא הוקצה"
+      },
+      "tool": {
+        "none": "אין כלי"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

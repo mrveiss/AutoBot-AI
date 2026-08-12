@@ -8240,6 +8240,29 @@
       "canvasUnit": "واحد {name}",
       "canvasHint": "برای جابه‌جایی Shift را نگه دارید و بکشید، برای بزرگ‌نمایی اسکرول کنید و برای جزئیات روی گره کلیک کنید."
     },
+    "canvasRules": {
+      "legendTitle": "راهنمای نمادها",
+      "colourBy": "رنگ‌آمیزی بر اساس",
+      "dimension": {
+        "status": "وضعیت",
+        "owner": "مالک",
+        "tool": "ابزار"
+      },
+      "status": {
+        "active": "فعال",
+        "idle": "بی‌کار",
+        "paused": "متوقف‌شده",
+        "error": "خطا",
+        "terminated": "خاتمه‌یافته",
+        "unknown": "نامشخص"
+      },
+      "owner": {
+        "unassigned": "تخصیص‌نیافته"
+      },
+      "tool": {
+        "none": "بدون ابزار"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",

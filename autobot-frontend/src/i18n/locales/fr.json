@@ -8240,6 +8240,29 @@
       "canvasUnit": "Unité {name}",
       "canvasHint": "Maj+glisser pour déplacer, molette pour zoomer, cliquez sur un nœud pour les détails."
     },
+    "canvasRules": {
+      "legendTitle": "Légende",
+      "colourBy": "Colorer par",
+      "dimension": {
+        "status": "Statut",
+        "owner": "Propriétaire",
+        "tool": "Outil"
+      },
+      "status": {
+        "active": "Actif",
+        "idle": "Inactif",
+        "paused": "En pause",
+        "error": "Erreur",
+        "terminated": "Arrêté",
+        "unknown": "Inconnu"
+      },
+      "owner": {
+        "unassigned": "Non attribué"
+      },
+      "tool": {
+        "none": "Aucun outil"
+      }
+    },
     "goals": {
       "title": "Arbre des objectifs",
       "retry": "Réessayer",

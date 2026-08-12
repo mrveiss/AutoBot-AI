@@ -8228,6 +8228,29 @@
       "canvasUnit": "{name} unit",
       "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details."
     },
+    "canvasRules": {
+      "legendTitle": "Legend",
+      "colourBy": "Colour by",
+      "dimension": {
+        "status": "Status",
+        "owner": "Owner",
+        "tool": "Tool"
+      },
+      "status": {
+        "active": "Active",
+        "idle": "Idle",
+        "paused": "Paused",
+        "error": "Error",
+        "terminated": "Terminated",
+        "unknown": "Unknown"
+      },
+      "owner": {
+        "unassigned": "Unassigned"
+      },
+      "tool": {
+        "none": "No tool"
+      }
+    },
     "goals": {
       "title": "Goal Tree",
       "retry": "Retry",
