@@ -71,7 +71,12 @@ async def _dispatch(mixin: ToolHandlerMixin, tool_call: dict, execution_results:
 def test_uniform_set_is_union_of_builtin_families() -> None:
     """Membership SSOT: browser + web research + live-page extract + web_search + execute_command."""
     assert _UNIFORM_BUILTIN_TOOLS == (
-        BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | LIVE_PAGE_EXTRACT_TOOL_NAMES | {"web_search", "execute_command"}
+        BROWSER_TOOL_NAMES
+        | WEB_RESEARCH_TOOL_NAMES
+        | LIVE_PAGE_EXTRACT_TOOL_NAMES
+        # #13919: read_spilled_output joined the uniform set so the spill
+        # excerpt's note names something this seam can actually route.
+        | {"web_search", "execute_command", "read_spilled_output"}
     )
     # respond/delegate are non-uniform (special return shapes) and must stay out.
     assert "respond" not in _UNIFORM_BUILTIN_TOOLS
@@ -90,6 +95,7 @@ _ROUTE_EXPECTATIONS = [
     *[(name, "_handle_extract_content_tool") for name in sorted(LIVE_PAGE_EXTRACT_TOOL_NAMES)],
     ("web_search", "_handle_web_search_tool"),
     ("execute_command", "_dispatch_execute_command"),
+    ("read_spilled_output", "_handle_read_spilled_output"),
 ]
 
 
