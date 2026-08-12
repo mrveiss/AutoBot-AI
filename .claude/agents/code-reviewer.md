@@ -1,6 +1,7 @@
 ---
 name: code-reviewer
 description: Expert code review specialist for AutoBot platform. Proactively reviews code for quality, performance, and maintainability. Use immediately after writing or modifying Python/Vue/TypeScript code. MUST enforce mandatory pre-commit workflow.
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

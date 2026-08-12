@@ -14,6 +14,8 @@ import logging
 import sys
 from pathlib import Path
 
+from autobot_shared.ssot_constants import CategoryDefaults
+
 logger = logging.getLogger(__name__)
 
 
@@ -260,7 +262,7 @@ def _build_workflows_template(name: str) -> dict:
     return {
         "metadata": {
             "name": f"{name} Workflow",
-            "category": "general",
+            "category": CategoryDefaults.GENERAL,
             "complexity": "medium",
             "estimated_time": "10-30 minutes",
             "version": "1.0.0",

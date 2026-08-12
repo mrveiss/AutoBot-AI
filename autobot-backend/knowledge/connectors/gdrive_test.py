@@ -13,6 +13,7 @@ import pytest
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.gdrive import GoogleDriveConnector
 from knowledge.connectors.models import ConnectorConfig
+from media.document.extraction import ExtractedDocument, PageText
 
 
 @pytest.fixture
@@ -202,12 +203,22 @@ class TestGoogleDriveConnector:
         }
 
         async def mock_request(method, url, **kwargs):
-            if "alt=media" in str(kwargs.get("params", {})):
+            if kwargs.get("params", {}).get("alt") == "media":
                 return mock_content
             return mock_metadata
 
+        # Long enough to clear the #13884 per-page character floor — a short
+        # placeholder would (correctly) be treated like a stamped scan.
+        page_text = "Extracted PDF text: a full paragraph of real prose content for this test."
+        extracted_doc = ExtractedDocument(
+            format="pdf",
+            text=page_text,
+            pages=(PageText(1, page_text),),
+            page_count=1,
+        )
+
         with patch.object(connector, "_drive_request", side_effect=mock_request):
-            with patch("knowledge.connectors.gdrive._extract_text_from_pdf", return_value="Extracted PDF text"):
+            with patch("knowledge.connectors.gdrive._extract_pdf_document", return_value=extracted_doc):
                 with patch.object(connector, "_store_ts", return_value=None):
                     result = await connector.fetch_content(source_id)
 
@@ -215,6 +226,61 @@ class TestGoogleDriveConnector:
                     assert result.source_id == source_id
                     assert "Extracted PDF text" in result.content
                     assert result.metadata["file_extension"] == ".pdf"
+
+    @pytest.mark.asyncio
+    async def test_fetch_content_refuses_a_stamped_scan(self, connector):
+        """#13884 finding 1 / finding 2: the live sync path, not just a mock.
+
+        A page-number stamp on every page passes the old ``not text.strip()``
+        guard — every page technically "has text". Runs the real extractor
+        (nothing here is mocked past HTTP), so this proves the refusal fires
+        on the path a Drive sync actually takes, not just in a unit test of
+        the extraction core.
+        """
+        pytest.importorskip("reportlab", reason="reportlab needed to synthesize a PDF fixture")
+        pytest.importorskip("PIL", reason="Pillow needed to synthesize an image-only page")
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+
+        buffer = __import__("io").BytesIO()
+        pdf = canvas.Canvas(buffer)
+        for i in range(1, 6):
+            pdf.drawImage(ImageReader(Image.new("RGB", (600, 800), "white")), 0, 0, width=400, height=500)
+            pdf.setFont("Helvetica", 9)
+            pdf.drawString(400, 20, f"Page {i} of 5")
+            pdf.showPage()
+        pdf.save()
+        stamped_scan_bytes = buffer.getvalue()
+
+        file_id = "stamped123"
+        source_id = f"gdrive:{connector.config.connector_id}:file:{file_id}"
+
+        mock_metadata = {
+            "status_code": 200,
+            "body": {
+                "id": file_id,
+                "name": "Stamped Scan.pdf",
+                "mimeType": "application/pdf",
+                "size": "10240",
+                "modifiedTime": "2026-06-04T10:00:00Z",
+                "webViewLink": "https://drive.google.com/file/d/stamped123",
+                "parents": ["root"],
+                "driveId": "drive1",
+            },
+        }
+        mock_content = {"status_code": 200, "content": stamped_scan_bytes}
+
+        async def mock_request(method, url, **kwargs):
+            if kwargs.get("params", {}).get("alt") == "media":
+                return mock_content
+            return mock_metadata
+
+        with patch.object(connector, "_drive_request", side_effect=mock_request):
+            with patch.object(connector, "_store_ts", return_value=None):
+                result = await connector.fetch_content(source_id)
+
+        assert result is None, "a stamp-only scan must not be ingested as a real document"
 
     @pytest.mark.asyncio
     async def test_detect_changes_initial_sync(self, connector):

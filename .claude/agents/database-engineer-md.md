@@ -1,6 +1,7 @@
 ---
 name: database-engineer
 description: Database specialist for AutoBot's SQLite, ChromaDB, and Redis Stack systems. Use for schema migrations, query optimization, backup strategies, and data integrity. Proactively engage for database-related operations and multi-modal AI data management.
+model: sonnet
 tools: Read, Write, Bash, Grep, Glob
 ---
 

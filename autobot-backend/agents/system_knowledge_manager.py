@@ -20,6 +20,7 @@ import yaml
 
 from agents.kb_librarian import KBLibrarian
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from knowledge_base import KnowledgeBase
 
 logger = get_logger(__name__)
@@ -555,7 +556,7 @@ class SystemKnowledgeManager:
             "name": tool_name,
             "type": tool_data.get("type", "command-line tool"),
             "purpose": tool_data.get("purpose", ""),
-            "category": tool_data.get("type", "general"),
+            "category": tool_data.get("type", CategoryDefaults.GENERAL),
             "platform": "linux",
             "installation": self._format_installation(tool_data.get("installation", {})),
             "usage": self._format_usage(tool_data.get("usage", {})),
@@ -644,7 +645,7 @@ class SystemKnowledgeManager:
         # Convert to librarian format
         workflow_info = {
             "name": workflow_name,
-            "type": metadata.get("category", "general"),
+            "type": metadata.get("category", CategoryDefaults.GENERAL),
             "complexity": metadata.get("complexity", "medium"),
             "estimated_time": metadata.get("estimated_time", "varies"),
             "objective": workflow_data.get("objective", ""),

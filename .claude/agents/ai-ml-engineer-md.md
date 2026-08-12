@@ -1,6 +1,7 @@
 ---
 name: ai-ml-engineer
 description: AI/ML specialist for AutoBot's LLM integrations, vector operations, and NPU optimization. Use for ChromaDB optimization, RAG improvements, LLM provider management, NPU acceleration, and AI workflow enhancements. Proactively engage for AI-related features and platform optimizations.
+model: sonnet
 tools: Read, Write, Grep, Glob, Bash
 ---
 

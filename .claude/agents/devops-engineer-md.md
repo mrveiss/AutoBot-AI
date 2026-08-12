@@ -1,6 +1,7 @@
 ---
 name: devops-engineer
 description: Infrastructure specialist for AutoBot AutoBot platform. Use for Docker operations, Redis Stack management, NPU worker deployment, OpenVINO optimization, and production scaling. Proactively engage for infrastructure and deployment.
+model: sonnet
 tools: Read, Write, Bash, Grep, Glob
 ---
 

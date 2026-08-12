@@ -13,7 +13,7 @@ duplication sweep) instead of carrying its own copy.
 import hashlib
 
 from autobot_shared.logging_manager import get_logger
-from media.document.extraction import DocumentExtractionError, extract_docx, extract_pdf
+from media.document.extraction import DocumentExtractionError, ExtractedDocument, extract_docx, extract_pdf
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,21 @@ def extract_text_from_docx(content_bytes: bytes) -> str:
         return ""
 
 
+def extract_pdf_document(content_bytes: bytes) -> ExtractedDocument | None:
+    """Extract a PDF's structured result, or ``None`` on a parse failure.
+
+    Kept distinct from :func:`extract_text_from_pdf`: a caller that needs to
+    tell a page-number/Bates-stamped scan (text present, nothing usable) from
+    real content needs the per-page structure ``has_usable_text_layer`` reads,
+    not just the flattened string (#13884).
+    """
+    try:
+        return extract_pdf(content_bytes)
+    except DocumentExtractionError as exc:
+        logger.warning("Failed to extract text from PDF: %s", exc)
+        return None
+
+
 def extract_text_from_pdf(content_bytes: bytes) -> str:
     """Extract text from PDF file.
 
@@ -45,8 +60,5 @@ def extract_text_from_pdf(content_bytes: bytes) -> str:
     canonical extractor, which emits the same ``## Page N`` markers this
     connector already used.
     """
-    try:
-        return extract_pdf(content_bytes).text
-    except DocumentExtractionError as exc:
-        logger.warning("Failed to extract text from PDF: %s", exc)
-        return ""
+    extracted = extract_pdf_document(content_bytes)
+    return extracted.text if extracted else ""

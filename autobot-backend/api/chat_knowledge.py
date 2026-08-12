@@ -72,6 +72,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # Import existing components
@@ -852,7 +853,7 @@ async def get_session_facts(session_id: str, request: Request):
                     "id": fact.get("id"),
                     "content": fact.get("content", "")[:200] + ("..." if len(fact.get("content", "")) > 200 else ""),
                     "full_content": fact.get("content", ""),
-                    "category": fact.get("category", "general"),
+                    "category": fact.get("category", CategoryDefaults.GENERAL),
                     "tags": fact.get("tags", []),
                     "important": fact.get("important", False),
                     "preserve": fact.get("preserve", False),
