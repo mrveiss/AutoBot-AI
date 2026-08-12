@@ -105,6 +105,7 @@ type Fixture = {
   teams?: unknown[]
   contactsFail?: boolean
   teamsFail?: boolean
+  rollupFail?: boolean
 }
 
 function mockApi({
@@ -113,10 +114,18 @@ function mockApi({
   teams = TEAMS,
   contactsFail = false,
   teamsFail = false,
+  rollupFail = false,
 }: Fixture = {}) {
   get.mockImplementation((url: string) => {
     if (url === '/api/llc/companies/c1/org-chart') {
       return Promise.resolve({ nodes: structuredClone(nodes) })
+    }
+    // #13942: OrgChart also loads the executor rollup on mount, independent
+    // of the People tab — every fixture in this file must answer it.
+    if (url === '/api/llc/companies/c1/work-items/executor-rollup') {
+      return rollupFail
+        ? Promise.reject(new Error('rollup unavailable'))
+        : Promise.resolve({ cells: [] })
     }
     if (url === '/api/llc/contacts/c1') {
       return contactsFail
@@ -139,7 +148,8 @@ const i18n = createI18n({
   messages: { en, ar },
 })
 
-async function mountChart() {
+async function mountChart(fixture?: Fixture) {
+  if (fixture) mockApi(fixture)
   const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true } } })
   await flushPromises()
   return wrapper
@@ -425,8 +435,11 @@ describe('People list loading behaviour (#13938)', () => {
     mockApi()
     const wrapper = await mountChart()
 
-    expect(get).toHaveBeenCalledTimes(1)
+    // #13942: mount now issues two requests — the tree and the (independent,
+    // always-on) executor rollup — neither of which touches contacts/teams.
+    expect(get).toHaveBeenCalledTimes(2)
     expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/org-chart')
+    expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/work-items/executor-rollup')
 
     await wrapper.get('[data-testid="org-view-people"]').trigger('click')
     await flushPromises()
@@ -456,5 +469,34 @@ describe('People list loading behaviour (#13938)', () => {
     const wrapper = await mountPeople({ nodes: [], contacts: [], teams: [] })
 
     expect(wrapper.get('[data-testid="org-people-empty"]').text()).toBe(en.llc.orgChart.peopleEmpty)
+  })
+})
+
+// #13942: the panel distinguishes "no work items" from "we could not ask".
+// A rollup reading 0 unassigned when the request failed is the worst version of
+// #14064 — it is a number a reader would act on. The failure branch was the only
+// uncovered code in this change, i.e. the honest-failure behaviour was asserted
+// by nobody.
+describe('the executor rollup never reports zero when it failed to load (#13942)', () => {
+  it('shows the unavailable state instead of an all-zero matrix', async () => {
+    const wrapper = await mountChart({ rollupFail: true })
+
+    expect(wrapper.find('[data-testid="executor-rollup-unavailable"]').exists()).toBe(true)
+    // Nothing on screen may present a count the request never returned — not the
+    // table, not the legend, not the total line.
+    expect(wrapper.find('[data-testid="executor-rollup-table"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="executor-rollup-legend"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="executor-rollup-total"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="executor-rollup-empty"]').exists()).toBe(false)
+  })
+
+  it('reports an answered-but-empty rollup as empty, not as unavailable', async () => {
+    // The case that must stay distinguishable: the request succeeded and the
+    // company genuinely has no work items.
+    const wrapper = await mountChart()
+
+    expect(wrapper.find('[data-testid="executor-rollup-unavailable"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="executor-rollup-empty"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="executor-rollup-total"]').exists()).toBe(true)
   })
 })

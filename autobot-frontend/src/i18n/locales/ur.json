@@ -8260,6 +8260,18 @@
       "peopleContactNotInHierarchy": "رابطہ کار رپورٹنگ کے درجہ بندی کا حصہ نہیں — ان کا کوئی منتظم، بجٹ یا ہارٹ بیٹ نہیں۔",
       "peopleEmpty": "اس کمپنی میں ابھی کوئی فرد نہیں۔"
     },
+    "executorRollup": {
+      "title": "عمل کنندہ خلاصہ",
+      "totalItems": "{count} کام کے آئٹمز",
+      "unavailable": "عمل کنندہ خلاصہ لوڈ نہیں ہو سکا۔ یہ لوڈنگ کا مسئلہ ہے، صفر کام کے آئٹمز نہیں۔",
+      "empty": "ابھی تک کوئی کام کا آئٹم نہیں۔",
+      "statusColumn": "حیثیت",
+      "class": {
+        "user": "شخص",
+        "agent": "AI ایجنٹ",
+        "unassigned": "غیر تفویض شدہ"
+      }
+    },
     "canvasRules": {
       "legendTitle": "کلید",
       "colourBy": "رنگ بندی بلحاظ",
