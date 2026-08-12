@@ -45,14 +45,10 @@ def upgrade() -> None:
         return
 
     op.execute(
-        'ALTER TABLE "agent_org_nodes" '
-        "ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'available'"
+        'ALTER TABLE "agent_org_nodes" ' "ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'available'"
     )
     op.execute('ALTER TABLE "agent_org_nodes" ADD COLUMN IF NOT EXISTS pause_reason TEXT')
-    op.execute(
-        'ALTER TABLE "agent_org_nodes" '
-        "ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE"
-    )
+    op.execute('ALTER TABLE "agent_org_nodes" ' "ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE")
 
 
 def downgrade() -> None:
