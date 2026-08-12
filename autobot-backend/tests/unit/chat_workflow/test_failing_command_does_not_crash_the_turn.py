@@ -94,3 +94,80 @@ class TestTheErrorBranchNeverEmitsANoneError:
         )
 
         assert formatted["error"] == "the real reason"
+
+
+class TestTheRealBoundaryFromPtyResultToPrompt:
+    """The test that would have caught round 2's finding, and did not exist.
+
+    Rounds 1 and 2 both failed the same way: a test drove a helper with a dict
+    hand-built to look plausible, and no producer ever emits that shape. Round 1
+    fed `_create_execution_result` a non-zero `return_code` that its call sites
+    are gated from ever supplying. Round 2 fed `_handle_command_error` a dict
+    carrying `stdout` alongside `status: "error"` — which
+    `_format_execution_result`'s error branch never produced, because it dropped
+    every outcome field.
+
+    So this drives the **actual chain**: a `_build_pty_result`-shaped dict →
+    `TerminalTool._format_execution_result` → `_handle_command_error` → the
+    rendered prompt. Nothing here is hand-shaped except the PTY result itself,
+    which is the one end that genuinely originates data.
+    """
+
+    @staticmethod
+    def _pty_result(return_code: int, stdout: str) -> dict:
+        """Exactly what `command_executor._build_pty_result` emits.
+
+        Note `stderr: ""` and no `error` key — the PTY combines the streams.
+        Those two facts are why the old fallback chain always degraded to its
+        literal, and why a hand-built dict with an `error` key hid the bug.
+        """
+        return {
+            "status": "success" if return_code == 0 else "error",
+            "stdout": stdout,
+            "stderr": "",
+            "return_code": return_code,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_failing_runners_report_survives_the_whole_chain(self):
+        from chat_workflow.manager import ChatWorkflowManager
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        formatted = TerminalTool._format_execution_result(
+            TerminalTool.__new__(TerminalTool),
+            self._pty_result(1, "47 failed, 200 passed"),
+            "./run-suite",
+            None,
+        )
+
+        results: list = []
+        mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+        async for _ in mixin._handle_command_error("./run-suite", formatted, [], "sess-1", results):
+            pass
+
+        assert results, "the failing command left no step"
+        rendered = ChatWorkflowManager._format_execution_step(
+            ChatWorkflowManager.__new__(ChatWorkflowManager), 1, results[0]
+        )
+        assert "47 failed, 200 passed" in rendered, "the failure report never reached the model"
+        assert "Status: error" in rendered
+
+    @pytest.mark.asyncio
+    async def test_the_real_exit_code_survives_rather_than_a_default(self):
+        """`return_code` used to be the literal default 1 — indistinguishable
+        from a genuine exit 1, and wrong for 127 or 139."""
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        formatted = TerminalTool._format_execution_result(
+            TerminalTool.__new__(TerminalTool),
+            self._pty_result(127, "command not found"),
+            "./run-suite",
+            None,
+        )
+
+        results: list = []
+        mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+        async for _ in mixin._handle_command_error("./run-suite", formatted, [], "sess-1", results):
+            pass
+
+        assert results[0]["return_code"] == 127

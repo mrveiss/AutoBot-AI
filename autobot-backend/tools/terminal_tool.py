@@ -183,10 +183,23 @@ class TerminalTool:
             # `.get(key, default)` — the default will not apply and the None
             # travels onward. Fall back through the fields the PTY result
             # actually carries before giving up.
+            #
+            # #14141: carry stdout/stderr/return_code through, mirroring the
+            # success branch below. This branch used to return only status,
+            # error and command, so every field describing WHAT the command did
+            # was discarded here — and `_build_pty_result` sets `stderr: ""`
+            # (the PTY combines the streams) and no `error` key at all, so the
+            # message always degraded to the literal fallback and the failure
+            # report itself never reached the model. A test runner writing
+            # "47 failed, 200 passed" to stdout and exiting 1 arrived at the
+            # continuation prompt as a generic placeholder.
             return {
                 "status": "error",
                 "error": result.get("error") or result.get("stderr") or "Command failed with no error detail",
                 "command": command,
+                "stdout": result.get("stdout", ""),
+                "stderr": result.get("stderr", ""),
+                "return_code": result.get("return_code", 1),
             }
         else:
             return {
