@@ -147,10 +147,30 @@ jobs:
             echo "_Anything worth keeping should be filed as an issue — a PR comment is not tracking._"
           } > /tmp/comment.md
 
+      # #14155 review (finding D): the PR comment was the ONLY place these
+      # findings ever surfaced — no job summary, no artifact. Making the post
+      # non-fatal above therefore traded a false failure for *no signal*: on a
+      # fork PR the analysis runs, the 403 is swallowed, the job reports green,
+      # and a real finding sits in raw Actions logs nobody opens for a job
+      # documented as advisory and always-green.
+      #
+      # The step summary is written BEFORE the post attempt and is not
+      # conditional on it, so the findings survive whether or not the comment
+      # lands. It renders on the run page, which is reachable from the check
+      # regardless of who owns the head repo.
+      - name: Publish findings to the run summary
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        run: cat /tmp/comment.md >> "$GITHUB_STEP_SUMMARY"
+
       # Upsert by marker so repeated pushes update one comment instead of
       # appending a new one per run.
+      # #14153: same fork-hostile shape as ssot-coverage.yml — GITHUB_TOKEN
+      # is read-only on pull_request events from a fork, so this call 403s
+      # and would otherwise mark the (already advisory, never-required) job
+      # "fail" for a reason that has nothing to do with the review itself.
       - name: Post or update PR comment
         if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |
