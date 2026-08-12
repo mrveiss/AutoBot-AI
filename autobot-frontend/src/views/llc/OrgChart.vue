@@ -309,7 +309,11 @@ async function terminateAgent(node: OrgNode) {
   try {
     // Permanent stop — canonical /controls/agents/{id}/terminate endpoint.
     await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/terminate`, {})
-    await fetchTree() // reload from source of truth (backend sets status=terminated)
+    // Reload from source of truth: GET /org-chart now honors the persisted
+    // "terminated" lifecycle state over a stale heartbeat run (#14108) — the
+    // node the refetch returns carries status="terminated", not whatever the
+    // latest heartbeat run would otherwise derive.
+    await fetchTree()
     closeDrawer()
   } catch (err: unknown) {
     logger.error('Terminate agent failed', err)

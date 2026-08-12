@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -29,8 +30,18 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
-_TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"
+# ``Path("")`` is ``Path(".")`` and therefore truthy, so an unset or empty
+# AUTOBOT_TEE_DIR must be tested on the string, never on the Path.
+_TEE_DIR_ENV = os.environ.get("AUTOBOT_TEE_DIR", "").strip()
+_TEE_DIR = Path(_TEE_DIR_ENV) if _TEE_DIR_ENV else Path.home() / ".local" / "share" / "autobot" / "tee"
 _MAX_UNMATCHED_OUTPUT_CHARS = int(os.environ.get("AUTOBOT_MAX_UNMATCHED_OUTPUT_CHARS", "20000"))
+# #14142: nothing pruned this directory. Every oversized output accumulated
+# indefinitely, keyed by content hash. Until #14120 only shell stdout reached
+# it; that change carries web-tool content down the same path, and a crawl or
+# scrape result routinely exceeds the cap -- so third-party page content was
+# being persisted without bound and without expiry.
+_TEE_RETENTION_HOURS = int(os.environ.get("AUTOBOT_TEE_RETENTION_HOURS", "168"))
+_TEE_MAX_TOTAL_BYTES = int(os.environ.get("AUTOBOT_TEE_MAX_TOTAL_MB", "256")) * 1024 * 1024
 _NO_OP_PATTERNS = re.compile(
     r"(Everything up-to-date|nothing to commit|Already up to date|" r"no changes added|working tree clean)",
     re.IGNORECASE,
@@ -252,6 +263,69 @@ def filter_by_blocks(output: str, handler: BlockHandler, exit_code: int = 0) -> 
     return "\n".join(result)
 
 
+def _tee_entries() -> list[tuple[float, int, Path]]:
+    """Return ``(mtime, size, path)`` for every tee file, oldest first."""
+    entries: list[tuple[float, int, Path]] = []
+    for path in _TEE_DIR.glob("*.txt"):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue  # vanished between glob and stat -- another prune, or a cleanup
+        entries.append((stat.st_mtime, stat.st_size, path))
+    entries.sort()
+    return entries
+
+
+def _prune_tee_dir(keep: Path | None = None) -> None:
+    """Enforce the retention window and the total-size ceiling (#14142).
+
+    Age first, then size, because an age sweep is what keeps the common case
+    bounded; the size ceiling is the backstop for a burst that outruns it.
+    Both knobs come from module-level constants sourced from env vars, and a
+    non-positive value disables that half deliberately.
+
+    *keep* is never deleted. The caller has just written it and returned a
+    hint pointing at it, so a sweep that removed it would hand the model a
+    pointer to a file that no longer exists -- and a single output larger
+    than the whole ceiling would do exactly that, since the sweep runs
+    oldest-first and the new file is last.
+    """
+    entries = [entry for entry in _tee_entries() if keep is None or entry[2] != keep]
+    if _TEE_RETENTION_HOURS > 0:
+        cutoff = time.time() - _TEE_RETENTION_HOURS * 3600
+        survivors = []
+        for mtime, size, path in entries:
+            if mtime < cutoff:
+                path.unlink(missing_ok=True)
+            else:
+                survivors.append((mtime, size, path))
+        entries = survivors
+    if _TEE_MAX_TOTAL_BYTES <= 0:
+        return
+    total = sum(size for _, size, _ in entries)
+    for _, size, path in entries:  # oldest first
+        if total <= _TEE_MAX_TOTAL_BYTES:
+            return
+        path.unlink(missing_ok=True)
+        total -= size
+
+
+def _tee_hint_path(tee_path: Path) -> str:
+    """Render *tee_path* for the model's prompt without an absolute host path.
+
+    #14142: the hint used to carry the real filesystem path straight into
+    model context, where it can be echoed into a reply, a log or an artifact.
+    Under the operator's home directory it becomes a ``~``-relative path --
+    still shell-expandable, so the pointer stays usable, but carrying no
+    account name and no host layout. Anywhere else only the basename is
+    disclosed.
+    """
+    try:
+        return f"~/{tee_path.relative_to(Path.home())}"
+    except ValueError:
+        return tee_path.name
+
+
 def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") -> str | None:
     """
     Save *raw* output to a tee file; return a read-path hint or None on error.
@@ -267,9 +341,16 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
         _TEE_DIR.mkdir(parents=True, exist_ok=True)
         tee_path = _TEE_DIR / filename
         tee_path.write_text(raw, encoding="utf-8")
-        return f"[full output saved: {tee_path}]"
     except Exception:
         return None
+    # Pruning runs after the write, never before: a prune failure must not cost
+    # the caller the tee file it just asked for, and the new file is the one
+    # entry that must survive its own sweep.
+    try:
+        _prune_tee_dir(keep=tee_path)
+    except Exception:
+        logger.warning("tee retention sweep failed; the tee directory may be over its ceiling", exc_info=True)
+    return f"[full output saved: {_tee_hint_path(tee_path)}]"
 
 
 def _hard_cap(command: str, text: str, raw: str, exit_code: int) -> str:

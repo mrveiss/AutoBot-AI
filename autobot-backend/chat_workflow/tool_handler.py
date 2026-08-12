@@ -920,6 +920,17 @@ def _create_execution_result(command: str, host: str, result: dict[str, Any], ap
     # the model as having succeeded, with stderr as the only hint — and a test
     # runner writes its failure report to *stdout*, so the model saw a
     # full-looking report under "success" and no signal that the suite failed.
+    #
+    # Reachability, so nobody mistakes this for the protection: both call sites
+    # are gated on ``status == "success"`` upstream (`_handle_approved_command`
+    # at the approval branch, `_handle_successful_command` in
+    # `_dispatch_command_by_status`), so this mapping cannot currently observe a
+    # non-zero code. It is kept as a correct restatement of the invariant for
+    # the day a caller stops gating -- not deleted, because a dict feeding the
+    # model's prompt with a hardcoded "success" is exactly the defect that got
+    # filed. The single *reachable* decision is
+    # `command_executor._build_pty_result`, which every layer here propagates
+    # rather than re-derives; that is where the invariant is asserted.
     return_code = result.get("return_code", 0)
     return {
         "command": command,
