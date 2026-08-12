@@ -21,7 +21,16 @@ jobs:
     # the same list as this known-meaningless one. Skip (not pass) so the gate
     # stays honest for human PRs; it is not in the required-checks set, so
     # skipping changes nothing about what can merge.
-    if: github.event.pull_request.user.type != 'Bot'
+    #
+    # #14153: same reasoning applies to fork PRs. The template IS published
+    # (.github/PULL_REQUEST_TEMPLATE.md, linked from CONTRIBUTING.md), but a
+    # drive-by external contributor can still open a PR without ever seeing
+    # GitHub's web compose UI populate it (e.g. a PR opened through the API).
+    # Penalizing them for a convention the tooling didn't show them inverts
+    # the point of the check, so fork PRs skip it the same way bot PRs do.
+    if: >
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

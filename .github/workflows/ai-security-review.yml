@@ -149,8 +149,13 @@ jobs:
 
       # Upsert by marker so repeated pushes update one comment instead of
       # appending a new one per run.
+      # #14153: same fork-hostile shape as ssot-coverage.yml — GITHUB_TOKEN
+      # is read-only on pull_request events from a fork, so this call 403s
+      # and would otherwise mark the (already advisory, never-required) job
+      # "fail" for a reason that has nothing to do with the review itself.
       - name: Post or update PR comment
         if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |

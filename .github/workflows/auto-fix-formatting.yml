@@ -21,6 +21,13 @@ permissions:
 jobs:
   autofix:
     runs-on: ubuntu-latest
+    # #14153: this job pushes a commit back to the PR branch, which requires
+    # write access to the head repo. On a fork PR that access does not exist —
+    # neither AUTOBOT_PUSH_TOKEN nor GITHUB_TOKEN can push to someone else's
+    # repository — so "Checkout PR branch" failed structurally on every fork
+    # PR regardless of the change. Skip rather than fail: a bot that cannot
+    # push must not report failure for being unable to.
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch

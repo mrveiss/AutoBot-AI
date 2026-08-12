@@ -90,7 +90,15 @@ jobs:
         echo "::endgroup::"
 
     - name: Comment on PR with SSOT status
+      # #14153: this is a nicety on top of the analysis above, not the
+      # analysis itself. On a fork PR, GITHUB_TOKEN is read-only — the
+      # comment call fails with 403, and without continue-on-error that
+      # step failure marks the whole job "fail" even when the analysis
+      # found zero violations. `Set job status` below is what should decide
+      # pass/fail, based on the actual violation count, not on whether a
+      # comment could be posted.
       if: github.event_name == 'pull_request'
+      continue-on-error: true
       uses: actions/github-script@v9
       with:
         script: |
