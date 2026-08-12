@@ -28,6 +28,10 @@ permissions:
 jobs:
   autofix-types:
     runs-on: ubuntu-latest
+    # #14153: same fork-hostile shape as auto-fix-formatting.yml — this job
+    # pushes a commit back to the PR branch, which needs write access to the
+    # head repo that a fork PR never grants. Skip rather than fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch
