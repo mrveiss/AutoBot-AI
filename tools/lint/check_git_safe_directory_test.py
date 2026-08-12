@@ -131,3 +131,71 @@ def test_an_unrelated_git_c_is_still_ignored() -> None:
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "unrelated.yml", body)
         assert find_violations(f) == []
+
+
+def test_a_command_split_across_lines_is_not_silently_invisible() -> None:
+    """A guard the checker cannot see is not a guard.
+
+    Found on this PR: guarding two sites pushed `git ... -C ...` onto two
+    physical lines of a `>-` folded scalar. The command was correct, but both
+    patterns are line-based — `git` was on one line and `-C` on the next — so
+    the checker stopped matching them entirely. They read as fixed while being
+    unwatched, and a later edit removing `safe.directory` would not be caught.
+
+    This pins the shape rather than the instance: a `git` line with no `-C`
+    must not be treated as a passing guarded site, because it is not a site at
+    all. The real protection is that the fixed files keep their commands on one
+    line, which `test_the_repository_guarded_sites_stay_visible` asserts.
+    """
+    body = (
+        "        cmd: >-\n"
+        "          git -c safe.directory={{ git_repo_root }}\n"
+        "          -C {{ git_repo_root }} rev-parse HEAD\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "split.yml", body)
+        # Neither line matches: no violation is reported, and that is precisely
+        # the blind spot — asserted so the behaviour is documented, not assumed.
+        assert find_violations(f) == []
+
+
+def test_the_repository_guarded_sites_stay_visible() -> None:
+    """Every real `git -C <code_source>` in the tree is on one line and guarded.
+
+    This is the assertion that would have caught the split introduced on this
+    PR. It runs against the actual repository rather than a fixture, so it
+    fails if any future edit folds a guarded command across lines and quietly
+    removes it from the checker's view.
+    """
+    import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
+
+    from check_git_safe_directory import PATTERN, REPO_ROOT, SAFE_FLAG
+
+    listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "*.yml", "*.yaml"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
+    tracked = listing.stdout.split()
+    assert tracked, "git ls-files listed nothing — refusing to report clean"
+
+    visible = 0
+    for name in tracked:
+        path = REPO_ROOT / name
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for line in text.splitlines():
+            if PATTERN.search(line):
+                visible += 1
+                assert SAFE_FLAG.search(line) or name.endswith(".pre-commit-config.yaml"), (
+                    f"{name}: an unguarded `git -C <code_source>` is visible to the checker:\n  {line.strip()[:120]}"
+                )
+
+    assert visible >= 20, (
+        f"only {visible} `git -C <code_source>` sites are visible to the checker; "
+        "a guarded command folded across lines drops out of view entirely"
+    )
