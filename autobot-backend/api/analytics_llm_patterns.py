@@ -47,6 +47,7 @@ from api.schemas_analytics import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from constants.threshold_constants import CategoryDefaults
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -807,7 +808,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             for record_str in records:
                 try:
                     record = json.loads(record_str)
-                    category = record.get("category", "unknown")
+                    category = record.get("category", CategoryDefaults.UNKNOWN)
                     categories[category]["count"] += 1
                     categories[category]["cost"] += record.get("cost", 0)
                 except json.JSONDecodeError:

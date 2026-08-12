@@ -26,6 +26,7 @@ from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
 from services.audit_logger import audit_log
 from services.feature_flags import FeatureFlags, get_feature_flags
@@ -147,7 +148,7 @@ async def update_enforcement_mode(
             user_id=admin.get("username", "admin"),
             resource="feature_flag:access_control:enforcement_mode",
             details={
-                "previous_mode": "unknown",  # Could fetch from history
+                "previous_mode": CategoryDefaults.UNKNOWN,  # Could fetch from history
                 "new_mode": update.mode.value,
                 "action": "enforcement_mode_update",
             },

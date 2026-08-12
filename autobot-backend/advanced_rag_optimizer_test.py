@@ -222,3 +222,53 @@ def test_relevance_floor_keeps_exact_boundary():
     # score == min_score is inclusive (>=); guards against a future > regression
     kept = AdvancedRAGOptimizer._apply_relevance_floor([_sr(0.3)], 0.3)
     assert len(kept) == 1
+
+
+def _mapelites_sr(hybrid: float, *, category: str | None = None, source_path: str) -> SearchResult:
+    metadata = {"category": category} if category is not None else {}
+    return SearchResult(
+        content="c",
+        metadata=metadata,
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=hybrid,
+        relevance_rank=1,
+        source_path=source_path,
+    )
+
+
+class TestMapElitesCategoryDefault:
+    """``_cell_key``'s ``category`` fallback (#14047): a result with no
+    ``category``/``chunk_category`` metadata must group into the exact same
+    MAP-Elites cell as one with an explicit ``category="unknown"`` — proving
+    the default literal is unchanged.
+    """
+
+    def test_missing_category_collides_with_explicit_unknown(self):
+        optimizer = AdvancedRAGOptimizer()
+        # Same source domain ("docs") so only `category` distinguishes the cell.
+        no_category = _mapelites_sr(0.9, source_path="docs/a.md")
+        explicit_unknown = _mapelites_sr(0.5, category="unknown", source_path="docs/b.md")
+        other = _mapelites_sr(0.1, category="other", source_path="other/c.md")
+
+        selected = optimizer._map_elites_select(
+            [no_category, explicit_unknown, other], max_results=2
+        )
+
+        # explicit_unknown collided into the same cell as no_category and lost
+        # the in-cell tie-break (lower hybrid_score) -> dropped from selection.
+        assert no_category in selected
+        assert explicit_unknown not in selected
+        assert other in selected
+
+    def test_explicit_category_avoids_collision_with_default(self):
+        optimizer = AdvancedRAGOptimizer()
+        no_category = _mapelites_sr(0.9, source_path="docs/a.md")
+        # Same source domain, but an explicit non-"unknown" category — must
+        # land in a different cell and survive alongside no_category.
+        explicit_other = _mapelites_sr(0.5, category="other", source_path="docs/b.md")
+
+        selected = optimizer._map_elites_select([no_category, explicit_other], max_results=2)
+
+        assert no_category in selected
+        assert explicit_other in selected
