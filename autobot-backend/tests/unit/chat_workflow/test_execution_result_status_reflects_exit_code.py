@@ -111,3 +111,68 @@ class TestTheWorkingPathIsUnchanged:
         assert entry["stdout"] == "out"
         assert entry["stderr"] == "err"
         assert entry["approved"] is False
+
+
+class TestAFailedCommandAppearsInThePromptAtAll:
+    """#14141's real defect, found only by tracing why the motivating scenario
+    never reached `_create_execution_result`.
+
+    `_handle_command_error` never touched `execution_results`, so a failing
+    command produced **no step**. The error text it appends goes to
+    `additional_response_parts`, which `execute_tool_calls` creates locally and
+    never yields — so that goes nowhere either.
+
+    The model therefore saw the steps before the failure and then nothing: no
+    step, no status, no stdout, no indication a command had run at all. That is
+    worse than being told `Status: success`, and it is why deriving the status
+    in `_create_execution_result` could not fix anything on its own — the
+    failure path never gets there.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_failing_command_is_recorded_as_a_step(self):
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+        results: list = []
+        failure = {
+            "status": "error",
+            "error": "exited 1",
+            "stdout": "5 failed, 12 passed",
+            "stderr": "",
+            "return_code": 1,
+        }
+
+        async for _ in mixin._handle_command_error(_INERT_COMMAND, failure, [], "sess-1", results):
+            pass
+
+        assert results, "a failing command left no step for the model to read"
+        entry = results[0]
+        assert entry["status"] == "error"
+        assert entry["return_code"] == 1
+        assert entry["stdout"] == "5 failed, 12 passed", "the failure report itself must survive"
+
+    @pytest.mark.asyncio
+    async def test_the_recorded_step_renders_the_failure_in_the_prompt(self):
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+        results: list = []
+        failure = {"status": "error", "error": "exited 1", "stdout": "5 failed", "stderr": "", "return_code": 1}
+
+        async for _ in mixin._handle_command_error(_INERT_COMMAND, failure, [], "sess-1", results):
+            pass
+
+        rendered = _prompt(results[0])
+        assert "Status: error" in rendered
+        assert "5 failed" in rendered
+
+    @pytest.mark.asyncio
+    async def test_omitting_the_results_list_is_still_safe(self):
+        """The parameter is optional so existing callers keep working."""
+        from chat_workflow.tool_handler import ToolHandlerMixin
+
+        mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+
+        async for _ in mixin._handle_command_error(_INERT_COMMAND, {"status": "error"}, [], "sess-1"):
+            pass

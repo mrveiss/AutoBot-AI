@@ -1992,7 +1992,9 @@ class ToolHandlerMixin:
             ):
                 yield msg
         elif status == "error":
-            async for msg in self._handle_command_error(command, result, additional_response_parts, session_id):
+            async for msg in self._handle_command_error(
+                command, result, additional_response_parts, session_id, execution_results
+            ):
                 yield msg
 
     async def _process_single_command(
@@ -2069,6 +2071,7 @@ class ToolHandlerMixin:
         result: dict[str, Any],
         additional_response_parts: list,
         session_id: str = "",
+        execution_results: list[dict[str, Any]] | None = None,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -2091,6 +2094,25 @@ class ToolHandlerMixin:
         # constructs exactly that. `or` coalesces both shapes.
         error = result.get("error") or "Unknown error"
         stderr = result.get("stderr", "")
+
+        # #14141: record the failed step. Without this a failing command was
+        # ABSENT from the continuation prompt entirely — this handler never
+        # touched `execution_results`, and the `additional_response_parts` entry
+        # it does append is created locally in `execute_tool_calls` and never
+        # yielded, so it goes nowhere. The model saw the steps before the
+        # failure, then nothing, and had no way to know a command had run at all.
+        if execution_results is not None:
+            execution_results.append(
+                {
+                    "command": command,
+                    "stdout": result.get("stdout", ""),
+                    "stderr": stderr,
+                    "return_code": result.get("return_code", 1),
+                    "status": "error",
+                    "error": error,
+                }
+            )
+
         repairable_error = self._classify_command_error(command, error, stderr)
 
         if repairable_error:
