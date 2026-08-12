@@ -23,6 +23,7 @@ import threading
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List
 
 from cryptography.fernet import Fernet
@@ -57,7 +58,11 @@ from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
 from type_defs.common import Metadata
-from utils.secrets_store_migration import migrate_legacy_secrets_store
+from utils.secrets_store_migration import (
+    ALL_SECRETS_STORE_FILES,
+    ensure_and_read_shared_key,
+    migrate_legacy_secrets_store,
+)
 
 logger = get_logger(__name__)
 
@@ -154,26 +159,26 @@ class SecretsManager:
             # One-time migration off the legacy CWD-relative resolver (#14081
             # review, #14113): must run before _initialize_encryption() decides
             # whether to load an existing key or mint a fresh one, or an
-            # existing deployment's real store is silently orphaned.
-            migrate_legacy_secrets_store(data_dir, ["secrets.key", "secrets.json"], "secrets manager")
+            # existing deployment's real store is silently orphaned. Migrates
+            # the FULL secrets-store file set, not just this class's own
+            # key+json (#14081 review round 5, finding 2) -- a process that
+            # only ever constructs SecretsService (a celery worker) must
+            # still get the shared key moved, or it silently mints its own.
+            migrate_legacy_secrets_store(data_dir, ALL_SECRETS_STORE_FILES, "secrets store")
 
             self._initialize_encryption()
             self._initialized = True
 
     def _initialize_encryption(self):
-        """Initialize or load encryption key"""
-        if os.path.exists(self.key_file):
-            with open(self.key_file, "rb") as f:
-                key = f.read()
-        else:
-            key = Fernet.generate_key()
-            # Fernet key must persist to decrypt secrets on next startup;
-            # secured by 0o600 file permissions.
-            with open(self.key_file, "wb") as f:
-                f.write(key)
-            os.chmod(self.key_file, 0o600)  # Restrict permissions
+        """Initialize or load encryption key.
 
-        self.cipher = Fernet(key)
+        Delegates to ``ensure_and_read_shared_key`` (#14081 review round 5)
+        rather than reading/generating ``self.key_file`` independently: it
+        is the one code path -- shared with ``SecretsService`` -- that may
+        create this file, cross-process-locked so two processes reaching a
+        genuine first boot at once cannot each mint their own key.
+        """
+        self.cipher = Fernet(ensure_and_read_shared_key(Path(self.key_file).parent))
 
     def _encrypt_value(self, value: str) -> str:
         """Encrypt a secret value"""

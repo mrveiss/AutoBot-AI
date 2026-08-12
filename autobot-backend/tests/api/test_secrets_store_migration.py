@@ -23,13 +23,18 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import sqlite3
+from pathlib import Path
 
 import pytest
+import yaml
 from cryptography.fernet import Fernet
 
 from autobot_shared.ssot_config import config as _real_ssot_config
 from autobot_shared.time_utils import now_utc
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture(autouse=True)
@@ -221,7 +226,16 @@ class TestMigrationRunsAtStartupNotImport:
 
 
 class TestSecretsServiceMigrationPreservesDecryption:
-    """SecretsService: legacy secrets.db -> canonical."""
+    """SecretsService: legacy secrets.db -> canonical.
+
+    #14081 review round 5, finding 2: SecretsService now migrates the FULL
+    secrets-store file set (ALL_SECRETS_STORE_FILES), not just secrets.db,
+    so a process that constructs it standalone -- a celery worker, with no
+    SecretsManager ever running -- still gets the shared key moved. This
+    test's legacy store therefore includes a real secrets.key alongside
+    secrets.db, exactly like a real pre-#14081 deployment, rather than
+    pre-placing the key directly at canonical.
+    """
 
     def test_legacy_row_still_decrypts_after_migration(self, tmp_path, monkeypatch):
         import services.secrets_service as secrets_service_module
@@ -258,13 +272,13 @@ class TestSecretsServiceMigrationPreservesDecryption:
         conn.commit()
         conn.close()
 
+        # The shared key lives at the LEGACY location, same as secrets.db --
+        # a real pre-#14081 deployment. SecretsService alone must migrate
+        # both, not just the db it directly reads.
+        (legacy_data_dir / "secrets.key").write_bytes(key)
+
         canonical_dir = tmp_path / "canonical"
         canonical_dir.mkdir()
-        # Pre-place the shared key at the canonical location, as
-        # SecretsManager's own migration would already have done in a real
-        # deployment -- this test isolates SecretsService's secrets.db
-        # migration specifically.
-        (canonical_dir / "secrets.key").write_bytes(key)
 
         class _StubPathConfig:
             data_path = canonical_dir
@@ -282,3 +296,107 @@ class TestSecretsServiceMigrationPreservesDecryption:
         assert secret["value"] == plaintext
 
         assert not (legacy_data_dir / "secrets.db").exists()
+        assert not (legacy_data_dir / "secrets.key").exists(), "SecretsService alone must migrate the shared key too"
+        assert (canonical_dir / "secrets.key").read_bytes() == key
+
+
+class TestSecretsServiceAloneMigratesTheSharedKey:
+    """#14081 review round 5, finding 2: a process that constructs
+    SecretsService without SecretsManager (api/secrets.py) ever running --
+    a celery worker via tasks/credential_reconcile.py or
+    services/workflow_secret_service.py, neither of which runs the FastAPI
+    lifespan -- must still migrate the shared secrets.key, not just
+    secrets.db. Before the fix, SecretsService's own migration call only
+    covered ["secrets.db"]: the db moved, the key stayed at the legacy
+    location, _init_encryption found no key file there and silently minted
+    an unpersisted throwaway one -- reads raised InvalidToken, writes
+    produced rows nothing could ever decrypt.
+
+    Deliberately never imports api.secrets -- the whole point is that
+    SecretsManager plays no part in the outcome.
+    """
+
+    def test_key_is_readable_after_secrets_service_alone(self, tmp_path, monkeypatch):
+        import services.secrets_service as secrets_service_module
+
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+
+        key = Fernet.generate_key()
+        (legacy_data_dir / "secrets.key").write_bytes(key)
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+
+        class _StubPathConfig:
+            data_path = canonical_dir
+
+        class _StubConfig:
+            path = _StubPathConfig()
+            secrets_key = ""  # forces _init_encryption to fall through to the key file
+
+        monkeypatch.setattr(secrets_service_module, "config", _StubConfig())
+
+        service = secrets_service_module.SecretsService()
+
+        # Proof the service's cipher is built from the ORIGINAL migrated
+        # key, not a freshly-minted throwaway one: a Fernet token encrypted
+        # with a *different* key raises InvalidToken on decrypt, so a
+        # successful cross-decrypt is only possible if both sides agree.
+        token = service.cipher.encrypt(b"round-trip-probe")
+        assert Fernet(key).decrypt(token) == b"round-trip-probe"
+
+        assert (canonical_dir / "secrets.key").read_bytes() == key
+        assert not (legacy_data_dir / "secrets.key").exists()
+
+
+class TestComposeCanonicalDataDirIsPersistent:
+    """#14081 review round 5, finding 1: under docker-compose.yml, with no
+    AUTOBOT_DATA_DIR configured, ssot_config.path.data_path (canonical)
+    resolved to the container's ephemeral writable layer while the legacy
+    CWD-relative resolver landed on the persistent backend_data named
+    volume. The migration this PR added moved real secrets OFF durable
+    storage and deleted the source -- the next `--force-recreate` or image
+    update destroyed them.
+
+    Parses the real docker-compose.yml (never a hand-written fixture), so a
+    future edit that drops the AUTOBOT_DATA_DIR override re-triggers this
+    failure rather than silently reintroducing it.
+    """
+
+    @staticmethod
+    def _service_env(compose: dict, service_name: str) -> dict[str, str]:
+        return dict(entry.split("=", 1) for entry in compose["services"][service_name]["environment"])
+
+    @pytest.mark.parametrize("service_name", ["autobot-backend", "autobot-worker", "autobot-celery-beat"])
+    def test_canonical_data_dir_matches_the_persistent_volume_mount(self, service_name):
+        compose = yaml.safe_load((_REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        service = compose["services"][service_name]
+
+        volume_mount = next((v for v in service["volumes"] if v.startswith("backend_data:")), None)
+        assert volume_mount is not None, f"{service_name} must mount the persistent backend_data volume"
+        persistent_mount_point = volume_mount.split(":", 1)[1]
+
+        env = self._service_env(compose, service_name)
+        data_dir_setting = env.get("AUTOBOT_DATA_DIR", "")
+        # Compose interpolation syntax `${AUTOBOT_DATA_DIR:-/app/data}` is
+        # never expanded by a plain YAML load -- extract the default, which
+        # is what applies for every operator who hasn't overridden it
+        # (including this smoke test's own environment).
+        match = re.search(r"\$\{AUTOBOT_DATA_DIR:-([^}]*)\}", data_dir_setting)
+        assert match, (
+            f"{service_name} must set AUTOBOT_DATA_DIR so ssot_config.path.data_path "
+            "resolves under the persistent backend_data volume, not the container's "
+            "ephemeral writable layer -- otherwise the legacy->canonical secrets-store "
+            "migration moves real secrets off durable storage and deletes the source."
+        )
+        default_data_dir = match.group(1)
+
+        assert default_data_dir == persistent_mount_point, (
+            f"{service_name}: AUTOBOT_DATA_DIR default ({default_data_dir!r}) does not match "
+            f"the backend_data volume's mount point ({persistent_mount_point!r}) -- the "
+            "secrets-store migration would move data off the persistent volume."
+        )

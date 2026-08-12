@@ -13,10 +13,16 @@ production.
 
 from __future__ import annotations
 
+import os
+import shutil
+import time
+
 import pytest
 
+import utils.secrets_store_migration as migration_module
 from utils.secrets_store_migration import (
     AmbiguousSecretsStoreError,
+    SecretsStoreLockTimeoutError,
     migrate_legacy_secrets_store,
 )
 
@@ -123,3 +129,102 @@ class TestBothLocationsPopulated:
         # Neither side was touched.
         assert (legacy_data_dir / "secrets.key").read_bytes() == b"legacy-key-material"
         assert (canonical_dir / "secrets.key").read_bytes() == b"canonical-key-material"
+
+
+class TestAtomicMoveVerification:
+    """#14081 review round 5, finding 3: shutil.move is not atomic across
+    filesystems (copy2+unlink), so an interrupted copy can leave a
+    truncated file at the destination and the untouched source at the
+    legacy location -- permanently "both populated". The replacement
+    (copy-to-tmp, fsync, verify size, os.replace, then unlink source) must
+    refuse to finish and must leave the source untouched when the copy
+    comes up short.
+    """
+
+    def test_size_mismatch_aborts_and_preserves_the_source(self, tmp_path, monkeypatch):
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(b"legacy-key-material-32-bytes!!!")
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+
+        def _truncated_copy(src, dst, *a, **kw):
+            # Simulate an interrupted cross-filesystem copy: fewer bytes
+            # land at the destination than the source actually has.
+            with open(src, "rb") as f:
+                data = f.read()
+            with open(dst, "wb") as f:
+                f.write(data[:4])
+
+        monkeypatch.setattr(shutil, "copy2", _truncated_copy)
+
+        with pytest.raises(OSError, match="size mismatch"):
+            migrate_legacy_secrets_store(canonical_dir, ["secrets.key"], "test store")
+
+        # Source untouched, no truncated file left at the destination, and
+        # no stray .tmp file -- a caller retrying later sees a clean legacy
+        # location, not a poisoned canonical one.
+        assert (legacy_data_dir / "secrets.key").read_bytes() == b"legacy-key-material-32-bytes!!!"
+        assert not (canonical_dir / "secrets.key").exists()
+        assert not (canonical_dir / "secrets.key.tmp").exists()
+
+
+class TestCrossProcessLock:
+    """#14081 review round 5, finding 3: backend and worker are separate OS
+    processes and can both reach a genuine first boot at the same moment on
+    an upgrade -- an in-process lock cannot see across that boundary.
+    """
+
+    def test_a_held_lock_blocks_a_second_migration_until_timeout(self, tmp_path, monkeypatch):
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(b"legacy-key-material")
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+        # Simulate another process mid-migration: a fresh lockfile already
+        # held in the canonical directory.
+        (canonical_dir / migration_module._LOCK_FILENAME).write_text(str(9999999), encoding="utf-8")
+
+        monkeypatch.setattr(migration_module, "_LOCK_WAIT_TIMEOUT_SECONDS", 0.3)
+        monkeypatch.setattr(migration_module, "_LOCK_POLL_INTERVAL_SECONDS", 0.05)
+
+        with pytest.raises(SecretsStoreLockTimeoutError):
+            migrate_legacy_secrets_store(canonical_dir, ["secrets.key"], "test store")
+
+        # The blocked caller must not have touched anything while waiting.
+        assert (legacy_data_dir / "secrets.key").read_bytes() == b"legacy-key-material"
+        assert not (canonical_dir / "secrets.key").exists()
+
+    def test_a_stale_lock_is_reclaimed(self, tmp_path, monkeypatch):
+        legacy_root = tmp_path / "legacy_cwd"
+        legacy_root.mkdir()
+        monkeypatch.chdir(legacy_root)
+        legacy_data_dir = legacy_root / "data"
+        legacy_data_dir.mkdir()
+        (legacy_data_dir / "secrets.key").write_bytes(b"legacy-key-material")
+
+        canonical_dir = tmp_path / "canonical"
+        canonical_dir.mkdir()
+        stale_lock = canonical_dir / migration_module._LOCK_FILENAME
+        stale_lock.write_text(str(9999999), encoding="utf-8")
+        # Back-date the lockfile's mtime so it reads as abandoned by a
+        # crashed holder rather than actively held.
+        old_time = time.time() - 3600
+        os.utime(stale_lock, (old_time, old_time))
+
+        monkeypatch.setattr(migration_module, "_LOCK_STALE_SECONDS", 60)
+        monkeypatch.setattr(migration_module, "_LOCK_WAIT_TIMEOUT_SECONDS", 2)
+
+        migrate_legacy_secrets_store(canonical_dir, ["secrets.key"], "test store")
+
+        assert (canonical_dir / "secrets.key").read_bytes() == b"legacy-key-material"
+        assert not (legacy_data_dir / "secrets.key").exists()
+        assert not stale_lock.exists()
