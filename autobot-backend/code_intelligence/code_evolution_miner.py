@@ -124,7 +124,22 @@ class GitCommandError(RuntimeError):
     be able to tell "there is none" from "the read failed" — the docstring on
     ``_run_git`` named this concern for over a year while still returning the
     same empty string for both.
+
+    ``returncode`` is ``None`` when the subprocess itself never completed — a
+    timeout, a missing git binary, a bad encoding argument — and an ``int``
+    when git ran and exited non-zero. Only the latter can mean "this path is
+    not a repository"; a probe that never got to run git at all is a different
+    kind of failure and must not be read as a verdict about the path. This is
+    what lets ``GitHistoryCrawler.__init__`` degrade on one and propagate the
+    other, instead of a blanket ``except GitCommandError`` there catching a
+    construction-time timeout or a missing git binary the same way it catches
+    "not a repository" — which would re-introduce this issue's defect one
+    layer up, at startup instead of at read time.
     """
+
+    def __init__(self, message: str, *, returncode: int | None = None) -> None:
+        super().__init__(message)
+        self.returncode = returncode
 
 
 def _run_git(repo_path: str, *args: str) -> str:
@@ -155,14 +170,19 @@ def _run_git(repo_path: str, *args: str) -> str:
         )
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("git %s failed in %s: %s", args, repo_path, exc)
-        raise GitCommandError(f"git {args} failed in {repo_path}: {exc}") from exc
+        # returncode=None: the subprocess never completed, so this cannot be a
+        # verdict about the path (see GitCommandError.returncode).
+        raise GitCommandError(f"git {args} failed in {repo_path}: {exc}", returncode=None) from exc
     if completed.returncode != 0:
         # Without this, a timeout, a non-repo path and a genuinely empty window
         # are the same empty string to the caller — the silent-computes-nothing
         # shape this method was written to get away from.
         stderr = completed.stderr.strip()
         logger.warning("git %s exited %s in %s: %s", args, completed.returncode, repo_path, stderr)
-        raise GitCommandError(f"git {args} exited {completed.returncode} in {repo_path}: {stderr}")
+        raise GitCommandError(
+            f"git {args} exited {completed.returncode} in {repo_path}: {stderr}",
+            returncode=completed.returncode,
+        )
     return completed.stdout
 
 
@@ -239,10 +259,21 @@ class GitHistoryCrawler:
         # a crash. A git failure *after* this succeeds (a corrupt object store, a
         # timeout) is a different thing and is left to raise from the method that
         # hits it — see `GitCommandError`.
+        #
+        # Only a *completed* `rev-parse` that exited non-zero (`returncode` is an
+        # int) can mean "not a repository" — `rev-parse --git-dir` never touches
+        # the object store, so that is the only way this specific probe fails
+        # short of a subprocess-level problem. A probe that never got to run git
+        # at all (a timeout, a missing git binary, a bad encoding argument —
+        # `returncode is None`) is not a verdict about the path and must
+        # propagate, or a construction-time git failure would degrade into a
+        # false "unavailable" the same way a read-time one did before #14114.
         try:
             _run_git(str(self.repo_path), "rev-parse", "--git-dir")
             self.available = True
-        except GitCommandError:
+        except GitCommandError as exc:
+            if exc.returncode is None:
+                raise
             self.available = False
             logger.warning("GitHistoryCrawler: %s is not a git repository — history is unavailable", repo_path)
 
@@ -628,6 +659,14 @@ class CodeEvolutionMiner:
                     logger.warning("Failed to analyze %s: %s", file_path, e)
                     continue
 
+        except GitCommandError:
+            # #14114: this used to fall into the broad `except Exception` below,
+            # which logged and moved on — the exact silent-degradation shape the
+            # rest of this fix removes everywhere else. A repo whose objects
+            # vanish mid-walk (a concurrent `git gc`, the tmp-retention race
+            # that motivated this issue) must not read as "no anti-patterns
+            # found"; it must fail the analysis that could not complete.
+            raise
         except Exception as e:
             logger.error("Failed to analyze commit %s: %s", commit["hash"], e)
 

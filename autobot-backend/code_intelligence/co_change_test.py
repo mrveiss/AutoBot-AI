@@ -449,16 +449,23 @@ def test_a_git_failure_on_an_available_repo_names_the_error(tmp_path):
     shutil.rmtree(tmp_path / ".git" / "objects")
     (tmp_path / ".git" / "objects").mkdir()
 
-    with pytest.raises(GitCommandError, match="git"):
+    with pytest.raises(GitCommandError, match="exited 128"):
         crawler.get_commit_file_sets()
 
 
 def test_a_genuinely_empty_window_is_not_an_error(repo):
     """A repo with real history but zero commits in range stays "no history",
-    never an error (#14114) — the distinction the fix exists to preserve."""
+    never an error (#14114) — the distinction the fix exists to preserve.
+
+    Pins ``available is True`` first — without it, a mutation that made the
+    repo read as unavailable would produce the same ``[]`` from the
+    degradation branch instead of from a successful, empty git call.
+    """
+    crawler = GitHistoryCrawler(str(repo))
+    assert crawler.available is True
     future = datetime.now(timezone.utc) + timedelta(days=1)
 
-    assert GitHistoryCrawler(str(repo)).get_commit_file_sets(since=future) == []
+    assert crawler.get_commit_file_sets(since=future) == []
 
 
 def test_the_default_window_is_actually_applied():

@@ -206,13 +206,18 @@ def _corrupt_object_store(repo: Path) -> None:
 
 def test_a_git_failure_on_an_available_repo_raises_not_degrades(repo):
     """MUST fail against the pre-#14114 code: every caller here returned ``[]``
-    on any non-zero git exit, indistinguishable from "no history"."""
+    on any non-zero git exit, indistinguishable from "no history".
+
+    Matches the exit code, not just the word "git" — every message here
+    contains "git" (the argv, the repo path), so that alone would pass even if
+    the exception carried no information about the actual failure.
+    """
     crawler = GitHistoryCrawler(str(repo))
     assert crawler.available is True
 
     _corrupt_object_store(repo)
 
-    with pytest.raises(GitCommandError, match="git"):
+    with pytest.raises(GitCommandError, match="exited 128"):
         crawler.get_commits_in_range()
 
 
@@ -221,7 +226,7 @@ def test_get_file_history_raises_on_a_git_failure_too(repo):
     crawler = GitHistoryCrawler(str(repo))
     _corrupt_object_store(repo)
 
-    with pytest.raises(GitCommandError, match="git"):
+    with pytest.raises(GitCommandError, match="exited 128"):
         crawler.get_file_history("a.py")
 
 
@@ -230,16 +235,60 @@ def test_get_commit_files_raises_on_a_git_failure_too(repo):
     commit_hash = crawler.get_commits_in_range()[0]["hash"]
     _corrupt_object_store(repo)
 
-    with pytest.raises(GitCommandError, match="git"):
+    with pytest.raises(GitCommandError, match="exited 128"):
         crawler.get_commit_files(commit_hash)
 
 
 def test_a_genuinely_empty_window_stays_no_history_not_an_error(repo):
     """The distinction the fix exists to preserve: an intact repository with no
-    commits in range is "no history", never an error (#14114)."""
+    commits in range is "no history", never an error (#14114).
+
+    Pins ``available is True`` first — without it, a mutation that made the
+    repo read as unavailable would produce the same ``[]`` from the
+    degradation branch instead of from a successful, empty git call, and this
+    test would stay green for the wrong reason.
+    """
+    crawler = GitHistoryCrawler(str(repo))
+    assert crawler.available is True
     future = datetime.now(timezone.utc) + timedelta(days=1)
 
-    assert GitHistoryCrawler(str(repo)).get_commits_in_range(start_date=future) == []
+    assert crawler.get_commits_in_range(start_date=future) == []
+
+
+# ------------------------- a construction-time failure is not "not a repo"
+
+
+def test_a_construction_time_subprocess_failure_propagates(repo, monkeypatch):
+    """A timeout or a missing git binary during the ``rev-parse`` probe must not
+    be swallowed into a false ``available = False`` (#14114 finding).
+
+    ``GitCommandError`` covers both a completed, non-zero git exit (which can
+    legitimately mean "not a repository") and a subprocess-level failure that
+    never got that far (which cannot). A blanket ``except GitCommandError`` in
+    ``__init__`` conflated the two, so a probe timeout read exactly like "not a
+    git repository" and silently degraded every subsequent call to ``[]`` —
+    reproducing this issue's core defect one call earlier, at construction.
+    """
+    import code_intelligence.code_evolution_miner as miner_module
+
+    def _timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd="git", timeout=1)
+
+    monkeypatch.setattr(miner_module.subprocess, "run", _timeout)
+
+    with pytest.raises(GitCommandError):
+        GitHistoryCrawler(str(repo))
+
+
+def test_a_non_repository_still_degrades_with_the_real_subprocess(tmp_path):
+    """The one case that legitimately swallows a ``GitCommandError``: a
+    completed ``rev-parse`` that exited non-zero because there is no
+    repository here at all. Runs the real subprocess, not a monkeypatch, so a
+    change to the exit-code plumbing cannot make both this and the timeout
+    test pass for the same wrong reason."""
+    crawler = GitHistoryCrawler(str(tmp_path))
+
+    assert crawler.available is False
 
 
 # ---------------------------------------------------------------- numstat parsing
@@ -286,6 +335,37 @@ def test_analyze_evolution_actually_analyses(repo, caplog):
     assert report["commits_analyzed"] == 3
     failures = [r.getMessage() for r in caplog.records if "Failed to analyze commit" in r.getMessage()]
     assert failures == [], f"commits failed to analyse: {failures[:2]}"
+
+
+def test_analyze_evolution_propagates_a_git_failure_mid_walk(repo, monkeypatch):
+    """A git failure while analysing one commit's files must reach the router,
+    not disappear into a logged warning (#14114 finding).
+
+    `_analyze_commit_patterns` wraps `crawler.get_commit_files` in its own
+    broad `except Exception`, which previously swallowed a `GitCommandError`
+    the same way it swallows a genuinely unreadable file — so
+    `analyze_evolution` returned `commits_analyzed: N, emerging_patterns: []`
+    with no indication anything had failed. Every `api/code_intelligence.py`
+    and `api/analytics_evolution.py` endpoint that calls `analyze_evolution`
+    wraps it in `except Exception`, so once this propagates out of
+    `CodeEvolutionMiner`, those endpoints turn it into a real error response
+    instead of a well-formed empty one — no router change required.
+
+    Reproduces the mid-walk failure directly (a commit whose *objects* vanish
+    after the initial `git log` already listed it — a concurrent `git gc`, or
+    the tmp-retention race that motivated #14114) rather than via git
+    corruption, so the test is deterministic and does not depend on which
+    specific commit git happens to touch first.
+    """
+    from code_intelligence.code_evolution_miner import CodeEvolutionMiner, GitCommandError
+
+    def _boom(self, commit_hash):
+        raise GitCommandError(f"git ('show', ...) exited 128 in <repo>: fatal: bad object {commit_hash}")
+
+    monkeypatch.setattr(GitHistoryCrawler, "get_commit_files", _boom)
+
+    with pytest.raises(GitCommandError, match="exited 128"):
+        CodeEvolutionMiner(str(repo)).analyze_evolution()
 
 
 def test_the_miner_holds_a_path_not_a_string(repo):
