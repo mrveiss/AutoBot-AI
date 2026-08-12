@@ -868,6 +868,39 @@ def _match_repairable_error(combined: str, command: str, error: str) -> Repairab
     return None
 
 
+def _record_failed_step(
+    execution_results: list[dict[str, Any]] | None,
+    command: str,
+    result: dict[str, Any],
+    error: str,
+    stderr: str,
+) -> None:
+    """Record a failed command as a step the model can read (#14141).
+
+    Without this a failing command was **absent** from the continuation prompt
+    entirely: `_handle_command_error` never touched `execution_results`, and the
+    `additional_response_parts` entry it does append is created locally in
+    `execute_tool_calls` and never yielded. The model saw the steps before the
+    failure, then nothing — no status, no output, no sign a command had run.
+
+    `stdout` matters most here. The motivating case is a test runner writing its
+    report to stdout and exiting non-zero, so the report is the one thing worth
+    carrying and was the one thing being dropped.
+    """
+    if execution_results is None:
+        return
+    execution_results.append(
+        {
+            "command": command,
+            "stdout": result.get("stdout", ""),
+            "stderr": stderr,
+            "return_code": result.get("return_code", 1),
+            "status": "error",
+            "error": error,
+        }
+    )
+
+
 def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
     """Create standardized execution result record (Issue #315: extracted).
 
@@ -880,15 +913,40 @@ def _create_execution_result(command: str, host: str, result: dict[str, Any], ap
     Returns:
         Standardized execution result dict for continuation loop
     """
+    # #14141: `status` is derived from the exit code, not hardcoded. It used to
+    # be the literal "success" regardless of `return_code`, and this dict feeds
+    # `_format_execution_step`, which prints `- Status: {status}` straight into
+    # the model's continuation prompt. So a command that failed was reported to
+    # the model as having succeeded, with stderr as the only hint — and a test
+    # runner writes its failure report to *stdout*, so the model saw a
+    # full-looking report under "success" and no signal that the suite failed.
+    return_code = result.get("return_code", 0)
     return {
         "command": command,
         "host": host,
         "stdout": result.get("stdout", ""),
         "stderr": result.get("stderr", ""),
-        "return_code": result.get("return_code", 0),
-        "status": "success",
+        "return_code": return_code,
+        "status": _status_for_return_code(return_code),
         "approved": approved,
     }
+
+
+def _status_for_return_code(return_code: Any) -> str:
+    """Map an exit code to the status the model is shown (#14141).
+
+    Only an exit code that is *known* to be 0 reports success. `None` — the
+    shape an execution path produces when it never captured one — and anything
+    unparseable both report ``error``, because "we do not know whether that
+    worked" is far closer to failure than to success as far as the next turn is
+    concerned. Reporting an unknown outcome as success is the defect this
+    function exists to remove, and defaulting it would reintroduce it.
+    """
+    try:
+        return "success" if int(return_code) == 0 else "error"
+    except (TypeError, ValueError):
+        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
+        return "error"
 
 
 def _build_mcp_approval_message(
@@ -1728,7 +1786,7 @@ class ToolHandlerMixin:
             Tuple of (WorkflowMessage, additional_text)
         """
         if approval_result:
-            error = approval_result.get("error", "Command was denied or failed")
+            error = approval_result.get("error") or "Command was denied or failed"
             return (
                 WorkflowMessage(
                     type="error",
@@ -1967,7 +2025,9 @@ class ToolHandlerMixin:
             ):
                 yield msg
         elif status == "error":
-            async for msg in self._handle_command_error(command, result, additional_response_parts, session_id):
+            async for msg in self._handle_command_error(
+                command, result, additional_response_parts, session_id, execution_results
+            ):
                 yield msg
 
     async def _process_single_command(
@@ -2044,6 +2104,7 @@ class ToolHandlerMixin:
         result: dict[str, Any],
         additional_response_parts: list,
         session_id: str = "",
+        execution_results: list[dict[str, Any]] | None = None,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -2061,8 +2122,14 @@ class ToolHandlerMixin:
         """
         from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
 
-        error = result.get("error", "Unknown error")
+        # #14148: `.get(key, default)` does NOT apply the default when the key
+        # exists holding None — and `terminal_tool._format_execution_result`
+        # constructs exactly that. `or` coalesces both shapes.
+        error = result.get("error") or "Unknown error"
         stderr = result.get("stderr", "")
+
+        _record_failed_step(execution_results, command, result, error, stderr)
+
         repairable_error = self._classify_command_error(command, error, stderr)
 
         if repairable_error:
@@ -2115,7 +2182,11 @@ class ToolHandlerMixin:
         Returns:
             RepairableException if error is recoverable, None if critical
         """
-        combined = f"{error.lower()} {stderr.lower()}"
+        # #14148: a classifier crashing the turn is never the right answer to an
+        # unexpected value. `None` reached here through a `.get()` default that
+        # did not apply, and the bare `raise` upstream propagated the
+        # AttributeError out of the tool-call generator.
+        combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
         # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):

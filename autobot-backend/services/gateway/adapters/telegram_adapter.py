@@ -36,7 +36,12 @@ class TelegramAdapter(BaseAdapter):
         from_user = message.get("from", {})
         reply_to = message.get("reply_to_message")
 
+        # metadata["message_id"] keeps Telegram's native int (required for the
+        # sendMessage reply_to_message_id API field, see denormalize_response
+        # below); the GatewayMessage.message_id dedup key (#14028) is a
+        # separate, always-string value.
         metadata["message_id"] = message.get("message_id")
+        message_id = str(message.get("message_id") or "")
         metadata["chat_type"] = chat.get("type", "private")
         metadata["reply_to_message_id"] = reply_to.get("message_id") if reply_to else None
         metadata["is_reply"] = reply_to is not None
@@ -67,6 +72,7 @@ class TelegramAdapter(BaseAdapter):
             message=text,
             timestamp=float(message.get("date", 0)),
             metadata=metadata,
+            message_id=message_id,
         )
 
     def _extract_file_info(self, message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
