@@ -159,6 +159,30 @@ READ_SPILLED_OUTPUT_SCHEMA: dict = {
     "required": ["anchor"],
 }
 
+#: What to tell the model when an anchor does not resolve, by reason.
+#: Module-level rather than rebuilt per call.
+_SPILL_MISS_ADVICE: dict[str, str] = {
+    # Bad offset/limit — the model can fix this itself, so mirror the
+    # self-correction hint the schema gate gives.
+    "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
+    # No run is bound to this context: an anchor cannot resolve here at all,
+    # and a different anchor would fare no better.
+    "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
+    # The artifact is genuinely gone or never existed.
+    "not_found": "Do not retry this anchor.",
+}
+
+#: The default, for a miss whose cause the reader could not determine.
+#:
+#: `read_spilled` swallows every exception into `None`, and a cross-run refusal
+#: returns `None` too, so an unknown reason covers a truncated artifact mid-write
+#: (spill_if_oversized writes with a bare write_text, no temp+rename, to a
+#: content-addressed path a re-spill rewrites), a transient OSError, a
+#: PermissionError, and a run-scope refusal. In every one of those the output is
+#: still on disk. Telling the model "do not retry" there is a permanent verdict
+#: on a cause nobody established — the shape this whole issue is about.
+_SPILL_MISS_UNKNOWN_ADVICE = "The read did not report why it failed. This may be transient — retrying once is reasonable."
+
 WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -2821,7 +2845,15 @@ class ToolHandlerMixin:
         try:
             from agent_loop.tool_output_spill import read_spilled_window
 
-            window = read_spilled_window(anchor, offset=params.get("offset", 0), limit=params.get("limit"))
+            # Off the event loop. read_spilled reads and json-parses the WHOLE
+            # artifact (up to SPILL_MAX_ARTIFACT_CHARS, 5,000,000) before
+            # slicing out at most 8,000 chars, so paging a large artifact means
+            # re-reading and re-parsing it once per call. The write side already
+            # took this decision — spill_results_async exists because a blocking
+            # write_text stalls every other coroutine in the process.
+            window = await asyncio.to_thread(
+                read_spilled_window, anchor, offset=params.get("offset", 0), limit=params.get("limit")
+            )
         except Exception as exc:
             logger.error("[#13919] read_spilled_output failed: %s", exc)
             execution_results.append({"tool": "read_spilled_output", "status": "error", "error": str(exc)})
@@ -2833,20 +2865,11 @@ class ToolHandlerMixin:
             return
 
         if not window.get("found"):
-            # The three miss reasons need three different responses. Flattening
-            # them into "do not retry" tells a model to abandon an anchor over a
-            # self-correctable argument error.
-            reason = window.get("reason", "not_found")
-            advice = {
-                # Bad offset/limit — the model can fix this itself, so mirror
-                # the self-correction hint the schema gate gives.
-                "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
-                # No run is bound to this context: an anchor cannot resolve here
-                # at all, and a different anchor would fare no better.
-                "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
-                # The artifact is genuinely gone or never existed.
-                "not_found": "Do not retry this anchor.",
-            }.get(reason, "Do not retry this anchor.")
+            # The miss reasons need different responses. Flattening them into
+            # "do not retry" tells a model to abandon an anchor over a
+            # self-correctable argument error, or over a transient one.
+            reason = window.get("reason", "unknown")
+            advice = _SPILL_MISS_ADVICE.get(reason, _SPILL_MISS_UNKNOWN_ADVICE)
             execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
             yield WorkflowMessage(
                 type="command_output",

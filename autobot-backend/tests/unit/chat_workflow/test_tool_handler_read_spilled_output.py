@@ -19,7 +19,7 @@ runs through — not the registry.
 """
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -170,10 +170,16 @@ class TestTheModelIsToldToStopRetrying:
         ("window", "expected"),
         [
             ({"found": False, "anchor": "a", "reason": "no_run_bound"}, "no_run_bound"),
-            ({"found": False, "anchor": "a"}, "not_found"),
+            ({"found": False, "anchor": "a", "reason": "not_found"}, "not_found"),
+            # Note: `invalid_window` cannot be produced by a production dispatch
+            # — the schema types offset/limit as "integer" and the shared #4529
+            # gate rejects anything else before this handler runs. It is kept as
+            # defence-in-depth (validate_tool_arguments returns None if the
+            # jsonschema import fails), so this case documents the branch rather
+            # than covering a live path.
             ({"found": False, "anchor": "a", "reason": "invalid_window"}, "invalid_window"),
         ],
-        ids=["unbound-run", "missing-artifact", "bad-arguments"],
+        ids=["unbound-run", "missing-artifact", "bad-arguments-defence-in-depth"],
     )
     async def test_a_miss_is_reported_with_its_reason(self, window, expected):
         """An unbound run and a missing artifact need different responses, and
@@ -191,6 +197,55 @@ class TestTheModelIsToldToStopRetrying:
             assert "Retry this anchor" in content
         else:
             assert "Do not retry" in content
+
+    @pytest.mark.asyncio
+    async def test_a_miss_with_no_stated_reason_is_not_declared_permanent(self):
+        """#13991 review: the default used to be "Do not retry this anchor."
+
+        ``read_spilled`` swallows every exception into ``None``, and a cross-run
+        refusal returns ``None`` too — so a reasonless miss covers a truncated
+        artifact caught mid-write, a transient OSError, a PermissionError and a
+        run-scope refusal. In all four the output is still on disk. Issuing a
+        permanent verdict on a cause nobody established is the exact defect this
+        seam exists to stop reproducing.
+        """
+        results = []
+        window = {"found": False, "anchor": "a"}  # no "reason" key at all
+
+        with patch("agent_loop.tool_output_spill.read_spilled_window", return_value=window):
+            msgs = await _dispatch({"name": "read_spilled_output", "params": {"anchor": "a"}}, results)
+
+        assert results[0]["status"] == "unknown", "a reasonless miss must not be labelled not_found"
+        content = " ".join(str(getattr(m, "content", "")) for m in msgs)
+        assert "Do not retry" not in content
+        assert "transient" in content
+
+
+class TestTheArtifactIsReadOffTheEventLoop:
+    """#13991 review: ``read_spilled_window`` reads and json-parses the WHOLE
+    artifact — up to ``SPILL_MAX_ARTIFACT_CHARS``, 5,000,000 — before slicing out
+    at most 8,000 chars. Called inline it stalls every other coroutine in the
+    process once per page, and paging a 5 MB artifact at the window cap is 625
+    such calls. CLAUDE.md: never add sync calls to async paths. The write side
+    already took this decision — ``spill_results_async`` exists for the same
+    reason.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_reader_is_handed_to_a_thread_not_awaited_inline(self):
+        from agent_loop.tool_output_spill import read_spilled_window
+
+        results = []
+        window = {"found": True, "anchor": "a", "content": "x", "offset": 0, "has_more": False, "total_chars": 1}
+
+        # Only to_thread is patched, so the first argument is the real function
+        # object — identity, not a name string a rename would leave passing.
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=window)) as to_thread:
+            await _dispatch({"name": "read_spilled_output", "params": {"anchor": "a"}}, results)
+
+        to_thread.assert_awaited_once()
+        assert to_thread.await_args.args[0] is read_spilled_window
+        assert results[0]["status"] == "success"
 
 
 class TestSchemaValidationApplies:
