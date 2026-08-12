@@ -28,7 +28,6 @@ import pytest
 from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.tool_handler import _create_execution_result
 
-
 #: A command that matches **no** rule in ``config/tool_output_filters.yaml``.
 #:
 #: This test started out using ``pytest -q`` and failed for an instructive
