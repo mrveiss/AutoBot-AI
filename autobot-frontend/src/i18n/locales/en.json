@@ -8242,6 +8242,8 @@
       "peopleNoTeam": "Not in a team",
       "peopleTeamEmpty": "No members in this team.",
       "peopleNoTeamsDefined": "No teams are defined for this company — everyone is listed together.",
+      "peopleTeamsUnavailable": "Team information is unavailable right now — grouping may be incomplete.",
+      "peopleUnavailable": "The people of this company could not be loaded. This is a loading problem, not an empty company.",
       "peopleTeamsCoverUsersOnly": "Teams cover account holders. Agents and contacts belong to no team.",
       "peopleContactNotInHierarchy": "Contacts are not part of the reporting hierarchy — they have no manager, budget or heartbeat.",
       "peopleEmpty": "This company has no people yet."

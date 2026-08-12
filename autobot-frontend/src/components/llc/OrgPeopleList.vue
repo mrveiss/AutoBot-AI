@@ -22,6 +22,14 @@ const props = defineProps<{
   counts: Record<PersonKind, number>
   /** Whether the company has any team at all — drives the honest empty state. */
   hasTeams: boolean
+  /**
+   * A source that did not answer. Absence of data and absence of an answer are
+   * different claims, and this list must never make the first one on behalf of
+   * the second (#14064): "no teams are defined" is a statement about the
+   * company, and we only know it when the request actually succeeded.
+   */
+  teamsFailed?: boolean
+  contactsFailed?: boolean
 }>()
 
 const emit = defineEmits<{ select: [orgNodeId: string] }>()
@@ -79,7 +87,10 @@ function groupLabel(group: OrgPeopleGroup): string {
       </span>
     </div>
 
-    <p v-if="!hasTeams" class="text-xs text-autobot-text-muted" data-testid="org-people-no-teams">
+    <p v-if="teamsFailed" class="text-xs text-autobot-text-muted" data-testid="org-people-teams-unavailable">
+      {{ t('llc.orgChart.peopleTeamsUnavailable') }}
+    </p>
+    <p v-else-if="!hasTeams" class="text-xs text-autobot-text-muted" data-testid="org-people-no-teams">
       {{ t('llc.orgChart.peopleNoTeamsDefined') }}
     </p>
     <p v-else class="text-xs text-autobot-text-muted" data-testid="org-people-teams-note">
@@ -87,14 +98,22 @@ function groupLabel(group: OrgPeopleGroup): string {
     </p>
 
     <p
-      v-if="totalPeople === 0"
+      v-if="totalPeople === 0 && (contactsFailed || teamsFailed)"
+      class="py-8 text-center text-autobot-text-muted"
+      data-testid="org-people-unavailable"
+    >
+      {{ t('llc.orgChart.peopleUnavailable') }}
+    </p>
+
+    <p
+      v-else-if="totalPeople === 0"
       class="py-8 text-center text-autobot-text-muted"
       data-testid="org-people-empty"
     >
       {{ t('llc.orgChart.peopleEmpty') }}
     </p>
 
-    <template v-else>
+    <template v-if="totalPeople > 0">
       <div
         v-for="group in groups"
         :key="group.id"

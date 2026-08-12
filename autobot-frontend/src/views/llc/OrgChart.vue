@@ -62,6 +62,10 @@ const activeTabId = ref<string>(ALL_UNITS_TAB)
 const contacts = ref<ContactSource[]>([])
 const teams = ref<CompanyTeam[]>([])
 const peopleLoaded = ref(false)
+// A source that did not answer — kept apart from a source that answered
+// "nothing", so the list never states a fact it does not know (#14064).
+const contactsFailed = ref(false)
+const teamsFailed = ref(false)
 const peopleLoading = ref(false)
 
 /**
@@ -148,24 +152,36 @@ const peopleCounts = computed(() => countByKind(people.value))
  */
 async function loadPeopleSources(): Promise<void> {
   if (peopleLoaded.value || peopleLoading.value) return
-  const cid = await resolveCompanyId()
-  if (!cid) return
+  // Claim the guard BEFORE the first await: two clicks in one tick would both
+  // pass the check above and double-fire every request.
   peopleLoading.value = true
+  const cid = await resolveCompanyId()
+  if (!cid) {
+    peopleLoading.value = false
+    return
+  }
   const [contactsResult, teamsResult] = await Promise.allSettled([
     api.get<ContactSource[]>(`/api/llc/contacts/${cid}`),
     api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
   ])
   if (contactsResult.status === 'fulfilled') {
     contacts.value = Array.isArray(contactsResult.value) ? contactsResult.value : []
+    contactsFailed.value = false
   } else {
+    // A failed fetch must never be reported as "this company has no people".
+    // Absence of data and absence of an answer are different claims (#14064).
+    contactsFailed.value = true
     logger.error('Failed to fetch contacts:', contactsResult.reason)
   }
   if (teamsResult.status === 'fulfilled') {
     teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
+    teamsFailed.value = false
   } else {
+    teamsFailed.value = true
     logger.error('Failed to fetch company teams:', teamsResult.reason)
   }
-  peopleLoaded.value = true
+  // Only a complete answer is cached; a partial one retries on re-entry.
+  peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
   peopleLoading.value = false
 }
 
@@ -352,6 +368,8 @@ onMounted(fetchTree)
         :groups="peopleGroups"
         :counts="peopleCounts"
         :has-teams="teams.length > 0"
+        :teams-failed="teamsFailed"
+        :contacts-failed="contactsFailed"
         @select="onPersonSelected"
       />
     </div>

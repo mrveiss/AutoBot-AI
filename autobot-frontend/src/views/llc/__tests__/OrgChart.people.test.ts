@@ -246,6 +246,41 @@ describe('A partial source failure stays partial (#13938)', () => {
     expect(text).toContain(CONTACT_NAME)
     // The team grouping is what is lost — the people are not.
     expect(text).not.toContain(TEAM_NAME)
+
+    // …and the UI must not turn "we did not get an answer" into the positive
+    // claim "no teams are defined for this company". That sentence is a fact
+    // about the company; we only know it when the request actually succeeded.
+    expect(wrapper.find('[data-testid="org-people-no-teams"]').exists()).toBe(false)
+    expect(text).not.toContain(en.llc.orgChart.peopleNoTeamsDefined)
+    expect(wrapper.find('[data-testid="org-people-teams-unavailable"]').exists()).toBe(true)
+  })
+
+  it('says the people could not be loaded, not that the company has none', async () => {
+    // The company #13969 was built for: its only people are contacts. If that
+    // request fails, "This company has no people yet." is a false statement
+    // indistinguishable from the truth — the exact shape of #14064.
+    const wrapper = await mountPeople({ nodes: [], contactsFail: true })
+
+    expect(wrapper.find('[data-testid="org-people-empty"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(en.llc.orgChart.peopleEmpty)
+    expect(wrapper.find('[data-testid="org-people-unavailable"]').exists()).toBe(true)
+  })
+
+  it('retries on re-entry after a failure instead of caching the gap', async () => {
+    const wrapper = await mountPeople({ teamsFail: true })
+    const teamCalls = () =>
+      get.mock.calls.filter(([url]) => String(url).includes('/teams')).length
+    expect(teamCalls()).toBe(1)
+
+    // A complete answer is cached; a partial one must not be, or the company
+    // keeps its degraded view until a full page reload.
+    mockApi()
+    await wrapper.get('[data-testid="org-view-tree"]').trigger('click')
+    await wrapper.get('[data-testid="org-view-people"]').trigger('click')
+    await flushPromises()
+
+    expect(teamCalls()).toBe(2)
+    expect(wrapper.text()).toContain(TEAM_NAME)
   })
 
   it('still renders the team grouping when the contacts endpoint fails', async () => {

@@ -8254,6 +8254,8 @@
       "peopleNoTeam": "Sin equipo",
       "peopleTeamEmpty": "No hay miembros en este equipo.",
       "peopleNoTeamsDefined": "No hay equipos definidos para esta empresa: todos aparecen juntos.",
+      "peopleTeamsUnavailable": "La información de equipos no está disponible ahora mismo: la agrupación puede estar incompleta.",
+      "peopleUnavailable": "No se pudieron cargar las personas de esta empresa. Es un problema de carga, no una empresa vacía.",
       "peopleTeamsCoverUsersOnly": "Los equipos abarcan a los titulares de cuenta. Los agentes y contactos no pertenecen a ningún equipo.",
       "peopleContactNotInHierarchy": "Los contactos no forman parte de la jerarquía de reporte: no tienen responsable, presupuesto ni latido.",
       "peopleEmpty": "Esta empresa aún no tiene personas."

@@ -23,9 +23,19 @@
  *   | `/contacts/{id}`                | n/a        | `contact` |
  *
  * A contact can only ever come from `llc_contacts`, and `llc_contacts` is never
- * queried by `get_org_chart` (enforced in that model's docstring and by
- * `llc/tests/test_contact_no_login.py`), so provenance is a total function on
- * the three kinds — there is no row that two branches could both claim.
+ * queried by `get_org_chart`. That holds by construction rather than by test:
+ * `LLCContact` is referenced outside tests only in `llc/models/contact.py`,
+ * `llc/models/__init__.py`, `llc/services/contact.py` and `llc/services/company.py`
+ * — never in `llc/api/companies.py` — and `is_human` has exactly two construction
+ * sites there (`True` for a membership, `False` for an `AgentOrgNode`). Two
+ * branches over disjoint tables, so provenance is a total function on the three
+ * kinds and no row can be claimed twice.
+ *
+ * (An earlier version of this comment cited `llc/tests/test_contact_no_login.py`
+ * as the guard. That path does not exist — the real file is
+ * `test_contacts_no_login.py`, and it pins the *authentication* boundary: no auth
+ * columns, no FK to `users`, no contact email resolving through user lookup. It
+ * says nothing about `get_org_chart`.)
  *
  * ## Vocabulary choice (#13970)
  *
