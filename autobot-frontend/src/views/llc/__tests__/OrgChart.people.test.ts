@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -27,8 +28,11 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 // Mutable so a test can exercise the "no company selected" path — the guard
-// that stops the People tab requesting /api/llc/contacts/undefined.
-const companyRef = { value: 'c1' as string | null }
+// that stops the People tab requesting /api/llc/contacts/undefined. A real
+// `ref`, not a `{ value }` look-alike (#13940): `companyId` is now also
+// forwarded as a typed `string` prop to `CanvasNodeSidebar`, and only an
+// actual `Ref` auto-unwraps in the template.
+const companyRef = ref<string | null>('c1')
 vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
   useLlcCompanyContext: () => ({
     companyId: companyRef,
