@@ -765,7 +765,11 @@ class TestIngestGovernanceWiring:
             # AutoBot "replies" -- the real send path records the turn.
             await ingest_governor.record_agent_send(platform=platform, channel_id=channel)
 
-        assert turns_survived <= INGEST_MAX_CHAIN_DEPTH, (
+        # _check_recursion allows depth == INGEST_MAX_CHAIN_DEPTH (locked in by
+        # TestRecursionGuard.test_chain_at_ceiling_is_allowed), so the counter
+        # can reach the ceiling before the *next* turn is the first one
+        # blocked -- one more successful turn than the ceiling itself.
+        assert turns_survived <= INGEST_MAX_CHAIN_DEPTH + 1, (
             f"chain ran {turns_survived} turns with no platform ever carrying "
             "chain_depth in its payload -- the recursion guard did not terminate it"
         )
