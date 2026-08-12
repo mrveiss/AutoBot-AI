@@ -6,6 +6,8 @@
 
 import os
 import tempfile
+import time
+from pathlib import Path
 
 import yaml
 
@@ -864,7 +866,13 @@ def test_cap_tees_full_copy_and_links_it(tmp_path, monkeypatch):
     teed = list(tmp_path.glob("*.txt"))
     assert len(teed) == 1
     assert teed[0].read_text(encoding="utf-8") == oversized
-    assert str(teed[0]) in result
+    # #14142: the hint links the tee'd file by name, not by absolute path. The
+    # assertion here used to be `str(teed[0]) in result`, which passed only
+    # because the absolute host path was being written into model context --
+    # the defect. What this test is really for is that the cap tees a full copy
+    # and points at it, and that is what is asserted now.
+    assert teed[0].name in result
+    assert str(tmp_path) not in result, "the absolute host path is back in the prompt"
 
 
 def test_filter_applies_cap_when_no_rule_matches(tmp_path, monkeypatch):
@@ -890,3 +898,163 @@ def test_matched_rule_path_bypasses_the_cap(tmp_path, monkeypatch):
     result = filt.filter("run", "\n".join(str(n) for n in range(6)))
     assert "4\n5" in result
     assert "lines omitted" in result
+
+
+# ---------------------------------------------------------------------------
+# #14142 -- tee retention and the host path in the prompt hint
+# ---------------------------------------------------------------------------
+
+
+def _tee(mod, raw: str, slug: str = "cmd") -> str | None:
+    """Call the real ``tee_and_hint`` (never a restatement of its logic)."""
+    return mod.tee_and_hint(raw, slug, 0)
+
+
+def test_tee_hint_carries_no_absolute_host_path(tmp_path, monkeypatch):
+    """The prompt hint must not put the real filesystem path into model context.
+
+    An absolute path in the hint crosses into the model's context, where it
+    can be echoed into a reply, a log or an artifact. Under the operator's
+    home directory the pointer stays usable as a ``~``-relative path while
+    disclosing neither the account name nor the host layout.
+    """
+    import services.tool_output_filter as mod
+
+    home = tmp_path / "home"
+    tee_dir = home / ".local" / "share" / "autobot" / "tee"
+    monkeypatch.setattr(mod.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(mod, "_TEE_DIR", tee_dir)
+
+    hint = _tee(mod, "x" * 900)
+
+    assert hint is not None
+    assert str(home) not in hint, f"absolute host path leaked into the prompt: {hint}"
+    assert hint.startswith("[full output saved: ~/"), hint
+    # Still a real, resolvable pointer -- a hint nobody can follow is not a fix.
+    written = tee_dir / hint.split("~/")[1].rstrip("]").split("/")[-1]
+    assert written.exists()
+
+
+def test_tee_hint_outside_home_discloses_only_the_basename(tmp_path, monkeypatch):
+    """A tee dir outside the home directory cannot be made ``~``-relative."""
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod.Path, "home", staticmethod(lambda: tmp_path / "elsewhere"))
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path / "spool")
+
+    hint = _tee(mod, "y" * 900)
+
+    assert hint is not None
+    assert str(tmp_path) not in hint, hint
+    assert hint.endswith(".txt]"), hint
+
+
+def test_tee_dir_is_pruned_past_the_retention_window(tmp_path, monkeypatch):
+    """Files older than the retention window are removed on the next write."""
+    import os
+
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    monkeypatch.setattr(mod, "_TEE_RETENTION_HOURS", 1)
+    monkeypatch.setattr(mod, "_TEE_MAX_TOTAL_BYTES", 0)  # size half off: age only
+
+    stale = tmp_path / "stale.deadbeef.txt"
+    stale.write_text("old", encoding="utf-8")
+    old = time.time() - 2 * 3600
+    os.utime(stale, (old, old))
+    fresh = tmp_path / "fresh.cafebabe.txt"
+    fresh.write_text("new", encoding="utf-8")
+
+    _tee(mod, "z" * 900)
+
+    assert not stale.exists(), "a file past the retention window survived the sweep"
+    assert fresh.exists(), "a file inside the retention window was swept"
+
+
+def test_tee_dir_is_pruned_oldest_first_past_the_size_ceiling(tmp_path, monkeypatch):
+    """The total-size ceiling evicts oldest-first once the window alone is not enough."""
+    import os
+
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    monkeypatch.setattr(mod, "_TEE_RETENTION_HOURS", 0)  # age half off: size only
+    monkeypatch.setattr(mod, "_TEE_MAX_TOTAL_BYTES", 2000)
+
+    for index, name in enumerate(("oldest", "middle", "newest")):
+        path = tmp_path / f"{name}.0000000{index}.txt"
+        path.write_text("q" * 900, encoding="utf-8")
+        stamp = time.time() - (10 - index) * 60
+        os.utime(path, (stamp, stamp))
+
+    _tee(mod, "w" * 900)
+
+    assert not (tmp_path / "oldest.00000000.txt").exists(), "the ceiling did not evict"
+    assert (tmp_path / "newest.00000002.txt").exists(), "eviction was not oldest-first"
+
+
+def test_the_file_just_written_survives_its_own_sweep(tmp_path, monkeypatch):
+    """A single output larger than the whole ceiling must not delete itself.
+
+    The sweep runs oldest-first and the new file is last, so without an
+    explicit exemption the hint would point at a file the same call had
+    already removed -- a pointer to nothing, which reads exactly like a
+    working hint until someone follows it.
+    """
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    monkeypatch.setattr(mod, "_TEE_RETENTION_HOURS", 0)
+    monkeypatch.setattr(mod, "_TEE_MAX_TOTAL_BYTES", 100)  # smaller than the payload
+
+    hint = _tee(mod, "b" * 5000)
+
+    assert hint is not None
+    survivors = list(tmp_path.glob("*.txt"))
+    assert len(survivors) == 1, f"expected the new file to survive, found {survivors}"
+    assert survivors[0].read_text(encoding="utf-8") == "b" * 5000
+
+
+def test_retention_knobs_come_from_env_vars(monkeypatch):
+    """Both bounds are configurable without a code change (repo convention)."""
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_TEE_RETENTION_HOURS", "3")
+    monkeypatch.setenv("AUTOBOT_TEE_MAX_TOTAL_MB", "7")
+    monkeypatch.setenv("AUTOBOT_TEE_DIR", "/tmp/autobot-tee-envtest")
+
+    import services.tool_output_filter as mod
+
+    reloaded = importlib.reload(mod)
+    try:
+        assert reloaded._TEE_RETENTION_HOURS == 3
+        assert reloaded._TEE_MAX_TOTAL_BYTES == 7 * 1024 * 1024
+        assert str(reloaded._TEE_DIR) == "/tmp/autobot-tee-envtest"
+    finally:
+        monkeypatch.delenv("AUTOBOT_TEE_RETENTION_HOURS")
+        monkeypatch.delenv("AUTOBOT_TEE_MAX_TOTAL_MB")
+        monkeypatch.delenv("AUTOBOT_TEE_DIR")
+        importlib.reload(mod)
+
+
+def test_empty_tee_dir_env_var_falls_back_to_the_default(monkeypatch):
+    """``Path("")`` is ``Path(".")`` and truthy -- an empty value must not win.
+
+    Tested because the obvious ``Path(os.environ.get(...)) or <default>``
+    spelling silently redirects every tee file into the process's working
+    directory instead of falling back.
+    """
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_TEE_DIR", "   ")
+
+    import services.tool_output_filter as mod
+
+    reloaded = importlib.reload(mod)
+    try:
+        assert reloaded._TEE_DIR != Path("."), "an empty env var redirected the tee dir to CWD"
+        assert reloaded._TEE_DIR.name == "tee"
+    finally:
+        monkeypatch.delenv("AUTOBOT_TEE_DIR")
+        importlib.reload(mod)
