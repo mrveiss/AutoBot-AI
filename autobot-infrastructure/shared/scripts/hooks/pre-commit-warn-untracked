@@ -40,7 +40,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # opposite of this hook's documented contract. A missing dependency must
 # degrade to "skip the warning silently" (still exit 0), never to a hard
 # stop; #14151's fail-CLOSED direction is deliberately not applied here.
+#
+# Review follow-up on this PR: "exit 0 silently" would satisfy the contract
+# while reintroducing the very defect this hook family is fixing — a broken
+# dependency and "nothing to warn about" would be byte-identical. So it says
+# so on stderr first. That keeps "never blocks a commit" (still exit 0) while
+# refusing to report clean about a check that never ran.
 if ! source "$SCRIPT_DIR/lib/_common.sh" 2>/dev/null; then
+    echo "warn-untracked: cannot load lib/_common.sh — untracked-file check SKIPPED (not clean)" >&2
     exit 0
 fi
 

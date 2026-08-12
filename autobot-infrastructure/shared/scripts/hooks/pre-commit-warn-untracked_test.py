@@ -93,3 +93,13 @@ class TestNeverBlocksOnAMissingDependency:
             "a missing lib/_common.sh aborted the commit, violating the "
             "documented 'never blocks' contract: " + result.stdout + result.stderr
         )
+        # Exit 0 alone is not enough. `extra.py` above is a genuine untracked
+        # source file, so a hook that exits 0 with no output is indistinguishable
+        # from one that ran and found nothing to warn about -- the same
+        # fail-open-and-look-clean defect the rest of this PR removes. The
+        # contract is "never blocks", not "never says anything".
+        assert "SKIPPED" in result.stderr, (
+            "the hook degraded silently: a missing dependency and a clean tree "
+            "produced identical output, so nothing tells the user the check "
+            "never ran. stdout=" + repr(result.stdout) + " stderr=" + repr(result.stderr)
+        )
