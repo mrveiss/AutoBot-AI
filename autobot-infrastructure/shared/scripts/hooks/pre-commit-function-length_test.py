@@ -65,3 +65,37 @@ class TestFailsClosedOnGitFailure:
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+
+class TestArgvModeIsNotSilentlyIgnored:
+    """GH#14163: neither the get_staged_python_files() wrapper nor its call
+    site in main() forwarded "$@" the way every sibling hook's
+    get_staged_*_files() does (#6785 convention: no-args -> git diff
+    --cached, argv -> explicit file list, so the same script works as a
+    local hook AND a CI wrapper). A CI wrapper's explicit file list was
+    silently discarded and the hook fell back to `git diff --cached`
+    against whatever happened to be staged in that invocation's working
+    tree instead -- a different bug shape than #13936 (argv accepted but
+    the pattern filter silently bypassed); this one is argv accepted but
+    discarded entirely. Reproduced by committing (nothing left staged)
+    and then invoking the hook in argv mode with an explicit path to a
+    file with a real violation, mirroring
+    pre-commit-no-tracked-symlink_test.py's
+    test_argv_mode_ignores_paths_not_passed.
+    """
+
+    def test_argv_mode_scopes_to_the_passed_file(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        (repo / "bad.py").write_text(_long_function_source(), encoding="utf-8")
+        _git(repo, "add", "bad.py")
+        _git(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed violation")
+        # Nothing staged now -- git diff --cached is empty.
+
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH), "bad.py"], cwd=repo, capture_output=True, text=True
+        )
+        assert result.returncode != 0, (
+            "argv mode was ignored -- fell back to the (empty) staged set: "
+            + result.stdout
+            + result.stderr
+        )
