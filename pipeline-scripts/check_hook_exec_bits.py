@@ -45,7 +45,8 @@ from pathlib import Path
 
 import yaml
 
-# Both copies. A hook fixed in one and not the other is the same defect back.
+# Both copies, repo-relative. Resolved against the repo root at call time --
+# never against the process CWD, see _repo_root().
 _CONFIG_PATHS = (
     Path(".pre-commit-config.yaml"),
     Path("autobot-infrastructure/shared/config/.pre-commit-config.yaml"),
@@ -80,10 +81,35 @@ _KNOWN_DORMANT = frozenset(
 )
 
 
-def _tracked_modes() -> dict[str, str]:
+def _repo_root() -> Path:
+    """Absolute repo root, or die.
+
+    Review finding on this PR: everything below is CWD-relative unless it is
+    anchored here, and a wrong CWD does not produce an *empty* result -- it
+    produces a confidently wrong one. Run from ``tools/lint/``, ``git ls-files``
+    returns 46 paths relative to that directory, so the map is non-empty, the
+    empty-map guard never fires, every config target misses its lookup, every
+    miss is read as "a program name on PATH", and the guard prints a clean bill
+    of health over 16 real violations. ``pre-commit`` itself chdirs to the repo
+    root before running a hook, so its own path was safe -- but a direct
+    invocation was not, and this script's whole purpose is to not do that.
+    """
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        sys.exit(f"FATAL: cannot locate the repo root (git rev-parse exit {result.returncode}): {result.stderr.strip()}")
+    return Path(result.stdout.strip())
+
+
+def _tracked_modes(root: Path) -> dict[str, str]:
     """Map every tracked path to its git mode, or die rather than report clean."""
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "-s"],
+        cwd=str(root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -119,13 +145,21 @@ def _local_hook_entries(config_path: Path) -> list[tuple[str, str]]:
     return entries
 
 
-def _split_findings(modes: dict[str, str]) -> tuple[list[str], list[str]]:
+def _split_findings(modes: dict[str, str], root: Path | None = None) -> tuple[list[str], list[str]]:
     """Return ``(blocking, known_dormant)`` descriptions of non-executable entries."""
     blocking: list[str] = []
     known: list[str] = []
     for config_path in _CONFIG_PATHS:
-        for hook_id, entry in _local_hook_entries(config_path):
+        for hook_id, entry in _local_hook_entries(config_path if root is None else root / config_path):
             target = entry.split()[0]
+            # pre-commit resolves ``cmd[0]`` through $PATH when it contains no
+            # separator (``parse_shebang.normexe``), and only treats it as a repo
+            # file when it does. Without this, a future ``entry: myhook.py`` at
+            # the repo root would match ``git ls-files`` -- which lists top-level
+            # files unprefixed -- and be wrongly required to be executable, when
+            # real pre-commit would search $PATH and never look at its mode.
+            if "/" not in target:
+                continue
             mode = modes.get(target)
             if mode is None:
                 continue  # a program name on PATH, not a repo path
@@ -141,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("filenames", nargs="*", help="ignored; the whole config is always checked")
     parser.parse_args(argv)
 
-    blocking, known = _split_findings(_tracked_modes())
+    root = _repo_root()
+    blocking, known = _split_findings(_tracked_modes(root), root)
 
     if known:
         # Printed on every run, pass or fail. A backlog nobody is reminded of is

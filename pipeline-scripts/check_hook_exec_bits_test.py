@@ -148,7 +148,7 @@ def test_an_empty_git_listing_is_fatal_not_clean(guard, monkeypatch):
     monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
-        guard._tracked_modes()
+        guard._tracked_modes(Path('.'))
 
     assert "refusing to report clean" in str(excinfo.value)
 
@@ -162,7 +162,7 @@ def test_a_failed_git_listing_is_fatal(guard, monkeypatch):
     monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
-        guard._tracked_modes()
+        guard._tracked_modes(Path('.'))
 
     assert "git ls-files failed" in str(excinfo.value)
 
@@ -175,3 +175,73 @@ def test_the_repository_itself_passes_the_guard(guard):
     as CI does.
     """
     assert guard.main([]) == 0
+
+
+def test_running_from_a_subdirectory_does_not_report_clean(guard, tmp_path):
+    """A wrong CWD must not turn 16 violations into a clean bill of health.
+
+    Review finding on #14182. `git ls-files` run from a subdirectory returns
+    paths relative to *that* directory, so the mode map is non-empty -- the
+    empty-map guard never fires -- and every config target misses its lookup.
+    Every miss is read as "a program name on PATH", so the guard printed
+    success over every real violation. Not reachable through `pre-commit`
+    itself, which chdirs to the repo root first, but reachable through any
+    direct invocation, including the end-to-end test below.
+    """
+    import os
+
+    root = guard._repo_root()
+    subdir = root / "tools" / "lint"
+    if not subdir.is_dir():  # pragma: no cover - layout changed
+        pytest.skip("tools/lint no longer exists")
+
+    cwd = os.getcwd()
+    try:
+        os.chdir(subdir)
+        modes = guard._tracked_modes(guard._repo_root())
+        blocking, known = guard._split_findings(modes, guard._repo_root())
+    finally:
+        os.chdir(cwd)
+
+    # The repository's own baseline is non-empty, so a correct run from a
+    # subdirectory still classifies it. A CWD-relative run loses all of it and
+    # reports nothing at all -- which is indistinguishable from "clean".
+    assert known, "running from a subdirectory lost the dormant baseline entirely"
+    assert not blocking, "the repository itself should have no blocking findings"
+
+
+def test_the_dormant_baseline_has_no_stale_entries(guard):
+    """Every baselined path must still be some hook's entry.
+
+    Without this the "only ever shrinks" rule in the source is a comment
+    rather than a property: a rename that updates the config but not the
+    literal leaves permanently dead weight in the list, and nothing notices.
+    """
+    root = guard._repo_root()
+    targets = {
+        entry.split()[0]
+        for config_path in guard._CONFIG_PATHS
+        for _, entry in guard._local_hook_entries(root / config_path)
+    }
+    stale = guard._KNOWN_DORMANT - targets
+    assert not stale, f"_KNOWN_DORMANT names paths no hook references any more: {sorted(stale)}"
+
+
+def test_a_slashless_entry_is_left_to_pre_commits_path_search(guard, tmp_path, monkeypatch):
+    """`entry: myhook.py` is resolved through $PATH, not as a repo file.
+
+    pre-commit only treats `cmd[0]` as a repo file when it contains a path
+    separator (`parse_shebang.normexe`). `git ls-files` lists top-level files
+    unprefixed, so without the separator test the guard would demand the exec
+    bit on a name real pre-commit never inspects the mode of -- a false
+    positive that blocks an otherwise-fine PR.
+    """
+    config = _config(
+        tmp_path,
+        "repos:\n  - repo: local\n    hooks:\n      - id: my-hook\n        entry: myhook.py\n",
+    )
+    monkeypatch.setattr(guard, "_CONFIG_PATHS", (config,))
+
+    blocking, known = guard._split_findings({"myhook.py": "100644"})
+
+    assert not blocking and not known
