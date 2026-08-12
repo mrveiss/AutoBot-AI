@@ -53,6 +53,7 @@ if env_path.exists():
 from autobot_shared.doc_chunking import chunk_large_content as _chunk_large_content
 from autobot_shared.doc_chunking import estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
+from autobot_shared.ssot_constants import CategoryDefaults
 from utils.chromadb_client import get_chromadb_client
 
 # Hash cache file for incremental indexing (Issue #400)
@@ -799,7 +800,7 @@ def get_collection_stats() -> None:
             for meta in sample["metadatas"]:
                 file_path = meta.get("file_path", "unknown")
                 files.add(file_path)
-                cat = meta.get("category", "unknown")
+                cat = meta.get("category", CategoryDefaults.UNKNOWN)
                 categories[cat] = categories.get(cat, 0) + 1
 
             logger.info(f"Indexed files: {len(files)}")

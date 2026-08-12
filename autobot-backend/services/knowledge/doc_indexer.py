@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from constants.threshold_constants import CategoryDefaults
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
@@ -732,7 +733,7 @@ class DocIndexerService:
                 categories: Dict[str, int] = {}
                 for meta in sample["metadatas"]:
                     files.add(meta.get("file_path", "unknown"))
-                    cat = meta.get("category", "unknown")
+                    cat = meta.get("category", CategoryDefaults.UNKNOWN)
                     categories[cat] = categories.get(cat, 0) + 1
                 result["files"] = len(files)
                 result["categories"] = categories

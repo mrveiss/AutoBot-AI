@@ -35,6 +35,7 @@ import {
   PERMISSION_MODES,
   PERMISSION_ACTIONS,
   PORT_DEFAULTS,
+  CATEGORY_DEFAULTS,
 } from '../ssot-config'
 
 const PYTHON_SSOT_RELATIVE = join('autobot_shared', 'ssot_config.py')
@@ -71,7 +72,9 @@ function readPythonSsot(): string {
 }
 
 /**
- * Return the indented body of a top-level `class <name>(...)`.
+ * Return the indented body of a top-level `class <name>(...)` or bare
+ * `class <name>:` (#14047 — `CategoryDefaults` has no base-class parens,
+ * unlike `PermissionMode(str, Enum)`).
  *
  * Throws when the class is gone — a rename must fail loudly rather than let
  * every assertion below pass vacuously against an empty extraction.
@@ -79,11 +82,11 @@ function readPythonSsot(): string {
 function pythonClassBody(source: string, className: string): string {
   const lines = source.split('\n')
   const start = lines.findIndex((line) =>
-    new RegExp(`^class ${className}\\(`).test(line),
+    new RegExp(`^class ${className}[(:]`).test(line),
   )
   if (start === -1) {
     throw new Error(
-      `class ${className} not found in ${PYTHON_SSOT_PATH} — it was renamed or removed; update this parity test alongside it.`,
+      `class ${className} not found in the given Python source — it was renamed or removed; update this parity test alongside it.`,
     )
   }
   const body: string[] = []
@@ -127,6 +130,28 @@ function pythonPortDefaults(source: string): Record<string, number> {
 }
 
 /**
+ * Extract `NAME: str = "value"` typed class-attribute defaults, in
+ * declaration order — the shape `class CategoryDefaults` uses (#14047),
+ * distinct from `pythonEnumValues`'s untyped `NAME = "value"` shape and
+ * `pythonPortDefaults`'s `name: int = Field(default=N)` shape.
+ */
+function pythonStringFieldDefaults(source: string, className: string): Record<string, string> {
+  const body = pythonClassBody(source, className)
+  const fields: Record<string, string> = {}
+  const field = /^ {4}([A-Z][A-Z0-9_]*)\s*:\s*str\s*=\s*"([^"]*)"/gm
+  let match: RegExpExecArray | null
+  while ((match = field.exec(body)) !== null) {
+    fields[match[1]] = match[2]
+  }
+  if (Object.keys(fields).length === 0) {
+    throw new Error(
+      `Parsed zero fields out of Python class ${className} — the declaration shape changed; fix this parser rather than trusting an empty comparison.`,
+    )
+  }
+  return fields
+}
+
+/**
  * Ports that legitimately exist on one side only.
  *
  * Python-only: backend-internal services the main frontend never addresses
@@ -157,6 +182,45 @@ describe('Python source parser (self-check)', () => {
     expect(pythonEnumValues(source, 'PermissionMode').length).toBeGreaterThan(0)
     expect(pythonEnumValues(source, 'PermissionAction').length).toBeGreaterThan(0)
     expect(Object.keys(pythonPortDefaults(source)).length).toBeGreaterThan(0)
+  })
+})
+
+const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'ssot_constants.py')
+
+function findPythonSharedSsotPath(): string {
+  let dir = resolve(process.cwd())
+  for (;;) {
+    const candidate = join(dir, PYTHON_SHARED_SSOT_RELATIVE)
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  throw new Error(
+    `Could not locate ${PYTHON_SHARED_SSOT_RELATIVE} above ${process.cwd()} — this parity guard requires a full repo checkout, not a frontend-only one.`,
+  )
+}
+
+const PYTHON_SHARED_SSOT_PATH = findPythonSharedSsotPath()
+
+function readPythonSharedSsot(): string {
+  const source = readFileSync(PYTHON_SHARED_SSOT_PATH, 'utf-8')
+  if (source.length === 0) {
+    throw new Error(`Canonical Python config is empty: ${PYTHON_SHARED_SSOT_PATH}`)
+  }
+  return source
+}
+
+describe('SSOT parity: category/mode defaults (#14047)', () => {
+  it('every mirrored CATEGORY_DEFAULTS value matches the Python CategoryDefaults literal', () => {
+    const pythonFields = pythonStringFieldDefaults(readPythonSharedSsot(), 'CategoryDefaults')
+    const mirrored = Object.entries(CATEGORY_DEFAULTS)
+
+    expect(mirrored.length).toBeGreaterThan(0)
+    for (const [key, value] of mirrored) {
+      expect(pythonFields).toHaveProperty(key)
+      expect(value).toBe(pythonFields[key])
+    }
   })
 })
 
