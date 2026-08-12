@@ -9,8 +9,7 @@
 
 - **No browsers for CLI tasks:** Use `gh`, `curl`, or API calls instead of Playwright/Puppeteer
 - **3-command exploration limit:** If 3 commands haven't converged, write a hypothesis first
-- **Propose before implementing:** For ambiguous tasks, state approach in 3 bullets and wait for confirmation
-- **Implementation first:** Prefer direct implementation over brainstorming — brief plan (max 10 lines) then implement
+- **Implementation first — clarify only on genuine ambiguity.** Default to a brief plan (max 10 lines) then implement. When the task *is* ambiguous, state the approach in 3 bullets and wait for confirmation (Rule 4 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md)); inside a `/loop`, post the question with a recommendation and continue instead of blocking
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
@@ -19,7 +18,11 @@
 
 ## Deployment Architecture
 
-**All fleet deployments go through the SLM Manager via Ansible playbooks.**
+**Deployments are triggered through the builtin updater only** — the code-sync API /
+self-update path a user reaches in the maintenance UI. It is the updater that runs the
+playbooks below. Invoking ansible or ssh by hand is the banned side-channel: if the builtin
+cannot do something, fix that gap (issue + PR) rather than routing around it. The playbook
+paths here are for *reading and changing* the deployment, not for running it.
 
 - **Code flow:** GitHub repo → SLM Manager pulls latest → Ansible deploys to fleet nodes
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
@@ -46,21 +49,27 @@
 - Always target `Dev_new_gui` for PRs unless told otherwise
 - Delete remote feature branches after completing work
 
-**Worktree & Branch Cleanup (MANDATORY after issue closure):**
+**Worktree & Branch Cleanup (MANDATORY once the branch's work is merged):**
 
 ```bash
-git worktree remove .worktrees/issue-XXXX
-git branch -d <branch-name>
-git push origin --delete <branch-name>
+git worktree remove .worktrees/issue-XXXX   # NO --force: a dirty tree is unfinished work
+git branch -D <branch-name>                 # -D, never -d — see below
+git push origin --delete <branch-name> 2>/dev/null || true   # usually already gone
+git worktree prune
 ```
+
+**Use `-D`, never `-d`.** A squash merge rewrites the commits, so the branch is never an
+ancestor of the base and `git branch -d` refuses with "not fully merged" — silently aborting
+the cleanup. Confirm the merge from the PR (`gh pr view N --json state,mergedAt`), never from
+`git branch --merged`, then delete with `-D`. Remove the worktree *before* the branch; a
+branch cannot be deleted while a worktree has it checked out.
 
 Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh`
 
-**Pre-Flight Checks (before ANY code changes):**
-1. `git branch --show-current`
-2. `git status` — **if any files are dirty, commit or stash them NOW before spawning subagents or starting batch work.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged. (See #4969.)
-3. `git stash list` — if present, ask user
-4. `git fetch origin Dev_new_gui && git log --oneline origin/Dev_new_gui -3`
+**Pre-flight checks** before any code change: see [`CLAUDE_GIT.md`](CLAUDE_GIT.md)
+"Pre-Flight Checklist" — the canonical list. Dirty files must be committed before spawning
+subagents; uncommitted edits are silently discarded when a subagent commits and upstream is
+merged (#4969).
 
 ---
 
@@ -87,8 +96,13 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
 4. Write `.session/HANDOFF-<branch>.md` (see schema) and commit it on your branch.
-5. Remove scratch only — **not** your own worktree; the next session's start
-   protocol removes it after the branch merges.
+5. Remove scratch only — **not** your own unmerged worktree.
+
+**Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
+still running, clean up in the same breath as the merge (worktree, local branch, remote
+branch) — a merged PR whose worktree still exists is an unfinished merge. If the session ends
+first, the next session's start protocol is the backstop. Neither ever removes a worktree
+whose work has not landed, and neither touches another session's tree.
 
 LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
 never edit.
@@ -103,17 +117,18 @@ never edit.
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
 - Prefer incremental `Edit` over full file `Write` for files >50 lines
 
-**schemas_common.py serialization constraint (response_model= batches):**
-`autobot-backend/api/schemas_common.py` is an append-only file — every `response_model=` audit batch appends new Pydantic schema classes to its end. When two such batches branch from the same `Dev_new_gui` head and both append to this file, git always produces a `CONFLICT (content)`. This is not a real code conflict; it is a git limitation with concurrent appends to the same file.
+**Schema files — the append-only conflict is resolved (#5799).** Schemas now live in
+per-domain modules (`schemas_agent.py`, `schemas_analytics.py`, `schemas_terminal.py`,
+`schemas_workflows.py`, `schemas_code.py`, `schemas_system.py`, and siblings), so parallel
+`response_model=` batches targeting *different* domain files no longer collide and may run
+concurrently.
 
-Rules:
-- **Do not run two `response_model=` audit batches in parallel.** Serialize them — wait for the first batch's PR to merge before starting the next.
-- This constraint applies until issue #5799 (per-domain schema split) is resolved.
-- If a conflict occurs anyway, the resolution is always deterministic:
+Two batches appending to the **same** domain module still conflict — that is a git limitation
+with concurrent appends, not a code conflict. Serialize those, or resolve deterministically:
 
 ```bash
 # Step 1: take origin/Dev_new_gui as the authoritative base
-git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-backend/api/schemas_common.py
+git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
 
 # Step 2: append the new schema classes from our branch at the end
 # (extract them from git diff or the conflicting branch's version)
@@ -160,9 +175,9 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
 
-**CI diagnosis:** queued checks on self-hosted runners are NOT stuck — confirm failure before acting.
-
-**Posting comments:** write literal markdown — never raw JSON or a file path.
+**CI diagnosis** and **posting comments correctly**: see [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md)
+— it owns both. In short: queued checks on the self-hosted runner are not failures, and a
+comment body is literal markdown, never raw JSON or a file path.
 
 **GitHub CLI Workarounds:**
 

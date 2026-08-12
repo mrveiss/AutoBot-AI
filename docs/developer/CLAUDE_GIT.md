@@ -82,7 +82,11 @@ merge.
 **Before any bulk git operation:**
 1. `git status` + `git diff --stat` — confirm exactly what will be affected
 2. State operation and scope in one sentence before executing
-3. For branch deletions: verify merged via `git branch -r --merged origin/Dev_new_gui`
+3. For branch deletions: verify merged via `git branch -r --merged origin/Dev_new_gui`.
+   This is **ancestor-based and deliberately conservative** — under a squash merge it reports
+   a landed branch as unmerged, which fails safe. It is *not* evidence that work is stranded:
+   confirm that with `gh pr list --head <branch> --state all` before concluding anything was
+   lost, and delete with `-D` once the PR shows MERGED.
 
 **Why:** Past incidents: staged 5,371 files for deletion in a worktree, nearly reset `main` during a cherry-pick with 30+ conflicts, committed fixes to wrong branches.
 
