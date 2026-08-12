@@ -21,6 +21,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from constants.threshold_constants import CategoryDefaults
 from prepared_facts import SkillRoutingIndex
 from skills.base_skill import BaseSkill, DeclarativeSkill, SkillHealth, SkillManifest, SkillStatus
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
@@ -514,7 +515,7 @@ def _parse_skill_md(skill_md_path: str) -> SkillManifest | None:
             version=str(data.get("version", "1.0.0")),
             description=str(data.get("description", "")),
             author=str(data.get("author", "mrveiss")),
-            category=str(data.get("category", "general")),
+            category=str(data.get("category", CategoryDefaults.GENERAL)),
             dependencies=[str(d) for d in (data.get("dependencies") or [])],
             tools=[str(t) for t in (data.get("tools") or [])],
             triggers=[str(tr) for tr in (data.get("triggers") or [])],

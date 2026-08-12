@@ -11,6 +11,8 @@ Extracted from enhanced_kb_librarian.py as part of Issue #381 god class refactor
 import re
 from typing import Any, Dict, List
 
+from constants.threshold_constants import CategoryDefaults
+
 from .text_extraction import TextExtractor
 from .types import (
     LIMITATION_KEYWORDS,
@@ -149,7 +151,7 @@ class ToolInfoData:
         """Initialize tool info with name, type, and default metadata fields."""
         self.name = name
         self.type = tool_type
-        self.category = "general"
+        self.category = CategoryDefaults.GENERAL
         self.platform = "linux"
         self.purpose = None
         self.installation = None

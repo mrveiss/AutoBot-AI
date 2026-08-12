@@ -22,7 +22,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from constants.threshold_constants import TimingConstants
+from constants.threshold_constants import CategoryDefaults, TimingConstants
 from utils.gpu_acceleration_optimizer import (
     benchmark_gpu,
     get_gpu_capabilities,
@@ -292,7 +292,7 @@ class PerformanceMonitoringManager:
             for alert in alerts:
                 self.alerts_triggered += 1
                 severity = alert.get("severity", "unknown")
-                category = alert.get("category", "unknown")
+                category = alert.get("category", CategoryDefaults.UNKNOWN)
                 message = alert.get("message", "No message")
 
                 log_level = logging.CRITICAL if severity == "critical" else logging.WARNING
