@@ -158,7 +158,7 @@ async function loadPeopleSources(): Promise<void> {
   // Claim the guard BEFORE the first await: two clicks in one tick would both
   // pass the check above and double-fire every request.
   peopleLoading.value = true
-  const cid = await resolveCompanyId()
+  const cid = await resolveCompanyIdOnce()
   if (!cid) {
     peopleLoading.value = false
     return
@@ -206,11 +206,36 @@ function onCanvasNodeSelected(nodeId: string | null) {
   if (node) openDrawer(node)
 }
 
+/**
+ * De-duplicate the in-flight company resolution (#13942 review).
+ *
+ * `fetchTree` and `loadExecutorRollup` both start with `await resolveCompanyIdOnce()`
+ * and `onMounted` fires them together. The composable has no in-flight
+ * de-duplication, so on the path it exists for — reached from a top-level nav
+ * entry carrying no company id — both raced into their own
+ * `GET /api/llc/companies/` fallback, doubling that request on the view most
+ * users land on. Harmless but wasteful, and invisible to CI: every test that
+ * mounts this view stubs the composable with a static resolver, so the real
+ * resolution path is never exercised.
+ *
+ * Only the *pending* promise is shared; it is released on settle, so a later
+ * call still re-resolves.
+ */
+let pendingCompanyId: Promise<string | null> | null = null
+function resolveCompanyIdOnce(): Promise<string | null> {
+  if (!pendingCompanyId) {
+    pendingCompanyId = Promise.resolve(resolveCompanyId()).finally(() => {
+      pendingCompanyId = null
+    })
+  }
+  return pendingCompanyId
+}
+
 async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const cid = await resolveCompanyId()
+    const cid = await resolveCompanyIdOnce()
     if (!cid) {
       tree.value = []
       return
@@ -238,7 +263,7 @@ async function loadExecutorRollup(): Promise<void> {
   executorRollupLoading.value = true
   executorRollupUnavailable.value = false
   try {
-    const cid = await resolveCompanyId()
+    const cid = await resolveCompanyIdOnce()
     if (!cid) {
       executorRollupMatrix.value = buildExecutorRollupMatrix([])
       return

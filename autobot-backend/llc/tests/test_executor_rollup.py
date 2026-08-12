@@ -284,6 +284,93 @@ async def test_executor_rollup_counts_by_class_and_status(app, client, session_f
 
 
 @pytest.mark.asyncio
+async def test_executor_rollup_counts_only_the_requested_company(app, client, session_factory):  # noqa: ANN001
+    """The row-level company filter, pinned independently of the route guard.
+
+    The tenant-gate test below only varies `org_id`; it never seeds a *second*
+    company, so deleting `.where(LLCWorkItem.company_id == company_id)` would
+    leave every assertion in this file green — the in-memory DB holds one
+    company's rows and nothing else to leak. That is the same gap #13936's
+    review found on the org chart and #13969's on contacts, so it gets its own
+    two-company case here rather than a third recurrence.
+    """
+    company_a = uuid.uuid4()
+    company_b = uuid.uuid4()
+    app.state.tenant["is_platform_admin"] = True
+
+    await _seed_item(
+        session_factory,
+        company_a,
+        status=WorkItemStatus.BACKLOG.value,
+        assignee_type=AssigneeType.USER.value,
+        assignee_user_id=uuid.uuid4(),
+    )
+    # Three items in the other company, deliberately spread across buckets so a
+    # leak would be visible in the totals AND in more than one cell.
+    for assignee_type, agent_id, user_id in (
+        (AssigneeType.AGENT.value, uuid.uuid4(), None),
+        (AssigneeType.USER.value, None, uuid.uuid4()),
+        (None, None, None),
+    ):
+        await _seed_item(
+            session_factory,
+            company_b,
+            status=WorkItemStatus.BACKLOG.value,
+            assignee_type=assignee_type,
+            assignee_agent_id=agent_id,
+            assignee_user_id=user_id,
+        )
+
+    resp = await client.get(f"/api/llc/companies/{company_a}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert sum(cell["count"] for cell in body["cells"]) == 1, (
+        f"company B's work items leaked into company A's rollup: {body}"
+    )
+    # And specifically: none of company B's three buckets appear at all.
+    assert {cell["executor_class"] for cell in body["cells"] if cell["count"]} == {AssigneeType.USER.value}
+
+
+@pytest.mark.asyncio
+async def test_executor_rollup_legacy_untyped_assignee_counts_as_unassigned(app, client, session_factory):  # noqa: ANN001
+    """The pre-#13937 row shape: an assignee id with no discriminator.
+
+    `WorkItemService.create()` set no `assignee_type` before #13937, so rows
+    exist with a real `assignee_user_id`/`assignee_agent_id` and a NULL
+    discriminator. They must land in exactly one bucket and must not vanish
+    from the total.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["is_platform_admin"] = True
+
+    await _seed_item(
+        session_factory,
+        company_id,
+        status=WorkItemStatus.BACKLOG.value,
+        assignee_type=None,
+        assignee_user_id=uuid.uuid4(),
+    )
+    await _seed_item(
+        session_factory,
+        company_id,
+        status=WorkItemStatus.BACKLOG.value,
+        assignee_type=None,
+        assignee_agent_id=uuid.uuid4(),
+    )
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert sum(cell["count"] for cell in body["cells"]) == 2, (
+        f"a legacy row fell out of every bucket: {body}"
+    )
+    counted = _cell_map(body["cells"])
+    assert counted[("unassigned", WorkItemStatus.BACKLOG.value)] == 2
+
+
+@pytest.mark.asyncio
 async def test_executor_rollup_tenant_gate(app, client, session_factory):  # noqa: ANN001
     company_id = uuid.uuid4()
     other_company_id = uuid.uuid4()
