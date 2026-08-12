@@ -26,12 +26,15 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 VIOLATIONS=0
 
