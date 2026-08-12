@@ -128,24 +128,26 @@ get_service_processes() {
 
     case "$vm_name" in
         "frontend")
-            # FIXED: Check for both npm dev and nginx processes
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*5173' | wc -l" 2>/dev/null || echo "0")
+            # Port comes from SERVICE_PORTS, the same map the health-check URL
+            # above reads, so the two probes cannot name different ports (#14178).
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "redis")
             # FIXED: Check for redis-stack-server service specifically
             process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active redis-stack-server >/dev/null && echo '1' || echo '0'" 2>/dev/null || echo "0")
             ;;
         "npu-worker")
-            # FIXED: Check for NPU worker service or Python server on 8081
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*8081' | wc -l" 2>/dev/null || echo "0")
+            # Service unit first, port probe as the fallback (#14178: port from SERVICE_PORTS).
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "ai-stack")
-            # FIXED: Check for AI stack service on 8080 (not Ollama on 11434)
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*8080' | wc -l" 2>/dev/null || echo "0")
+            # AI stack, not Ollama (11434) -- port from SERVICE_PORTS (#14178).
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
             ;;
         "browser")
-            # FIXED: Check for browser service on 3000
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*3000' | wc -l" 2>/dev/null || echo "0")
+            # 3000 was Grafana's port; the browser service is 9001 (#4052). Reading
+            # SERVICE_PORTS removes the literal that disagreed with the URL probe (#14178).
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*${SERVICE_PORTS[$vm_name]}' | wc -l" 2>/dev/null || echo "0")
             ;;
     esac
 

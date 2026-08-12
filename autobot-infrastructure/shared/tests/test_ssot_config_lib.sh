@@ -198,6 +198,35 @@ else
     pass=$((pass + 1))
 fi
 
+# --- #14178: the two probes in a status script must not name different ports ---
+# status-all-vms.sh checks a service two ways: an HTTP URL built from
+# SERVICE_PORTS, and a `pgrep` on the port. Those were separate literals, and
+# they disagreed the moment the SSOT library made the URL correct -- 3000 was
+# Grafana's port, the browser service is 9001 (#4052). Either probe can be
+# green while the other is red, and a process check that can never match
+# reports a running service as down.
+#
+# Asserted as a shape, not as an instance: no process probe may carry a literal
+# port at all. A specific 3000-vs-9001 assertion would pass the day someone
+# introduced the same split on a different service.
+_status_script="${REPO_ROOT}/autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh"
+if [ -f "$_status_script" ]; then
+    _literals="$(grep -cE "pgrep -f '[^']*[0-9]{4}|vite\.\*[0-9]{4}" "$_status_script" || true)"
+    check "status-all-vms.sh process probes carry no literal port" "$_literals" "0"
+
+    _derived="$(grep -c 'SERVICE_PORTS\[\$vm_name\]' "$_status_script" || true)"
+    if [ "$_derived" -ge 4 ]; then
+        echo "PASS: process probes derive their port from SERVICE_PORTS ($_derived sites)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: expected >=4 SERVICE_PORTS-derived probes, found $_derived"
+        fail=$((fail + 1))
+    fi
+else
+    echo "FAIL: status-all-vms.sh not found -- refusing to report clean on a missing target"
+    fail=$((fail + 1))
+fi
+
 echo
 echo "=== $pass passed, $fail failed ==="
 [ "$fail" -eq 0 ]
