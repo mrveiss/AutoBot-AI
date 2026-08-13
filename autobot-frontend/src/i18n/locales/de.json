@@ -8259,6 +8259,12 @@
       "peopleTeamsCoverUsersOnly": "Teams umfassen Kontoinhaber. Agenten und Kontakte gehören keinem Team an.",
       "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
       "peopleEmpty": "Dieses Unternehmen hat noch keine Personen.",
+      "roleLensLabel": "Nach Rolle anzeigen",
+      "roleLensAll": "Alle Rollen",
+      "roleLensHint": "Nur ein Ansichtsfilter — ändert nicht, worauf jemand zugreifen kann.",
+      "roleLensBanner": "Ansichtsfilter: {role} — zeigt {shown} von {total} Knoten. Der Zugriff bleibt unverändert.",
+      "roleLensEmpty": "Ansichtsfilter: Keine Knoten entsprechen „{role}“ in dieser Ansicht. Der Zugriff bleibt unverändert — Filter zurücksetzen, um alle zu sehen.",
+      "roleLensClear": "Filter zurücksetzen",
       "sidebar": {
         "owner": "Inhaber",
         "tools": "Werkzeuge",
