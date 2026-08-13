@@ -8258,7 +8258,13 @@
       "peopleUnavailable": "Šī uzņēmuma cilvēkus neizdevās ielādēt. Tā ir ielādes problēma, nevis tukšs uzņēmums.",
       "peopleTeamsCoverUsersOnly": "Komandas aptver kontu īpašniekus. Aģenti un kontaktpersonas nepieder nevienai komandai.",
       "peopleContactNotInHierarchy": "Kontaktpersonas nav pakļautības hierarhijas daļa — tām nav vadītāja, budžeta vai sirdspukstu.",
-      "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka."
+      "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka.",
+      "roleLensLabel": "Skatīt pēc lomas",
+      "roleLensAll": "Visas lomas",
+      "roleLensHint": "Tikai skata filtrs — tas nemaina to, kam kāds var piekļūt.",
+      "roleLensBanner": "Skata filtrs: {role} — rāda {shown} no {total} mezgliem. Piekļuve nemainās.",
+      "roleLensEmpty": "Skata filtrs: nevienam mezglam neatbilst \"{role}\" šajā skatā. Piekļuve nemainās — notīriet filtru, lai redzētu visus.",
+      "roleLensClear": "Notīrīt filtru"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",

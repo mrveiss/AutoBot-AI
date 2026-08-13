@@ -8258,7 +8258,13 @@
       "peopleUnavailable": "Não foi possível carregar as pessoas desta empresa. É um problema de carregamento, não uma empresa vazia.",
       "peopleTeamsCoverUsersOnly": "As equipas abrangem titulares de conta. Agentes e contactos não pertencem a nenhuma equipa.",
       "peopleContactNotInHierarchy": "Os contactos não fazem parte da hierarquia de reporte — não têm responsável, orçamento nem heartbeat.",
-      "peopleEmpty": "Esta empresa ainda não tem pessoas."
+      "peopleEmpty": "Esta empresa ainda não tem pessoas.",
+      "roleLensLabel": "Ver como função",
+      "roleLensAll": "Todas as funções",
+      "roleLensHint": "Apenas um filtro de visualização — não altera o que alguém pode acessar.",
+      "roleLensBanner": "Filtro de visualização: {role} — mostrando {shown} de {total} nós. O acesso permanece inalterado.",
+      "roleLensEmpty": "Filtro de visualização: nenhum nó corresponde a \"{role}\" nesta vista. O acesso permanece inalterado — limpe o filtro para ver todos.",
+      "roleLensClear": "Limpar filtro"
     },
     "executorRollup": {
       "title": "Resumo de executores",

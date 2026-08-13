@@ -8246,7 +8246,13 @@
       "peopleUnavailable": "The people of this company could not be loaded. This is a loading problem, not an empty company.",
       "peopleTeamsCoverUsersOnly": "Teams cover account holders. Agents and contacts belong to no team.",
       "peopleContactNotInHierarchy": "Contacts are not part of the reporting hierarchy — they have no manager, budget or heartbeat.",
-      "peopleEmpty": "This company has no people yet."
+      "peopleEmpty": "This company has no people yet.",
+      "roleLensLabel": "View as role",
+      "roleLensAll": "All roles",
+      "roleLensHint": "A view filter only — it does not change what anyone can access.",
+      "roleLensBanner": "View filter: {role} — showing {shown} of {total} nodes. Access is unchanged.",
+      "roleLensEmpty": "View filter: no nodes match \"{role}\" here. Access is unchanged — clear the filter to see everyone.",
+      "roleLensClear": "Clear filter"
     },
     "executorRollup": {
       "title": "Executor Rollup",

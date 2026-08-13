@@ -8258,7 +8258,13 @@
       "peopleUnavailable": "No se pudieron cargar las personas de esta empresa. Es un problema de carga, no una empresa vacía.",
       "peopleTeamsCoverUsersOnly": "Los equipos abarcan a los titulares de cuenta. Los agentes y contactos no pertenecen a ningún equipo.",
       "peopleContactNotInHierarchy": "Los contactos no forman parte de la jerarquía de reporte: no tienen responsable, presupuesto ni latido.",
-      "peopleEmpty": "Esta empresa aún no tiene personas."
+      "peopleEmpty": "Esta empresa aún no tiene personas.",
+      "roleLensLabel": "Ver como rol",
+      "roleLensAll": "Todos los roles",
+      "roleLensHint": "Solo un filtro de vista — no cambia lo que alguien puede acceder.",
+      "roleLensBanner": "Filtro de vista: {role} — mostrando {shown} de {total} nodos. El acceso no cambia.",
+      "roleLensEmpty": "Filtro de vista: ningún nodo coincide con «{role}» en esta vista. El acceso no cambia — borra el filtro para ver a todos.",
+      "roleLensClear": "Borrar filtro"
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
