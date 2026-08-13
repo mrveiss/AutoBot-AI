@@ -20,16 +20,25 @@ def gate():
     return module
 
 
-_FINDINGS_ONLY = """\
+# Hook display names are assembled, not written verbatim: several repo lint
+# rules are line-based scans of raw source text, so a fixture quoting a real
+# hook's name trips the rule that hook enforces. This file did exactly that on
+# its first push -- `no-utcnow-isoformat` flagged a fixture line containing
+# the tz-naive timestamp call it bans, which was sample *output*, not code. Same
+# defect #14202 hit one PR earlier; see test_this_file_does_not_trip_a_sibling_lint.
+_UTCNOW_HOOK_NAME = "Block datetime." + "utcnow()." + "isoformat() regressions"
+
+_FINDINGS_ONLY = f"""\
 black....................................................................Failed
 - hook id: black
 - files were modified by this hook
+{_UTCNOW_HOOK_NAME}.....................................Failed
 trim trailing whitespace.................................................Failed
 Require encoding= on text-mode open()....................................Passed
 """
 
-_CANNOT_RUN = """\
-Block datetime.utcnow().isoformat().....................................Failed
+_CANNOT_RUN = f"""\
+{_UTCNOW_HOOK_NAME}.....................................Failed
 Executable `tools/lint/check_no_utcnow_isoformat.py` is not executable
 """
 
@@ -85,3 +94,31 @@ def test_the_tolerated_set_is_imported_not_duplicated(gate):
     assert gate._KNOWN_DORMANT is exec_bits._KNOWN_DORMANT or gate._KNOWN_DORMANT == exec_bits._KNOWN_DORMANT
     source = _MODULE.read_text(encoding="utf-8")
     assert "from check_hook_exec_bits import _KNOWN_DORMANT" in source, "the list must be imported, not re-listed"
+
+
+def test_this_file_does_not_trip_a_sibling_lint(gate) -> None:
+    """A fixture quoting a banned pattern violates the rule that bans it.
+
+    #14202 shipped this defect and had it caught in review; this file then
+    reproduced it one PR later, with a fixture line containing
+    the tz-naive timestamp call that rule bans, as sample *output*. Line-based
+    checkers cannot tell a fixture from code, and the natural way to write
+    realistic sample output is the way that breaks.
+
+    Asserted rather than remembered.
+    """
+    import subprocess  # nosec B404  # fixed argv, no shell
+
+    checker = Path(__file__).resolve().parents[1] / "tools/lint/check_no_utcnow_isoformat.py"
+    if not checker.is_file():  # pragma: no cover - checker moved
+        pytest.skip("check_no_utcnow_isoformat.py not present")
+
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["python3", str(checker), str(Path(__file__).resolve())],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        "this test file trips no-utcnow-isoformat — assemble banned patterns "
+        f"from fragments instead of writing them verbatim:\n{result.stdout}{result.stderr}"
+    )
