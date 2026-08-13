@@ -83,7 +83,17 @@ ALLOWLIST = {
     "autobot-backend/tests/test_knowledge_boards.py",
     "autobot-backend/tests/knowledge/test_facts_dedup.py",
     "autobot-backend/knowledge/knowledge_base_async_test.py",
-    "autobot-backend/knowledge/knowledge_base.integration_test.py",
+    # #14181: this entry read `knowledge_base.integration_test.py` -- a DOT
+    # where the filename has an underscore. It matched nothing, so the six
+    # init-state assertions in this file were reported as violations by an
+    # allowlist that was written to exempt them. The hook has never run
+    # (its exec bit was untracked), so nothing ever surfaced the typo.
+    "autobot-backend/knowledge/knowledge_base_integration_test.py",
+    # Constructs fake KB instances -- squarely the category named above. Its
+    # `MinimalFakeKB`/`FactsFakeKB` stubs *define* `_aioredis_client` so their
+    # own `redis()` accessor has something to return; they do not reach into a
+    # real KnowledgeBase.
+    "autobot-backend/tests/helpers/fake_kb.py",
     "autobot-backend/utils/stats_counter_parsing_test.py",
     "autobot-backend/api/knowledge_audit_test.py",
     # Pre-existing string-literal-in-source assertion (Pattern D, #5225).
