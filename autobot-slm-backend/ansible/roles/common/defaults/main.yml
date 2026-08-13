@@ -6,6 +6,21 @@
 # Author: mrveiss
 
 # ==========================================
+# SSH KEY PATH (#14226)
+# ==========================================
+
+# Canonical shared key path (#2828, #12429). Defined here as a ROLE DEFAULT --
+# the lowest precedence in Ansible -- so inventory/group_vars/all.yml still wins
+# wherever it is loaded, while this role stops *depending* on it being loaded.
+#
+# It previously only existed in inventory/group_vars/all.yml, so any play run
+# against an inventory without that directory (a DB-driven or dynamic one, cf.
+# #7094) aborted at "Common | Configure SSH key authentication" with
+# 'autobot_ssh_key_path' is undefined -- observed on a live /opt/autobot
+# provisioning run, failing every host in the play.
+autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
+
+# ==========================================
 # FIREWALL PORT CONFIGURATION (#887)
 # ==========================================
 
