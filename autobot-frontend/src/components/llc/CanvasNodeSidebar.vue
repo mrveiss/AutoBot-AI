@@ -330,6 +330,17 @@ function formatTime(ts: string | null): string {
                 {{ node.is_human ? t('llc.orgChart.human') : t('llc.orgChart.aiAgent') }}
               </dd>
             </div>
+            <!-- #13945 added a labelled Role row for people, and #13940's first
+                 draft dropped it while moving the drawer into this component.
+                 A person's role is the one attribute that is *theirs* — the
+                 other three rows all read "not applicable" for a human, so
+                 without this the Attributes slot says nothing about a person at
+                 all. `node.title` also appears unlabelled in the Owner header;
+                 that is not a substitute for the semantic dt/dd pair. -->
+            <div v-if="node.is_human" class="flex justify-between" data-testid="sidebar-attr-role">
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.role') }}</dt>
+              <dd class="text-autobot-text-primary">{{ node.title }}</dd>
+            </div>
             <div class="flex justify-between">
               <dt class="text-autobot-text-muted">{{ t('llc.orgChart.lastHeartbeat') }}</dt>
               <dd class="text-autobot-text-primary">

@@ -427,3 +427,32 @@ describe('state that must not go stale (#13940)', () => {
     expect(wrapper.get('[data-testid="node-sidebar"]').text()).toContain(en.llc.orgChart.never)
   })
 })
+
+// #13945 added a labelled Role row for people. Moving the drawer into this
+// component dropped it, and nothing failed — no test had ever asserted it. The
+// guard exists so the next refactor cannot repeat that silently.
+describe('a person keeps their Role attribute (#13945 regression guard)', () => {
+  it('renders a labelled Role row for a human node', () => {
+    const wrapper = mountSidebar(HUMAN_NODE)
+
+    const row = wrapper.get('[data-testid="sidebar-attr-role"]')
+    expect(row.text()).toContain(en.llc.orgChart.role)
+    expect(row.text()).toContain(HUMAN_NODE.title)
+  })
+
+  it('does not render a Role row for an agent — its role is the adapter row', () => {
+    const wrapper = mountSidebar(AGENT_NODE)
+
+    expect(wrapper.find('[data-testid="sidebar-attr-role"]').exists()).toBe(false)
+  })
+
+  it('leaves a person with at least one attribute that is actually about them', () => {
+    // The other three attribute rows all read "not applicable" for a human, so
+    // dropping Role empties the slot entirely — the failure this guards.
+    const text = mountSidebar(HUMAN_NODE).get('[data-testid="sidebar-slot-attributes"]').text()
+    const notApplicable = en.llc.orgChart.sidebar.toolsNotApplicable
+
+    expect(text.split(notApplicable).length - 1).toBeLessThan(4)
+    expect(text).toContain(HUMAN_NODE.title)
+  })
+})
