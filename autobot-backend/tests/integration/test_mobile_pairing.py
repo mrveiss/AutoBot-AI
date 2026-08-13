@@ -32,6 +32,7 @@ from api.mobile_devices import _QR_CHALLENGE_TTL_SECONDS, _redis_challenge_key
 from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.ssot_constants import TTL_5_MINUTES
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
 from user_management.models.base import Base
@@ -812,7 +813,7 @@ async def test_only_one_of_two_interleaved_consumers_wins(redis_client):
     from autobot_shared.redis_client import client_getdel
 
     key = _redis_challenge_key("race-token")
-    redis_client.setex(key, 300, "user-42")
+    redis_client.setex(key, TTL_5_MINUTES, "user-42")
 
     results = await asyncio.gather(
         client_getdel(redis_client, key),
