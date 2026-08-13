@@ -8,6 +8,12 @@ import type { AgentDisplayStatus } from '@/composables/llc/llcStatus'
 
 export interface OrgNode {
   id: string
+  // AgentOrgNode UUID PK for an agent, or the raw user UUID for a person
+  // (`OrgChartNode.node_id`, GH#10032) — the assignment keyspace
+  // `assignee_agent_id` references. Optional so fixtures written before
+  // #13940 (which had no reason to carry it) keep compiling; every real
+  // response includes it.
+  node_id?: string
   name: string
   title: string
   status: AgentDisplayStatus
