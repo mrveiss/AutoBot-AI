@@ -81,15 +81,31 @@ jobs:
 
       - name: Run pre-commit on all files
         run: |
-          # This validates that the hooks are properly configured and can run
-          # We expect this to potentially fail on the first run if code doesn't meet standards
-          # The goal is to catch configuration errors, not necessarily code issues
-          pre-commit run --all-files --show-diff-on-failure || {
+          # #14181: this used to swallow the result entirely with
+          # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
+          # "to catch configuration errors, not necessarily code issues" -- the right
+          # distinction, never implemented. Measured on a real run: 20 hooks reported
+          # findings (formatting/lint -- gating on those is the judgement call this
+          # step was right to avoid) and 5 could not EXECUTE at all. Both were
+          # discarded, so sixteen dormant hooks scrolled past under a green check.
+          #
+          # Findings still only warn. A hook that could not run is a different thing:
+          # it reports nothing about the code, so a pass over it is a false clean
+          # bill of health. The next step fails on those.
+          set -o pipefail
+          pre-commit run --all-files --show-diff-on-failure > precommit-output.txt 2>&1 || {
             echo "::warning::Pre-commit hooks found issues. Developers should run 'pre-commit run --all-files' locally."
-            echo "::warning::Note: This is informational. The main goal is verifying hooks are configured."
-            # Don't fail the workflow - we just want to verify hooks work
-            exit 0
+            echo "::warning::Findings are informational here; hooks that could not RUN are enforced in the next step."
           }
+          cat precommit-output.txt
+
+      - name: Fail when a hook could not run at all (#14181)
+        run: |
+          # Tolerates exactly the hooks still on check_hook_exec_bits.py's
+          # _KNOWN_DORMANT list, imported rather than duplicated -- a second copy
+          # is a second thing to go stale (#14202). As each is woken both guards
+          # tighten together, and this becomes absolute when the baseline empties.
+          python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
 
       - name: Enforce SPDX/Apache-2.0 license header (#9840)
         run: |
