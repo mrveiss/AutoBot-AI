@@ -122,3 +122,57 @@ def test_this_file_does_not_trip_a_sibling_lint(gate) -> None:
         "this test file trips no-utcnow-isoformat — assemble banned patterns "
         f"from fragments instead of writing them verbatim:\n{result.stdout}{result.stderr}"
     )
+
+
+def test_empty_output_is_fatal_not_clean(gate, tmp_path):
+    """No output means no run, and a pass over it is the fail-open this gate removes.
+
+    Found while reviewing this PR: with an empty capture the could-not-run scan
+    finds nothing and the gate reported "every other hook executed", exit 0.
+    Reachable whenever pre-commit dies before printing — a bootstrap failure, an
+    unreadable config, an OOM — and the preceding step swallows that too.
+    """
+    log = tmp_path / "out.txt"
+    log.write_text("", encoding="utf-8")
+
+    assert gate.main([str(log)]) == 1
+
+
+def test_a_crash_AFTER_some_hooks_ran_is_still_fatal(gate, tmp_path):
+    """The case the run-happened check alone cannot catch.
+
+    pre-commit can print results for several hooks and then die. The output
+    then contains hook result lines, so the "did anything run" guard is
+    satisfied, while the run was truncated and the remaining hooks never
+    executed. Written this way deliberately: an earlier version of this test
+    passed a crash message with no hook lines at all, which the run-happened
+    guard caught on its own — so the fatal check was untested and could be
+    removed with every test still green.
+    """
+    log = tmp_path / "out.txt"
+    log.write_text(
+        "black....................................................Passed\n"
+        "An unexpected error has occurred: KeyError('x')\n",
+        encoding="utf-8",
+    )
+
+    assert gate.main([str(log)]) == 1
+
+
+def test_an_invalid_config_after_output_is_fatal(gate, tmp_path):
+    log = tmp_path / "out.txt"
+    log.write_text(
+        "black....................................................Passed\n"
+        "InvalidConfigError: .pre-commit-config.yaml is not valid\n",
+        encoding="utf-8",
+    )
+
+    assert gate.main([str(log)]) == 1
+
+
+def test_output_with_only_passes_is_accepted(gate, tmp_path):
+    """The run-happened check must not demand a failure to be satisfied."""
+    log = tmp_path / "out.txt"
+    log.write_text("black....................................................Passed\n", encoding="utf-8")
+
+    assert gate.main([str(log)]) == 0

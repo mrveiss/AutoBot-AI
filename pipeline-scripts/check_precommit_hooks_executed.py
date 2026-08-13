@@ -39,6 +39,16 @@ from check_hook_exec_bits import _KNOWN_DORMANT  # noqa: E402
 # pre-commit's own wording for "I could not execute this entry".
 _CANNOT_RUN = re.compile(r"Executable `([^`]+)` (?:is not executable|not found)")
 
+# Any hook result line. Used only to establish that pre-commit ran at all:
+# with no output the could-not-run scan finds nothing and this gate would
+# report success over a run that never happened -- the empty-result-reads-as-
+# clean failure it exists to remove.
+_RAN_AT_ALL = re.compile(r"\.\.\.+\s*(Passed|Failed|Skipped)\b")
+
+# pre-commit's own fatal wording. These mean no hooks ran, so they are blocking
+# regardless of which hook is named.
+_FATAL = re.compile(r"(InvalidManifestError|InvalidConfigError|An unexpected error has occurred)")
+
 
 def unrunnable_hooks(output: str) -> list[str]:
     """Every hook entry pre-commit reported it could not execute."""
@@ -51,6 +61,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     output = Path(args.logfile).read_text(encoding="utf-8") if args.logfile else sys.stdin.read()
+
+    if not _RAN_AT_ALL.search(output):
+        print(  # noqa: print
+            "check-precommit-hooks-executed: FATAL -- no hook result line in the captured output.\n"
+            "pre-commit produced nothing recognisable, so no hook ran and this gate has\n"
+            "nothing to verify. Reporting success here would be the exact fail-open the\n"
+            "gate exists to remove."
+        )
+        return 1
+
+    fatal = sorted({m.group(1) for m in _FATAL.finditer(output)})
+    if fatal:
+        print(  # noqa: print
+            f"check-precommit-hooks-executed: FATAL -- pre-commit could not run its config: {', '.join(fatal)}"
+        )
+        return 1
 
     unrunnable = unrunnable_hooks(output)
     tolerated = [hook for hook in unrunnable if hook in _KNOWN_DORMANT]
