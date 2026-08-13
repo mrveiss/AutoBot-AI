@@ -30,6 +30,7 @@ from autobot_shared.auth import (
     OAuthRefreshAuth,
     validate_config_against_schema,
 )
+from autobot_shared.datetime_utils import datetime_now
 from knowledge.connectors.base import AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -37,7 +38,6 @@ from knowledge.connectors.models import (
     ContentResult,
     SourceInfo,
 )
-from autobot_shared.datetime_utils import datetime_now
 
 # ---------------------------------------------------------------------------
 # Minimal concrete connector for testing
