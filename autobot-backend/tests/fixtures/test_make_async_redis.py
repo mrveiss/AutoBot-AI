@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tests.fixtures import make_async_redis, patch_async_redis
 from autobot_shared.ssot_constants import TTL_1_MINUTE
+from tests.fixtures import make_async_redis, patch_async_redis
 
 # ---------------------------------------------------------------------------
 # make_async_redis — defaults + override + extras

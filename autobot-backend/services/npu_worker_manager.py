@@ -1397,6 +1397,7 @@ class NPUWorkerManager(AsyncInitializable):
 
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
+
 from autobot_shared.ssot_constants import TTL_24_HOURS
 
 _worker_manager: NPUWorkerManager | None = None

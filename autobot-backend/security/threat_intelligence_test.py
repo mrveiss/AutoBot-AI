@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from security.threat_intelligence import (
     ThreatIntelligenceCache,
     ThreatIntelligenceService,
@@ -27,7 +28,6 @@ from security.threat_intelligence import (
     URLVoidClient,
     VirusTotalClient,
 )
-from autobot_shared.ssot_constants import TTL_1_HOUR
 
 
 class TestThreatScore:

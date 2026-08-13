@@ -32,10 +32,10 @@ from api.mobile_devices import _QR_CHALLENGE_TTL_SECONDS, _redis_challenge_key
 from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.ssot_constants import TTL_5_MINUTES
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
 from user_management.models.base import Base
-from autobot_shared.ssot_constants import TTL_5_MINUTES
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"

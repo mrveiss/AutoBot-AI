@@ -46,6 +46,7 @@ from typing import Any, AsyncIterator, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
@@ -55,7 +56,6 @@ from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
 from llm_shared.types import LLMType
-from autobot_shared.ssot_constants import TTL_1_HOUR
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
