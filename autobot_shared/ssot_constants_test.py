@@ -70,18 +70,18 @@ def test_no_tracked_python_file_carries_a_literal_ttl() -> None:
     redis-py native kwarg. This test inherits that blind spot rather than
     hiding it.
     """
-    import subprocess  # nosec B404 - fixed argv, no shell
+    import subprocess  # nosec B404  # fixed argv, no shell
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[1]
-    listing = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+    listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "*.py"], cwd=str(repo), capture_output=True, text=True
     )
     assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
     files = listing.stdout.split()
     assert files, "git ls-files listed nothing — refusing to report clean"
 
-    result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["python3", "pipeline-scripts/check_no_literal_ttl_seconds.py", *files],
         cwd=str(repo),
         capture_output=True,
