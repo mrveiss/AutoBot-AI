@@ -67,7 +67,13 @@ def test_the_allowlist_is_enforced_not_just_declared() -> None:
 
 def test_an_external_read_of_the_private_client_is_blocked() -> None:
     """The defect #5225 actually banned: a caller reaching into KB internals."""
-    body = "async def go(kb):\n    await kb._aioredis_client.get('x')\n"
+    # Assembled rather than written verbatim: this checker is a line-based scan
+    # of raw source text, so a literal containing the banned pattern would make
+    # THIS file violate the rule it is testing. The checker's own source is
+    # allowlisted for exactly that reason; splitting the literal avoids needing
+    # a second exemption, and #14181 is about allowlists going stale.
+    private_attr = "_aioredis" + "_client"
+    body = f"async def go(kb):\n    await kb.{private_attr}.get('x')\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "caller.py", body)
         assert len(_scan(f, Path(d))) == 1
@@ -92,3 +98,21 @@ def test_the_fake_kb_helper_is_exempt_for_a_stated_reason() -> None:
     assert "autobot-backend/tests/helpers/fake_kb.py" in ALLOWLIST
     source = (_REPO / "autobot-backend/tests/helpers/fake_kb.py").read_text(encoding="utf-8")
     assert re.search(r"def redis\(self\)", source), "the fake must expose the public accessor it stands in for"
+
+
+def test_this_test_file_does_not_violate_the_rule_it_tests() -> None:
+    """A line-based checker scans its own tests' source text too.
+
+    Review finding on #14202: the first version of this file wrote the banned
+    pattern as a verbatim literal to synthesize a violation, which made the
+    file itself a violation — the checker reported 1 hit on the very PR that
+    turned the hook on, while the PR body claimed 0. CI missed it only because
+    `enforce-precommit.yml` swallows hook failures (#14181's second AC).
+
+    Asserted rather than remembered, because the natural way to write the next
+    such test is the way that breaks it.
+    """
+    assert _scan(Path(__file__), _REPO) == [], (
+        "this test file trips the checker it tests — assemble banned patterns "
+        "from fragments instead of writing them verbatim"
+    )
