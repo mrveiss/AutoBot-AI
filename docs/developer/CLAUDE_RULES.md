@@ -437,23 +437,43 @@ To add a new variable:
 <!-- BEGIN_AUTOGEN_ENV_DOCS -->
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
+| `AUTOBOT_AUDIT_MAX_DEFERRED` | backend | int | `10000` | Ceiling on audit records held in the deferred queue when the sink is unavailable. Beyond it the oldest are dropped, bounding memory rather than letting an outage grow it without limit. |
 | `AUTOBOT_BACKEND_HOST` | backend | str | `'10.0.0.1'` | Hostname or IP address of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_URL` | backend | str | `'http://10.255.255.254:8001'` | Full base URL of the AutoBot backend service (overrides HOST+PORT). |
 | `AUTOBOT_CHATS_DIRECTORY` | chat | str | `'data/chats'` | Filesystem path where chat session files are stored. |
 | `AUTOBOT_CLASSIFICATION_MODEL` | ai | str | `'gemma2:2b'` | Ollama model name used for intent classification. |
+| `AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS` | backend | int | `8` | Tasks a code-analysis child handles before it is recycled. Recycling bounds memory growth in long-lived children. |
+| `AUTOBOT_CODE_ANALYSIS_POOL_WORKERS` | backend | int | `2` | Child processes used to offload code analysis. Deliberately small: each carries a full interpreter, and analysis is bursty rather than sustained. |
+| `AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS` | redis | float | `30.0` | Interval between config-registry attempts to reconnect to Redis after a failure, so a Redis outage does not become a reconnect storm. |
 | `AUTOBOT_DEPLOYMENT_MODE` | system | str | `'distributed'` | Deployment topology: 'distributed' or 'standalone'. |
+| `AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS` | auth | int | `5` | Extra delay added to the device-code poll interval after the provider answers `slow_down`. |
+| `AUTOBOT_DEVICE_POLL_MAX_ATTEMPTS` | auth | int | `360` | Maximum device-code poll attempts before the flow is abandoned. Bounds the poll loop independently of the time window below. |
+| `AUTOBOT_DEVICE_POLL_MIN_INTERVAL_SECONDS` | auth | int | `5` | Floor on how often the device-code flow polls the provider for completion, regardless of the interval the provider advertises. |
+| `AUTOBOT_DEVICE_POLL_WINDOW_SECONDS` | auth | int | `1800` | Wall-clock ceiling on a device-code flow. Reached first when the provider advertises a long interval, whereas the attempt cap above binds first when it advertises a short one. |
+| `AUTOBOT_DOCKER_POOL_SIZE` | execution | int | `3` | Number of warm containers kept when AUTOBOT_DOCKER_USE_POOL is on. Ignored entirely when pooling is off. |
+| `AUTOBOT_DOCKER_USE_POOL` | execution | bool | false | Reuse a pool of warm containers for tool execution instead of starting one per call. Off by default — the pool trades isolation between calls for start-up latency. |
 | `AUTOBOT_ENV` | system | str | `'production'` | Short environment label used in logs and traces (e.g. 'development', 'production'). |
 | `AUTOBOT_ENVIRONMENT` | system | str | `'development'` | Full environment name for OTel deployment.environment attribute. Prefer AUTOBOT_ENV for new code. |
 | `AUTOBOT_GIT_BRANCH` | system | str | `'Dev_new_gui'` | Git branch that the running instance was built from. |
+| `AUTOBOT_GRAFANA_PORT` | monitoring | str | `'3000'` | TCP port of the Grafana instance. Also declared in ssot_config.py; 3000 is Grafana's own default and is NOT the browser service, which is 9001 (#4052, #14198). |
+| `AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS` | kb | float | `10.0` | Ceiling on a knowledge-graph path search. Path queries are unbounded in the worst case, so this is what stops one request occupying a worker indefinitely. |
+| `AUTOBOT_IMESSAGE_ENABLED` | gateway | bool | false | Opt in to the iMessage gateway adapter. Off by default: it is macOS-only and needs Full Disk Access to the Messages database. |
 | `AUTOBOT_INTERNAL_API_KEY` | auth | str | `""` | Shared secret used to authenticate internal service-to-service calls. |
 | `AUTOBOT_KB_TIMEOUT` | kb | int | `30` | Timeout in seconds for knowledge-base HTTP requests. Range: 1–300. |
+| `AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL` | orchestrator | int | `86400` | Cache lifetime in seconds for a human-to-agent handoff brief (llc/services/handoff.py). One day. |
+| `AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS` | ai | float | `30.0` | Cap applied to a provider's `Retry-After`. Without it a provider advertising a long back-off would stall a request for that whole period (services/llm_service.py). |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
 | `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
+| `AUTOBOT_MATRIX_E2EE` | gateway | bool | false | Opt in to end-to-end encryption for the Matrix adapter. Off by default because E2EE needs the optional olm dependency and a persisted device store. |
 | `AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD` | voice | float | `0.7` | Fallback confidence threshold for VoiceProcessor when the multimodal.voice config section omits it (#13207). Range: 0.0–1.0. |
 | `AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT` | voice | int | `30` | Fallback processing timeout in seconds for VoiceProcessor when the multimodal.voice config section omits it (#13207). |
+| `AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS` | auth | int | `0` | Milliseconds a connector holds the single-flight lock while refreshing an OAuth token. Zero means 'derive it' — the default is computed as three times the token request timeout, so it tracks that timeout instead of drifting from it (knowledge/connectors/credential_store.py). |
+| `AUTOBOT_OAUTH_REFRESH_POLL_S` | auth | float | `0.2` | Polling interval while waiting on another worker's token refresh. Only consulted when AUTOBOT_OAUTH_REFRESH_WAIT_S is non-zero. |
+| `AUTOBOT_OAUTH_REFRESH_WAIT_S` | auth | float | `0.0` | Seconds a caller waits for another worker's in-flight token refresh before refreshing itself. Zero disables waiting, so every caller refreshes independently. |
 | `AUTOBOT_OLLAMA_BASE_URL` | ai | str | *(none)* | Base URL of the local Ollama API (e.g. http://localhost:11434). |
+| `AUTOBOT_OPENVINO_CACHE_DIR` | ai | str | `'data/openvino_cache'` | Directory for compiled OpenVINO model artefacts. Relative to the working directory unless given as an absolute path. |
 | `AUTOBOT_ORCHESTRATOR_MODEL` | ai | str | `'llama3.2:1b'` | Ollama model name used for the main orchestrator/routing loop. |
 | `AUTOBOT_OTEL_ENABLED` | otel | bool | false | Enable OpenTelemetry tracing when truthy. |
 | `AUTOBOT_OTEL_ENDPOINT` | otel | str | *(none)* | OTLP collector endpoint URL (e.g. http://otel-collector:4317). |
@@ -465,7 +485,9 @@ To add a new variable:
 | `AUTOBOT_POSTGRES_PASSWORD` | postgres | str | `""` | PostgreSQL user password. |
 | `AUTOBOT_POSTGRES_PORT` | postgres | str | `'5432'` | PostgreSQL server port. |
 | `AUTOBOT_POSTGRES_USER` | postgres | str | `'slm_app'` | PostgreSQL login role. |
+| `AUTOBOT_PROMETHEUS_PORT` | monitoring | str | `'9090'` | TCP port of the Prometheus instance. Also declared in ssot_config.py. |
 | `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
+| `AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS` | auth | int | `600` | Lifetime of a pending OAuth `state` value. A provider authorisation that is not completed within this window is rejected as expired (api/provider_auth.py). |
 | `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | `11` | Redis logical database number for analytics data. Range: 0–15. |
 | `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | `1` | Redis logical database number for knowledge-base vectors. Range: 0–15. |
 | `AUTOBOT_REDIS_DB_MAIN` | redis | int | `0` | Redis logical database number for primary application data. Range: 0–15. |
@@ -475,15 +497,22 @@ To add a new variable:
 | `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
 | `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
 | `AUTOBOT_REQUIRE_CLASSIFICATION` | orchestrator | bool | false | Fail orchestrator construction when request classification is unavailable. Default (off) degrades gracefully: every request is defaulted to COMPLEX and the reason is reported in the orchestration status. Deployments that depend on classification set this so the failure is loud instead of silent (#13807). |
+| `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` | redis | float | `1.5` | Seconds the retrieval learner waits for its Redis lock before proceeding without it. Short on purpose — retrieval must answer even when the learner cannot record what it learned. |
 | `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
+| `AUTOBOT_SIGNAL_ENABLED` | gateway | bool | false | Opt in to the Signal gateway adapter. Off by default: it needs a running signal-cli daemon and a registered number. |
+| `AUTOBOT_SNAPSHOT_STORAGE_PATH` | execution | str | `""` | Directory holding execution snapshots. Empty means 'derive it' — the default is `<project root>/snapshots`, so it follows the install location rather than being pinned to one path. |
+| `AUTOBOT_SNAPSHOT_TTL_DAYS` | execution | int | `7` | Age at which the cleanup task removes an execution snapshot. Snapshots are a debugging aid, so the default is deliberately short. |
 | `AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD` | voice | float | `0.8` | Decoder no-speech probability at or above which an STT transcript is discarded as a silence hallucination (#13104). Range: 0.0–1.0. |
 | `AUTOBOT_STT_SILENCE_RMS_THRESHOLD` | voice | float | `0.005` | Audio RMS below which the waveform is treated as silence, so any STT transcript over it is a hallucination rather than a user turn (#13104). Range: 0.0–1.0. |
+| `AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS` | chat | int | `300` | Quiet period after a context-overflow summarisation failure before another is attempted, so a persistently failing summary does not retry on every turn. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
 | `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
 | `AUTOBOT_TLS_KEY_PATH` | tls | str | *(none)* | Path to the TLS private key file. |
+| `AUTOBOT_TRANSCRIBER_DB_PATH` | voice | str | `'data/transcriber.db'` | SQLite database backing the transcriber. Relative to the working directory unless given as an absolute path. |
 | `AUTOBOT_TRUSTED_PROXIES` | network | str | `""` | Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges for X-Forwarded-For header trust. |
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
+| `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*47 variables registered as of last generation.*
+*76 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
