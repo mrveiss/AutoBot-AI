@@ -92,7 +92,11 @@ jobs:
           # Findings still only warn. A hook that could not run is a different thing:
           # it reports nothing about the code, so a pass over it is a false clean
           # bill of health. The next step fails on those.
-          set -o pipefail
+          # No `set -o pipefail` here: there is no pipeline in this step, only a
+          # redirection and `||`. An earlier version added it with a comment about
+          # broken pipes, which was inaccurate -- there is no pipe to break. The
+          # step runs under `bash -e`, so the trailing `cat` fails the step if the
+          # capture file is ever missing, which is the fail-closed behaviour wanted.
           pre-commit run --all-files --show-diff-on-failure > precommit-output.txt 2>&1 || {
             echo "::warning::Pre-commit hooks found issues. Developers should run 'pre-commit run --all-files' locally."
             echo "::warning::Findings are informational here; hooks that could not RUN are enforced in the next step."

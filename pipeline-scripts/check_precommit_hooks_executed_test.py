@@ -43,9 +43,13 @@ Executable `tools/lint/check_no_utcnow_isoformat.py` is not executable
 """
 
 
-def test_findings_alone_do_not_fail(gate, capsys):
-    """20 hooks report findings on a real run. Gating on those is the judgement
-    call the original step was right to avoid — only inability to run is fatal."""
+def test_findings_produce_no_unrunnable_hooks(gate):
+    """Findings are not inability-to-run.
+
+    Renamed after review: the old name promised that findings "do not fail",
+    but the body only checked the helper. The end-to-end claim is covered by
+    `test_findings_only_output_passes_end_to_end`; this one covers the parse.
+    """
     assert gate.unrunnable_hooks(_FINDINGS_ONLY) == []
 
 
@@ -174,5 +178,45 @@ def test_output_with_only_passes_is_accepted(gate, tmp_path):
     """The run-happened check must not demand a failure to be satisfied."""
     log = tmp_path / "out.txt"
     log.write_text("black....................................................Passed\n", encoding="utf-8")
+
+    assert gate.main([str(log)]) == 0
+
+
+def test_a_generic_pre_commit_fatal_after_output_is_caught(gate, tmp_path):
+    """pre-commit prints "An error has occurred: <Class>" for its FatalError
+    subclasses — a repo clone failure, a venv bootstrap failure — and only
+    "An unexpected error has occurred" for unhandled exceptions.
+
+    Review finding: listing three literal strings missed the general prefix, so
+    a crash after some hooks had already printed satisfied the run-happened
+    guard and fell through the fatal check.
+    """
+    log = tmp_path / "out.txt"
+    log.write_text(
+        "black....................................................Passed\n"
+        "An error has occurred: FatalError: git clone of hook repo failed\n",
+        encoding="utf-8",
+    )
+
+    assert gate.main([str(log)]) == 1
+
+
+def test_the_same_phrase_inside_hook_output_does_not_fail(gate, tmp_path):
+    """The fatal patterns are ordinary English, so they are anchored at line start.
+
+    pre-commit prints its own errors at column zero; hook output is indented or
+    prefixed. Unanchored, a lint message quoting the phrase would fail the gate
+    and block every PR — a false positive here is far worse than the false
+    negative it replaces.
+    """
+    log = tmp_path / "out.txt"
+    log.write_text(
+        "black....................................................Passed\n"
+        # Capitalised and word-for-word identical to pre-commit's own wording,
+        # differing ONLY by indentation — otherwise this test passes whether or
+        # not the pattern is anchored, and the anchor goes untested.
+        "  An error has occurred: while parsing foo.py\n",
+        encoding="utf-8",
+    )
 
     assert gate.main([str(log)]) == 0

@@ -45,9 +45,28 @@ _CANNOT_RUN = re.compile(r"Executable `([^`]+)` (?:is not executable|not found)"
 # clean failure it exists to remove.
 _RAN_AT_ALL = re.compile(r"\.\.\.+\s*(Passed|Failed|Skipped)\b")
 
-# pre-commit's own fatal wording. These mean no hooks ran, so they are blocking
-# regardless of which hook is named.
-_FATAL = re.compile(r"(InvalidManifestError|InvalidConfigError|An unexpected error has occurred)")
+# pre-commit's own fatal wording, blocking regardless of which hook is named.
+#
+# Review finding on this PR: an earlier version listed three literal strings, so
+# a crash *after* some hooks had printed results — satisfying _RAN_AT_ALL — with
+# any other wording fell through both guards. pre-commit prints
+# "An error has occurred: <Class>: <msg>" for its FatalError subclasses and
+# "An unexpected error has occurred: ..." only for unhandled exceptions, so the
+# general prefix is the one that matters and was missing.
+#
+# **Anchored at line start on purpose.** These phrases are ordinary English and
+# a hook's own output could contain them; pre-commit prints its errors at column
+# zero while hook output is indented or prefixed. Unanchored, a lint message
+# quoting "an error has occurred" would fail the gate and block every PR — a
+# false positive here is far worse than the false negative it replaces.
+#
+# NOT verified against a live pre-commit crash: no pre-commit binary is
+# available in this environment and nothing may be installed. The wording is
+# from documentation and source reading, so a version bump is worth re-checking.
+_FATAL = re.compile(
+    r"^(An (?:unexpected )?error has occurred|InvalidManifestError|InvalidConfigError)",
+    re.MULTILINE,
+)
 
 
 def unrunnable_hooks(output: str) -> list[str]:
