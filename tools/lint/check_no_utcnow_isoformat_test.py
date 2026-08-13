@@ -390,3 +390,47 @@ def test_naive_timestamp_test_fixture_allowlisted(tmp_path: Path) -> None:
     )
     hits = hook._scan(target, tmp_path)
     assert hits == [], "knowledge_context_suggestions_test.py must be allowlisted (#5393)"
+
+
+# --- #14181: the scan flagged its own documentation ---------------------------
+
+
+def test_a_docstring_describing_the_pattern_is_not_flagged(tmp_path: Path) -> None:
+    """The rule flagged documentation of the migration it enforces.
+
+    `autobot-slm-backend/migrations/migrate_timestamps_to_timestamptz.py:8,12`
+    is a module docstring whose whole subject is the naive-timestamp migration.
+    A line-based scan cannot tell prose from code, so it told a contributor to
+    fix the sentence describing the fix.
+    """
+    f = _write(tmp_path, "doc.py", '"""Issue #5385 - the datetime.utcnow() to now_utc() gate."""\n')
+    assert hook.main(["check_no_utcnow_isoformat", str(f)]) == 0
+
+
+def test_a_comment_describing_the_pattern_is_not_flagged(tmp_path: Path) -> None:
+    f = _write(tmp_path, "cmt.py", "# every write path used datetime.utcnow() before this\nx = 1\n")
+    assert hook.main(["check_no_utcnow_isoformat", str(f)]) == 0
+
+
+def test_real_code_with_a_trailing_comment_is_still_flagged(tmp_path: Path) -> None:
+    """Only lines that are *entirely* prose are skipped.
+
+    Excluding any line that merely contains a comment would let
+    `x = datetime.utcnow()  # keep` through — a far larger hole than the one
+    being closed.
+    """
+    f = _write(tmp_path, "code.py", "from datetime import datetime\nx = datetime.utcnow()  # intentional\n")
+    assert hook.main(["check_no_utcnow_isoformat", str(f)]) == 1
+
+
+def test_the_tz_aware_stdlib_form_passes(tmp_path: Path) -> None:
+    """`datetime.now(timezone.utc)` satisfies the rule without `autobot_shared`.
+
+    The rule's message names a helper from `autobot_shared`, but 15 of the sites
+    it flagged live in standalone tooling (`.claude/skills/`, an MCP server)
+    where that package is not importable. The rule's *contract* is "no tz-naive
+    utcnow", and the stdlib form meets it — which is what those sites now use,
+    with no packaging change.
+    """
+    f = _write(tmp_path, "tz.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc).isoformat()\n")
+    assert hook.main(["check_no_utcnow_isoformat", str(f)]) == 0

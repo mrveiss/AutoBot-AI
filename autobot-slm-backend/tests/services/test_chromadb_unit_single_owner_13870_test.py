@@ -232,3 +232,43 @@ def test_the_combined_host_keeps_todays_data_path():
             f"{rel} hands a combined host to redis — that relocates the chroma data "
             "directory silently (#13870, open decision)"
         )
+
+
+# ---------------------------------------------------------------------------
+# #13870 follow-up: the two units differed in more than their path, and which
+# one won was decided by role order. Whatever a host ended up with, it got an
+# arbitrary combination of these — and nothing made that visible.
+#
+# The memory watermarks that were here are gone, and the reason is worth
+# keeping: `CgroupMemoryCollector` reads its OWN host's /sys/fs/cgroup and is
+# scraped only from the backend and slm-backend processes. Chroma runs on the
+# ai/ML and database nodes, so `autobot_cgroup_memory_*` is never produced for
+# this unit on the documented multi-node topology — the alerting that would have
+# justified a watermark is structurally unable to fire for it. Adding MemoryHigh
+# there would have shipped a throttle with no observer. Tracked separately.
+# ---------------------------------------------------------------------------
+
+
+def _directive(text: str, name: str) -> str | None:
+    match = re.search(rf"^{name}=(.+)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+@pytest.mark.parametrize("role", _ROLES)
+def test_both_units_disable_chroma_telemetry(role: str):
+    """Chroma's telemetry is ON by default and posts to an external endpoint.
+    One unit opted out and the other did not, so whether this deployment phoned
+    home depended on which ansible role ran last."""
+    text = _template(role).read_text(encoding="utf-8")
+    assert 'Environment="ANONYMIZED_TELEMETRY=FALSE"' in text, f"{role}'s chroma still reports telemetry externally"
+
+
+@pytest.mark.parametrize("role", _ROLES)
+def test_the_unit_writing_to_a_file_is_unbuffered(role: str):
+    """`StandardOutput=append:` is a FILE, which is fully buffered rather than
+    line-buffered — so without this the log an operator reads during an incident
+    lags the incident by up to a buffer."""
+    text = _template(role).read_text(encoding="utf-8")
+    if "StandardOutput=append:" not in text:
+        pytest.skip(f"{role} does not append to a file")
+    assert 'Environment="PYTHONUNBUFFERED=1"' in text, f"{role} buffers chroma's diagnostics into a file"

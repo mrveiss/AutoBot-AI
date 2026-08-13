@@ -1174,14 +1174,28 @@ async def get_org_chart(
 # to store — no work item row is ever written with assignee_type="unassigned".
 _UNASSIGNED_EXECUTOR_CLASS = "unassigned"
 
+# A work item whose assignee id is present but no longer resolves to a live
+# member/agent of *this* company (#14222) — the membership was deleted
+# (`membership_service`) or the agent was terminated (`controls_service`),
+# and neither reassigns the work it left behind. Kept distinct from
+# ``unassigned`` rather than folded into it: "never assigned" and "the
+# assignee is gone" are different facts about the row, and the second is the
+# one that tells an operator a handover was missed (#14221's owner framing —
+# "work items remain behind when someone leaves — they still need someone to
+# work on them"). Same literal-constant convention as
+# ``_UNASSIGNED_EXECUTOR_CLASS`` above: a third value on the existing
+# executor axis, never a fourth ``AssigneeType``/``CoWorkerType`` fork
+# (#13970).
+_ORPHANED_EXECUTOR_CLASS = "orphaned"
+
 
 class ExecutorRollupCell(BaseModel):
     """One (executor_class, status) count — one bar of the rollup panel.
 
     ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
-    / ``_UNASSIGNED_EXECUTOR_CLASS`` — never a value invented for this endpoint
-    (#13942's "no parallel executor enum" constraint). ``status`` is a
-    ``WorkItemStatus`` value.
+    / ``_UNASSIGNED_EXECUTOR_CLASS`` / ``_ORPHANED_EXECUTOR_CLASS`` — never a
+    value invented for this endpoint (#13942's "no parallel executor enum"
+    constraint). ``status`` is a ``WorkItemStatus`` value.
     """
 
     executor_class: str
@@ -1194,38 +1208,84 @@ class ExecutorRollupResponse(BaseModel):
 
 
 def _executor_class_case(work_item_model):
-    """SQL ``CASE`` classifying a work item's assignee (#13942).
+    """SQL ``CASE`` classifying a work item's assignee (#13942, #14222).
 
-    A work item lands in ``AssigneeType.USER``/``AssigneeType.AGENT`` only when *both* the typed
-    discriminator and the matching id column agree — ``assignee_type="user"``
-    with a NULL ``assignee_user_id`` (a mistyped/dangling row; the column is
-    an unconstrained ``String(16)``, not a DB-level enum — see
-    ``AssigneeType``'s docstring) falls through to ``unassigned`` rather than
-    being counted as a person nobody can actually look up. This is the same
-    defensive pattern the issue's acceptance criteria asks for: a mis-typed
-    discriminator must never silently land in a normal-looking bucket.
+    Four branches, evaluated in order:
+
+    1. ``AssigneeType.USER`` — typed "user", a non-NULL ``assignee_user_id``,
+       AND that user is a *current* member of *this* company
+       (``llc_company_memberships``, scoped by ``company_id`` — a member of a
+       *different* company must not count here; that row-level scope has had
+       to be pinned independently three times already: #13936, #13969,
+       #13942).
+    2. ``AssigneeType.AGENT`` — typed "agent", a non-NULL ``assignee_agent_id``,
+       AND that id resolves to an ``AgentOrgNode`` of *this* company whose
+       ``status`` is not ``LLCAgentStatus.TERMINATED``. A paused/on-leave/
+       inactive agent still counts as existing — those are recoverable
+       states the agent can return from, so the work stays "owned, agent
+       temporarily unavailable" rather than orphaned. Terminated is the one
+       status that is final for this purpose (#14221's owner framing): the
+       work still needs an owner, so it must not be reported as covered.
+    3. ``orphaned`` — the discriminator and id column agree (so branch 1/2's
+       *shape* matched — this is a real, non-dangling id) but the existence
+       check failed: the id is present yet does not resolve inside this
+       company. This is #14222's defect — the id existing was previously
+       treated as sufficient to call the item owned.
+    4. ``unassigned`` — nothing above matched: no assignee was ever set, or
+       the discriminator/id pair is dangling in the pre-existing #13942
+       sense (mis-typed discriminator, or a typed row with a NULL id
+       column).
 
     ``work_item_model`` is passed in (not imported at module scope) to match
     this file's existing convention of importing ``LLCWorkItem`` locally
     inside each endpoint function (see ``get_org_chart``, ``_compose_human_nodes``).
     """
-    from sqlalchemy import and_, case  # noqa: PLC0415
+    from sqlalchemy import and_, case, or_, select  # noqa: PLC0415
+
+    from models.agent_org import AgentOrgNode  # noqa: PLC0415
+
+    user_assigned = and_(
+        work_item_model.assignee_type == AssigneeType.USER.value,
+        work_item_model.assignee_user_id.isnot(None),
+    )
+    agent_assigned = and_(
+        work_item_model.assignee_type == AssigneeType.AGENT.value,
+        work_item_model.assignee_agent_id.isnot(None),
+    )
+
+    user_exists = (
+        select(LLCCompanyMembership.id)
+        .where(
+            LLCCompanyMembership.company_id == work_item_model.company_id,
+            LLCCompanyMembership.user_id == work_item_model.assignee_user_id,
+        )
+        .exists()
+    )
+    agent_exists = (
+        select(AgentOrgNode.id)
+        .where(
+            AgentOrgNode.id == work_item_model.assignee_agent_id,
+            AgentOrgNode.company_id == work_item_model.company_id,
+            # NULL-safe: `status != 'terminated'` evaluates to NULL — not TRUE —
+            # for a NULL status, which would fail the EXISTS and mark EVERY
+            # agent's work orphaned. The column is NOT NULL on a migrated
+            # database, but #14189 records that we do not yet know whether it
+            # pre-existed out-of-band, and 20260812_073 uses
+            # ADD COLUMN IF NOT EXISTS — so a nullable variant is possible in
+            # the field and invisible to tests (the SQLite harness builds the
+            # NOT NULL column from the model).
+            or_(
+                AgentOrgNode.status.is_(None),
+                AgentOrgNode.status != LLCAgentStatus.TERMINATED.value,
+            ),
+        )
+        .exists()
+    )
 
     return case(
-        (
-            and_(
-                work_item_model.assignee_type == AssigneeType.USER.value,
-                work_item_model.assignee_user_id.isnot(None),
-            ),
-            AssigneeType.USER.value,
-        ),
-        (
-            and_(
-                work_item_model.assignee_type == AssigneeType.AGENT.value,
-                work_item_model.assignee_agent_id.isnot(None),
-            ),
-            AssigneeType.AGENT.value,
-        ),
+        (and_(user_assigned, user_exists), AssigneeType.USER.value),
+        (and_(agent_assigned, agent_exists), AssigneeType.AGENT.value),
+        (or_(user_assigned, agent_assigned), _ORPHANED_EXECUTOR_CLASS),
         else_=_UNASSIGNED_EXECUTOR_CLASS,
     )
 
@@ -1237,13 +1297,14 @@ async def get_work_item_executor_rollup(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ExecutorRollupResponse:
-    """Company-wide work-item counts by executor class and status (#13942).
+    """Company-wide work-item counts by executor class and status (#13942, #14222).
 
     Executor class is derived from the *item's own assignee* — ``assignee_type``
-    (typed via ``AssigneeType``, #13937) plus the matching id column — never a
-    new discriminator. There is no ``PersonKind``-style provenance derivation
-    here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type`` is
-    already a backend-typed value, not something only knowable from the
+    (typed via ``AssigneeType``, #13937) plus the matching id column, plus (#14222)
+    whether that id still resolves to a live member/agent of this company —
+    never a new discriminator. There is no ``PersonKind``-style provenance
+    derivation here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type``
+    is already a backend-typed value, not something only knowable from the
     frontend, so counting it server-side introduces no honesty gap.
 
     Grouped in SQL rather than paginated to the frontend and counted there:

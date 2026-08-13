@@ -70,7 +70,6 @@ _KNOWN_DORMANT = frozenset(
         "pipeline-scripts/check_env_var_registry.py",
         "tools/lint/check_no_blocking_io_in_async.py",
         "tools/lint/check_no_local_schemas.py",
-        "tools/lint/check_no_utcnow_isoformat.py",
     }
 )
 

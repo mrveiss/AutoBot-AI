@@ -4,7 +4,7 @@
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .base import (
@@ -44,7 +44,7 @@ class TestVerifier(BaseVerifier):
                 status=VerificationStatus.MANUAL,
                 confidence=VerificationConfidence.LOW,
                 notes="Could not extract test subject from claim",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
         # Search for test files related to subject
@@ -59,7 +59,7 @@ class TestVerifier(BaseVerifier):
                 evidence_content=f"Found {test_results['count']} test(s)",
                 method=f"grep -r 'def test.*{subject}' --include='test_*.py'",
                 notes=f"Tests found for {subject}",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
         else:
             # No tests found
@@ -68,7 +68,7 @@ class TestVerifier(BaseVerifier):
                 confidence=VerificationConfidence.MEDIUM,
                 method=f"grep -r 'test.*{subject}' --include='test_*.py'",
                 notes=f"No tests found for {subject}",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
     def _extract_test_subject(self, text: str) -> Optional[str]:

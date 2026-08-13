@@ -8259,6 +8259,12 @@
       "peopleTeamsCoverUsersOnly": "Zespoły obejmują posiadaczy kont. Agenci i kontakty nie należą do żadnego zespołu.",
       "peopleContactNotInHierarchy": "Kontakty nie są częścią hierarchii raportowania — nie mają przełożonego, budżetu ani sygnału życia.",
       "peopleEmpty": "Ta firma nie ma jeszcze żadnych osób.",
+      "roleLensLabel": "Pokaż wg roli",
+      "roleLensAll": "Wszystkie role",
+      "roleLensHint": "To tylko filtr widoku — nie zmienia tego, do czego ktoś ma dostęp.",
+      "roleLensBanner": "Filtr widoku: {role} — pokazano {shown} z {total} węzłów. Dostęp pozostaje bez zmian.",
+      "roleLensEmpty": "Filtr widoku: żaden węzeł nie pasuje do „{role}” w tym widoku. Dostęp pozostaje bez zmian — wyczyść filtr, aby zobaczyć wszystkich.",
+      "roleLensClear": "Wyczyść filtr",
       "sidebar": {
         "owner": "Właściciel",
         "tools": "Narzędzia",
@@ -8300,6 +8306,7 @@
       "class": {
         "user": "Osoba",
         "agent": "Agent AI",
+        "orphaned": "Osierocone",
         "unassigned": "Nieprzypisane"
       }
     },

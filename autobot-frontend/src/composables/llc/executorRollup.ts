@@ -52,10 +52,23 @@
  * used for the same fact on the org-chart drawer) because that is what our
  * agent hires *are*, without asserting a distinction the data doesn't carry.
  *
+ * ## Orphaned (#14222)
+ *
+ * The backend's `_executor_class_case` (`llc/api/companies.py`) does not stop
+ * at "is an assignee id present" — it also checks whether that id still
+ * *resolves* to a live member/agent of the company. An id that is present but
+ * no longer resolves (the membership was deleted, or the agent was
+ * terminated — neither reassigns the work it left behind, #14221) lands in a
+ * fourth cell value, `orphaned`, distinct from `unassigned`: "never assigned"
+ * and "the assignee is gone" are different facts, and the second is the one
+ * that tells an operator a handover was missed. It joins `user` / `agent` /
+ * `unassigned` on the same executor axis — not a new vocabulary (#13970's
+ * constraint, same one `unassigned` was already held to).
+ *
  * ## Defence against an unrecognised cell
  *
  * `buildExecutorRollupMatrix` routes any cell whose `executor_class` is not
- * one of the three known values into `unassigned` rather than dropping it —
+ * one of the four known values into `unassigned` rather than dropping it —
  * a dropped cell would silently under-count the total, which is worse than a
  * cell landing in the bucket that already means "nobody's claim on this is
  * known good". `status` needs no equivalent guard: unlike `assignee_type`
@@ -72,13 +85,16 @@ const logger = createLogger('ExecutorRollup')
 /**
  * The executor class of a work item's assignee. Extends
  * `WorkItem['assignee_type']` (`'user' | 'agent' | null | undefined`) with
- * the one case that union cannot express on its own — see the module
- * docstring's "Vocabulary" section.
+ * the two cases that union cannot express on its own — no assignee at all,
+ * and an assignee id that no longer resolves (#14222) — see the module
+ * docstring's "Vocabulary" and "Orphaned" sections. Declared structurally
+ * (`NonNullable<...> | ...`), never as a bare re-declared union, so it stays
+ * anchored to `WorkItem['assignee_type']` as that type evolves.
  */
-export type ExecutorClass = NonNullable<WorkItem['assignee_type']> | 'unassigned'
+export type ExecutorClass = NonNullable<WorkItem['assignee_type']> | 'unassigned' | 'orphaned'
 
 /** Stable render order — a class never moves between renders. */
-export const EXECUTOR_CLASSES: readonly ExecutorClass[] = ['user', 'agent', 'unassigned'] as const
+export const EXECUTOR_CLASSES: readonly ExecutorClass[] = ['user', 'agent', 'orphaned', 'unassigned'] as const
 
 /** One (executor_class, status) cell as the backend rollup endpoint sends it. */
 export interface ExecutorRollupCell {
@@ -95,7 +111,7 @@ export interface ExecutorRollupResponse {
 export type ExecutorRollupMatrix = Record<ExecutorClass, Partial<Record<WorkItemStatus, number>>>
 
 function emptyMatrix(): ExecutorRollupMatrix {
-  return { user: {}, agent: {}, unassigned: {} }
+  return { user: {}, agent: {}, orphaned: {}, unassigned: {} }
 }
 
 function isKnownExecutorClass(value: string): value is ExecutorClass {
@@ -105,7 +121,7 @@ function isKnownExecutorClass(value: string): value is ExecutorClass {
 /**
  * Build the dense matrix from the API's sparse cell list.
  *
- * A cell whose `executor_class` isn't one of the three known values is
+ * A cell whose `executor_class` isn't one of the four known values is
  * folded into `unassigned` (logged, never dropped) — see the module
  * docstring's "Defence against an unrecognised cell". A cell with a
  * non-positive count is skipped: the backend's `GROUP BY` never emits one,
