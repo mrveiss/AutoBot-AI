@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
 const get = vi.fn()
@@ -22,10 +23,16 @@ vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
 
+// A real ref, not a plain object: `companyId` is typed `string` on
+// `CanvasNodeSidebar` (#13940), and only an actual `Ref` auto-unwraps in the
+// template — a `{ value: 'c1' }` look-alike passes the prop through as an
+// object and trips Vue's prop-type warning the moment the child is not stubbed.
+const companyRef = ref('c1')
+
 vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
   useLlcCompanyContext: () => ({
-    companyId: { value: 'c1' },
-    resolveCompanyId: () => Promise.resolve('c1'),
+    companyId: companyRef,
+    resolveCompanyId: () => Promise.resolve(companyRef.value),
   }),
 }))
 
@@ -324,7 +331,9 @@ describe('OrgChart nested-tree mode is unregressed (#13939)', () => {
 
     expect(confirmSpy).toHaveBeenCalled()
     expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/ceo/terminate', {})
-    expect(get).toHaveBeenCalledTimes(2) // reload from the source of truth
+    // #13942: mount issues two GETs (tree + the independent executor
+    // rollup); terminate's reload only refetches the tree — so 2 + 1 = 3.
+    expect(get).toHaveBeenCalledTimes(3) // reload from the source of truth
     confirmSpy.mockRestore()
   })
 

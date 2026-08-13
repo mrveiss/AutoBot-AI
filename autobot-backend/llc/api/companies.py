@@ -19,6 +19,7 @@ Route group: /llc/companies
   POST   /{id}/members             — add a member (GH#8223)
   DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
   GET    /{id}/members             — list members (GH#8223)
+  GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
   POST   /{id}/export/snapshot     — full-state export for backup/migration (GH#8245)
 
@@ -46,7 +47,14 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
+from llc.models.enums import (
+    AssigneeType,
+    ExternalPMType,
+    LLCAgentStatus,
+    LLCCompanyStatus,
+    MembershipRole,
+    WorkItemStatus,
+)
 from llc.models.membership import LLCCompanyMembership
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -838,7 +846,7 @@ class OrgChartNode(BaseModel):
     node_id: str
     name: str
     title: str
-    status: str  # active | idle | error | paused
+    status: str  # active | idle | error | paused | terminated
     adapter_type: str
     is_human: bool
     last_heartbeat: Optional[str]
@@ -862,6 +870,39 @@ def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
         return "error"
     # completed / cancelled / rate_limited / queued / no-run → idle
     return "idle"
+
+
+# Persisted ``LLCAgentStatus`` values that must win over the heartbeat-derived
+# status (#14108). Both are terminal *from the org chart's point of view*: an
+# agent an operator paused or terminated must read that way even while a
+# stale/queued heartbeat run would otherwise derive ``active`` or ``idle``.
+_STOP_STATUSES = frozenset({LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value})
+
+
+def _resolve_org_status(persisted_status: Optional[str], run_status: Optional[str]) -> str:
+    """Combine ``agent_org_nodes.status`` with the derived heartbeat status.
+
+    Precedence rule (#14108): an explicit *stop* lifecycle state — ``paused``
+    or ``terminated`` — always wins over the heartbeat-derived liveness. A
+    terminated agent must never read as ``active``/``idle`` merely because a
+    stale ``llc_heartbeat_runs`` row exists; the same is true of ``paused``.
+    ``controls_service.py`` sets exactly these two values as terminal writes
+    (pause/terminate); resume restores ``pre_pause_status`` or ``available``,
+    neither of which is a stop state, so control returns to the heartbeat
+    derivation on the very next org-chart read after a resume.
+
+    Every other ``LLCAgentStatus`` member (``available``, ``assigned``,
+    ``in_sprint``, ``on_leave``, ``onboarding``, ``offboarding``,
+    ``inactive``) describes work assignment, not liveness — it has no
+    dedicated slot in the org chart's 5-member display vocabulary
+    (``active`` / ``idle`` / ``error`` / ``paused`` / ``terminated``,
+    ``AgentDisplayStatus`` in ``llcStatus.ts``) and falls through to the
+    heartbeat-derived value exactly as before this fix. Per #13485, this is a
+    mapping onto the existing vocabulary — not a tenth status vocabulary.
+    """
+    if persisted_status in _STOP_STATUSES:
+        return persisted_status
+    return _heartbeat_status_to_org_status(run_status)
 
 
 # ``adapter_type`` is agent vocabulary; for a person the honest value is the kind,
@@ -1062,8 +1103,17 @@ async def get_org_chart(
             node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
             name=row.name,
             title=row.title or row.org_role,
-            status=_heartbeat_status_to_org_status(run.status if run else None),
-            adapter_type=row.org_role,
+            # #14108: an explicit pause/terminate must win over a derived
+            # heartbeat status — see `_resolve_org_status` for the precedence
+            # rule and why every other lifecycle value falls through to it.
+            status=_resolve_org_status(row.status, run.status if run else None),
+            # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
+            # back to "" (not the role) when NULL: the hire flow
+            # (agent_hires.py) always sets a concrete adapter — "claude_code"
+            # by default — so a NULL here means a legacy/manually-seeded row
+            # with genuinely no configured adapter, and reusing ``org_role``
+            # is exactly the dishonest substitution this fix removes.
+            adapter_type=row.adapter_type or "",
             is_human=False,
             # Liveness: latest run is picked by created_at; a just-queued run
             # may have no started_at, so fall back to created_at.
@@ -1109,6 +1159,207 @@ async def get_org_chart(
     roots.extend(await _compose_human_nodes(session, company_id))
 
     return OrgChartResponse(nodes=roots)
+
+
+# ------------------------------------------------------------------
+# Executor rollup (#13942) — work items counted by assignee class and status
+# ------------------------------------------------------------------
+
+# The value ``unassigned`` in ``ExecutorRollupCell.executor_class`` — not an
+# ``AssigneeType`` member (that enum only names the two *typed* assignees), but
+# the third state ``assignee_type`` can legitimately hold: absent. Kept as a
+# literal string constant, not a new enum member, per #13970: the axis already
+# forked once under different member names, and adding a member here would be
+# a third fork of the same concept rather than a value the column ever needs
+# to store — no work item row is ever written with assignee_type="unassigned".
+_UNASSIGNED_EXECUTOR_CLASS = "unassigned"
+
+
+class ExecutorRollupCell(BaseModel):
+    """One (executor_class, status) count — one bar of the rollup panel.
+
+    ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
+    / ``_UNASSIGNED_EXECUTOR_CLASS`` — never a value invented for this endpoint
+    (#13942's "no parallel executor enum" constraint). ``status`` is a
+    ``WorkItemStatus`` value.
+    """
+
+    executor_class: str
+    status: str
+    count: int
+
+
+class ExecutorRollupResponse(BaseModel):
+    cells: List[ExecutorRollupCell]
+
+
+def _executor_class_case(work_item_model):
+    """SQL ``CASE`` classifying a work item's assignee (#13942).
+
+    A work item lands in ``AssigneeType.USER``/``AssigneeType.AGENT`` only when *both* the typed
+    discriminator and the matching id column agree — ``assignee_type="user"``
+    with a NULL ``assignee_user_id`` (a mistyped/dangling row; the column is
+    an unconstrained ``String(16)``, not a DB-level enum — see
+    ``AssigneeType``'s docstring) falls through to ``unassigned`` rather than
+    being counted as a person nobody can actually look up. This is the same
+    defensive pattern the issue's acceptance criteria asks for: a mis-typed
+    discriminator must never silently land in a normal-looking bucket.
+
+    ``work_item_model`` is passed in (not imported at module scope) to match
+    this file's existing convention of importing ``LLCWorkItem`` locally
+    inside each endpoint function (see ``get_org_chart``, ``_compose_human_nodes``).
+    """
+    from sqlalchemy import and_, case  # noqa: PLC0415
+
+    return case(
+        (
+            and_(
+                work_item_model.assignee_type == AssigneeType.USER.value,
+                work_item_model.assignee_user_id.isnot(None),
+            ),
+            AssigneeType.USER.value,
+        ),
+        (
+            and_(
+                work_item_model.assignee_type == AssigneeType.AGENT.value,
+                work_item_model.assignee_agent_id.isnot(None),
+            ),
+            AssigneeType.AGENT.value,
+        ),
+        else_=_UNASSIGNED_EXECUTOR_CLASS,
+    )
+
+
+@router.get("/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse)
+async def get_work_item_executor_rollup(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ExecutorRollupResponse:
+    """Company-wide work-item counts by executor class and status (#13942).
+
+    Executor class is derived from the *item's own assignee* — ``assignee_type``
+    (typed via ``AssigneeType``, #13937) plus the matching id column — never a
+    new discriminator. There is no ``PersonKind``-style provenance derivation
+    here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type`` is
+    already a backend-typed value, not something only knowable from the
+    frontend, so counting it server-side introduces no honesty gap.
+
+    Grouped in SQL rather than paginated to the frontend and counted there:
+    ``GET /work-items`` caps at 500 rows per page, and a company can hold far
+    more than that — a client-side count over one page would silently be
+    a lie about companies past the cap. ``COUNT(*) ... GROUP BY`` has no such
+    ceiling.
+    """
+    from sqlalchemy import func, select  # noqa: PLC0415
+
+    from llc.models.work_item import LLCWorkItem  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)  # #12184 canonical tenant guard
+
+    executor_class = _executor_class_case(LLCWorkItem).label("executor_class")
+    rows = (
+        await session.execute(
+            select(executor_class, LLCWorkItem.status, func.count(LLCWorkItem.id).label("item_count"))
+            .where(LLCWorkItem.company_id == company_id)
+            .group_by(executor_class, LLCWorkItem.status)
+        )
+    ).all()
+
+    return ExecutorRollupResponse(
+        cells=[
+            ExecutorRollupCell(executor_class=row.executor_class, status=row.status, count=row.item_count)
+            for row in rows
+        ]
+    )
+
+
+# ------------------------------------------------------------------
+# Company teams (#13938) — read-only projection of existing team data
+# ------------------------------------------------------------------
+
+
+class CompanyTeam(BaseModel):
+    """One team of a company, with the user ids that belong to it.
+
+    Read-only projection of ``teams`` / ``team_memberships`` — the team data
+    plane that already exists (#6042). No new table, no migration, and no new
+    vocabulary: a company inside AutoBot *is* an ``Organization`` (see
+    ``CompanyService.delete``, which soft-deletes ``Organization.deleted_at``),
+    so ``Team.org_id == company_id`` is the company's own team list.
+
+    Only ``member_user_ids`` is returned because teams cover exactly one of the
+    three person kinds the Org Chart shows: account holders. Hired agents
+    (``agent_org_nodes``) and contacts (``llc_contacts``) carry no team column,
+    so inventing a team for them would be fabricated grouping. The frontend
+    renders them under an explicit "not in a team" bucket instead.
+    """
+
+    id: str
+    name: str
+    member_user_ids: List[str]
+
+
+class CompanyTeamsResponse(BaseModel):
+    teams: List[CompanyTeam]
+
+
+@router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
+async def get_company_teams(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> CompanyTeamsResponse:
+    """Return the company's teams and their member user ids (#13938).
+
+    Company-scoped by path parameter through the same shared
+    :func:`assert_company_access` guard the rest of the LLC router uses, rather
+    than by the ambient org context that ``/teams`` relies on — a platform
+    admin viewing another company's Org Chart must see that company's teams,
+    not their own.
+
+    Two queries, both bounded by the company: teams, then the memberships of
+    those teams. Soft-deleted teams are excluded, matching every other team
+    listing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from user_management.models.team import Team, TeamMembership  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    team_rows = (
+        (
+            await session.execute(
+                select(Team).where(Team.org_id == company_id, Team.deleted_at.is_(None)).order_by(Team.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not team_rows:
+        return CompanyTeamsResponse(teams=[])
+
+    team_ids = [team.id for team in team_rows]
+    membership_rows = (
+        await session.execute(
+            select(TeamMembership.team_id, TeamMembership.user_id)
+            .where(TeamMembership.team_id.in_(team_ids))
+            .order_by(TeamMembership.joined_at)
+        )
+    ).all()
+
+    members_by_team: Dict[uuid.UUID, List[str]] = {team_id: [] for team_id in team_ids}
+    for team_id, user_id in membership_rows:
+        members_by_team[team_id].append(str(user_id))
+
+    return CompanyTeamsResponse(
+        teams=[
+            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id]) for team in team_rows
+        ]
+    )
 
 
 # Capability-search result bounds. These literals predate #13936; they were named

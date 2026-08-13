@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from security.threat_intelligence import (
     ThreatIntelligenceCache,
     ThreatIntelligenceService,
@@ -200,7 +201,7 @@ class TestThreatIntelligenceCache:
         await asyncio.sleep(1.1)
 
         # Add fresh entry
-        await cache.set("https://example3.com", ThreatScore(), ttl=3600)
+        await cache.set("https://example3.com", ThreatScore(), ttl=TTL_1_HOUR)
 
         await cache.clear_expired()
 

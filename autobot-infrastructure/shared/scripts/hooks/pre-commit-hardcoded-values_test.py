@@ -721,3 +721,37 @@ class TestHardcodedTimeouts:
             },
         )
         assert result.returncode == 0
+
+
+# === GH#14151: fails closed when git itself cannot answer ===
+
+
+def _git(repo, *args):
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestFailsClosedOnGitFailure:
+    """GH#14151: get_staged_files()'s former blanket `|| true` masked BOTH
+    "the filters matched nothing" (normal) and "git diff --cached itself
+    failed" (e.g. a corrupted index) identically — this hook's own opening
+    banner already referenced an unbound color variable under `set -u`
+    (independently closing the missing-lib case pre-fix), but a git
+    failure produced no such reference and reported clean with a
+    genuinely staged violation present. Reproduced with a corrupted
+    .git/index, mirroring #14150's fixed hooks.
+    """
+
+    def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
+        _git(tmp_path, "init", "--quiet")
+        _git(tmp_path, "config", "user.email", "test@test")
+        _git(tmp_path, "config", "user.name", "test")
+        bad = tmp_path / "src" / "bad.py"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_text('IP = "172.16.168.21"\n', encoding="utf-8")
+        _git(tmp_path, "add", "src/bad.py")
+        # Corrupt the index so git errors rather than returning an empty answer.
+        (tmp_path / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

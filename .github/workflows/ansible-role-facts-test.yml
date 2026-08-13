@@ -9,6 +9,8 @@
 #   - Forgotten group-membership check
 #   - Drift between provision-fleet-roles.yml gates and group_vars facts
 #   - Cleanup-gate regressions of the #7031 class
+#   - The test inventory's group_vars/all.yml silently resolving to nothing
+#     (#14149) — see the "Assert test inventory resolves group_vars" step
 #
 # Security note: this workflow does NOT interpolate any untrusted GitHub
 # event data (no issue titles, PR bodies, commit messages, head_ref, etc.)
@@ -73,6 +75,16 @@ jobs:
         run: |
           ansible-playbook -i tests/inventory/test_role_facts.yml tests/playbooks/test_role_active_facts.yml
 
+      # #14149: tests/inventory/group_vars/all.yml used to be a symlink to the
+      # canonical inventory/group_vars/all.yml. GitHub-hosted Linux runners keep
+      # core.symlinks=true, so the playbook run above passed here even while it
+      # silently resolved to zero variables on core.symlinks=false checkouts.
+      # This asserts the test inventory actually resolves a known group_vars key.
+      - name: "Assert test inventory resolves group_vars (#14149)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_test_inventory_group_vars.py
+
       - name: Run role_*_active facts test (vars_files codepath, #7094)
         working-directory: autobot-slm-backend/ansible
         # #7094: tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT
@@ -82,7 +94,7 @@ jobs:
         run: |
           ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
 
-      - name: "Diff guard: ensure both fact-file copies stay byte-equal (#7095)"
+      - name: "Diff guard: ensure all fact-file copies stay byte-equal (#7095, #14149)"
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_role_facts_synced.py
@@ -110,3 +122,4 @@ jobs:
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"

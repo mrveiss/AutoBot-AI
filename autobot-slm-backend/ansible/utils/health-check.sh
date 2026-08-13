@@ -14,7 +14,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 LOG_FILE="/var/log/autobot/health-check-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT=10
 
@@ -32,7 +32,7 @@ REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 REDISINSIGHT_PORT="8002"
 AI_STACK_PORT="${AUTOBOT_AI_STACK_PORT:-8080}"
 NPU_WORKER_PORT="${AUTOBOT_NPU_WORKER_PORT:-8081}"
-PLAYWRIGHT_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+PLAYWRIGHT_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 VNC_PORT="5901"
 
 # Colors for output

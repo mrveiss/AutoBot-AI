@@ -16,12 +16,15 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Get script directory for Python script location (also used by lib/_common.sh source)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 PYTHON_SCRIPT="${SCRIPT_DIR}/function_length_checker.py"
 
@@ -43,8 +46,24 @@ find_python() {
 
 # Get staged Python files (excluding tests, __init__, temp directories, migrations).
 # Named get_staged_python_files to avoid shadowing _common.sh's get_staged_files.
+# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
+# used to be masked by the trailing `|| true` below, which existed only to
+# tolerate "the filters matched nothing" — a real git failure looked
+# identical. Captured separately so get_staged_files' non-zero return
+# propagates (set -e turns that into a hard stop); the later filter chain's
+# `|| true` still only ever tolerates an empty *result*, not a git error.
 get_staged_python_files() {
-    get_staged_files '\.py$' | \
+    # GH#14163: neither this wrapper nor its call site in main() used to
+    # forward "$@" the way every sibling hook's get_staged_*_files() does
+    # (#6785 convention: no-args -> git diff --cached, argv -> explicit
+    # file list, so the same script works as a local hook AND a CI
+    # wrapper). Without it, an argv-mode invocation silently fell back to
+    # `git diff --cached` against whatever happened to be staged in that
+    # invocation's working tree instead of the file list the caller asked
+    # for.
+    local staged
+    staged="$(get_staged_files '\.py$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(test_|_test\.py|tests/)' | \
         grep -v -E '__init__\.py$' | \
@@ -71,7 +90,7 @@ main() {
     fi
 
     local files
-    files=$(get_staged_python_files)
+    files=$(get_staged_python_files "$@")
 
     if [[ -z "$files" ]]; then
         echo -e "${GREEN}No Python files staged for commit.${NC}"
@@ -84,11 +103,15 @@ main() {
     echo -e "Checking ${BOLD}${file_count}${NC} staged Python file(s)..."
     echo ""
 
-    # Run Python analyzer and capture exit code
-    echo "$files" | "$python_cmd" "$PYTHON_SCRIPT"
-    exit_code=$?
+    # Run Python analyzer and capture exit code. GH#14151: a bare pipeline
+    # statement's own non-zero status (the analyzer reporting violations,
+    # not an error) would trip `set -e` right here, before `exit_code=$?`
+    # on the next line ever ran. `|| exit_code=$?` captures the real code
+    # without tripping -e, since the assignment is the last command run.
+    local exit_code=0
+    echo "$files" | "$python_cmd" "$PYTHON_SCRIPT" || exit_code=$?
 
-    exit $exit_code
+    exit "$exit_code"
 }
 
 main "$@"

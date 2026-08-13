@@ -8238,7 +8238,99 @@
       "viewCanvas": "Leinwand",
       "canvasTabAll": "Alle Einheiten",
       "canvasUnit": "Einheit {name}",
-      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details."
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details.",
+      "viewPeople": "Personen",
+      "peopleLegend": "Personenarten",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "Benutzer",
+        "contact": "Kontakt"
+      },
+      "peopleKindHint": {
+        "agent": "Beauftragter Ausführender",
+        "user": "Kontoinhaber, kann sich anmelden",
+        "contact": "Prozesskontakt, kein Konto"
+      },
+      "peopleNoTeam": "Keinem Team zugeordnet",
+      "peopleTeamEmpty": "Keine Mitglieder in diesem Team.",
+      "peopleNoTeamsDefined": "Für dieses Unternehmen sind keine Teams definiert — alle werden gemeinsam aufgeführt.",
+      "peopleTeamsUnavailable": "Teaminformationen sind derzeit nicht verfügbar — die Gruppierung ist möglicherweise unvollständig.",
+      "peopleUnavailable": "Die Personen dieses Unternehmens konnten nicht geladen werden. Das ist ein Ladeproblem, kein leeres Unternehmen.",
+      "peopleTeamsCoverUsersOnly": "Teams umfassen Kontoinhaber. Agenten und Kontakte gehören keinem Team an.",
+      "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
+      "peopleEmpty": "Dieses Unternehmen hat noch keine Personen.",
+      "roleLensLabel": "Nach Rolle anzeigen",
+      "roleLensAll": "Alle Rollen",
+      "roleLensHint": "Nur ein Ansichtsfilter — ändert nicht, worauf jemand zugreifen kann.",
+      "roleLensBanner": "Ansichtsfilter: {role} — zeigt {shown} von {total} Knoten. Der Zugriff bleibt unverändert.",
+      "roleLensEmpty": "Ansichtsfilter: Keine Knoten entsprechen „{role}“ in dieser Ansicht. Der Zugriff bleibt unverändert — Filter zurücksetzen, um alle zu sehen.",
+      "roleLensClear": "Filter zurücksetzen",
+      "sidebar": {
+        "owner": "Inhaber",
+        "tools": "Werkzeuge",
+        "toolsNotApplicable": "Gilt nicht für Personen.",
+        "notes": "Notizen",
+        "notesOverview": "Übersicht",
+        "notesChecklist": "Checkliste",
+        "notesOutput": "Ergebnis",
+        "attributes": "Attribute",
+        "railLabel": "Seitenleisten-Bereiche",
+        "railInfo": "Info",
+        "railChecklist": "Checkliste",
+        "railCost": "Kosten",
+        "railActivity": "Aktivität",
+        "railHandoff": "Übergabe",
+        "itemsUnavailable": "Elemente konnten nicht geladen werden. Das ist ein Ladeproblem, keine leere Liste.",
+        "itemsEmpty": "Keine aktiven Elemente.",
+        "itemsNotApplicableHuman": "Personenbezogene Listen sind noch nicht verfügbar — nur Agenten können nach Zuständigkeit gefiltert werden.",
+        "outputEmpty": "Noch keine abgeschlossenen Elemente.",
+        "costTotalTokens": "Tokens gesamt",
+        "costUsd": "Kosten (USD)",
+        "costUnavailable": "Kostendaten konnten nicht geladen werden.",
+        "costEmpty": "Für diesen Agenten sind noch keine Kosten erfasst.",
+        "costNotApplicableHuman": "Kostenerfassung gilt nur für Agenten.",
+        "activityUnavailable": "Aktivität konnte nicht geladen werden.",
+        "activityEmpty": "Für diesen Knoten wurde noch keine Aktivität erfasst.",
+        "activityNotApplicableHuman": "Personenbezogener Aktivitätsverlauf ist noch nicht verfügbar.",
+        "handoffButton": "An Mensch übergeben",
+        "handoffEmpty": "Keine aktiven Elemente zur Übergabe.",
+        "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
+      }
+    },
+    "executorRollup": {
+      "title": "Ausführungs-Übersicht",
+      "totalItems": "{count} Arbeitselemente",
+      "unavailable": "Die Ausführungs-Übersicht konnte nicht geladen werden. Das ist ein Ladeproblem, nicht null Arbeitselemente.",
+      "empty": "Noch keine Arbeitselemente.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "KI-Agent",
+        "unassigned": "Nicht zugewiesen"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Legende",
+      "colourBy": "Einfärben nach",
+      "dimension": {
+        "status": "Status",
+        "owner": "Inhaber",
+        "tool": "Werkzeug"
+      },
+      "status": {
+        "active": "Aktiv",
+        "idle": "Leerlauf",
+        "paused": "Pausiert",
+        "error": "Fehler",
+        "terminated": "Beendet",
+        "unknown": "Unbekannt"
+      },
+      "owner": {
+        "unassigned": "Nicht zugewiesen"
+      },
+      "tool": {
+        "none": "Kein Werkzeug"
+      }
     },
     "goals": {
       "title": "Zielbaum",

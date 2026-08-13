@@ -213,6 +213,35 @@ repos:
   # file list but added no guard, so the pattern drifted back.
   - repo: local
     hooks:
+      # #14171: core.fileMode=false hides a hook script committed as 100644 --
+      # the working tree stays executable, so the mismatch is invisible on the
+      # machine that introduced it and only breaks a fresh checkout. It has
+      # reached CI twice (#14151's sweep, #14162), and #14181 records the 16
+      # hooks it found already dormant.
+      # #14198: 19 sites fell back to ${AUTOBOT_BROWSER_SERVICE_PORT:-3000} --
+      # Grafana's port, not the browser service's 9001 (#4052). Dead while
+      # lib/ssot-config.sh loads (it assigns the SSOT value with := first), and
+      # live the moment it does not, because every source line is `|| true`.
+      # Bans divergence, not the shape: 145 other fallbacks agree with the SSOT.
+      - id: port-fallbacks-match-ssot
+        name: Shell port fallbacks must agree with the SSOT (#14198)
+        entry: tools/lint/check_port_fallbacks_match_ssot.py
+        language: python
+        files: (\.sh|ssot_config\.py)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
+
+      - id: hook-exec-bits
+        name: Pre-commit hook entries must be tracked executable (#14171)
+        entry: pipeline-scripts/check_hook_exec_bits.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^(\.pre-commit-config\.yaml|autobot-infrastructure/shared/config/\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
+
       - id: no-open-without-encoding
         name: Require encoding= on text-mode open() (#3391 / #13151)
         entry: pipeline-scripts/check_open_encoding.py
@@ -485,6 +514,24 @@ repos:
         always_run: true
         stages: [pre-commit]
         description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
+
+  # Shell SSOT library regression guard (#14041)
+  # 23 tracked scripts silently no-op'd for years because they sourced a path
+  # with a wrong directory segment (infrastructure/ instead of
+  # autobot-infrastructure/); the library itself never existed at all. Runs
+  # the library's own bash self-test -- including the "no tracked *.sh file
+  # sources the non-autobot- path" guard -- whenever a shell script changes,
+  # so the wrong path (or a broken library) cannot regrow silently again.
+  - repo: local
+    hooks:
+      - id: ssot-config-lib-guard
+        name: Shell SSOT Library Self-Test (#14041)
+        entry: bash autobot-infrastructure/shared/tests/test_ssot_config_lib.sh
+        language: system
+        files: \.sh$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Sources lib/ssot-config.sh under every known call shape and asserts no tracked *.sh file still points at the wrong infrastructure/ path (#14041)"
 
   # Hardcoded value detection (Issue #694)
   - repo: local

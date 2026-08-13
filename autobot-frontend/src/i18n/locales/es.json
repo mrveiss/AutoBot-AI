@@ -8238,7 +8238,99 @@
       "viewCanvas": "Lienzo",
       "canvasTabAll": "Todas las unidades",
       "canvasUnit": "Unidad {name}",
-      "canvasHint": "Mayús+arrastrar para desplazar, rueda para acercar, haz clic en un nodo para ver detalles."
+      "canvasHint": "Mayús+arrastrar para desplazar, rueda para acercar, haz clic en un nodo para ver detalles.",
+      "viewPeople": "Personas",
+      "peopleLegend": "Tipos de persona",
+      "peopleKind": {
+        "agent": "Agente",
+        "user": "Usuario",
+        "contact": "Contacto"
+      },
+      "peopleKindHint": {
+        "agent": "Ejecutor contratado",
+        "user": "Titular de cuenta, puede iniciar sesión",
+        "contact": "Contacto de proceso, sin cuenta"
+      },
+      "peopleNoTeam": "Sin equipo",
+      "peopleTeamEmpty": "No hay miembros en este equipo.",
+      "peopleNoTeamsDefined": "No hay equipos definidos para esta empresa: todos aparecen juntos.",
+      "peopleTeamsUnavailable": "La información de equipos no está disponible ahora mismo: la agrupación puede estar incompleta.",
+      "peopleUnavailable": "No se pudieron cargar las personas de esta empresa. Es un problema de carga, no una empresa vacía.",
+      "peopleTeamsCoverUsersOnly": "Los equipos abarcan a los titulares de cuenta. Los agentes y contactos no pertenecen a ningún equipo.",
+      "peopleContactNotInHierarchy": "Los contactos no forman parte de la jerarquía de reporte: no tienen responsable, presupuesto ni latido.",
+      "peopleEmpty": "Esta empresa aún no tiene personas.",
+      "roleLensLabel": "Ver como rol",
+      "roleLensAll": "Todos los roles",
+      "roleLensHint": "Solo un filtro de vista — no cambia lo que alguien puede acceder.",
+      "roleLensBanner": "Filtro de vista: {role} — mostrando {shown} de {total} nodos. El acceso no cambia.",
+      "roleLensEmpty": "Filtro de vista: ningún nodo coincide con «{role}» en esta vista. El acceso no cambia — borra el filtro para ver a todos.",
+      "roleLensClear": "Borrar filtro",
+      "sidebar": {
+        "owner": "Propietario",
+        "tools": "Herramientas",
+        "toolsNotApplicable": "No aplicable a personas.",
+        "notes": "Notas",
+        "notesOverview": "Resumen",
+        "notesChecklist": "Lista de verificación",
+        "notesOutput": "Resultado",
+        "attributes": "Atributos",
+        "railLabel": "Secciones de la barra lateral",
+        "railInfo": "Info",
+        "railChecklist": "Lista de verificación",
+        "railCost": "Costo",
+        "railActivity": "Actividad",
+        "railHandoff": "Traspaso",
+        "itemsUnavailable": "No se pudieron cargar los elementos. Es un problema de carga, no una lista vacía.",
+        "itemsEmpty": "Sin elementos activos.",
+        "itemsNotApplicableHuman": "Las listas de elementos por persona aún no están disponibles — solo los agentes se pueden filtrar por asignación.",
+        "outputEmpty": "Aún no hay elementos completados.",
+        "costTotalTokens": "Tokens totales",
+        "costUsd": "Costo (USD)",
+        "costUnavailable": "No se pudieron cargar los datos de costo.",
+        "costEmpty": "Aún no hay costo registrado para este agente.",
+        "costNotApplicableHuman": "El seguimiento de costos se aplica solo a agentes.",
+        "activityUnavailable": "No se pudo cargar la actividad.",
+        "activityEmpty": "Aún no hay actividad registrada para este nodo.",
+        "activityNotApplicableHuman": "El historial de actividad por persona aún no está disponible.",
+        "handoffButton": "Traspasar a humano",
+        "handoffEmpty": "Sin elementos activos para traspasar.",
+        "handoffNotApplicableHuman": "El traspaso se aplica solo a agentes."
+      }
+    },
+    "executorRollup": {
+      "title": "Resumen de ejecutores",
+      "totalItems": "{count} elementos de trabajo",
+      "unavailable": "No se pudo cargar el resumen de ejecutores. Es un problema de carga, no cero elementos de trabajo.",
+      "empty": "Aún no hay elementos de trabajo.",
+      "statusColumn": "Estado",
+      "class": {
+        "user": "Persona",
+        "agent": "Agente de IA",
+        "unassigned": "Sin asignar"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Leyenda",
+      "colourBy": "Colorear por",
+      "dimension": {
+        "status": "Estado",
+        "owner": "Propietario",
+        "tool": "Herramienta"
+      },
+      "status": {
+        "active": "Activo",
+        "idle": "Inactivo",
+        "paused": "En pausa",
+        "error": "Error",
+        "terminated": "Finalizado",
+        "unknown": "Desconocido"
+      },
+      "owner": {
+        "unassigned": "Sin asignar"
+      },
+      "tool": {
+        "none": "Sin herramienta"
+      }
     },
     "goals": {
       "title": "Árbol de objetivos",

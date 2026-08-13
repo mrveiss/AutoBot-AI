@@ -8238,7 +8238,99 @@
       "viewCanvas": "لوحة",
       "canvasTabAll": "كل الوحدات",
       "canvasUnit": "وحدة {name}",
-      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل."
+      "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل.",
+      "viewPeople": "الأشخاص",
+      "peopleLegend": "أنواع الأشخاص",
+      "peopleKind": {
+        "agent": "وكيل",
+        "user": "مستخدم",
+        "contact": "جهة اتصال"
+      },
+      "peopleKindHint": {
+        "agent": "منفّذ متعاقد",
+        "user": "صاحب حساب، يمكنه تسجيل الدخول",
+        "contact": "جهة اتصال في العملية، بلا حساب"
+      },
+      "peopleNoTeam": "بلا فريق",
+      "peopleTeamEmpty": "لا يوجد أعضاء في هذا الفريق.",
+      "peopleNoTeamsDefined": "لا توجد فرق معرَّفة لهذه الشركة — يُعرض الجميع معًا.",
+      "peopleTeamsUnavailable": "معلومات الفِرق غير متاحة حاليًا — قد يكون التجميع غير مكتمل.",
+      "peopleUnavailable": "تعذّر تحميل أفراد هذه الشركة. هذه مشكلة في التحميل، وليست شركة فارغة.",
+      "peopleTeamsCoverUsersOnly": "تشمل الفرق أصحاب الحسابات. الوكلاء وجهات الاتصال لا ينتمون إلى أي فريق.",
+      "peopleContactNotInHierarchy": "جهات الاتصال ليست جزءًا من التسلسل الإداري — لا مدير لها ولا ميزانية ولا نبض.",
+      "peopleEmpty": "لا يوجد أشخاص في هذه الشركة بعد.",
+      "roleLensLabel": "عرض حسب الدور",
+      "roleLensAll": "كل الأدوار",
+      "roleLensHint": "مجرد فلتر عرض — لا يغيّر ما يمكن لأي شخص الوصول إليه.",
+      "roleLensBanner": "فلتر العرض: {role} — يعرض {shown} من {total} عقدة. الوصول لا يتغيّر.",
+      "roleLensEmpty": "فلتر العرض: لا توجد عقد مطابقة لـ «{role}» في هذا العرض. الوصول لا يتغيّر — امسح الفلتر لرؤية الجميع.",
+      "roleLensClear": "مسح الفلتر",
+      "sidebar": {
+        "owner": "المالك",
+        "tools": "الأدوات",
+        "toolsNotApplicable": "لا ينطبق على الأشخاص.",
+        "notes": "الملاحظات",
+        "notesOverview": "نظرة عامة",
+        "notesChecklist": "قائمة المهام",
+        "notesOutput": "المخرجات",
+        "attributes": "السمات",
+        "railLabel": "أقسام الشريط الجانبي",
+        "railInfo": "معلومات",
+        "railChecklist": "قائمة المهام",
+        "railCost": "التكلفة",
+        "railActivity": "النشاط",
+        "railHandoff": "التسليم",
+        "itemsUnavailable": "تعذّر تحميل العناصر. هذه مشكلة في التحميل، وليست قائمة فارغة.",
+        "itemsEmpty": "لا توجد عناصر نشطة.",
+        "itemsNotApplicableHuman": "قوائم العناصر لكل شخص غير متاحة بعد — يمكن تصفية الوكلاء فقط حسب التكليف.",
+        "outputEmpty": "لا توجد عناصر مكتملة بعد.",
+        "costTotalTokens": "إجمالي الرموز",
+        "costUsd": "التكلفة (دولار أمريكي)",
+        "costUnavailable": "تعذّر تحميل بيانات التكلفة.",
+        "costEmpty": "لا توجد تكلفة مسجلة لهذا الوكيل بعد.",
+        "costNotApplicableHuman": "يُطبَّق تتبع التكلفة على الوكلاء فقط.",
+        "activityUnavailable": "تعذّر تحميل النشاط.",
+        "activityEmpty": "لم يُسجَّل أي نشاط لهذه العقدة بعد.",
+        "activityNotApplicableHuman": "سجل النشاط لكل شخص غير متاح بعد.",
+        "handoffButton": "التسليم إلى إنسان",
+        "handoffEmpty": "لا توجد عناصر نشطة للتسليم.",
+        "handoffNotApplicableHuman": "يُطبَّق التسليم على الوكلاء فقط."
+      }
+    },
+    "executorRollup": {
+      "title": "ملخص المنفذين",
+      "totalItems": "{count} عنصر عمل",
+      "unavailable": "تعذر تحميل ملخص المنفذين. هذه مشكلة تحميل، وليست صفر عناصر عمل.",
+      "empty": "لا توجد عناصر عمل بعد.",
+      "statusColumn": "الحالة",
+      "class": {
+        "user": "شخص",
+        "agent": "وكيل ذكاء اصطناعي",
+        "unassigned": "غير مُسند"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "وسيلة الإيضاح",
+      "colourBy": "التلوين حسب",
+      "dimension": {
+        "status": "الحالة",
+        "owner": "المالك",
+        "tool": "الأداة"
+      },
+      "status": {
+        "active": "نشط",
+        "idle": "خامل",
+        "paused": "متوقف مؤقتًا",
+        "error": "خطأ",
+        "terminated": "منتهٍ",
+        "unknown": "غير معروف"
+      },
+      "owner": {
+        "unassigned": "غير مُسنَد"
+      },
+      "tool": {
+        "none": "لا توجد أداة"
+      }
     },
     "goals": {
       "title": "Goal Tree",

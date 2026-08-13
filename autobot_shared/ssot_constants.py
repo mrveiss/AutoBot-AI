@@ -881,8 +881,10 @@ class ProtocolDefaults:
 # ============================================================================
 
 TTL_10_SECONDS = 10
+TTL_1_MINUTE = 60
 TTL_5_MINUTES = 300
 TTL_1_HOUR = 3_600
+TTL_2_HOURS = 3_600 * 2
 TTL_24_HOURS = 86_400
 TTL_7_DAYS = 86_400 * 7
 TTL_30_DAYS = 86_400 * 30

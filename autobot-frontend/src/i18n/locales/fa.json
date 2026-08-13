@@ -8238,7 +8238,99 @@
       "viewCanvas": "بوم",
       "canvasTabAll": "همه واحدها",
       "canvasUnit": "واحد {name}",
-      "canvasHint": "برای جابه‌جایی Shift را نگه دارید و بکشید، برای بزرگ‌نمایی اسکرول کنید و برای جزئیات روی گره کلیک کنید."
+      "canvasHint": "برای جابه‌جایی Shift را نگه دارید و بکشید، برای بزرگ‌نمایی اسکرول کنید و برای جزئیات روی گره کلیک کنید.",
+      "viewPeople": "افراد",
+      "peopleLegend": "انواع افراد",
+      "peopleKind": {
+        "agent": "عامل",
+        "user": "کاربر",
+        "contact": "مخاطب"
+      },
+      "peopleKindHint": {
+        "agent": "مجری استخدام‌شده",
+        "user": "دارنده حساب، می‌تواند وارد شود",
+        "contact": "مخاطب فرآیند، بدون حساب"
+      },
+      "peopleNoTeam": "بدون تیم",
+      "peopleTeamEmpty": "عضوی در این تیم نیست.",
+      "peopleNoTeamsDefined": "هیچ تیمی برای این شرکت تعریف نشده است — همه با هم فهرست می‌شوند.",
+      "peopleTeamsUnavailable": "اطلاعات تیم‌ها در حال حاضر در دسترس نیست — گروه‌بندی ممکن است ناقص باشد.",
+      "peopleUnavailable": "افراد این شرکت بارگیری نشدند. این یک مشکل بارگیری است، نه شرکتی خالی.",
+      "peopleTeamsCoverUsersOnly": "تیم‌ها دارندگان حساب را در بر می‌گیرند. عامل‌ها و مخاطبان به هیچ تیمی تعلق ندارند.",
+      "peopleContactNotInHierarchy": "مخاطبان بخشی از سلسله‌مراتب گزارش‌دهی نیستند — مدیر، بودجه یا ضربان ندارند.",
+      "peopleEmpty": "این شرکت هنوز هیچ فردی ندارد.",
+      "roleLensLabel": "نمایش بر اساس نقش",
+      "roleLensAll": "همه نقش‌ها",
+      "roleLensHint": "فقط یک فیلتر نمایشی است — چیزی را که هرکس به آن دسترسی دارد تغییر نمی‌دهد.",
+      "roleLensBanner": "فیلتر نمایش: {role} — نمایش {shown} از {total} گره. دسترسی بدون تغییر است.",
+      "roleLensEmpty": "فیلتر نمایش: هیچ گره‌ای با «{role}» در این نما مطابقت ندارد. دسترسی بدون تغییر است — فیلتر را پاک کنید تا همه را ببینید.",
+      "roleLensClear": "پاک کردن فیلتر",
+      "sidebar": {
+        "owner": "مالک",
+        "tools": "ابزارها",
+        "toolsNotApplicable": "برای افراد قابل اعمال نیست.",
+        "notes": "یادداشت‌ها",
+        "notesOverview": "نمای کلی",
+        "notesChecklist": "چک‌لیست",
+        "notesOutput": "خروجی",
+        "attributes": "ویژگی‌ها",
+        "railLabel": "بخش‌های نوار کناری",
+        "railInfo": "اطلاعات",
+        "railChecklist": "چک‌لیست",
+        "railCost": "هزینه",
+        "railActivity": "فعالیت",
+        "railHandoff": "واگذاری",
+        "itemsUnavailable": "موارد بارگیری نشدند. این یک مشکل بارگیری است، نه فهرستی خالی.",
+        "itemsEmpty": "هیچ مورد فعالی وجود ندارد.",
+        "itemsNotApplicableHuman": "فهرست موارد به‌ازای هر فرد هنوز در دسترس نیست — فقط عامل‌ها را می‌توان بر اساس واگذاری فیلتر کرد.",
+        "outputEmpty": "هنوز موردی تکمیل نشده است.",
+        "costTotalTokens": "مجموع توکن‌ها",
+        "costUsd": "هزینه (دلار)",
+        "costUnavailable": "داده‌های هزینه بارگیری نشدند.",
+        "costEmpty": "هنوز هزینه‌ای برای این عامل ثبت نشده است.",
+        "costNotApplicableHuman": "پیگیری هزینه فقط برای عامل‌ها اعمال می‌شود.",
+        "activityUnavailable": "فعالیت بارگیری نشد.",
+        "activityEmpty": "هنوز فعالیتی برای این گره ثبت نشده است.",
+        "activityNotApplicableHuman": "سابقه فعالیت به‌ازای هر فرد هنوز در دسترس نیست.",
+        "handoffButton": "واگذاری به انسان",
+        "handoffEmpty": "هیچ مورد فعالی برای واگذاری وجود ندارد.",
+        "handoffNotApplicableHuman": "واگذاری فقط برای عامل‌ها اعمال می‌شود."
+      }
+    },
+    "executorRollup": {
+      "title": "خلاصه مجریان",
+      "totalItems": "{count} مورد کاری",
+      "unavailable": "خلاصه مجریان بارگذاری نشد. این یک مشکل بارگذاری است، نه صفر مورد کاری.",
+      "empty": "هنوز موردی کاری وجود ندارد.",
+      "statusColumn": "وضعیت",
+      "class": {
+        "user": "شخص",
+        "agent": "عامل هوش مصنوعی",
+        "unassigned": "واگذار نشده"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "راهنمای نمادها",
+      "colourBy": "رنگ‌آمیزی بر اساس",
+      "dimension": {
+        "status": "وضعیت",
+        "owner": "مالک",
+        "tool": "ابزار"
+      },
+      "status": {
+        "active": "فعال",
+        "idle": "بی‌کار",
+        "paused": "متوقف‌شده",
+        "error": "خطا",
+        "terminated": "خاتمه‌یافته",
+        "unknown": "نامشخص"
+      },
+      "owner": {
+        "unassigned": "تخصیص‌نیافته"
+      },
+      "tool": {
+        "none": "بدون ابزار"
+      }
     },
     "goals": {
       "title": "Goal Tree",

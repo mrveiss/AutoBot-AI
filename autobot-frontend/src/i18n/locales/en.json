@@ -8226,7 +8226,99 @@
       "viewCanvas": "Canvas",
       "canvasTabAll": "All units",
       "canvasUnit": "{name} unit",
-      "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details."
+      "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details.",
+      "viewPeople": "People",
+      "peopleLegend": "Person kinds",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "User",
+        "contact": "Contact"
+      },
+      "peopleKindHint": {
+        "agent": "Hired executor",
+        "user": "Account holder, can sign in",
+        "contact": "Process contact, no account"
+      },
+      "peopleNoTeam": "Not in a team",
+      "peopleTeamEmpty": "No members in this team.",
+      "peopleNoTeamsDefined": "No teams are defined for this company — everyone is listed together.",
+      "peopleTeamsUnavailable": "Team information is unavailable right now — grouping may be incomplete.",
+      "peopleUnavailable": "The people of this company could not be loaded. This is a loading problem, not an empty company.",
+      "peopleTeamsCoverUsersOnly": "Teams cover account holders. Agents and contacts belong to no team.",
+      "peopleContactNotInHierarchy": "Contacts are not part of the reporting hierarchy — they have no manager, budget or heartbeat.",
+      "peopleEmpty": "This company has no people yet.",
+      "roleLensLabel": "View as role",
+      "roleLensAll": "All roles",
+      "roleLensHint": "A view filter only — it does not change what anyone can access.",
+      "roleLensBanner": "View filter: {role} — showing {shown} of {total} nodes. Access is unchanged.",
+      "roleLensEmpty": "View filter: no nodes match \"{role}\" here. Access is unchanged — clear the filter to see everyone.",
+      "roleLensClear": "Clear filter",
+      "sidebar": {
+        "owner": "Owner",
+        "tools": "Tools",
+        "toolsNotApplicable": "Not applicable to people.",
+        "notes": "Notes",
+        "notesOverview": "Overview",
+        "notesChecklist": "Checklist",
+        "notesOutput": "Output",
+        "attributes": "Attributes",
+        "railLabel": "Sidebar sections",
+        "railInfo": "Info",
+        "railChecklist": "Checklist",
+        "railCost": "Cost",
+        "railActivity": "Activity",
+        "railHandoff": "Handoff",
+        "itemsUnavailable": "Items could not be loaded. This is a loading problem, not an empty list.",
+        "itemsEmpty": "No active items.",
+        "itemsNotApplicableHuman": "Per-person item lists are not available yet — only agents can be filtered by assignee.",
+        "outputEmpty": "No completed items yet.",
+        "costTotalTokens": "Total tokens",
+        "costUsd": "Cost (USD)",
+        "costUnavailable": "Cost data could not be loaded.",
+        "costEmpty": "No recorded cost for this agent yet.",
+        "costNotApplicableHuman": "Cost tracking applies to agents only.",
+        "activityUnavailable": "Activity could not be loaded.",
+        "activityEmpty": "No activity recorded for this node yet.",
+        "activityNotApplicableHuman": "Per-person activity history is not available yet.",
+        "handoffButton": "Hand off to human",
+        "handoffEmpty": "No active items to hand off.",
+        "handoffNotApplicableHuman": "Handoff applies to agents only."
+      }
+    },
+    "executorRollup": {
+      "title": "Executor Rollup",
+      "totalItems": "{count} work items",
+      "unavailable": "The executor rollup could not be loaded. This is a loading problem, not zero work items.",
+      "empty": "No work items yet.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "AI Agent",
+        "unassigned": "Unassigned"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Legend",
+      "colourBy": "Colour by",
+      "dimension": {
+        "status": "Status",
+        "owner": "Owner",
+        "tool": "Tool"
+      },
+      "status": {
+        "active": "Active",
+        "idle": "Idle",
+        "paused": "Paused",
+        "error": "Error",
+        "terminated": "Terminated",
+        "unknown": "Unknown"
+      },
+      "owner": {
+        "unassigned": "Unassigned"
+      },
+      "tool": {
+        "none": "No tool"
+      }
     },
     "goals": {
       "title": "Goal Tree",

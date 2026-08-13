@@ -16,8 +16,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-source "$PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
-INFRA_ROOT="${PROJECT_ROOT}/infrastructure"
+# #14041: capture what the operator actually exported for AUTOBOT_REDIS_HOST
+# *before* sourcing the SSOT library below, which -- now that it exists --
+# fills in a 127.0.0.1 default when the caller left it unset. Line ~406 below
+# depends on being able to tell "the operator set it" from "the library
+# defaulted it": #2224 made an unset AUTOBOT_REDIS_HOST fail loudly on purpose,
+# because this script bakes the value into a REMOTE node's generated .env, and
+# a loopback default there silently points a distributed Redis at the wrong
+# host. Do not fold this into the library's own defaulting.
+_OPERATOR_REDIS_HOST="${AUTOBOT_REDIS_HOST:-}"
+source "$PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+INFRA_ROOT="${PROJECT_ROOT}/autobot-infrastructure"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
 
@@ -403,7 +412,7 @@ SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 
 # Redis (optional but recommended)
 # AUTOBOT_REDIS_HOST must be set in the deployment environment (#2224)
-REDIS_HOST=${AUTOBOT_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
+REDIS_HOST=${_OPERATOR_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
 REDIS_PORT=6379
 REDIS_DB=0
 

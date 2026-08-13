@@ -17,12 +17,15 @@
 # Install: ln -sf ../../scripts/hooks/pre-commit-hardcoded-values .git/hooks/pre-commit
 # Or add to .pre-commit-config.yaml as local hook
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 VIOLATIONS=0
 WARNINGS=0
@@ -32,8 +35,16 @@ WARNINGS=0
 # lookup with positional-args override (#6725: same hook runs as local
 # pre-commit AND CI gate). The multi-stage allowlist below is hook-specific
 # and must remain.
+# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
+# used to be masked by the trailing `|| true` below, which existed only to
+# tolerate "the filters matched nothing" — a real git failure looked
+# identical. Captured separately so get_staged_files' non-zero return
+# propagates (set -e turns that into a hard stop); the later filter chain's
+# `|| true` still only ever tolerates an empty *result*, not a git error.
 get_files_to_scan() {
-    get_staged_files '\.(py|ts|vue|js)$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.(py|ts|vue|js)$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(/__pycache__/|/node_modules/|/\.venv/|/venv/|/archive/|/tmp/|/\.tmp/|^tmp/|^archive/)' | \
         grep -v -E '(test_|_test\.py|\.test\.ts|\.test\.js|\.spec\.ts|\.spec\.js)' | \
         grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
@@ -82,7 +93,7 @@ check_hardcoded_ips() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
@@ -103,7 +114,7 @@ check_hardcoded_ips() {
             echo -e "  ${CYAN}Fix: Use config.vm.* from ssot_config${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -117,7 +128,7 @@ check_hardcoded_ports() {
     local ports="8001|5173|6379|11434|6080|8080|8081|8082|3000"
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
@@ -143,7 +154,7 @@ check_hardcoded_ports() {
             echo -e "  ${CYAN}Fix: Use config.port.* from ssot_config${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -154,7 +165,7 @@ check_magic_numbers() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
@@ -182,7 +193,7 @@ check_magic_numbers() {
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_SEARCH_LIMIT${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
             continue
         fi
 
@@ -195,7 +206,7 @@ check_magic_numbers() {
             echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_PAGE_SIZE${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
             continue
         fi
 
@@ -208,7 +219,7 @@ check_magic_numbers() {
             echo -e "  ${CYAN}Fix: Use QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT or BatchConfig.LARGE_BATCH${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
             continue
         fi
 
@@ -222,7 +233,7 @@ check_magic_numbers() {
             echo "  Consider using QueryDefaults.DEFAULT_OFFSET for consistency"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((WARNINGS++))
+            WARNINGS=$((WARNINGS + 1))
             continue
         fi
 
@@ -235,7 +246,7 @@ check_magic_numbers() {
             echo -e "  ${CYAN}Fix: Use QueryDefaults.RAG_DEFAULT_RESULTS${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
             continue
         fi
     done < "$file"
@@ -247,7 +258,7 @@ check_hardcoded_roles() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments. Includes JSDoc/block-comment continuation lines
         # (`* ...`) — same false-positive class caught for
@@ -298,7 +309,7 @@ check_hardcoded_roles() {
             echo -e "  ${CYAN}Fix: Use CategoryDefaults.ROLE_USER/ROLE_ASSISTANT/ROLE_SYSTEM${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -311,7 +322,7 @@ check_hardcoded_paths() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
@@ -342,7 +353,7 @@ check_hardcoded_paths() {
             echo -e "  ${CYAN}Fix: Use config.path.base_dir from ssot_config or os.environ.get('AUTOBOT_BASE_DIR', '/opt/autobot')${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -357,7 +368,7 @@ check_hardcoded_model_names() {
     local model_pattern="llama3\.2:latest|llama3\.2:1b|qwen3\.5:9b|nomic-embed-text:latest|gemma2:2b|phi3:mini|mistral:7b-instruct|dolphin-llama3:8b"
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
@@ -383,7 +394,7 @@ check_hardcoded_model_names() {
             echo -e "  ${CYAN}Fix: Import ROUTING_MODEL/DEFAULT_LLM_MODEL/etc from autobot_shared.ssot_config${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -394,7 +405,7 @@ check_hardcoded_categories() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments. Includes JSDoc/block-comment continuation lines
         # (`* ...`) — the fixed quote class below now also matches
@@ -448,7 +459,7 @@ check_hardcoded_categories() {
             echo -e "  ${CYAN}Fix: Use CategoryDefaults.GENERAL/SEARCH_MODE_HYBRID/UNKNOWN${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -460,7 +471,7 @@ check_hardcoded_db_dsns() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
@@ -486,7 +497,7 @@ check_hardcoded_db_dsns() {
             echo -e "  ${CYAN}Fix: Use config.database.* from ssot_config or AUTOBOT_DB_URL env var${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
@@ -501,7 +512,7 @@ check_hardcoded_timeouts() {
     local timeout_values="30|60|120|300|3600"
 
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
 
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
@@ -533,7 +544,7 @@ check_hardcoded_timeouts() {
             echo -e "  ${CYAN}Fix: Use config.timeout.* from ssot_config (TimeoutConfig)${NC}"
             echo "  Line: ${line:0:80}"
             echo ""
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         fi
     done < "$file"
 }
