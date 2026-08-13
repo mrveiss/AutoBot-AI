@@ -630,10 +630,7 @@ register_env_var(
         name="AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS",
         type=int,
         default=5,
-        description=(
-            "Extra delay added to the device-code poll interval after the "
-            "provider answers `slow_down`."
-        ),
+        description=("Extra delay added to the device-code poll interval after the " "provider answers `slow_down`."),
         component="auth",
     )
 )
@@ -929,8 +926,7 @@ register_env_var(
         type=int,
         default=86400,
         description=(
-            "Cache lifetime in seconds for a human-to-agent handoff brief "
-            "(llc/services/handoff.py). One day."
+            "Cache lifetime in seconds for a human-to-agent handoff brief " "(llc/services/handoff.py). One day."
         ),
         component="orchestrator",
     )
@@ -1001,9 +997,7 @@ register_env_var(
         name="AUTOBOT_PROMETHEUS_PORT",
         type=str,
         default="9090",
-        description=(
-            "TCP port of the Prometheus instance. Also declared in ssot_config.py."
-        ),
+        description=("TCP port of the Prometheus instance. Also declared in ssot_config.py."),
         component="monitoring",
     )
 )
