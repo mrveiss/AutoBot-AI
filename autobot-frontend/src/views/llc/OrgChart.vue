@@ -21,6 +21,7 @@ import {
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
   buildOrgPeople,
   countByKind,
@@ -332,11 +333,6 @@ function closeDrawer() {
   selectedNode.value = null
 }
 
-function formatTime(ts: string | null): string {
-  if (!ts) return t('llc.orgChart.never')
-  return new Date(ts).toLocaleString()
-}
-
 function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   // Containers stay anchored to the subtree they enclose.
   if (nodeId.startsWith(ORG_GROUP_PREFIX)) return
@@ -467,96 +463,22 @@ onMounted(() => {
       {{ t('llc.orgChart.canvasHint') }}
     </p>
 
-    <!-- Agent Detail Drawer -->
+    <!-- Node sidebar (#13940): fixed slot order + icon rail, extracted to
+         CanvasNodeSidebar.vue so it is one component for tree/canvas/People
+         selections rather than a template block duplicated per surface. -->
     <transition name="slide">
       <div
         v-if="drawerOpen && selectedNode"
-        class="fixed inset-y-0 right-0 w-80 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50 flex flex-col"
+        class="fixed inset-y-0 right-0 w-96 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50"
       >
-        <div class="flex items-center justify-between px-5 py-4 border-b border-autobot-border">
-          <h2 class="text-lg font-semibold text-autobot-text-primary">
-            {{ selectedNode.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail') }}
-          </h2>
-          <button class="text-autobot-text-muted hover:text-autobot-text-secondary" @click="closeDrawer">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div class="flex items-center gap-3">
-            <div
-              class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold"
-              :class="selectedNode.is_human ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700'"
-            >
-              {{ selectedNode.name.charAt(0).toUpperCase() }}
-            </div>
-            <div>
-              <p class="font-semibold text-autobot-text-primary">{{ selectedNode.name }}</p>
-              <p class="text-sm text-autobot-text-muted">{{ selectedNode.title }}</p>
-            </div>
-          </div>
-
-          <dl class="space-y-2 text-sm">
-            <!-- "Adapter: lead" is nonsense for a person — the Type row below
-                 already says Human, so the adapter row is agent-only. -->
-            <div v-if="!selectedNode.is_human" class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.adapter') }}</dt>
-              <dd class="text-autobot-text-primary font-medium">{{ selectedNode.adapter_type }}</dd>
-            </div>
-            <div v-if="selectedNode.is_human" class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.role') }}</dt>
-              <dd class="text-autobot-text-primary font-medium">{{ selectedNode.title }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.type') }}</dt>
-              <dd class="text-autobot-text-primary">{{ selectedNode.is_human ? t('llc.orgChart.human') : t('llc.orgChart.aiAgent') }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.lastHeartbeat') }}</dt>
-              <dd class="text-autobot-text-primary">{{ formatTime(selectedNode.last_heartbeat) }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.budget') }}</dt>
-              <dd class="text-autobot-text-primary">
-                {{ selectedNode.budget_spent }} / {{ selectedNode.budget_total }}
-              </dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.assignedItems') }}</dt>
-              <dd class="text-autobot-text-primary">{{ selectedNode.assigned_item_count }}</dd>
-            </div>
-          </dl>
-        </div>
-        <!-- Agent lifecycle controls. Gated on !is_human (#13936): people are not
-             hired agents — /controls/agents/{id} has no meaning for a membership,
-             so the buttons must not be offered for a human node. -->
-        <div v-if="selectedNode.is_human" class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
-          {{ t('llc.orgChart.humanNoAgentControls') }}
-        </div>
-        <div v-else-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
-          <button
-            class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
-            :class="selectedNode.status === 'paused'
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-amber-500 text-white hover:bg-amber-600'"
-            data-testid="org-drawer-pause"
-            @click="toggleAgentPause(selectedNode)"
-          >
-            {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
-          </button>
-          <button
-            class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            :disabled="terminating"
-            data-testid="org-drawer-terminate"
-            @click="terminateAgent(selectedNode)"
-          >
-            {{ t('llc.orgChart.terminateAgent') }}
-          </button>
-        </div>
-        <div v-else class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
-          {{ t('llc.orgChart.terminatedNote') }}
-        </div>
+        <CanvasNodeSidebar
+          :node="selectedNode"
+          :company-id="companyId ?? ''"
+          :terminating="terminating"
+          @close="closeDrawer"
+          @pause="toggleAgentPause"
+          @terminate="terminateAgent"
+        />
       </div>
     </transition>
     <div v-if="drawerOpen" class="fixed inset-0 bg-black/20 z-40" @click="closeDrawer" />
