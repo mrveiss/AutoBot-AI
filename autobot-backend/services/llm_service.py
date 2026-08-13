@@ -55,6 +55,7 @@ from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
 from llm_shared.types import LLMType
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
@@ -642,7 +643,7 @@ class LLMService:
             # Store with 1 hour TTL
             redis_client.setex(
                 fallback_key,
-                3600,  # 1 hour TTL
+                TTL_1_HOUR,
                 json.dumps(event_data),
             )
 

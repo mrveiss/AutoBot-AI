@@ -43,6 +43,7 @@ from typing import Any, Callable
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
@@ -186,7 +187,7 @@ class ProgressTracker:
         }
         await redis.setex(
             f"{self._prefix}{task_id}",
-            3600,
+            TTL_1_HOUR,
             json.dumps(payload),
         )
 

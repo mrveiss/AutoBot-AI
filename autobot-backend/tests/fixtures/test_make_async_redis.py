@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from tests.fixtures import make_async_redis, patch_async_redis
+from autobot_shared.ssot_constants import TTL_1_MINUTE
 
 # ---------------------------------------------------------------------------
 # make_async_redis — defaults + override + extras
@@ -36,8 +37,8 @@ async def test_default_set_setex_expire_succeed() -> None:
     return value, but those that do expect truthy on success."""
     redis = make_async_redis()
     assert await redis.set("k", "v") is True
-    assert await redis.setex("k", 60, "v") is True
-    assert await redis.expire("k", 60) is True
+    assert await redis.setex("k", TTL_1_MINUTE, "v") is True
+    assert await redis.expire("k", TTL_1_MINUTE) is True
 
 
 @pytest.mark.asyncio

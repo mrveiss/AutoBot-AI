@@ -357,7 +357,7 @@ class NPUWorkerManager(AsyncInitializable):
             pipe = self.redis_client.pipeline()
             pipe.rpush(key, latency_s)
             pipe.ltrim(key, -window, -1)
-            pipe.expire(key, 86400)
+            pipe.expire(key, TTL_24_HOURS)
             await pipe.execute()
         except Exception as e:
             logger.debug("Failed to store pulse latency for %s: %s", worker_id, e)
@@ -1397,6 +1397,7 @@ class NPUWorkerManager(AsyncInitializable):
 
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
+from autobot_shared.ssot_constants import TTL_24_HOURS
 
 _worker_manager: NPUWorkerManager | None = None
 _worker_manager_lock = _asyncio_lock.Lock()
