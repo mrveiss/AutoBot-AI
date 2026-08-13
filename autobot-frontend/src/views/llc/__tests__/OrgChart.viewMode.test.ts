@@ -331,7 +331,9 @@ describe('OrgChart nested-tree mode is unregressed (#13939)', () => {
 
     expect(confirmSpy).toHaveBeenCalled()
     expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/ceo/terminate', {})
-    expect(get).toHaveBeenCalledTimes(2) // reload from the source of truth
+    // #13942: mount issues two GETs (tree + the independent executor
+    // rollup); terminate's reload only refetches the tree — so 2 + 1 = 3.
+    expect(get).toHaveBeenCalledTimes(3) // reload from the source of truth
     confirmSpy.mockRestore()
   })
 

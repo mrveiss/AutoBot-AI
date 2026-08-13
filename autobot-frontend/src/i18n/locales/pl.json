@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "Przekazanie dotyczy tylko agentów."
       }
     },
+    "executorRollup": {
+      "title": "Zestawienie wykonawców",
+      "totalItems": "{count} elementów pracy",
+      "unavailable": "Nie udało się załadować zestawienia wykonawców. To problem z ładowaniem, a nie zero elementów pracy.",
+      "empty": "Brak elementów pracy.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Osoba",
+        "agent": "Agent AI",
+        "unassigned": "Nieprzypisane"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Legenda",
       "colourBy": "Koloruj według",

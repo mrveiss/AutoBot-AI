@@ -42,8 +42,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Captures the flags between `git` and `-C` so we can check for `-c safe.directory`.
 # No \b after the closing `}}` — those aren't word chars so the boundary doesn't match;
 # rely on the literal terminator instead.
+# #14181: the target group used to accept only the literal `{{ git_repo_root }}`
+# or the literal path, which left the rule blind to every other Jinja name for
+# the same directory. Three real unguarded sites were passing it that way --
+# `{{ _code_source_dest }}` and `{{ code_source_dir | default(...) }}` in the
+# update/deploy path, which is exactly where a `dubious ownership` rc=128 bites.
+# The group now accepts any Jinja variable whose name contains `code_source` or
+# `git_repo_root`, with an optional filter expression. Measured against the
+# tracked tree: 22 matches, 19 of them already carrying `-c safe.directory`
+# (the sites #7150's migration fixed), which is what says the widening targets
+# the right shape rather than merely matching more.
 PATTERN = re.compile(
-    r"\bgit\s+(?P<flags>[^\n]*?)-C\s+" r"(?:\{\{\s*git_repo_root\s*\}\}|/opt/autobot/code_source(?=[\s/]))"
+    r"\bgit\s+(?P<flags>[^\n]*?)-C\s+"
+    r"(?:\{\{\s*[\w]*(?:code_source|git_repo_root)[\w]*\s*(?:\|[^}]*)?\}\}"
+    r"|/opt/autobot/code_source(?=[\s/]))"
 )
 SAFE_FLAG = re.compile(r"-c\s+safe\.directory\s*=")
 
@@ -51,6 +63,11 @@ ALLOWLIST = frozenset(
     {
         "tools/lint/check_git_safe_directory.py",
         "tools/lint/check_git_safe_directory_test.py",
+        # This hook's own registration: its `name:` and `description:` quote the
+        # very pattern it looks for, so the rule matched its own documentation
+        # (#14181). The file carries no Ansible tasks, so nothing is lost.
+        ".pre-commit-config.yaml",
+        "autobot-infrastructure/shared/config/.pre-commit-config.yaml",
     }
 )
 

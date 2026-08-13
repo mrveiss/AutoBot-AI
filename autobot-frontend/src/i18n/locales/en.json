@@ -8279,6 +8279,18 @@
         "handoffNotApplicableHuman": "Handoff applies to agents only."
       }
     },
+    "executorRollup": {
+      "title": "Executor Rollup",
+      "totalItems": "{count} work items",
+      "unavailable": "The executor rollup could not be loaded. This is a loading problem, not zero work items.",
+      "empty": "No work items yet.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "AI Agent",
+        "unassigned": "Unassigned"
+      }
+    },
     "canvasRules": {
       "legendTitle": "Legend",
       "colourBy": "Colour by",

@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "ההעברה חלה על סוכנים בלבד."
       }
     },
+    "executorRollup": {
+      "title": "סיכום מבצעים",
+      "totalItems": "{count} פריטי עבודה",
+      "unavailable": "לא ניתן היה לטעון את סיכום המבצעים. זו בעיית טעינה, לא אפס פריטי עבודה.",
+      "empty": "אין עדיין פריטי עבודה.",
+      "statusColumn": "סטטוס",
+      "class": {
+        "user": "אדם",
+        "agent": "סוכן בינה מלאכותית",
+        "unassigned": "לא משויך"
+      }
+    },
     "canvasRules": {
       "legendTitle": "מקרא",
       "colourBy": "צביעה לפי",

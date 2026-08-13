@@ -8291,6 +8291,18 @@
         "handoffNotApplicableHuman": "يُطبَّق التسليم على الوكلاء فقط."
       }
     },
+    "executorRollup": {
+      "title": "ملخص المنفذين",
+      "totalItems": "{count} عنصر عمل",
+      "unavailable": "تعذر تحميل ملخص المنفذين. هذه مشكلة تحميل، وليست صفر عناصر عمل.",
+      "empty": "لا توجد عناصر عمل بعد.",
+      "statusColumn": "الحالة",
+      "class": {
+        "user": "شخص",
+        "agent": "وكيل ذكاء اصطناعي",
+        "unassigned": "غير مُسند"
+      }
+    },
     "canvasRules": {
       "legendTitle": "وسيلة الإيضاح",
       "colourBy": "التلوين حسب",
