@@ -166,7 +166,7 @@
           authorized_key:
             user: "{{ autobot_user }}"
             state: present
-            key: "{{ lookup('file', autobot_ssh_key_path ~ '.pub') }}"
+            key: "{{ lookup('file', (autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key')) ~ '.pub') }}"
           ignore_errors: true  # Key may not exist during initial enrollment
 
         - name: "Create emergency admin user"
