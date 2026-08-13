@@ -283,3 +283,147 @@ describe('lifecycle controls stay wired (#13936/#13996 regression guard)', () =>
     expect(wrapper.text()).toContain(en.llc.orgChart.humanNoAgentControls)
   })
 })
+
+// The activity rail mirrors the cost rail's three states. It was the only
+// data-bearing slot with no coverage at all, which is how the honest-failure
+// and not-applicable branches this umbrella exists to protect ended up
+// asserted by nobody (#14064; same shape fixed on #14104 and #14169).
+describe('activity rail: three distinct states (#13940)', () => {
+  it('renders entries the API returned', async () => {
+    get.mockResolvedValueOnce({
+      items: [{ id: 'a1', action: 'Heartbeat completed', occurred_at: '2026-01-01T00:00:00Z' }],
+    })
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(get).toHaveBeenCalledWith(
+      expect.stringContaining('/api/llc/companies/c1/activity'),
+    )
+    expect(wrapper.get('[data-testid="sidebar-panel-activity"]').text()).toContain(
+      'Heartbeat completed',
+    )
+  })
+
+  it('renders "unavailable" — not "no activity" — when the fetch rejects', async () => {
+    get.mockRejectedValueOnce(new Error('down'))
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+
+    const panel = wrapper.get('[data-testid="sidebar-panel-activity"]').text()
+    expect(panel).toContain(en.llc.orgChart.sidebar.activityUnavailable)
+    // A failed fetch must never be reported as an absence of activity.
+    expect(panel).not.toContain(en.llc.orgChart.sidebar.activityEmpty)
+  })
+
+  it('renders "no activity" — not "unavailable" — on a genuinely empty result', async () => {
+    get.mockResolvedValueOnce({ items: [] })
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+
+    const panel = wrapper.get('[data-testid="sidebar-panel-activity"]').text()
+    expect(panel).toContain(en.llc.orgChart.sidebar.activityEmpty)
+    expect(panel).not.toContain(en.llc.orgChart.sidebar.activityUnavailable)
+  })
+
+  it('a human node never calls the API and says so structurally', async () => {
+    const wrapper = mountSidebar(HUMAN_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(get).not.toHaveBeenCalled()
+    const panel = wrapper.get('[data-testid="sidebar-panel-activity"]').text()
+    expect(panel).toContain(en.llc.orgChart.sidebar.activityNotApplicableHuman)
+    // "Not applicable" and "none" are different claims about a person.
+    expect(panel).not.toContain(en.llc.orgChart.sidebar.activityEmpty)
+  })
+
+  it('does not refetch when the rail is re-entered', async () => {
+    get.mockResolvedValueOnce({ items: [] })
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="sidebar-rail-info"]').trigger('click')
+    await wrapper.get('[data-testid="sidebar-rail-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('rail switching drives the notes tab and the handoff slot (#13940)', () => {
+  it('the info icon returns the notes pane to Overview', async () => {
+    get.mockResolvedValue({ items: [] })
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-checklist"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="sidebar-rail-info"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="sidebar-notes-tab-overview"]').classes().join(' ')).toMatch(
+      /autobot-/,
+    )
+  })
+
+  it('the handoff rail loads the assignable items for an agent', async () => {
+    get.mockResolvedValue([{ id: 'w1', title: 'Ship it', status: 'in_progress' }])
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-handoff"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="sidebar-panel-handoff"]').exists()).toBe(true)
+    expect(get).toHaveBeenCalled()
+  })
+
+  it('the handoff rail is structurally not applicable for a person', async () => {
+    const wrapper = mountSidebar(HUMAN_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-handoff"]').trigger('click')
+    await flushPromises()
+
+    expect(get).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="sidebar-panel-handoff"]').text()).toContain(
+      en.llc.orgChart.sidebar.handoffNotApplicableHuman,
+    )
+  })
+})
+
+describe('state that must not go stale (#13940)', () => {
+  it('refetches the assigned items after a handoff completes', async () => {
+    // The item just moved off this agent. Trusting the stale list would show a
+    // work item under an owner who no longer has it — a wrong statement about
+    // ownership, which is the class this umbrella keeps finding.
+    get.mockResolvedValue([{ id: 'w1', title: 'Ship it', status: 'in_progress' }])
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-handoff"]').trigger('click')
+    await flushPromises()
+    const callsBefore = get.mock.calls.length
+
+    await wrapper.get('[data-testid="sidebar-handoff-item-w1"]').trigger('click')
+    wrapper.findComponent(HandoffModal).vm.$emit('done')
+    await flushPromises()
+
+    expect(get.mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  it('does not refetch the cost rail when it is re-entered', async () => {
+    get.mockResolvedValue([])
+    const wrapper = mountSidebar(AGENT_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-cost"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="sidebar-rail-info"]').trigger('click')
+    await wrapper.get('[data-testid="sidebar-rail-cost"]').trigger('click')
+    await flushPromises()
+
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders "never" for a freshly hired agent that has not run yet', () => {
+    // Only agents render a heartbeat (a person's row says "not applicable"),
+    // so the null branch belongs to a just-hired agent — a real state, not a
+    // defensive one. An empty cell there would read as "ran, but we lost when".
+    const wrapper = mountSidebar({ ...AGENT_NODE, last_heartbeat: null })
+
+    expect(wrapper.get('[data-testid="node-sidebar"]').text()).toContain(en.llc.orgChart.never)
+  })
+})
