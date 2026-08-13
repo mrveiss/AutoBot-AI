@@ -49606,13 +49606,14 @@ export interface paths {
         };
         /**
          * Get Work Item Executor Rollup
-         * @description Company-wide work-item counts by executor class and status (#13942).
+         * @description Company-wide work-item counts by executor class and status (#13942, #14222).
          *
          *     Executor class is derived from the *item's own assignee* — ``assignee_type``
-         *     (typed via ``AssigneeType``, #13937) plus the matching id column — never a
-         *     new discriminator. There is no ``PersonKind``-style provenance derivation
-         *     here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type`` is
-         *     already a backend-typed value, not something only knowable from the
+         *     (typed via ``AssigneeType``, #13937) plus the matching id column, plus (#14222)
+         *     whether that id still resolves to a live member/agent of this company —
+         *     never a new discriminator. There is no ``PersonKind``-style provenance
+         *     derivation here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type``
+         *     is already a backend-typed value, not something only knowable from the
          *     frontend, so counting it server-side introduces no honesty gap.
          *
          *     Grouped in SQL rather than paginated to the frontend and counted there:
@@ -72316,9 +72317,9 @@ export interface components {
          * @description One (executor_class, status) count — one bar of the rollup panel.
          *
          *     ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
-         *     / ``_UNASSIGNED_EXECUTOR_CLASS`` — never a value invented for this endpoint
-         *     (#13942's "no parallel executor enum" constraint). ``status`` is a
-         *     ``WorkItemStatus`` value.
+         *     / ``_UNASSIGNED_EXECUTOR_CLASS`` / ``_ORPHANED_EXECUTOR_CLASS`` — never a
+         *     value invented for this endpoint (#13942's "no parallel executor enum"
+         *     constraint). ``status`` is a ``WorkItemStatus`` value.
          */
         ExecutorRollupCell: {
             /** Executor Class */
