@@ -171,7 +171,10 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
     suggestion = _suggestion_for(rel)
     hits: List[Tuple[int, str, str]] = []
     reasons = {pattern_id: reason for pattern_id, _, reason in PATTERNS}
+    prose = _prose_lines(text)
     for line_no, line in enumerate(text.splitlines(), start=1):
+        if line_no in prose:
+            continue
         line_ids = [pattern_id for pattern_id, regex, _ in PATTERNS if regex.search(line)]
         for pattern_id in _dedupe_subsumed(line_ids):
             reason = reasons[pattern_id]
@@ -181,6 +184,45 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
             message = reason if pattern_id in SELF_DESCRIBING_FIX else f"Use {suggestion} {reason}"
             hits.append((line_no, pattern_id, message))
     return hits
+
+
+def _prose_lines(text: str) -> set[int]:
+    """Line numbers whose content is entirely comment or string literal.
+
+    #14181: this scan is line-based and had no idea what it was reading, so it
+    flagged **documentation of the very migration it enforces** --
+    `autobot-slm-backend/migrations/migrate_timestamps_to_timestamptz.py:8,12`,
+    a module docstring whose whole subject is the `datetime.utcnow()` → `now_utc()`
+    move. Telling a contributor to "fix" the sentence describing the fix is worse
+    than missing a real call, and the same shape recurred three times in one
+    session in this repo's own lint tests.
+
+    Only lines with **no** code outside a comment or string are excluded, so
+    `foo = datetime.utcnow()  # keep` is still caught. A file that cannot be
+    tokenized (a syntax error mid-edit) yields nothing here, which leaves the
+    line-based scan exactly as strict as it was rather than silently softening it.
+    """
+    import io
+    import tokenize
+
+    code_lines: set[int] = set()
+    prose_lines: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type in (tokenize.COMMENT, tokenize.STRING):
+                prose_lines.update(range(tok.start[0], tok.end[0] + 1))
+            elif tok.type not in (
+                tokenize.NL,
+                tokenize.NEWLINE,
+                tokenize.INDENT,
+                tokenize.DEDENT,
+                tokenize.ENDMARKER,
+                tokenize.ENCODING,
+            ):
+                code_lines.update(range(tok.start[0], tok.end[0] + 1))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return set()
+    return prose_lines - code_lines
 
 
 def main(argv: List[str]) -> int:

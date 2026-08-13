@@ -4,7 +4,7 @@
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -55,7 +55,7 @@ class ConfigVerifier(BaseVerifier):
                 status=VerificationStatus.MANUAL,
                 confidence=VerificationConfidence.LOW,
                 notes="Could not extract config value from claim",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
         key, value = config_info
@@ -72,7 +72,7 @@ class ConfigVerifier(BaseVerifier):
                 evidence_content=search_results.get("match"),
                 method=f"grep -r '{key}' in config files",
                 notes=f"Config {key}={value} found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
         else:
             # Config not found
@@ -81,7 +81,7 @@ class ConfigVerifier(BaseVerifier):
                 confidence=VerificationConfidence.MEDIUM,
                 method=f"grep -r '{key}' in config files",
                 notes=f"Config {key}={value} not found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
     def _extract_config_value(self, text: str) -> Optional[tuple[str, str]]:

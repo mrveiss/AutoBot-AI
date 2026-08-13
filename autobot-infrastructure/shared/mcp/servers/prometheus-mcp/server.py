@@ -10,7 +10,7 @@ Provides agents with access to Prometheus metrics data
 
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -222,7 +222,7 @@ async def query_range(query: str, duration: str, step: str) -> List[TextContent]
     }
 
     delta = duration_map.get(duration, timedelta(hours=1))
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - delta
 
     data = await prometheus_query_range(query, start, end, step)
