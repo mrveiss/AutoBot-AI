@@ -83,11 +83,14 @@ ALLOWLIST = {
     "autobot-backend/tests/test_knowledge_boards.py",
     "autobot-backend/tests/knowledge/test_facts_dedup.py",
     "autobot-backend/knowledge/knowledge_base_async_test.py",
-    # #14181: this entry read `knowledge_base.integration_test.py` -- a DOT
-    # where the filename has an underscore. It matched nothing, so the six
-    # init-state assertions in this file were reported as violations by an
-    # allowlist that was written to exempt them. The hook has never run
-    # (its exec bit was untracked), so nothing ever surfaced the typo.
+    # #14181: this entry read `knowledge_base.integration_test.py` (dotted).
+    # NOT a typo -- it was correct when written in d67a6574f (#5330, closing
+    # #5225). `3302e3f7f` then renamed 44 dotted test filenames to the
+    # underscore form (#7082/#7167) and did not update this reference, so the
+    # entry silently stopped matching and the six init-state assertions in
+    # this file were reported as violations by an allowlist written to exempt
+    # them. Nothing surfaced it because the hook has never run -- its exec bit
+    # was untracked (#14181).
     "autobot-backend/knowledge/knowledge_base_integration_test.py",
     # Constructs fake KB instances -- squarely the category named above. Its
     # `MinimalFakeKB`/`FactsFakeKB` stubs *define* `_aioredis_client` so their

@@ -31,14 +31,19 @@ def _write(tmp: Path, name: str, body: str) -> Path:
 
 
 def test_every_allowlist_entry_names_a_file_that_exists() -> None:
-    """An allowlist entry with a typo exempts nothing and says nothing.
+    """An allowlist entry that names a moved file exempts nothing, silently.
 
     #14181: the entry for the KB integration test read
-    `knowledge_base.integration_test.py` — a dot where the filename has an
-    underscore. It matched no file, so six init-state assertions the allowlist
-    was written to exempt were reported as violations instead. A stale or
-    misspelled path is indistinguishable from a correct one until something
-    runs, and this hook never had.
+    `knowledge_base.integration_test.py`. It was correct when written
+    (d67a6574f, #5330); `3302e3f7f` renamed 44 dotted test filenames to the
+    underscore form (#7082) and left this reference behind. Six init-state
+    assertions the allowlist was written to exempt were reported as
+    violations instead.
+
+    A stale path is indistinguishable from a correct one until something
+    runs, and this hook never had. Bulk renames are exactly when references
+    like this go stale, which is why the invariant is asserted rather than
+    the one instance.
     """
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files"], cwd=str(_REPO), capture_output=True, text=True
