@@ -8306,6 +8306,7 @@
       "class": {
         "user": "Person",
         "agent": "KI-Agent",
+        "orphaned": "Verwaist",
         "unassigned": "Nicht zugewiesen"
       }
     },

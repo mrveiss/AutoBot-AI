@@ -8306,6 +8306,7 @@
       "class": {
         "user": "Personne",
         "agent": "Agent IA",
+        "orphaned": "Orphelin",
         "unassigned": "Non attribué"
       }
     },

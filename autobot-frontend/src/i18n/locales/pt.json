@@ -8306,6 +8306,7 @@
       "class": {
         "user": "Pessoa",
         "agent": "Agente de IA",
+        "orphaned": "Órfão",
         "unassigned": "Não atribuído"
       }
     },

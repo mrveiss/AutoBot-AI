@@ -8306,6 +8306,7 @@
       "class": {
         "user": "Persona",
         "agent": "MI aģents",
+        "orphaned": "Pamests",
         "unassigned": "Nav piešķirts"
       }
     },

@@ -4,10 +4,14 @@
 <!-- Author: mrveiss -->
 <script setup lang="ts">
 // The Org Chart's executor rollup panel (#13942): work items counted by
-// executor class (person / AI agent / unassigned) and by status.
+// executor class (person / AI agent / orphaned / unassigned) and by status.
 //
 // The unassigned bucket is the point — it is the work nobody owns — so it is
-// never hidden even at zero, and it is never a subtraction. See
+// never hidden even at zero, and it is never a subtraction. Orphaned (#14222)
+// is the same idea applied to work whose assignee id is present but no
+// longer resolves — a departed member or a terminated agent — and is kept as
+// a distinct bucket rather than folded into unassigned: "never assigned" and
+// "the assignee is gone" are different facts. See
 // `composables/llc/executorRollup.ts` for how the matrix is built and why
 // "person / automation / AI agent" collapses to "person / AI agent" here.
 
@@ -50,6 +54,10 @@ const STATUS_ORDER: readonly WorkItemStatus[] = [
 const CLASS_BADGE_CLASS: Record<ExecutorClass, string> = {
   user: 'bg-autobot-info-bg text-autobot-info border-autobot-info',
   agent: 'bg-autobot-primary-bg text-autobot-primary border-autobot-primary',
+  // Orphaned (#14222) gets the error palette, not the warning one unassigned
+  // uses — it is a distinct, more urgent fact ("the assignee is gone", not
+  // merely "nobody was ever asked").
+  orphaned: 'bg-autobot-error-bg text-autobot-error border-autobot-error',
   unassigned: 'bg-autobot-warning-bg text-autobot-warning border-autobot-warning',
 }
 
@@ -92,7 +100,7 @@ function cellCount(executorClass: ExecutorClass, status: WorkItemStatus): number
     </p>
 
     <template v-else>
-      <!-- Legend: the three classes, named and counted — unassigned always shown, even at zero. -->
+      <!-- Legend: every class, named and counted — unassigned/orphaned always shown, even at zero. -->
       <div class="flex flex-wrap items-center gap-3" data-testid="executor-rollup-legend">
         <span
           v-for="executorClass in EXECUTOR_CLASSES"
