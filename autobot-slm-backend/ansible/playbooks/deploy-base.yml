@@ -250,11 +250,11 @@
     - name: Update /etc/hosts with VM information
       lineinfile:
         path: /etc/hosts
-        regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}"
-        line: "{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }} {{ item }} {{ item }}.{{ network.domain }}"
+        regexp: "^{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}"
+        line: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }} {{ item }} {{ item }}.{{ network.domain }}"
         state: present
       loop: "{{ groups['all'] }}"
-      when: hostvars[item]['ansible_default_ipv4']['address'] is defined
+      when: hostvars[item]['ansible_facts']['default_ipv4']['address'] is defined
 
     - name: Configure DNS servers
       lineinfile:

@@ -198,6 +198,90 @@ else
     pass=$((pass + 1))
 fi
 
+# --- #14178: the two probes in a status script must not name different ports ---
+# status-all-vms.sh checks a service two ways: an HTTP URL built from
+# SERVICE_PORTS, and a `pgrep` on the port. Those were separate literals, and
+# they disagreed the moment the SSOT library made the URL correct -- 3000 was
+# Grafana's port, the browser service is 9001 (#4052). Either probe can be
+# green while the other is red, and a process check that can never match
+# reports a running service as down.
+#
+# Asserted as a shape, not as an instance: no process probe may carry a literal
+# port at all. A specific 3000-vs-9001 assertion would pass the day someone
+# introduced the same split on a different service.
+_status_script="${REPO_ROOT}/autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh"
+if [ -f "$_status_script" ]; then
+    _literals="$(grep -cE "pgrep -f '[^']*[0-9]{4}|vite\.\*[0-9]{4}" "$_status_script" || true)"
+    check "status-all-vms.sh process probes carry no literal port" "$_literals" "0"
+
+    # The four probes read one resolved local, `$svc_port`, rather than the array
+    # directly -- the review found that an unset key expands to EMPTY under this
+    # script's `set -e` (no `set -u`), which would make `pgrep -f 'python.*'`
+    # match every python process and report the service UP. So the guard checks
+    # both that the probes are derived AND that the empty-key path is defended.
+    _derived="$(grep -cE "pgrep -f '[^']*\\\$\\{svc_port\\}" "$_status_script" || true)"
+    if [ "$_derived" -ge 4 ]; then
+        echo "PASS: process probes derive their port from the resolved svc_port ($_derived sites)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: expected >=4 svc_port-derived probes, found $_derived"
+        fail=$((fail + 1))
+    fi
+
+    # BEHAVIOURAL, not a grep. The review defeated the previous text-presence
+    # version with `if false && [ -z "$svc_port" ]` -- dead code that keeps both
+    # substrings, so the guard passed while the wildcard vulnerability was live.
+    # A guard for a fail-closed path has to actually run the path.
+    #
+    # The function is extracted and executed with `ssh` stubbed to echo its
+    # command, so nothing reaches a network. An unknown service must produce
+    # exactly "0" and must NOT produce a pgrep pattern at all.
+    _probe_out="$(
+        {
+            sed -n '/^get_service_processes() {/,/^}/p' "$_status_script"
+            cat <<'STUB'
+# NOTE: "browser" is deliberately ABSENT while the probe is called WITH it.
+# A name that matches no `case` branch would return "0" via fall-through, so a
+# dead guard would look identical to a live one -- the review defeated the
+# previous version exactly that way.
+declare -A SERVICE_PORTS=( ["frontend"]="5173" )
+SSH_KEY="$(mktemp)"; SSH_USER=nobody
+ssh() { echo "SSH_WOULD_RUN: $*"; }
+timeout() { shift; "$@"; }
+get_service_processes 192.0.2.1 browser
+STUB
+        } | bash 2>/dev/null
+    )"
+    check "a case-matched service with no port entry reports exactly 0" "$_probe_out" "0"
+
+    _wildcard_out="$(
+        {
+            sed -n '/^get_service_processes() {/,/^}/p' "$_status_script"
+            cat <<'STUB'
+# NOTE: "browser" is deliberately ABSENT while the probe is called WITH it.
+# A name that matches no `case` branch would return "0" via fall-through, so a
+# dead guard would look identical to a live one -- the review defeated the
+# previous version exactly that way.
+declare -A SERVICE_PORTS=( ["frontend"]="5173" )
+SSH_KEY="$(mktemp)"; SSH_USER=nobody
+ssh() { echo "SSH_WOULD_RUN: $*"; }
+timeout() { shift; "$@"; }
+get_service_processes 192.0.2.1 browser
+STUB
+        } | bash 2>&1 | grep -c "pgrep -f 'python\.\*'" || true
+    )"
+    check "a missing port never builds a bare 'python.*' pattern" "$_wildcard_out" "0"
+
+    # Quote-agnostic literal check: the earlier single-quote-only regex was
+    # defeated by writing the same literal in double quotes.
+    _dq_literals="$(grep -cE "pgrep -f \"[^\"]*[0-9]{4}" "$_status_script" || true)"
+    check "no double-quoted literal port in a process probe" "$_dq_literals" "0"
+
+else
+    echo "FAIL: status-all-vms.sh not found -- refusing to report clean on a missing target"
+    fail=$((fail + 1))
+fi
+
 echo
 echo "=== $pass passed, $fail failed ==="
 [ "$fail" -eq 0 ]

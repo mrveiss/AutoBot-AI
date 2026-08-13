@@ -50,7 +50,7 @@ HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-localhost}/"
 HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
 HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}"
 HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
-HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
+HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"
 
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
