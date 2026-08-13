@@ -43,11 +43,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from llc.models.enums import AssigneeType, LLCAgentStatus, WorkItemStatus, WorkItemType
 from llc.models.membership import LLCCompanyMembership
 from llc.models.work_item import LLCWorkItem
-from models.agent_org import AgentOrgNode
 
 # Importing the harness registers the SQLite compile shims and all loop models
 # on Base.metadata (including LLCWorkItem).
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode
 
 _FIXED_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -501,18 +501,14 @@ async def test_executor_rollup_reports_orphaned_when_membership_is_deleted(
 
 
 @pytest.mark.asyncio
-async def test_executor_rollup_reports_orphaned_when_agent_is_terminated(
-    app, client, session_factory
-):  # noqa: ANN001
+async def test_executor_rollup_reports_orphaned_when_agent_is_terminated(app, client, session_factory):  # noqa: ANN001
     """The agent-side reproduction: `controls_service.terminate` reassigns nothing (#14221)."""
     company_id = uuid.uuid4()
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
     terminated_agent_id = uuid.uuid4()
-    await _seed_agent_node(
-        session_factory, company_id, terminated_agent_id, status=LLCAgentStatus.TERMINATED.value
-    )
+    await _seed_agent_node(session_factory, company_id, terminated_agent_id, status=LLCAgentStatus.TERMINATED.value)
     await _seed_item(
         session_factory,
         company_id,
