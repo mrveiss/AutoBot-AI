@@ -10,7 +10,7 @@ using appropriate verifiers (endpoint, test, config, code).
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -82,7 +82,7 @@ class ClaimsVerifier:
                     "status": "manual",
                     "confidence": "low",
                     "notes": "No automated verifier available",
-                    "last_verified": datetime.utcnow().isoformat(),
+                    "last_verified": datetime.now(timezone.utc).isoformat(),
                 }
                 summary["manual"] += 1
 
@@ -90,7 +90,7 @@ class ClaimsVerifier:
 
         return {
             "version": "1.0.0",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": summary,
             "claims": verified_claims,
         }

@@ -30,6 +30,7 @@ from autobot_shared.auth import (
     OAuthRefreshAuth,
     validate_config_against_schema,
 )
+from autobot_shared.datetime_utils import datetime_now
 from knowledge.connectors.base import AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -235,7 +236,7 @@ class TestSyncCheckpoint:
         self.conn = _DummyConnector(self.cfg)
 
     def _change(self, source_id: str) -> ChangeInfo:
-        return ChangeInfo(source_id=source_id, change_type="added", timestamp=datetime.utcnow())
+        return ChangeInfo(source_id=source_id, change_type="added", timestamp=datetime_now())
 
     @pytest.mark.asyncio
     async def test_normal_flow_no_checkpoint(self):
@@ -310,7 +311,7 @@ class TestCheckpointFixes:
         self.conn = _DummyConnector(self.cfg)
 
     def _change(self, source_id: str) -> ChangeInfo:
-        return ChangeInfo(source_id=source_id, change_type="added", timestamp=datetime.utcnow())
+        return ChangeInfo(source_id=source_id, change_type="added", timestamp=datetime_now())
 
     @pytest.mark.asyncio
     async def test_failed_source_not_checkpointed(self):
