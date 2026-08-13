@@ -31,6 +31,7 @@ import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
+import { availableLensRoles, applyRoleLens, roleLensCounts } from '@/composables/llc/orgRoleLens'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -139,6 +140,20 @@ watch(statusById, (statuses) => {
     if (status !== undefined) (node.data as Record<string, unknown>).status = status
   }
 })
+
+// GH#13943: "View As: role" lens — a presentation filter over the canvas
+// already on screen. '' means "no lens" (every role shown); a select bound to
+// this ref never needs a null/'' branch of its own. The option list is drawn
+// from the whole company, not `visibleRoots` — a role can then stay selected
+// across a unit-tab change even when the new tab has none of it, so the tab
+// switch cannot silently drop the filter out from under the reader; it
+// reports zero matches instead (see `roleLens.value && lensCounts...` below).
+const roleLens = ref<string>('')
+const availableRoles = computed<string[]>(() => availableLensRoles(tree.value))
+const lensedCanvasNodes = computed<CanvasNode[]>(() =>
+  applyRoleLens(canvasNodes.value, roleLens.value || null),
+)
+const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
 
 /** Everyone in the company, of all three kinds, in one list (#13938). */
 const people = computed(() => buildOrgPeople(tree.value, contacts.value))
@@ -372,6 +387,36 @@ onMounted(() => {
             {{ t(VIEW_MODE_LABEL_KEY[mode]) }}
           </button>
         </div>
+
+        <!-- GH#13943: "View As: role" lens — a presentation filter of the
+             canvas already on screen, never an access boundary (umbrella
+             #13935's hard condition). Rendered only in canvas mode, next to
+             the view-mode toggle: outside canvas mode there is nothing for it
+             to filter, so a dangling non-functional control never appears. -->
+        <div
+          v-if="viewMode === 'canvas' && availableRoles.length > 0"
+          class="flex items-center gap-2 pl-3 border-l border-autobot-border"
+          data-testid="role-lens-control"
+        >
+          <label
+            for="org-role-lens"
+            class="text-sm text-autobot-text-secondary"
+            :title="t('llc.orgChart.roleLensHint')"
+          >
+            {{ t('llc.orgChart.roleLensLabel') }}
+          </label>
+          <select
+            id="org-role-lens"
+            v-model="roleLens"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="role-lens-select"
+            :aria-label="t('llc.orgChart.roleLensLabel')"
+          >
+            <option value="">{{ t('llc.orgChart.roleLensAll') }}</option>
+            <option v-for="role in availableRoles" :key="role" :value="role">{{ role }}</option>
+          </select>
+        </div>
+
         <button
           v-if="companyId"
           class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
@@ -447,10 +492,55 @@ onMounted(() => {
     </div>
 
     <!-- GH#13939: same data on the existing workflow canvas — pan/zoom, no graph library -->
-    <div v-else class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden" data-testid="org-canvas">
+    <div
+      v-else
+      class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden flex flex-col"
+      data-testid="org-canvas"
+    >
+      <!-- GH#13943: the lens's own affordance. Shown whenever a role is
+           selected, independent of whether it still matches anything, so a
+           reduced (or emptied) canvas reads as "filtered by view", never as
+           "no data" (#14064's failure shape) — and its copy states plainly
+           that access is unchanged, so it cannot be mistaken for a
+           permission boundary. -->
+      <div
+        v-if="roleLens"
+        class="flex items-center justify-between gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
+        role="status"
+        data-testid="role-lens-banner"
+      >
+        <span class="text-autobot-text-primary">
+          {{ t('llc.orgChart.roleLensBanner', { role: roleLens, shown: lensCounts.shown, total: lensCounts.total }) }}
+        </span>
+        <button
+          class="shrink-0 underline text-autobot-text-secondary hover:text-autobot-text-primary"
+          data-testid="role-lens-clear"
+          @click="roleLens = ''"
+        >
+          {{ t('llc.orgChart.roleLensClear') }}
+        </button>
+      </div>
+
+      <!-- Only when the lens leaves literally nothing — no matching person AND
+           no unit container to stand in for one (an ungrouped roster, #13994)
+           — is WorkflowCanvas replaced outright: mounting it with an empty
+           `nodes` array would fall through to its own empty-state, which
+           speaks workflow-authoring vocabulary ("Empty workflow") and reads
+           as "no data" rather than "filtered by view". Whenever at least one
+           `org-group` container survives, WorkflowCanvas stays mounted and
+           renders that (now person-less) box — the emptied box is itself the
+           "filtered, not missing" cue, so it is the stronger default. -->
+      <div
+        v-if="roleLens && lensedCanvasNodes.length === 0"
+        class="flex-1 flex items-center justify-center text-center px-6 text-sm text-autobot-text-muted"
+        data-testid="role-lens-empty-canvas"
+      >
+        {{ t('llc.orgChart.roleLensEmpty', { role: roleLens }) }}
+      </div>
       <WorkflowCanvas
+        v-else
         readonly
-        :nodes="canvasNodes"
+        :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
         :active-tab-id="effectiveTabId"
