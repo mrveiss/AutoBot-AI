@@ -242,6 +242,22 @@ repos:
         stages: [pre-commit]
         description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
 
+      # #14216: 14 session/audit reports accumulated at the repository root —
+      # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
+      # and friends. Legitimate work product written to the front door because
+      # that is where the session happened to be. The root is the first screen a
+      # visitor sees, and nothing stopped them landing there. Reports now live in
+      # docs/reports/; this is the stop. Also blocks the MagicMock/ artifact tree
+      # that the #14217 path-sanitizer bug creates on every suite run.
+      - id: no-root-clutter
+        name: Keep session reports and test artifacts out of the repo root (#14216)
+        entry: tools/lint/check_no_root_clutter.py
+        language: python
+        files: ^([^/]+|MagicMock/.*)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"
+
       - id: no-open-without-encoding
         name: Require encoding= on text-mode open() (#3391 / #13151)
         entry: pipeline-scripts/check_open_encoding.py
