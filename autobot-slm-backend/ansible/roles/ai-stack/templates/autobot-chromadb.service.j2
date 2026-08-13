@@ -12,6 +12,17 @@ Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
+# #13870: three settings the redis role's unit had and this one did not. Which
+# template won was decided by role order, so a host could run chroma with any
+# combination of them — and nothing made that visible.
+#
+# Chroma's telemetry is ON by default and posts to an external endpoint. Nobody
+# chose that; the other unit had already opted out.
+Environment="ANONYMIZED_TELEMETRY=FALSE"
+# StandardOutput below appends to a FILE, which is fully buffered rather than
+# line-buffered. Without this, chroma's own diagnostics sit in a 4-8KB buffer —
+# so the log an operator reads during an incident lags the incident.
+Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 # #12513: chroma's server-side token auth. The credential is deliberately NOT
 # inlined here as Environment=: this unit is deployed 0644 and world-readable, so
