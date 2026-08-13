@@ -54,18 +54,6 @@ RestartSec=10
 # RestartSec * StartLimitBurst for the limit to be reachable at all.
 StartLimitIntervalSec=120
 StartLimitBurst=5
-# #13870/#13765: without a cgroup limit, `memory.max` reads "max" and the
-# headroom metric #13765 added has nothing to divide by — the unit is invisible
-# to the alerting built for exactly this failure. MemoryHigh throttles and feeds
-# `memory.events high`; MemoryMax is left unset by default because a hard cap on
-# a service that has never had one kills it the moment it exceeds the number.
-MemoryAccounting=yes
-{% if chromadb_memory_high %}
-MemoryHigh={{ chromadb_memory_high }}
-{% endif %}
-{% if chromadb_memory_max %}
-MemoryMax={{ chromadb_memory_max }}
-{% endif %}
 StandardOutput=append:{{ ai_log_dir }}/chromadb.log
 StandardError=append:{{ ai_log_dir }}/chromadb-error.log
 

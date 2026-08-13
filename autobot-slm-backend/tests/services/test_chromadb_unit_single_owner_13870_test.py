@@ -239,11 +239,13 @@ def test_the_combined_host_keeps_todays_data_path():
 # one won was decided by role order. Whatever a host ended up with, it got an
 # arbitrary combination of these — and nothing made that visible.
 #
-# The memory settings are the sharp ones. #13765 built alerting on cgroup
-# pressure after `memory.events high` reached 21,052 on a host systemd still
-# reported as active. A unit with no cgroup limit produces none of that: the
-# metric has nothing to divide by, so the service is invisible to the alerting
-# written for exactly this failure.
+# The memory watermarks that were here are gone, and the reason is worth
+# keeping: `CgroupMemoryCollector` reads its OWN host's /sys/fs/cgroup and is
+# scraped only from the backend and slm-backend processes. Chroma runs on the
+# ai/ML and database nodes, so `autobot_cgroup_memory_*` is never produced for
+# this unit on the documented multi-node topology — the alerting that would have
+# justified a watermark is structurally unable to fire for it. Adding MemoryHigh
+# there would have shipped a throttle with no observer. Tracked separately.
 # ---------------------------------------------------------------------------
 
 
@@ -259,51 +261,6 @@ def test_both_units_disable_chroma_telemetry(role: str):
     home depended on which ansible role ran last."""
     text = _template(role).read_text(encoding="utf-8")
     assert 'Environment="ANONYMIZED_TELEMETRY=FALSE"' in text, f"{role}'s chroma still reports telemetry externally"
-
-
-@pytest.mark.parametrize("role", _ROLES)
-def test_both_units_account_for_memory(role: str):
-    """Without accounting there are no cgroup counters at all, so #13765's
-    metrics read nothing for this unit."""
-    text = _template(role).read_text(encoding="utf-8")
-    assert _directive(text, "MemoryAccounting") == "yes", f"{role} has no memory accounting"
-
-
-@pytest.mark.parametrize("role", _ROLES)
-def test_both_units_declare_a_soft_memory_limit(role: str):
-    """MemoryHigh is what generates `memory.events high` — the reclaim counter
-    the #13765 incident was diagnosed from. A hard cap alone produces none of
-    it: the service is either fine or killed, with nothing observable between."""
-    text = _template(role).read_text(encoding="utf-8")
-    assert "MemoryHigh=" in text, f"{role} produces no reclaim signal (#13765)"
-
-
-def test_the_soft_limit_sits_below_the_hard_one():
-    """A MemoryHigh at or above MemoryMax is inert — the kill fires first and
-    the throttle never does, so the signal it exists for is never produced."""
-    units = {"G": 1024, "M": 1, "K": 1 / 1024}
-
-    def _mb(value: str) -> float:
-        return float(value[:-1]) * units[value[-1].upper()] if value[-1].upper() in units else float(value) / 1048576
-
-    for role in _ROLES:
-        defaults = yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))
-        high, hard = defaults.get("chromadb_memory_high"), defaults.get("chromadb_memory_max")
-        assert high, f"{role} declares no chromadb_memory_high"
-        if not hard:
-            continue  # no hard cap configured — nothing to order against
-        assert _mb(high) < _mb(hard), f"{role}: MemoryHigh {high} is not below MemoryMax {hard}"
-
-
-def test_the_ai_stack_unit_does_not_impose_a_hard_cap_by_default():
-    """A hard cap on a service that has never had one KILLS it the moment it
-    exceeds the number. Introducing one blind would trade an observability gap
-    for an outage — the opposite of what this umbrella is for."""
-    defaults = yaml.safe_load((_ANSIBLE / "roles" / "ai-stack" / "defaults" / "main.yml").read_text(encoding="utf-8"))
-    assert not defaults.get("chromadb_memory_max"), (
-        "ai-stack's chroma has never had a MemoryMax; defaulting one on would OOM-kill it "
-        "on the first deploy where it exceeds the value"
-    )
 
 
 @pytest.mark.parametrize("role", _ROLES)
