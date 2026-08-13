@@ -46,6 +46,7 @@ from typing import Any, AsyncIterator, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
@@ -642,7 +643,7 @@ class LLMService:
             # Store with 1 hour TTL
             redis_client.setex(
                 fallback_key,
-                3600,  # 1 hour TTL
+                TTL_1_HOUR,
                 json.dumps(event_data),
             )
 

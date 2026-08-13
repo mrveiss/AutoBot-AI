@@ -25,6 +25,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from autobot_shared.ssot_constants import TTL_24_HOURS, TTL_30_DAYS
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,17 +71,17 @@ async def _update_redis_indices(session_id: str, username: str, org_id: str) -> 
         # Org session set
         org_key = f"org_chat_sessions:{org_id}"
         await redis.sadd(org_key, session_id)
-        await redis.expire(org_key, 2592000)
+        await redis.expire(org_key, TTL_30_DAYS)
 
         # Session context hash
         ctx_key = f"chat_session_context:{session_id}"
         await redis.hset(ctx_key, mapping={"org_id": org_id})
-        await redis.expire(ctx_key, 86400)
+        await redis.expire(ctx_key, TTL_24_HOURS)
 
         # Ensure user session set exists
         user_key = f"user_chat_sessions:{username}"
         await redis.sadd(user_key, session_id)
-        await redis.expire(user_key, 2592000)
+        await redis.expire(user_key, TTL_30_DAYS)
 
     except Exception as e:
         logger.warning("Redis update failed for %s: %s", session_id, e)
