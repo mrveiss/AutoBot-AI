@@ -219,7 +219,7 @@ def test_get_acceptance_metrics(mock_engine, mock_redis) -> None:
 
 def test_feedback_event_time_filtering() -> None:
     """Test feedback time window filtering."""
-    now = datetime.utcnow()
+    now = datetime_now()
     old_feedback = CompletionFeedback(
         timestamp=now - timedelta(days=10),
         context="old",
@@ -297,7 +297,7 @@ def test_context_truncation_in_to_dict() -> None:
     long_context = "x" * 200
     feedback = CompletionFeedback(
         id=1,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime_now(),
         context=long_context,
         suggestion="test",
         action="accepted",
