@@ -72,6 +72,17 @@ describe('buildExecutorRollupMatrix (#13942)', () => {
     expect(matrix.unassigned.backlog).toBe(7)
   })
 
+  it('places an orphaned cell in its own bucket, never folded into unassigned (#14222)', () => {
+    const cells: ExecutorRollupCell[] = [
+      { executor_class: 'orphaned', status: 'in_progress', count: 2 },
+      { executor_class: 'unassigned', status: 'in_progress', count: 3 },
+    ]
+    const matrix = buildExecutorRollupMatrix(cells)
+
+    expect(matrix.orphaned.in_progress).toBe(2)
+    expect(matrix.unassigned.in_progress).toBe(3)
+  })
+
   it('skips a non-positive count instead of showing a negative bucket', () => {
     const cells: ExecutorRollupCell[] = [{ executor_class: 'user', status: 'backlog', count: 0 }]
     expect(buildExecutorRollupMatrix(cells).user.backlog).toBeUndefined()
@@ -85,26 +96,28 @@ describe('buildExecutorRollupMatrix (#13942)', () => {
   })
 })
 
-describe('executorClassTotal / executorClassTotals / rollupTotal (#13942)', () => {
+describe('executorClassTotal / executorClassTotals / rollupTotal (#13942, #14222)', () => {
   const matrix = buildExecutorRollupMatrix([
     { executor_class: 'user', status: 'backlog', count: 2 },
     { executor_class: 'user', status: 'done', count: 1 },
     { executor_class: 'agent', status: 'in_progress', count: 4 },
+    { executor_class: 'orphaned', status: 'in_progress', count: 5 },
     { executor_class: 'unassigned', status: 'backlog', count: 3 },
   ])
 
   it('sums across statuses for one class', () => {
     expect(executorClassTotal(matrix, 'user')).toBe(3)
     expect(executorClassTotal(matrix, 'agent')).toBe(4)
+    expect(executorClassTotal(matrix, 'orphaned')).toBe(5)
     expect(executorClassTotal(matrix, 'unassigned')).toBe(3)
   })
 
   it('reports a total per class in EXECUTOR_CLASSES order', () => {
-    expect(executorClassTotals(matrix)).toEqual({ user: 3, agent: 4, unassigned: 3 })
+    expect(executorClassTotals(matrix)).toEqual({ user: 3, agent: 4, orphaned: 5, unassigned: 3 })
   })
 
-  it('the grand total is the sum of every class total, including unassigned', () => {
-    expect(rollupTotal(matrix)).toBe(10)
+  it('the grand total is the sum of every class total, including orphaned and unassigned', () => {
+    expect(rollupTotal(matrix)).toBe(15)
   })
 
   it('the unassigned bucket is asserted directly, not derived as a remainder', () => {

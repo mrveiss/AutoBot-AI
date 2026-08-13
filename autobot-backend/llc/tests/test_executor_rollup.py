@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Behaviour lock for GET /api/llc/companies/{company_id}/work-items/executor-rollup (#13942).
+"""Behaviour lock for GET /api/llc/companies/{company_id}/work-items/executor-rollup (#13942, #14222).
 
 Mounts the REAL companies router over the same minimal-mount harness as
 ``test_llc_org_chart.py`` (in-memory SQLite, dependency overrides for the
@@ -20,6 +20,11 @@ session/auth/tenant). Locks:
      buckets from a total.
   4. Tenant gate — cross-tenant company_id is rejected; a platform admin or a
      matching org_id succeeds.
+  5. Orphaned (#14222) — a work item typed/id-assigned to a user whose
+     membership was deleted, or to an agent that was terminated, is counted
+     as ``orphaned`` — the reproduction the issue asks for, not merely a
+     check that ``assignee_type`` is unchanged. A paused agent, and a user
+     who is a member of a *different* company, must NOT be orphaned.
 
 Determinism: no network, no Postgres, no Redis — identical to the org-chart
 harness this module borrows fixtures from.
@@ -35,12 +40,14 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.enums import AssigneeType, WorkItemStatus, WorkItemType
+from llc.models.enums import AssigneeType, LLCAgentStatus, WorkItemStatus, WorkItemType
+from llc.models.membership import LLCCompanyMembership
 from llc.models.work_item import LLCWorkItem
 
 # Importing the harness registers the SQLite compile shims and all loop models
 # on Base.metadata (including LLCWorkItem).
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode
 
 _FIXED_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -164,6 +171,34 @@ async def _seed_item(
         await session.commit()
 
 
+async def _seed_membership(session_factory, company_id: uuid.UUID, user_id: uuid.UUID) -> None:  # noqa: ANN001
+    """A live ``llc_company_memberships`` row — makes ``assignee_user_id`` resolve (#14222)."""
+    async with session_factory() as session:
+        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=company_id, user_id=user_id))
+        await session.commit()
+
+
+async def _seed_agent_node(
+    session_factory,  # noqa: ANN001
+    company_id: uuid.UUID,
+    agent_node_id: uuid.UUID,
+    *,
+    status: str = LLCAgentStatus.AVAILABLE.value,
+) -> None:
+    """An ``AgentOrgNode`` row — makes ``assignee_agent_id`` resolve (#14222)."""
+    async with session_factory() as session:
+        session.add(
+            AgentOrgNode(
+                id=agent_node_id,
+                agent_id=f"agent-{agent_node_id.hex[:8]}",
+                name="rollup fixture agent",
+                company_id=company_id,
+                status=status,
+            )
+        )
+        await session.commit()
+
+
 def _cell_map(cells: list[dict]) -> dict[tuple[str, str], int]:
     return {(c["executor_class"], c["status"]): c["count"] for c in cells}
 
@@ -181,6 +216,10 @@ async def test_executor_rollup_counts_by_class_and_status(app, client, session_f
 
     user_id = uuid.uuid4()
     agent_node_id = uuid.uuid4()
+    # (#14222) "cleanly assigned" now also means the assignee resolves: a live
+    # membership row for the user, a non-terminated AgentOrgNode for the agent.
+    await _seed_membership(session_factory, company_id, user_id)
+    await _seed_agent_node(session_factory, company_id, agent_node_id)
 
     # Two cleanly person-assigned items.
     await _seed_item(
@@ -298,12 +337,14 @@ async def test_executor_rollup_counts_only_the_requested_company(app, client, se
     company_b = uuid.uuid4()
     app.state.tenant["is_platform_admin"] = True
 
+    company_a_user_id = uuid.uuid4()
+    await _seed_membership(session_factory, company_a, company_a_user_id)
     await _seed_item(
         session_factory,
         company_a,
         status=WorkItemStatus.BACKLOG.value,
         assignee_type=AssigneeType.USER.value,
-        assignee_user_id=uuid.uuid4(),
+        assignee_user_id=company_a_user_id,
     )
     # Three items in the other company, deliberately spread across buckets so a
     # leak would be visible in the totals AND in more than one cell.
@@ -377,12 +418,14 @@ async def test_executor_rollup_tenant_gate(app, client, session_factory):  # noq
     app.state.tenant["org_id"] = str(other_company_id)
     app.state.tenant["is_platform_admin"] = False
 
+    tenant_gate_user_id = uuid.uuid4()
+    await _seed_membership(session_factory, company_id, tenant_gate_user_id)
     await _seed_item(
         session_factory,
         company_id,
         status=WorkItemStatus.BACKLOG.value,
         assignee_type=AssigneeType.USER.value,
-        assignee_user_id=uuid.uuid4(),
+        assignee_user_id=tenant_gate_user_id,
     )
 
     resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
@@ -409,3 +452,142 @@ async def test_executor_rollup_empty_company(app, client):  # noqa: ANN001
     resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
     assert resp.status_code == 200, resp.text
     assert resp.json()["cells"] == []
+
+
+# ---------------------------------------------------------------------------
+# 4. Orphaned (#14222) — the reproduction, not the predicate. Each test seeds
+#    a work item that would have passed the OLD (id-presence-only) check,
+#    then removes/terminates the assignee and asserts the rollup stops
+#    reporting it as owned.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_executor_rollup_reports_orphaned_when_membership_is_deleted(
+    app, client, session_factory
+):  # noqa: ANN001
+    """The reproduction from #14222: seed a user-owned item, delete the membership.
+
+    Mirrors what `membership_service.remove_member` actually does — deletes the
+    `llc_company_memberships` row and reassigns nothing (#14221's finding) — by
+    never seeding a membership row at all rather than seeding then deleting it;
+    the resulting DB state is identical either way, and this is the shorter path
+    to it. `assignee_type`/`assignee_user_id` are untouched, so a test that only
+    checked those (the OLD bug) would still pass while this one catches it.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    departed_user_id = uuid.uuid4()
+    # No _seed_membership call — the user has no membership row in this company,
+    # exactly the state `membership_service` leaves behind after a removal.
+    await _seed_item(
+        session_factory,
+        company_id,
+        status=WorkItemStatus.IN_PROGRESS.value,
+        assignee_type=AssigneeType.USER.value,
+        assignee_user_id=departed_user_id,
+    )
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    cells = _cell_map(resp.json()["cells"])
+
+    assert (
+        cells.get((AssigneeType.USER.value, WorkItemStatus.IN_PROGRESS.value), 0) == 0
+    ), "a work item whose assignee has no membership must not be reported as owned"
+    assert cells[("orphaned", WorkItemStatus.IN_PROGRESS.value)] == 1
+
+
+@pytest.mark.asyncio
+async def test_executor_rollup_reports_orphaned_when_agent_is_terminated(app, client, session_factory):  # noqa: ANN001
+    """The agent-side reproduction: `controls_service.terminate` reassigns nothing (#14221)."""
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    terminated_agent_id = uuid.uuid4()
+    await _seed_agent_node(session_factory, company_id, terminated_agent_id, status=LLCAgentStatus.TERMINATED.value)
+    await _seed_item(
+        session_factory,
+        company_id,
+        status=WorkItemStatus.IN_PROGRESS.value,
+        assignee_type=AssigneeType.AGENT.value,
+        assignee_agent_id=terminated_agent_id,
+    )
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    cells = _cell_map(resp.json()["cells"])
+
+    assert (
+        cells.get((AssigneeType.AGENT.value, WorkItemStatus.IN_PROGRESS.value), 0) == 0
+    ), "a work item assigned to a terminated agent must not be reported as owned"
+    assert cells[("orphaned", WorkItemStatus.IN_PROGRESS.value)] == 1
+
+
+@pytest.mark.asyncio
+async def test_executor_rollup_paused_agent_still_counts_as_owned(app, client, session_factory):  # noqa: ANN001
+    """Paused is recoverable, not gone (#14222's paused-vs-terminated decision).
+
+    A pause is a temporary, resumable state — the owner's framing ("gone" for
+    this purpose) applies to termination, not a pause. A paused agent's work
+    must still read as owned, not orphaned.
+    """
+    company_id = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_id)
+    app.state.tenant["is_platform_admin"] = False
+
+    paused_agent_id = uuid.uuid4()
+    await _seed_agent_node(session_factory, company_id, paused_agent_id, status=LLCAgentStatus.PAUSED.value)
+    await _seed_item(
+        session_factory,
+        company_id,
+        status=WorkItemStatus.IN_PROGRESS.value,
+        assignee_type=AssigneeType.AGENT.value,
+        assignee_agent_id=paused_agent_id,
+    )
+
+    resp = await client.get(f"/api/llc/companies/{company_id}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    cells = _cell_map(resp.json()["cells"])
+
+    assert cells[(AssigneeType.AGENT.value, WorkItemStatus.IN_PROGRESS.value)] == 1
+    assert cells.get(("orphaned", WorkItemStatus.IN_PROGRESS.value), 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_executor_rollup_membership_in_a_different_company_does_not_count(
+    app, client, session_factory
+):  # noqa: ANN001
+    """Company-scoped existence (#14222): a member of company B is not valid in company A.
+
+    Pinned independently a fourth time (after #13936, #13969, #13942) — the
+    existence check this issue adds is exactly the kind of join that can leak
+    across the row-level company boundary if it is not scoped.
+    """
+    company_a = uuid.uuid4()
+    company_b = uuid.uuid4()
+    app.state.tenant["org_id"] = str(company_a)
+    app.state.tenant["is_platform_admin"] = False
+
+    cross_company_user_id = uuid.uuid4()
+    # This user IS a member — just of the other company.
+    await _seed_membership(session_factory, company_b, cross_company_user_id)
+    await _seed_item(
+        session_factory,
+        company_a,
+        status=WorkItemStatus.IN_PROGRESS.value,
+        assignee_type=AssigneeType.USER.value,
+        assignee_user_id=cross_company_user_id,
+    )
+
+    resp = await client.get(f"/api/llc/companies/{company_a}/work-items/executor-rollup")
+    assert resp.status_code == 200, resp.text
+    cells = _cell_map(resp.json()["cells"])
+
+    assert (
+        cells.get((AssigneeType.USER.value, WorkItemStatus.IN_PROGRESS.value), 0) == 0
+    ), "membership in a different company must not make the assignee valid here"
+    assert cells[("orphaned", WorkItemStatus.IN_PROGRESS.value)] == 1

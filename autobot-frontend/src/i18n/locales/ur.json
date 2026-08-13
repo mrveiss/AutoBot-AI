@@ -8306,6 +8306,7 @@
       "class": {
         "user": "شخص",
         "agent": "AI ایجنٹ",
+        "orphaned": "بے وارث",
         "unassigned": "غیر تفویض شدہ"
       }
     },
