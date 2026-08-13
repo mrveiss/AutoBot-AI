@@ -1266,7 +1266,18 @@ def _executor_class_case(work_item_model):
         .where(
             AgentOrgNode.id == work_item_model.assignee_agent_id,
             AgentOrgNode.company_id == work_item_model.company_id,
-            AgentOrgNode.status != LLCAgentStatus.TERMINATED.value,
+            # NULL-safe: `status != 'terminated'` evaluates to NULL — not TRUE —
+            # for a NULL status, which would fail the EXISTS and mark EVERY
+            # agent's work orphaned. The column is NOT NULL on a migrated
+            # database, but #14189 records that we do not yet know whether it
+            # pre-existed out-of-band, and 20260812_073 uses
+            # ADD COLUMN IF NOT EXISTS — so a nullable variant is possible in
+            # the field and invisible to tests (the SQLite harness builds the
+            # NOT NULL column from the model).
+            or_(
+                AgentOrgNode.status.is_(None),
+                AgentOrgNode.status != LLCAgentStatus.TERMINATED.value,
+            ),
         )
         .exists()
     )
