@@ -36,6 +36,7 @@ from utils.error_boundaries import (
     HIGH_SEVERITY_ERROR_TYPES,
     MEDIUM_SEVERITY_ERROR_TYPES,
     RETRY_ERROR_TYPES,
+    ROUTE_DEADLINE_GRACE,
     SYSTEM_RESTART_ERROR_TYPES,
     APIErrorResponse,
     ErrorBoundaryException,
@@ -100,6 +101,7 @@ __all__ = [
     # Decorators and utilities
     "error_boundary",
     "DEFAULT_ROUTE_DEADLINE_SECONDS",
+    "ROUTE_DEADLINE_GRACE",
     "bounded",
     "with_error_handling",
     "with_error_boundary",

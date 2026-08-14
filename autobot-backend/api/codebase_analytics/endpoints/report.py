@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Set, Tuple
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
+from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
@@ -2171,7 +2171,7 @@ def _render_report(problems: list, analyses: dict) -> str:
 
 
 @router.get("/report")
-@bounded(180.0)
+@bounded(PATTERN_ANALYSIS_TIMEOUT + ANALYSIS_DEADLINE_GRACE + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_report",

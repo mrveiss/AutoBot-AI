@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
+from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from .shared import resolve_project_root, resolve_scan_root
@@ -142,6 +142,11 @@ def _validate_path_security(path: str, project_root: str) -> JSONResponse | None
         )
 
 
+# #14015: module level so the route decorator can clear it. A route bound
+# BELOW its own internal budget converts a slow success into a guaranteed 504.
+ANALYSIS_TIMEOUT = 180  # 3 minute timeout for git operations
+
+
 async def _run_ownership_analysis(analyzer, path: str, pattern_list: list, days: int):
     """
     Run ownership analysis with timeout.
@@ -155,7 +160,6 @@ async def _run_ownership_analysis(analyzer, path: str, pattern_list: list, days:
     Returns:
         Analysis result or None if timed out
     """
-    ANALYSIS_TIMEOUT = 180  # 3 minute timeout for git operations
     try:
         coro = analyzer.analyze_ownership(path, pattern_list, days)
         if asyncio.iscoroutine(coro):
@@ -326,7 +330,7 @@ async def _cache_ownership_result(result: dict, source_id: str | None = None) ->
 
 
 @router.get("/analysis")
-@bounded(60.0)
+@bounded(ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
@@ -394,7 +398,7 @@ async def get_ownership_analysis(
 
 
 @router.get("/expertise")
-@bounded(60.0)
+@bounded(ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_expertise_scores",
@@ -450,7 +454,7 @@ async def get_expertise_scores(
 
 
 @router.get("/knowledge-gaps")
-@bounded(60.0)
+@bounded(ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_gaps",

@@ -177,3 +177,75 @@ class TestTheCheckerCoversEveryRoute:
         assert "of 85 routes bounded" in result.stdout or " routes bounded" in result.stdout
         count = int(result.stdout.split(" of ")[1].split(" ")[0])
         assert count >= 50, f"checker found only {count} routes — the matcher is probably broken"
+
+
+class TestTheCheckerActuallyFires:
+    """The checker's whole premise is that an unbounded route becomes a
+    declaration rather than a default. Review of #14243 showed nothing proved
+    it: mutating `_is_bounded` to `return True` — so it would accept ANY route —
+    left the suite green, because every test only asserted the checker is
+    currently happy with a repo that happens to be fully bounded.
+
+    Asserting "it passes today" is not asserting "it catches an omission". These
+    plant one.
+    """
+
+    def _run_against(self, tmp_path, body: str) -> int:
+        import importlib.util
+
+        pkg = tmp_path / "endpoints"
+        pkg.mkdir()
+        (pkg / "routes.py").write_text(body, encoding="utf-8")
+
+        spec = importlib.util.spec_from_file_location("_deadline_checker", _CHECKER)
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        checker._REPO_ROOT = tmp_path
+        checker.COVERED_PACKAGES = ("endpoints",)
+        checker.UNBOUNDED_BY_DESIGN = {}
+        return checker.main()
+
+    def test_an_unbounded_route_fails(self, tmp_path):
+        code = self._run_against(
+            tmp_path,
+            '@router.get("/thing")\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 1, "an unbounded route was accepted — the checker does not detect the thing it exists for"
+
+    def test_a_bounded_route_passes(self, tmp_path):
+        """The direction that must stay true: a checker that always fails is as
+        useless as one that never does, and would be deleted within a week."""
+        code = self._run_against(
+            tmp_path,
+            '@router.get("/thing")\n@bounded(60.0)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 0
+
+    def test_a_declared_route_passes_only_with_its_declaration(self, tmp_path):
+        import importlib.util
+
+        pkg = tmp_path / "endpoints"
+        pkg.mkdir()
+        (pkg / "routes.py").write_text(
+            '@router.get("/thing")\nasync def get_thing():\n    return {}\n', encoding="utf-8"
+        )
+        spec = importlib.util.spec_from_file_location("_deadline_checker2", _CHECKER)
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        checker._REPO_ROOT = tmp_path
+        checker.COVERED_PACKAGES = ("endpoints",)
+
+        checker.UNBOUNDED_BY_DESIGN = {}
+        assert checker.main() == 1, "undeclared and unbounded must fail"
+
+        checker.UNBOUNDED_BY_DESIGN = {"get_thing": "streams an unbounded log tail"}
+        assert checker.main() == 0, "a declared route with a reason must pass"
+
+    def test_a_non_route_function_is_not_required_to_be_bounded(self, tmp_path):
+        """Only routes. A helper without a deadline is not a finding."""
+        code = self._run_against(
+            tmp_path,
+            '@router.get("/thing")\n@bounded(60.0)\nasync def get_thing():\n    return {}\n\n\n'
+            "async def _helper():\n    return {}\n",
+        )
+        assert code == 0

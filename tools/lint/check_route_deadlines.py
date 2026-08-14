@@ -67,7 +67,47 @@ def _is_bounded(decorator: ast.expr) -> bool:
     )
 
 
-def _routes_in(path: Path) -> list[tuple[str, bool]]:
+def _module_timeout_ceiling(tree: ast.Module) -> float:
+    """Largest module-level ``*_TIMEOUT`` constant declared in this file.
+
+    Heuristic on purpose. Proving which internal budget a given route can reach
+    needs call-graph analysis; what is cheap and catches the real shape is
+    noticing that a file declares a 240s budget somewhere and then bounds one of
+    its own routes at 60s.
+
+    That shape is not hypothetical — review of #14243 found it on three routes:
+    /analysis (60s outer over a 180s internal), /env-analysis (60s over 240s),
+    and /report (180s outer under its own 195s fan-out ceiling, so the generic
+    message would have beaten the one that names the analysis).
+    """
+    ceiling = 0.0
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not (isinstance(target, ast.Name) and target.id.endswith("_TIMEOUT")):
+                continue
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, (int, float)):
+                ceiling = max(ceiling, float(node.value.value))
+    return ceiling
+
+
+def _literal_deadline(decorator: ast.expr) -> float | None:
+    """The deadline when it is a bare literal, else None.
+
+    A computed expression — ``ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE`` — is
+    exempt, because it derives from the budget rather than guessing past it, and
+    stays correct when that budget changes.
+    """
+    if not (isinstance(decorator, ast.Call) and decorator.args):
+        return None
+    first = decorator.args[0]
+    if isinstance(first, ast.Constant) and isinstance(first.value, (int, float)):
+        return float(first.value)
+    return None
+
+
+def _routes_in(path: Path) -> list[tuple[str, bool, float | None]]:
     """Every route handler in *path*, with whether it is bounded."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -79,12 +119,14 @@ def _routes_in(path: Path) -> list[tuple[str, bool]]:
             continue
         if not any(_is_route(d) for d in node.decorator_list):
             continue
-        found.append((node.name, any(_is_bounded(d) for d in node.decorator_list)))
+        deadline = next((_literal_deadline(d) for d in node.decorator_list if _is_bounded(d)), None)
+        found.append((node.name, any(_is_bounded(d) for d in node.decorator_list), deadline))
     return found
 
 
 def main() -> int:
     unbounded: list[str] = []
+    too_tight: list[str] = []
     seen: set[str] = set()
     total = 0
 
@@ -96,9 +138,18 @@ def main() -> int:
         for source in sorted(root.rglob("*.py")):
             if source.name.endswith("_test.py") or source.name.startswith("test_"):
                 continue
-            for name, is_bounded in _routes_in(source):
+            try:
+                ceiling = _module_timeout_ceiling(ast.parse(source.read_text(encoding="utf-8")))
+            except (OSError, SyntaxError):
+                ceiling = 0.0
+            for name, is_bounded, deadline in _routes_in(source):
                 total += 1
                 seen.add(name)
+                if is_bounded and deadline is not None and ceiling and deadline < ceiling:
+                    too_tight.append(
+                        f"{source.relative_to(_REPO_ROOT)}::{name} "
+                        f"bounded at {deadline:.0f}s under a {ceiling:.0f}s budget declared in the same file"
+                    )
                 if is_bounded or name in UNBOUNDED_BY_DESIGN:
                     continue
                 unbounded.append(f"{source.relative_to(_REPO_ROOT)}::{name}")
@@ -115,6 +166,17 @@ def main() -> int:
         print(
             "[route-deadlines] declared unbounded but no longer present "
             f"(remove from UNBOUNDED_BY_DESIGN): {', '.join(stale)}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if too_tight:
+        print(f"[route-deadlines] {len(too_tight)} route(s) bounded BELOW their own file's budget:", file=sys.stderr)
+        for route in too_tight:
+            print(f"  {route}", file=sys.stderr)
+        print(
+            "\nA route bound under a budget it can reach turns a slow success into a guaranteed "
+            "504. Derive it instead: @bounded(THAT_TIMEOUT + ROUTE_DEADLINE_GRACE).",
             file=sys.stderr,
         )
         return 1

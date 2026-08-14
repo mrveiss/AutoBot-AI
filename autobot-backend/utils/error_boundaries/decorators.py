@@ -311,6 +311,15 @@ def _raise_or_return_error(error_response: APIErrorResponse):
 # unbounded route becomes a declaration rather than a default.
 DEFAULT_ROUTE_DEADLINE_SECONDS = 60.0
 
+# Margin a route-level deadline must clear above the largest internal budget
+# reachable from that route. #14015 review: a blanket 60s outer bound sat BELOW
+# pre-existing internal timeouts of 120s, 180s and 240s, which would have turned
+# previously-slow-but-successful requests into guaranteed 504s. And on /report
+# the outer bound was tighter than its own fan-out ceiling, so it would have won
+# the race with a generic message where report.py's design says the inner
+# deadline should win and name the analysis that ran long.
+ROUTE_DEADLINE_GRACE = 15.0
+
 
 def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str | None = None):
     """Bound an async route handler, returning a structured error on timeout.
