@@ -107,19 +107,60 @@ def _module_timeout_ceiling(tree: ast.Module) -> float:
     return ceiling
 
 
-def _literal_deadline(decorator: ast.expr) -> float | None:
-    """The deadline when it is a bare literal, else None.
+def _module_constants(tree: ast.Module) -> dict[str, float]:
+    """Module-level numeric constants, for resolving derived deadlines."""
+    values: dict[str, float] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+            continue
+        if not isinstance(node.value.value, (int, float)) or isinstance(node.value.value, bool):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                values[target.id] = float(node.value.value)
+    return values
 
-    A computed expression — ``ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE`` — is
-    exempt, because it derives from the budget rather than guessing past it, and
-    stays correct when that budget changes.
+
+def _resolve(node: ast.expr, constants: dict[str, float]) -> float | None:
+    """Evaluate a deadline expression built from literals and known constants.
+
+    Handles the shapes a deadline is actually written in — a literal, a named
+    constant, and additive arithmetic over them. Anything else returns None and
+    is left alone rather than guessed at.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.Name):
+        # An unresolvable name contributes ZERO, not None. ROUTE_DEADLINE_GRACE
+        # is imported, so it is not a module constant here — returning None
+        # would make every derived deadline unresolvable and silently skip the
+        # very routes this check exists for. Zero under-estimates the deadline,
+        # so the error is toward flagging, which is the safe direction: a false
+        # flag is argued down in review, a missed one ships a 504.
+        return constants.get(node.id, 0.0)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        left, right = _resolve(node.left, constants), _resolve(node.right, constants)
+        if left is None or right is None:
+            return None
+        return left + right if isinstance(node.op, ast.Add) else left - right
+    return None
+
+
+def _literal_deadline(decorator: ast.expr, constants: dict[str, float] | None = None) -> float | None:
+    """The deadline in seconds, resolving named constants and additive arithmetic.
+
+    An earlier version exempted every computed expression on the reasoning that
+    deriving from a budget beats guessing past it. Review of #14243 showed that
+    the exemption assumes the arithmetic is right: `@bounded(TIMEOUT - 170.0)`
+    resolves to 10s under a 195s ceiling and passed the checker unchallenged.
+
+    Deriving is still the right pattern — it is the ONLY thing that stays correct
+    when the budget moves. But "derived" and "correct" are different claims, and
+    a check that conflates them is the shape this whole issue is about.
     """
     if not (isinstance(decorator, ast.Call) and decorator.args):
         return None
-    first = decorator.args[0]
-    if isinstance(first, ast.Constant) and isinstance(first.value, (int, float)):
-        return float(first.value)
-    return None
+    return _resolve(decorator.args[0], constants or {})
 
 
 def _routes_in(path: Path) -> list[tuple[str, bool, float | None]]:
@@ -128,13 +169,14 @@ def _routes_in(path: Path) -> list[tuple[str, bool, float | None]]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return []
+    constants = _module_constants(tree)
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if not any(_is_route(d) for d in node.decorator_list):
             continue
-        deadline = next((_literal_deadline(d) for d in node.decorator_list if _is_bounded(d)), None)
+        deadline = next((_literal_deadline(d, constants) for d in node.decorator_list if _is_bounded(d)), None)
         found.append((node.name, any(_is_bounded(d) for d in node.decorator_list), deadline))
     return found
 

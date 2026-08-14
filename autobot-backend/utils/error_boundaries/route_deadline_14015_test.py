@@ -249,3 +249,78 @@ class TestTheCheckerActuallyFires:
             "async def _helper():\n    return {}\n",
         )
         assert code == 0
+
+
+class TestTheCeilingCheckActuallyFires:
+    """Round-2 review: disabling the too-tight branch entirely left all 17 tests
+    green.
+
+    Coverage for "the checker enforces the ceiling" came only from the real repo
+    happening to have no too-tight routes today — which is the same
+    "asserting it passes today is not asserting it catches an omission" trap
+    this file's own commit message called out for `_is_bounded`, reappearing on
+    the newer and more consequential half of the checker.
+    """
+
+    def _run_against(self, tmp_path, body: str) -> int:
+        import importlib.util
+
+        pkg = tmp_path / "endpoints"
+        pkg.mkdir(exist_ok=True)
+        (pkg / "routes.py").write_text(body, encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("_ceiling_checker", _CHECKER)
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        checker._REPO_ROOT = tmp_path
+        checker.COVERED_PACKAGES = ("endpoints",)
+        checker.UNBOUNDED_BY_DESIGN = {}
+        return checker.main()
+
+    def test_a_literal_below_the_files_budget_fails(self, tmp_path):
+        code = self._run_against(
+            tmp_path,
+            "TOTAL_TIMEOUT = 300\n\n\n"
+            '@router.get("/thing")\n@bounded(10.0)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 1, "a route bounded under its own file's budget was accepted"
+
+    def test_a_derived_expression_that_computes_low_also_fails(self, tmp_path):
+        """The hole review found: computed expressions were exempt outright, so
+        `TIMEOUT - 170` read as 'derived, therefore fine' at 10 seconds."""
+        code = self._run_against(
+            tmp_path,
+            "TOTAL_TIMEOUT = 300\n\n\n"
+            '@router.get("/thing")\n@bounded(TOTAL_TIMEOUT - 290.0)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 1, "a derived expression computing below the budget was accepted"
+
+    def test_a_derived_expression_that_clears_the_budget_passes(self, tmp_path):
+        """The direction that must stay true, and the reason deriving is the
+        recommended pattern: it stays correct when the budget moves."""
+        code = self._run_against(
+            tmp_path,
+            "TOTAL_TIMEOUT = 300\nGRACE = 15\n\n\n"
+            '@router.get("/thing")\n@bounded(TOTAL_TIMEOUT + GRACE)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 0
+
+    def test_an_unresolvable_name_does_not_silently_exempt_the_route(self, tmp_path):
+        """`ROUTE_DEADLINE_GRACE` is imported, not module-level. Treating an
+        unknown name as unresolvable would skip exactly the routes this check
+        exists for; it contributes zero instead, so the estimate errs low and
+        the check errs toward flagging."""
+        code = self._run_against(
+            tmp_path,
+            "TOTAL_TIMEOUT = 300\n\n\n"
+            '@router.get("/thing")\n@bounded(IMPORTED_GRACE)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 1, "an unresolvable deadline was treated as clearing the budget"
+
+    def test_a_file_with_no_budget_constrains_nothing(self, tmp_path):
+        """No `*_TIMEOUT` in the file means no ceiling to clear — a small bound
+        there is a choice, not a defect."""
+        code = self._run_against(
+            tmp_path,
+            '@router.get("/thing")\n@bounded(5.0)\nasync def get_thing():\n    return {}\n',
+        )
+        assert code == 0
