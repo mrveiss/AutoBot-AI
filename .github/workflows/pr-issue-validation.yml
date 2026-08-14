@@ -104,10 +104,23 @@ jobs:
           # `Refs`. Same-repo branches keep the strict check: renaming one costs
           # nothing, and a mismatch there is a real signal rather than an
           # unfixable accident.
+          # Fenced code is illustrative, not a claim. A body pasting the PR
+          # template inside ``` would otherwise satisfy this with an example.
+          PROSE=$(printf '%s' "$BODY" | awk '/^[[:space:]]*```/{f=!f; next} !f')
+
+          # The left boundary is load-bearing: without it `encloses` and
+          # `discloses` match `closes` as a substring. The `-` inside the class
+          # is what excludes `self-closes` — it must stay LAST in the bracket
+          # expression to be a literal rather than a range.
+          # `#0` is excluded because no issue can have that number, so it is
+          # never an author naming something.
+          keyword_re="(^|[^[:alnum:]_-])(resolves|closes|fixes)[[:space:]]+(#[1-9][0-9]*|MVA-[1-9][0-9]*)([^0-9]|$)"
+
           if [ "${PR_IS_FORK:-false}" = "true" ] \
-             && printf '%s' "$BODY" | grep -iqE "(resolves|closes|fixes)[[:space:]]+(#[0-9]+|MVA-[0-9]+)"; then
+             && printf '%s' "$PROSE" | grep -iqE "$keyword_re"; then
             echo "::notice::Fork PR: branch implies ${EXPECTED_ISSUE}, but the body explicitly closes a different issue."
             echo "::notice::Accepting the body over the branch name (#14241)."
+            echo "::notice::This gate checks that a claim was MADE, not that it is the right one — that is review's job."
             echo "status=success" >> "$GITHUB_OUTPUT"
             exit 0
           fi

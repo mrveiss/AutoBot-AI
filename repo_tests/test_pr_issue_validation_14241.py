@@ -164,3 +164,79 @@ def test_a_superstring_does_not_count_as_the_issue(tmp_path):
     code, out = _decide(tmp_path, branch="issue-9464", body="Closes #19464")
 
     assert code == 1 and "status=failure" in out
+
+
+# ---------------------------------------------------------------------------
+# What the relaxation must NOT accept (found in review of #14251).
+#
+# The first version checked only that *some* closing keyword and *some* number
+# appeared. It could not tell a claim from a coincidence, while the PR body
+# described it as "an explicit claim naming a concrete issue".
+#
+# What this gate can and cannot do, stated plainly: it verifies a claim was
+# MADE. It cannot verify the claim is the RIGHT one — no gate can, and the
+# strict path never could either (name a branch `issue-1`, write `Closes #1`,
+# and it passes today). Relevance is review's job. These tests hold the line at
+# "a human wrote a deliberate reference", which is the part a machine can check.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "This encloses #14235 for context.",
+        "Change discloses #14235 in the log.",
+        "The handler self-closes #14235 on timeout.",
+    ],
+)
+def test_a_word_merely_containing_a_keyword_does_not_qualify(tmp_path, body):
+    """No left word boundary meant `encloses` matched `closes` as a substring."""
+    code, out = _decide(
+        tmp_path, branch="fix/issue-13162-1786528649", body=body + " Refs #14235", is_fork="true"
+    )
+
+    assert code == 1 and "status=failure" in out
+
+
+def test_a_keyword_inside_fenced_code_does_not_qualify(tmp_path):
+    """A body pasting the PR template as an example is illustrating, not claiming."""
+    body = "Refs #14235\n\nTemplate for future PRs:\n```\nCloses #14235\n```\n"
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body=body, is_fork="true")
+
+    assert code == 1 and "status=failure" in out
+
+
+def test_a_real_claim_outside_the_fence_still_qualifies(tmp_path):
+    """Stripping fenced code must not swallow a genuine claim elsewhere."""
+    body = "Closes #14235\n\nExample of the old form:\n```\nRefs #1\n```\n"
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body=body, is_fork="true")
+
+    assert code == 0 and "status=success" in out
+
+
+@pytest.mark.parametrize("body", ["Closes #0", "Fixes #0.", "Resolves MVA-0"])
+def test_issue_zero_does_not_qualify(tmp_path, body):
+    """No issue can be number zero, so this is never an author naming something."""
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body=body, is_fork="true")
+
+    assert code == 1 and "status=failure" in out
+
+
+def test_the_tightening_did_not_break_the_ordinary_case(tmp_path):
+    """A keyword at the very start of the body has no character to its left."""
+    code, out = _decide(
+        tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true"
+    )
+
+    assert code == 0 and "status=success" in out
+
+
+def test_a_keyword_after_punctuation_still_qualifies(tmp_path):
+    code, out = _decide(
+        tmp_path,
+        branch="fix/issue-13162-1786528649",
+        body="Summary of the change.\n\n(Closes #14235)",
+        is_fork="true",
+    )
+
+    assert code == 0 and "status=success" in out
