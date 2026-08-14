@@ -507,7 +507,23 @@ class SkillDistillationScheduler:
         if manager is None:
             logger.warning("Skill distillation: no chat history manager; cannot read conversation %s", session_id)
             return None
-        messages = await manager.get_session_messages(session_id)
+
+        # `load_session`, NOT `get_session_messages`. #1906 made `load_session`
+        # raise PermissionError/ValueError for a denied or corrupted session
+        # "instead of silently returning []" — precisely so a caller could tell
+        # unreadable from empty. `get_session_messages` then catches both and
+        # returns [], discarding the signal for every caller downstream of it.
+        #
+        # Routing through the wrapper is what made the manager-is-None fix
+        # insufficient: the common production case is a session file that exists
+        # and cannot be decrypted, and that arrived here as an empty
+        # conversation. The exceptions now reach `_distil_session`'s broad
+        # handler, which already means *stop the pass*.
+        #
+        # It is also the more correct read for this caller: the wrapper applies
+        # a model-aware retrieval limit, and distillation wants the whole
+        # conversation, not a context-window slice of it.
+        messages = await manager.load_session(session_id)
         return [
             {"role": msg.get("role", "unknown"), "content": msg.get("content", "")}
             for msg in messages

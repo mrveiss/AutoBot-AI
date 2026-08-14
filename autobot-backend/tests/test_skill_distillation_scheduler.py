@@ -98,6 +98,9 @@ def _with_sessions(scheduler, sessions, history=None):
     manager = MagicMock()
     manager.list_sessions_fast = AsyncMock(return_value=sessions)
     manager.get_session_messages = AsyncMock(return_value=history if history is not None else _history())
+    # #14077: distillation reads via `load_session`, not the wrapper — the
+    # wrapper swallows PermissionError/ValueError into [] (see #1906).
+    manager.load_session = AsyncMock(return_value=history if history is not None else _history())
     scheduler._get_chat_history_manager = AsyncMock(return_value=manager)
     return manager
 
@@ -356,29 +359,54 @@ class TestAnUnreadableConversationIsNotProcessed:
     """
 
     @pytest.mark.asyncio
-    async def test_an_unavailable_manager_stops_the_pass_and_holds_the_cursor(self, redis):
+    @pytest.mark.parametrize(
+        "failure",
+        [PermissionError("chat file unreadable"), ValueError("could not decrypt session")],
+        ids=["permission-denied", "corrupted"],
+    )
+    async def test_an_unreadable_session_file_stops_the_pass(self, redis, failure):
+        """The production case: the manager is healthy, one file cannot be read.
+
+        This is what `get_session_messages` swallowed into `[]` — #1906 built
+        `load_session` to raise here *precisely* so a caller could tell this
+        apart from an empty conversation, and routing through the wrapper threw
+        that away.
+
+        Parametrised over both exception types the wrapper catches, since a fix
+        covering one and not the other would look identical from outside.
+        """
         extractor = MagicMock()
         extractor.extract_skills = AsyncMock(return_value=[_skill()])
         proposer = MagicMock()
         proposer.propose_skills = AsyncMock(return_value={"proposed": ["deploy_service"]})
         scheduler = _make_scheduler(extractor, proposer)
-        _with_sessions(
+        manager = _with_sessions(
             scheduler,
             [
                 {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
                 {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
             ],
         )
-        # Selection resolved the manager; the load cannot. This is a real
-        # window, not a contrivance: `_select_pending_sessions` and
-        # `_load_history` resolve it independently.
-        manager = scheduler._get_chat_history_manager.return_value
-        scheduler._get_chat_history_manager = AsyncMock(side_effect=[manager, None, None])
+        # One healthy manager throughout, as production has. Only the read fails.
+        manager.load_session = AsyncMock(side_effect=failure)
 
         result = await scheduler.run_once()
 
         assert _stored_cursor(redis) is None, "cursor advanced past a conversation nobody read"
         assert result["sessions_distilled"] == 0, "unread conversations must not report as distilled"
+
+    @pytest.mark.asyncio
+    async def test_an_unavailable_manager_stops_the_pass_and_holds_the_cursor(self, redis):
+        """The narrower case that started this issue."""
+        scheduler = _make_scheduler(MagicMock(), MagicMock())
+        _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+        manager = scheduler._get_chat_history_manager.return_value
+        scheduler._get_chat_history_manager = AsyncMock(side_effect=[manager, None, None])
+
+        result = await scheduler.run_once()
+
+        assert _stored_cursor(redis) is None
+        assert result["sessions_distilled"] == 0
 
     @pytest.mark.asyncio
     async def test_a_genuinely_short_conversation_still_advances(self, redis):
