@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import re
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -25,9 +26,34 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
 # `python3 -c '...'` / `python -c "..."` inline programs in workflow steps.
-_INLINE_PYTHON = re.compile(r"""python3?\s+-c\s+(['"])(?P<code>.+?)\1""", re.DOTALL)
+#
+# `(?:\\.|(?!\1).)*` rather than `.+?`: a lazy match closes on the first quote
+# of the same kind, including a backslash-escaped one, so
+# `python -c "import json; print(f\"{x}\")"` was captured truncated. The
+# fragment then failed to parse and its imports were checked against nothing.
+# Three workflows have that shape.
+_INLINE_PYTHON = re.compile(
+    r"""python3?\s+-c\s+(['"])(?P<code>(?:\\.|(?!\1).)*)\1""", re.DOTALL
+)
+
+# Heredoc form: `python - <<'PY' ... PY`. A separate shape entirely, and one the
+# quote-matching pattern above cannot see at all.
+_HEREDOC_PYTHON = re.compile(
+    r"""python3?\s+-\s*<<-?\s*['"]?(?P<tag>[A-Za-z_][A-Za-z0-9_]*)['"]?\n(?P<code>.*?)\n\s*(?P=tag)\b""",
+    re.DOTALL,
+)
 
 # Roots the workflows put on PYTHONPATH for those inline programs.
+#
+# Applied uniformly, not per-step: a step whose own PYTHONPATH omits
+# `autobot-backend` is still checked against it. That is deliberate (tracking the
+# real PYTHONPATH per step would mean interpreting shell), but it has one known
+# failure direction. `autobot-backend/mcp/` is a first-party package AND `mcp` is
+# a pip distribution; a future step importing `mcp.<submodule>` that exists in
+# the installed package but not in the repo's own would be reported missing here.
+# Nothing does that today. If this test ever fails on a name that is genuinely a
+# third-party package, that is the case — add it to the list below rather than
+# widening the roots.
 _IMPORT_ROOTS = ("autobot-backend", "autobot_shared", ".")
 
 # Third-party and stdlib names are resolved by the installed environment, not the
@@ -36,20 +62,54 @@ _IMPORT_ROOTS = ("autobot-backend", "autobot_shared", ".")
 _STDLIB_OR_THIRD_PARTY_PREFIXES = ("os", "sys", "json", "pathlib", "subprocess")
 
 
+def _normalise(code: str) -> str:
+    """Strip the YAML block indentation a multi-line `-c` argument carries.
+
+    A program written across several lines inside a workflow step arrives with
+    the step's indentation on every line, so `ast.parse` raises IndentationError
+    — a SyntaxError subclass, indistinguishable from "not python" to a bare
+    except. `verify-generated-types.yml:216` is exactly this.
+    """
+    return textwrap.dedent(code.strip("\n") + "\n")
+
+
+def _unescape_shell(code: str) -> str:
+    """Undo the backslash escaping a double-quoted shell argument requires.
+
+    `\\"` reaches python as `"`. Left in place, every such program is a syntax
+    error and its imports go unchecked.
+    """
+    return code.replace('\\"', '"').replace("\\$", "$").replace("\\`", "`")
+
+
 def _inline_programs() -> list[tuple[str, str]]:
     found = []
     for workflow in sorted(_WORKFLOWS.glob("*.yml")):
         text = workflow.read_text(encoding="utf-8")
         for match in _INLINE_PYTHON.finditer(text):
-            found.append((workflow.name, match.group("code")))
+            found.append((workflow.name, _normalise(_unescape_shell(match.group("code")))))
+        for match in _HEREDOC_PYTHON.finditer(text):
+            found.append((workflow.name, _normalise(match.group("code"))))
     return found
+
+
+def _parses(code: str) -> bool:
+    try:
+        ast.parse(code)
+    except SyntaxError:
+        return False
+    return True
 
 
 def _imported_names(code: str) -> list[str]:
     try:
         tree = ast.parse(code)
     except SyntaxError:
-        return []  # a shell-interpolated program is not ours to parse
+        # Reported by test_every_extracted_program_parses, never swallowed here.
+        # Returning [] quietly is how a guard reports clean on input it could not
+        # read -- the same failure this whole file exists to catch, one layer
+        # earlier, at extraction instead of classification.
+        return []
     names = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
@@ -119,3 +179,25 @@ def test_the_corrected_path_resolves():
     assert _resolves_in_tree("secure_command_executor")
     assert _resolves_in_tree("security_layer")
     assert _resolves_in_tree("app_factory")
+
+
+def test_every_extracted_program_parses():
+    """A program the extractor mangles is checked against nothing.
+
+    `_INLINE_PYTHON` uses a backreference to close on the same quote it opened
+    with, and has no escape-awareness: `python -c "...\\"...\\"..."` closes on the
+    first escaped quote and captures a truncated fragment. `ast.parse` then
+    raises, `_imported_names` returns [], and the step passes without a single
+    import being checked. `coverage.yml` contains exactly that shape.
+
+    Failing loudly here is the point: the guard must be able to say "I could not
+    read this", which is different from "this is fine".
+    """
+    unparseable = [
+        (workflow, code[:60]) for workflow, code in _inline_programs() if not _parses(code)
+    ]
+
+    assert unparseable == [], (
+        "inline python that the extractor could not parse — its imports are "
+        f"checked against nothing: {unparseable}"
+    )
