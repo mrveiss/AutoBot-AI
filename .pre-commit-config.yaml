@@ -232,6 +232,20 @@ repos:
         stages: [pre-commit]
         description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
 
+      # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
+      # so pip sees both files as one set and aborts when the same distribution
+      # arrives with different specifiers. openpyxl and python-pptx did exactly
+      # that and killed a live provisioning run. pip reports only the FIRST, so a
+      # one-at-a-time fix moves the failure to the next deploy.
+      - id: requirements-no-conflicting-dupes
+        name: A requirements file and its include must not pin a package differently (#14228)
+        entry: pipeline-scripts/check_requirements_no_conflicting_dupes.py
+        language: python
+        files: requirements.*\.txt$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "pip aborts on a differing duplicate across `-r` includes; identical duplicates are tolerated and not flagged"
+
       - id: hook-exec-bits
         name: Pre-commit hook entries must be tracked executable (#14171)
         entry: pipeline-scripts/check_hook_exec_bits.py
