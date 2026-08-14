@@ -67,7 +67,6 @@ _REQUIRED_MODE = "100755"
 _KNOWN_DORMANT_ISSUE = "#14181"
 _KNOWN_DORMANT = frozenset(
     {
-        "pipeline-scripts/check_env_var_registry.py",
         "tools/lint/check_no_blocking_io_in_async.py",
         "tools/lint/check_no_local_schemas.py",
     }

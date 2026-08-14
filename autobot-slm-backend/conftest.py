@@ -231,6 +231,22 @@ sys.modules["services.ssh_utils"] = _ssh_utils_mod
 _ssh_utils_spec.loader.exec_module(_ssh_utils_mod)
 setattr(sys.modules["services"], "ssh_utils", _ssh_utils_mod)
 
+# ── services.deploy_artifacts — REAL module, not a stub (#14231) ──────────────
+# Same reasoning as ssh_utils, opposite failure mode: this module is *only*
+# data (frozensets and tuples of rsync patterns, no imports beyond
+# ``__future__``), and a MagicMock iterates as EMPTY.  Stubbed, every
+# ``for pattern in HOST_STATE_EXCLUDES`` loop runs zero times and the rsync
+# chokepoint's protections vanish under test while looking perfectly healthy --
+# the artifact excludes had exactly that blind spot until this line existed.
+_artifacts_spec = _importlib_util.spec_from_file_location(
+    "services.deploy_artifacts",
+    Path(__file__).parent / "services" / "deploy_artifacts.py",
+)
+_artifacts_mod = _importlib_util.module_from_spec(_artifacts_spec)
+sys.modules["services.deploy_artifacts"] = _artifacts_mod
+_artifacts_spec.loader.exec_module(_artifacts_mod)
+setattr(sys.modules["services"], "deploy_artifacts", _artifacts_mod)
+
 # ── python-multipart ─────────────────────────────────────────────────────────
 # FastAPI's ensure_multipart_is_installed() is called when any route uses
 # UploadFile or Form parameters.  It checks for python_multipart.__version__

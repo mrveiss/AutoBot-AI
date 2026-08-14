@@ -176,7 +176,12 @@ if [ -n "$BODY_FILE" ]; then
       fi
     done
 
-    # Mirrors .github/workflows/pr-issue-validation.yml.
+    # Mirrors .github/workflows/pr-issue-validation.yml, with one deliberate
+    # difference: #14241 lets a FORK PR override the branch-derived issue with an
+    # explicit `Closes #N` in the body. This script takes --issue explicitly, so
+    # it has no branch to derive from and no fork/same-repo distinction to make.
+    # A fork contributor relying on that relaxation therefore sees a FAIL here for
+    # a check CI will pass -- a false negative, not a false accept.
     if printf '%s' "$BODY" \
       | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
       pass "carries a close/refs keyword"
