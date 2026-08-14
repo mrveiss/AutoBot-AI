@@ -2296,6 +2296,77 @@ before summarizing.
 
         return True
 
+    def _bind_spill_run(self, session_id: str) -> None:
+        """Declare which conversation the current Task is serving (#13997).
+
+        Never fatal: if the agent-loop package cannot be imported, the spill
+        simply does not fire and output passes through whole.
+        """
+        try:
+            from agent_loop.tool_output_spill import bind_task
+
+            bind_task(session_id)
+        except Exception:  # pragma: no cover - the turn must not fail over this
+            logger.warning("Could not bind the tool-output spill run", exc_info=True)
+
+    def _spill_run_id(self) -> str | None:
+        """The conversation this Task is bound to, or None when unbound.
+
+        Read rather than passed: `_handle_execution_summary` has no session_id in
+        scope, and threading one through four call layers to reach it would be a
+        worse coupling than a ContextVar the dispatch already relies on.
+        """
+        try:
+            from agent_loop.tool_output_spill import current_task_id
+
+            return current_task_id()
+        except Exception:  # pragma: no cover
+            return None
+
+    def _offload_oversized_output(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Write oversized tool output aside before it enters the model's context (#13997).
+
+        #13692 built this and wired it only into ``AgentLoop``, which is
+        documented as never instantiated in production — so on the live chat path
+        it never fired, and its re-read tool could never resolve an anchor. This
+        is the seam that actually assembles what the model sees.
+
+        Worth knowing what it replaces: the chat path has **no general cap** on
+        tool output today. ``execute_command`` — the likeliest source of a
+        window-consuming result — is unbounded, and the per-tool caps that do
+        exist (``web_search`` at 3000 chars, subagent results at 1000) discard
+        the remainder permanently. The spill is non-lossy: the excerpt carries an
+        anchor and the full output stays retrievable.
+
+        Off by default and non-fatal: with the flag unset this returns *results*
+        unchanged, so a turn is byte-identical to one without this call.
+        """
+        try:
+            from agent_loop.tool_output_spill import spill_execution_results
+
+            run_id = self._spill_run_id()
+            if not run_id:
+                # No run bound: an artifact written now could never be re-read,
+                # so writing it would be pure cost. The agent loop makes the
+                # same call for the same reason.
+                return results
+            rewritten, spilled = spill_execution_results(run_id, results)
+        except Exception:
+            # Losing the offload is always better than losing the observation.
+            logger.warning("Tool-output offload failed; keeping full output", exc_info=True)
+            return results
+
+        if spilled:
+            before = sum(len(str(r.get("output", ""))) for r in results)
+            after = sum(len(str(r.get("output", ""))) for r in rewritten)
+            logger.info(
+                "Offloaded %d oversized tool result(s): %d -> %d chars (#13997)",
+                spilled,
+                before,
+                after,
+            )
+        return rewritten
+
     def _handle_execution_summary(
         self,
         tool_msg: WorkflowMessage,
@@ -2311,6 +2382,7 @@ before summarizing.
         """
         if tool_msg.type == "execution_summary":
             new_results = tool_msg.metadata.get("execution_results", [])
+            new_results = self._offload_oversized_output(new_results)
             new_execution_results.extend(new_results)
             execution_history.extend(new_results)
             logger.info(
@@ -2944,6 +3016,16 @@ before summarizing.
         execution_history = ctx.execution_history
         all_llm_responses = []
         current_prompt = ctx.initial_prompt
+
+        # #13997: bind the spill run for this turn, HERE rather than earlier in
+        # the request. `_current_task_id` is a ContextVar and asyncio copies the
+        # context at Task creation, so a bind in a parent or sibling Task is
+        # invisible to the dispatch below. This coroutine and every tool call it
+        # drives share one Task, which is the only place the binding holds.
+        #
+        # Scoped to the session: an anchor leaked into another conversation must
+        # not resolve there.
+        self._bind_spill_run(ctx.session_id)
 
         self._log_iteration_start(ctx)
 

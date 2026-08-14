@@ -34,7 +34,7 @@ import json
 import os
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -389,6 +389,70 @@ def spill_results(task_id: str, tool_results: Dict[str, Any]) -> Tuple[Dict[str,
     return rewritten, spilled_count
 
 
+#: Fields a chat execution result may carry its payload in, largest-first by
+#: convention. `output` is what every builtin handler writes.
+_EXECUTION_RESULT_TEXT_KEYS = ("output", "result")
+
+
+def spill_execution_results(task_id: str, results: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
+    """Spill oversized output in a chat *execution-results list* (#13997).
+
+    The agent loop passes a ``{name: result}`` mapping; the chat seam collects a
+    **list of envelopes** — ``{"tool", "status", "output"}`` — and extends
+    ``execution_history`` with it, which is what the model then sees. So this is
+    the shape that needs offloading on the live path.
+
+    Only the payload field is replaced, never the envelope: ``status`` decides
+    error handling downstream (`tool_handler` counts ``status == "success"``,
+    delegation checks ``== "error"``), and swapping the whole dict for an
+    excerpt would drop it. The field stays a **str** because
+    ``_as_output_text`` and ``tool_handler`` read it as one.
+
+    Reuses :func:`spill_if_oversized`, so the measured
+    smaller-than-what-it-replaced guard, the artifact cap and the flag all apply
+    unchanged — this adds a shape adapter, not a second mechanism.
+    """
+    if not SPILL_ENABLED or not results:
+        return results, 0
+
+    rewritten: List[Dict[str, Any]] = []
+    spilled_count = 0
+    for entry in results:
+        if not isinstance(entry, dict):
+            rewritten.append(entry)
+            continue
+        key = next((k for k in _EXECUTION_RESULT_TEXT_KEYS if isinstance(entry.get(k), str)), None)
+        if key is None:
+            rewritten.append(entry)
+            continue
+
+        tool_name = str(entry.get("tool") or "tool")
+        value, was_spilled = spill_if_oversized(task_id, tool_name, entry[key])
+        if not was_spilled:
+            rewritten.append(entry)
+            continue
+
+        # The note carries the anchor and names the read tool, so it must reach
+        # the model with the excerpt — it is the only place the capability is
+        # advertised on this path.
+        rewritten.append({**entry, key: f"{value['excerpt']}\n\n{value['note']}", "anchor": value["anchor"]})
+        spilled_count += 1
+    return rewritten, spilled_count
+
+
+async def spill_execution_results_async(
+    task_id: str, results: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], int]:
+    """:func:`spill_execution_results` off the event loop.
+
+    Same reason as :func:`spill_results_async`: the write is large by definition
+    and the chat seam is async.
+    """
+    if not SPILL_ENABLED or not results:
+        return results, 0
+    return await asyncio.to_thread(spill_execution_results, task_id, results)
+
+
 async def spill_results_async(task_id: str, tool_results: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
     """:func:`spill_results` off the event loop.
 
@@ -413,6 +477,8 @@ __all__ = [
     "sweepable_spill_root",
     "read_spilled_window",
     "spill_if_oversized",
+    "spill_execution_results",
+    "spill_execution_results_async",
     "spill_results",
     "spill_results_async",
 ]
