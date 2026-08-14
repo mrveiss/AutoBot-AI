@@ -87,9 +87,7 @@ def _git(repo: Path, *args: str) -> None:
     therefore read as a bare "exit status 128" with no indication of the cause,
     which is what made the intermittent failure undiagnosable from the log.
     """
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, env=_fixture_git_env()
-    )
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=_fixture_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
@@ -99,9 +97,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _git_init(path: Path) -> None:
     """git init with the same stderr-surfacing contract as _git (#13882)."""
-    result = subprocess.run(
-        ["git", "init", "-q", str(path)], capture_output=True, text=True, env=_fixture_git_env()
-    )
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_fixture_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
