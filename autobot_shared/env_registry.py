@@ -666,12 +666,15 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS",
         type=int,
-        default=0,
+        default=90_000,
         description=(
             "Milliseconds a connector holds the single-flight lock while "
-            "refreshing an OAuth token. Zero means 'derive it' — the default is "
-            "computed as three times the token request timeout, so it tracks that "
-            "timeout instead of drifting from it (knowledge/connectors/credential_store.py)."
+            "refreshing an OAuth token. When unset it is derived as three times the "
+            "token request timeout, so it tracks that timeout instead of drifting "
+            "from it — 90000 with the default 30s timeout "
+            "(knowledge/connectors/credential_store.py). Setting it explicitly "
+            "REPLACES that derivation; zero is not a way to ask for it, and zero "
+            "disarms the lock (#14237)."
         ),
         component="auth",
     )
@@ -684,8 +687,10 @@ register_env_var(
         default=0.0,
         description=(
             "Seconds a caller waits for another worker's in-flight token refresh "
-            "before refreshing itself. Zero disables waiting, so every caller "
-            "refreshes independently."
+            "before refreshing itself. The effective value is floored at the lock "
+            "TTL plus five seconds — 95 with the defaults — because a caller that "
+            "gives up before the lease expires abandons a refresh still in "
+            "progress. Setting it below that floor therefore has no effect."
         ),
         component="auth",
     )
@@ -698,7 +703,7 @@ register_env_var(
         default=0.2,
         description=(
             "Polling interval while waiting on another worker's token refresh. "
-            "Only consulted when AUTOBOT_OAUTH_REFRESH_WAIT_S is non-zero."
+            "Floored at 0.05s, since zero would busy-loop the executor."
         ),
         component="auth",
     )
