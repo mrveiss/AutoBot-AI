@@ -153,6 +153,11 @@ class ExtractedDocument:
     page_count: int | None = None
     tables: Tuple[Any, ...] = ()
     info: Mapping[str, str] = field(default_factory=dict)
+    # #13895: whether table extraction was actually run for this format. Without
+    # it an empty ``tables`` means both "this document has no tables" and "we
+    # never looked", and the caller cannot tell which — PDF always returned []
+    # while DOCX did real work, from an identical-looking result.
+    tables_attempted: bool = False
 
     @property
     def char_count(self) -> int:
@@ -227,9 +232,9 @@ class ExtractedDocument:
         Distinct from :attr:`has_usable_text_layer`: a DOCX whose content is
         entirely a table has no text layer at all and is still a complete,
         successful extraction — its data lives in ``tables`` (#13884). PDF
-        table extraction is not implemented upstream (#13895), so ``tables``
-        is always empty there and this collapses back to the text-layer
-        check for PDFs.
+        table extraction is not implemented, which :attr:`tables_attempted`
+        reports rather than leaving callers to infer it from an empty list
+        (#13895), so this collapses back to the text-layer check for PDFs.
         """
         return self.has_usable_text_layer or bool(self.tables)
 
@@ -331,6 +336,7 @@ def extract_docx(raw: bytes) -> ExtractedDocument:
         text="\n".join(paragraphs),
         tables=tables,
         info=_docx_info(doc),
+        tables_attempted=True,
     )
 
 
