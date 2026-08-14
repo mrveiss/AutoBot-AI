@@ -11,7 +11,7 @@ import asyncio
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from ..storage import get_redis_connection
@@ -23,6 +23,7 @@ router = APIRouter()
 
 
 @router.delete("/cache")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_codebase_cache",

@@ -18,7 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
@@ -381,6 +381,7 @@ async def _analyze_and_return_env_result(
 
 
 @router.get("/env-analysis")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_environment_analysis",
@@ -433,6 +434,7 @@ async def get_environment_analysis(
 
 
 @router.get("/env-recommendations")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_env_recommendations",
@@ -639,6 +641,7 @@ def _validate_export_severity(severity: str | None) -> JSONResponse | None:
 
 
 @router.get("/env-analysis/export")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_env_analysis",

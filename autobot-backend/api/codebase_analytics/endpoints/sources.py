@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from .. import source_service
@@ -228,6 +228,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
 
 
 @router.get("/sources")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sources",
@@ -240,6 +241,7 @@ async def list_code_sources():
 
 
 @router.post("/sources")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_source",
@@ -309,6 +311,7 @@ async def _auto_index_local_source(source: CodeSource) -> None:
 
 
 @router.get("/sources/summary")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_source_summary",
@@ -328,6 +331,7 @@ async def get_all_source_summaries():
 
 
 @router.get("/sources/{source_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_source",
@@ -342,6 +346,7 @@ async def get_code_source(source_id: str):
 
 
 @router.put("/sources/{source_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_source",
@@ -365,6 +370,7 @@ async def update_code_source(source_id: str, request: CodeSourceUpdateRequest):
 
 
 @router.delete("/sources/{source_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_source",
@@ -382,6 +388,7 @@ async def delete_code_source(source_id: str):
 
 
 @router.post("/sources/{source_id}/sync")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sync_source",
@@ -432,6 +439,7 @@ async def sync_code_source(source_id: str):
 
 
 @router.post("/sources/{source_id}/share")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_source",
@@ -550,6 +558,7 @@ async def _build_summary(source: CodeSource) -> dict:
 
 
 @router.get("/sources/{source_id}/summary")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="source_summary",

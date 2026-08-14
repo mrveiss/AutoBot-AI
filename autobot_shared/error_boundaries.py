@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Re-export all public API from the package for backward compatibility
 from utils.error_boundaries import (
     CRITICAL_ERROR_TYPES,
+    DEFAULT_ROUTE_DEADLINE_SECONDS,
     FALLBACK_ERROR_TYPES,
     HIGH_SEVERITY_ERROR_TYPES,
     MEDIUM_SEVERITY_ERROR_TYPES,
@@ -48,6 +49,7 @@ from utils.error_boundaries import (
     GracefulDegradationHandler,
     RecoveryStrategy,
     RetryRecoveryHandler,
+    bounded,
     classify_error,
     error_boundary,
     get_error_boundary_manager,
@@ -97,6 +99,8 @@ __all__ = [
     "get_error_boundary_manager",
     # Decorators and utilities
     "error_boundary",
+    "DEFAULT_ROUTE_DEADLINE_SECONDS",
+    "bounded",
     "with_error_handling",
     "with_error_boundary",
     "with_async_error_boundary",

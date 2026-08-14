@@ -17,6 +17,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import bounded
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
@@ -138,6 +139,7 @@ async def _clear_checkpoint(task_id: str) -> None:
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
+@bounded(60.0)
 async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: Request) -> PatternAnalysisStatus:
     """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
     # #12375: source_id arrives in the request BODY here, so the router-level
@@ -159,6 +161,7 @@ async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: 
 
 
 @router.get("/patterns/status/{task_id}", response_model=PatternAnalysisStatus)
+@bounded(60.0)
 async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
     """Get status of a pattern analysis task."""
     task = celery_result_to_status(AsyncResult(task_id))
@@ -177,6 +180,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
 
 
 @router.get("/patterns/result/{task_id}")
+@bounded(60.0)
 async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     """Get full results of a completed pattern analysis."""
     task = celery_result_to_status(AsyncResult(task_id))
@@ -188,6 +192,7 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
 
 
 @router.delete("/patterns/task/{task_id}")
+@bounded(60.0)
 async def cancel_analysis(task_id: str) -> Dict[str, str]:
     """Revoke a pending/running pattern analysis task (GH#8440: async-safe)."""
     from celery_app import celery_app
@@ -197,6 +202,7 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
 
 
 @router.get("/patterns/tasks")
+@bounded(60.0)
 async def list_analysis_tasks() -> Dict[str, Any]:
     """List active pattern analysis tasks (GH#8440: async-safe Celery inspect)."""
     from celery_app import celery_app
@@ -207,6 +213,7 @@ async def list_analysis_tasks() -> Dict[str, Any]:
 
 
 @router.post("/patterns/tasks/clear-stuck")
+@bounded(60.0)
 async def clear_stuck_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ) -> Dict[str, Any]:
@@ -215,6 +222,7 @@ async def clear_stuck_tasks(
 
 
 @router.post("/patterns/tasks/clear-all")
+@bounded(60.0)
 async def clear_all_tasks() -> Dict[str, str]:
     """Revoke active analytics tasks without purging other Celery queues (GH#8438)."""
     from celery_app import celery_app
@@ -229,6 +237,7 @@ async def clear_all_tasks() -> Dict[str, str]:
 
 
 @router.get("/patterns/summary", response_model=PatternSummary)
+@bounded(60.0)
 async def get_pattern_summary(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ) -> PatternSummary:
@@ -262,6 +271,7 @@ async def get_pattern_summary(
 
 
 @router.post("/patterns/summary/analyze")
+@bounded(60.0)
 async def start_pattern_summary_analysis(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ):
@@ -272,6 +282,7 @@ async def start_pattern_summary_analysis(
 
 
 @router.get("/patterns/summary/status/{task_id}")
+@bounded(60.0)
 async def get_pattern_summary_status(task_id: str):
     """Get pattern summary task status."""
     status = celery_result_to_status(AsyncResult(task_id))
@@ -281,6 +292,7 @@ async def get_pattern_summary_status(task_id: str):
 
 
 @router.post("/patterns/summary/tasks/clear-stuck")
+@bounded(60.0)
 async def clear_stuck_summary_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
@@ -289,6 +301,7 @@ async def clear_stuck_summary_tasks(
 
 
 @router.get("/patterns/duplicates")
+@bounded(60.0)
 async def get_duplicate_patterns(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
@@ -318,6 +331,7 @@ async def get_duplicate_patterns(
 
 
 @router.get("/patterns/regex-opportunities")
+@bounded(60.0)
 async def get_regex_opportunities(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
@@ -347,6 +361,7 @@ async def get_regex_opportunities(
 
 
 @router.get("/patterns/complexity-hotspots")
+@bounded(60.0)
 async def get_complexity_hotspots(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
@@ -385,6 +400,7 @@ async def get_complexity_hotspots(
 
 
 @router.get("/patterns/refactoring-suggestions")
+@bounded(60.0)
 async def get_refactoring_suggestions(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
@@ -415,6 +431,7 @@ async def get_refactoring_suggestions(
 
 
 @router.get("/patterns/report")
+@bounded(60.0)
 async def get_pattern_report(
     path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     format: str = Query(default="json", description="Output format: json or markdown"),
@@ -445,6 +462,7 @@ async def get_pattern_report(
 
 
 @router.get("/patterns/storage/stats")
+@bounded(60.0)
 async def get_pattern_storage_stats(
     source_id: str | None = Query(default=None, description="Code source to scope stats to (Issue #12384)"),
 ) -> Dict[str, Any]:
@@ -529,6 +547,7 @@ def _aggregate_pattern_metadata(metadatas: List[Dict]) -> Dict[str, Any]:
 
 
 @router.get("/patterns/cached-summary")
+@bounded(60.0)
 async def get_cached_pattern_summary(
     source_id: str | None = Query(default=None, description="Code source to scope the summary to (Issue #12384)"),
 ) -> Dict[str, Any]:
@@ -664,6 +683,7 @@ def _format_pattern_results(
 
 
 @router.get("/patterns/cached-patterns")
+@bounded(60.0)
 async def get_cached_patterns(
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
     severity: str | None = Query(None, description="Filter by severity"),
@@ -733,6 +753,7 @@ async def get_cached_patterns(
 
 
 @router.post("/patterns/storage/clear")
+@bounded(60.0)
 async def clear_pattern_storage(
     source_id: str | None = Query(default=None, description="Code source to scope the clear to (Issue #12408)"),
 ) -> Dict[str, str]:
@@ -762,6 +783,7 @@ async def clear_pattern_storage(
 
 
 @router.get("/patterns/similar")
+@bounded(60.0)
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: str | None = Query(None, description="Filter by pattern type"),

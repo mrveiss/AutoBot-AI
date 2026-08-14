@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from .shared import resolve_project_root, resolve_scan_root
@@ -326,6 +326,7 @@ async def _cache_ownership_result(result: dict, source_id: str | None = None) ->
 
 
 @router.get("/analysis")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
@@ -393,6 +394,7 @@ async def get_ownership_analysis(
 
 
 @router.get("/expertise")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_expertise_scores",
@@ -448,6 +450,7 @@ async def get_expertise_scores(
 
 
 @router.get("/knowledge-gaps")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_gaps",
