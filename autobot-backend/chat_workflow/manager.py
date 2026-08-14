@@ -2323,7 +2323,7 @@ before summarizing.
         except Exception:  # pragma: no cover
             return None
 
-    def _offload_oversized_output(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _offload_oversized_output(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Write oversized tool output aside before it enters the model's context (#13997).
 
         #13692 built this and wired it only into ``AgentLoop``, which is
@@ -2342,7 +2342,7 @@ before summarizing.
         unchanged, so a turn is byte-identical to one without this call.
         """
         try:
-            from agent_loop.tool_output_spill import spill_execution_results
+            from agent_loop.tool_output_spill import spill_execution_results_async
 
             run_id = self._spill_run_id()
             if not run_id:
@@ -2350,7 +2350,7 @@ before summarizing.
                 # so writing it would be pure cost. The agent loop makes the
                 # same call for the same reason.
                 return results
-            rewritten, spilled = spill_execution_results(run_id, results)
+            rewritten, spilled = await spill_execution_results_async(run_id, results)
         except Exception:
             # Losing the offload is always better than losing the observation.
             logger.warning("Tool-output offload failed; keeping full output", exc_info=True)
@@ -2367,7 +2367,7 @@ before summarizing.
             )
         return rewritten
 
-    def _handle_execution_summary(
+    async def _handle_execution_summary(
         self,
         tool_msg: WorkflowMessage,
         new_execution_results: List[Dict[str, Any]],
@@ -2382,7 +2382,7 @@ before summarizing.
         """
         if tool_msg.type == "execution_summary":
             new_results = tool_msg.metadata.get("execution_results", [])
-            new_results = self._offload_oversized_output(new_results)
+            new_results = await self._offload_oversized_output(new_results)
             new_execution_results.extend(new_results)
             execution_history.extend(new_results)
             logger.info(
@@ -2472,7 +2472,7 @@ before summarizing.
             if not self._validate_tool_message(tool_msg):
                 continue
 
-            if self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
+            if await self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
                 continue
 
             if tool_msg.metadata is not None:
@@ -2878,6 +2878,13 @@ before summarizing.
         # MVA-1993 / #11216 / #11612: store lightweight_mode_used in a task-local
         # ContextVar (not on the shared singleton) for the response-metadata badge.
         _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
+        # #13997: bind the spill run at the SAME seam, and for the same reason
+        # #11612 gives above — the LangGraph path (the production default) calls
+        # this method directly and bypasses `_run_llm_iterations` entirely. A
+        # bind in that outer wrapper never runs in production, which is how the
+        # cost badge came to always read False. Both are ContextVars, so both
+        # must be set here or not at all.
+        self._bind_spill_run(ctx.session_id)
         try:
             llm_response = None
             should_continue = False
@@ -3016,16 +3023,6 @@ before summarizing.
         execution_history = ctx.execution_history
         all_llm_responses = []
         current_prompt = ctx.initial_prompt
-
-        # #13997: bind the spill run for this turn, HERE rather than earlier in
-        # the request. `_current_task_id` is a ContextVar and asyncio copies the
-        # context at Task creation, so a bind in a parent or sibling Task is
-        # invisible to the dispatch below. This coroutine and every tool call it
-        # drives share one Task, which is the only place the binding holds.
-        #
-        # Scoped to the session: an anchor leaked into another conversation must
-        # not resolve there.
-        self._bind_spill_run(ctx.session_id)
 
         self._log_iteration_start(ctx)
 
