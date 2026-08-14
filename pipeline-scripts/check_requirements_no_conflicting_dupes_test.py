@@ -92,3 +92,92 @@ def test_an_empty_file_listing_is_fatal_not_clean(guard, monkeypatch):
         guard.conflicts(Path("."))
 
     assert "refusing to report clean" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# The pairwise blind spot (found reviewing this PR). pip resolves the whole
+# include graph into ONE requirement set, so "a file vs its direct include" is
+# the wrong unit of comparison -- it reports clean on conflicts that abort a
+# real install.
+# ---------------------------------------------------------------------------
+
+
+def _write(tmp_path, layout):
+    for relative, body in layout.items():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+
+
+def _stub_listing(guard, monkeypatch, tmp_path, relatives):
+    monkeypatch.setattr(guard, "_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: type(
+        "R", (), {"returncode": 0, "stdout": "\n".join(relatives), "stderr": ""})())
+
+
+def test_a_conflict_two_hops_away_is_reported(guard, tmp_path, monkeypatch):
+    """dev -> backend -> root, with the conflicting pins at the two ENDS.
+
+    The middle file does not mention the package at all, so no adjacent pair
+    conflicts and a pairwise check reports clean -- while pip, handed the dev
+    file, aborts. `requirements-dev.txt` already re-declares two packages this
+    exact way, so the shape is not hypothetical.
+    """
+    _write(tmp_path, {
+        "requirements-dev.txt": "-r sub/requirements.txt\nopenpyxl>=3.1.0\n",
+        "sub/requirements.txt": "-r ../requirements.txt\naiosqlite>=0.22.1\n",
+        "requirements.txt": "openpyxl>=3.1.5\n",
+    })
+    _stub_listing(guard, monkeypatch, tmp_path,
+                  ["requirements-dev.txt", "sub/requirements.txt", "requirements.txt"])
+
+    assert len(guard.conflicts(tmp_path)) == 1
+
+
+def test_two_siblings_of_one_parent_are_compared(guard, tmp_path, monkeypatch):
+    """A fan-out parent installs all its children together, so two children can
+    conflict with each other while neither conflicts with the parent."""
+    _write(tmp_path, {
+        "requirements-ci.txt": "-r ci/a.txt\n-r ci/b.txt\n",
+        "ci/a.txt": "openpyxl>=3.1.0\n",
+        "ci/b.txt": "openpyxl>=3.1.5\n",
+    })
+    _stub_listing(guard, monkeypatch, tmp_path, ["requirements-ci.txt", "ci/a.txt", "ci/b.txt"])
+
+    assert len(guard.conflicts(tmp_path)) == 1
+
+
+def test_the_long_form_include_is_followed(guard, tmp_path, monkeypatch):
+    """`--requirement` is as valid as `-r`; skipping it means reporting clean on
+    a file that was never opened."""
+    _write(tmp_path, {
+        "sub/requirements.txt": "--requirement ../requirements.txt\nopenpyxl>=3.1.0\n",
+        "requirements.txt": "openpyxl>=3.1.5\n",
+    })
+    _stub_listing(guard, monkeypatch, tmp_path, ["sub/requirements.txt", "requirements.txt"])
+
+    assert len(guard.conflicts(tmp_path)) == 1
+
+
+def test_an_include_cycle_terminates(guard, tmp_path, monkeypatch):
+    """Two files including each other must not hang the closure walk."""
+    _write(tmp_path, {
+        "a.txt": "-r b.txt\nopenpyxl>=3.1.0\n",
+        "b.txt": "-r a.txt\nopenpyxl>=3.1.5\n",
+    })
+    _stub_listing(guard, monkeypatch, tmp_path, ["a.txt", "b.txt"])
+
+    assert len(guard.conflicts(tmp_path)) == 1
+
+
+def test_one_conflict_is_reported_once_not_once_per_root(guard, tmp_path, monkeypatch):
+    """Every file whose closure reaches the pair would otherwise re-report it."""
+    _write(tmp_path, {
+        "requirements-dev.txt": "-r sub/requirements.txt\n",
+        "sub/requirements.txt": "-r ../requirements.txt\nopenpyxl>=3.1.0\n",
+        "requirements.txt": "openpyxl>=3.1.5\n",
+    })
+    _stub_listing(guard, monkeypatch, tmp_path,
+                  ["requirements-dev.txt", "sub/requirements.txt", "requirements.txt"])
+
+    assert len(guard.conflicts(tmp_path)) == 1

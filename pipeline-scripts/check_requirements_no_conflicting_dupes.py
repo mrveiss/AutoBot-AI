@@ -34,7 +34,9 @@ import sys
 from pathlib import Path
 
 _REQ = re.compile(r"([A-Za-z0-9_.\-]+)(\[[^\]]*\])?\s*([<>=!~].*)?$")
-_INCLUDE = re.compile(r"^\s*-r\s+(\S+)")
+# pip accepts both spellings, and a guard that silently skips one reports clean
+# on a file it never opened (#14228 review).
+_INCLUDE = re.compile(r"^\s*(?:-r|--requirement)[\s=]+(\S+)")
 
 
 def _repo_root() -> Path:
@@ -68,8 +70,28 @@ def _includes(path: Path) -> list[Path]:
     return out
 
 
+def _closure(path: Path) -> list[Path]:
+    """Every file pip would read when handed *path*, itself first.
+
+    pip resolves the whole include graph into ONE requirement set, so a conflict
+    two hops away aborts the install exactly like an adjacent one. Comparing a
+    file only against its direct includes misses that, and misses two siblings
+    of the same parent entirely -- `requirements-ci.txt` fans out to twelve
+    children that never see each other pairwise (#14228 review).
+    """
+    seen: list[Path] = []
+    queue = [path]
+    while queue:
+        current = queue.pop(0)
+        if current in seen or not current.is_file():
+            continue
+        seen.append(current)
+        queue.extend(_includes(current))
+    return seen
+
+
 def conflicts(root: Path) -> list[str]:
-    """Every package a requirements file and its include pin differently."""
+    """Every package pinned differently anywhere in one install's requirement set."""
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "*requirements*.txt"], cwd=str(root), capture_output=True, text=True, encoding="utf-8"
     )
@@ -79,25 +101,37 @@ def conflicts(root: Path) -> list[str]:
     if not files:
         sys.exit("FATAL: git ls-files listed no requirements files — refusing to report clean on an empty scope")
 
+    def _label(path: Path) -> str:
+        try:
+            return path.relative_to(root).as_posix()
+        except ValueError:  # pragma: no cover - include outside the repo
+            return str(path)
+
+    # The same conflict surfaces from every root whose closure reaches it; report
+    # each distinct pair of declarations once.
+    reported: set[tuple[str, str]] = set()
     found: list[str] = []
     for rel in files:
-        path = root / rel
-        own = _declarations(path)
-        for inc in _includes(path):
-            if not inc.is_file():
-                continue
-            for name, (inc_line, inc_spec) in _declarations(inc).items():
-                if name not in own:
+        declarations: dict[str, list[tuple[str, int, str]]] = {}
+        for member in _closure(root / rel):
+            for name, (lineno, spec) in _declarations(member).items():
+                declarations.setdefault(name, []).append((_label(member), lineno, spec))
+
+        for name, sites in sorted(declarations.items()):
+            distinct = {spec for _, _, spec in sites}
+            if len(distinct) < 2:
+                continue  # absent, or declared identically: pip accepts those
+            first = sites[0]
+            for site in sites[1:]:
+                if site[2] == first[2]:
                     continue
-                own_line, own_spec = own[name]
-                if own_spec == inc_spec:
-                    continue  # identical: redundant, but pip accepts it
-                try:
-                    inc_rel = inc.relative_to(root).as_posix()
-                except ValueError:  # pragma: no cover - include outside the repo
-                    inc_rel = str(inc)
+                key = tuple(sorted((f"{first[0]}:{first[1]}", f"{site[0]}:{site[1]}")))
+                if key in reported:
+                    continue
+                reported.add(key)
                 found.append(
-                    f"{rel}:{own_line}: '{own_spec}' conflicts with {inc_rel}:{inc_line}: '{inc_spec}'"
+                    f"{name}: {first[0]}:{first[1]}: '{first[2]}' "
+                    f"conflicts with {site[0]}:{site[1]}: '{site[2]}'"
                 )
     return found
 
@@ -109,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
     found = conflicts(_repo_root())
     if not found:
-        print("check-requirements-dupes: no package is pinned differently by a file and its include")  # noqa: print
+        print("check-requirements-dupes: no package is pinned differently within any install's requirement set")  # noqa: print
         return 0
 
     print(f"check-requirements-dupes: {len(found)} conflicting duplicate(s)\n")  # noqa: print
