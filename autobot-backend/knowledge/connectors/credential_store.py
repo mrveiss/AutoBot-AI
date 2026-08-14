@@ -96,9 +96,56 @@ def _token_timeout_s() -> float:
         return 30.0
 
 
-# Lease must outlive the slowest possible refresh, with headroom for the
-# surrounding read/decrypt/write.
-_REFRESH_LOCK_TTL_MS = int(os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", str(int(_token_timeout_s() * 3 * 1000))))
+def _derived_lock_ttl_ms() -> int:
+    """Three token timeouts: the slowest refresh, plus headroom for the
+    surrounding read/decrypt/write."""
+    return int(_token_timeout_s() * 3 * 1000)
+
+
+def _configured_lock_ttl_ms() -> int:
+    """The lease TTL, floored so no environment value can disarm the lock (#14238).
+
+    `os.getenv`'s fallback only applies when the variable is UNSET, so an explicit
+    ``AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=0`` reached ``LeaderLease(ttl_ms=0)`` — a
+    lease that has already expired, so a losing caller's takeover succeeds
+    immediately and two workers refresh the same token at once. That is the race
+    #13627 added this lock to prevent, and a second refresh can invalidate the
+    token the first just rotated.
+
+    The floor is the token request timeout: a lease shorter than the slowest
+    possible refresh cannot do its job however it was configured. The poll
+    interval below has been floored against the same class of input since it was
+    written; this is the knob where zero has a correctness consequence rather
+    than a performance one.
+    """
+    derived = _derived_lock_ttl_ms()
+    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()
+    if not raw:
+        return derived
+    try:
+        configured = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%r is not an integer; using the derived %dms",
+            raw,
+            derived,
+        )
+        return derived
+
+    floor = int(_token_timeout_s() * 1000)
+    if configured < floor:
+        logger.warning(
+            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%d is below the %dms token request timeout — "
+            "a lease that short cannot outlive the refresh it guards. Using %dms.",
+            configured,
+            floor,
+            floor,
+        )
+        return floor
+    return configured
+
+
+_REFRESH_LOCK_TTL_MS = _configured_lock_ttl_ms()
 # A loser must outwait the lease, or it gives up on a refresh still in progress.
 _REFRESH_WAIT_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "0")), (_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
 # Guarded against 0 from the environment, which would busy-loop the executor.

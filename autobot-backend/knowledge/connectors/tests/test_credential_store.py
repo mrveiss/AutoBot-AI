@@ -920,3 +920,73 @@ def test_unconfigured_provider_falls_back_rather_than_raising(monkeypatch):
         "cid-old",
         "csec-OLD",
     )
+
+
+# ---------------------------------------------------------------------------
+# #14238 — the refresh lock's TTL must survive a hostile environment value.
+#
+# `os.getenv`'s fallback applies only when the variable is UNSET, so an explicit
+# `AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=0` used to reach `LeaderLease(ttl_ms=0)`.
+# These assert the INVARIANT -- the lease always outlives the refresh it guards --
+# rather than the one value that was reported.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("hostile", ["0", "-1", "1", "500", "not-a-number", "", "   "])
+def test_no_environment_value_produces_a_lease_shorter_than_a_refresh(monkeypatch, hostile):
+    """A lease shorter than the token request timeout cannot outlive the refresh
+    it guards, so the losing caller's takeover succeeds and two workers refresh
+    the same token — the #13627 race, reintroduced by configuration."""
+    monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", hostile)
+
+    ttl_ms = mod._configured_lock_ttl_ms()
+
+    assert ttl_ms >= mod._token_timeout_s() * 1000
+
+
+def test_unset_derives_from_the_token_timeout(monkeypatch):
+    """The documented default: three token timeouts, tracking that timeout
+    rather than drifting from it."""
+    monkeypatch.delenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", raising=False)
+
+    assert mod._configured_lock_ttl_ms() == mod._derived_lock_ttl_ms()
+
+
+def test_a_value_above_the_floor_is_honoured(monkeypatch):
+    """The floor must not become a fixed value — an operator raising the TTL for
+    a slow provider still gets what they asked for."""
+    monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "300000")
+
+    assert mod._configured_lock_ttl_ms() == 300_000
+
+
+def test_the_floor_tracks_the_token_timeout_rather_than_a_constant(monkeypatch):
+    """A hard-coded floor would silently stop protecting a provider whose token
+    endpoint is slower than the one this was written against."""
+    monkeypatch.setattr(mod, "_token_timeout_s", lambda: 120.0)
+    monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "1000")
+
+    assert mod._configured_lock_ttl_ms() == 120_000
+
+
+def test_a_rejected_value_is_reported_not_swallowed(monkeypatch, caplog):
+    """Silently overriding an operator's setting is its own failure mode: the
+    lease works and the configuration is a lie."""
+    monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "0")
+
+    with caplog.at_level("WARNING"):
+        mod._configured_lock_ttl_ms()
+
+    assert any("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS" in record.message for record in caplog.records)
+
+
+def test_the_wait_floor_follows_the_lock_ttl(monkeypatch):
+    """`_REFRESH_WAIT_S` is floored at the lock TTL plus headroom, so a caller
+    never gives up on a refresh that is still holding the lease. A zero TTL used
+    to collapse this from 95s to 5s as a side effect."""
+    monkeypatch.setenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "0")
+
+    ttl_ms = mod._configured_lock_ttl_ms()
+    wait_s = max(0.0, (ttl_ms / 1000.0) + 5.0)
+
+    assert wait_s >= mod._token_timeout_s() + 5.0
