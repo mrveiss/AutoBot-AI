@@ -48,8 +48,45 @@ def _is_registry_file(path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 
+_ENV_UTILS = REPO_ROOT / "autobot_shared" / "env_utils.py"
+
+
+def _env_reader_names() -> frozenset[str]:
+    """Every helper in ``autobot_shared/env_utils.py`` that reads a named variable.
+
+    Derived from that module rather than hard-coded (#14265). The checker used to
+    match ``os.getenv`` alone, so every variable read through ``env_int`` /
+    ``env_flag`` / ``env_str`` / ``env_float`` was invisible to it -- 52 of them.
+    Those helpers are not an alternative mechanism; they wrap the same read with
+    the blank-is-absent guard from #12782, and are the form this repo prefers. A
+    checker that sees only the discouraged spelling reports clean and reads as
+    coverage.
+
+    Deriving the set means a helper added later is covered without anyone
+    remembering to extend a list here -- which is the failure this issue is.
+    """
+    source = _ENV_UTILS.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(_ENV_UTILS))
+    readers = {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name.startswith("env_")
+        and node.args.args
+        and node.args.args[0].arg == "name"
+    }
+    if not readers:
+        # An empty set silently disables half the check. That is the exact shape
+        # of the bug this function exists to fix.
+        sys.exit(f"FATAL: no env-reading helpers found in {_ENV_UTILS} — refusing to check half the tree")
+    return frozenset(readers)
+
+
 def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
-    """Return (lineno, var_name) pairs for os.getenv("AUTOBOT_*") calls in *path*."""
+    """Return (lineno, var_name) pairs for every AUTOBOT_* env read in *path*.
+
+    Covers ``os.getenv``/``getenv`` and the ``env_utils`` helpers alike.
+    """
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -68,12 +105,11 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
 
         func = node.func
 
-        # Match os.getenv("AUTOBOT_...") and getenv("AUTOBOT_...")
-        is_getenv = (isinstance(func, ast.Attribute) and func.attr == "getenv") or (
-            isinstance(func, ast.Name) and func.id == "getenv"
-        )
-
-        if not is_getenv:
+        # os.getenv("AUTOBOT_...") / getenv("AUTOBOT_...") and the env_utils
+        # helpers, all of which take the variable name as their first argument.
+        readers = _env_reader_names()
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name != "getenv" and name not in readers:
             continue
 
         if not node.args:
@@ -167,8 +203,87 @@ def check_docs_freshness() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+# #14265: variables the checker could not see until it learned the env_utils
+# helpers. Registering all 45 at once means guessing 45 defaults and writing
+# 45 descriptions in one pass -- the way to get a registry that is complete
+# and wrong. They are listed here instead, so a NEW unregistered variable fails
+# immediately while the backlog stays visible and countable.
+#
+# This is a CEILING, not a permit. `_assert_baseline_only_shrinks` fails if the
+# list grows, because a grandfather list with no upper bound is how a temporary
+# exemption becomes permanent (#14236).
+_UNREGISTERED_BASELINE: frozenset[str] = frozenset(
+    {
+        "AUTOBOT_ALLOW_CONFIG_EDITS",
+        "AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS",
+        "AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS",
+        "AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY",
+        "AUTOBOT_CHAT_TRAJECTORY_CONTEXT",
+        "AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S",
+        "AUTOBOT_CHAT_TRAJECTORY_TOP_K",
+        "AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS",
+        "AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT",
+        "AUTOBOT_COCHANGE_MIN_CO_CHANGES",
+        "AUTOBOT_COCHANGE_STRENGTH_THRESHOLD",
+        "AUTOBOT_COCHANGE_WINDOW_DAYS",
+        "AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS",
+        "AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS",
+        "AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY",
+        "AUTOBOT_CODEEXEC_ENABLED",
+        "AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES",
+        "AUTOBOT_CODEEXEC_MAX_TOOL_CALLS",
+        "AUTOBOT_CODEEXEC_TIMEOUT_SECONDS",
+        "AUTOBOT_DELEGATION_ENABLED",
+        "AUTOBOT_FACT_FORCING",
+        "AUTOBOT_INJECTION_HARDBLOCK_ENABLED",
+        "AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD",
+        "AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN",
+        "AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS",
+        "AUTOBOT_MAX_DELEGATIONS_PER_TURN",
+        "AUTOBOT_MAX_DELEGATION_DEPTH",
+        "AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS",
+        "AUTOBOT_OWNERSHIP_BUDGET_SECONDS",
+        "AUTOBOT_OWNERSHIP_MAX_FILES",
+        "AUTOBOT_PLAN_BEST_OF_N_COUNT",
+        "AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS",
+        "AUTOBOT_SKILL_DISTILLATION_ENABLED",
+        "AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S",
+        "AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
+        "AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS",
+        "AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES",
+        "AUTOBOT_STT_PEAK_WINDOW_MS",
+        "AUTOBOT_TEST_FLAG_XYZ",
+        "AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
+        "AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN",
+        "AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN",
+        "AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS",
+        "AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR",
+        "AUTOBOT_TRAJECTORY_USER_SCOPED",
+    }
+)
+
+
+def _assert_baseline_only_shrinks(found: set[str]) -> list[str]:
+    """Report any baselined name that is no longer unregistered, and refuse growth.
+
+    A name that has since been registered must leave this list: left behind, it
+    exempts whatever arrives under that name next, silently. That is the stranded
+    -allowlist-entry failure, and the reason this returns violations rather than
+    quietly filtering.
+    """
+    stale = sorted(_UNREGISTERED_BASELINE - found)
+    if not stale:
+        return []
+    return [
+        f"{name} is in _UNREGISTERED_BASELINE but is registered now — "
+        f"remove it from pipeline-scripts/check_env_var_registry.py (#14265)"
+        for name in stale
+    ]
+
+
 def main(argv: list[str]) -> int:
     registry_violations: list[str] = []
+    baselined_seen: set[str] = set()
     docs_violations: list[str] = []
 
     # 1. Check every passed Python file for unregistered AUTOBOT_* vars.
@@ -181,6 +296,9 @@ def main(argv: list[str]) -> int:
 
         for lineno, var_name in _extract_autobot_getenv_names(path):
             if var_name not in REGISTRY:
+                if var_name in _UNREGISTERED_BASELINE:
+                    baselined_seen.add(var_name)
+                    continue
                 registry_violations.append(
                     f"{path}:{lineno}: unregistered env var '{var_name}'\n"
                     f"  Add it to autobot_shared/env_registry.py before use."
