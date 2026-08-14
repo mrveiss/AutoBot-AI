@@ -293,6 +293,10 @@ class SkillDistillationScheduler:
         session_id = session["id"]
         try:
             history = await self._load_history(session_id)
+            if history is None:
+                # Unreadable, not empty. Stop the pass rather than advance past
+                # a conversation nobody has looked at.
+                return None
             if len(history) < MIN_MESSAGES_TO_DISTILL:
                 return []
             skills = await self._get_extractor().extract_skills(history, self._list_existing_skills())
@@ -487,11 +491,22 @@ class SkillDistillationScheduler:
         pending.sort(key=lambda item: item["updated_at"])
         return pending[:MAX_SESSIONS_PER_RUN]
 
-    async def _load_history(self, session_id: str) -> List[Dict[str, str]]:
-        """Load one conversation as ``[{"role": ..., "content": ...}]``."""
+    async def _load_history(self, session_id: str) -> List[Dict[str, str]] | None:
+        """Load one conversation as ``[{"role": ..., "content": ...}]``.
+
+        ``None`` means **could not read**, which is not the same as *read it and
+        there was nothing there* (#14077). Returning ``[]`` for both let the
+        caller treat an unreadable conversation as processed and advance the
+        cursor past it — the pass reported "2/2 conversations distilled" having
+        read neither, and both were dropped permanently on the next run.
+
+        That is exactly what this module's docstring says cannot happen:
+        *bounded re-work, never a silently skipped conversation.*
+        """
         manager = await self._get_chat_history_manager()
         if manager is None:
-            return []
+            logger.warning("Skill distillation: no chat history manager; cannot read conversation %s", session_id)
+            return None
         messages = await manager.get_session_messages(session_id)
         return [
             {"role": msg.get("role", "unknown"), "content": msg.get("content", "")}

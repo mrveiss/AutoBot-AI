@@ -346,6 +346,58 @@ class TestDurableCursor:
         assert _stored_cursor(redis) is None
 
 
+class TestAnUnreadableConversationIsNotProcessed:
+    """#14077: `_load_history` returned `[]` both for *nothing to distil* and
+    for *could not read it*, so the caller advanced the cursor past
+    conversations it had never opened — and reported them as distilled.
+
+    Driven through `run_once` against the real cursor, because the defect is in
+    what the cursor does, not in what the loader returns.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unavailable_manager_stops_the_pass_and_holds_the_cursor(self, redis):
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(return_value={"proposed": ["deploy_service"]})
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [
+                {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
+                {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
+            ],
+        )
+        # Selection resolved the manager; the load cannot. This is a real
+        # window, not a contrivance: `_select_pending_sessions` and
+        # `_load_history` resolve it independently.
+        manager = scheduler._get_chat_history_manager.return_value
+        scheduler._get_chat_history_manager = AsyncMock(side_effect=[manager, None, None])
+
+        result = await scheduler.run_once()
+
+        assert _stored_cursor(redis) is None, "cursor advanced past a conversation nobody read"
+        assert result["sessions_distilled"] == 0, "unread conversations must not report as distilled"
+
+    @pytest.mark.asyncio
+    async def test_a_genuinely_short_conversation_still_advances(self, redis):
+        """The case that must STAY working — a fix that stopped on every empty
+        history would re-offer short conversations forever."""
+        extractor = MagicMock()
+        proposer = MagicMock()
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}],
+            history=[{"role": "user", "content": "hi"}],
+        )
+
+        await scheduler.run_once()
+
+        assert _stored_cursor(redis) == _epoch("2026-07-27T10:00:00")
+
+
 class TestLifecycle:
     """The feature ships inert and is process-wide."""
 
