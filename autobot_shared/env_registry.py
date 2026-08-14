@@ -674,7 +674,7 @@ register_env_var(
             "from it — 90000 with the default 30s timeout "
             "(knowledge/connectors/credential_store.py). Setting it explicitly "
             "REPLACES that derivation; zero is not a way to ask for it, and zero "
-            "disarms the lock (#14237)."
+            "disarms the lock (#14238)."
         ),
         component="auth",
     )
