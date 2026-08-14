@@ -669,12 +669,14 @@ register_env_var(
         default=90_000,
         description=(
             "Milliseconds a connector holds the single-flight lock while "
-            "refreshing an OAuth token. When unset it is derived as three times the "
-            "token request timeout, so it tracks that timeout instead of drifting "
-            "from it — 90000 with the default 30s timeout "
-            "(knowledge/connectors/credential_store.py). Setting it explicitly "
-            "REPLACES that derivation; zero is not a way to ask for it, and zero "
-            "disarms the lock (#14238)."
+            "refreshing an OAuth token. Derived as three times the token request "
+            "timeout — 90000 with the default 30s timeout — so it tracks that "
+            "timeout instead of drifting from it "
+            "(knowledge/connectors/credential_store.py). This variable can only "
+            "RAISE it: a smaller value is floored back to the derived TTL and a "
+            "warning is logged, because the lease is held across the store write "
+            "as well as the HTTP call, and one that expires mid-refresh lets two "
+            "workers rotate the same token (#14238)."
         ),
         component="auth",
     )
