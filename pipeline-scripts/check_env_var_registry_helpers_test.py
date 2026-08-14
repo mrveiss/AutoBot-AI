@@ -86,11 +86,55 @@ def test_no_baselined_name_is_already_registered(checker):
 def test_a_registered_baseline_entry_is_reported(checker):
     """The mechanism that keeps the list shrinking rather than rotting."""
     name = sorted(checker._UNREGISTERED_BASELINE)[0]
-
-    violations = checker._assert_baseline_only_shrinks(set())
+    checker.REGISTRY[name] = next(iter(checker.REGISTRY.values()))
+    try:
+        violations = checker._stale_baseline_entries()
+    finally:
+        del checker.REGISTRY[name]
 
     assert any(name in v for v in violations)
 
 
-def test_nothing_is_reported_when_the_baseline_matches(checker):
-    assert checker._assert_baseline_only_shrinks(set(checker._UNREGISTERED_BASELINE)) == []
+def test_nothing_is_reported_while_the_baseline_is_all_unregistered(checker):
+    assert checker._stale_baseline_entries() == []
+
+
+def test_the_ceiling_is_reached_from_main_not_only_by_calling_it(checker, tmp_path):
+    """A guard defined and never invoked is decorative.
+
+    The first version of this defined the check, populated a set for it, and
+    never called either — while a test that invoked the function directly passed.
+    This runs `main` on a file that mentions nothing, so the ONLY way a violation
+    can appear is the wired-in ceiling.
+    """
+    import io
+    import sys as _sys
+
+    name = sorted(checker._UNREGISTERED_BASELINE)[0]
+    sample = tmp_path / "empty.py"
+    sample.write_text("x = 1\n", encoding="utf-8")
+    checker.REGISTRY[name] = next(iter(checker.REGISTRY.values()))
+    captured = io.StringIO()
+    original = _sys.stderr
+    _sys.stderr = captured
+    try:
+        checker.main([str(sample)])
+    finally:
+        _sys.stderr = original
+        del checker.REGISTRY[name]
+
+    # Asserting on the exit code alone is not enough: mutating REGISTRY also
+    # makes the generated docs stale, so `main` returns non-zero either way and
+    # the test would pass with the ceiling unwired. Assert the specific message.
+    assert f"{name} is in _UNREGISTERED_BASELINE" in captured.getvalue()
+
+
+def test_the_reader_set_is_parsed_once_not_per_node(checker):
+    """It used to be called inside the AST walk, re-reading and re-parsing
+    env_utils.py for every node of every file."""
+    checker._env_reader_names.cache_clear()
+    first = checker._env_reader_names()
+    second = checker._env_reader_names()
+
+    assert first is second
+    assert checker._env_reader_names.cache_info().hits >= 1

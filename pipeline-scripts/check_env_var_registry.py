@@ -16,6 +16,7 @@ Closes GH#7081.
 """
 
 import ast
+import functools
 import sys
 from pathlib import Path
 
@@ -51,6 +52,7 @@ def _is_registry_file(path: Path) -> bool:
 _ENV_UTILS = REPO_ROOT / "autobot_shared" / "env_utils.py"
 
 
+@functools.lru_cache(maxsize=1)
 def _env_reader_names() -> frozenset[str]:
     """Every helper in ``autobot_shared/env_utils.py`` that reads a named variable.
 
@@ -263,27 +265,28 @@ _UNREGISTERED_BASELINE: frozenset[str] = frozenset(
 )
 
 
-def _assert_baseline_only_shrinks(found: set[str]) -> list[str]:
-    """Report any baselined name that is no longer unregistered, and refuse growth.
+def _stale_baseline_entries() -> list[str]:
+    """Report any baselined name that has since been registered.
 
-    A name that has since been registered must leave this list: left behind, it
-    exempts whatever arrives under that name next, silently. That is the stranded
-    -allowlist-entry failure, and the reason this returns violations rather than
-    quietly filtering.
+    Compared against the REGISTRY, not against the variables this invocation
+    happened to scan: the hook usually runs on a handful of staged files, so
+    "not seen this run" says nothing about whether a name is still unregistered.
+    An earlier version of this function made that mistake and would have reported
+    ~43 false violations on any normal pre-commit run.
+
+    A name left here after being registered exempts whatever arrives under that
+    name next, silently — the stranded-allowlist failure (#14236). Reported as a
+    violation rather than quietly filtered, so the list is forced to shrink.
     """
-    stale = sorted(_UNREGISTERED_BASELINE - found)
-    if not stale:
-        return []
     return [
         f"{name} is in _UNREGISTERED_BASELINE but is registered now — "
         f"remove it from pipeline-scripts/check_env_var_registry.py (#14265)"
-        for name in stale
+        for name in sorted(_UNREGISTERED_BASELINE & set(REGISTRY))
     ]
 
 
 def main(argv: list[str]) -> int:
-    registry_violations: list[str] = []
-    baselined_seen: set[str] = set()
+    registry_violations: list[str] = _stale_baseline_entries()
     docs_violations: list[str] = []
 
     # 1. Check every passed Python file for unregistered AUTOBOT_* vars.
@@ -297,7 +300,6 @@ def main(argv: list[str]) -> int:
         for lineno, var_name in _extract_autobot_getenv_names(path):
             if var_name not in REGISTRY:
                 if var_name in _UNREGISTERED_BASELINE:
-                    baselined_seen.add(var_name)
                     continue
                 registry_violations.append(
                     f"{path}:{lineno}: unregistered env var '{var_name}'\n"
