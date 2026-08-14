@@ -1008,3 +1008,37 @@ register_env_var(
         component="monitoring",
     )
 )
+
+# --- skill distillation (#14255) ---------------------------------------------
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_MAX_FAILURES",
+        type=int,
+        default=3,
+        description=(
+            "Consecutive failures on the SAME conversation before the distillation "
+            "pass stops waiting for it and moves on. Below this the pass halts and "
+            "retries next run, so a transient fault costs nothing; at it, the "
+            "conversation is quarantined with a warning and the cursor advances, so "
+            "one unreadable conversation cannot starve every newer one behind it in "
+            "an oldest-first queue (#14255). A success resets the count."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_FAILURE_TTL_S",
+        type=int,
+        default=86_400,
+        description=(
+            "How long a conversation's consecutive-failure count survives, in "
+            "seconds. Derived as 24 distillation intervals, so failures accumulate "
+            "across passes rather than expiring between them, while a counter for a "
+            "conversation nobody retries eventually clears instead of accumulating "
+            "forever (#14255)."
+        ),
+        component="backend",
+    )
+)
