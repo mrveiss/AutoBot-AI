@@ -543,6 +543,17 @@
         - "--exclude=*.pyc"
         - "--exclude=.git"
         - "--exclude=archives"
+        # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+        # services/deploy_artifacts.py (#14231). Anchored entries cannot match
+        # anything here, and cost nothing -- carrying the whole vocabulary is what
+        # keeps the delete-style syncs from disagreeing with each other again.
+        - "--exclude=.env"
+        - "--exclude=.env.*"
+        - "--exclude=data"
+        - "--exclude=logs"
+        - "--exclude=/config/"
+        - "--exclude=/.deployed_commit"
+        - "--exclude=/ansible/enroll.yml"
     tags: ['backend', 'deploy']
 
   # Issue #10020: backend_install_dir/autobot_shared is now a symlink to

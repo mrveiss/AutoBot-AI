@@ -109,8 +109,20 @@ def test_backend_sync_excludes_the_runtime_worker_registry(monkeypatch) -> None:
     assert "--exclude=/config/npu_workers.yaml" in args
 
 
-def test_component_omitted_keeps_previous_behaviour() -> None:
-    """Callers that pass no component get exactly the pre-#13851 set plus
-    logs — no anchored foreign excludes appear from nowhere."""
+def test_component_omitted_adds_no_foreign_anchored_excludes() -> None:
+    """Callers that pass no component get no anchored excludes from nowhere.
+
+    #14231 introduced anchored host-state patterns that are always on, so the
+    assertion can no longer be "no anchored args at all" — it is "the anchored
+    args are exactly the host-state ones". Kept as an equality rather than a
+    subset check so a foreign exclude leaking in without a component still
+    fails here.
+    """
+    from services.deploy_artifacts import HOST_STATE_EXCLUDES
+
     args = _rsync_exclude_args([])
-    assert not [a for a in args if a.startswith("--exclude=/")]
+    anchored = {a for a in args if a.startswith("--exclude=/")}
+    expected = {f"--exclude={p}" for p in HOST_STATE_EXCLUDES if p.startswith("/")}
+
+    assert expected, "host-state vocabulary did not load — this test proves nothing"
+    assert anchored == expected
