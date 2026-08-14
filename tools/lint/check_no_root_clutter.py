@@ -137,14 +137,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         paths = _tracked_paths(repo_root)
     except RuntimeError as exc:
-        print(f"[no-root-clutter] {exc}", file=sys.stderr)
+        print(f"[no-root-clutter] {exc}", file=sys.stderr)  # noqa: print
         return 2
 
     # An empty result reads as a clean result. A tracked tree without README.md
     # means the scan did not see the repository, not that the root is tidy —
     # fail loudly rather than passing on nothing.
     if "README.md" not in paths:
-        print(
+        print(  # noqa: print
             "[no-root-clutter] scan returned no README.md — the repository was not "
             f"scanned (got {len(paths)} tracked paths). Refusing to report clean.",
             file=sys.stderr,
@@ -153,10 +153,10 @@ def main(argv: list[str] | None = None) -> int:
 
     violations = find_violations(paths)
     for path, reason in violations:
-        print(f"[no-root-clutter] {path}: {reason}", file=sys.stderr)
+        print(f"[no-root-clutter] {path}: {reason}", file=sys.stderr)  # noqa: print
 
     if violations:
-        print(
+        print(  # noqa: print
             f"\n[no-root-clutter] {len(violations)} disallowed root path(s). "
             "Move the file, or add it to ALLOWED_ROOT_FILES in this hook if it "
             "genuinely belongs at the front door. Rationale: #14216.",
