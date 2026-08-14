@@ -1289,11 +1289,7 @@ def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> Li
     # Host-state args go FIRST: they carry `--include` entries, and rsync applies
     # the first matching rule (#14231). Dedup spans the whole list, not just
     # `merged` -- a caller passing `.env` would otherwise emit it twice.
-    return list(
-        dict.fromkeys(
-            [*rsync_host_state_args(), *(f"--exclude={exc}" for exc in merged)]
-        )
-    )
+    return list(dict.fromkeys([*rsync_host_state_args(), *(f"--exclude={exc}" for exc in merged)]))
 
 
 # #13851: rsync itemize marker for a delete. `--dry-run --delete --itemize-changes`

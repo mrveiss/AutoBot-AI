@@ -52,15 +52,8 @@ def test_the_vocabulary_actually_loaded():
     assert len(HOST_STATE_EXCLUDES) >= 7
     assert isinstance(HOST_STATE_REINCLUDES, tuple) and HOST_STATE_REINCLUDES
 
-_ANSIBLE_SYNC_TASK = (
-    _REPO_ROOT
-    / "autobot-slm-backend"
-    / "ansible"
-    / "roles"
-    / "slm_manager"
-    / "tasks"
-    / "main.yml"
-)
+
+_ANSIBLE_SYNC_TASK = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_manager" / "tasks" / "main.yml"
 
 # The paths a live node reported it would lose. Kept as data, not as the
 # assertion -- they are the reproduction, and the invariant tests below are what
@@ -94,9 +87,7 @@ def _matches_any_exclude(relative_path: str) -> bool:
 
 
 def _matches_any_reinclude(relative_path: str) -> bool:
-    return any(
-        relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES
-    )
+    return any(relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES)
 
 
 def _tracked_files(component: str) -> list[str]:
@@ -183,11 +174,7 @@ def test_the_ansible_sync_task_carries_every_host_state_exclude():
     decides. The ansible task protected `.deployed_commit` and the code-sync API
     did not -- for the same file, in the same tree."""
     tasks = yaml.safe_load(_ANSIBLE_SYNC_TASK.read_text(encoding="utf-8"))
-    sync_tasks = [
-        task
-        for task in tasks
-        if isinstance(task, dict) and "ansible.posix.synchronize" in task
-    ]
+    sync_tasks = [task for task in tasks if isinstance(task, dict) and "ansible.posix.synchronize" in task]
     assert sync_tasks, "no synchronize task found -- the guard cannot see what it checks"
 
     for task in sync_tasks:
@@ -195,9 +182,7 @@ def test_the_ansible_sync_task_carries_every_host_state_exclude():
             continue  # a non-delete sync cannot remove host state
         opts = task["ansible.posix.synchronize"].get("rsync_opts", [])
         missing = [p for p in HOST_STATE_EXCLUDES if f"--exclude={p}" not in opts]
-        assert missing == [], (
-            f"{task.get('name')}: delete-style sync missing host-state excludes {missing}"
-        )
+        assert missing == [], f"{task.get('name')}: delete-style sync missing host-state excludes {missing}"
 
 
 def test_the_ansible_task_puts_reincludes_before_excludes():
@@ -210,9 +195,7 @@ def test_the_ansible_task_puts_reincludes_before_excludes():
         includes = [i for i, opt in enumerate(opts) if opt.startswith("--include=")]
         excludes = [i for i, opt in enumerate(opts) if opt.startswith("--exclude=")]
         if includes and excludes:
-            assert max(includes) < min(excludes), (
-                f"{task.get('name')}: --include must precede --exclude"
-            )
+            assert max(includes) < min(excludes), f"{task.get('name')}: --include must precede --exclude"
 
 
 def test_rsync_host_state_args_emits_reincludes_first():
