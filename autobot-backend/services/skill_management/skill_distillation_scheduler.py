@@ -277,7 +277,10 @@ class SkillDistillationScheduler:
         pending = await self._select_pending_sessions(cursor)
         if not pending:
             logger.debug("Skill distillation: no conversations since cursor %s", cursor or "(start)")
-            return {"sessions_seen": 0, "sessions_distilled": 0, "proposed": []}
+            # `quarantined` is present on BOTH paths: a caller reading
+            # result["quarantined"] must not KeyError on the empty pass, which is
+            # the common case.
+            return {"sessions_seen": 0, "sessions_distilled": 0, "proposed": [], "quarantined": 0}
 
         distilled, proposed, quarantined = await self._distil_pending(pending)
 
@@ -318,6 +321,11 @@ class SkillDistillationScheduler:
                 if not await self._should_quarantine(session["id"]):
                     break
                 quarantined += 1
+                # Clear the count as well. Left at the threshold, a conversation
+                # that resurfaces later — the queue is keyed on updated_at, so an
+                # edited one does — would re-quarantine on its FIRST new failure,
+                # which is the opposite of "N failures is evidence, one is not".
+                await self._clear_failures(session["id"])
                 await self._write_cursor(session["updated_at"])
                 continue
             await self._clear_failures(session["id"])

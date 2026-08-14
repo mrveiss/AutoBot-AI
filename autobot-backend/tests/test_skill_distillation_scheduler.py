@@ -355,7 +355,7 @@ class TestDurableCursor:
 
         result = await scheduler.run_once()
 
-        assert result == {"sessions_seen": 0, "sessions_distilled": 0, "proposed": []}
+        assert result == {"sessions_seen": 0, "sessions_distilled": 0, "proposed": [], "quarantined": 0}
         assert _stored_cursor(redis) is None
 
 
@@ -549,3 +549,44 @@ class TestQuarantineAfterRepeatedFailures:
         assert result["quarantined"] == 0
         assert result["sessions_distilled"] == 0
         assert proposer.propose_skills.await_count == 1, "the pass continued past the failure"
+
+    async def test_the_summary_shape_is_the_same_on_both_paths(self, redis):
+        """An empty pass is the common case. A caller reading
+        result["quarantined"] must not KeyError on it — and an equality
+        assertion on the busy path alone would never notice."""
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(return_value={"proposed": ["a_skill"]})
+
+        empty = _make_scheduler(extractor, proposer)
+        _with_sessions(empty, [])
+        busy = _make_scheduler(extractor, proposer)
+        _with_sessions(busy, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+
+        assert set((await empty.run_once())) == set((await busy.run_once()))
+
+    async def test_a_quarantined_conversation_gets_a_fresh_budget_if_it_returns(self, redis):
+        """The counter must not survive the quarantine that consumed it.
+
+        The queue is keyed on updated_at, so an edited conversation re-enters it.
+        Left at the threshold, its FIRST new failure would quarantine it again —
+        the opposite of "N failures is evidence, one is not", and unfair to
+        exactly the conversation someone just repaired.
+        """
+        from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
+
+        redis.store["skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(side_effect=RuntimeError("corrupt history"))
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+
+        result = await scheduler.run_once()
+
+        assert result["quarantined"] == 1
+        assert "skills:distillation:failures:chat-a" not in redis.store, (
+            "the count survived the quarantine, so one more failure would re-quarantine immediately"
+        )
