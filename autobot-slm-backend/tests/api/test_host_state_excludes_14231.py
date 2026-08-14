@@ -52,8 +52,37 @@ def test_the_vocabulary_actually_loaded():
     assert len(HOST_STATE_EXCLUDES) >= 7
     assert isinstance(HOST_STATE_REINCLUDES, tuple) and HOST_STATE_REINCLUDES
 
+_ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
-_ANSIBLE_SYNC_TASK = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_manager" / "tasks" / "main.yml"
+
+def _delete_style_syncs():
+    """Every `synchronize` task in the ansible tree that can remove files.
+
+    Scoped to the whole tree, not to one role. The first version of this test
+    read `roles/slm_manager/tasks/main.yml` alone -- and three more delete-style
+    syncs with the identical gap sat in the frontend and backend roles, invisible
+    to a guard whose reach was narrower than its own subject.
+    """
+    found = []
+    for path in sorted(_ANSIBLE_ROOT.rglob("*.yml")):
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:  # pragma: no cover - a malformed file fails elsewhere
+            continue
+
+        def walk(node):
+            if isinstance(node, list):
+                for item in node:
+                    walk(item)
+            elif isinstance(node, dict):
+                sync = node.get("ansible.posix.synchronize") or node.get("synchronize")
+                if isinstance(sync, dict) and sync.get("delete"):
+                    found.append((path.relative_to(_ANSIBLE_ROOT).as_posix(), node.get("name"), sync))
+                for value in node.values():
+                    walk(value)
+
+        walk(document)
+    return found
 
 # The paths a live node reported it would lose. Kept as data, not as the
 # assertion -- they are the reproduction, and the invariant tests below are what
@@ -65,8 +94,20 @@ _REPORTED_ON_A_LIVE_NODE = (
     "ansible/enroll.yml",
 )
 
-# Synced by the code-sync flow; must match _SLM_COMPONENTS in api/code_sync.py.
-_SYNCED_COMPONENTS = ("autobot-slm-backend", "autobot-slm-frontend", "autobot_shared")
+# Every source root a delete-style sync copies from: the three code-sync
+# components (matching _SLM_COMPONENTS in api/code_sync.py) AND the shared trees
+# the ansible roles sync separately. The excludes apply to all of them, so the
+# "no tracked file is swallowed" invariant has to cover all of them -- checking
+# only the code-sync three would leave three roots where a new `.env.*` or
+# root-level `config/` could silently stop deploying.
+_SYNCED_COMPONENTS = (
+    "autobot-slm-backend",
+    "autobot-slm-frontend",
+    "autobot_shared",
+    "autobot-plugins",
+    "libs",
+    "docs",
+)
 
 
 def _matches_any_exclude(relative_path: str) -> bool:
@@ -87,7 +128,9 @@ def _matches_any_exclude(relative_path: str) -> bool:
 
 
 def _matches_any_reinclude(relative_path: str) -> bool:
-    return any(relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES)
+    return any(
+        relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES
+    )
 
 
 def _tracked_files(component: str) -> list[str]:
@@ -169,33 +212,44 @@ def test_config_is_anchored_so_nested_source_config_still_syncs():
 # --------------------------------------------------------------------------
 
 
-def test_the_ansible_sync_task_carries_every_host_state_exclude():
+def test_every_delete_style_ansible_sync_carries_the_host_state_excludes():
     """Both writers of the deployed tree must agree, or whichever runs last
-    decides. The ansible task protected `.deployed_commit` and the code-sync API
+    decides. The ansible role protected `.deployed_commit` and the code-sync API
     did not -- for the same file, in the same tree."""
-    tasks = yaml.safe_load(_ANSIBLE_SYNC_TASK.read_text(encoding="utf-8"))
-    sync_tasks = [task for task in tasks if isinstance(task, dict) and "ansible.posix.synchronize" in task]
-    assert sync_tasks, "no synchronize task found -- the guard cannot see what it checks"
+    syncs = _delete_style_syncs()
+    assert len(syncs) >= 6, f"only {len(syncs)} delete-style syncs found — the scan did not reach the ansible tree"
 
-    for task in sync_tasks:
-        if not task["ansible.posix.synchronize"].get("delete"):
-            continue  # a non-delete sync cannot remove host state
-        opts = task["ansible.posix.synchronize"].get("rsync_opts", [])
+    gaps = []
+    for source, name, sync in syncs:
+        opts = sync.get("rsync_opts", [])
         missing = [p for p in HOST_STATE_EXCLUDES if f"--exclude={p}" not in opts]
-        assert missing == [], f"{task.get('name')}: delete-style sync missing host-state excludes {missing}"
+        if missing:
+            gaps.append(f"{source}: {name}: missing {missing}")
+
+    assert gaps == [], "\n".join(gaps)
 
 
-def test_the_ansible_task_puts_reincludes_before_excludes():
+def test_no_delete_style_sync_uses_delete_excluded():
+    """`--delete-excluded` would remove the very paths the excludes protect,
+    turning every guarantee above into its opposite."""
+    offenders = [
+        f"{source}: {name}"
+        for source, name, sync in _delete_style_syncs()
+        if any("--delete-excluded" in str(opt) for opt in sync.get("rsync_opts", []))
+        or sync.get("delete_excluded")
+    ]
+
+    assert offenders == [], offenders
+
+
+def test_every_ansible_task_puts_reincludes_before_excludes():
     """rsync applies the first matching rule; order is the mechanism here."""
-    tasks = yaml.safe_load(_ANSIBLE_SYNC_TASK.read_text(encoding="utf-8"))
-    for task in tasks:
-        if not isinstance(task, dict) or "ansible.posix.synchronize" not in task:
-            continue
-        opts = task["ansible.posix.synchronize"].get("rsync_opts", [])
-        includes = [i for i, opt in enumerate(opts) if opt.startswith("--include=")]
-        excludes = [i for i, opt in enumerate(opts) if opt.startswith("--exclude=")]
+    for source, name, sync in _delete_style_syncs():
+        opts = sync.get("rsync_opts", [])
+        includes = [i for i, opt in enumerate(opts) if str(opt).startswith("--include=")]
+        excludes = [i for i, opt in enumerate(opts) if str(opt).startswith("--exclude=")]
         if includes and excludes:
-            assert max(includes) < min(excludes), f"{task.get('name')}: --include must precede --exclude"
+            assert max(includes) < min(excludes), f"{source}: {name}: --include must precede --exclude"
 
 
 def test_rsync_host_state_args_emits_reincludes_first():
