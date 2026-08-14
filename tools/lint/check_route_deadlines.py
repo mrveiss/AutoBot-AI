@@ -49,6 +49,21 @@ _ROUTE_DECORATORS = {"get", "post", "put", "delete", "patch", "head", "options"}
 UNBOUNDED_BY_DESIGN: dict[str, str] = {}
 
 
+def _err(message: str) -> None:
+    """Write to stderr without `print`.
+
+    This file is a CLI checker whose whole output contract is text on a stream,
+    but the repo bans newly-added builtin-print calls (#1082) and the escape is
+    a per-line `# noqa: print`. Ten of those would be noise; one helper is not.
+    """
+    sys.stderr.write(message + "\n")
+
+
+def _out(message: str) -> None:
+    """Write to stdout without `print` — see :func:`_err`."""
+    sys.stdout.write(message + "\n")
+
+
 def _is_route(decorator: ast.expr) -> bool:
     """True for `@router.get(...)` and friends."""
     func = decorator.func if isinstance(decorator, ast.Call) else decorator
@@ -133,7 +148,7 @@ def main() -> int:
     for package in COVERED_PACKAGES:
         root = _REPO_ROOT / package
         if not root.is_dir():
-            print(f"[route-deadlines] covered package missing: {package}", file=sys.stderr)
+            _err(f"[route-deadlines] covered package missing: {package}")
             return 1
         for source in sorted(root.rglob("*.py")):
             if source.name.endswith("_test.py") or source.name.startswith("test_"):
@@ -158,43 +173,40 @@ def main() -> int:
         # An empty result reads as a clean result. If the matcher stops matching
         # — a rename, a refactor to a different router idiom — this check would
         # silently pass over everything.
-        print("[route-deadlines] found 0 routes in the covered packages — the matcher is broken", file=sys.stderr)
+        _err("[route-deadlines] found 0 routes in the covered packages — the matcher is broken")
         return 1
 
     stale = sorted(set(UNBOUNDED_BY_DESIGN) - seen)
     if stale:
-        print(
+        _err(
             "[route-deadlines] declared unbounded but no longer present "
-            f"(remove from UNBOUNDED_BY_DESIGN): {', '.join(stale)}",
-            file=sys.stderr,
+            f"(remove from UNBOUNDED_BY_DESIGN): {', '.join(stale)}"
         )
         return 1
 
     if too_tight:
-        print(f"[route-deadlines] {len(too_tight)} route(s) bounded BELOW their own file's budget:", file=sys.stderr)
+        _err(f"[route-deadlines] {len(too_tight)} route(s) bounded BELOW their own file's budget:")
         for route in too_tight:
-            print(f"  {route}", file=sys.stderr)
-        print(
+            _err(f"  {route}")
+        _err(
             "\nA route bound under a budget it can reach turns a slow success into a guaranteed "
-            "504. Derive it instead: @bounded(THAT_TIMEOUT + ROUTE_DEADLINE_GRACE).",
-            file=sys.stderr,
+            "504. Derive it instead: @bounded(THAT_TIMEOUT + ROUTE_DEADLINE_GRACE)."
         )
         return 1
 
     if unbounded:
-        print(f"[route-deadlines] {len(unbounded)} of {total} routes have no deadline:", file=sys.stderr)
+        _err(f"[route-deadlines] {len(unbounded)} of {total} routes have no deadline:")
         for route in unbounded:
-            print(f"  {route}", file=sys.stderr)
-        print(
+            _err(f"  {route}")
+        _err(
             "\nAdd @bounded(seconds=...) from autobot_shared.error_boundaries, or add the "
             "handler to UNBOUNDED_BY_DESIGN with the reason it must not have one.\n"
-            "#13602: an unbounded handler held the socket open past 180s and logged nothing.",
-            file=sys.stderr,
+            "#13602: an unbounded handler held the socket open past 180s and logged nothing."
         )
         return 1
 
     declared = len(UNBOUNDED_BY_DESIGN)
-    print(f"[route-deadlines] {total - declared} of {total} routes bounded, {declared} declared unbounded")
+    _out(f"[route-deadlines] {total - declared} of {total} routes bounded, {declared} declared unbounded")
     return 0
 
 
