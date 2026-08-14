@@ -112,11 +112,22 @@ def _configured_lock_ttl_ms() -> int:
     #13627 added this lock to prevent, and a second refresh can invalidate the
     token the first just rotated.
 
-    The floor is the token request timeout: a lease shorter than the slowest
-    possible refresh cannot do its job however it was configured. The poll
-    interval below has been floored against the same class of input since it was
-    written; this is the knob where zero has a correctness consequence rather
-    than a performance one.
+    The floor is the **derived** TTL, not the token timeout alone. The lease is
+    held across more than the HTTP call: the response is serialised, written
+    through ``run_in_executor`` to the secrets store, and optionally mirrored to
+    the vault. A provider answering in 29s -- inside the 30s client timeout, so
+    no error and no retry -- would leave a one-timeout lease with nothing left
+    for the write, and it could expire before the commit lands. The losing
+    caller's takeover would then succeed and both would refresh: the #13627 race
+    again, reached through provider latency instead of a hostile config value.
+
+    Consequence, stated plainly: this variable can only ever RAISE the TTL.
+    Lowering it below the derivation is the unsafe direction, and that is the
+    whole point.
+
+    The poll interval below has been floored against the same class of input
+    since it was written; this is the knob where zero has a correctness
+    consequence rather than a performance one.
     """
     derived = _derived_lock_ttl_ms()
     raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()
@@ -132,11 +143,11 @@ def _configured_lock_ttl_ms() -> int:
         )
         return derived
 
-    floor = int(_token_timeout_s() * 1000)
+    floor = derived
     if configured < floor:
         logger.warning(
-            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%d is below the %dms token request timeout — "
-            "a lease that short cannot outlive the refresh it guards. Using %dms.",
+            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%d is below the %dms a refresh needs "
+            "(token request timeout plus the store write it is held across). Using %dms.",
             configured,
             floor,
             floor,
