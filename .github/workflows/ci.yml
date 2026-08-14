@@ -499,9 +499,15 @@ jobs:
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
           python3 -c 'from config import config; print("Configuration system working")'
 
-        # Test core imports
+        # Test core imports.
+        # #14252: this named `security.secure_command_executor`, which has never
+        # existed -- the module is at autobot-backend/secure_command_executor.py,
+        # top level, not inside the `security` package. The step therefore raised
+        # ModuleNotFoundError on every run since #798, so this job was red
+        # continuously and could not report a real import break. It is not a
+        # required context, which is why nothing blocked on it.
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
-          python3 -c 'from security_layer import SecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
+          python3 -c 'from security_layer import SecurityLayer; from secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
 
     - name: Generate deployment artifact
       run: |
