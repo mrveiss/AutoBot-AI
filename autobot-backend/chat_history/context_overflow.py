@@ -14,6 +14,7 @@ Provides automatic context window management:
 Builds on #8990 (token usage tracking) and #3770 (compression service).
 """
 
+import json
 import os
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +23,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
+from autobot_shared.tool_catalogue import FILE_WRITE_TOOLS, SHELL_EXEC_TOOLS, match_tool_name
 
 logger = get_logger(__name__)
 
@@ -36,6 +38,22 @@ _DEFAULT_COMPRESS_THRESHOLD = 0.90  # 90%
 # How long to skip compaction after it fails, so a rate-limited provider costs
 # one attempt per window instead of one per turn (#14065 review).
 _SUMMARY_FAILURE_BACKOFF_SECONDS = int(os.getenv("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", "300"))
+
+# How many of the most recent user messages cross a compaction verbatim (#14066).
+# Bounded so repeated compaction cannot grow the preserved set without limit —
+# the bound is what makes preserving them unconditionally safe.
+_PRESERVED_USER_MESSAGE_CAP = int(os.getenv("AUTOBOT_COMPACTION_USER_MESSAGE_CAP", "40"))
+
+# Tool results in the summarized region are clipped to this many characters
+# before the summarizer sees them: a file read many turns ago is cheaper to
+# re-read than to carry (#14066).
+_TOOL_RESULT_CLIP_CHARS = int(os.getenv("AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS", "400"))
+
+# How far back to look for a user turn before settling for any turn start.
+_BOUNDARY_SEARCH_WINDOW = int(os.getenv("AUTOBOT_COMPACTION_BOUNDARY_WINDOW", "10"))
+
+# Most recent shell commands named in the extracted state block.
+_STATE_COMMAND_CAP = int(os.getenv("AUTOBOT_COMPACTION_STATE_COMMAND_CAP", "10"))
 
 
 class SessionTokenTracker:
@@ -207,11 +225,183 @@ def _message_text(msg: object) -> str:
     ``estimate_fast`` needs a string. A non-dict entry or a non-string ``text``
     (a provider emitting ``None``, an int, a content-part list) used to raise
     here — after the token tracker had already been reset.
+
+    #14066: reads **both** schemas. This used to read only ``text``, so every
+    API-schema message (``role``/``content``) estimated as 0 tokens and the
+    post-compaction refill under-counted the retained half — which delays the
+    next compaction rather than triggering it early, so nothing surfaced it.
+    ``_format_messages`` already handled both; this did not.
     """
     if not isinstance(msg, dict):
         return ""
-    text = msg.get("text", "")
-    return text if isinstance(text, str) else ""
+    value = msg.get("content")
+    if isinstance(value, list):
+        value = " ".join(_text_parts(value))
+    if not isinstance(value, str) or not value:
+        value = msg.get("text", "")
+    return value if isinstance(value, str) else ""
+
+
+def _text_parts(parts: list) -> List[str]:
+    """The string ``text`` fields of a multimodal content list.
+
+    Non-dict entries, non-text parts, and a ``text`` that is not a string are
+    all skipped rather than joined: providers genuinely emit ``text: None``, and
+    this helper runs outside ``summarize_messages``' try, so raising here 500s a
+    turn whose answer was already generated and stored (#14065 review).
+    """
+    out: List[str] = []
+    for part in parts:
+        if not isinstance(part, dict) or part.get("type") != "text":
+            continue
+        text = part.get("text")
+        if isinstance(text, str):
+            out.append(text)
+    return out
+
+
+def _role_of(msg: object) -> str:
+    """Role across both schemas: ``role`` (API) or ``sender`` (display)."""
+    if not isinstance(msg, dict):
+        return ""
+    role = msg.get("role") or msg.get("sender") or ""
+    return role if isinstance(role, str) else ""
+
+
+def _pick_boundary(messages: List[Dict], target: int) -> int:
+    """Snap *target* back to a turn start, preferring a user turn (#14066).
+
+    ``len(messages) // 2`` is an index, not a boundary: it can land on a
+    ``role="tool"`` message whose assistant parent sits earlier, orphaning the
+    responses in the kept half. A tool message is therefore never a valid cut
+    point; anything else is, because a batch cut *before* its assistant parent
+    keeps the whole batch together.
+
+    Both searches floor at index 1, never 0. Returning 0 would summarize *no*
+    messages while the caller's early return skips the tracker reset — so the
+    session stays over threshold and re-attempts compaction every single turn.
+    A short history whose only user turn is its first message hits this
+    immediately, and it reads as "compaction is enabled" the whole time.
+    Index 0 is returned only when no valid cut point exists at all.
+    """
+    if not messages:
+        return 0
+    target = max(0, min(target, len(messages) - 1))
+    floor = max(1, target - _BOUNDARY_SEARCH_WINDOW)
+    for idx in range(target, floor - 1, -1):
+        if _role_of(messages[idx]) == CategoryDefaults.ROLE_USER:
+            return idx
+    for idx in range(target, 0, -1):
+        if _role_of(messages[idx]) != "tool":
+            return idx
+    return 0
+
+
+def _preserved_user_messages(messages: List[Dict], cap: int) -> List[str]:
+    """The most recent *cap* user messages, verbatim (#14066).
+
+    Never summarized. A long session re-summarizes the same region repeatedly
+    and each pass is another chance for the model to drop a constraint the user
+    stated once; the cap is what keeps doing this unconditionally bounded.
+    """
+    if cap <= 0:
+        return []
+    texts = [_message_text(m) for m in messages if _role_of(m) == CategoryDefaults.ROLE_USER]
+    return [t for t in texts if t][-cap:]
+
+
+def _clip_tool_results(messages: List[Dict], max_chars: int) -> List[Dict]:
+    """Clip oversized tool results before summarization (#14066).
+
+    Returns a new list; the caller's messages are never mutated — the persisted
+    transcript is untouched and only the summarizer's input is reduced.
+    """
+    clipped: List[Dict] = []
+    for msg in messages:
+        body = _message_text(msg)
+        if _role_of(msg) != "tool" or len(body) <= max_chars:
+            clipped.append(msg)
+            continue
+        copy = dict(msg)
+        copy["content" if isinstance(msg.get("content"), str) else "text"] = body[:max_chars] + "… [clipped]"
+        clipped.append(copy)
+    return clipped
+
+
+def _tool_calls_of(msg: object) -> List[Dict]:
+    """The tool calls on a message, or an empty list on any other shape."""
+    if not isinstance(msg, dict):
+        return []
+    calls = msg.get("tool_calls")
+    return [c for c in calls if isinstance(c, dict)] if isinstance(calls, list) else []
+
+
+def _call_name_and_args(call: Dict) -> "tuple[str, Dict]":
+    """``(name, arguments)`` for one tool call; ``("", {})`` on any bad shape."""
+    fn = call.get("function") if isinstance(call.get("function"), dict) else call
+    name = fn.get("name")
+    raw = fn.get("arguments", fn.get("args", {}))
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            raw = {}
+    return (name if isinstance(name, str) else ""), (raw if isinstance(raw, dict) else {})
+
+
+def _extract_state(messages: List[Dict]) -> Dict[str, List[str]]:
+    """State that crosses the boundary without a model call (#14066).
+
+    Deterministic: files written, shell commands run, tools used — read straight
+    off the tool calls. This is the part that still works when the summary is
+    bad, which is the whole reason it exists. Tool-name matching reuses the
+    canonical catalogue rather than a local literal list.
+    """
+    files: List[str] = []
+    commands: List[str] = []
+    tools: List[str] = []
+    for msg in messages:
+        for call in _tool_calls_of(msg):
+            name, args = _call_name_and_args(call)
+            if not name:
+                continue
+            if name not in tools:
+                tools.append(name)
+            if match_tool_name(name, FILE_WRITE_TOOLS):
+                path = args.get("path") or args.get("file_path")
+                if isinstance(path, str) and path and path not in files:
+                    files.append(path)
+            elif match_tool_name(name, SHELL_EXEC_TOOLS):
+                command = args.get("command")
+                if isinstance(command, str) and command:
+                    commands.append(command)
+    return {"files_written": files, "commands": commands, "tools_used": tools}
+
+
+def _render_state_block(state: Dict[str, List[str]]) -> str:
+    """Render extracted state, or "" when nothing was extracted."""
+    lines = []
+    if state["files_written"]:
+        lines.append("**Files written:** " + ", ".join(state["files_written"]))
+    if state["commands"]:
+        lines.append("**Commands run:** " + "; ".join(state["commands"][-_STATE_COMMAND_CAP:]))
+    if state["tools_used"]:
+        lines.append("**Tools used:** " + ", ".join(state["tools_used"]))
+    if not lines:
+        return ""
+    return "### Retained state (extracted, not inferred)\n" + "\n".join(lines)
+
+
+def _compose_summary(summary: str, summarized: List[Dict]) -> str:
+    """Model summary + extracted state + verbatim user turns (#14066)."""
+    parts = [summary]
+    block = _render_state_block(_extract_state(summarized))
+    if block:
+        parts.append(block)
+    preserved = _preserved_user_messages(summarized, _PRESERVED_USER_MESSAGE_CAP)
+    if preserved:
+        parts.append("### User messages (verbatim)\n" + "\n".join(f"- {t}" for t in preserved))
+    return "\n\n".join(parts)
 
 
 def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
@@ -571,8 +761,11 @@ class ContextOverflowProtection:
         model_name: str,
     ) -> str:
         """Create summary and reset token counter."""
-        # Determine how many messages to summarize (oldest half)
-        split_point = len(messages) // 2
+        # #14066: snap the midpoint back to a turn start. The raw index could
+        # fall between an assistant's tool_calls and its tool responses, leaving
+        # orphans in the *kept* half — _sanitize_tool_messages repairs only the
+        # summarizer's input, never the half that continues to the provider.
+        split_point = _pick_boundary(messages, len(messages) // 2)
         messages_to_summarize = messages[:split_point]
 
         if not messages_to_summarize:
@@ -582,7 +775,9 @@ class ContextOverflowProtection:
         # tracker reset below must not run when the history it claims to have
         # compressed is still uncompressed (#14065). Leaving the counter high is
         # what makes the next turn retry instead of proceeding on a lie.
-        summary = await self.summarizer.summarize_messages(messages_to_summarize, model_name)
+        summary = await self.summarizer.summarize_messages(
+            _clip_tool_results(messages_to_summarize, _TOOL_RESULT_CLIP_CHARS), model_name
+        )
 
         # Estimate BEFORE resetting. #14065 review: this loop used to run after
         # the reset, so a malformed entry in the second half raised with the
@@ -601,7 +796,10 @@ class ContextOverflowProtection:
         for tokens in retained_tokens:
             await self.tracker.add_message_tokens(session_id, prompt_tokens=tokens)
 
-        return summary
+        # #14066: the model's summary is only one of three things that cross the
+        # boundary. The extracted state and the verbatim user turns are the two
+        # that survive a bad summarization turn.
+        return _compose_summary(summary, messages_to_summarize)
 
 
 __all__ = [

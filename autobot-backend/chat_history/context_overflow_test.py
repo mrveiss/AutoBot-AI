@@ -567,6 +567,18 @@ class TestTheTrackerIsNeverResetWithoutADeliveredSummary:
 
         summary = await protection._create_summary("session-1", messages, "gpt-4")
 
-        assert summary == "Summary."
+        # #14066 changed two things this test had pinned, both deliberately:
+        #
+        # 1. The return value is now the model summary *plus* extracted state and
+        #    verbatim user turns, so it is no longer equal to the stub. The
+        #    property that matters — the paid-for summary is delivered, not
+        #    discarded — is asserted on containment instead.
+        # 2. The boundary snaps back from the raw midpoint (index 4, which is the
+        #    ``"not a dict"`` entry) to the nearest user turn at index 3, so five
+        #    messages are retained rather than four.
+        #
+        # The original intent is unchanged and still asserted: exactly one reset,
+        # and every retained message re-counted despite three malformed entries.
+        assert "Summary." in summary
         mock_tracker.reset_session.assert_awaited_once_with("session-1")
-        assert mock_tracker.add_message_tokens.await_count == 4
+        assert mock_tracker.add_message_tokens.await_count == 5
