@@ -587,6 +587,6 @@ class TestQuarantineAfterRepeatedFailures:
         result = await scheduler.run_once()
 
         assert result["quarantined"] == 1
-        assert "skills:distillation:failures:chat-a" not in redis.store, (
-            "the count survived the quarantine, so one more failure would re-quarantine immediately"
-        )
+        assert (
+            "skills:distillation:failures:chat-a" not in redis.store
+        ), "the count survived the quarantine, so one more failure would re-quarantine immediately"
