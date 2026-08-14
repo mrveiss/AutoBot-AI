@@ -7,6 +7,12 @@
 The script block is extracted from the YAML and executed with bash rather than
 reimplemented here. A second copy of the rule would drift from the first, and
 then the test would be asserting the copy (#14241).
+
+Lives in ``repo_tests/`` rather than beside the workflow: ci.yml's shard command
+passes an explicit path list (``autobot-backend autobot_shared autobot-tts-worker
+repo_tests tools scripts pipeline-scripts``) and ``.github/`` is not on it, so a
+test placed there is collected by a bare local ``pytest`` and by nothing in CI --
+present, passing locally, and never run where it matters.
 """
 
 from __future__ import annotations
@@ -17,7 +23,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-_WORKFLOW = Path(__file__).resolve().parents[1] / "pr-issue-validation.yml"
+_WORKFLOW = (
+    Path(__file__).resolve().parents[1] / ".github" / "workflows" / "pr-issue-validation.yml"
+)
 
 
 def _script() -> str:
