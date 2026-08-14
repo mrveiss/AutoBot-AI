@@ -594,3 +594,415 @@ register_env_var(
         component="voice",
     )
 )
+
+
+# --- provider OAuth / device-code flow (#14223) ------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS",
+        type=int,
+        default=600,
+        description=(
+            "Lifetime of a pending OAuth `state` value. A provider authorisation "
+            "that is not completed within this window is rejected as expired "
+            "(api/provider_auth.py)."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEVICE_POLL_MIN_INTERVAL_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Floor on how often the device-code flow polls the provider for "
+            "completion, regardless of the interval the provider advertises."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS",
+        type=int,
+        default=5,
+        description=("Extra delay added to the device-code poll interval after the " "provider answers `slow_down`."),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEVICE_POLL_MAX_ATTEMPTS",
+        type=int,
+        default=360,
+        description=(
+            "Maximum device-code poll attempts before the flow is abandoned. "
+            "Bounds the poll loop independently of the time window below."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DEVICE_POLL_WINDOW_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "Wall-clock ceiling on a device-code flow. Reached first when the "
+            "provider advertises a long interval, whereas the attempt cap above "
+            "binds first when it advertises a short one."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS",
+        type=int,
+        default=90_000,
+        description=(
+            "Milliseconds a connector holds the single-flight lock while "
+            "refreshing an OAuth token. When unset it is derived as three times the "
+            "token request timeout, so it tracks that timeout instead of drifting "
+            "from it — 90000 with the default 30s timeout "
+            "(knowledge/connectors/credential_store.py). Setting it explicitly "
+            "REPLACES that derivation; zero is not a way to ask for it, and zero "
+            "disarms the lock (#14238)."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OAUTH_REFRESH_WAIT_S",
+        type=float,
+        default=0.0,
+        description=(
+            "Seconds a caller waits for another worker's in-flight token refresh "
+            "before refreshing itself. The effective value is floored at the lock "
+            "TTL plus five seconds — 95 with the defaults — because a caller that "
+            "gives up before the lease expires abandons a refresh still in "
+            "progress. Setting it below that floor therefore has no effect."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OAUTH_REFRESH_POLL_S",
+        type=float,
+        default=0.2,
+        description=(
+            "Polling interval while waiting on another worker's token refresh. "
+            "Floored at 0.05s, since zero would busy-loop the executor."
+        ),
+        component="auth",
+    )
+)
+
+
+# --- gateway connectors (#14223) ---------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IMESSAGE_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Opt in to the iMessage gateway adapter. Off by default: it is "
+            "macOS-only and needs Full Disk Access to the Messages database."
+        ),
+        component="gateway",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SIGNAL_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Opt in to the Signal gateway adapter. Off by default: it needs a "
+            "running signal-cli daemon and a registered number."
+        ),
+        component="gateway",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MATRIX_E2EE",
+        type=bool,
+        default=False,
+        description=(
+            "Opt in to end-to-end encryption for the Matrix adapter. Off by "
+            "default because E2EE needs the optional olm dependency and a "
+            "persisted device store."
+        ),
+        component="gateway",
+    )
+)
+
+
+# --- execution sandbox and snapshots (#14223) --------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_USE_POOL",
+        type=bool,
+        default=False,
+        description=(
+            "Reuse a pool of warm containers for tool execution instead of "
+            "starting one per call. Off by default — the pool trades isolation "
+            "between calls for start-up latency."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_POOL_SIZE",
+        type=int,
+        default=3,
+        description=(
+            "Number of warm containers kept when AUTOBOT_DOCKER_USE_POOL is on. "
+            "Ignored entirely when pooling is off."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SNAPSHOT_STORAGE_PATH",
+        type=str,
+        default="",
+        description=(
+            "Directory holding execution snapshots. Empty means 'derive it' — "
+            "the default is `<project root>/snapshots`, so it follows the "
+            "install location rather than being pinned to one path."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SNAPSHOT_TTL_DAYS",
+        type=int,
+        default=7,
+        description=(
+            "Age at which the cleanup task removes an execution snapshot. "
+            "Snapshots are a debugging aid, so the default is deliberately short."
+        ),
+        component="execution",
+    )
+)
+
+
+# --- worker and analysis pools (#14223) --------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AUDIT_MAX_DEFERRED",
+        type=int,
+        default=10000,
+        description=(
+            "Ceiling on audit records held in the deferred queue when the sink "
+            "is unavailable. Beyond it the oldest are dropped, bounding memory "
+            "rather than letting an outage grow it without limit."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_ANALYSIS_POOL_WORKERS",
+        type=int,
+        default=2,
+        description=(
+            "Child processes used to offload code analysis. Deliberately small: "
+            "each carries a full interpreter, and analysis is bursty rather than "
+            "sustained."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS",
+        type=int,
+        default=8,
+        description=(
+            "Tasks a code-analysis child handles before it is recycled. Recycling "
+            "bounds memory growth in long-lived children."
+        ),
+        component="backend",
+    )
+)
+
+
+# --- timeouts and backoffs (#14223) ------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Interval between config-registry attempts to reconnect to Redis "
+            "after a failure, so a Redis outage does not become a reconnect storm."
+        ),
+        component="redis",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_REDIS_TIMEOUT",
+        type=float,
+        default=1.5,
+        description=(
+            "Seconds the retrieval learner waits for its Redis lock before "
+            "proceeding without it. Short on purpose — retrieval must answer "
+            "even when the learner cannot record what it learned."
+        ),
+        component="redis",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Ceiling on a knowledge-graph path search. Path queries are "
+            "unbounded in the worst case, so this is what stops one request "
+            "occupying a worker indefinitely."
+        ),
+        component="kb",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Cap applied to a provider's `Retry-After`. Without it a provider "
+            "advertising a long back-off would stall a request for that whole "
+            "period (services/llm_service.py)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Quiet period after a context-overflow summarisation failure before "
+            "another is attempted, so a persistently failing summary does not "
+            "retry on every turn."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
+        type=int,
+        default=86400,
+        description=(
+            "Cache lifetime in seconds for a human-to-agent handoff brief " "(llc/services/handoff.py). One day."
+        ),
+        component="orchestrator",
+    )
+)
+
+
+# --- storage paths and toolsets (#14223) -------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OPENVINO_CACHE_DIR",
+        type=str,
+        default="data/openvino_cache",
+        description=(
+            "Directory for compiled OpenVINO model artefacts. Relative to the "
+            "working directory unless given as an absolute path."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRANSCRIBER_DB_PATH",
+        type=str,
+        default="data/transcriber.db",
+        description=(
+            "SQLite database backing the transcriber. Relative to the working "
+            "directory unless given as an absolute path."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VOICE_TOOLSETS",
+        type=str,
+        default="voice_safe",
+        description=(
+            "Comma-separated toolset bundles a voice session may call. Defaults "
+            "to the restricted `voice_safe` bundle — voice input is harder to "
+            "confirm than typed input, so the surface is narrowed by default."
+        ),
+        component="voice",
+    )
+)
+
+
+# --- monitoring endpoints (#14223) -------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_GRAFANA_PORT",
+        type=str,
+        default="3000",
+        description=(
+            "TCP port of the Grafana instance. Also declared in ssot_config.py; "
+            "3000 is Grafana's own default and is NOT the browser service, which "
+            "is 9001 (#4052, #14198)."
+        ),
+        component="monitoring",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROMETHEUS_PORT",
+        type=str,
+        default="9090",
+        description=("TCP port of the Prometheus instance. Also declared in ssot_config.py."),
+        component="monitoring",
+    )
+)
