@@ -58,6 +58,19 @@ class _FakeRedis:
         # builtin eval. Nothing here executes caller-supplied code.
         return 1
 
+    # #14255: the failure counter. Stateful rather than a MagicMock, because
+    # "counted" and "never written" are indistinguishable to a mock, and the
+    # whole mechanism is a count crossing a threshold.
+    async def incr(self, key):
+        self.store[key] = int(self.store.get(key, 0)) + 1
+        return self.store[key]
+
+    async def expire(self, key, _ttl):
+        return key in self.store
+
+    async def delete(self, key):
+        return 1 if self.store.pop(key, None) is not None else 0
+
 
 @pytest.fixture
 def redis():
@@ -393,3 +406,146 @@ class TestSchedulerRegistry:
         source = lifespan.read_text(encoding="utf-8")
         assert "_init_skill_distillation_scheduler" in source
         assert "await _init_skill_distillation_scheduler(app)" in source
+
+
+class TestQuarantineAfterRepeatedFailures:
+    """#14255: a conversation that cannot be read must not starve the queue.
+
+    The pass stops on a failure so a transient fault costs nothing — that is
+    right, and `test_failure_stops_the_pass_instead_of_skipping_ahead` pins it.
+    But an oldest-first queue plus a cursor that never advances means a
+    permanently unreadable conversation re-sorts to the front every run and
+    blocks every newer one, with silence as the only symptom.
+
+    Both directions are asserted here on purpose. A fix that only proves
+    "eventually skips" turns the scheduler into "skip everything that errors",
+    which is the defect #14247 removed.
+    """
+
+    async def test_a_transient_failure_still_stops_the_pass(self, redis):
+        """One failure is not evidence of anything. The cursor must hold."""
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(side_effect=RuntimeError("SLM unreachable"))
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+
+        result = await scheduler.run_once()
+
+        assert result["sessions_distilled"] == 0
+        assert result["quarantined"] == 0
+        assert _stored_cursor(redis) is None
+
+    async def test_the_same_conversation_is_quarantined_once_it_keeps_failing(self, redis):
+        """After MAX_CONSECUTIVE_FAILURES passes, the queue moves on."""
+        from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
+
+        for _ in range(MAX_CONSECUTIVE_FAILURES):
+            extractor = MagicMock()
+            extractor.extract_skills = AsyncMock(return_value=[_skill()])
+            proposer = MagicMock()
+            proposer.propose_skills = AsyncMock(side_effect=RuntimeError("corrupt history"))
+            scheduler = _make_scheduler(extractor, proposer)
+            _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+            result = await scheduler.run_once()
+
+        assert result["quarantined"] == 1
+        assert _stored_cursor(redis) is not None, "the cursor must advance past a quarantined session"
+
+    async def test_a_newer_conversation_is_reached_after_a_quarantine(self, redis):
+        """The point of the escape hatch: healthy work behind the blockage runs."""
+        from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
+
+        redis.store[f"skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(
+            side_effect=[RuntimeError("corrupt history"), {"proposed": ["later_skill"]}]
+        )
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [
+                {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
+                {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
+            ],
+        )
+
+        result = await scheduler.run_once()
+
+        assert result["quarantined"] == 1
+        assert result["sessions_distilled"] == 1
+        assert "later_skill" in result["proposed"]
+
+    async def test_a_success_forgets_earlier_failures(self, redis):
+        """Otherwise the count is cumulative, and a conversation that fails
+        intermittently over months is eventually quarantined despite always
+        recovering."""
+        from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
+
+        redis.store["skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(return_value={"proposed": ["a_skill"]})
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+
+        await scheduler.run_once()
+
+        assert "skills:distillation:failures:chat-a" not in redis.store
+
+    async def test_quarantining_is_announced_not_silent(self, redis, caplog):
+        """A silent skip would reinstate the defect #14247 removed — a
+        conversation reported as handled when it was not — one level up."""
+        from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
+
+        redis.store["skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(side_effect=RuntimeError("corrupt history"))
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(scheduler, [{"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"}])
+
+        with caplog.at_level("WARNING"):
+            await scheduler.run_once()
+
+        assert any("quarantin" in record.message.lower() for record in caplog.records)
+        assert any("chat-a" in str(record.args) for record in caplog.records)
+
+    async def test_an_unavailable_redis_stops_the_pass_rather_than_quarantining(self, monkeypatch):
+        """Without a durable count there is no evidence anything is unrecoverable.
+
+        A Redis outage would otherwise quarantine every failing conversation at
+        once — turning an infrastructure blip into permanent data loss, which is
+        far worse than the head-of-line block this mechanism exists to prevent.
+        Fail closed: the pass stops, which is the pre-#14255 behaviour.
+
+        This is the direction a mutation caught: returning True on `redis is
+        None` left all 22 other tests green, because every one of them has a
+        working fake.
+        """
+        import services.skill_management.skill_distillation_scheduler as mod
+
+        extractor = MagicMock()
+        extractor.extract_skills = AsyncMock(return_value=[_skill()])
+        proposer = MagicMock()
+        proposer.propose_skills = AsyncMock(side_effect=RuntimeError("corrupt history"))
+        scheduler = _make_scheduler(extractor, proposer)
+        _with_sessions(
+            scheduler,
+            [
+                {"id": "chat-a", "updatedAt": "2026-07-27T10:00:00"},
+                {"id": "chat-b", "updatedAt": "2026-07-27T11:00:00"},
+            ],
+        )
+        monkeypatch.setattr(mod, "get_async_redis_client", AsyncMock(return_value=None))
+
+        result = await scheduler.run_once()
+
+        assert result["quarantined"] == 0
+        assert result["sessions_distilled"] == 0
+        assert proposer.propose_skills.await_count == 1, "the pass continued past the failure"
