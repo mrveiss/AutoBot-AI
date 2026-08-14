@@ -144,7 +144,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         paths = _tracked_paths(repo_root)
-    except RuntimeError as exc:
+    except (RuntimeError, OSError) as exc:
+        # OSError covers `git` missing from PATH: subprocess raises
+        # FileNotFoundError, not RuntimeError, so a RuntimeError-only handler let
+        # that case escape as a traceback. The commit was blocked either way --
+        # the exit code is nonzero regardless -- but the operator got a stack
+        # trace instead of the diagnostic this hook promises.
         print(f"[no-root-clutter] {exc}", file=sys.stderr)  # noqa: print
         return 2
 

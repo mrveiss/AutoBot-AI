@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import sys
 from pathlib import Path
 
@@ -163,3 +164,51 @@ class TestRepositoryIsClean:
         paths = check_no_root_clutter._tracked_paths(repo_root)
         assert "README.md" in paths, "scan did not see the repository"
         assert find_violations(paths) == []
+
+    def test_git_missing_from_path_reports_a_diagnostic_not_a_traceback(self) -> None:
+        """`subprocess` raises FileNotFoundError, not RuntimeError, when `git` is
+        absent. The commit is blocked either way -- the exit code is nonzero
+        regardless -- but a hook whose docstring promises to fail loudly should
+        not fail with a stack trace."""
+        original = check_no_root_clutter.subprocess.run
+
+        def _no_git(*args, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", "git")
+
+        check_no_root_clutter.subprocess.run = _no_git
+        try:
+            captured = io.StringIO()
+            original_stderr = sys.stderr
+            sys.stderr = captured
+            try:
+                exit_code = check_no_root_clutter.main([])
+            finally:
+                sys.stderr = original_stderr
+        finally:
+            check_no_root_clutter.subprocess.run = original
+
+        assert exit_code == 2
+        assert "[no-root-clutter]" in captured.getvalue()
+
+    def test_no_allowlist_entry_names_a_file_that_is_gone(self) -> None:
+        """The other direction, which `test_actual_root_is_clean` cannot see.
+
+        That test asks "does every root file have permission". This one asks
+        "does every permission still name a file". They fail on different
+        mistakes: a stale entry breaks nothing today and quietly pre-authorises
+        any future, unrelated file dropped at root under that exact name --
+        bypassing the review signal the allowlist exists to create. Membership
+        is not enforcement, and a dormant exemption list drifts silently.
+        """
+        repo_root = Path(__file__).resolve().parents[2]
+        paths = check_no_root_clutter._tracked_paths(repo_root)
+        assert "README.md" in paths, "scan did not see the repository"
+
+        root_files = {path for path in paths if "/" not in path}
+        stranded = sorted(check_no_root_clutter.ALLOWED_ROOT_FILES - root_files)
+
+        assert stranded == [], (
+            "ALLOWED_ROOT_FILES names files that are no longer at the root: "
+            f"{stranded}. Remove them, or the next file to arrive under one of "
+            "these names is allowlisted without anyone deciding so."
+        )
