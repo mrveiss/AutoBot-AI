@@ -95,9 +95,33 @@ class TestMagicMockArtifact:
         assert [p for p, _ in violations] == [path]
         assert "#14217" in violations[0][1]
 
-    def test_similarly_named_real_path_is_not_a_false_positive(self) -> None:
-        """Prefix matching must respect the path separator."""
-        assert find_violations(["MagicMockHelpers/utils.py"]) == []
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "autobot-backend/MagicMock/mock.settings.backup_dir/124658818721376",
+            "tests/MagicMock",
+            "autobot-backend/knowledge/MagicMock/mock.config_manager.get()/x",
+        ],
+    )
+    def test_nested_artifact_paths_are_flagged(self, path: str) -> None:
+        """The tree lands wherever the test CWD was, not only at the root.
+
+        The unanchored `MagicMock/` ignore rule matches at any depth; a guard
+        that only matched the root would be narrower than the rule it backstops.
+        """
+        assert [p for p, _ in find_violations([path])] == [path]
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "MagicMockHelpers/utils.py",
+            "tools/MagicMockFactory.py",
+            "docs/magicmock-notes.md",
+        ],
+    )
+    def test_similarly_named_real_paths_are_not_false_positives(self, path: str) -> None:
+        """Component matching must be exact — a prefix or substring is not a hit."""
+        assert find_violations([path]) == []
 
 
 class TestScanIntegrity:

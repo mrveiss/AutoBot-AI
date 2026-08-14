@@ -267,7 +267,11 @@ repos:
         name: Keep session reports and test artifacts out of the repo root (#14216)
         entry: tools/lint/check_no_root_clutter.py
         language: python
-        files: ^([^/]+|MagicMock/.*)$
+        # Trigger on any top-level path, or a MagicMock/ component at any depth
+        # — the artifact tree lands wherever the test process's CWD was, and a
+        # trigger narrower than the check means the check never runs for the
+        # case it was written to catch.
+        files: (^[^/]+$)|(^|/)MagicMock/
         pass_filenames: false
         stages: [pre-commit]
         description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"

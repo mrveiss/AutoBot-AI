@@ -26,9 +26,12 @@ the backstop.
 
 Scope
 -----
-Top-level ``*.md`` and ``*.txt`` files only, plus any path rooted at
-``MagicMock``. Files in subdirectories are never in scope: the point is the
-front door, not the house.
+Top-level ``*.md`` and ``*.txt`` files only — for documents, subdirectories are
+never in scope, because the point is the front door, not the house.
+
+``MagicMock`` paths are the exception and are matched at **any** depth, to stay
+in step with the unanchored ``MagicMock/`` ignore rule: the artifact tree lands
+wherever the test process's CWD happened to be.
 
 Adding a genuinely new top-level document is a deliberate act — add it to
 ``ALLOWED_ROOT_FILES`` in the same commit and the reviewer sees the intent.
@@ -110,7 +113,12 @@ def find_violations(paths: list[str]) -> list[tuple[str, str]]:
     """Return [(path, reason), …] for disallowed root documents and artifacts."""
     violations: list[tuple[str, str]] = []
     for path in paths:
-        if path == _ARTIFACT_ROOT or path.startswith(f"{_ARTIFACT_ROOT}/"):
+        # Any depth, not just the root. The tree is created relative to the
+        # process CWD, so a suite run started from a subdirectory drops it
+        # there instead — and the .gitignore rule (`MagicMock/`, unanchored)
+        # already matches at any depth. A guard narrower than the ignore rule
+        # it backstops leaves exactly the gap a `git add -f` walks through.
+        if _ARTIFACT_ROOT in path.split("/"):
             violations.append(
                 (
                     path,
@@ -157,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if violations:
         print(  # noqa: print
-            f"\n[no-root-clutter] {len(violations)} disallowed root path(s). "
+            f"\n[no-root-clutter] {len(violations)} disallowed path(s). "
             "Move the file, or add it to ALLOWED_ROOT_FILES in this hook if it "
             "genuinely belongs at the front door. Rationale: #14216.",
             file=sys.stderr,
