@@ -500,6 +500,8 @@ To add a new variable:
 | `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` | redis | float | `1.5` | Seconds the retrieval learner waits for its Redis lock before proceeding without it. Short on purpose — retrieval must answer even when the learner cannot record what it learned. |
 | `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
 | `AUTOBOT_SIGNAL_ENABLED` | gateway | bool | false | Opt in to the Signal gateway adapter. Off by default: it needs a running signal-cli daemon and a registered number. |
+| `AUTOBOT_SKILL_DISTILLATION_FAILURE_TTL_S` | backend | int | `86400` | How long a conversation's consecutive-failure count survives, in seconds. Derived as 24 distillation intervals, so failures accumulate across passes rather than expiring between them, while a counter for a conversation nobody retries eventually clears instead of accumulating forever (#14255). |
+| `AUTOBOT_SKILL_DISTILLATION_MAX_FAILURES` | backend | int | `3` | Consecutive failures on the SAME conversation before the distillation pass stops waiting for it and moves on. Below this the pass halts and retries next run, so a transient fault costs nothing; at it, the conversation is quarantined with a warning and the cursor advances, so one unreadable conversation cannot starve every newer one behind it in an oldest-first queue (#14255). A success resets the count. |
 | `AUTOBOT_SNAPSHOT_STORAGE_PATH` | execution | str | `""` | Directory holding execution snapshots. Empty means 'derive it' — the default is `<project root>/snapshots`, so it follows the install location rather than being pinned to one path. |
 | `AUTOBOT_SNAPSHOT_TTL_DAYS` | execution | int | `7` | Age at which the cleanup task removes an execution snapshot. Snapshots are a debugging aid, so the default is deliberately short. |
 | `AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD` | voice | float | `0.8` | Decoder no-speech probability at or above which an STT transcript is discarded as a silence hallucination (#13104). Range: 0.0–1.0. |
@@ -514,5 +516,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*76 variables registered as of last generation.*
+*78 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
