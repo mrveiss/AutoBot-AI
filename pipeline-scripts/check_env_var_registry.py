@@ -84,6 +84,35 @@ def _env_reader_names() -> frozenset[str]:
     return frozenset(readers)
 
 
+def _self_provided_names(tree: ast.AST) -> set[str]:
+    """Names this file sets for itself before reading them (#14265).
+
+    `env_utils_blank_test.py` does `monkeypatch.setenv("AUTOBOT_TEST_BLANK", …)`
+    and reads it straight back to prove blank-is-absent. That is a fixture, not
+    deployed configuration, and registering it would put a variable in the
+    documented environment that no deployment ever sets.
+
+    Expressed as a rule rather than an allowlist entry: a name the file supplies
+    itself is not evidence of an unregistered setting. A genuinely deployed
+    variable that a test also monkeypatches is still caught, because production
+    code reads it somewhere this exemption does not apply.
+    """
+    provided: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in {"setenv", "setdefault"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    provided.add(first.value)
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            value = node.slice.value
+            if isinstance(value, str):
+                provided.add(value)
+    return provided
+
+
 def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
     """Return (lineno, var_name) pairs for every AUTOBOT_* env read in *path*.
 
@@ -100,6 +129,8 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
         return []
 
     results: list[tuple[int, str]] = []
+    self_provided = _self_provided_names(tree)
+    readers = _env_reader_names()
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -109,7 +140,6 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
 
         # os.getenv("AUTOBOT_...") / getenv("AUTOBOT_...") and the env_utils
         # helpers, all of which take the variable name as their first argument.
-        readers = _env_reader_names()
         name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
         if name != "getenv" and name not in readers:
             continue
@@ -123,6 +153,9 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
         if not isinstance(first_arg.value, str):
             continue
         if not first_arg.value.startswith("AUTOBOT_"):
+            continue
+
+        if first_arg.value in self_provided:
             continue
 
         results.append((node.lineno, first_arg.value))

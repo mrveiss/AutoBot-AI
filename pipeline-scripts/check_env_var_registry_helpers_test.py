@@ -138,3 +138,79 @@ def test_the_reader_set_is_parsed_once_not_per_node(checker):
 
     assert first is second
     assert checker._env_reader_names.cache_info().hits >= 1
+
+
+# ---------------------------------------------------------------------------
+# A name the file supplies itself is a fixture, not configuration (#14265).
+# ---------------------------------------------------------------------------
+
+
+def test_env_raw_is_in_the_derived_reader_set(checker):
+    """It matches the derivation criteria and was missed by the hand pass that
+    built the baseline — which is why `AUTOBOT_TEST_BLANK` slipped through."""
+    assert "env_raw" in checker._env_reader_names()
+
+
+def test_a_monkeypatched_name_read_back_is_not_reported(checker, tmp_path):
+    """The real case: env_utils_blank_test sets AUTOBOT_TEST_BLANK and reads it
+    to prove blank-is-absent. Registering it would document a variable no
+    deployment sets."""
+    assert _extract(
+        checker,
+        tmp_path,
+        '''
+        def test_blank(monkeypatch):
+            monkeypatch.setenv("AUTOBOT_TEST_BLANK", "   ")
+            assert env_raw("AUTOBOT_TEST_BLANK") is None
+        ''',
+    ) == []
+
+
+def test_an_os_environ_assignment_counts_as_self_provided(checker, tmp_path):
+    assert _extract(
+        checker,
+        tmp_path,
+        '''
+        import os
+        os.environ["AUTOBOT_LOCAL_ONLY"] = "1"
+        x = os.getenv("AUTOBOT_LOCAL_ONLY")
+        ''',
+    ) == []
+
+
+def test_a_name_only_read_is_still_reported(checker, tmp_path):
+    """The exemption must not swallow the ordinary case."""
+    assert _extract(checker, tmp_path, 'x = env_int("AUTOBOT_REAL_ONE", 1)\n') == ["AUTOBOT_REAL_ONE"]
+
+
+def test_the_repository_has_no_unbaselined_unregistered_names(checker):
+    """End-to-end: the baseline plus the registry must cover everything the
+    matcher finds, or the next edit to an untouched file blocks a commit.
+
+    The first version of this PR shipped a baseline built by a hand pass that
+    omitted `env_raw`, so exactly one name was missing and nothing said so.
+    """
+    import subprocess
+
+    listing = subprocess.run(
+        ["git", "ls-files", "*.py"],
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert listing.returncode == 0, listing.stderr
+    files = [f for f in listing.stdout.split() if f]
+    assert len(files) > 100, "git ls-files returned almost nothing — this test would prove nothing"
+
+    known = set(checker.REGISTRY) | checker._UNREGISTERED_BASELINE
+    missing = sorted(
+        {
+            name
+            for f in files
+            for _, name in checker._extract_autobot_getenv_names(_REPO_ROOT / f)
+            if name not in known
+        }
+    )
+
+    assert missing == [], f"neither registered nor baselined: {missing}"
