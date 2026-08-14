@@ -52,6 +52,7 @@ def test_the_vocabulary_actually_loaded():
     assert len(HOST_STATE_EXCLUDES) >= 7
     assert isinstance(HOST_STATE_REINCLUDES, tuple) and HOST_STATE_REINCLUDES
 
+
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 
@@ -83,6 +84,7 @@ def _delete_style_syncs():
 
         walk(document)
     return found
+
 
 # The paths a live node reported it would lose. Kept as data, not as the
 # assertion -- they are the reproduction, and the invariant tests below are what
@@ -128,9 +130,7 @@ def _matches_any_exclude(relative_path: str) -> bool:
 
 
 def _matches_any_reinclude(relative_path: str) -> bool:
-    return any(
-        relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES
-    )
+    return any(relative_path == pattern.lstrip("/") for pattern in HOST_STATE_REINCLUDES)
 
 
 def _tracked_files(component: str) -> list[str]:
@@ -235,8 +235,7 @@ def test_no_delete_style_sync_uses_delete_excluded():
     offenders = [
         f"{source}: {name}"
         for source, name, sync in _delete_style_syncs()
-        if any("--delete-excluded" in str(opt) for opt in sync.get("rsync_opts", []))
-        or sync.get("delete_excluded")
+        if any("--delete-excluded" in str(opt) for opt in sync.get("rsync_opts", [])) or sync.get("delete_excluded")
     ]
 
     assert offenders == [], offenders
