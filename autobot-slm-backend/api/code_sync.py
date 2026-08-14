@@ -69,7 +69,11 @@ from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
-from services.deploy_artifacts import rsync_artifact_excludes
+from services.deploy_artifacts import (
+    HOST_STATE_EXCLUDES,
+    rsync_artifact_excludes,
+    rsync_host_state_args,
+)
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
@@ -1242,19 +1246,14 @@ _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
 ]
 
 
-# #9970: secret/runtime paths that must survive every sync. The deployed .env
-# is the systemd EnvironmentFile (#2824) and exists only in the deployment --
-# a delete-style sync without these excludes removes it and the service cannot
-# start ("Failed to load environment files"). `data` holds per-service runtime
-# state with the same property. Applied at the rsync chokepoint so no caller
-# or future component list can forget them.
-#
-# #13851: `logs` joins them. A dry run of the autobot-backend resolve on a live
-# host listed logs/audit/*.jsonl among 55 deletions — the audit trail, removed
-# by the remediation for what turned out to be a false drift signal. No
-# component in the repo tracks a `logs/` directory, so excluding it cannot
-# suppress a legitimate source file.
-_PROTECTED_EXCLUDES: List[str] = [".env", "data", "logs"]
+# #14231: the list of paths that must survive every sync now lives in
+# services/deploy_artifacts.py, next to the artifact vocabulary it sits beside
+# at the rsync chokepoint. It was extended here three times by incident (#9970
+# `.env`/`data`, #13851 `logs`, #14231 four more) while the ansible sync path
+# in roles/slm_manager/tasks/main.yml carried its own partial copy -- two code
+# paths writing the same tree, disagreeing about which files may be deleted.
+# One source, one guard test (tests/api/test_host_state_excludes_14231.py).
+_PROTECTED_EXCLUDES: List[str] = list(HOST_STATE_EXCLUDES)
 
 
 def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> List[str]:
@@ -1286,8 +1285,11 @@ def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> Li
     if component is not None:
         foreign = [f"/{sub}/" for sub in sorted(owned_subtrees(component))]
         foreign += [f"/{path}" for path in sorted(deploy_only_entries(component))]
-    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *_PROTECTED_EXCLUDES, *foreign]))
-    return [f"--exclude={exc}" for exc in merged]
+    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *foreign]))
+    # Host-state args go FIRST: they carry `--include` entries, and rsync applies
+    # the first matching rule (#14231). Dedup spans the whole list, not just
+    # `merged` -- a caller passing `.env` would otherwise emit it twice.
+    return list(dict.fromkeys([*rsync_host_state_args(), *(f"--exclude={exc}" for exc in merged)]))
 
 
 # #13851: rsync itemize marker for a delete. `--dry-run --delete --itemize-changes`
