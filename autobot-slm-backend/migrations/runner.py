@@ -26,6 +26,8 @@ from typing import List, Tuple
 
 import psycopg2
 
+from migrations import utils as _migration_utils
+
 logger = logging.getLogger(__name__)
 
 # Migration files in order of execution
@@ -251,8 +253,6 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         logger.info("Running %d pending migration(s)", len(pending))
 
         for migration_name in pending:
-            from migrations import utils as _migration_utils
-
             _migration_utils.reset_deferrals()
             success, message = run_migration(db_url, migration_name)
             deferred = _migration_utils.deferrals()

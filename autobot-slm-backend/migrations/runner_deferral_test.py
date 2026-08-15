@@ -202,13 +202,43 @@ def test_a_deferred_migration_is_not_marked_applied():
 
 
 def test_a_mid_run_exception_is_always_recorded():
-    """The visibility half.
+    """The visibility half, asserted on structure rather than on source text.
 
     `if results == []` meant an exception after one success produced an
     all-successes list, and the startup caller raises only on a failure entry —
     so a half-migrated schema started cleanly.
-    """
-    source = _runner_source()
 
-    assert "if results == []" not in source, "the failure is recorded only when nothing ran yet (#14300)"
-    assert 'results.append(("migrations_execution", False' in source
+    Review finding: the first version of this test matched raw substrings, so
+    the identical bug rewritten as `if not results:` — or merely reformatted —
+    would have passed it while reproducing the defect exactly. It now walks the
+    handler and requires the append to be unconditional.
+    """
+    import ast
+
+    func = next(
+        node
+        for node in ast.walk(ast.parse(_runner_source()))
+        if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
+    )
+    handlers = [h for node in ast.walk(func) if isinstance(node, ast.Try) for h in node.handlers]
+    recording = []
+    for handler in handlers:
+        appends = [
+            n
+            for n in ast.walk(handler)
+            if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "append"
+        ]
+        if not appends:
+            continue
+        # every append must sit directly in the handler body, not inside an If
+        gated = {
+            id(n)
+            for branch in ast.walk(handler)
+            if isinstance(branch, ast.If)
+            for n in ast.walk(branch)
+            if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "append"
+        }
+        recording.append(any(id(a) not in gated for a in appends))
+
+    assert recording, "no except handler records anything into results"
+    assert all(recording), "an except handler records the failure only conditionally (#14300)"
