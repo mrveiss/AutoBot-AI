@@ -1042,3 +1042,546 @@ register_env_var(
         component="backend",
     )
 )
+
+# --- backfilled from the env_utils helper form (#14265) -----------------------
+# These were read via env_int/env_flag/env_str/env_float and were therefore
+# invisible to the registry checker until it learned that form. Defaults and
+# types are taken from each call site, not guessed.
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ALLOW_CONFIG_EDITS",
+        type=bool,
+        default=False,
+        description=(
+            "Permit writes to the repository's tracked config files. Off by default: the "
+            "codebase is the source of truth and an edit made here is invisible to "
+            "deployment (#11220)."
+        ),
+        component="system",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS",
+        type=int,
+        default=604800,
+        description=(
+            "Seconds a session holding a pending approval survives in Redis. Deliberately "
+            "long — what it waits for is a person, and expiring sooner discards the "
+            "approval rather than the wait (#13478)."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS",
+        type=int,
+        default=30,
+        description=(
+            "How many numbered elements the LLM-visible state block renders per browser "
+            "tool result. The browser worker caps the raw list separately; this bounds only "
+            "what reaches the prompt (#11537)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY",
+        type=int,
+        default=2,
+        description=("Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede " "the LLM."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TRAJECTORY_CONTEXT",
+        type=bool,
+        default=True,
+        description=(
+            "Search past trajectories before answering. Defaults on because the search is "
+            "one vector query; capture is gated separately since it spends a judge call."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S",
+        type=float,
+        default=0.15,
+        description=(
+            "Seconds the pre-answer trajectory search may take. It rides the response hot "
+            "path, so a cold or slow collection must never delay first token."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TRAJECTORY_TOP_K",
+        type=int,
+        default=3,
+        description=("How many past trajectories the pre-answer search retrieves."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS",
+        type=int,
+        default=120,
+        description=("Seconds the co-change history walk may run before it is abandoned."),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT",
+        type=int,
+        default=50,
+        description=(
+            "Commits touching more files than this are ignored as coupling evidence: a bulk "
+            "rename, a vendored-tree import or a reformat is not a signal (#13639)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COCHANGE_MIN_CO_CHANGES",
+        type=int,
+        default=3,
+        description=(
+            "How many commits two files must share before the pair is reported at all. One "
+            "shared commit is a coincidence."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COCHANGE_STRENGTH_THRESHOLD",
+        type=float,
+        default=0.3,
+        description=(
+            "Minimum normalised coupling strength to report. Independent of the count "
+            "threshold: a pair can clear the count and still be weak if either file changes "
+            "constantly."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COCHANGE_WINDOW_DAYS",
+        type=int,
+        default=180,
+        description=(
+            "Days of history the co-change analysis considers. Coupling decays — a pair "
+            "that moved together two years ago is history, not structure."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS",
+        type=int,
+        default=2,
+        description=("Seconds between polls while waiting for a code-execution approval decision."),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "Seconds a code-execution request waits for approval before expiring. Expiry is "
+            "a decision the caller can act on, not a side effect of how long a coroutine "
+            "lives (GH#11568)."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY",
+        type=bool,
+        default=True,
+        description=(
+            "Auto-approve code-execution calls limited to the read-only tool set. The "
+            "eligible set is fixed in code, not configurable here (GH#11568, GH#11662)."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_ENABLED",
+        type=bool,
+        default=False,
+        description=("Master switch for the compose/code-execution tool. Ships off (GH#11568)."),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES",
+        type=int,
+        default=1,
+        description=("How many times a failed generated script may be retried within one " "code-execution call."),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_MAX_TOOL_CALLS",
+        type=int,
+        default=50,
+        description=(
+            "Ceiling on tool calls a single code-execution script may make, bounding a "
+            "runaway loop inside the sandbox."
+        ),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODEEXEC_TIMEOUT_SECONDS",
+        type=int,
+        default=120,
+        description=("Seconds a compose-tool sandbox execution may run (GH#11568)."),
+        component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DELEGATION_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Master switch for the delegate tool. Off, it records the delegation request " "and does not dispatch it."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FACT_FORCING",
+        type=bool,
+        default=False,
+        description=("Enable the fact-forcing gate, which requires an answer to cite retrieved " "facts."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INJECTION_HARDBLOCK_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Hard-block prompt injection rather than only flagging it. When on and "
+            "confidence clears the threshold, the request is refused instead of annotated."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD",
+        type=float,
+        default=0.75,
+        description=(
+            "Confidence in [0.0, 1.0] at or above which a detected injection is "
+            "hard-blocked. 0.75 maps to HIGH; 1.0 would block only CRITICAL."
+        ),
+        component="auth",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN",
+        type=int,
+        default=0,
+        description=(
+            "Cumulative token ceiling (input plus output) for one run. Zero disables the "
+            "gate, which is the shipped default (#11541)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds a run's cumulative token counter survives in Redis, bounding memory "
+            "for abandoned sessions. Refreshed on every increment."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MAX_DELEGATIONS_PER_TURN",
+        type=int,
+        default=5,
+        description=("Delegate calls allowed in a single LLM turn — a fan-out bound, not a quality " "setting."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MAX_DELEGATION_DEPTH",
+        type=int,
+        default=2,
+        description=("How deep delegation may nest before it is refused, bounding runaway recursive " "delegation."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Seconds a single `git blame` may take during ownership analysis. Must stay "
+            "below the whole-analysis budget, which a previous 30s value exceeded (#13602)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OWNERSHIP_BUDGET_SECONDS",
+        type=float,
+        default=20.0,
+        description=(
+            "Total seconds ownership analysis may spend blaming files before it returns " "what it has (#13602)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OWNERSHIP_MAX_FILES",
+        type=int,
+        default=2000,
+        description=(
+            "How many files ownership analysis will blame. Paired with the time budget "
+            "because a file count alone is the wrong bound — file size dominates blame cost "
+            "(#13602)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAN_BEST_OF_N_COUNT",
+        type=int,
+        default=3,
+        description=(
+            "How many candidate plans best-of-N generates before selection. Clamped to a "
+            "minimum of 2, since best-of-1 is not a selection."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a provider stays marked degraded after a failure before traffic is " "offered to it again."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Master switch for skill distillation. Ships inert — enable once the LLM cost "
+            "of a recurring pass is accepted."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S",
+        type=int,
+        default=900,
+        description=(
+            "Seconds of corpus idleness after which a distillation pass runs early. Without "
+            "it the pass is purely clock-bound and a conversation ending at 09:00 waits for "
+            "the small hours (#13695)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=("Seconds between skill distillation passes."),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS",
+        type=int,
+        default=10,
+        description=(
+            "Conversations distilled per pass. Bounds the LLM spend of any one run; the "
+            "remainder is picked up next time because the cursor only advances over what "
+            "was handled."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES",
+        type=int,
+        default=4,
+        description=(
+            "Minimum messages a conversation needs before distillation attempts it. Shorter "
+            "ones cannot contain a reusable workflow and the extractor rejects them anyway."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_STT_PEAK_WINDOW_MS",
+        type=int,
+        default=100,
+        description=(
+            "Window in milliseconds over which speech energy is measured. Measuring across "
+            "the whole buffer averages a short reply into silence (#13104)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
+        type=int,
+        default=50000,
+        description=("Rows a consolidation pass may scan, keeping the pass bounded on a large " "trajectory store."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN",
+        type=float,
+        default=0.4,
+        description=(
+            "Reward at or above which a trajectory outcome is 'partial'. Below it the " "outcome is a failure (#11280)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN",
+        type=float,
+        default=0.7,
+        description=(
+            "Reward at or above which a trajectory outcome is 'success'. The canonical "
+            "threshold, so callers stop re-deriving it inline (#11280)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS",
+        type=int,
+        default=30,
+        description=("Age in days beyond which a low-reward trajectory is eligible for pruning " "(#11263)."),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR",
+        type=float,
+        default=0.4,
+        description=(
+            "Reward below which an aged trajectory is pruned. Stale low-reward failures are "
+            "noise that costs retrieval precision (#11263)."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRAJECTORY_USER_SCOPED",
+        type=bool,
+        default=True,
+        description=(
+            "Scope trajectory retrieval by user as well as tenant. tenant_id alone is "
+            "insufficient in single-company deployments where org_id is empty or identical "
+            "for everyone (#11089)."
+        ),
+        component="ai",
+    )
+)
