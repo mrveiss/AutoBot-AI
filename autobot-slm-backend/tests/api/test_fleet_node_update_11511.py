@@ -304,7 +304,15 @@ def _make_db_service_for_node(node):
 
 
 def test_sync_fleet_node_skips_degraded_node() -> None:
-    """A degraded node (no heartbeat) increments skipped, not failed (#11511)."""
+    """A degraded node that ansible cannot reach increments skipped, not failed.
+
+    #11511 established the outcome: a node that cannot be contacted must not
+    fail the job. #14297 changed how that is decided — the node is no longer
+    skipped on its *health*, because a node too stale to heartbeat is exactly
+    the one that needs the update, and skipping it on health was a deadlock.
+    Ansible's UNREACHABLE verdict decides instead, so this test now supplies
+    that verdict rather than asserting the playbook never ran.
+    """
     degraded = _fake_node(
         node_id="node-vnc",
         hostname="VNC",
@@ -319,20 +327,32 @@ def test_sync_fleet_node_skips_degraded_node() -> None:
     stage.status = _StageStatus.RUNNING
 
     mock_executor = MagicMock()
+    mock_executor.execute_playbook = AsyncMock(
+        return_value={
+            "success": False,
+            "returncode": 4,
+            "output": 'fatal: [node-vnc]: UNREACHABLE! => {"msg": "Failed to connect to the host via ssh"}',
+        }
+    )
     mock_db_svc = _make_db_service_for_node(degraded)
 
     with _patched_db_service(mock_db_svc):
         cont = _run(_sync_fleet_node(mock_executor, "node-vnc", job, stage, "10.0.0.1"))
 
-    assert cont is True, "loop must continue after skipping a non-operational node"
+    assert cont is True, "loop must continue after skipping an unreachable node"
     assert job.skipped_fleet_nodes == 1
     assert job.failed_fleet_nodes == 0
     assert job.completed_fleet_nodes == 0
-    mock_executor.execute_playbook.assert_not_called()
+    mock_executor.execute_playbook.assert_called_once()
 
 
 def test_sync_fleet_node_skips_never_heartbeated_node() -> None:
-    """A node that never sent a heartbeat is skipped regardless of status (#11511)."""
+    """A node that never heartbeated is attempted, and skipped only if unreachable.
+
+    Same reclassification as above (#14297): never having heartbeated is the
+    signature of a node that has not been provisioned yet, which is precisely
+    a node that should receive the deploy.
+    """
     never_beat = _fake_node(
         node_id="node-new",
         status=_STATUS_ONLINE,
@@ -345,6 +365,13 @@ def test_sync_fleet_node_skips_never_heartbeated_node() -> None:
     stage.status = _StageStatus.RUNNING
 
     mock_executor = MagicMock()
+    mock_executor.execute_playbook = AsyncMock(
+        return_value={
+            "success": False,
+            "returncode": 4,
+            "output": 'fatal: [node-new]: UNREACHABLE! => {"msg": "Failed to connect to the host via ssh"}',
+        }
+    )
     mock_db_svc = _make_db_service_for_node(never_beat)
 
     with _patched_db_service(mock_db_svc):
@@ -353,7 +380,79 @@ def test_sync_fleet_node_skips_never_heartbeated_node() -> None:
     assert cont is True
     assert job.skipped_fleet_nodes == 1
     assert job.failed_fleet_nodes == 0
-    mock_executor.execute_playbook.assert_not_called()
+    mock_executor.execute_playbook.assert_called_once()
+
+
+def test_sync_fleet_node_updates_a_degraded_but_reachable_node() -> None:
+    """The deadlock-breaker (#14297).
+
+    The node in the live report was degraded, SSH-reachable, and 1140 commits
+    behind — skipped on every run by the health check, so it could never get
+    the update that would let it heartbeat again. Reachable means it gets the
+    deploy.
+    """
+    degraded = _fake_node(
+        node_id="node-vnc",
+        hostname="VNC",
+        ip_address="203.0.113.26",  # RFC 5737 TEST-NET-3 doc IP (no real fleet IPs in tests — SSOT)
+        status=_STATUS_DEGRADED,
+        last_heartbeat=None,
+    )
+    job = _job_with_fleet_stage()
+    from api.code_sync import _get_stage
+
+    stage = _get_stage(job, "fleet_nodes")
+    stage.status = _StageStatus.RUNNING
+
+    mock_executor = MagicMock()
+    mock_executor.execute_playbook = AsyncMock(return_value={"success": True, "output": "", "returncode": 0})
+    mock_db_svc = _make_db_service_for_node(degraded)
+
+    with _patched_db_service(mock_db_svc), patch("api.code_sync._update_fleet_node_version", new=AsyncMock()):
+        cont = _run(_sync_fleet_node(mock_executor, "node-vnc", job, stage, "10.0.0.1"))
+
+    assert cont is True
+    assert job.completed_fleet_nodes == 1, "a reachable node must be updated even while degraded"
+    assert job.skipped_fleet_nodes == 0
+    assert job.failed_fleet_nodes == 0
+
+
+def test_sync_fleet_node_fails_a_degraded_node_that_broke_rather_than_vanished() -> None:
+    """A real failure must stay a failure, even for an unhealthy node.
+
+    If every failure against a degraded node counted as "it was down", a broken
+    deploy would report itself as a skip, the job would go green, and the node
+    would stay stale — the original bug wearing a different hat.
+    """
+    degraded = _fake_node(
+        node_id="node-vnc",
+        hostname="VNC",
+        ip_address="203.0.113.26",
+        status=_STATUS_DEGRADED,
+        last_heartbeat=None,
+    )
+    job = _job_with_fleet_stage()
+    from api.code_sync import _get_stage
+
+    stage = _get_stage(job, "fleet_nodes")
+    stage.status = _StageStatus.RUNNING
+
+    mock_executor = MagicMock()
+    mock_executor.execute_playbook = AsyncMock(
+        return_value={
+            "success": False,
+            "returncode": 2,
+            "output": 'TASK [Install]\nfatal: [node-vnc]: FAILED! => {"msg": "pip resolution failed"}',
+        }
+    )
+    mock_db_svc = _make_db_service_for_node(degraded)
+
+    with _patched_db_service(mock_db_svc):
+        cont = _run(_sync_fleet_node(mock_executor, "node-vnc", job, stage, "10.0.0.1"))
+
+    assert cont is False, "a real failure halts the stage"
+    assert job.failed_fleet_nodes == 1
+    assert job.skipped_fleet_nodes == 0
 
 
 # ---------------------------------------------------------------------------
