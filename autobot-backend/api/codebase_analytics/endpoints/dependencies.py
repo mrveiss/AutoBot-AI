@@ -16,7 +16,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_dependency_analysis
 from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
@@ -452,6 +452,7 @@ async def _scan_filesystem_imports(
 
 
 @router.get("/analytics/dependencies")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dependencies",
@@ -513,6 +514,7 @@ async def get_dependencies(
 
 
 @router.get("/analytics/dependencies/cached")
+@bounded(60.0)
 async def get_cached_dependency_result(source_id: str = ""):
     """Return the latest completed dependency analysis result (#1540)."""
     cached = await get_latest_task_result(_REDIS_PREFIX)
@@ -527,6 +529,7 @@ async def get_cached_dependency_result(source_id: str = ""):
 
 
 @router.post("/analytics/dependencies/analyze")
+@bounded(60.0)
 async def start_dependency_analysis():
     """Enqueue dependency analysis as a Celery task (GH#6505)."""
     result = run_dependency_analysis.delay()
@@ -535,6 +538,7 @@ async def start_dependency_analysis():
 
 
 @router.get("/analytics/dependencies/status/{task_id}")
+@bounded(60.0)
 async def get_dependency_status(task_id: str):
     """Get dependency analysis task status."""
     status = celery_result_to_status(AsyncResult(task_id))
@@ -544,6 +548,7 @@ async def get_dependency_status(task_id: str):
 
 
 @router.post("/analytics/dependencies/tasks/clear-stuck")
+@bounded(60.0)
 async def clear_stuck_dep_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):

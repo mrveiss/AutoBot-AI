@@ -33,7 +33,7 @@ class IndexCodebaseRequest(BaseModel):
     )
 
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 
 from ..scanner import (
     _active_tasks,
@@ -188,6 +188,7 @@ def _create_cleanup_callback(task_id: str):
 
 
 @router.post("/index")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -265,6 +266,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
 
 
 @router.get("/index/status/{task_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_indexing_status",
@@ -312,6 +314,7 @@ async def get_indexing_status(task_id: str):
 
 
 @router.get("/index/current")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_indexing_job",
@@ -418,6 +421,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
 
 
 @router.post("/index/cancel")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_indexing_job",
