@@ -2342,10 +2342,10 @@ before summarizing.
         unchanged, so a turn is byte-identical to one without this call.
         """
         try:
+            from agent_loop.tool_output_spill import _EXECUTION_RESULT_TEXT_KEYS as _SPILL_PAYLOAD_KEYS
             from agent_loop.tool_output_spill import (
-                _EXECUTION_RESULT_TEXT_KEYS as _SPILL_PAYLOAD_KEYS,
+                spill_execution_results_async,
             )
-            from agent_loop.tool_output_spill import spill_execution_results_async
 
             run_id = self._spill_run_id()
             if not run_id:
