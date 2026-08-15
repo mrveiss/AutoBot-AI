@@ -1324,6 +1324,8 @@ def test_the_filter_removes_those_files_from_a_walk(tmp_path):
     assert "agent_test.py" in without
     assert "agent_test.py" not in filtered
     assert "agent.py" in filtered, "the filter removed a real source file"
+
+
 class TestTheAgentExclusionReachesComputeDrift:
     """The wiring, not the constant (#14283, review finding on PR #14285).
 
