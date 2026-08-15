@@ -66,6 +66,11 @@ def _load():
     real ``inventory_builder`` has to occupy ``services.inventory_builder``
     while the wizard executes — and only while.
     """
+    # Derived, not guessed: every `services.*` / `api.*` / `config` module the
+    # four real-loaded files import. CI caught `services.provision_progress`
+    # missing from a hand-written version of this list — with `services` set to
+    # a MagicMock, an unlisted submodule fails as "not a package" rather than
+    # falling back to anything, so the omission is fatal at import time.
     touched = (
         "api",
         "api.websocket",
@@ -77,6 +82,7 @@ def _load():
         "services.database",
         "services.inventory_builder",
         "services.playbook_executor",
+        "services.provision_progress",
         "services.role_registry",
     )
     saved = {name: sys.modules.get(name) for name in touched}
