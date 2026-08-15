@@ -1,0 +1,190 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""A migration that did nothing must not be recorded as done (#14300).
+
+Observed live: ``column audit_logs.updated_at does not exist`` raised on an HTTP
+request, while ``add_role_permission_audit_log_timestamps`` — the migration
+written for exactly that column, and registered in the runner — sat marked
+applied.
+
+Two independent holes produced that, and both are the same shape: an absence
+read as a success.
+
+1. ``add_column_if_not_exists`` skips when the table is missing (#9785, correct
+   in itself — the alternative is an ALTER that errors). The runner then marked
+   the migration applied, so the skip became permanent. ``audit_logs`` lives in
+   the user-management database while the runner connects to one URL, so the
+   table is *never* there and the column could never arrive.
+
+2. ``run_all_migrations``'s exception handler recorded the error only when
+   ``results == []``. An exception after one success therefore left a list of
+   nothing but successes, and the startup caller — which raises on any failure
+   entry — saw a clean run and continued with the schema half migrated.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load(name: str, relative: str):
+    """Load a migrations module standalone — the package pulls in psycopg2 users."""
+    spec = importlib.util.spec_from_file_location(name, _BACKEND_ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(name, None)
+    return module
+
+
+_utils = _load("_mig_utils_14300", "migrations/utils.py")
+
+
+class _Cursor:
+    """Minimal cursor: knows which tables and columns exist, records ALTERs."""
+
+    def __init__(self, tables: dict[str, list[str]]):
+        self._tables = tables
+        self.executed: list[str] = []
+        self._result = None
+
+    def execute(self, sql, params=None):
+        self.executed.append(sql)
+        lowered = sql.lower()
+        if "information_schema.tables" in lowered:
+            name = params[0] if params else ""
+            self._result = [(1,)] if name in self._tables else []
+        elif "information_schema.columns" in lowered:
+            name = params[0] if params else ""
+            self._result = [(c,) for c in self._tables.get(name, [])]
+        else:
+            self._result = []
+
+    def fetchall(self):
+        return self._result or []
+
+    def fetchone(self):
+        rows = self._result or []
+        return rows[0] if rows else None
+
+
+@pytest.fixture(autouse=True)
+def _clear_deferrals():
+    _utils.reset_deferrals()
+    yield
+    _utils.reset_deferrals()
+
+
+def test_a_missing_table_is_recorded_as_a_deferral():
+    """The signal the runner needs, which previously existed only as a DEBUG line."""
+    cursor = _Cursor({"other_table": ["id"]})
+
+    added = _utils.add_column_if_not_exists(cursor, "audit_logs", "updated_at", "TIMESTAMP")
+
+    assert added is False
+    assert _utils.deferrals() == ["audit_logs.updated_at"]
+    assert not [sql for sql in cursor.executed if "ALTER TABLE" in sql], "must not ALTER a table that is absent"
+
+
+def test_a_present_table_missing_the_column_is_altered_and_not_deferred():
+    cursor = _Cursor({"audit_logs": ["id", "created_at"]})
+
+    added = _utils.add_column_if_not_exists(cursor, "audit_logs", "updated_at", "TIMESTAMP")
+
+    assert added is True
+    assert _utils.deferrals() == []
+    assert any("ALTER TABLE audit_logs ADD COLUMN updated_at" in sql for sql in cursor.executed)
+
+
+def test_an_existing_column_is_neither_altered_nor_deferred():
+    """The genuinely-idempotent case must stay silent — a deferral here would
+    make every re-run refuse to mark the migration applied, forever."""
+    cursor = _Cursor({"audit_logs": ["id", "updated_at"]})
+
+    added = _utils.add_column_if_not_exists(cursor, "audit_logs", "updated_at", "TIMESTAMP")
+
+    assert added is False
+    assert _utils.deferrals() == []
+    assert not [sql for sql in cursor.executed if "ALTER TABLE" in sql]
+
+
+def test_deferrals_accumulate_across_calls_within_one_migration():
+    """A migration touching three tables reports every one it could not reach."""
+    cursor = _Cursor({})
+
+    _utils.add_column_if_not_exists(cursor, "role_permissions", "created_at", "TIMESTAMP")
+    _utils.add_column_if_not_exists(cursor, "role_permissions", "updated_at", "TIMESTAMP")
+    _utils.add_column_if_not_exists(cursor, "audit_logs", "updated_at", "TIMESTAMP")
+
+    assert _utils.deferrals() == [
+        "role_permissions.created_at",
+        "role_permissions.updated_at",
+        "audit_logs.updated_at",
+    ]
+
+
+def test_reset_clears_between_migrations():
+    """Without this the runner would attribute one migration's deferral to the next."""
+    cursor = _Cursor({})
+    _utils.add_column_if_not_exists(cursor, "audit_logs", "updated_at", "TIMESTAMP")
+    assert _utils.deferrals()
+
+    _utils.reset_deferrals()
+
+    assert _utils.deferrals() == []
+
+
+# --------------------------------------------------------------------------
+# The runner's two rules, asserted structurally — importing runner.py needs
+# psycopg2 and a live DSN, neither of which belongs in a unit test.
+# --------------------------------------------------------------------------
+
+
+def _runner_source() -> str:
+    return (_BACKEND_ROOT / "migrations" / "runner.py").read_text(encoding="utf-8")
+
+
+def test_a_deferred_migration_is_not_marked_applied():
+    """The permanence half of the bug.
+
+    Marking a migration applied when it skipped every operation is what turned
+    a one-boot ordering problem into a column that could never arrive.
+    """
+    import ast
+
+    tree = ast.parse(_runner_source())
+    func = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
+    )
+    body = ast.dump(func)
+
+    assert "reset_deferrals" in body, "the runner never clears deferrals, so they leak between migrations"
+    assert "deferrals" in body, "the runner never reads the deferral record"
+    assert "Continue" in ast.dump(func) or any(
+        isinstance(node, ast.Continue) for node in ast.walk(func)
+    ), "a deferred migration must skip mark_migration_applied, not fall through to it"
+
+
+def test_a_mid_run_exception_is_always_recorded():
+    """The visibility half.
+
+    `if results == []` meant an exception after one success produced an
+    all-successes list, and the startup caller raises only on a failure entry —
+    so a half-migrated schema started cleanly.
+    """
+    source = _runner_source()
+
+    assert "if results == []" not in source, "the failure is recorded only when nothing ran yet (#14300)"
+    assert 'results.append(("migrations_execution", False' in source
