@@ -98,4 +98,4 @@ role_tts_worker_active: >-
 
 # #13870: mirrors inventory/group_vars/all.yml — kept in sync by
 # tests/check_role_facts_synced.py.
-chromadb_service_owner: "{{ 'ai-stack' if (role_ai_stack_active | default(false) | bool) else 'redis' }}"
+chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
