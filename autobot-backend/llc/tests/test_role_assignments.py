@@ -29,13 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.enums import RoleHolderType
 from llc.models.role_assignment import LLCRoleAssignment
-from user_management.models.role import Role
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
+from user_management.models.role import Role
 
 
 @pytest_asyncio.fixture

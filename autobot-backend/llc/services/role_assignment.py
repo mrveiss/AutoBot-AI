@@ -27,10 +27,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.activity import ActorType
-from ..models.enums import RoleHolderType
 from user_management.models.role import Role
 
+from ..models.activity import ActorType
+from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
 from .base import LLCServiceBase
 

@@ -21,13 +21,13 @@ from typing import AsyncIterator
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from user_management.models.role import Role
 
 from llc.services.role import RoleService
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
+from user_management.models.role import Role
 
 
 @pytest_asyncio.fixture
