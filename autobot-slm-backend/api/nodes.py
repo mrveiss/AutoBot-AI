@@ -77,6 +77,7 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
+from services.ansible_utils import summarize_playbook_failure
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -992,7 +993,7 @@ async def _execute_provision_playbook(
             "success": True,
             "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
             "roles": target_roles,
-            "output": result["output"][:500],
+            "output": summarize_playbook_failure(result["output"]),
         }
 
     logger.error("Failed to provision node %s: %s", node_id, result["output"])

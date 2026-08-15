@@ -8,6 +8,8 @@ import os
 import re
 import shutil
 
+from autobot_shared.env_utils import env_int
+
 # Common install locations checked when ansible-playbook isn't on PATH
 # (Issue #12693 — shared between DeploymentService and PlaybookExecutor).
 _COMMON_ANSIBLE_PATHS = (
@@ -87,3 +89,43 @@ def _extract_failure_summary(output: str) -> str:
     count = len(failures)
     noun = "host" if count == 1 else "hosts"
     return f"{count} {noun} failed \u2014 " + "; ".join(failures)
+
+
+# How much raw output to fall back to when nothing parseable is found. From the
+# END of the run: ansible's first lines are its preamble, so a head slice
+# reliably returns deprecation warnings and nothing else (#14298).
+PLAYBOOK_FAILURE_TAIL_CHARS = env_int("AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS", 500)
+
+
+def summarize_playbook_failure(output: str, tail_chars: int | None = None) -> str:
+    """Return the useful part of a failed playbook's output.
+
+    ``_extract_failure_summary`` first — it names the host, the task and the
+    ``msg``, which is what an operator needs. When it finds nothing parseable
+    (a run that died before any task, a non-ansible error), fall back to the
+    **tail**.
+
+    #14298: every caller previously did ``output[:500]``, which is ansible's
+    banner. A code-sync node failure reported itself as a DEFAULT_GATHER_SUBSET
+    deprecation warning while the actual cause — a pip resolution conflict —
+    sat at the end of the output, uncut. That is worse than no message: it
+    reads as a diagnosis and points somewhere unrelated.
+
+    Args:
+        output: full stdout/stderr of the playbook run.
+        tail_chars: fallback size; defaults to PLAYBOOK_FAILURE_TAIL_CHARS.
+
+    Returns:
+        A summary, or the tail of the output, or a fixed string when there is
+        no output at all.
+    """
+    summary = _extract_failure_summary(output or "")
+    if summary:
+        return summary
+    text = (output or "").strip()
+    if not text:
+        return "playbook failed with no output"
+    limit = PLAYBOOK_FAILURE_TAIL_CHARS if tail_chars is None else tail_chars
+    if len(text) <= limit:
+        return text
+    return "..." + text[-limit:]

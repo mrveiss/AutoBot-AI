@@ -28,6 +28,7 @@ from models.schemas import ServiceActionRequest
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_orchestrator import service_orchestrator
+from services.ansible_utils import summarize_playbook_failure
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orchestration", tags=["orchestration"])
@@ -598,9 +599,9 @@ async def _run_ssh_service_action(
                 node.node_id,
                 service_name,
                 action,
-                result["output"][:200],
+                summarize_playbook_failure(result["output"]),
             )
-            return False, f"Failed: {result['output'][:200]}"
+            return False, f"Failed: {summarize_playbook_failure(result['output'])}"
 
     except Exception as e:
         logger.error(

@@ -88,6 +88,7 @@ from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_trac
 from services.playbook_executor import get_playbook_executor
 from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
+from services.ansible_utils import summarize_playbook_failure
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -3419,7 +3420,7 @@ async def _ansible_self_update(node_id: str) -> None:
             detach=True,
         )
         if not result["success"]:
-            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+            logger.error("Ansible full-machine update failed for %s: %s", node_id, summarize_playbook_failure(result["output"]))
             # C2-a: playbook failed before restart — clear plan so it never auto-fires
             await _clear_resume_plan()
         else:
@@ -3648,12 +3649,12 @@ async def _sync_single_node(
 
         if result["success"]:
             node_state.status = "success"
-            node_state.message = result["output"][:500]
+            node_state.message = summarize_playbook_failure(result["output"])
             # Update node version in DB (#1209)
             await _update_fleet_node_version(node_state.node_id)
         else:
             node_state.status = "failed"
-            node_state.message = f"Playbook failed: {result['output'][:500]}"
+            node_state.message = f"Playbook failed: {summarize_playbook_failure(result['output'])}"
 
         node_state.completed_at = datetime.now(timezone.utc)
 
