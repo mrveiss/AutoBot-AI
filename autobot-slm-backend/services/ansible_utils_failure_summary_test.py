@@ -149,6 +149,50 @@ def test_the_message_is_found_on_the_fatal_line_itself():
     assert not result.rstrip().endswith("}"), "the trailing JSON brace leaked into the summary"
 
 
+def test_the_message_stops_where_it_ends_when_msg_is_not_the_last_key():
+    """The common shape, and the one the first fix got wrong.
+
+    ``command``/``shell``/``apt``/``pip`` tasks all set ``rc``, ``stderr`` and
+    ``stdout``, which sort after ``msg`` in the result dict. A regex ending at
+    ``$`` cannot know where the value stops, so it ran the message straight on
+    into the rest of the JSON — verified in review against a real apt failure.
+    """
+    line = (
+        'fatal: [host]: FAILED! => {"changed": false, '
+        '"msg": "apt-get install failed: E: Unable to locate package", '
+        '"rc": 100, "stderr": "E: Unable to locate package", '
+        '"stderr_lines": ["E: Unable to locate package"]}'
+    )
+
+    result = _au.summarize_playbook_failure("TASK [Install] ***\n" + line)
+
+    assert "apt-get install failed: E: Unable to locate package" in result
+    for leaked in ('"rc"', '"stderr"', "stderr_lines"):
+        assert leaked not in result, f"{leaked} leaked out of the result dict into the summary"
+
+
+def test_a_message_that_itself_ends_in_braces_is_not_truncated():
+    """The first fix stripped a trailing ``}``, which ate real content.
+
+    Template and set_fact failures quote the offending structure, so a message
+    genuinely ending in ``}}`` is ordinary — and losing those two characters
+    changes what the error says.
+    """
+    line = 'fatal: [host]: FAILED! => {"msg": "Unbalanced braces: {a: 1, b: {c: 2}}"}'
+
+    result = _au.summarize_playbook_failure("TASK [Render] ***\n" + line)
+
+    assert "Unbalanced braces: {a: 1, b: {c: 2}}" in result
+
+
+def test_a_fatal_line_with_no_parseable_json_still_summarises():
+    """UNREACHABLE lines carry no dict; the host and type must still surface."""
+    result = _au.summarize_playbook_failure("TASK [Facts] ***\nfatal: [host]: UNREACHABLE!")
+
+    assert "host" in result
+    assert "unreachable" in result.lower()
+
+
 def test_the_multi_line_callback_form_still_works():
     """The form the existing suite pins — it must not regress in the fix."""
     multi = 'TASK [Restart] ***\nfatal: [host]: FAILED! => {\n    "msg": "Service restart failed"\n}'

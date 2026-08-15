@@ -4,6 +4,7 @@
 # Author: mrveiss
 """Ansible output parsing utilities for slm-backend endpoints."""
 
+import json
 import os
 import re
 import shutil
@@ -39,6 +40,49 @@ def _find_ansible_playbook() -> str:
     raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
 
+def _msg_from_result_json(line: str) -> str:
+    """``msg`` out of the result dict on a ``fatal:`` line, parsed as JSON.
+
+    Ansible's default callback renders the whole result on one line:
+    ``fatal: [host]: FAILED! => {"changed": false, "msg": "...", "rc": 100, ...}``
+
+    Review finding on #14298: a regex ending at ``$`` cannot know where the
+    ``msg`` value stops, so whenever ``msg`` is not the last key — which is the
+    norm for ``command``/``shell``/``apt``/``pip`` tasks, since ``rc``,
+    ``stderr`` and ``stdout`` all sort after it — the captured text ran on into
+    the rest of the JSON. The first fix for that, stripping a trailing ``}``,
+    was the same mistake one size smaller: it truncated any message whose own
+    text ends in a brace.
+
+    Parsing removes both failure modes rather than trading between them.
+    """
+    start = line.find("{")
+    if start == -1:
+        return ""
+    blob = line[start:]
+    try:
+        result = json.loads(blob)
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(result, dict):
+        return ""
+    msg = result.get("msg")
+    return str(msg).strip() if msg else ""
+
+
+def _msg_from_following_lines(lines: list[str], index: int) -> str:
+    """``msg`` from the lines after a ``fatal:``, for the yaml/verbose callback.
+
+    There the dict is pretty-printed, so ``"msg": "..."`` sits alone on its own
+    line and ending the capture at ``$`` is correct.
+    """
+    for j in range(index + 1, min(index + 10, len(lines))):
+        msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\',]?\s*$', lines[j].strip())
+        if msg_match:
+            return msg_match.group(1).strip().strip("'\"")
+    return ""
+
+
 def _extract_failure_summary(output: str) -> str:
     """Parse Ansible stdout and return a human-readable failure summary.
 
@@ -70,19 +114,10 @@ def _extract_failure_summary(output: str) -> str:
             host = host_match.group(1) if host_match else "unknown host"
             failure_type = "UNREACHABLE" if "UNREACHABLE" in line else "FAILED"
 
-            # #14298: start at the fatal line ITSELF, not the one after it.
-            # Ansible's default callback puts the whole result dict on the same
-            # line as `fatal: [host]: FAILED! => {...”msg”: ...}`, so scanning
-            # from i+1 found the message only in the multi-line (yaml/debug)
-            # callback form. A summary that names the task but drops the
-            # message is the half that matters least — the task is already in
-            # the play, the msg is why it stopped.
-            msg = ""
-            for j in range(i, min(i + 10, len(lines))):
-                msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\']?\s*$', lines[j].strip())
-                if msg_match:
-                    msg = msg_match.group(1).strip().strip("'\"").rstrip("}").strip().strip("'\"")
-                    break
+            # #14298: the message lives on the fatal line itself under the
+            # default callback, and on its own line under the yaml/verbose one.
+            # Parse the JSON first, fall back to the line scan.
+            msg = _msg_from_result_json(line) or _msg_from_following_lines(lines, i)
 
             task_part = f' at "{current_task}"' if current_task else ""
             msg_part = f": {msg}" if msg else ""
