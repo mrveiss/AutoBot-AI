@@ -87,11 +87,13 @@ def test_a_module_without_a_router_attribute_is_recorded(loader):
 def test_a_router_that_imports_is_recorded_loaded(loader):
     """The success path, via the 5-tuple form the monitoring group uses.
 
-    ``logging`` is importable and genuinely has ``getLogger``, so this
-    exercises a load that works rather than a third way of failing — and it
-    covers ``_unpack``'s 5-tuple branch at the same time.
+    The 5-tuple order is the monitoring group's — ``(module, router_attr,
+    prefix, tags, name)`` — which is the point of ``_unpack``: it is NOT the
+    4-tuple order with an attribute appended. ``logging`` is importable and
+    genuinely has ``getLogger``, so this exercises a load that works rather
+    than a third way of failing.
     """
-    routers = loader.load_router_group("t", [("logging", "", ["x"], "fake", "getLogger")])
+    routers = loader.load_router_group("t", [("logging", "getLogger", "", ["x"], "fake")])
 
     assert len(routers) == 1
     assert routers[0][3] == "fake"
@@ -114,14 +116,14 @@ def test_a_fully_loaded_group_does_not_log_an_error(loader, caplog):
     then it is worth nothing on the boot that matters.
     """
     with caplog.at_level(logging.DEBUG):
-        loader.load_router_group("t", [("logging", "", ["x"], "fine", "getLogger")])
+        loader.load_router_group("t", [("logging", "getLogger", "", ["x"], "fine")])
 
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 def test_reloading_a_group_replaces_its_results(loader):
     """A stale entry would report a router as loaded that this pass never loaded."""
-    loader.load_router_group("t", [("logging", "", ["x"], "fine", "getLogger")])
+    loader.load_router_group("t", [("logging", "getLogger", "", ["x"], "fine")])
     loader.load_router_group("t", [("no.such.module", "", ["x"], "ghost")])
 
     results = loader.get_load_results("t")
@@ -130,7 +132,7 @@ def test_reloading_a_group_replaces_its_results(loader):
 
 def test_results_are_isolated_per_group(loader):
     loader.load_router_group("a", [("no.such.module", "", ["x"], "ghost_a")])
-    loader.load_router_group("b", [("logging", "", ["x"], "ok_b", "getLogger")])
+    loader.load_router_group("b", [("logging", "getLogger", "", ["x"], "ok_b")])
 
     assert [r["name"] for r in loader.get_load_results("a")] == ["ghost_a"]
     assert [r["name"] for r in loader.get_load_results("b")] == ["ok_b"]
