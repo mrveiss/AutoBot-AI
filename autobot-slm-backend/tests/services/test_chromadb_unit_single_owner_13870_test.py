@@ -84,24 +84,6 @@ def test_each_role_declares_a_default_owner(role: str):
     assert defaults["chromadb_service_owner"] in _ROLES
 
 
-def test_the_roles_do_not_share_one_default():
-    """They must DISAGREE — each defaults to its own name.
-
-    The first version asserted the opposite, and that is what produced the
-    review's headline defect: with both roles defaulting to "redis", every
-    topology that runs ai-stack without redis skipped the template task and
-    deployed no unit at all. Five of six entry points, including the updater's.
-    A default that is the role's own name always writes something.
-    """
-    values = {
-        role: yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))[
-            "chromadb_service_owner"
-        ]
-        for role in _ROLES
-    }
-    assert values == {role: role for role in _ROLES}, f"defaults must be self-named, got {values}"
-
-
 def test_the_ai_stack_only_play_still_resolves_an_owner():
     """setup-ai-stack.yml needs no override now that the role default is
     self-named — and it must not have one.
@@ -187,23 +169,6 @@ def test_every_unit_writer_in_the_tree_is_gated():
     assert not ungated, "tasks writing the chromadb unit without an ownership gate: " + "; ".join(ungated)
 
 
-def test_every_ai_stack_entry_point_resolves_to_a_writer():
-    """A topology that applies ai-stack without redis must still get a unit.
-
-    A shared default of one role's name meant five of six entry points —
-    including the updater's own path — silently deployed nothing, which the
-    PR's own comment had already identified as worse than the bug being fixed.
-    The floor is now each role's own name, so a single-role topology always
-    writes.
-    """
-    for role in _ROLES:
-        defaults = yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))
-        assert defaults["chromadb_service_owner"] == role, (
-            f"{role}'s default must be its own name — a shared default makes every "
-            "single-role topology deploy no unit at all"
-        )
-
-
 def test_the_combined_host_owner_is_derived_where_both_roles_can_run():
     """Both places that carry the role_*_active facts must agree, or a run that
     loads one and not the other resolves differently."""
@@ -213,40 +178,6 @@ def test_the_combined_host_owner_is_derived_where_both_roles_can_run():
         assert (
             "role_ai_stack_active" in text or "role_redis_active" in text
         ), f"{rel} does not derive the owner from a role_*_active fact"
-
-
-def test_the_combined_host_keeps_todays_data_path():
-    """ai-stack must win a combined host, because that is what wins TODAY.
-
-    The old run order put ai-stack last (deploy.yml applies redis before
-    ai-stack; the fleet play runs redis in phase 3 and ai-stack in 5a), so the
-    live ExecStart --path is ai-stack's. Handing ownership to redis relocates
-    the vector store, and chroma comes up healthy against an empty directory —
-    the knowledge base would read as empty with no error anywhere. Making
-    ownership deterministic must not smuggle in a data move.
-    """
-    for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
-        text = (_ANSIBLE / rel).read_text(encoding="utf-8")
-        line = next(ln for ln in text.splitlines() if ln.startswith("chromadb_service_owner:"))
-        assert "'ai-stack' if" in line, (
-            f"{rel} hands a combined host to redis — that relocates the chroma data "
-            "directory silently (#13870, open decision)"
-        )
-
-
-# ---------------------------------------------------------------------------
-# #13870 follow-up: the two units differed in more than their path, and which
-# one won was decided by role order. Whatever a host ended up with, it got an
-# arbitrary combination of these — and nothing made that visible.
-#
-# The memory watermarks that were here are gone, and the reason is worth
-# keeping: `CgroupMemoryCollector` reads its OWN host's /sys/fs/cgroup and is
-# scraped only from the backend and slm-backend processes. Chroma runs on the
-# ai/ML and database nodes, so `autobot_cgroup_memory_*` is never produced for
-# this unit on the documented multi-node topology — the alerting that would have
-# justified a watermark is structurally unable to fire for it. Adding MemoryHigh
-# there would have shipped a throttle with no observer. Tracked separately.
-# ---------------------------------------------------------------------------
 
 
 def _directive(text: str, name: str) -> str | None:
@@ -272,3 +203,109 @@ def test_the_unit_writing_to_a_file_is_unbuffered(role: str):
     if "StandardOutput=append:" not in text:
         pytest.skip(f"{role} does not append to a file")
     assert 'Environment="PYTHONUNBUFFERED=1"' in text, f"{role} buffers chroma's diagnostics into a file"
+
+
+def test_each_role_keeps_a_self_named_floor():
+    """The floor is what a role resolves to when applied ALONE with no vars
+    layer loaded — `setup_wizard._generate_dynamic_inventory()` writes a bare
+    temp inventory with no group_vars sibling, so the "Setup AI Stack Node"
+    action sees nothing but these defaults.
+
+    A shared default of one role's name means that host deploys NO unit at all.
+    Review caught that in #14055, and I re-created it here by moving both floors
+    to "redis" while fixing the ownership question — which is one precedence
+    level up and unaffected by the floor.
+    """
+    for role in _ROLES:
+        defaults = yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))
+        assert defaults["chromadb_service_owner"] == role, (
+            f"{role}'s floor must be its own name — a shared floor makes a single-role "
+            "topology with no vars layer deploy nothing"
+        )
+
+
+def test_the_migration_does_not_gate_on_an_empty_target():
+    """An interrupted copy leaves the target non-empty. Gating the retry on
+    "target is empty" would skip it forever and serve the partial store — the
+    same silent-wrong-data class the migration exists to prevent, one step
+    removed."""
+    tasks = (_ANSIBLE / "roles" / "redis" / "tasks" / "chromadb_data_migration.yml").read_text(encoding="utf-8")
+    assert ".migrated-from-legacy" in tasks, "completeness is not tracked by a marker"
+    assert "_chroma_migration_ran: false" in tasks, (
+        "the safety net must use an explicit boolean — a registered task in a SKIPPED block "
+        "still yields a result dict, so `is defined` reads True when nothing ran"
+    )
+    block_gate = tasks.index('- name: "ChromaDB | Migrate the persist directory')
+    gate_text = tasks[block_gate : block_gate + 700]
+    assert (
+        "_chroma_target_files | int == 0" not in gate_text
+    ), "the migration gates on an empty target — an interrupted copy would never be retried"
+
+
+def test_the_database_stack_owns_the_database():
+    """ChromaDB is a database, so on a host running both roles the db stack owns
+    its unit — and that is the only role that installs chromadb.
+
+    Asserted on the DERIVATION, not on the role defaults. The defaults are a
+    fail-safe floor for a role applied alone; the ownership decision is one
+    precedence level up. Conflating the two is how I broke the ai-stack-only
+    topology while fixing this.
+
+    An earlier revision made ai-stack the owner on a combined host to avoid
+    relocating the persist directory. That produced the #4090 outage live:
+    ExecStart pointed at /opt/autobot/autobot-ai-stack/venv/bin/chroma, which
+    does not exist, and the unit reached NRestarts=4399 while reporting
+    `activating`.
+    """
+    for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
+        line = next(
+            ln
+            for ln in (_ANSIBLE / rel).read_text(encoding="utf-8").splitlines()
+            if ln.startswith("chromadb_service_owner:")
+        )
+        assert "'redis' if" in line, (
+            f"{rel} does not hand a combined host to the db stack — the ai-stack venv " "has no chromadb installed"
+        )
+
+    deploy = (_ANSIBLE / "deploy.yml").read_text(encoding="utf-8")
+    owner_line = next(ln for ln in deploy.splitlines() if "chromadb_service_owner:" in ln)
+    assert "'redis' if" in owner_line, "deploy.yml still prefers ai-stack when both are requested"
+
+
+def test_the_persist_directory_moves_with_the_service():
+    """The store follows the database. The migration must exist and must refuse
+    to leave the service pointed at an empty directory while the legacy path
+    holds data — chroma starts happily on an empty store and the knowledge base
+    simply reads as empty, with no error anywhere."""
+    tasks = (_ANSIBLE / "roles" / "redis" / "tasks" / "chromadb_data_migration.yml").read_text(encoding="utf-8")
+    assert "chromadb_legacy_data_dir" in tasks
+    assert "assert" in tasks, "the migration has no guard against serving an empty store"
+
+    code_only = (_ANSIBLE / "roles" / "redis" / "tasks" / "code_only.yml").read_text(encoding="utf-8")
+    assert "chromadb_data_migration.yml" in code_only, "the migration is never included"
+    assert code_only.index("chromadb_data_migration.yml") < code_only.index(
+        _UNIT_DEST
+    ), "the migration must run BEFORE the unit is deployed, or the service starts on the old path"
+
+
+def test_the_marker_is_written_only_after_the_copy_is_verified():
+    """Order is the entire guarantee, and nothing asserted it.
+
+    Round-2 review swapped the assert and the marker-write and the suite stayed
+    green. If the marker lands first, an incomplete copy is recorded as migrated
+    — the block then skips forever and chroma serves a partial store, which is
+    exactly the failure the marker was introduced to prevent.
+
+    Checking the strings in isolation cannot see this: both are present either
+    way. Only their relative position carries the meaning.
+    """
+    tasks = (_ANSIBLE / "roles" / "redis" / "tasks" / "chromadb_data_migration.yml").read_text(encoding="utf-8")
+    verify_at = tasks.index("The copy must be complete before anything trusts it")
+    marker_at = tasks.index("Mark the store migrated")
+    assert verify_at < marker_at, (
+        "the migration marker is written BEFORE the copy is verified — an incomplete "
+        "copy would be recorded as migrated and never retried (#13870)"
+    )
+
+    copy_at = tasks.index("Copy the store to the db-stack path")
+    assert copy_at < verify_at, "the verification must follow the copy it verifies"

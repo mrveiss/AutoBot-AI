@@ -97,6 +97,11 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/write_chromadb_authn_env.yml
   tags: ['redis', 'chromadb']
 
+- name: "ChromaDB | Move the persist directory to the db stack (#13870)"
+  ansible.builtin.include_tasks: chromadb_data_migration.yml
+  when: chromadb_service_owner == 'redis'
+  tags: ['redis', 'chromadb']
+
 - name: "ChromaDB | Deploy systemd service unit"
   # #13870: only when this role owns the unit — see chromadb_service_owner.
   when: chromadb_service_owner == 'redis'
