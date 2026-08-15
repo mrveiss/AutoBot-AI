@@ -166,13 +166,34 @@ def test_a_deferred_migration_is_not_marked_applied():
     func = next(
         node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
     )
-    body = ast.dump(func)
+    called = {
+        node.func.attr
+        for node in ast.walk(func)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    } | {node.func.id for node in ast.walk(func) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
 
-    assert "reset_deferrals" in body, "the runner never clears deferrals, so they leak between migrations"
-    assert "deferrals" in body, "the runner never reads the deferral record"
-    assert "Continue" in ast.dump(func) or any(
-        isinstance(node, ast.Continue) for node in ast.walk(func)
-    ), "a deferred migration must skip mark_migration_applied, not fall through to it"
+    assert "reset_deferrals" in called, "the runner never clears deferrals, so they leak between migrations"
+    assert "deferrals" in called, "the runner never reads the deferral record"
+
+    # The `continue` must live in the branch that tested for deferrals, not
+    # merely somewhere in the function. An earlier version of this assertion
+    # accepted `"Continue" in ast.dump(func)` — a substring check over dumped
+    # source, which is the shape this repo keeps getting bitten by: it would
+    # pass on a `continue` in an unrelated loop while the deferral branch fell
+    # straight through to mark_migration_applied.
+    deferral_branches = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.If)
+        and any(
+            isinstance(inner, ast.Name) and inner.id == "deferred"
+            for inner in ast.walk(node.test)
+        )
+    ]
+    assert deferral_branches, "no branch tests whether the migration deferred anything"
+    assert any(
+        isinstance(inner, ast.Continue) for branch in deferral_branches for inner in ast.walk(branch)
+    ), "the deferral branch falls through to mark_migration_applied instead of skipping it"
 
 
 def test_a_mid_run_exception_is_always_recorded():
