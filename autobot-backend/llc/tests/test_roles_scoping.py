@@ -60,9 +60,9 @@ async def test_company_a_never_sees_company_bs_roles(session_factory):  # noqa: 
     async with session_factory() as session:
         listed = await service.list_by_company(session, company_a)
 
-    assert [role.name for role in listed] == ["Head of Sales"], (
-        f"company B's roles leaked into company A: {[r.name for r in listed]}"
-    )
+    assert [role.name for role in listed] == [
+        "Head of Sales"
+    ], f"company B's roles leaked into company A: {[r.name for r in listed]}"
 
 
 @pytest.mark.asyncio

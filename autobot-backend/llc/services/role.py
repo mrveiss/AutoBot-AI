@@ -54,18 +54,12 @@ class RoleService:
         await session.flush()
         return role
 
-    async def get(
-        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
-    ) -> Optional[LLCRole]:
-        result = await session.execute(
-            select(LLCRole).where(LLCRole.id == role_id, LLCRole.company_id == company_id)
-        )
+    async def get(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> Optional[LLCRole]:
+        result = await session.execute(select(LLCRole).where(LLCRole.id == role_id, LLCRole.company_id == company_id))
         return result.scalar_one_or_none()
 
     async def list_by_company(self, session: AsyncSession, company_id: uuid.UUID) -> List[LLCRole]:
-        result = await session.execute(
-            select(LLCRole).where(LLCRole.company_id == company_id).order_by(LLCRole.name)
-        )
+        result = await session.execute(select(LLCRole).where(LLCRole.company_id == company_id).order_by(LLCRole.name))
         return list(result.scalars().all())
 
     async def update(

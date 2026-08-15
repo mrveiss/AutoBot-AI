@@ -32,8 +32,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE IF NOT EXISTS llc_roles (
             id UUID PRIMARY KEY,
             company_id UUID NOT NULL,
@@ -43,8 +42,7 @@ def upgrade() -> None:
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
             CONSTRAINT uq_llc_roles_company_name UNIQUE (company_id, name)
         )
-        """
-    )
+        """)
     op.execute("CREATE INDEX IF NOT EXISTS ix_llc_roles_company_id ON llc_roles (company_id)")
 
 
