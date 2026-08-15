@@ -12,7 +12,7 @@ Mount point: /api/analytics/codebase (via router.py)
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from ..scanner import (
@@ -41,6 +41,7 @@ def _build_running_info(task_id: str) -> dict:
 
 
 @router.get("/index/queue")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_index_queue",
@@ -72,6 +73,7 @@ async def get_index_queue():
 
 
 @router.delete("/index/queue/{source_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="dequeue_source",

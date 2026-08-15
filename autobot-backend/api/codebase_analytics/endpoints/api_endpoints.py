@@ -20,7 +20,7 @@ from typing import Dict
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from ..api_endpoint_scanner import APIEndpointChecker
@@ -76,6 +76,7 @@ async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
 
 
 @router.get("/api-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_endpoints",
@@ -104,6 +105,7 @@ async def get_api_endpoints(
 
 
 @router.get("/api-calls")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_api_calls",
@@ -132,6 +134,7 @@ async def get_frontend_api_calls(
 
 
 @router.get("/endpoint-coverage")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_coverage",
@@ -173,6 +176,7 @@ async def get_endpoint_coverage(
 
 
 @router.get("/endpoint-analysis")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_analysis_full",
@@ -199,6 +203,7 @@ async def get_endpoint_analysis_full(
 
 
 @router.get("/orphaned-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orphaned_endpoints",
@@ -226,6 +231,7 @@ async def get_orphaned_endpoints(
 
 
 @router.get("/missing-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_missing_endpoints",
@@ -253,6 +259,7 @@ async def get_missing_endpoints(
 
 
 @router.get("/used-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_used_endpoints",
@@ -293,6 +300,7 @@ async def get_used_endpoints(
 
 
 @router.post("/refresh-endpoint-cache")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_endpoint_cache",
