@@ -15,7 +15,7 @@ set -e
 #
 # $USER is not usable here either: this script is run with sudo, so $USER is
 # root and the paths resolved to /home/root.
-VNC_USER="${VNC_USER}"
+VNC_USER="${AUTOBOT_VNC_USER:-autobot}"
 VNC_HOME="/home/${VNC_USER}"
 
 echo "Setting up VNC with XFCE desktop..."

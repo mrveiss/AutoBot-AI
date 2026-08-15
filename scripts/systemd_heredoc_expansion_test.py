@@ -42,7 +42,13 @@ _HEREDOC = re.compile(r"""cat\s*>>?\s*(?P<target>\S+)\s*<<-?\s*(?P<q>['"]?)(?P<d
 # ${NAME}, ${NAME:-default}, $NAME
 _VAR_REF = re.compile(r"\$\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)[^}]*\}|\$(?P<bare>[A-Za-z_][A-Za-z0-9_]*)")
 
-_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)=")
+# `local`/`declare`/`readonly`/`typeset` bind a name just as plainly as a bare
+# assignment does. Reading only the bare form reported 10 false positives in
+# install-bare-metal.sh, where every unit variable is a function `local`.
+_ASSIGNMENT = re.compile(
+    r"^\s*(?:export\s+|local\s+|declare\s+(?:-\w+\s+)?|readonly\s+|typeset\s+)?"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)="
+)
 
 # Names systemd itself resolves at runtime, which must reach the unit file
 # unexpanded. A script wanting one writes it escaped; this list keeps the rule
@@ -164,14 +170,23 @@ def test_the_vnc_units_resolve_to_a_real_user():
         text = script.read_text(encoding="utf-8")
         values = dict(re.findall(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)="?([^"\n]*)"?', text, re.M))
 
+        def substitute(match: re.Match) -> str:
+            """``${NAME}`` from the script, else ``${NAME:-default}``'s default.
+
+            The default branch matters: the resolved value is *built* from one
+            (``VNC_USER="${AUTOBOT_VNC_USER:-autobot}"``), so ignoring it leaves
+            the expansion stuck one level short and the assertion below reports
+            an unresolved token that resolves fine at runtime.
+            """
+            name, default = match.group(1), match.group(2)
+            if name in values:
+                return values[name]
+            return default if default is not None else match.group(0)
+
         def expand(raw: str) -> str:
             out = raw
-            for _ in range(5):  # VNC_HOME references VNC_USER
-                new = re.sub(
-                    r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}",
-                    lambda m: values.get(m.group(1), m.group(0)),
-                    out,
-                )
+            for _ in range(5):  # VNC_HOME references VNC_USER references the default
+                new = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}", substitute, out)
                 if new == out:
                     break
                 out = new
