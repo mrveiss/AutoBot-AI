@@ -52176,6 +52176,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/workflows/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows */
+        get: operations["list_workflows_api_llc_workflows__company_id__get"];
+        put?: never;
+        /** Create Workflow */
+        post: operations["create_workflow_api_llc_workflows__company_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/workflows/{company_id}/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow */
+        get: operations["get_workflow_api_llc_workflows__company_id___workflow_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Workflow */
+        delete: operations["delete_workflow_api_llc_workflows__company_id___workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Workflow Status */
+        patch: operations["update_workflow_status_api_llc_workflows__company_id___workflow_id__patch"];
+        trace?: never;
+    };
     "/api/llc/health": {
         parameters: {
             query?: never;
@@ -100889,6 +100926,24 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowCreate */
+        WorkflowCreate: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Status
+             * @default planned
+             */
+            status: string;
+            /** Definition */
+            definition?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WorkflowDetailResponse
          * @description Response shape for GET /workflow/{workflow_id}.
@@ -101048,6 +101103,38 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowResponse */
+        WorkflowResponse: {
+            /** Workflow Id */
+            workflow_id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string | null;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WorkflowSecretCreateRequest
          * @description Request body for creating a workflow secret. Issue #2303: owner_id derived from auth.
@@ -101155,6 +101242,13 @@ export interface components {
             } | null;
             /** Estimated Remaining */
             estimated_remaining?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowStatusUpdate */
+        WorkflowStatusUpdate: {
+            /** Status */
+            status: string;
         } & {
             [key: string]: unknown;
         };
@@ -173371,6 +173465,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuotaWindow"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_api_llc_workflows__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_api_llc_workflows__company_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_api_llc_workflows__company_id___workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workflow_api_llc_workflows__company_id___workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_status_api_llc_workflows__company_id___workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
                 };
             };
             /** @description Validation Error */

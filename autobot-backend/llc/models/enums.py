@@ -414,3 +414,26 @@ class ActivityEventType(str, Enum):
 
     # Notification
     NOTIFICATION_SENT = "notification.sent"
+
+
+class WorkflowStatus(str, Enum):
+    """Lifecycle of a workflow *definition* (#14210).
+
+    A new axis, not a duplicate of an existing one — ``LLCRunStatus`` describes a
+    single *execution*, while a workflow definition can sit ``PLANNED`` having
+    never run, or stay ``RUNNING`` across many runs. #14263 is the umbrella for
+    telling a genuine axis apart from a fork; this is the former, and it is
+    deliberately small so it does not grow into a second run vocabulary.
+
+    Before this existed ``Workflow.status`` was a bare ``String(50)`` that the
+    Redis backfill populated from ``current_step`` — i.e. a *step name* stored in
+    a *status* column. That is the same untyped-discriminator defect as #13937,
+    whose cost was #13954: a Kanban swimlane filtering on a value the backend
+    never wrote, which matched nothing for months.
+    """
+
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
