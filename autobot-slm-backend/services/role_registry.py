@@ -461,7 +461,14 @@ _INFRA_ROLES = [
         "target_path": _SLM_AGENT_DIR,
         "systemd_service": "slm-agent",
         "auto_restart": True,
-        "post_sync_cmd": (f"cd {_SLM_AGENT_DIR} && pip install aiohttp psutil"),
+        # #14278: the agent's venv, not system pip, and the SAME package set the
+        # ansible role installs. This listed two of six and targeted an
+        # interpreter the unit does not run, so a code-sync of this role could
+        # not update the dependencies the agent actually imports — and on a
+        # PEP 668 distro it fails outright with externally-managed-environment.
+        "post_sync_cmd": (
+            f"cd {_SLM_AGENT_DIR} && " "venv/bin/pip install aiohttp psutil redis pydantic-settings sqlalchemy pyyaml"
+        ),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-slm-agent.yml",
