@@ -156,7 +156,6 @@ def _module_ast(filename: str) -> ast.Module:
     return ast.parse((_REGISTRY_DIR / filename).read_text(encoding="utf-8"))
 
 
-
 _ENTRY_POINTS = {
     "analytics": "load_analytics_routers",
     "feature": "load_feature_routers",
@@ -182,6 +181,7 @@ def _entry_point_ast(filename: str, group: str) -> ast.FunctionDef:
             return node
     raise AssertionError(f"{filename}: {name} not found — this rule is pinned to the wrong name")
 
+
 @pytest.mark.parametrize("group,filename", sorted(_GROUP_MODULES.items()))
 def test_no_registry_catches_importerror_itself(group, filename):
     """An except-and-return-None here is a router failing invisibly again.
@@ -190,6 +190,7 @@ def test_no_registry_catches_importerror_itself(group, filename):
     had it, so a seventh registry added tomorrow cannot reintroduce the shape
     and stay quiet.
     """
+
     def _caught_names(handler: ast.ExceptHandler) -> set[str]:
         """Names in `except X:` and in the grouped `except (X, Y):` form.
 

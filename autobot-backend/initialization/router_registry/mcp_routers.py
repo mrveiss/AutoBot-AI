@@ -10,7 +10,6 @@ as part of the core routers module. This exists for organizational consistency
 and future MCP router additions that may be optional.
 """
 
-from typing import List, Tuple
 
 from .loader import load_router_group
 

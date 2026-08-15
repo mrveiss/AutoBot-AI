@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-from .loader import get_load_results, load_router_group, load_single_router
+from .loader import get_load_results, load_router_group
 
 logger = get_logger(__name__)
 
