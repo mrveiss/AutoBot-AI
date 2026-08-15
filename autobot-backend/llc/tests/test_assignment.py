@@ -102,6 +102,37 @@ class TestEnableCoworking:
         assert result.co_working_enabled is True
         assert result.version == 2
 
+    async def test_sets_coworker_fields_user_vocabulary(self, service, mock_session):
+        """The converged vocabulary is accepted directly (#13970)."""
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+
+        result = await service.enable_coworking(
+            mock_session,
+            str(item.id),
+            co_worker_type="user",
+            company_id=str(uuid.uuid4()),
+            co_worker_user_id=str(uuid.uuid4()),
+            caller_role="owner",
+        )
+
+        assert result.co_worker_type == "user"
+
+    async def test_rejects_a_co_worker_type_outside_the_vocabulary(self, service, mock_session):
+        """The case that must stay caught: coercion still rejects junk."""
+        item = _make_item()
+        mock_session._db_result.scalar_one_or_none.return_value = item
+
+        with pytest.raises(ValueError):
+            await service.enable_coworking(
+                mock_session,
+                str(item.id),
+                co_worker_type="contact",  # not an actor kind that can co-work
+                company_id=str(uuid.uuid4()),
+                co_worker_user_id=str(uuid.uuid4()),
+                caller_role="owner",
+            )
+
     async def test_sets_coworker_fields_human(self, service, mock_session):
         user_co_id = str(uuid.uuid4())
         company_id = str(uuid.uuid4())
@@ -117,7 +148,13 @@ class TestEnableCoworking:
             caller_role="owner",
         )
 
-        assert result.co_worker_type == "human"
+        # #13970: a legacy "human" from an older caller is still ACCEPTED — an
+        # in-flight client must not start failing mid-deploy — but it is
+        # normalised to the converged vocabulary before storage. This assertion
+        # previously expected "human", i.e. it encoded the forked vocabulary
+        # that produced #13954; it is changed deliberately, not to silence a
+        # failure.
+        assert result.co_worker_type == "user"
         assert result.co_worker_user_id == uuid.UUID(user_co_id)
         assert result.co_working_enabled is True
 
