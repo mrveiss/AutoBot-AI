@@ -69,6 +69,7 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
+from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import derive_code_status as _derive_code_status
 from services.code_status import get_latest_code_version as _get_latest_code_version
@@ -77,7 +78,6 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
-from services.ansible_utils import summarize_playbook_failure
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])

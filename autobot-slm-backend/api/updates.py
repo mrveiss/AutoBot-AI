@@ -49,11 +49,11 @@ from models.schemas import (
     UpdatePackagesResponse,
     UpdateSummaryResponse,
 )
+from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
-from services.ansible_utils import summarize_playbook_failure
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/updates", tags=["updates"])
