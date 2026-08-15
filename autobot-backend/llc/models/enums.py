@@ -201,7 +201,25 @@ class ContextMode(str, Enum):
 
 
 class CoWorkerType(str, Enum):
-    """Identifies whether the co-worker is an agent or human (GH#8230)."""
+    """DEPRECATED — use :class:`AssigneeType` (GH#8230, converged in #13970).
+
+    This and ``AssigneeType`` described the same axis — is this actor an agent or
+    a person — with different strings for the person side (``"human"`` here,
+    ``"user"`` there). That fork produced a live bug: #13954, a Kanban swimlane
+    filtering ``assignee_type == "human"`` against a backend that only ever wrote
+    ``"user"``, which matched nothing for months.
+
+    ``AssigneeType`` won because a *contact* (#13969) is also a human, so
+    ``"human"`` stops discriminating the moment the third person kind exists,
+    while ``"user"`` keeps naming exactly one thing: a ``users`` row.
+
+    Retained only so a stored ``"human"`` can still be recognised during the
+    transition — see ``migrations/versions/20260815_075_co_worker_type_human_to_user.py``.
+    Do not use in new code, and never compare across the two: both are
+    ``str``-mixin enums, so ``AssigneeType.AGENT == CoWorkerType.AGENT`` is
+    silently ``True`` while ``AssigneeType.USER == CoWorkerType.HUMAN`` is
+    silently ``False``.
+    """
 
     AGENT = "agent"
     HUMAN = "human"
@@ -218,13 +236,14 @@ class AssigneeType(str, Enum):
     construct/compare through this enum instead of a bare string literal so
     an invalid value raises at write time rather than being silently stored.
 
-    The column-pattern precedent above is NOT a vocabulary precedent: this
+    Converged in #13970: ``co_worker_type`` now uses this enum too, so there is
+    one vocabulary for the actor axis. Historically the column-pattern
+    precedent above was NOT a vocabulary precedent — this
     enum's human-actor member is ``USER = "user"``, while ``CoWorkerType``'s
     is ``HUMAN = "human"`` — same axis (agent vs. human), different string
     for the human side. Applying one enum's member to the other field is
     exactly the bug in #13954 (a frontend filter compared ``assignee_type``
-    against ``'human'``, which this enum never emits). Tracked for
-    convergence in #13970. Because both are ``str``-mixin enums,
+    against ``'human'``, which this enum never emits). Converged in #13970. Because both are ``str``-mixin enums,
     ``AssigneeType.AGENT == CoWorkerType.AGENT`` is silently ``True`` while
     ``AssigneeType.USER == CoWorkerType.HUMAN`` is silently ``False`` —
     never compare across the two enums.
