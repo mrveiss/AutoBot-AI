@@ -175,7 +175,9 @@ def test_no_registry_catches_importerror_itself(group, filename):
 @pytest.mark.parametrize("group,filename", sorted(_GROUP_MODULES.items()))
 def test_every_registry_routes_through_the_shared_loader(group, filename):
     called = {
-        node.func.id for node in ast.walk(_module_ast(filename)) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        node.func.id
+        for node in ast.walk(_module_ast(filename))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert "load_router_group" in called or "load_single_router" in called, f"{filename} does not use the shared loader"
 

@@ -11,7 +11,6 @@ These routers provide terminal access, command execution, and remote terminal fu
 
 from .loader import load_router_group
 
-
 # (module_path, prefix, tags, name). agent_terminal and terminal_tools carry
 # their own /api prefixes internally, hence the empty prefix.
 TERMINAL_ROUTER_CONFIGS = [

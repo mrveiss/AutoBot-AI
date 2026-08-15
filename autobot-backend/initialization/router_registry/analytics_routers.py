@@ -16,7 +16,6 @@ from typing import List, Tuple
 
 from .loader import load_router_group, load_single_router
 
-
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
 ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [

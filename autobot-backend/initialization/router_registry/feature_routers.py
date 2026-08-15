@@ -18,11 +18,12 @@ import os
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-
-from .loader import get_load_results, load_router_group, load_single_router
 from autobot_shared.ssot_config import config
 
+from .loader import get_load_results, load_router_group, load_single_router
+
 logger = get_logger(__name__)
+
 
 # #6797: load-result registry — populated by load_feature_routers() so callers
 # (health endpoint, dashboards) can introspect what loaded vs failed without
@@ -34,6 +35,7 @@ logger = get_logger(__name__)
 def _load_results() -> List[Dict[str, Any]]:
     """This group's load results, from the shared registry (#14207)."""
     return get_load_results("feature")
+
 
 # #6808: Redis key prefix and TTL for cross-worker aggregation.
 # Each uvicorn worker publishes its results under its PID so the health
