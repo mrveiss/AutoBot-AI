@@ -10,10 +10,10 @@ directory to detect files that have been manually patched or missed by Ansible.
 """
 
 import ast
-from fnmatch import fnmatch
 import hashlib
 import logging
 import os
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List, Tuple
 

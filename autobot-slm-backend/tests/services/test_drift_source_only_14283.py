@@ -12,31 +12,13 @@ the signal that exists to say "something needs attention" always said so.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_ROLE_TASKS = (
-    _REPO_ROOT
-    / "autobot-slm-backend"
-    / "ansible"
-    / "roles"
-    / "slm_agent"
-    / "tasks"
-    / "main.yml"
-)
-_AGENT_SOURCE = (
-    _REPO_ROOT
-    / "autobot-slm-backend"
-    / "ansible"
-    / "roles"
-    / "slm_agent"
-    / "files"
-    / "slm"
-    / "agent"
-)
+_ROLE_TASKS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "tasks" / "main.yml"
+_AGENT_SOURCE = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "files" / "slm" / "agent"
 
 
 @pytest.fixture
