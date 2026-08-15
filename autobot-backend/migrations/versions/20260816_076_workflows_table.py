@@ -23,8 +23,8 @@ registration is needed because this revision is fully observable through its
 
 Purely additive.
 
-Revision ID: 20260813_074
-Revises: 20260812_073
+Revision ID: 20260816_076
+Revises: 20260815_075
 Create Date: 2026-08-13 00:00:00.000000
 """
 
@@ -36,8 +36,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from migrations.guards import has_table
 
-revision: str = "20260813_074"
-down_revision: Union[str, None] = "20260812_073"
+revision: str = "20260816_076"
+down_revision: Union[str, None] = "20260815_075"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
