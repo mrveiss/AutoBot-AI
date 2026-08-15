@@ -14,77 +14,28 @@ zero hosts and reported success having done nothing, and
 ``chromadb_service_owner`` derived from role defaults instead of from
 ``role_redis_active``.
 
-Loaded via importlib to dodge the conftest's session-global stubs (#11248):
-under ``tests/services/`` every ``services.*`` name is a MagicMock, and a
-MagicMock group set iterates as EMPTY — which is exactly the failure being
-tested, so it would pass while proving nothing.
+Co-located rather than under ``tests/services/`` deliberately: that directory's
+conftest stubs every ``services.*`` name as a MagicMock, and a MagicMock group
+set iterates as EMPTY — which is exactly the pre-fix behaviour, so the tests
+would pass while proving nothing. Real-loading around the stubs works but
+mutates ``sys.modules`` for whatever runs next in the same shard, which broke
+``services/inventory_builder_test.py``. Here the plain imports are the real
+modules and nothing needs unpicking.
 """
 
 from __future__ import annotations
 
 import ast
-import importlib.util
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+from api.setup_wizard import _build_inventory_children
+from services.playbook_executor import PlaybookExecutor, link_group_vars
+from services.role_registry import ROLE_ANSIBLE_GROUPS
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _ANSIBLE_DIR = _BACKEND_ROOT / "ansible"
-
-
-def _real_load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _load_modules():
-    """Real-load inventory_builder + setup_wizard, stubbing only the rest.
-
-    ``services.inventory_builder`` must be REAL: ``_build_inventory_children``
-    imports ``groups_for_role_tokens`` from it at call time, and a stubbed one
-    returns a MagicMock that iterates as empty — the pre-fix behaviour.
-    """
-    stubs = [
-        "api",
-        "api.websocket",
-        "config",
-        "services.ansible_secrets",
-        "services.ansible_utils",
-        "services.auth",
-        "services.database",
-        "services.playbook_executor",
-    ]
-    saved = {
-        n: sys.modules.get(n) for n in stubs + ["services", "services.inventory_builder", "services.role_registry"]
-    }
-    try:
-        for n in stubs:
-            sys.modules[n] = MagicMock()
-        # ANSIBLE_LOCAL_TMP is used as a path; a MagicMock would explode.
-        sys.modules["services.playbook_executor"].ANSIBLE_LOCAL_TMP = "/tmp/_ib_14286"  # nosec B108
-        sys.modules["services"] = MagicMock()
-        ib = _real_load("services.inventory_builder", _BACKEND_ROOT / "services" / "inventory_builder.py")
-        rr = _real_load("services.role_registry", _BACKEND_ROOT / "services" / "role_registry.py")
-        wiz = _real_load("_wizard_14286", _BACKEND_ROOT / "api" / "setup_wizard.py")
-        return ib, rr, wiz
-    finally:
-        for n, orig in saved.items():
-            if orig is None:
-                sys.modules.pop(n, None)
-            else:
-                sys.modules[n] = orig
-
-
-_ib, _rr, _wiz = _load_modules()
-
-# Loaded separately: playbook_executor is stubbed above so setup_wizard can
-# import, but link_group_vars itself is under test and must be the real one.
-_pe = _real_load("_pe_14286", _BACKEND_ROOT / "services" / "playbook_executor.py")
 
 
 def _children_for(roles_by_node: dict[str, list[str]]) -> dict[str, dict]:
@@ -93,7 +44,7 @@ def _children_for(roles_by_node: dict[str, list[str]]) -> dict[str, dict]:
     node_roles = [
         SimpleNamespace(node_id=node, role_name=role) for node, roles in roles_by_node.items() for role in roles
     ]
-    children, _groups = _wiz._build_inventory_children(hosts, node_roles, {n: n for n in roles_by_node})
+    children, _groups = _build_inventory_children(hosts, node_roles, {n: n for n in roles_by_node})
     return children
 
 
@@ -135,7 +86,7 @@ def test_no_group_this_path_already_emitted_disappears():
     ROLE_ANSIBLE_GROUPS, and playbooks gate on them. Swapping rather than
     unioning would trade one silent no-op for another.
     """
-    for role, legacy_group in _rr.ROLE_ANSIBLE_GROUPS.items():
+    for role, legacy_group in ROLE_ANSIBLE_GROUPS.items():
         children = _children_for({"n": [role]})
         assert _hosts_in(children, legacy_group) == {"n"}, f"{role} lost its {legacy_group} membership"
 
@@ -190,7 +141,7 @@ def test_every_group_a_play_gates_on_is_reachable_through_this_path():
     gated = _gated_groups()
     assert gated, "found no `hosts:` lines — the scan is broken, not the inventory"
 
-    every_role = sorted(_rr.ROLE_ANSIBLE_GROUPS)
+    every_role = sorted(ROLE_ANSIBLE_GROUPS)
     children = _children_for({"fleet-node": every_role, "slm-node": ["slm-backend"]})
 
     unreachable = {
@@ -225,7 +176,7 @@ def test_link_group_vars_creates_the_sibling(tmp_path):
     inventory.parent.mkdir()
     inventory.write_text("all: {}\n", encoding="utf-8")
 
-    _pe.link_group_vars(inventory, ansible_dir)
+    link_group_vars(inventory, ansible_dir)
 
     linked = inventory.parent / "group_vars"
     assert linked.is_symlink()
@@ -244,7 +195,7 @@ def test_the_executor_method_still_links_after_the_extraction(tmp_path):
     inventory.parent.mkdir()
     inventory.write_text("all: {}\n", encoding="utf-8")
 
-    executor = _pe.PlaybookExecutor.__new__(_pe.PlaybookExecutor)  # skip __init__ (env probing)
+    executor = PlaybookExecutor.__new__(PlaybookExecutor)  # skip __init__ (env probing)
     executor.ansible_dir = ansible_dir
     executor._link_group_vars(inventory)
 
