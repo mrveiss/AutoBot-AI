@@ -12,12 +12,7 @@ and future MCP router additions that may be optional.
 
 from typing import List, Tuple
 
-from .loader import load_router_group, load_single_router
-
-
-def _load_single_mcp_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
-    """Load a single MCP router with graceful fallback."""
-    return load_single_router("mcp", module_path, prefix, tags, name)
+from .loader import load_router_group
 
 
 def load_mcp_routers():

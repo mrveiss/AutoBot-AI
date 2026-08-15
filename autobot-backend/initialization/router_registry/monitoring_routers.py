@@ -14,7 +14,7 @@ Issue #729: Infrastructure routers removed - now served by slm-server.
 
 from typing import List, Tuple
 
-from .loader import load_router_group, load_single_router
+from .loader import load_router_group
 
 # Router configurations: (module_path, router_name, prefix, tags, display_name)
 # Issue #281: Centralized router configuration for maintainability
@@ -74,25 +74,6 @@ MONITORING_ROUTER_CONFIGS = [
     # Issue #4254: Register diagnostics router
     ("api.diagnostics", "router", "", ["diagnostics"], "diagnostics"),
 ]
-
-
-def _try_load_router(module_path: str, router_attr: str, prefix: str, tags: List[str], name: str) -> Tuple:
-    """
-    Attempt to load a single router module with graceful fallback.
-
-    Issue #281: Extracted from load_monitoring_routers to reduce repetition.
-
-    Args:
-        module_path: Full module path (e.g., 'backend.api.monitoring')
-        router_attr: Attribute name for the router (usually 'router')
-        prefix: API prefix for the router
-        tags: OpenAPI tags for the router
-        name: Display name for logging
-
-    Returns:
-        Tuple of (router, prefix, tags, name) if successful, None otherwise
-    """
-    return load_single_router("monitoring", module_path, prefix, tags, name, router_attr)
 
 
 def load_monitoring_routers() -> List[Tuple]:

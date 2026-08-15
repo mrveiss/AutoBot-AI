@@ -156,6 +156,32 @@ def _module_ast(filename: str) -> ast.Module:
     return ast.parse((_REGISTRY_DIR / filename).read_text(encoding="utf-8"))
 
 
+
+_ENTRY_POINTS = {
+    "analytics": "load_analytics_routers",
+    "feature": "load_feature_routers",
+    "integration": "load_integration_routers",
+    "mcp": "load_mcp_routers",
+    "monitoring": "load_monitoring_routers",
+    "terminal": "load_terminal_routers",
+}
+
+
+def _entry_point_ast(filename: str, group: str) -> ast.FunctionDef:
+    """The registry's ``load_*_routers`` definition, not the whole module.
+
+    Review finding on this PR: walking the whole module made two rules below
+    vacuous. The extraction left five thin wrapper functions that were never
+    called, and each of them contained exactly the call the rules searched for
+    — so a registry could have stopped calling the shared loader on its real
+    path while the rules kept finding the call in dead code and passing.
+    """
+    name = _ENTRY_POINTS[group]
+    for node in ast.walk(_module_ast(filename)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            return node
+    raise AssertionError(f"{filename}: {name} not found — this rule is pinned to the wrong name")
+
 @pytest.mark.parametrize("group,filename", sorted(_GROUP_MODULES.items()))
 def test_no_registry_catches_importerror_itself(group, filename):
     """An except-and-return-None here is a router failing invisibly again.
@@ -164,12 +190,25 @@ def test_no_registry_catches_importerror_itself(group, filename):
     had it, so a seventh registry added tomorrow cannot reintroduce the shape
     and stay quiet.
     """
+    def _caught_names(handler: ast.ExceptHandler) -> set[str]:
+        """Names in `except X:` and in the grouped `except (X, Y):` form.
+
+        A tuple is not an ast.Name, so reading only the single form left the
+        grouped one — the same swallow, one comma away — passing untouched.
+        """
+        caught = handler.type
+        if isinstance(caught, ast.Name):
+            return {caught.id}
+        if isinstance(caught, ast.Tuple):
+            return {e.id for e in caught.elts if isinstance(e, ast.Name)}
+        return set()
+
     swallows = [
         handler
         for node in ast.walk(_module_ast(filename))
         if isinstance(node, ast.Try)
         for handler in node.handlers
-        if isinstance(handler.type, ast.Name) and handler.type.id in {"ImportError", "AttributeError"}
+        if _caught_names(handler) & {"ImportError", "AttributeError"}
     ]
     assert not swallows, f"{filename} still catches import failures instead of recording them"
 
@@ -193,7 +232,7 @@ def test_each_registry_records_under_its_own_group_name(group, filename):
     """
     literals = {
         node.args[0].value
-        for node in ast.walk(_module_ast(filename))
+        for node in ast.walk(_entry_point_ast(filename, group))
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id in {"load_router_group", "load_single_router"}
@@ -243,5 +282,9 @@ def test_a_health_probe_reads_the_shared_registry():
             isinstance(inner, ast.ImportFrom) and inner.module and inner.module.endswith("router_registry.loader")
             for inner in ast.walk(node)
         )
+        and any(
+            isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == "get_load_results"
+            for inner in ast.walk(node)
+        )
     ]
-    assert reading, "nothing reads the shared load registry — the results would be a store with no reader"
+    assert reading, "no health probe calls get_load_results — the results would be a store with no reader"

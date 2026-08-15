@@ -14,7 +14,7 @@ data-driven configuration pattern for improved maintainability.
 
 from typing import List, Tuple
 
-from .loader import load_router_group, load_single_router
+from .loader import load_router_group
 
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
@@ -179,16 +179,6 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "analytics_export",
     ),
 ]
-
-
-def _load_single_analytics_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
-    """Load one router. Kept as this module's named entry point (#14207).
-
-    The body moved to :func:`loader.load_single_router` so all seven
-    registries record results in one place, instead of six of them
-    swallowing the failure with nothing but a WARNING.
-    """
-    return load_single_router("analytics", module_path, prefix, tags, name)
 
 
 def load_analytics_routers() -> List[Tuple]:

@@ -735,28 +735,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
 ]
 
 
-def _load_single_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
-    """
-    Load a single router with graceful fallback.
-
-    Issue #281: Extracted helper for loading individual routers to eliminate
-    repetitive try/except blocks and enable data-driven router loading.
-
-    #6797: appends a structured result entry to ``_LOAD_RESULTS`` so callers
-    can introspect load status without scraping logs.
-
-    Args:
-        module_path: Full Python module path (e.g., 'backend.api.workflow')
-        prefix: URL prefix for the router (e.g., '/workflow')
-        tags: List of OpenAPI tags for the router
-        name: Human-readable name for logging
-
-    Returns:
-        Tuple of (router, prefix, tags, name) if successful, None otherwise
-    """
-    return load_single_router("feature", module_path, prefix, tags, name)
-
-
 def get_feature_router_load_results() -> List[Dict[str, Any]]:
     """Return the current load-results registry (#6797).
 
