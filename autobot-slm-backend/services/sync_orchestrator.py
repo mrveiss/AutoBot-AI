@@ -23,6 +23,8 @@ from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
+from services.deploy_artifacts import HOST_STATE_EXCLUDES, rsync_artifact_excludes
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,18 +124,39 @@ class SyncOrchestrator:
         """
         src = cache_path / source_path.rstrip("/")
         if not src.exists():
-            logger.warning("Source path not found in cache: %s", src)
-            return True, "skipped"
+            # #14275: this returned success. A role whose source_paths named a
+            # directory that is not in the checkout therefore reported a clean
+            # sync having copied nothing — the update silently did not happen,
+            # which is indistinguishable from one that did.
+            logger.error("Source path not found in cache: %s", src)
+            return False, f"source path not in checkout: {source_path}"
 
         rsync_src = f"{src}/" if source_path.endswith("/") else str(src)
+        # #14275: this is a DELETE-style sync onto a live install directory, and
+        # it carried no protection for host-generated state. `target_path` for
+        # several roles is the same directory the ansible role builds a venv in
+        # (ai-stack: /opt/autobot/autobot-ai-stack, venv at <dir>/venv), so a
+        # sync whose source lacks those paths removed them.
+        #
+        # Reuses HOST_STATE_EXCLUDES from services/deploy_artifacts.py — the same
+        # vocabulary api/code_sync.py protects (#9970, #13851, #14231) — rather
+        # than a third hand-written list. `venv` and `.venv` come from the
+        # canonical artifact set, which this path did not consult either.
+        # #14275: NO `--delete` here. This path's job is to update a live install
+        # and leave it running. `target_path` for several roles is the directory
+        # the ansible role also owns — ai-stack's is /opt/autobot/autobot-ai-stack,
+        # holding the venv, an ansible-generated `src/` of module symlinks and the
+        # deployed app files — and a delete-style sync whose source cannot supply
+        # those removes them, taking the service down until a re-provision.
+        #
+        # The excludes below stay as defence in depth. The ansible syncs keep
+        # `--delete` because their sources DO carry the full tree (#14231); this
+        # one does not, so the cost of a stale leftover file is far lower than the
+        # cost of deleting a live installation.
         rsync_cmd = [
             "rsync",
             "-avz",
-            "--delete",
-            "--exclude",
-            "__pycache__",
-            "--exclude",
-            "*.pyc",
+            *[arg for pattern in (*rsync_artifact_excludes(), *HOST_STATE_EXCLUDES) for arg in ("--exclude", pattern)],
             "-e",
             ssh_opts,
             rsync_src,
