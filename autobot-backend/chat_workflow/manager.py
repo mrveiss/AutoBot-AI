@@ -2342,6 +2342,9 @@ before summarizing.
         unchanged, so a turn is byte-identical to one without this call.
         """
         try:
+            from agent_loop.tool_output_spill import (
+                _EXECUTION_RESULT_TEXT_KEYS as _SPILL_PAYLOAD_KEYS,
+            )
             from agent_loop.tool_output_spill import spill_execution_results_async
 
             run_id = self._spill_run_id()
@@ -2357,8 +2360,15 @@ before summarizing.
             return results
 
         if spilled:
-            before = sum(len(str(r.get("output", ""))) for r in results)
-            after = sum(len(str(r.get("output", ""))) for r in rewritten)
+            # Summed over the SAME keys the adapter offloads, not just `output`.
+            # Reading only `output` reported 0 -> 0 for every shell result, since
+            # those carry `stdout`/`stderr` — so the one measurement this change
+            # exists to produce was blind to its most common case.
+            def _payload_chars(entries: List[Dict[str, Any]]) -> int:
+                return sum(len(v) for e in entries for k in _SPILL_PAYLOAD_KEYS if isinstance((v := e.get(k)), str))
+
+            before = _payload_chars(results)
+            after = _payload_chars(rewritten)
             logger.info(
                 "Offloaded %d oversized tool result(s): %d -> %d chars (#13997)",
                 spilled,
