@@ -21,8 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
-from services.deploy_artifacts import HOST_STATE_EXCLUDES, rsync_artifact_excludes
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
+
+from services.deploy_artifacts import rsync_artifact_excludes
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +138,20 @@ class SyncOrchestrator:
         # (ai-stack: /opt/autobot/autobot-ai-stack, venv at <dir>/venv), so a
         # sync whose source lacks those paths removed them.
         #
-        # Reuses HOST_STATE_EXCLUDES from services/deploy_artifacts.py — the same
-        # vocabulary api/code_sync.py protects (#9970, #13851, #14231) — rather
-        # than a third hand-written list. `venv` and `.venv` come from the
-        # canonical artifact set, which this path did not consult either.
+        # Only the ARTIFACT excludes (`venv`, `node_modules`, `__pycache__`,
+        # `dist`, …) — deliberately NOT HOST_STATE_EXCLUDES.
+        #
+        # That vocabulary (`data`, `logs`, `config/`, `.env*`) describes
+        # host-generated state in api/code_sync.py's component layout. Here the
+        # same names are SOURCE: `autobot-backend/data/` and `config/`,
+        # `autobot-frontend/config/`, `autobot-slm-backend/data/` are all tracked
+        # directories a sync must deliver. Applying it here would have made the
+        # update silently incomplete — the opposite of this path's job.
+        #
+        # Safe to omit because there is no delete flag above: this sync only adds
+        # and overwrites, so host-only files are untouched whether excluded or
+        # not. The artifact set stays because it protects the venv from being
+        # clobbered by a repo directory of the same name.
         # #14275: NO `--delete` here. This path's job is to update a live install
         # and leave it running. `target_path` for several roles is the directory
         # the ansible role also owns — ai-stack's is /opt/autobot/autobot-ai-stack,
@@ -155,7 +166,7 @@ class SyncOrchestrator:
         rsync_cmd = [
             "rsync",
             "-avz",
-            *[arg for pattern in (*rsync_artifact_excludes(), *HOST_STATE_EXCLUDES) for arg in ("--exclude", pattern)],
+            *[arg for pattern in rsync_artifact_excludes() for arg in ("--exclude", pattern)],
             "-e",
             ssh_opts,
             rsync_src,

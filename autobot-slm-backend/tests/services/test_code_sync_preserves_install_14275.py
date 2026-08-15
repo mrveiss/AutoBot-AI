@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -62,20 +63,82 @@ def _rsync_argv_node() -> ast.List:
     pytest.fail("rsync_cmd argv not found")
 
 
-def test_host_state_is_excluded_in_the_argv_not_merely_imported():
+def test_build_artifacts_are_excluded_in_the_argv_not_merely_imported():
     """Assert on the command that is BUILT, not on the file's text.
 
-    The first version of this checked that the module mentioned
-    HOST_STATE_EXCLUDES anywhere — which stayed true when the excludes were
-    deleted from the argv, because the import line still named them. A test that
-    reads the wrong observable is the defect it is meant to catch.
+    An earlier version checked that the module *mentioned* the exclude names
+    anywhere — which stayed true when they were deleted from the argv, because
+    the import line still named them.
     """
     starred = [e for e in _rsync_argv_node().elts if isinstance(e, ast.Starred)]
     assert starred, "no expanded excludes in the rsync argv"
 
-    expanded = " ".join(ast.unparse(e) for e in starred)
-    assert "HOST_STATE_EXCLUDES" in expanded
-    assert "rsync_artifact_excludes" in expanded
+    assert "rsync_artifact_excludes" in " ".join(ast.unparse(e) for e in starred)
+
+
+def _effective_exclude_patterns() -> list[str]:
+    """The patterns the rsync argv ACTUALLY expands, resolved from the source.
+
+    Reading `rsync_artifact_excludes()` directly would not notice a second
+    exclude set being added back into the argv — which is exactly what the
+    mutation `reintroduce-host-state-excludes` does, and what an earlier version
+    of this test missed.
+    """
+    from services import deploy_artifacts
+
+    starred = [e for e in _rsync_argv_node().elts if isinstance(e, ast.Starred)]
+    referenced = {
+        node.id
+        for element in starred
+        for node in ast.walk(element)
+        if isinstance(node, ast.Name)
+    }
+
+    patterns: list[str] = []
+    for name in sorted(referenced):
+        value = getattr(deploy_artifacts, name, None)
+        if callable(value):
+            patterns.extend(value())
+        elif isinstance(value, (list, tuple, frozenset, set)):
+            patterns.extend(value)
+    assert patterns, f"resolved no exclude patterns from {sorted(referenced)}"
+    return patterns
+
+
+def test_no_exclude_blocks_a_directory_that_is_source_for_some_role():
+    """The excludes must not make the update incomplete.
+
+    HOST_STATE_EXCLUDES (`data`, `logs`, `config/`, `.env*`) describes
+    host-generated state in api/code_sync.py's layout. Here those names are
+    tracked SOURCE — `autobot-backend/data/` and `config/`,
+    `autobot-frontend/config/`, `autobot-slm-backend/data/`. Excluding them
+    would deliver an incomplete install while reporting success.
+    """
+    excluded = {pattern.strip("/") for pattern in _effective_exclude_patterns()}
+    clashes = []
+    for entry in _registry_entries():
+        for path in entry.get("source_paths") or []:
+            directory = _REPO_ROOT / path.rstrip("/")
+            if not directory.is_dir():
+                continue
+            for child in directory.iterdir():
+                if not child.is_dir() or child.name not in excluded:
+                    continue
+                # "Source" means TRACKED. `__pycache__` exists on disk and is
+                # exactly what the artifact excludes are for; an on-disk check
+                # cannot tell the two apart.
+                relative = child.relative_to(_REPO_ROOT).as_posix()
+                listing = subprocess.run(
+                    ["git", "ls-files", relative],
+                    cwd=str(_REPO_ROOT),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if listing.returncode == 0 and listing.stdout.strip():
+                    clashes.append(f"{entry.get('name')}: {relative}/ is tracked source but excluded")
+
+    assert clashes == [], "\n".join(clashes)
 
 
 def test_a_missing_source_path_fails_rather_than_reporting_success():
