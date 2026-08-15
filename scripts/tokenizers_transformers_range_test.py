@@ -156,8 +156,15 @@ def test_every_file_declaring_tokenizers_is_covered():
 @pytest.mark.parametrize(
     "spec,version,expected",
     [
-        # the shape the review found: a bound written with fewer components
-        ("<=0.23", (0, 23, 0), True),
+        # Exactly two shapes are False without _pad and True with it, and both
+        # are here: `<=` where the BOUND is shorter, and `>=` where the
+        # VERSION is shorter. Review found the original set contained only the
+        # first — the other two "must now be admitted" cases were already True
+        # by accident of which side happened to be longer, so they documented
+        # an equivalence rather than pinning the fix.
+        ("<=0.23", (0, 23, 0), True),  # discriminates
+        (">=0.23.0", (0, 23), True),  # discriminates
+        # equivalences that hold with or without padding, kept as documentation
         (">=0.22", (0, 22, 0), True),
         ("<=0.23.0", (0, 23), True),
         # and the ones that must still be rejected
