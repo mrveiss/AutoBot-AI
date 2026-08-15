@@ -39,7 +39,13 @@ _SLM_ROLES = [
         "health_check_port": 8000,
         "health_check_path": "/api/health",
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
+            # #14275: venv/bin, not bare. The unit runs
+            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
+            # targets system Python — new code against unchanged dependencies,
+            # and a migration run by a different interpreter than the service.
+            f"cd {_BASE_DIR}/autobot-slm-backend && "
+            "venv/bin/pip install -r requirements.txt && "
+            "venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -242,13 +248,32 @@ _AI_STACK_ROLES = [
         "name": "ai-stack",
         "display_name": "AI Stack",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-ai-stack/"],
+        # #14275: the real AI-stack sources live here, not in the repo's
+        # `autobot-ai-stack/`, which holds a placeholder README and nothing else.
+        # Pointed at that placeholder, a sync delivered one README and reported
+        # success — the update never happened.
+        "source_paths": ["autobot-infrastructure/shared/docker/ai-stack/"],
         "target_path": f"{_BASE_DIR}/autobot-ai-stack",
         "systemd_service": "autobot-ai-stack",
         "auto_restart": True,
         "health_check_port": 8080,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-ai-stack && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-ai-stack && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements-ai.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-ai-stack.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-ai-stack.txt"
+        ),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -283,7 +308,22 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8081,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-npu-worker && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-npu-worker && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-npu-worker.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-npu-worker.txt"
+        ),
         "required": False,
         "degraded_without": ["GPU inference offloading — backend falls back to local Ollama"],
         "ansible_playbook": "setup-npu-worker.yml",
@@ -298,7 +338,22 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8082,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-tts-worker && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-tts-worker && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-tts-worker.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-tts-worker.txt"
+        ),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
         "ansible_playbook": "playbooks/deploy_role.yml",
