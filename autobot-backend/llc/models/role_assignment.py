@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Who holds an :class:`LLCRole`, and for how long (#14221 step 2).
+"""Who holds a company role, and for how long (#14221 step 2).
 
-Step 1 deliberately gave ``LLCRole`` no occupancy column, because a role
-outliving its occupant is the entire reason the object exists. Occupancy is a
-**relationship with its own lifetime**, so it gets its own table:
+The role itself is the canonical ``roles`` row (``Role.org_id`` = the company);
+step 1 added no table of its own. Occupancy is a **relationship with its own
+lifetime**, so it gets one:
 
 * ``ended_at IS NULL`` — the holder holds it *now*.
 * ``ended_at`` set — the holder held it *then*, and the row stays.
@@ -55,7 +55,7 @@ class LLCRoleAssignment(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Denormalised from llc_roles on purpose: every query in this module carries
+    # Denormalised from the role's org_id on purpose: every query in this module carries
     # its own WHERE company_id rather than reaching it through a join, so a lost
     # join condition cannot widen the scope. That predicate has had to be pinned
     # independently five times here (#13936, #13969, #13942, #14222, #14210).

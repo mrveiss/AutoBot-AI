@@ -28,8 +28,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import RoleHolderType
-from llc.models.role import LLCRole
 from llc.models.role_assignment import LLCRoleAssignment
+from user_management.models.role import Role
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
 
@@ -43,7 +43,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [LLCRole.__table__, LLCRoleAssignment.__table__]
+    tables = [Role.__table__, LLCRoleAssignment.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)

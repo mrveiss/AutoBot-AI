@@ -9,7 +9,7 @@ requirement is that work left behind still has a role to belong to, which only
 holds if the history survives the departure.
 
 Every query carries its own ``WHERE company_id``, independent of the route
-guard and independent of the join to ``llc_roles`` — see the model docstring.
+guard and independent of the join to ``roles`` — see the model docstring.
 
 Emits ``role_assignment.created`` / ``role_assignment.ended`` through
 ``LLCServiceBase.activity_log``, matching ``RoleService`` and ``ContactService``.
@@ -29,7 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
-from ..models.role import LLCRole
+from user_management.models.role import Role
+
 from ..models.role_assignment import LLCRoleAssignment
 from .base import LLCServiceBase
 
@@ -119,9 +120,7 @@ class RoleAssignmentService(LLCServiceBase):
         Without this an assignment could name a role from another company, or
         one that never existed — the orphan-reference shape fixed in #14222.
         """
-        result = await session.execute(
-            select(LLCRole.id).where(LLCRole.id == role_id, LLCRole.company_id == company_id)
-        )
+        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
         if result.scalar_one_or_none() is None:
             raise ValueError(f"role {role_id} does not exist in company {company_id}")
 
@@ -180,21 +179,21 @@ class RoleAssignmentService(LLCServiceBase):
         company_id: uuid.UUID,
         holder_type: object,
         holder_id: uuid.UUID,
-    ) -> List[LLCRole]:
+    ) -> List[Role]:
         """Roles this holder currently occupies — what offboarding must hand over."""
         resolved = _coerce_holder_type(holder_type)
         column = getattr(LLCRoleAssignment, _HOLDER_COLUMNS[resolved])
         result = await session.execute(
-            select(LLCRole)
-            .join(LLCRoleAssignment, LLCRoleAssignment.role_id == LLCRole.id)
+            select(Role)
+            .join(LLCRoleAssignment, LLCRoleAssignment.role_id == Role.id)
             .where(
-                LLCRole.company_id == company_id,
+                Role.org_id == company_id,
                 LLCRoleAssignment.company_id == company_id,
                 LLCRoleAssignment.holder_type == resolved.value,
                 column == holder_id,
                 LLCRoleAssignment.ended_at.is_(None),
             )
-            .order_by(LLCRole.name)
+            .order_by(Role.name)
         )
         return list(result.scalars().all())
 

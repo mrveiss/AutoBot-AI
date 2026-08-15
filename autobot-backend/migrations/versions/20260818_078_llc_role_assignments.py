@@ -6,15 +6,14 @@
 tenure is over and the row stays. Ending a tenure is an UPDATE, never a DELETE,
 because work left behind still has to belong to the role.
 
-Follows the sibling new-table migrations (``20260817_077_llc_roles``,
-``20260811_072_llc_contacts``): plain ``op.create_table``, not
+Follows the sibling new-table migration ``20260811_072_llc_contacts``: plain ``op.create_table``, not
 ``CREATE TABLE IF NOT EXISTS``. The tolerant form belongs to the drift
 reconciliations that re-add columns to tables already changed out-of-band; this
 table is born here, so tolerating a pre-existing one would only hide a schema
 mismatch a migration is supposed to surface.
 
 Revision ID: 20260818_078
-Revises: 20260817_077
+Revises: 20260816_076
 """
 
 from typing import Sequence, Union
@@ -24,7 +23,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision: str = "20260818_078"
-down_revision: Union[str, None] = "20260817_077"
+down_revision: Union[str, None] = "20260816_076"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -43,7 +42,7 @@ def upgrade() -> None:
     op.create_table(
         "llc_role_assignments",
         # No server_default gen_random_uuid() — the ORM always supplies id
-        # explicitly, mirroring llc_roles / llc_contacts / llc_secrets.
+        # explicitly, mirroring llc_contacts / llc_secrets.
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column("role_id", UUID(as_uuid=True), nullable=False),
