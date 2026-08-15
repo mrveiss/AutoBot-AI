@@ -2,6 +2,20 @@
 Description=AutoBot Frontend Vue.js Development Server
 After=network.target
 Wants=network-online.target
+# #4090: these live in [Unit], NOT [Service]. systemd's own verdict on the
+# wrong placement is "Unknown key name 'StartLimitIntervalSec' in section
+# 'Service', ignoring" — so the fix merged for #4090 was discarded on every unit
+# and chromadb still reached NRestarts=4399 while showing `activating`, never
+# `failed`. That is the exact outage #4090 exists to make visible.
+#
+# Without them a unit that can never exec restarts forever and stays out of
+# `systemctl --failed`. systemd's defaults do not help: DefaultStartLimitIntervalSec=10s
+# with DefaultStartLimitBurst=5 needs 5 restarts inside 10s, and RestartSec spaces
+# them further apart, so the rate never reaches the limit. The window must exceed
+# RestartSec * StartLimitBurst for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
 
 [Service]
 Type=simple
@@ -20,15 +34,6 @@ ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port {{ frontend_port }}
 # Restart policy
 Restart=always
 RestartSec=5s
-# #4090: without these, a unit that can never exec restarts forever and stays
-# out of `systemctl --failed`, so the one thing an operator checks cannot see it
-# (chromadb: 1681 restarts over ~4h45m, invisible). systemd's OWN defaults do not
-# help — DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
-# restarts inside 10s, and RestartSec spaces them further apart than that, so the
-# rate never reaches the limit. The window has to be wider than
-# RestartSec * StartLimitBurst for the limit to be reachable at all.
-StartLimitIntervalSec=120
-StartLimitBurst=5
 
 # Limits
 LimitNOFILE=65535

@@ -1,0 +1,119 @@
+---
+# ChromaDB data lives with the database stack (#13870).
+#
+# The store was written to the ai-stack path while that role owned the unit.
+# Ownership now sits with the db stack — ChromaDB is a database — so the persist
+# directory moves with it.
+#
+# The dangerous part is not the move, it is the failure mode of getting it
+# wrong: chroma starts happily against an empty directory. No error, no crash,
+# no alert — the knowledge base simply reads as empty. So this refuses to leave
+# the service pointed at an empty target while the legacy path still holds data,
+# rather than trusting the move to have worked.
+
+- name: "ChromaDB | Stat the legacy persist directory"
+  ansible.builtin.stat:
+    path: "{{ chromadb_legacy_data_dir }}"
+  register: _chroma_legacy
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Stat the db-stack persist directory"
+  ansible.builtin.stat:
+    path: "{{ chromadb_data_dir }}"
+  register: _chroma_target
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Measure both persist directories"
+  # `find -type f` rather than a size check: a directory can be non-empty and
+  # tiny (a fresh chroma writes a small sqlite file), which is exactly the state
+  # that must NOT be mistaken for a populated store.
+  ansible.builtin.find:
+    paths: "{{ item }}"
+    recurse: true
+    file_type: file
+  register: _chroma_counts
+  when: item is defined
+  loop:
+    - "{{ chromadb_legacy_data_dir }}"
+    - "{{ chromadb_data_dir }}"
+  failed_when: false
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Record what each directory holds"
+  ansible.builtin.set_fact:
+    _chroma_legacy_files: "{{ (_chroma_counts.results[0].files | default([])) | length }}"
+    _chroma_target_files: "{{ (_chroma_counts.results[1].files | default([])) | length }}"
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Report the persist directories before any move"
+  ansible.builtin.debug:
+    msg: >-
+      legacy={{ chromadb_legacy_data_dir }} ({{ _chroma_legacy_files }} files),
+      target={{ chromadb_data_dir }} ({{ _chroma_target_files }} files)
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Migrate the persist directory to the db stack"
+  when:
+    - _chroma_legacy.stat.exists | default(false)
+    - _chroma_legacy_files | int > 0
+    - _chroma_target_files | int == 0
+  block:
+    - name: "ChromaDB | Stop the service before moving its store"
+      # Moving a live store underneath a running chroma corrupts it. The unit
+      # may not exist yet on a first run, which is not an error.
+      ansible.builtin.systemd:
+        name: autobot-chromadb
+        state: stopped
+      become: true
+      failed_when: false
+
+    - name: "ChromaDB | Copy the store to the db-stack path"
+      # Copy, not move: a failed move loses the only copy. The legacy directory
+      # is left in place for an operator to remove once the service is verified
+      # healthy on the new path — deletion is not this play's decision.
+      ansible.builtin.command:
+        cmd: "cp -a {{ chromadb_legacy_data_dir }}/. {{ chromadb_data_dir }}/"
+        creates: "{{ chromadb_data_dir }}/chroma.sqlite3"
+      become: true
+
+    - name: "ChromaDB | Own the migrated store"
+      ansible.builtin.file:
+        path: "{{ chromadb_data_dir }}"
+        owner: "{{ redis_owner }}"
+        group: "{{ redis_group }}"
+        recurse: true
+      become: true
+
+    - name: "ChromaDB | Re-count the target after the copy"
+      ansible.builtin.find:
+        paths: "{{ chromadb_data_dir }}"
+        recurse: true
+        file_type: file
+      register: _chroma_target_after
+
+    - name: "ChromaDB | The copy must have landed"
+      ansible.builtin.assert:
+        that:
+          - (_chroma_target_after.files | default([])) | length >= _chroma_legacy_files | int
+        fail_msg: >-
+          ChromaDB migration incomplete: {{ chromadb_legacy_data_dir }} holds
+          {{ _chroma_legacy_files }} files but {{ chromadb_data_dir }} holds
+          {{ (_chroma_target_after.files | default([])) | length }}. Refusing to
+          continue — starting chroma against a partial store reads as an empty
+          knowledge base with no error anywhere (#13870).
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Refuse to serve an empty store while the legacy one holds data"
+  # The safety net for every path that did NOT migrate: a skipped block, a
+  # changed variable, a partial run. Without it the service comes up on an empty
+  # directory and the only symptom is a knowledge base that returns nothing.
+  ansible.builtin.assert:
+    that:
+      - not (_chroma_legacy_files | int > 0 and _chroma_target_files | int == 0 and not _chroma_migrated | default(false))
+    fail_msg: >-
+      {{ chromadb_legacy_data_dir }} holds {{ _chroma_legacy_files }} files while
+      {{ chromadb_data_dir }} is empty, and no migration ran. Starting chroma on
+      the empty path would report a healthy service and an empty knowledge base.
+  vars:
+    _chroma_migrated: "{{ _chroma_target_after is defined }}"
+  tags: ['redis', 'chromadb']
