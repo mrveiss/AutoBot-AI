@@ -64,8 +64,25 @@ def _specifiers(path: Path) -> list[tuple[str, tuple[int, ...]]]:
     return [(m.group("op"), _version(m.group("version"))) for m in _SPEC.finditer(match.group("spec"))]
 
 
+def _pad(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Zero-pad two version tuples to equal length before comparing.
+
+    Review finding: raw tuple comparison is not PEP 440. ``(0, 23, 0) <= (0, 23)``
+    is False in Python while the two versions are *equal* to pip, so a future
+    edit to ``tokenizers<=0.23`` — the same bound written with one component
+    fewer — would fail this guard against a range that is actually fine.
+
+    The failure direction is loud rather than silent, which is why it is a
+    latent bug and not an escape. Fixed anyway: a guard that cries wolf on a
+    correct change is one people learn to edit around.
+    """
+    width = max(len(left), len(right))
+    return left + (0,) * (width - len(left)), right + (0,) * (width - len(right))
+
+
 def _admits(specs: list[tuple[str, tuple[int, ...]]], version: tuple[int, ...]) -> bool:
-    for op, bound in specs:
+    for op, raw_bound in specs:
+        version, bound = _pad(version, raw_bound)
         if op == ">=" and not version >= bound:
             return False
         if op == ">" and not version > bound:
@@ -127,10 +144,43 @@ def test_every_file_declaring_tokenizers_is_covered():
     declaring = {
         str(p.relative_to(_REPO_ROOT))
         for p in _REPO_ROOT.rglob("requirements*.txt")
-        if not any(skip in str(p) for skip in ("venv/", "node_modules/", ".worktrees/"))
+        if not any(skip in str(p) for skip in ("venv/", "node_modules/", ".worktrees/", ".claude/"))
         and _TOKENIZERS_LINE.search(p.read_text(encoding="utf-8", errors="replace"))
     }
     # The windows npu-worker resource file pins an old, independent stack
     # (transformers>=4.36) and is not installed by any role this repo deploys.
     declaring -= {"autobot-npu-worker/resources/windows-npu-worker/requirements.txt"}
     assert declaring == set(_REQUIREMENT_FILES), f"unguarded tokenizers pins: {sorted(declaring - set(_REQUIREMENT_FILES))}"
+
+
+@pytest.mark.parametrize(
+    "spec,version,expected",
+    [
+        # Exactly two shapes are False without _pad and True with it, and both
+        # are here: `<=` where the BOUND is shorter, and `>=` where the
+        # VERSION is shorter. Review found the original set contained only the
+        # first — the other two "must now be admitted" cases were already True
+        # by accident of which side happened to be longer, so they documented
+        # an equivalence rather than pinning the fix.
+        ("<=0.23", (0, 23, 0), True),  # discriminates
+        (">=0.23.0", (0, 23), True),  # discriminates
+        # equivalences that hold with or without padding, kept as documentation
+        (">=0.22", (0, 22, 0), True),
+        ("<=0.23.0", (0, 23), True),
+        # and the ones that must still be rejected
+        ("<=0.23", (0, 23, 1), False),
+        (">=0.23.1", (0, 23, 0), False),
+        ("<0.24", (0, 24, 0), False),
+    ],
+)
+def test_version_comparison_is_length_normalised(spec, version, expected):
+    """``0.23`` and ``0.23.0`` are the same version to pip, not to a tuple.
+
+    Without padding, ``(0, 23, 0) <= (0, 23)`` is False and this guard would
+    reject ``tokenizers<=0.23`` — a range that is perfectly correct, written
+    one component shorter. Loud rather than silent, but a guard that fails on
+    a correct change is one people learn to route around.
+    """
+    specs = [(m.group("op"), _version(m.group("version"))) for m in _SPEC.finditer(spec)]
+
+    assert _admits(specs, version) is expected
