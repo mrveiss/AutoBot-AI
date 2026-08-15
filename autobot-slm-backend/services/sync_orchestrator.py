@@ -21,9 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
-from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
-
 from services.deploy_artifacts import rsync_artifact_excludes
+from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
 

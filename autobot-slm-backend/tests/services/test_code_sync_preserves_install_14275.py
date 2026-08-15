@@ -87,12 +87,7 @@ def _effective_exclude_patterns() -> list[str]:
     from services import deploy_artifacts
 
     starred = [e for e in _rsync_argv_node().elts if isinstance(e, ast.Starred)]
-    referenced = {
-        node.id
-        for element in starred
-        for node in ast.walk(element)
-        if isinstance(node, ast.Name)
-    }
+    referenced = {node.id for element in starred for node in ast.walk(element) if isinstance(node, ast.Name)}
 
     patterns: list[str] = []
     for name in sorted(referenced):
