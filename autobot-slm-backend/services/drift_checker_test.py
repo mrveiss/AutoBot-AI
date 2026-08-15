@@ -1324,3 +1324,78 @@ def test_the_filter_removes_those_files_from_a_walk(tmp_path):
     assert "agent_test.py" in without
     assert "agent_test.py" not in filtered
     assert "agent.py" in filtered, "the filter removed a real source file"
+class TestTheAgentExclusionReachesComputeDrift:
+    """The wiring, not the constant (#14283, review finding on PR #14285).
+
+    The five tests above prove the pattern exists, that the role really does
+    not deploy those files, and that ``_collect_checksums`` honours a filter
+    handed to it. None of them cross ``compute_drift``, which is where the
+    patterns are looked up and threaded into BOTH walks — so dropping the third
+    argument from either ``_collect_checksums`` call, or inverting the
+    ``component is not None`` guard, would leave every one of them green while
+    reopening the issue or starting to mask real drift.
+    """
+
+    def test_a_source_only_test_file_is_not_drift(self, tmp_path):
+        """#14283 verbatim: the condition must be satisfiable."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "agent.py", b"same")
+        _write(dep / "agent.py", b"same")
+        _write(src / "version_test.py", b"a test the role never copies")
+
+        drifted, _total = compute_drift(str(src), str(dep), "autobot-slm-agent")
+
+        assert drifted == []
+
+    def test_a_test_file_differing_on_BOTH_sides_is_still_not_drift(self, tmp_path):
+        """Catches an asymmetric filter in either direction.
+
+        Filter dropped from the source walk: only the deployed copy is
+        collected, and the file reads as added. Dropped from the deployed
+        walk: only the source copy is collected, and it reads as missing.
+        Either way this fails, which a source-only fixture cannot do.
+        """
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "agent.py", b"same")
+        _write(dep / "agent.py", b"same")
+        _write(src / "version_test.py", b"source version")
+        _write(dep / "version_test.py", b"a stale copy from some older deploy")
+
+        drifted, _total = compute_drift(str(src), str(dep), "autobot-slm-agent")
+
+        assert drifted == []
+
+    def test_a_real_agent_file_still_drifts(self, tmp_path):
+        """The exclusion must not blind the walk it was added to.
+
+        A filter that removed the false signal by removing all signal would
+        pass both tests above.
+        """
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "agent.py", b"new")
+        _write(dep / "agent.py", b"old")
+        _write(src / "version_test.py", b"source only")
+
+        drifted, total = compute_drift(str(src), str(dep), "autobot-slm-agent")
+
+        assert total == 1
+        assert [d["path"] for d in drifted] == ["agent.py"]
+        assert drifted[0]["status"] == "modified"
+
+    def test_another_component_still_sees_its_test_files(self, tmp_path):
+        """The same fixture, a different component: drift, as before.
+
+        Pins that the exclusion is keyed on the component at the
+        ``compute_drift`` level, not applied to whatever walks past.
+        """
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "version_test.py", b"source version")
+        _write(dep / "version_test.py", b"deployed version")
+
+        drifted, _total = compute_drift(str(src), str(dep), "autobot-slm-backend")
+
+        assert [d["path"] for d in drifted] == ["version_test.py"]
