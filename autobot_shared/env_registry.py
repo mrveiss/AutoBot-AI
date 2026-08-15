@@ -1095,10 +1095,7 @@ register_env_var(
         name="AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY",
         type=int,
         default=2,
-        description=(
-            "Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede "
-            "the LLM."
-        ),
+        description=("Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede " "the LLM."),
         component="ai",
     )
 )
@@ -1134,9 +1131,7 @@ register_env_var(
         name="AUTOBOT_CHAT_TRAJECTORY_TOP_K",
         type=int,
         default=3,
-        description=(
-            "How many past trajectories the pre-answer search retrieves."
-        ),
+        description=("How many past trajectories the pre-answer search retrieves."),
         component="ai",
     )
 )
@@ -1146,9 +1141,7 @@ register_env_var(
         name="AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS",
         type=int,
         default=120,
-        description=(
-            "Seconds the co-change history walk may run before it is abandoned."
-        ),
+        description=("Seconds the co-change history walk may run before it is abandoned."),
         component="backend",
     )
 )
@@ -1211,9 +1204,7 @@ register_env_var(
         name="AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS",
         type=int,
         default=2,
-        description=(
-            "Seconds between polls while waiting for a code-execution approval decision."
-        ),
+        description=("Seconds between polls while waiting for a code-execution approval decision."),
         component="execution",
     )
 )
@@ -1250,9 +1241,7 @@ register_env_var(
         name="AUTOBOT_CODEEXEC_ENABLED",
         type=bool,
         default=False,
-        description=(
-            "Master switch for the compose/code-execution tool. Ships off (GH#11568)."
-        ),
+        description=("Master switch for the compose/code-execution tool. Ships off (GH#11568)."),
         component="execution",
     )
 )
@@ -1262,10 +1251,7 @@ register_env_var(
         name="AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES",
         type=int,
         default=1,
-        description=(
-            "How many times a failed generated script may be retried within one "
-            "code-execution call."
-        ),
+        description=("How many times a failed generated script may be retried within one " "code-execution call."),
         component="execution",
     )
 )
@@ -1288,9 +1274,7 @@ register_env_var(
         name="AUTOBOT_CODEEXEC_TIMEOUT_SECONDS",
         type=int,
         default=120,
-        description=(
-            "Seconds a compose-tool sandbox execution may run (GH#11568)."
-        ),
+        description=("Seconds a compose-tool sandbox execution may run (GH#11568)."),
         component="execution",
     )
 )
@@ -1301,8 +1285,7 @@ register_env_var(
         type=bool,
         default=False,
         description=(
-            "Master switch for the delegate tool. Off, it records the delegation request "
-            "and does not dispatch it."
+            "Master switch for the delegate tool. Off, it records the delegation request " "and does not dispatch it."
         ),
         component="ai",
     )
@@ -1313,10 +1296,7 @@ register_env_var(
         name="AUTOBOT_FACT_FORCING",
         type=bool,
         default=False,
-        description=(
-            "Enable the fact-forcing gate, which requires an answer to cite retrieved "
-            "facts."
-        ),
+        description=("Enable the fact-forcing gate, which requires an answer to cite retrieved " "facts."),
         component="ai",
     )
 )
@@ -1378,10 +1358,7 @@ register_env_var(
         name="AUTOBOT_MAX_DELEGATIONS_PER_TURN",
         type=int,
         default=5,
-        description=(
-            "Delegate calls allowed in a single LLM turn — a fan-out bound, not a quality "
-            "setting."
-        ),
+        description=("Delegate calls allowed in a single LLM turn — a fan-out bound, not a quality " "setting."),
         component="ai",
     )
 )
@@ -1391,10 +1368,7 @@ register_env_var(
         name="AUTOBOT_MAX_DELEGATION_DEPTH",
         type=int,
         default=2,
-        description=(
-            "How deep delegation may nest before it is refused, bounding runaway recursive "
-            "delegation."
-        ),
+        description=("How deep delegation may nest before it is refused, bounding runaway recursive " "delegation."),
         component="ai",
     )
 )
@@ -1418,8 +1392,7 @@ register_env_var(
         type=float,
         default=20.0,
         description=(
-            "Total seconds ownership analysis may spend blaming files before it returns "
-            "what it has (#13602)."
+            "Total seconds ownership analysis may spend blaming files before it returns " "what it has (#13602)."
         ),
         component="backend",
     )
@@ -1458,8 +1431,7 @@ register_env_var(
         type=int,
         default=300,
         description=(
-            "Seconds a provider stays marked degraded after a failure before traffic is "
-            "offered to it again."
+            "Seconds a provider stays marked degraded after a failure before traffic is " "offered to it again."
         ),
         component="ai",
     )
@@ -1497,9 +1469,7 @@ register_env_var(
         name="AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
         type=int,
         default=3600,
-        description=(
-            "Seconds between skill distillation passes."
-        ),
+        description=("Seconds between skill distillation passes."),
         component="backend",
     )
 )
@@ -1549,10 +1519,7 @@ register_env_var(
         name="AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
         type=int,
         default=50000,
-        description=(
-            "Rows a consolidation pass may scan, keeping the pass bounded on a large "
-            "trajectory store."
-        ),
+        description=("Rows a consolidation pass may scan, keeping the pass bounded on a large " "trajectory store."),
         component="ai",
     )
 )
@@ -1563,8 +1530,7 @@ register_env_var(
         type=float,
         default=0.4,
         description=(
-            "Reward at or above which a trajectory outcome is 'partial'. Below it the "
-            "outcome is a failure (#11280)."
+            "Reward at or above which a trajectory outcome is 'partial'. Below it the " "outcome is a failure (#11280)."
         ),
         component="ai",
     )
@@ -1588,10 +1554,7 @@ register_env_var(
         name="AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS",
         type=int,
         default=30,
-        description=(
-            "Age in days beyond which a low-reward trajectory is eligible for pruning "
-            "(#11263)."
-        ),
+        description=("Age in days beyond which a low-reward trajectory is eligible for pruning " "(#11263)."),
         component="ai",
     )
 )
@@ -1622,4 +1585,3 @@ register_env_var(
         component="ai",
     )
 )
-
