@@ -6,7 +6,12 @@
 tenure is over and the row stays. Ending a tenure is an UPDATE, never a DELETE,
 because work left behind still has to belong to the role.
 
-Drift-safe, following 20260817_077: ``IF NOT EXISTS`` throughout.
+Follows the sibling new-table migrations (``20260817_077_llc_roles``,
+``20260811_072_llc_contacts``): plain ``op.create_table``, not
+``CREATE TABLE IF NOT EXISTS``. The tolerant form belongs to the drift
+reconciliations that re-add columns to tables already changed out-of-band; this
+table is born here, so tolerating a pre-existing one would only hide a schema
+mismatch a migration is supposed to surface.
 
 Revision ID: 20260818_078
 Revises: 20260817_077
@@ -14,67 +19,78 @@ Revises: 20260817_077
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import UUID
 
 revision: str = "20260818_078"
 down_revision: Union[str, None] = "20260817_077"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+_HOLDER_KINDS = ("agent", "user", "contact")
+_INDEXED_COLUMNS = (
+    "company_id",
+    "role_id",
+    "ended_at",
+    "holder_agent_id",
+    "holder_user_id",
+    "holder_contact_id",
+)
+
 
 def upgrade() -> None:
-    op.execute(
-        """
-        CREATE TABLE IF NOT EXISTS llc_role_assignments (
-            id UUID PRIMARY KEY,
-            company_id UUID NOT NULL,
-            role_id UUID NOT NULL,
-            holder_type VARCHAR(16) NOT NULL,
-            holder_agent_id UUID,
-            holder_user_id UUID,
-            holder_contact_id UUID,
-            started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-            ended_at TIMESTAMP WITH TIME ZONE,
-            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-        )
-        """
+    op.create_table(
+        "llc_role_assignments",
+        # No server_default gen_random_uuid() — the ORM always supplies id
+        # explicitly, mirroring llc_roles / llc_contacts / llc_secrets.
+        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("company_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("role_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("holder_type", sa.String(16), nullable=False),
+        sa.Column("holder_agent_id", UUID(as_uuid=True), nullable=True),
+        sa.Column("holder_user_id", UUID(as_uuid=True), nullable=True),
+        sa.Column("holder_contact_id", UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "started_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        # NULL means "still holds it" — the column the whole design turns on.
+        sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
-    for column in (
-        "company_id",
-        "role_id",
-        "ended_at",
-        "holder_agent_id",
-        "holder_user_id",
-        "holder_contact_id",
-    ):
-        op.execute(
-            f"CREATE INDEX IF NOT EXISTS ix_llc_role_assignments_{column} "
-            f"ON llc_role_assignments ({column})"
-        )
+    for column in _INDEXED_COLUMNS:
+        op.create_index(f"ix_llc_role_assignments_{column}", "llc_role_assignments", [column])
 
     # Partial unique index: one *open* tenure per holder per role. Ended tenures
     # are excluded so returning to a role you once held stays legal, which a
     # plain UNIQUE over the same columns would forbid.
-    for kind in ("agent", "user", "contact"):
-        op.execute(
-            f"CREATE UNIQUE INDEX IF NOT EXISTS uq_llc_role_assignments_open_{kind} "
-            f"ON llc_role_assignments (role_id, holder_{kind}_id) "
-            f"WHERE ended_at IS NULL AND holder_{kind}_id IS NOT NULL"
+    for kind in _HOLDER_KINDS:
+        op.create_index(
+            f"uq_llc_role_assignments_open_{kind}",
+            "llc_role_assignments",
+            ["role_id", f"holder_{kind}_id"],
+            unique=True,
+            postgresql_where=sa.text(f"ended_at IS NULL AND holder_{kind}_id IS NOT NULL"),
         )
 
 
 def downgrade() -> None:
-    """Reverse of upgrade, guarded so it cannot fail where nothing was created."""
-    for kind in ("agent", "user", "contact"):
-        op.execute(f"DROP INDEX IF EXISTS uq_llc_role_assignments_open_{kind}")
-    for column in (
-        "company_id",
-        "role_id",
-        "ended_at",
-        "holder_agent_id",
-        "holder_user_id",
-        "holder_contact_id",
-    ):
-        op.execute(f"DROP INDEX IF EXISTS ix_llc_role_assignments_{column}")
-    op.execute("DROP TABLE IF EXISTS llc_role_assignments")
+    for kind in _HOLDER_KINDS:
+        op.drop_index(f"uq_llc_role_assignments_open_{kind}", table_name="llc_role_assignments")
+    for column in _INDEXED_COLUMNS:
+        op.drop_index(f"ix_llc_role_assignments_{column}", table_name="llc_role_assignments")
+    op.drop_table("llc_role_assignments")

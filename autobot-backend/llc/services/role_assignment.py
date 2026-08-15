@@ -10,21 +10,28 @@ holds if the history survives the departure.
 
 Every query carries its own ``WHERE company_id``, independent of the route
 guard and independent of the join to ``llc_roles`` — see the model docstring.
+
+Emits ``role_assignment.created`` / ``role_assignment.ended`` through
+``LLCServiceBase.activity_log``, matching ``RoleService`` and ``ContactService``.
+Occupancy changes are exactly what an org chart needs an audit trail for: "who
+held this role in March" is unanswerable from the current rows alone once
+someone has been assigned and unassigned repeatedly.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
 from ..models.role import LLCRole
 from ..models.role_assignment import LLCRoleAssignment
+from .base import LLCServiceBase
 
 _HOLDER_COLUMNS = {
     RoleHolderType.AGENT: "holder_agent_id",
@@ -46,8 +53,30 @@ def _coerce_holder_type(holder_type: object) -> RoleHolderType:
         raise ValueError(f"invalid holder_type {holder_type!r}; expected one of: {valid}") from exc
 
 
-class RoleAssignmentService:
+class RoleAssignmentService(LLCServiceBase):
     """Assigns holders to roles and ends tenures without losing history."""
+
+    async def _record(
+        self,
+        session: AsyncSession,
+        assignment: LLCRoleAssignment,
+        event_type: str,
+        actor: Optional[str],
+        after: Optional[Dict[str, Any]],
+    ) -> None:
+        """Emit one activity-log event, or nothing if the DI slot is unpopulated."""
+        if not self.activity_log:
+            return
+        await self.activity_log.record(
+            session=session,
+            company_id=str(assignment.company_id),
+            actor_type=ActorType.USER if actor else ActorType.SYSTEM,
+            actor_id=actor,
+            event_type=event_type,
+            entity_type="llc_role_assignment",
+            entity_id=str(assignment.id),
+            after=after,
+        )
 
     async def assign(
         self,
@@ -57,19 +86,12 @@ class RoleAssignmentService:
         role_id: uuid.UUID,
         holder_type: object,
         holder_id: uuid.UUID,
+        actor: Optional[str] = None,
     ) -> LLCRoleAssignment:
         if company_id is None or role_id is None or holder_id is None:
             raise ValueError("company_id, role_id and holder_id are all required")
         resolved = _coerce_holder_type(holder_type)
-
-        # The role must exist *in this company*. Without this an assignment
-        # could name a role from another company, or one that never existed —
-        # the orphan-reference shape fixed in #14222.
-        role = await session.execute(
-            select(LLCRole.id).where(LLCRole.id == role_id, LLCRole.company_id == company_id)
-        )
-        if role.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        await self._require_role(session, company_id, role_id)
 
         if await self._current_tenure(session, company_id, role_id, resolved, holder_id):
             raise ValueError("holder already holds this role")
@@ -82,7 +104,26 @@ class RoleAssignmentService:
         )
         session.add(assignment)
         await session.flush()
+        await self._record(
+            session,
+            assignment,
+            "role_assignment.created",
+            actor,
+            {"role_id": str(role_id), "holder_type": resolved.value},
+        )
         return assignment
+
+    async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
+        """The role must exist *in this company*.
+
+        Without this an assignment could name a role from another company, or
+        one that never existed — the orphan-reference shape fixed in #14222.
+        """
+        result = await session.execute(
+            select(LLCRole.id).where(LLCRole.id == role_id, LLCRole.company_id == company_id)
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValueError(f"role {role_id} does not exist in company {company_id}")
 
     async def _current_tenure(
         self,
@@ -164,6 +205,7 @@ class RoleAssignmentService:
         assignment_id: uuid.UUID,
         *,
         ended_at: Optional[datetime] = None,
+        actor: Optional[str] = None,
     ) -> Optional[LLCRoleAssignment]:
         """Close an open tenure. The row survives — that is the whole point.
 
@@ -182,9 +224,25 @@ class RoleAssignmentService:
         if assignment is None:
             return None
 
-        assignment.ended_at = ended_at or datetime.now(timezone.utc)
-        await session.flush()
+        await self._close(session, assignment, ended_at or datetime.now(timezone.utc), actor)
         return assignment
+
+    async def _close(
+        self,
+        session: AsyncSession,
+        assignment: LLCRoleAssignment,
+        stamp: datetime,
+        actor: Optional[str],
+    ) -> None:
+        assignment.ended_at = stamp
+        await session.flush()
+        await self._record(
+            session,
+            assignment,
+            "role_assignment.ended",
+            actor,
+            {"role_id": str(assignment.role_id), "ended_at": stamp.isoformat()},
+        )
 
     async def vacate_holder(
         self,
@@ -194,6 +252,7 @@ class RoleAssignmentService:
         holder_id: uuid.UUID,
         *,
         ended_at: Optional[datetime] = None,
+        actor: Optional[str] = None,
     ) -> List[LLCRoleAssignment]:
         """End every open tenure for one holder — the offboarding entry point.
 
@@ -215,6 +274,7 @@ class RoleAssignmentService:
         closing = list(result.scalars().all())
         stamp = ended_at or datetime.now(timezone.utc)
         for assignment in closing:
-            assignment.ended_at = stamp
-        await session.flush()
+            # One event per tenure, not one per departure: each role losing its
+            # holder is a separate thing the org chart has to answer for.
+            await self._close(session, assignment, stamp, actor)
         return closing

@@ -401,3 +401,83 @@ async def test_holder_id_returns_none_when_the_discriminator_does_not_match(sess
         holder_user_id=uuid.uuid4(),
     )
     assert assignment.holder_id is None
+
+
+class _RecordingActivityLog:
+    """Captures ``record()`` calls — a stateful fake, not a MagicMock.
+
+    A MagicMock makes "an event was emitted" and "nothing was written" look
+    identical, which is the failure this module has hit before.
+    """
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    async def record(self, **kwargs) -> None:  # noqa: ANN003
+        self.events.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_offboarding_emits_one_event_per_vacated_role(session_factory):  # noqa: ANN001
+    """Each role losing its holder is its own event, not one 'they left'.
+
+    A single departure event would make "which roles fell vacant on the 3rd"
+    unanswerable — which is the question offboarding exists to answer.
+    """
+    log = _RecordingActivityLog()
+    service = RoleAssignmentService(activity_log=log)
+    company = uuid.uuid4()
+    sre = await _seed_role(session_factory, company, "SRE")
+    lead = await _seed_role(session_factory, company, "Team Lead")
+    leaver = uuid.uuid4()
+
+    async with session_factory() as session:
+        for role_id in (sre, lead):
+            await service.assign(
+                session,
+                company_id=company,
+                role_id=role_id,
+                holder_type=RoleHolderType.USER,
+                holder_id=leaver,
+                actor="u1",
+            )
+        await session.commit()
+
+    assert [e["event_type"] for e in log.events] == ["role_assignment.created"] * 2
+    log.events.clear()
+
+    async with session_factory() as session:
+        await service.vacate_holder(session, company, RoleHolderType.USER, leaver, actor="u1")
+        await session.commit()
+
+    assert [e["event_type"] for e in log.events] == ["role_assignment.ended"] * 2
+    assert {e["after"]["role_id"] for e in log.events} == {str(sre), str(lead)}
+    assert all(e["entity_type"] == "llc_role_assignment" for e in log.events)
+    assert all(e["company_id"] == str(company) for e in log.events)
+
+
+@pytest.mark.asyncio
+async def test_a_scoped_out_end_tenure_emits_nothing(session_factory):  # noqa: ANN001
+    """Failing to end another company's tenure must not log an ending."""
+    log = _RecordingActivityLog()
+    service = RoleAssignmentService(activity_log=log)
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    role_b = await _seed_role(session_factory, company_b, "SRE")
+
+    async with session_factory() as session:
+        assignment = await service.assign(
+            session,
+            company_id=company_b,
+            role_id=role_b,
+            holder_type=RoleHolderType.AGENT,
+            holder_id=uuid.uuid4(),
+        )
+        await session.commit()
+        assignment_id = assignment.id
+        log.events.clear()
+
+    async with session_factory() as session:
+        assert await service.end_tenure(session, company_a, assignment_id) is None
+        await session.commit()
+
+    assert log.events == []
