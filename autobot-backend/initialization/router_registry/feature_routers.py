@@ -751,7 +751,7 @@ def load_feature_routers() -> List[Tuple]:
 
     Issue #281: Refactored to use data-driven configuration pattern.
     Original implementation had 53 repetitive try/except blocks (~716 lines).
-    Now uses FEATURE_ROUTER_CONFIGS list and _load_single_router helper.
+    Now uses FEATURE_ROUTER_CONFIGS with the shared loader (#14207).
 
     #6797: When fewer routers loaded than configured, escalate the summary log
     to ERROR (was always INFO) so the partial-boot state is loud at deploy

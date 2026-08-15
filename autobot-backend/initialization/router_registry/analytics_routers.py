@@ -187,7 +187,7 @@ def load_analytics_routers() -> List[Tuple]:
 
     Issue #281: Refactored to use data-driven configuration pattern.
     Original implementation had 20 repetitive try/except blocks (~338 lines).
-    Now uses ANALYTICS_ROUTER_CONFIGS list and _load_single_analytics_router helper.
+    Now uses ANALYTICS_ROUTER_CONFIGS with the shared loader (#14207).
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
