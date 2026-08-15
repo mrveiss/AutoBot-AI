@@ -146,6 +146,8 @@ def parse_unreachable_hosts(output: str) -> list[str]:
     """
     pattern = re.compile(r"^fatal:\s+\[([^\]]+)\]:\s+UNREACHABLE!", re.MULTILINE)
     return list(dict.fromkeys(m.group(1) for m in pattern.finditer(output or "")))
+
+
 # How much raw output to fall back to when nothing parseable is found. From the
 # END of the run: ansible's first lines are its preamble, so a head slice
 # reliably returns deprecation warnings and nothing else (#14298).
