@@ -154,6 +154,27 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # #14015: every route in a covered package carries a deadline, or is declared
+  # unbounded with a reason. #13602 was an endpoint that held the socket open
+  # past 180s and logged nothing, because bounding was opt-in per call site and
+  # one handler simply had none. Only a check that covers every member by
+  # construction catches an omission.
+  #
+  # pass_filenames: false — the checker walks the covered packages itself, so a
+  # commit touching an unrelated file still validates the whole surface. A
+  # filename-scoped run would pass on the very commit that adds an unbounded
+  # route elsewhere.
+  - repo: local
+    hooks:
+      - id: route-deadlines
+        name: Every covered route carries a deadline (#14015)
+        entry: tools/lint/check_route_deadlines.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Add @bounded(seconds=...) or declare the route in UNBOUNDED_BY_DESIGN"
+
   # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
   # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
   # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production
