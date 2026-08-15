@@ -133,6 +133,21 @@ def _extract_failure_summary(output: str) -> str:
     return f"{count} {noun} failed \u2014 " + "; ".join(failures)
 
 
+def parse_unreachable_hosts(output: str) -> list[str]:
+    """Hostnames ansible reported as UNREACHABLE, in order of appearance.
+
+    Ansible distinguishes *unreachable* from *failed*, and the difference is
+    the whole answer to "is this node down, or is the deploy broken?" — #14297
+    needs it to tell a node that cannot be contacted from one that is merely
+    unhealthy.
+
+    Moved here from ``api/updates.py`` (#1816) so ``api/code_sync.py`` can use
+    it without importing another api module.
+    """
+    pattern = re.compile(r"^fatal:\s+\[([^\]]+)\]:\s+UNREACHABLE!", re.MULTILINE)
+    return list(dict.fromkeys(m.group(1) for m in pattern.finditer(output or "")))
+
+
 # How much raw output to fall back to when nothing parseable is found. From the
 # END of the run: ansible's first lines are its preamble, so a head slice
 # reliably returns deprecation warnings and nothing else (#14298).
