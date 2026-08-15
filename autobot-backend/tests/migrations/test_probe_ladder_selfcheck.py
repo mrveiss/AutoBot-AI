@@ -111,6 +111,8 @@ def test_observability_coverage():
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run
         "20260526_045",  # agent_runtime_state data migration — idempotent UPDATE
+        "20260815_075",  # co_worker_type human->user (#13970) — data-only,
+        # idempotent UPDATE: re-running matches nothing
         "20260608_052",  # merge revision — no-op
         "20260623_062",  # RBAC colon->dot reconcile (#10458) — data-only head;
         # absorbed by the data-only tail advance, idempotent if re-run
