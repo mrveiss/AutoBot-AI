@@ -12,12 +12,9 @@ Issue #281: Refactored from 112 lines to use data-driven router loading.
 Issue #729: Infrastructure routers removed - now served by slm-server.
 """
 
-import importlib
 from typing import List, Tuple
 
-from autobot_shared.logging_manager import get_logger
-
-logger = get_logger(__name__)
+from .loader import load_router_group, load_single_router
 
 # Router configurations: (module_path, router_name, prefix, tags, display_name)
 # Issue #281: Centralized router configuration for maintainability
@@ -95,17 +92,7 @@ def _try_load_router(module_path: str, router_attr: str, prefix: str, tags: List
     Returns:
         Tuple of (router, prefix, tags, name) if successful, None otherwise
     """
-    try:
-        module = importlib.import_module(module_path)
-        router = getattr(module, router_attr)
-        logger.info("✅ Optional router loaded: %s", name)
-        return (router, prefix, tags, name)
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
-        return None
-    except AttributeError as e:
-        logger.warning("⚠️ Router attribute missing: %s - %s", name, e)
-        return None
+    return load_single_router("monitoring", module_path, prefix, tags, name, router_attr)
 
 
 def load_monitoring_routers() -> List[Tuple]:
@@ -119,12 +106,4 @@ def load_monitoring_routers() -> List[Tuple]:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
-    optional_routers = []
-
-    for config in MONITORING_ROUTER_CONFIGS:
-        module_path, router_attr, prefix, tags, name = config
-        result = _try_load_router(module_path, router_attr, prefix, tags, name)
-        if result:
-            optional_routers.append(result)
-
-    return optional_routers
+    return load_router_group("monitoring", MONITORING_ROUTER_CONFIGS)

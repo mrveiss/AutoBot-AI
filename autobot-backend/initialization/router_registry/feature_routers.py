@@ -13,12 +13,13 @@ Issue #281: Refactored from 716 lines of repetitive try/except blocks to
 data-driven configuration pattern for improved maintainability.
 """
 
-import importlib
 import json
 import os
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+
+from .loader import get_load_results, load_router_group, load_single_router
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
@@ -27,7 +28,12 @@ logger = get_logger(__name__)
 # (health endpoint, dashboards) can introspect what loaded vs failed without
 # scraping logs. Each entry: {"name": str, "module": str, "loaded": bool,
 # "error": str | None}.
-_LOAD_RESULTS: List[Dict[str, Any]] = []
+# #14207: this group's slice of the shared registry in ``loader``. Kept as a
+# module name because the Redis publisher and the cross-worker reader below
+# were written against it; it is now a function call, not a second store.
+def _load_results() -> List[Dict[str, Any]]:
+    """This group's load results, from the shared registry (#14207)."""
+    return get_load_results("feature")
 
 # #6808: Redis key prefix and TTL for cross-worker aggregation.
 # Each uvicorn worker publishes its results under its PID so the health
@@ -64,7 +70,7 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
       - ``worker_count``: number of live workers seen
       - ``redis_available``: whether aggregation succeeded
 
-    Falls back to the local ``_LOAD_RESULTS`` when Redis is unavailable.
+    Falls back to this worker's own results when Redis is unavailable.
     """
     try:
         from autobot_shared.redis_client import get_redis_client
@@ -86,8 +92,8 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
         if not workers:
             # No Redis data yet — fall back to local (boot race window)
             return {
-                "workers": {str(os.getpid()): _LOAD_RESULTS},
-                "aggregated": _LOAD_RESULTS,
+                "workers": {str(os.getpid()): _load_results()},
+                "aggregated": _load_results(),
                 "worker_count": 1,
                 "redis_available": True,
                 "note": "local-only: no other worker keys found in Redis yet",
@@ -120,8 +126,8 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
     except Exception:
         logger.debug("Redis aggregation failed, falling back to local results (#6808)", exc_info=True)
         return {
-            "workers": {str(os.getpid()): _LOAD_RESULTS},
-            "aggregated": _LOAD_RESULTS,
+            "workers": {str(os.getpid()): _load_results()},
+            "aggregated": _load_results(),
             "worker_count": 1,
             "redis_available": False,
         }
@@ -746,34 +752,7 @@ def _load_single_router(module_path: str, prefix: str, tags: List[str], name: st
     Returns:
         Tuple of (router, prefix, tags, name) if successful, None otherwise
     """
-    try:
-        module = importlib.import_module(module_path)
-        router = getattr(module, "router")
-        logger.info("✅ Optional router loaded: %s", name)
-        _LOAD_RESULTS.append({"name": name, "module": module_path, "loaded": True, "error": None})
-        return (router, prefix, tags, name)
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
-        _LOAD_RESULTS.append(
-            {
-                "name": name,
-                "module": module_path,
-                "loaded": False,
-                "error": f"ImportError: {e}",
-            }
-        )
-        return None
-    except AttributeError as e:
-        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
-        _LOAD_RESULTS.append(
-            {
-                "name": name,
-                "module": module_path,
-                "loaded": False,
-                "error": f"AttributeError: {e}",
-            }
-        )
-        return None
+    return load_single_router("feature", module_path, prefix, tags, name)
 
 
 def get_feature_router_load_results() -> List[Dict[str, Any]]:
@@ -783,7 +762,7 @@ def get_feature_router_load_results() -> List[Dict[str, Any]]:
     that wants to surface partial-boot state without scraping logs. Returns
     a copy so callers can mutate freely.
     """
-    return list(_LOAD_RESULTS)
+    return _load_results()
 
 
 def load_feature_routers() -> List[Tuple]:
@@ -803,37 +782,18 @@ def load_feature_routers() -> List[Tuple]:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
-    # Reset results — supports test environments that load_feature_routers()
-    # multiple times in a single process.
-    _LOAD_RESULTS.clear()
+    # #14207: the reset, the loop and the loaded/expected summary are the
+    # shared loader's, which every registry now uses. Strict mode stays here
+    # because it is this group's policy, not the mechanism's.
+    optional_routers = load_router_group("feature", FEATURE_ROUTER_CONFIGS)
 
-    optional_routers = []
-
-    for module_path, prefix, tags, name in FEATURE_ROUTER_CONFIGS:
-        result = _load_single_router(module_path, prefix, tags, name)
-        if result:
-            optional_routers.append(result)
-
-    loaded = len(optional_routers)
-    expected = len(FEATURE_ROUTER_CONFIGS)
-    if loaded < expected:
-        # #6797: escalate from INFO so partial-boot state is visible.
-        failed = [r for r in _LOAD_RESULTS if not r["loaded"]]
-        logger.error(
-            "📊 Loaded %s/%s feature routers — %s FAILED: %s",
-            loaded,
-            expected,
-            len(failed),
-            ", ".join(r["name"] for r in failed),
+    failed = [r for r in _load_results() if not r["loaded"]]
+    if failed and config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
+        raise RuntimeError(
+            f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
+            f"failed to load: {', '.join(r['name'] for r in failed)}"
         )
-        if config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
-            raise RuntimeError(
-                f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
-                f"failed to load: {', '.join(r['name'] for r in failed)}"
-            )
-    else:
-        logger.info("📊 Loaded %s/%s feature routers", loaded, expected)
     # #6808: publish this worker's results to Redis so the health endpoint can
     # aggregate across all workers instead of returning a per-worker snapshot.
-    _publish_load_results_to_redis(_LOAD_RESULTS)
+    _publish_load_results_to_redis(_load_results())
     return optional_routers
