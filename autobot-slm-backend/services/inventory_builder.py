@@ -237,6 +237,45 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
     return hostvars
 
 
+def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Complete ansible group set for one node, universal groups included.
+
+    Extracted from ``build_registry_inventory`` so the setup-wizard inventory
+    path can reach the same answer instead of carrying its own mapping
+    (#14286). Two builders emitting different group vocabularies for one fleet
+    is what made plays gated on ``aiml`` / ``database`` match zero hosts and
+    report success having done nothing.
+
+    Args:
+        role_tokens: role / detected_role strings for one node.
+
+    Returns:
+        Every ansible group the node belongs to.
+    """
+    node_groups = _role_tokens_to_groups(role_tokens)
+
+    # Every node joins autobot + autobot_cluster (centralized logging, etc.)
+    node_groups |= _UNIVERSAL_ALL
+
+    # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
+    # node that ALSO carries app roles (single-node installs co-locate
+    # backend/frontend/workers on the SLM box) must join them too —
+    # otherwise the update playbook's Play 2 never matches that host and
+    # the co-located components silently stop receiving updates.
+    # Co-location is classified at the ROLE-TOKEN level, not the group
+    # level: SLM-internal tokens (slm-database, slm-monitoring) map to
+    # non-SLM groups (redis/monitoring_vm), so group-based detection would
+    # wrongly promote a pure SLM manager into infrastructure (#11453).
+    is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
+    has_app_roles = any(
+        (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
+    )
+    if not is_slm or has_app_roles:
+        node_groups |= _UNIVERSAL_NON_SLM
+
+    return node_groups
+
+
 def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
     """Build a full Ansible YAML inventory dict from the DB node list.
 
@@ -277,27 +316,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         hostvars = _build_hostvars(node, local_ip_check)
         host_section[host_name] = hostvars
 
-        role_tokens = _union_roles(node)
-        node_groups = _role_tokens_to_groups(role_tokens)
-
-        # Every node joins autobot + autobot_cluster (centralized logging, etc.)
-        node_groups |= _UNIVERSAL_ALL
-
-        # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
-        # node that ALSO carries app roles (single-node installs co-locate
-        # backend/frontend/workers on the SLM box) must join them too —
-        # otherwise the update playbook's Play 2 never matches that host and
-        # the co-located components silently stop receiving updates.
-        # Co-location is classified at the ROLE-TOKEN level, not the group
-        # level: SLM-internal tokens (slm-database, slm-monitoring) map to
-        # non-SLM groups (redis/monitoring_vm), so group-based detection would
-        # wrongly promote a pure SLM manager into infrastructure (#11453).
-        is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
-        has_app_roles = any(
-            (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
-        )
-        if not is_slm or has_app_roles:
-            node_groups |= _UNIVERSAL_NON_SLM
+        node_groups = groups_for_role_tokens(_union_roles(node))
 
         for g in node_groups:
             if g not in groups:

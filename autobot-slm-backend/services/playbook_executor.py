@@ -141,6 +141,43 @@ SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.l
 SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
 
 
+def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
+    """Expose the static group_vars beside a dynamic inventory (#11781).
+
+    Ansible resolves ``group_vars/`` relative to the inventory SOURCE
+    directory. A dynamic inventory is written to a uid-scoped /tmp dir,
+    so none of ``inventory/group_vars/*.yml`` (24 vars in all.yml alone,
+    e.g. ``slm_manager_node_id``) loaded — playbooks referencing them hit
+    "undefined variable" (the self-update pre-flight "Notify SLM of new
+    commit" task failed exactly this way). Symlink the real group_vars dir
+    next to the temp inventory so dynamic runs get the same vars as static
+    ones. Best-effort: a link failure must not block the deploy.
+
+    Module-level rather than a method because there are two inventory
+    builders and only one was calling it (#14286): the wizard path wrote a
+    bare inventory with no group_vars sibling, so ``role_redis_active`` and
+    everything derived from it — ``chromadb_service_owner`` among them —
+    fell back to role defaults and a single-role redeploy could reassign a
+    unit it does not own.
+
+    Args:
+        inventory_path: the written inventory file; the link is made beside it.
+        ansible_dir: repo ansible directory holding ``inventory/group_vars``.
+    """
+    src = ansible_dir / "inventory" / "group_vars"
+    if not src.is_dir():
+        return
+    link = inventory_path.parent / "group_vars"
+    try:
+        if link.is_symlink() or link.exists():
+            if link.is_symlink() and link.resolve() == src.resolve():
+                return
+            link.unlink()
+        link.symlink_to(src, target_is_directory=True)
+    except OSError as exc:
+        logger.warning("Could not link group_vars for dynamic inventory: %s", exc)
+
+
 class PlaybookExecutor:
     """Execute Ansible playbooks programmatically."""
 
@@ -911,29 +948,13 @@ class PlaybookExecutor:
         return tmp_path
 
     def _link_group_vars(self, inventory_path: Path) -> None:
-        """Expose the static group_vars beside the dynamic inventory (#11781).
+        """Expose the static group_vars beside this executor's inventory.
 
-        Ansible resolves ``group_vars/`` relative to the inventory SOURCE
-        directory. The dynamic inventory is written to a uid-scoped /tmp dir,
-        so none of ``inventory/group_vars/*.yml`` (24 vars in all.yml alone,
-        e.g. ``slm_manager_node_id``) loaded — playbooks referencing them hit
-        "undefined variable" (the self-update pre-flight "Notify SLM of new
-        commit" task failed exactly this way). Symlink the real group_vars dir
-        next to the temp inventory so dynamic runs get the same vars as static
-        ones. Best-effort: a link failure must not block the deploy.
+        Thin wrapper over :func:`link_group_vars` so the setup-wizard
+        inventory path can reach the same behaviour (#14286) rather than
+        growing a second copy of it.
         """
-        src = self.ansible_dir / "inventory" / "group_vars"
-        if not src.is_dir():
-            return
-        link = inventory_path.parent / "group_vars"
-        try:
-            if link.is_symlink() or link.exists():
-                if link.is_symlink() and link.resolve() == src.resolve():
-                    return
-                link.unlink()
-            link.symlink_to(src, target_is_directory=True)
-        except OSError as exc:
-            logger.warning("Could not link group_vars for dynamic inventory: %s", exc)
+        link_group_vars(inventory_path, self.ansible_dir)
 
     async def execute_playbook(
         self,
