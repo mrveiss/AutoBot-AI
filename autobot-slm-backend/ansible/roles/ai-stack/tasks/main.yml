@@ -139,9 +139,30 @@
     path: "{{ ai_install_dir }}/requirements-ai.txt"
   register: _ai_requirements_file
 
+# #14272: requirements-ai.txt carries `-c ../../../../constraints/shared.txt`,
+# correct where the file LIVES in the repo and wrong where it is DEPLOYED — four
+# levels up from /opt/autobot/autobot-ai-stack/ is `/`, so pip looked for
+# /constraints/shared.txt and aborted provisioning.
+#
+# Rewritten through the canonical scripts/build-filtered-requirements.sh rather
+# than with a second sed here: the backend role and services/role_registry.py
+# already share that script for exactly this, and it says so in its own header
+# (#11117). It was never wired in here, which is the whole bug.
+- name: Create filtered AI-stack requirements file (#14272)
+  ansible.builtin.shell:
+    cmd: >-
+      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+      {{ ai_install_dir }}/requirements-ai.txt
+      {{ code_source_dir | default('/opt/autobot/code_source') }}
+      > {{ ai_install_dir }}/requirements-ai-filtered.txt
+  become_user: "{{ ai_user }}"
+  changed_when: true
+  when: _ai_requirements_file.stat.exists
+  tags: ['ai', 'deploy']
+
 - name: Install AI Python packages from requirements-ai.txt
   ansible.builtin.pip:
-    requirements: "{{ ai_install_dir }}/requirements-ai.txt"
+    requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
     extra_args: "--timeout 300"
