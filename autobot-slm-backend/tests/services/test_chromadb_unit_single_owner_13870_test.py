@@ -286,3 +286,26 @@ def test_the_persist_directory_moves_with_the_service():
     assert code_only.index("chromadb_data_migration.yml") < code_only.index(
         _UNIT_DEST
     ), "the migration must run BEFORE the unit is deployed, or the service starts on the old path"
+
+
+def test_the_marker_is_written_only_after_the_copy_is_verified():
+    """Order is the entire guarantee, and nothing asserted it.
+
+    Round-2 review swapped the assert and the marker-write and the suite stayed
+    green. If the marker lands first, an incomplete copy is recorded as migrated
+    — the block then skips forever and chroma serves a partial store, which is
+    exactly the failure the marker was introduced to prevent.
+
+    Checking the strings in isolation cannot see this: both are present either
+    way. Only their relative position carries the meaning.
+    """
+    tasks = (_ANSIBLE / "roles" / "redis" / "tasks" / "chromadb_data_migration.yml").read_text(encoding="utf-8")
+    verify_at = tasks.index("The copy must be complete before anything trusts it")
+    marker_at = tasks.index("Mark the store migrated")
+    assert verify_at < marker_at, (
+        "the migration marker is written BEFORE the copy is verified — an incomplete "
+        "copy would be recorded as migrated and never retried (#13870)"
+    )
+
+    copy_at = tasks.index("Copy the store to the db-stack path")
+    assert copy_at < verify_at, "the verification must follow the copy it verifies"
