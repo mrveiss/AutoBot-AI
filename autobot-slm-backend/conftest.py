@@ -247,6 +247,27 @@ sys.modules["services.deploy_artifacts"] = _artifacts_mod
 _artifacts_spec.loader.exec_module(_artifacts_mod)
 setattr(sys.modules["services"], "deploy_artifacts", _artifacts_mod)
 
+# ── services.ansible_utils — REAL module, not a stub (#14297) ─────────────────
+# Third instance of the ssh_utils/deploy_artifacts pattern, and self-inflicted:
+# _CODE_SYNC_SERVICE_MODULES above is derived by AST from code_sync.py's
+# `services.*` imports, so adding `from services.ansible_utils import
+# parse_unreachable_hosts` to that module automatically enrolled it for
+# stubbing.
+#
+# The consequence is the deploy_artifacts failure mode verbatim: the stub's
+# parse_unreachable_hosts returns a MagicMock, `set(MagicMock)` is EMPTY, so
+# _node_was_unreachable finds no match, an unreachable node is recorded as a
+# hard failure instead of a skip, and the fleet stage halts. The module is
+# dependency-light (re/os/shutil + env_utils), so real-load it.
+_ansible_utils_spec = _importlib_util.spec_from_file_location(
+    "services.ansible_utils",
+    Path(__file__).parent / "services" / "ansible_utils.py",
+)
+_ansible_utils_mod = _importlib_util.module_from_spec(_ansible_utils_spec)
+sys.modules["services.ansible_utils"] = _ansible_utils_mod
+_ansible_utils_spec.loader.exec_module(_ansible_utils_mod)
+setattr(sys.modules["services"], "ansible_utils", _ansible_utils_mod)
+
 # ── python-multipart ─────────────────────────────────────────────────────────
 # FastAPI's ensure_multipart_is_installed() is called when any route uses
 # UploadFile or Form parameters.  It checks for python_multipart.__version__
