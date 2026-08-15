@@ -49,6 +49,7 @@ from models.schemas import (
     UpdatePackagesResponse,
     UpdateSummaryResponse,
 )
+from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
 from services.database import get_db
@@ -211,7 +212,7 @@ async def _handle_failed_update(db: AsyncSession, job: UpdateJob, node_id: str, 
     Helper for _run_update_job (Issue #665).
     """
     job.status = UpdateJobStatus.FAILED.value
-    job.error = f"Playbook failed: {output[:500]}"
+    job.error = f"Playbook failed: {summarize_playbook_failure(output)}"
     job.output = output
 
     await db.commit()
@@ -578,7 +579,7 @@ async def _run_discover_job(
 
         if not result["success"] and not host_results:
             job["status"] = "failed"
-            job["message"] = "Playbook failed: " + result["output"][:500]
+            job["message"] = "Playbook failed: " + summarize_playbook_failure(result["output"])
             job["completed_at"] = utc_timestamp()
             logger.error("Discover job %s failed — no nodes reported results", job_id)
             return
@@ -970,7 +971,7 @@ async def _execute_upgrade_playbook(
         )
     else:
         j.status = UpdateJobStatus.FAILED.value
-        j.error = r["output"][:500]
+        j.error = summarize_playbook_failure(r["output"])
         j.output = r["output"]
     j.completed_at = datetime.now(timezone.utc)
     await sess.commit()
