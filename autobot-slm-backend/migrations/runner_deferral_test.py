@@ -224,9 +224,7 @@ def test_a_mid_run_exception_is_always_recorded():
     recording = []
     for handler in handlers:
         appends = [
-            n
-            for n in ast.walk(handler)
-            if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "append"
+            n for n in ast.walk(handler) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "append"
         ]
         if not appends:
             continue
