@@ -28,8 +28,12 @@ reportlab>=5.0.0    # PDF export for transcripts
 # PyPDF2 removed (#13893): unmaintained, and it was the PDF reader behind the
 # Drive/OneDrive connectors while the repo pinned pypdf as a security update
 # (requirements.txt:23). All PDF reading now goes through media/document/extraction.py.
-openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
-python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
+# openpyxl / python-pptx: declared once, in the root requirements.txt this file
+# includes at the bottom (`-r ../requirements.txt`). Both were declared here too,
+# with LOWER floors, and pip aborts provisioning on a differing duplicate:
+#   ERROR: Double requirement given: openpyxl>=3.1.5 ... already in openpyxl>=3.1.0
+# The root file carries the stricter floor, so dropping these tightens rather than
+# loosens the constraint and the OneDrive connector's parsers still install (#14228, GH#9004).
 
 # AI/ML
 openai>=2.53.0

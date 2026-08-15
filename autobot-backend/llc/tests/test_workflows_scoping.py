@@ -23,12 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.enums import WorkflowStatus
 from llc.services.workflow import WorkflowService
-from models.workflow import SOURCE_CREATED, SOURCE_LEGACY_REDIS, Workflow
 
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect, safe to reuse
 # without modifying the shared file).
 from llc.tests import _e2e_harness as harness
+from models.workflow import SOURCE_CREATED, SOURCE_LEGACY_REDIS, Workflow
 from user_management.models.base import Base
 
 # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
@@ -54,9 +54,7 @@ async def session_factory(engine):  # noqa: ANN001, ANN201
     return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
-async def _seed_workflow(  # noqa: ANN001
-    session_factory, company_id: uuid.UUID, *, workflow_id: str, name: str
-) -> str:
+async def _seed_workflow(session_factory, company_id: uuid.UUID, *, workflow_id: str, name: str) -> str:  # noqa: ANN001
     async with session_factory() as session:
         svc = WorkflowService()
         workflow = await svc.create(session, company_id, workflow_id, name=name)

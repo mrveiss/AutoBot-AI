@@ -93,25 +93,31 @@ class PatternLifecycle:
         return 0
 
 
-#: Git environment variables that override the repository named on the command
-#: line. Left in place, ``-C repo_path`` becomes advisory and git reads whatever
-#: the ambient environment points at (#13983). A crawler asked to analyse one
-#: repository must not silently analyse another — the caller gets a plausible
-#: history for the wrong tree, which is worse than an error.
-_REPO_OVERRIDING_GIT_VARS = (
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_NAMESPACE",
-)
+def git_env() -> dict:
+    """The ambient environment minus everything that redirects git off ``-C``.
+
+    Left in place, such a variable makes ``-C repo_path`` advisory and git reads
+    whatever the ambient environment points at (#13983). A crawler asked to
+    analyse one repository must not silently analyse another — the caller gets a
+    plausible history for the wrong tree, which is worse than an error.
+
+    #13882: this was a hand-written list of seven names, and its sibling in the
+    test fixture was a list of nine. Both are denylists — narrower than their own
+    subject, correct for the failures already seen and silently wrong for the
+    next one. Git has more than nine such variables and gains new ones between
+    releases, so neither list could ever be finished, only extended once per
+    incident. Inverted here: strip everything beginning with ``GIT_``.
+
+    Safe to strip wholesale because every caller is read-only and local —
+    ``_run_git`` passes ``-C`` and runs ``log``/``show`` against a path that is
+    already on disk. Nothing here clones, fetches or authenticates, so no
+    ``GIT_SSH_*`` or credential variable is load-bearing.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
-def _git_env() -> dict:
-    """The ambient environment minus anything that redirects git off ``-C``."""
-    return {k: v for k, v in os.environ.items() if k not in _REPO_OVERRIDING_GIT_VARS}
+#: Back-compat alias — this module's own call site and the tests both import it.
+_git_env = git_env
 
 
 class GitCommandError(RuntimeError):

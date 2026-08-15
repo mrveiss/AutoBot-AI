@@ -195,7 +195,9 @@ async def _main(dry_run: bool) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Backfill Redis-persisted workflows into the workflows table (#14210).")
+    parser = argparse.ArgumentParser(
+        description="Backfill Redis-persisted workflows into the workflows table (#14210)."
+    )
     parser.add_argument("--dry-run", action="store_true", help="Scan and report without writing.")
     args = parser.parse_args()
     asyncio.run(_main(args.dry_run))

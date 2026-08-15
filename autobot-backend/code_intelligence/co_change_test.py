@@ -23,23 +23,32 @@ import pytest
 from code_intelligence.co_change import CoChangeAnalyzer, CoChangePair
 from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler
 
-#: Git environment variables that redirect git away from the repository named
-#: on the command line. Inherited from the CI job, they make every worker's
-#: ``git`` operate on shared state instead of its own tmpdir (#13983).
-_INHERITED_GIT_VARS = (
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_CEILING_DIRECTORIES",
-    "GIT_NAMESPACE",
-    "GIT_CONFIG",
-)
+#: Supplied by :func:`hermetic_git_env` to any fixture building a throwaway repo.
+#: Config is nulled so the runner's global git config cannot leak in. Identity is
+#: deliberately NOT here: an env-level identity silently outranks the repo-level
+#: ``git config user.name`` a fixture sets, so a sibling asserting on an author
+#: name would get this one instead of its own.
+_SUPPLIED_GIT_VARS = {
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_SYSTEM": os.devnull,
+}
+
+#: This file's identity, layered on top. Supplied via the environment so the
+#: fixture does not depend on the runner having a global git identity configured.
+_FIXTURE_IDENTITY = {
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "a@b.c",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "a@b.c",
+}
 
 
-def _hermetic_git_env() -> dict:
+def _fixture_git_env() -> dict:
+    """:func:`hermetic_git_env` plus this file's own identity."""
+    return {**hermetic_git_env(), **_FIXTURE_IDENTITY}
+
+
+def hermetic_git_env() -> dict:
     """A git environment that cannot reach outside the repo passed to ``-C``.
 
     #13983: with ``GIT_INDEX_FILE`` exported, every xdist worker stages into
@@ -49,21 +58,23 @@ def _hermetic_git_env() -> dict:
         error: invalid object 100644 <sha> for 'solo_12.py'
         error: Error building trees
 
-    That reads as repository corruption and is nowhere near the code under
-    test. Identity is supplied here too, so the fixture does not depend on the
-    runner having a global git identity configured.
+    That reads as repository corruption and is nowhere near the code under test.
+
+    #13882: the same failure came back after that fix, with a second line of
+    ``error: bad tree object HEAD``. #13983 stripped a hand-written LIST of nine
+    variables, which is a denylist -- narrower than its own subject, and silently
+    wrong for the tenth. Git has more than nine such variables and gains new ones
+    between releases, so the list could only ever be correct for the failures
+    already seen.
+
+    Inverted here: strip **everything** beginning with ``GIT_``, then add back
+    exactly what the fixture needs. The fixture runs only local commands in a
+    throwaway repo, so nothing inherited is load-bearing, and a variable git adds
+    next year is stripped without anyone updating a list. Identity is supplied
+    too, so this does not depend on the runner having a global git identity.
     """
-    env = {k: v for k, v in os.environ.items() if k not in _INHERITED_GIT_VARS}
-    env.update(
-        {
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_CONFIG_SYSTEM": os.devnull,
-            "GIT_AUTHOR_NAME": "t",
-            "GIT_AUTHOR_EMAIL": "a@b.c",
-            "GIT_COMMITTER_NAME": "t",
-            "GIT_COMMITTER_EMAIL": "a@b.c",
-        }
-    )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(_SUPPLIED_GIT_VARS)
     return env
 
 
@@ -76,7 +87,7 @@ def _git(repo: Path, *args: str) -> None:
     therefore read as a bare "exit status 128" with no indication of the cause,
     which is what made the intermittent failure undiagnosable from the log.
     """
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=_hermetic_git_env())
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=_fixture_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
@@ -86,7 +97,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _git_init(path: Path) -> None:
     """git init with the same stderr-surfacing contract as _git (#13882)."""
-    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_hermetic_git_env())
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_fixture_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
@@ -508,23 +519,136 @@ def test_the_crawler_reads_the_repo_it_was_given_not_the_ambient_one(repo, tmp_p
     assert "decoy.py" not in seen, "GIT_DIR redirected the crawler to the ambient repository"
 
 
-def test_the_stripped_git_vars_cover_the_ones_that_override__C():
-    """The strip list must name every variable that outranks ``-C``.
+def test_the_production_git_env_strips_every_git_variable():
+    """The rule, not a list of names.
 
-    Listed explicitly rather than stripping ``GIT_*`` wholesale: ``GIT_AUTHOR_*``,
-    ``GIT_SSH_COMMAND`` and friends are legitimate and removing them would break
-    unrelated callers.
+    This test previously pinned a seven-name denylist, arguing that stripping
+    ``GIT_*`` wholesale would break unrelated callers because ``GIT_AUTHOR_*``
+    and ``GIT_SSH_COMMAND`` are legitimate. The call graph refutes it:
+    ``git_env()`` has exactly one consumer, ``_run_git``, whose every call site
+    is ``rev-parse --git-dir`` / ``log`` / ``show`` against a local path with
+    ``-C``. Nothing commits, so ``GIT_AUTHOR_*`` is inert; nothing clones or
+    fetches, so ``GIT_SSH_COMMAND`` is inert. (``skills/external_importer.py``
+    does fetch, but through its own ``_run_git`` with a different signature — it
+    never touches this environment.)
+
+    The concern was real in principle and false for this module, and the cost of
+    being wrong the other way is a crawler silently reporting another
+    repository's history (#13983, #13882).
     """
-    from code_intelligence.code_evolution_miner import _REPO_OVERRIDING_GIT_VARS, _git_env
+    from code_intelligence.code_evolution_miner import git_env
 
-    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"):
-        assert var in _REPO_OVERRIDING_GIT_VARS, f"{var} outranks -C but is not stripped"
+    for var in (
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        # Never on the seven-name list. The rule covers them without anyone
+        # noticing they were missing.
+        "GIT_COMMON_DIR",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_INDEX_VERSION",
+        "GIT_TEST_SOMETHING_NEW",
+    ):
+        os.environ[var] = "/somewhere/else"
+        try:
+            assert var not in git_env(), f"{var} outranks -C but survives"
+        finally:
+            del os.environ[var]
 
     import os as _os
 
     _os.environ["GIT_DIR"] = "/nowhere"
     try:
-        assert "GIT_DIR" not in _git_env()
-        assert "PATH" in _git_env(), "the environment was emptied rather than filtered"
+        assert "GIT_DIR" not in git_env()
+        assert "PATH" in git_env(), "the environment was emptied rather than filtered"
     finally:
         _os.environ.pop("GIT_DIR", None)
+
+
+# ---------------------------------------------------------------------------
+# #13882 — the hermetic environment itself, asserted directly.
+#
+# #13983 stripped a hand-written list of nine GIT_* variables and the corruption
+# came back through a tenth. These assert the RULE ("nothing inherited beginning
+# with GIT_ survives"), not the nine names that were known at the time.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "leaked",
+    [
+        "GIT_INDEX_FILE",  # #13983's original culprit
+        "GIT_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        # Never on any denylist. A future git release adding one of these is the
+        # whole reason the rule replaced the list.
+        "GIT_INDEX_VERSION",
+        "GIT_LITERAL_PATHSPECS",
+        "GIT_ATTR_NOSYSTEM",
+        "GIT_TEST_SOMETHING_NEW",
+    ],
+)
+def test_no_inherited_git_variable_survives(monkeypatch, leaked):
+    monkeypatch.setenv(leaked, "/somewhere/shared")
+
+    assert leaked not in hermetic_git_env()
+
+
+def test_the_variables_the_fixture_needs_are_supplied(monkeypatch):
+    """Stripping everything means identity has to be put back, or the fixture
+    depends on the runner having a global git identity configured."""
+    for name in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_EMAIL", "GIT_CONFIG_GLOBAL"):
+        monkeypatch.delenv(name, raising=False)
+
+    env = _fixture_git_env()
+
+    assert env["GIT_AUTHOR_NAME"] == "t"
+    assert env["GIT_COMMITTER_EMAIL"] == "a@b.c"
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+
+
+def test_a_supplied_variable_overrides_an_inherited_one(monkeypatch):
+    """A runner exporting GIT_AUTHOR_NAME must not change what this fixture commits."""
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "the-runner")
+
+    assert _fixture_git_env()["GIT_AUTHOR_NAME"] == "t"
+
+
+def test_non_git_environment_is_left_alone(monkeypatch):
+    """PATH and friends must survive, or git cannot be found at all."""
+    monkeypatch.setenv("SOME_UNRELATED_VAR", "kept")
+
+    env = hermetic_git_env()
+
+    assert env["SOME_UNRELATED_VAR"] == "kept"
+    assert "PATH" in env
+
+
+def test_a_worker_with_a_hostile_index_file_still_commits_its_own_tree(monkeypatch, tmp_path):
+    """The reproduction, end to end.
+
+    With GIT_INDEX_FILE pointing at a shared path, a worker used to stage into
+    one index while committing in its own tmpdir — producing a tree whose blobs
+    live in another worker's object store. Two repos are built here under the
+    same hostile value; both must succeed and stay independent.
+    """
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "shared.index"))
+
+    for name in ("repo_a", "repo_b"):
+        repo = tmp_path / name
+        repo.mkdir()
+        _git_init(repo)
+        _commit(repo, {f"{name}.py": "v0\n"}, f"initial {name}")
+
+    for name in ("repo_a", "repo_b"):
+        result = subprocess.run(
+            ["git", "-C", str(tmp_path / name), "log", "--oneline"],
+            capture_output=True,
+            text=True,
+            env=_fixture_git_env(),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.count("\n") == 1, f"{name} sees another repo's history: {result.stdout}"

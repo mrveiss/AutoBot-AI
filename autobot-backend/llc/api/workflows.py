@@ -150,9 +150,7 @@ async def update_workflow_status(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
-    workflow = await _svc().update_status(
-        session, company_id, workflow_id, body.status, actor=_actor_id(_current_user)
-    )
+    workflow = await _svc().update_status(session, company_id, workflow_id, body.status, actor=_actor_id(_current_user))
     if workflow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     await session.commit()
