@@ -75,12 +75,11 @@ jobs:
         # psycopg2-binary: sync driver used by the custom runner.
         # pyyaml: NOT a migration dependency. The pytest step below loads
         # autobot-slm-backend/conftest.py, which since #14307 real-loads
-        # services/inventory_builder.py (that module imports yaml) so the
-        # co-located tests get the real thing instead of a MagicMock. Without
-        # it the conftest fails to import and every test in the directory dies,
-        # including main_tablename_test.py, which has nothing to do with
-        # inventory. Listed explicitly rather than folded into a broader
-        # install so the coupling is visible if either side changes.
+        # services/inventory_builder.py (that module imports yaml). The
+        # conftest now degrades per-module rather than dying, so this is no
+        # longer load-bearing — kept because inventory_builder is the one
+        # listed module a migration test could plausibly want real, and one
+        # line is cheaper than discovering it is absent. See #14326.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
