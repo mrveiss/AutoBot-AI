@@ -31,7 +31,7 @@ from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
-from services.playbook_executor import get_playbook_executor
+from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
 
 logger = logging.getLogger(__name__)
 
@@ -118,15 +118,36 @@ def _build_inventory_children(
     Returns (children dict, ansible_groups) where ansible_groups maps
     group name to set of inventory names for logging.
     """
+    from services.inventory_builder import groups_for_role_tokens
     from services.role_registry import ROLE_ANSIBLE_GROUPS
 
+    # #14286: this path used to emit ROLE_ANSIBLE_GROUPS alone — one group per
+    # role, a vocabulary that drifted from the canonical builder's. Measured
+    # against every `hosts:` in the playbooks, 13 groups a play can gate on
+    # (aiml, database, redis, infrastructure, main, npu, npu_workers, browser,
+    # slm, monitoring_vm, autobot, autobot_cluster, production_vms) matched
+    # zero hosts through here, so those plays reported success having done
+    # nothing.
+    #
+    # The two maps are unioned rather than swapped, because neither is a
+    # superset: `databases`, `browser_automation` and tts-worker's
+    # `npu_worker` exist only in ROLE_ANSIBLE_GROUPS, and playbooks gate on
+    # them. Dropping either vocabulary would trade one silent no-op for
+    # another; a host in more groups cannot make a previously-matching play
+    # stop matching.
+    roles_by_node: dict[str, list[str]] = {}
     ansible_groups: dict[str, set[str]] = {}
     for nr in node_roles:
         inv_name = node_id_to_inv_name.get(nr.node_id)
         if not inv_name:
             continue
+        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
         group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
         if group:
+            ansible_groups.setdefault(group, set()).add(inv_name)
+
+    for inv_name, role_tokens in roles_by_node.items():
+        for group in groups_for_role_tokens(role_tokens):
             ansible_groups.setdefault(group, set()).add(inv_name)
 
     children: dict[str, dict] = {
@@ -541,9 +562,19 @@ async def _generate_dynamic_inventory(
         infra_vars["backend_chromadb_port"] = _CHROMADB_PORT
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
-    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
+    # #14286: written into the uid-scoped ansible tmp dir, not bare /tmp, so a
+    # `group_vars` symlink can be placed beside it without landing in a
+    # world-writable directory. Without that sibling, ansible resolves none of
+    # inventory/group_vars/*.yml for this path — `role_redis_active` and the
+    # `chromadb_service_owner` derived from it fall back to role defaults, and
+    # a single-role redeploy rewrites a unit the named role does not own
+    # (#4090's outage, verbatim).
+    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
+    tmp_dir.mkdir(mode=0o700, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
     with open(fd, "w", encoding="utf-8") as f:
         yaml.dump(inventory, f, default_flow_style=False)
+    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
 
     grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
     logger.info(
