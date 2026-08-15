@@ -71,13 +71,24 @@ def test_a_non_autobot_name_is_not_matched(checker, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_the_baseline_is_not_empty(checker):
-    """An empty baseline would make the shrink assertion vacuous."""
-    assert len(checker._UNREGISTERED_BASELINE) >= 40
+def test_the_baseline_is_empty_now_that_the_backlog_is_drained(checker):
+    """This asserted `>= 40` when the baseline held the backlog, to stop an empty
+    set making the shrink check vacuous. The backlog is drained, so that
+    assertion now encodes "the debt must stay large" — the opposite of the point.
+
+    The vacuity it guarded against is covered better by
+    `test_the_repository_has_no_unbaselined_unregistered_names`, which fails if
+    anything is unregistered whether or not the baseline is empty.
+    """
+    assert checker._UNREGISTERED_BASELINE == frozenset()
 
 
 def test_no_baselined_name_is_already_registered(checker):
-    """A stranded entry exempts whatever arrives under that name next, silently."""
+    """A stranded entry exempts whatever arrives under that name next, silently.
+
+    Vacuously true while the baseline is empty, and deliberately kept: it is the
+    assertion that matters the moment anyone adds an entry back.
+    """
     already = sorted(checker._UNREGISTERED_BASELINE & set(checker.REGISTRY))
 
     assert already == [], f"remove these from _UNREGISTERED_BASELINE — they are registered: {already}"
@@ -85,7 +96,8 @@ def test_no_baselined_name_is_already_registered(checker):
 
 def test_a_registered_baseline_entry_is_reported(checker):
     """The mechanism that keeps the list shrinking rather than rotting."""
-    name = sorted(checker._UNREGISTERED_BASELINE)[0]
+    name = "AUTOBOT_SYNTHETIC_BASELINE_ENTRY"
+    checker._UNREGISTERED_BASELINE = frozenset({name})
     checker.REGISTRY[name] = next(iter(checker.REGISTRY.values()))
     try:
         violations = checker._stale_baseline_entries()
@@ -110,7 +122,8 @@ def test_the_ceiling_is_reached_from_main_not_only_by_calling_it(checker, tmp_pa
     import io
     import sys as _sys
 
-    name = sorted(checker._UNREGISTERED_BASELINE)[0]
+    name = "AUTOBOT_SYNTHETIC_BASELINE_ENTRY"
+    checker._UNREGISTERED_BASELINE = frozenset({name})
     sample = tmp_path / "empty.py"
     sample.write_text("x = 1\n", encoding="utf-8")
     checker.REGISTRY[name] = next(iter(checker.REGISTRY.values()))
