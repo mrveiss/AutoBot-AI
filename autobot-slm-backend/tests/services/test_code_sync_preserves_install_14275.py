@@ -173,9 +173,7 @@ def test_a_post_sync_pip_install_goes_through_the_rewrite():
         for path in entry.get("source_paths") or []:
             candidate = _REPO_ROOT / path.rstrip("/") / name
             if candidate.is_file() and _RELATIVE_INCLUDE.search(candidate.read_text(encoding="utf-8")):
-                offenders.append(
-                    f"{entry.get('name')}: installs {name} raw, but it carries a relative include"
-                )
+                offenders.append(f"{entry.get('name')}: installs {name} raw, but it carries a relative include")
 
     assert offenders == [], "\n".join(offenders)
 
