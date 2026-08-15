@@ -545,6 +545,7 @@ To add a new variable:
 | `AUTOBOT_STT_PEAK_WINDOW_MS` | voice | int | `100` | Window in milliseconds over which speech energy is measured. Measuring across the whole buffer averages a short reply into silence (#13104). |
 | `AUTOBOT_STT_SILENCE_RMS_THRESHOLD` | voice | float | `0.005` | Audio RMS below which the waveform is treated as silence, so any STT transcript over it is a hallucination rather than a user turn (#13104). Range: 0.0–1.0. |
 | `AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS` | chat | int | `300` | Quiet period after a context-overflow summarisation failure before another is attempted, so a persistently failing summary does not retry on every turn. |
+| `AUTOBOT_SYNC_POST_CMD_TIMEOUT_S` | backend | int | `300` | Seconds a code-sync post-sync command may run before it is abandoned. It covers a dependency install, so the ceiling depends on link speed and wheel availability rather than on anything fixed (services/sync_orchestrator.py, #14275). |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
 | `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
@@ -560,5 +561,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*122 variables registered as of last generation.*
+*123 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

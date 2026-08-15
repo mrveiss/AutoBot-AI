@@ -1585,3 +1585,18 @@ register_env_var(
         component="ai",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_POST_CMD_TIMEOUT_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a code-sync post-sync command may run before it is abandoned. "
+            "It covers a dependency install, so the ceiling depends on link speed "
+            "and wheel availability rather than on anything fixed "
+            "(services/sync_orchestrator.py, #14275)."
+        ),
+        component="backend",
+    )
+)
