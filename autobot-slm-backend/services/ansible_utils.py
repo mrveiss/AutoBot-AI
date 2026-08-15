@@ -87,3 +87,18 @@ def _extract_failure_summary(output: str) -> str:
     count = len(failures)
     noun = "host" if count == 1 else "hosts"
     return f"{count} {noun} failed \u2014 " + "; ".join(failures)
+
+
+def parse_unreachable_hosts(output: str) -> list[str]:
+    """Hostnames ansible reported as UNREACHABLE, in order of appearance.
+
+    Ansible distinguishes *unreachable* from *failed*, and the difference is
+    the whole answer to "is this node down, or is the deploy broken?" — #14297
+    needs it to tell a node that cannot be contacted from one that is merely
+    unhealthy.
+
+    Moved here from ``api/updates.py`` (#1816) so ``api/code_sync.py`` can use
+    it without importing another api module.
+    """
+    pattern = re.compile(r"^fatal:\s+\[([^\]]+)\]:\s+UNREACHABLE!", re.MULTILINE)
+    return list(dict.fromkeys(m.group(1) for m in pattern.finditer(output or "")))

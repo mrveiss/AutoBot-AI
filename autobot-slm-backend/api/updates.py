@@ -53,6 +53,7 @@ from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
+from services.ansible_utils import parse_unreachable_hosts
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/updates", tags=["updates"])
@@ -329,17 +330,12 @@ def _parse_discover_output(output: str) -> List[dict]:
 
 
 def _parse_unreachable_hosts(output: str) -> List[str]:
-    """Extract hostnames of unreachable nodes from Ansible output.
+    """Hostnames ansible reported UNREACHABLE (#1816).
 
-    Ansible emits lines like:
-        fatal: [hostname]: UNREACHABLE! => {...}
-    This function collects all such hostnames so callers can report
-    partial success with a descriptive warning (Issue #1816).
+    Delegates to :func:`services.ansible_utils.parse_unreachable_hosts`, where
+    the implementation now lives so ``api/code_sync.py`` can share it (#14297).
     """
-    import re
-
-    pattern = re.compile(r"^fatal:\s+\[([^\]]+)\]:\s+UNREACHABLE!", re.MULTILINE)
-    return list(dict.fromkeys(m.group(1) for m in pattern.finditer(output)))
+    return parse_unreachable_hosts(output)
 
 
 async def _resolve_host_to_node(

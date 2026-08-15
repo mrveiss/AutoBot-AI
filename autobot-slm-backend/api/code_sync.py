@@ -88,6 +88,7 @@ from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_trac
 from services.playbook_executor import get_playbook_executor
 from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
+from services.ansible_utils import parse_unreachable_hosts
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -5150,6 +5151,25 @@ def _is_node_operational(node: Node) -> bool:
     return node.status not in _NON_OPERATIONAL_STATUSES
 
 
+def _node_was_unreachable(node: Node, playbook_result: dict) -> bool:
+    """Did ansible report *this* node as UNREACHABLE?
+
+    Matched on node_id, hostname or ip_address, because the inventory name a
+    play reports is not always the one the DB stores — ``ansible_hostname`` is
+    the OS hostname while ``nodes.hostname`` is a display name (#1789 hit the
+    same mismatch and fell back to IP).
+
+    A run that failed for some other reason is NOT unreachable, and must stay a
+    failure: treating every failure as "node was down" is how a broken deploy
+    would come to report itself as a skip.
+    """
+    unreachable = parse_unreachable_hosts(playbook_result.get("output") or "")
+    if not unreachable:
+        return False
+    identities = {node.node_id, node.hostname, node.ip_address} - {None, ""}
+    return bool(identities & set(unreachable))
+
+
 def _extract_ansible_fatal(output: str) -> str:
     """Return the first meaningful ansible error line from playbook output (#11511).
 
@@ -5200,14 +5220,29 @@ async def _sync_fleet_node(
         job.completed_fleet_nodes += 1
         return True
 
-    # Skip non-operational nodes rather than attempting a deploy that will fail (#11511).
-    if not _is_node_operational(node):
+    # #11511 skipped non-operational nodes outright, on the reasoning that a
+    # deploy against them "will always fail". That holds for a node that is
+    # down; it does not hold for one that is merely unhealthy — and #14297 is
+    # the case where the two diverge. A node whose agent is too old to
+    # heartbeat is marked degraded, so it is skipped, so it never receives the
+    # update that would replace the agent. The health signal gates the only
+    # thing that could repair it.
+    #
+    # Health is not transport. The attempt goes ahead, and ansible's own
+    # UNREACHABLE verdict — which it reports distinctly from a failure — is
+    # what decides whether the node was actually contactable. Unreachable on
+    # this path is counted as skipped exactly as before, so a genuinely down
+    # node still does not fail the job.
+    unhealthy = not _is_node_operational(node)
+    if unhealthy:
         reason = (
             f"status={node.status}, last_heartbeat={'none' if node.last_heartbeat is None else node.last_heartbeat}"
         )
-        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — not operational ({reason})")
-        job.skipped_fleet_nodes += 1
-        return True
+        _stage_log(
+            stage,
+            f"Node {node_id} ({node.hostname}) is not operational ({reason}) — "
+            f"attempting anyway; ansible decides whether it is reachable (#14297)",
+        )
 
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
@@ -5216,10 +5251,20 @@ async def _sync_fleet_node(
     if playbook_result["success"]:
         await _update_fleet_node_version(node_id)
         job.completed_fleet_nodes += 1
-        _stage_log(stage, f"Node {node_id} updated successfully")
+        _stage_log(
+            stage,
+            f"Node {node_id} updated successfully"
+            + (" (recovered while not operational)" if unhealthy else ""),
+        )
         return True
 
-    error_msg = _extract_ansible_fatal(playbook_result["output"])
+    output = playbook_result["output"]
+    if unhealthy and _node_was_unreachable(node, playbook_result):
+        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — unreachable")
+        job.skipped_fleet_nodes += 1
+        return True
+
+    error_msg = _extract_ansible_fatal(output)
     job.failed_fleet_nodes += 1
     _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
     _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
