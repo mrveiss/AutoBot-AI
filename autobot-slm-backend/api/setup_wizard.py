@@ -32,8 +32,8 @@ from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import groups_for_role_tokens
-from services.role_registry import ROLE_ANSIBLE_GROUPS
 from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
+from services.role_registry import ROLE_ANSIBLE_GROUPS
 
 logger = logging.getLogger(__name__)
 
