@@ -5,11 +5,24 @@
 # Ownership now sits with the db stack — ChromaDB is a database — so the persist
 # directory moves with it.
 #
-# The dangerous part is not the move, it is the failure mode of getting it
-# wrong: chroma starts happily against an empty directory. No error, no crash,
-# no alert — the knowledge base simply reads as empty. So this refuses to leave
-# the service pointed at an empty target while the legacy path still holds data,
-# rather than trusting the move to have worked.
+# The dangerous part is not the move, it is the failure modes around it. Chroma
+# starts happily against an empty OR partial directory: no error, no crash, no
+# alert, just a knowledge base that returns nothing. So completeness is tracked
+# explicitly with a marker written only after the copy is verified, rather than
+# inferred from "the target has some files in it" — an interrupted copy leaves
+# exactly that state, and gating on it would skip the retry forever.
+
+- name: "ChromaDB | Ensure the db-stack persist directory exists"
+  # `cp -a src/. dst/` creates only the leaf, not missing parents, and this file
+  # runs before chromadb.yml's directory task on a from-scratch host.
+  ansible.builtin.file:
+    path: "{{ chromadb_data_dir }}"
+    state: directory
+    owner: "{{ redis_owner }}"
+    group: "{{ redis_group }}"
+    mode: "0750"
+  become: true
+  tags: ['redis', 'chromadb']
 
 - name: "ChromaDB | Stat the legacy persist directory"
   ansible.builtin.stat:
@@ -17,22 +30,23 @@
   register: _chroma_legacy
   tags: ['redis', 'chromadb']
 
-- name: "ChromaDB | Stat the db-stack persist directory"
+- name: "ChromaDB | Stat the migration marker"
+  # Written only after a copy has been verified complete. Its presence is the
+  # ONLY thing that means "this store has been migrated".
   ansible.builtin.stat:
-    path: "{{ chromadb_data_dir }}"
-  register: _chroma_target
+    path: "{{ chromadb_data_dir }}/.migrated-from-legacy"
+  register: _chroma_marker
   tags: ['redis', 'chromadb']
 
-- name: "ChromaDB | Measure both persist directories"
+- name: "ChromaDB | Count files in both persist directories"
   # `find -type f` rather than a size check: a directory can be non-empty and
-  # tiny (a fresh chroma writes a small sqlite file), which is exactly the state
-  # that must NOT be mistaken for a populated store.
+  # tiny (a fresh chroma writes a small sqlite file), and that state must never
+  # be mistaken for a populated store.
   ansible.builtin.find:
     paths: "{{ item }}"
     recurse: true
     file_type: file
   register: _chroma_counts
-  when: item is defined
   loop:
     - "{{ chromadb_legacy_data_dir }}"
     - "{{ chromadb_data_dir }}"
@@ -43,38 +57,53 @@
   ansible.builtin.set_fact:
     _chroma_legacy_files: "{{ (_chroma_counts.results[0].files | default([])) | length }}"
     _chroma_target_files: "{{ (_chroma_counts.results[1].files | default([])) | length }}"
+    # Explicit boolean, set BEFORE the block. `_something is defined` is not
+    # usable here: a registered task inside a SKIPPED block still produces a
+    # result dict, so `is defined` reads True even when the block never ran.
+    _chroma_migration_ran: false
   tags: ['redis', 'chromadb']
 
 - name: "ChromaDB | Report the persist directories before any move"
   ansible.builtin.debug:
     msg: >-
       legacy={{ chromadb_legacy_data_dir }} ({{ _chroma_legacy_files }} files),
-      target={{ chromadb_data_dir }} ({{ _chroma_target_files }} files)
+      target={{ chromadb_data_dir }} ({{ _chroma_target_files }} files),
+      migrated={{ _chroma_marker.stat.exists | default(false) }}
   tags: ['redis', 'chromadb']
 
 - name: "ChromaDB | Migrate the persist directory to the db stack"
+  # Runs whenever the legacy store has data and the marker is absent — NOT when
+  # the target merely looks empty. An interrupted copy leaves files behind, and
+  # gating on emptiness would skip the retry permanently and serve the partial
+  # store forever.
   when:
     - _chroma_legacy.stat.exists | default(false)
     - _chroma_legacy_files | int > 0
-    - _chroma_target_files | int == 0
+    - not (_chroma_marker.stat.exists | default(false))
   block:
+    - name: "ChromaDB | Is the service running?"
+      ansible.builtin.service_facts:
+
     - name: "ChromaDB | Stop the service before moving its store"
-      # Moving a live store underneath a running chroma corrupts it. The unit
-      # may not exist yet on a first run, which is not an error.
+      # Moving a live store underneath a running chroma corrupts it. Scoped to
+      # the case where the unit actually exists: a blanket `failed_when: false`
+      # would also swallow a genuine refusal-to-stop and let the copy run
+      # against a live, mid-write SQLite file.
       ansible.builtin.systemd:
         name: autobot-chromadb
         state: stopped
       become: true
-      failed_when: false
+      when: "'autobot-chromadb.service' in (ansible_facts.services | default({}))"
 
     - name: "ChromaDB | Copy the store to the db-stack path"
-      # Copy, not move: a failed move loses the only copy. The legacy directory
-      # is left in place for an operator to remove once the service is verified
-      # healthy on the new path — deletion is not this play's decision.
+      # Copy, not move: a failed move loses the only copy. No `creates:` guard —
+      # a partial copy must be resumable, and cp overwrites in place. The legacy
+      # directory is left for an operator to remove once the service is verified
+      # healthy; deletion is not this play's decision.
       ansible.builtin.command:
         cmd: "cp -a {{ chromadb_legacy_data_dir }}/. {{ chromadb_data_dir }}/"
-        creates: "{{ chromadb_data_dir }}/chroma.sqlite3"
       become: true
+      changed_when: true
 
     - name: "ChromaDB | Own the migrated store"
       ansible.builtin.file:
@@ -91,29 +120,45 @@
         file_type: file
       register: _chroma_target_after
 
-    - name: "ChromaDB | The copy must have landed"
+    - name: "ChromaDB | The copy must be complete before anything trusts it"
       ansible.builtin.assert:
         that:
-          - (_chroma_target_after.files | default([])) | length >= _chroma_legacy_files | int
+          - ((_chroma_target_after.files | default([])) | length) >= (_chroma_legacy_files | int)
         fail_msg: >-
           ChromaDB migration incomplete: {{ chromadb_legacy_data_dir }} holds
           {{ _chroma_legacy_files }} files but {{ chromadb_data_dir }} holds
-          {{ (_chroma_target_after.files | default([])) | length }}. Refusing to
-          continue — starting chroma against a partial store reads as an empty
-          knowledge base with no error anywhere (#13870).
+          {{ (_chroma_target_after.files | default([])) | length }}. No marker
+          written, so a re-run will retry rather than skip. Refusing to continue —
+          serving a partial store reads as an empty knowledge base with no error
+          anywhere (#13870).
+
+    - name: "ChromaDB | Mark the store migrated (only after the count is verified)"
+      ansible.builtin.copy:
+        content: "migrated from {{ chromadb_legacy_data_dir }} ({{ _chroma_legacy_files }} files)\n"
+        dest: "{{ chromadb_data_dir }}/.migrated-from-legacy"
+        owner: "{{ redis_owner }}"
+        group: "{{ redis_group }}"
+        mode: "0640"
+      become: true
+
+    - name: "ChromaDB | Record that the migration ran"
+      ansible.builtin.set_fact:
+        _chroma_migration_ran: true
   tags: ['redis', 'chromadb']
 
-- name: "ChromaDB | Refuse to serve an empty store while the legacy one holds data"
+- name: "ChromaDB | Refuse to serve an unmigrated store"
   # The safety net for every path that did NOT migrate: a skipped block, a
-  # changed variable, a partial run. Without it the service comes up on an empty
-  # directory and the only symptom is a knowledge base that returns nothing.
+  # changed variable, a partial run, an aborted play. Without it the service
+  # comes up on an empty or partial directory and the only symptom is a
+  # knowledge base that returns nothing.
   ansible.builtin.assert:
     that:
-      - not (_chroma_legacy_files | int > 0 and _chroma_target_files | int == 0 and not _chroma_migrated | default(false))
+      - not (_chroma_legacy_files | int > 0
+             and not (_chroma_marker.stat.exists | default(false))
+             and not (_chroma_migration_ran | bool))
     fail_msg: >-
-      {{ chromadb_legacy_data_dir }} holds {{ _chroma_legacy_files }} files while
-      {{ chromadb_data_dir }} is empty, and no migration ran. Starting chroma on
-      the empty path would report a healthy service and an empty knowledge base.
-  vars:
-    _chroma_migrated: "{{ _chroma_target_after is defined }}"
+      {{ chromadb_legacy_data_dir }} holds {{ _chroma_legacy_files }} files and
+      {{ chromadb_data_dir }} carries no migration marker, but no migration ran
+      this play. Starting chroma on the target path would report a healthy
+      service and an empty or partial knowledge base.
   tags: ['redis', 'chromadb']

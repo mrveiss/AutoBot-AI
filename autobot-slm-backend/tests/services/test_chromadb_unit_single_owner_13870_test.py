@@ -205,31 +205,71 @@ def test_the_unit_writing_to_a_file_is_unbuffered(role: str):
     assert 'Environment="PYTHONUNBUFFERED=1"' in text, f"{role} buffers chroma's diagnostics into a file"
 
 
-def test_the_database_stack_owns_the_database():
-    """ChromaDB is a database, so the db stack owns its unit.
+def test_each_role_keeps_a_self_named_floor():
+    """The floor is what a role resolves to when applied ALONE with no vars
+    layer loaded — `setup_wizard._generate_dynamic_inventory()` writes a bare
+    temp inventory with no group_vars sibling, so the "Setup AI Stack Node"
+    action sees nothing but these defaults.
 
-    An earlier revision made ai-stack the owner on a combined host, to avoid
-    relocating the persist directory. That produced the #4090 outage live:
-    ExecStart pointed at /opt/autobot/autobot-ai-stack/venv/bin/chroma, which
-    does not exist — only the db-stack venv has chromadb installed — and the
-    unit reached NRestarts=4399 while reporting `activating`.
-
-    Owning the service and owning the data are two decisions. Collapsing them
-    into one attached a database to the wrong stack.
+    A shared default of one role's name means that host deploys NO unit at all.
+    Review caught that in #14055, and I re-created it here by moving both floors
+    to "redis" while fixing the ownership question — which is one precedence
+    level up and unaffected by the floor.
     """
     for role in _ROLES:
         defaults = yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))
-        assert (
-            defaults["chromadb_service_owner"] == "redis"
-        ), f"{role} does not hand chroma to the db stack — the ai-stack venv has no chromadb installed"
+        assert defaults["chromadb_service_owner"] == role, (
+            f"{role}'s floor must be its own name — a shared floor makes a single-role "
+            "topology with no vars layer deploy nothing"
+        )
 
+
+def test_the_migration_does_not_gate_on_an_empty_target():
+    """An interrupted copy leaves the target non-empty. Gating the retry on
+    "target is empty" would skip it forever and serve the partial store — the
+    same silent-wrong-data class the migration exists to prevent, one step
+    removed."""
+    tasks = (_ANSIBLE / "roles" / "redis" / "tasks" / "chromadb_data_migration.yml").read_text(encoding="utf-8")
+    assert ".migrated-from-legacy" in tasks, "completeness is not tracked by a marker"
+    assert "_chroma_migration_ran: false" in tasks, (
+        "the safety net must use an explicit boolean — a registered task in a SKIPPED block "
+        "still yields a result dict, so `is defined` reads True when nothing ran"
+    )
+    block_gate = tasks.index('- name: "ChromaDB | Migrate the persist directory')
+    gate_text = tasks[block_gate : block_gate + 700]
+    assert (
+        "_chroma_target_files | int == 0" not in gate_text
+    ), "the migration gates on an empty target — an interrupted copy would never be retried"
+
+
+def test_the_database_stack_owns_the_database():
+    """ChromaDB is a database, so on a host running both roles the db stack owns
+    its unit — and that is the only role that installs chromadb.
+
+    Asserted on the DERIVATION, not on the role defaults. The defaults are a
+    fail-safe floor for a role applied alone; the ownership decision is one
+    precedence level up. Conflating the two is how I broke the ai-stack-only
+    topology while fixing this.
+
+    An earlier revision made ai-stack the owner on a combined host to avoid
+    relocating the persist directory. That produced the #4090 outage live:
+    ExecStart pointed at /opt/autobot/autobot-ai-stack/venv/bin/chroma, which
+    does not exist, and the unit reached NRestarts=4399 while reporting
+    `activating`.
+    """
     for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
         line = next(
             ln
             for ln in (_ANSIBLE / rel).read_text(encoding="utf-8").splitlines()
             if ln.startswith("chromadb_service_owner:")
         )
-        assert "'redis' if" in line, f"{rel} does not give the db stack ownership where it is present"
+        assert "'redis' if" in line, (
+            f"{rel} does not hand a combined host to the db stack — the ai-stack venv " "has no chromadb installed"
+        )
+
+    deploy = (_ANSIBLE / "deploy.yml").read_text(encoding="utf-8")
+    owner_line = next(ln for ln in deploy.splitlines() if "chromadb_service_owner:" in ln)
+    assert "'redis' if" in owner_line, "deploy.yml still prefers ai-stack when both are requested"
 
 
 def test_the_persist_directory_moves_with_the_service():
