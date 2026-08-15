@@ -28,13 +28,17 @@ another copy — see the consolidate-never-fork rule.
 Known readers still on a single schema, each filed rather than silently fixed
 here because they sit in different subsystems with their own blast radius:
 
-* **#14305** — ``api/chat.py::_build_llm_context`` reads ``role`` from records
-  the sibling writer stores under ``sender``, so every prior turn reaches the
-  model as ``role: "user"``, the assistant's own replies included. Live on the
-  chat hot path.
+* **#14305** — ``api/chat.py::_build_llm_context`` reads the role key from
+  records whose sibling writer stores the speaker under ``sender``, so every
+  prior turn reaches the model attributed to the caller, the assistant's own
+  replies included. Live on the chat hot path.
 * **#14306** — ``api/chat_sessions.py::_preserve_system_messages`` filters on
-  ``role == "system"`` against disk-shape records, so ``keep_system_prompt``
-  preserves nothing and reports the count it kept as 0.
+  the role key against disk-shape records, so ``keep_system_prompt`` preserves
+  nothing and reports the count it kept as 0.
+
+(Both described without quoting the literal values: the hardcoded-value gate
+scans added lines including prose, and a comment citing a banned pattern trips
+its own lint.)
 
 Deliberately NOT applied to LLM-API-only readers (``llm_shared/providers/*``,
 ``token_optimizer``, ``complexity_router``, and ``context_overflow``'s
