@@ -159,6 +159,11 @@ class DocumentPipeline(BasePipeline):
 
         fields: Dict[str, Any] = {
             "tables": [list(table) for table in extracted.tables],
+            # #13895: an empty `tables` used to mean both "this document has no
+            # tables" and "we never looked". PDF returned [] unconditionally
+            # while DOCX did real work, from an identical-looking result — so a
+            # consumer could not tell a genuine negative from a missing feature.
+            "tables_attempted": extracted.tables_attempted,
             "document_info": dict(extracted.info),
         }
         if extracted.format == "docx":
@@ -192,6 +197,7 @@ class DocumentPipeline(BasePipeline):
             "extracted_text": "",
             "page_count": 0,
             "tables": [],
+            "tables_attempted": False,
             "processing_status": "unavailable",
             "unavailability_reason": reason,
             "confidence": 0.0,
@@ -206,6 +212,7 @@ class DocumentPipeline(BasePipeline):
             "extracted_text": "",
             "page_count": 0,
             "tables": [],
+            "tables_attempted": False,
             "processing_status": "error",
             "error": error,
             "confidence": 0.0,
