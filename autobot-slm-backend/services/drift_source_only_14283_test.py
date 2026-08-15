@@ -16,14 +16,22 @@ from pathlib import Path
 
 import pytest
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _ROLE_TASKS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "tasks" / "main.yml"
 _AGENT_SOURCE = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "files" / "slm" / "agent"
 
 
 @pytest.fixture
 def drift():
-    from services import drift_checker
+    """Co-located beside drift_checker.py on purpose.
+
+    Under tests/services/ the root conftest stubs `services.*` as MagicMocks, so
+    `source_only_patterns(...)` returned a MagicMock and every assertion here
+    compared against one — the tests failed for a reason that had nothing to do
+    with the behaviour. drift_checker_test.py already lives here for the same
+    reason.
+    """
+    import drift_checker
 
     return drift_checker
 

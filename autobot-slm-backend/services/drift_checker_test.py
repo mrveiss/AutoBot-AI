@@ -57,6 +57,7 @@ finally:
 # Convenience aliases.
 _file_checksum = _dc._file_checksum
 _collect_checksums = _dc._collect_checksums
+source_only_patterns = _dc.source_only_patterns
 compute_drift = _dc.compute_drift
 build_drift_report = _dc.build_drift_report
 get_default_source_dir = _dc.get_default_source_dir
@@ -1257,3 +1258,69 @@ class TestRenderedComparisonPrefersChecksum:
         repo_root = Path(__file__).resolve().parents[2]
         text = (repo_root / self.TEMPLATE_REL).read_text(encoding="utf-8")
         assert "{{" not in text and "{%" not in text
+
+
+# ---------------------------------------------------------------------------
+# #14283 — a component must not be reported stale for files its role never
+# deploys.
+#
+# `autobot-slm-agent` sat in `stale_components` permanently: the walk compared
+# `health_collector_state_change_test.py` and `version_test.py`, which live in
+# the role's files/ tree and are never copied to a node. No sync could clear it.
+#
+# These live here rather than under tests/services/ because the root conftest
+# stubs `services.*` as MagicMocks there — `source_only_patterns()` returned a
+# MagicMock and every assertion compared against one. This file already carries
+# the real-load preamble for exactly that reason.
+# ---------------------------------------------------------------------------
+
+_AGENT_ROLE = Path(__file__).resolve().parents[2] / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent"
+_AGENT_SOURCE = _AGENT_ROLE / "files" / "slm" / "agent"
+
+
+def test_the_agent_excludes_its_undeployed_tests():
+    assert source_only_patterns("autobot-slm-agent") == ("*_test.py", "test_*.py")
+
+
+def test_the_exclusion_is_not_global():
+    """The backend components rsync their whole tree, so their co-located tests
+    ARE deployed and ARE comparable — 1382 files under autobot-backend on a live
+    host. Excluding `*_test.py` everywhere would hide real drift in all of them.
+    """
+    for component in ("autobot-backend", "autobot-slm-backend", "autobot-frontend"):
+        assert source_only_patterns(component) == ()
+
+
+def test_the_role_really_does_not_deploy_those_files():
+    """The premise. If the role ever starts copying its tests, this exclusion
+    would hide real drift instead of removing a false signal."""
+    tasks = (_AGENT_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+    test_sources = [p.name for p in _AGENT_SOURCE.glob("*_test.py")]
+
+    assert test_sources, "no test files in the agent source — this test proves nothing"
+    for name in test_sources:
+        assert name not in tasks, f"the role now deploys {name}; the exclusion would hide drift"
+
+
+def test_every_excluded_pattern_matches_something_in_the_source():
+    """A pattern matching nothing is dead configuration that reads as protection."""
+    import fnmatch
+
+    names = [p.name for p in _AGENT_SOURCE.iterdir() if p.is_file()]
+    for pattern in source_only_patterns("autobot-slm-agent"):
+        assert any(fnmatch.fnmatch(n, pattern) for n in names), f"{pattern} matches no source file"
+
+
+def test_the_filter_removes_those_files_from_a_walk(tmp_path):
+    """Assert on the collector's OUTPUT, not on the constant — a pattern defined
+    but never reaching `_collect_checksums` would leave the false signal exactly
+    as it was."""
+    (tmp_path / "agent.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "agent_test.py").write_text("x = 2\n", encoding="utf-8")
+
+    without = _collect_checksums(tmp_path, frozenset({".py"}))
+    filtered = _collect_checksums(tmp_path, frozenset({".py"}), source_only_patterns("autobot-slm-agent"))
+
+    assert "agent_test.py" in without
+    assert "agent_test.py" not in filtered
+    assert "agent.py" in filtered, "the filter removed a real source file"
