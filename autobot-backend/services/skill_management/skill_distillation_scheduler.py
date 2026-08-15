@@ -64,9 +64,27 @@ MIN_MESSAGES_TO_DISTILL = env_int("AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES", 4)
 # whether its memory layer helped.
 IDLE_FLUSH_S = env_int("AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S", 900)
 
+# #14255: how many consecutive failures on the SAME conversation before the pass
+# stops waiting for it and moves on. Stopping is right for a transient fault --
+# an extractor timeout, a proposer blip -- where the next run succeeds and
+# nothing is lost. It is wrong for one that cannot heal: a corrupted history file
+# or a rotated decryption key re-sorts to the front of an oldest-first queue
+# every run, so the cursor never advances and every newer conversation starves
+# behind it, with silence as the only symptom.
+#
+# The distinction is repetition, not error type. An exception class cannot tell
+# you whether the next attempt will work; N attempts can.
+MAX_CONSECUTIVE_FAILURES = env_int("AUTOBOT_SKILL_DISTILLATION_MAX_FAILURES", 3)
+
+# Long enough that a session failing once a pass keeps its count across the gap
+# between runs, short enough that a counter for a session nobody retries expires
+# instead of accumulating forever.
+_FAILURE_TTL_S = env_int("AUTOBOT_SKILL_DISTILLATION_FAILURE_TTL_S", DISTILLATION_INTERVAL_S * 24)
+
 _REDIS_DB = "knowledge"
 _LEADER_KEY = "skills:distillation:leader"
 _CURSOR_KEY = "skills:distillation:cursor"
+_FAILURE_KEY_PREFIX = "skills:distillation:failures:"
 
 
 def _decode(value: object) -> str | None:
@@ -259,34 +277,117 @@ class SkillDistillationScheduler:
         pending = await self._select_pending_sessions(cursor)
         if not pending:
             logger.debug("Skill distillation: no conversations since cursor %s", cursor or "(start)")
-            return {"sessions_seen": 0, "sessions_distilled": 0, "proposed": []}
+            # `quarantined` is present on BOTH paths: a caller reading
+            # result["quarantined"] must not KeyError on the empty pass, which is
+            # the common case.
+            return {"sessions_seen": 0, "sessions_distilled": 0, "proposed": [], "quarantined": 0}
 
-        distilled, proposed = await self._distil_pending(pending)
+        distilled, proposed, quarantined = await self._distil_pending(pending)
 
         logger.info(
-            "Skill distillation pass: %d/%d conversations distilled, %d skills proposed",
+            "Skill distillation pass: %d/%d conversations distilled, %d skills proposed, %d quarantined",
             distilled,
             len(pending),
             len(proposed),
+            quarantined,
         )
-        return {"sessions_seen": len(pending), "sessions_distilled": distilled, "proposed": proposed}
+        # `quarantined` is in the summary, not only the log: a caller counting
+        # pass outcomes must be able to see that conversations were skipped
+        # rather than infer it from an unchanged `sessions_distilled` (#14255).
+        return {
+            "sessions_seen": len(pending),
+            "sessions_distilled": distilled,
+            "proposed": proposed,
+            "quarantined": quarantined,
+        }
 
-    async def _distil_pending(self, pending: List[Dict[str, Any]]) -> tuple[int, List[str]]:
+    async def _distil_pending(self, pending: List[Dict[str, Any]]) -> tuple[int, List[str], int]:
         """Distil each pending conversation in order, advancing the cursor as it goes.
 
         Stops at the first conversation whose proposal did not land rather than
         skipping it — advancing past a failed session would drop it permanently.
+
+        #14255: unless it has now failed ``MAX_CONSECUTIVE_FAILURES`` times, in
+        which case it is quarantined and the pass moves on. Waiting forever for a
+        conversation that cannot be read is not patience, it is a queue that
+        never drains.
         """
         proposed: List[str] = []
         distilled = 0
+        quarantined = 0
         for session in pending:
             names = await self._distil_session(session)
             if names is None:
-                break
+                if not await self._should_quarantine(session["id"]):
+                    break
+                quarantined += 1
+                # Clear the count as well. Left at the threshold, a conversation
+                # that resurfaces later — the queue is keyed on updated_at, so an
+                # edited one does — would re-quarantine on its FIRST new failure,
+                # which is the opposite of "N failures is evidence, one is not".
+                await self._clear_failures(session["id"])
+                await self._write_cursor(session["updated_at"])
+                continue
+            await self._clear_failures(session["id"])
             proposed.extend(names)
             distilled += 1
             await self._write_cursor(session["updated_at"])
-        return distilled, proposed
+        return distilled, proposed, quarantined
+
+    async def _should_quarantine(self, session_id: str) -> bool:
+        """Record a failure for *session_id* and report whether to move past it.
+
+        Returns False on a Redis failure: without a durable count there is no
+        evidence the conversation is unrecoverable, and skipping one that is
+        merely unlucky drops it permanently. The pass stops, which is the
+        pre-#14255 behaviour and the safe direction.
+        """
+        redis = await get_async_redis_client(database=_REDIS_DB)
+        if redis is None:
+            return False
+        key = f"{_FAILURE_KEY_PREFIX}{session_id}"
+        try:
+            failures = int(await redis.incr(key))
+            await redis.expire(key, _FAILURE_TTL_S)
+        except Exception as exc:
+            logger.warning("Skill distillation could not record a failure for %s: %s", session_id, exc)
+            return False
+
+        if failures < MAX_CONSECUTIVE_FAILURES:
+            logger.info(
+                "Skill distillation: conversation %s failed (%d/%d) — pass stops, will retry",
+                session_id,
+                failures,
+                MAX_CONSECUTIVE_FAILURES,
+            )
+            return False
+
+        # Loud on purpose. A silent skip would reinstate the defect #14247
+        # removed -- a conversation reported as handled when it was not -- one
+        # level up, at the scheduler instead of the loader.
+        logger.warning(
+            "Skill distillation: quarantining conversation %s after %d consecutive failures. "
+            "It will not be distilled and the pass will continue past it. "
+            "Investigate the conversation itself — this is not a transient fault (#14255).",
+            session_id,
+            failures,
+        )
+        return True
+
+    async def _clear_failures(self, session_id: str) -> None:
+        """Forget a session's failures once it succeeds.
+
+        Without this the counter is cumulative rather than consecutive, and a
+        conversation that fails intermittently over months eventually crosses the
+        threshold despite always recovering.
+        """
+        redis = await get_async_redis_client(database=_REDIS_DB)
+        if redis is None:
+            return
+        try:
+            await redis.delete(f"{_FAILURE_KEY_PREFIX}{session_id}")
+        except Exception as exc:
+            logger.debug("Skill distillation could not clear failures for %s: %s", session_id, exc)
 
     async def _distil_session(self, session: Dict[str, Any]) -> List[str] | None:
         """Extract and propose for one conversation. ``None`` means the pass must stop."""

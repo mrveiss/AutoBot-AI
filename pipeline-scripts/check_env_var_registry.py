@@ -16,6 +16,7 @@ Closes GH#7081.
 """
 
 import ast
+import functools
 import sys
 from pathlib import Path
 
@@ -48,8 +49,75 @@ def _is_registry_file(path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 
+_ENV_UTILS = REPO_ROOT / "autobot_shared" / "env_utils.py"
+
+
+@functools.lru_cache(maxsize=1)
+def _env_reader_names() -> frozenset[str]:
+    """Every helper in ``autobot_shared/env_utils.py`` that reads a named variable.
+
+    Derived from that module rather than hard-coded (#14265). The checker used to
+    match ``os.getenv`` alone, so every variable read through ``env_int`` /
+    ``env_flag`` / ``env_str`` / ``env_float`` was invisible to it -- 52 of them.
+    Those helpers are not an alternative mechanism; they wrap the same read with
+    the blank-is-absent guard from #12782, and are the form this repo prefers. A
+    checker that sees only the discouraged spelling reports clean and reads as
+    coverage.
+
+    Deriving the set means a helper added later is covered without anyone
+    remembering to extend a list here -- which is the failure this issue is.
+    """
+    source = _ENV_UTILS.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(_ENV_UTILS))
+    readers = {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name.startswith("env_")
+        and node.args.args
+        and node.args.args[0].arg == "name"
+    }
+    if not readers:
+        # An empty set silently disables half the check. That is the exact shape
+        # of the bug this function exists to fix.
+        sys.exit(f"FATAL: no env-reading helpers found in {_ENV_UTILS} — refusing to check half the tree")
+    return frozenset(readers)
+
+
+def _self_provided_names(tree: ast.AST) -> set[str]:
+    """Names this file sets for itself before reading them (#14265).
+
+    `env_utils_blank_test.py` does `monkeypatch.setenv("AUTOBOT_TEST_BLANK", …)`
+    and reads it straight back to prove blank-is-absent. That is a fixture, not
+    deployed configuration, and registering it would put a variable in the
+    documented environment that no deployment ever sets.
+
+    Expressed as a rule rather than an allowlist entry: a name the file supplies
+    itself is not evidence of an unregistered setting. A genuinely deployed
+    variable that a test also monkeypatches is still caught, because production
+    code reads it somewhere this exemption does not apply.
+    """
+    provided: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in {"setenv", "setdefault"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    provided.add(first.value)
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            value = node.slice.value
+            if isinstance(value, str):
+                provided.add(value)
+    return provided
+
+
 def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
-    """Return (lineno, var_name) pairs for os.getenv("AUTOBOT_*") calls in *path*."""
+    """Return (lineno, var_name) pairs for every AUTOBOT_* env read in *path*.
+
+    Covers ``os.getenv``/``getenv`` and the ``env_utils`` helpers alike.
+    """
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -61,6 +129,8 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
         return []
 
     results: list[tuple[int, str]] = []
+    self_provided = _self_provided_names(tree)
+    readers = _env_reader_names()
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -68,12 +138,10 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
 
         func = node.func
 
-        # Match os.getenv("AUTOBOT_...") and getenv("AUTOBOT_...")
-        is_getenv = (isinstance(func, ast.Attribute) and func.attr == "getenv") or (
-            isinstance(func, ast.Name) and func.id == "getenv"
-        )
-
-        if not is_getenv:
+        # os.getenv("AUTOBOT_...") / getenv("AUTOBOT_...") and the env_utils
+        # helpers, all of which take the variable name as their first argument.
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name != "getenv" and name not in readers:
             continue
 
         if not node.args:
@@ -85,6 +153,9 @@ def _extract_autobot_getenv_names(path: Path) -> list[tuple[int, str]]:
         if not isinstance(first_arg.value, str):
             continue
         if not first_arg.value.startswith("AUTOBOT_"):
+            continue
+
+        if first_arg.value in self_provided:
             continue
 
         results.append((node.lineno, first_arg.value))
@@ -167,8 +238,39 @@ def check_docs_freshness() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+# #14265: this held the 45 variables the checker could not see until it learned
+# the env_utils helper form. All of them are now registered, and the two that
+# were test fixtures are exempt by rule rather than by listing, so the set is
+# EMPTY — which is the state it was always meant to reach.
+#
+# Kept rather than deleted: `_stale_baseline_entries` still runs against it, so
+# the next time someone needs a temporary exemption there is a ceiling with a
+# shrink check already attached, instead of a fresh list with neither.
+_UNREGISTERED_BASELINE: frozenset[str] = frozenset()
+
+
+def _stale_baseline_entries() -> list[str]:
+    """Report any baselined name that has since been registered.
+
+    Compared against the REGISTRY, not against the variables this invocation
+    happened to scan: the hook usually runs on a handful of staged files, so
+    "not seen this run" says nothing about whether a name is still unregistered.
+    An earlier version of this function made that mistake and would have reported
+    ~43 false violations on any normal pre-commit run.
+
+    A name left here after being registered exempts whatever arrives under that
+    name next, silently — the stranded-allowlist failure (#14236). Reported as a
+    violation rather than quietly filtered, so the list is forced to shrink.
+    """
+    return [
+        f"{name} is in _UNREGISTERED_BASELINE but is registered now — "
+        f"remove it from pipeline-scripts/check_env_var_registry.py (#14265)"
+        for name in sorted(_UNREGISTERED_BASELINE & set(REGISTRY))
+    ]
+
+
 def main(argv: list[str]) -> int:
-    registry_violations: list[str] = []
+    registry_violations: list[str] = _stale_baseline_entries()
     docs_violations: list[str] = []
 
     # 1. Check every passed Python file for unregistered AUTOBOT_* vars.
@@ -181,6 +283,8 @@ def main(argv: list[str]) -> int:
 
         for lineno, var_name in _extract_autobot_getenv_names(path):
             if var_name not in REGISTRY:
+                if var_name in _UNREGISTERED_BASELINE:
+                    continue
                 registry_violations.append(
                     f"{path}:{lineno}: unregistered env var '{var_name}'\n"
                     f"  Add it to autobot_shared/env_registry.py before use."
