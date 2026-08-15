@@ -704,11 +704,17 @@ class WorkItemService(LLCServiceBase):
                 f"Role {caller_role!r} does not have permission to manage co-working. "
                 f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
             )
-        co_type = CoWorkerType(co_worker_type)
-        if co_type == CoWorkerType.AGENT and not co_worker_agent_id:
+        # #13970: one vocabulary for the actor axis. A legacy "human" from an
+        # older caller is still accepted and normalised to "user" rather than
+        # rejected — the stored rows are migrated by 20260815_075, but an
+        # in-flight client should not start failing mid-deploy.
+        if co_worker_type == CoWorkerType.HUMAN.value:
+            co_worker_type = AssigneeType.USER.value
+        co_type = AssigneeType(co_worker_type)
+        if co_type == AssigneeType.AGENT and not co_worker_agent_id:
             raise ValueError("co_worker_agent_id required when co_worker_type is 'agent'")
-        if co_type == CoWorkerType.HUMAN and not co_worker_user_id:
-            raise ValueError("co_worker_user_id required when co_worker_type is 'human'")
+        if co_type == AssigneeType.USER and not co_worker_user_id:
+            raise ValueError("co_worker_user_id required when co_worker_type is 'user'")
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()

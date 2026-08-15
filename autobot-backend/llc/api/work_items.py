@@ -291,16 +291,16 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured co-worker display info (GH#8230)."""
     if not item.co_working_enabled:
         return None
-    if item.co_worker_type == CoWorkerType.HUMAN.value and item.co_worker_user_id:
+    if item.co_worker_type == AssigneeType.USER.value and item.co_worker_user_id:
         return {
-            "type": CoWorkerType.HUMAN.value,
+            "type": AssigneeType.USER.value,
             "id": str(item.co_worker_user_id),
             "display_name": None,
             "name": None,
         }
-    if item.co_worker_type == CoWorkerType.AGENT.value and item.co_worker_agent_id:
+    if item.co_worker_type == AssigneeType.AGENT.value and item.co_worker_agent_id:
         return {
-            "type": CoWorkerType.AGENT.value,
+            "type": AssigneeType.AGENT.value,
             "id": str(item.co_worker_agent_id),
             "display_name": None,
             "name": None,
