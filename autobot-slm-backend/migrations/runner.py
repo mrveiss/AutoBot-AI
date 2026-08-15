@@ -26,6 +26,8 @@ from typing import List, Tuple
 
 import psycopg2
 
+from migrations import utils as _migration_utils
+
 logger = logging.getLogger(__name__)
 
 # Migration files in order of execution
@@ -251,7 +253,20 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         logger.info("Running %d pending migration(s)", len(pending))
 
         for migration_name in pending:
+            _migration_utils.reset_deferrals()
             success, message = run_migration(db_url, migration_name)
+            deferred = _migration_utils.deferrals()
+
+            if success and deferred:
+                # #14300: it "succeeded" having skipped every schema change it
+                # was asked to make, because the tables were not in this
+                # database. Marking it applied is what made that permanent —
+                # leave it pending so the next boot retries it.
+                message = f"Deferred {migration_name}: tables not present yet ({', '.join(deferred)})"
+                logger.warning(message)
+                results.append((migration_name, True, message))
+                continue
+
             results.append((migration_name, success, message))
 
             if success:
@@ -263,9 +278,12 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
                 break
 
     except Exception as e:
+        # #14300: this used to record the error only when NOTHING had run yet.
+        # An exception after one success left `results` all-successes, so the
+        # startup caller saw a clean run and carried on with the schema half
+        # migrated. The failure is always recorded now.
         logger.error("Migration execution failed: %s", e)
-        if results == []:
-            results.append(("migrations_execution", False, f"Execution error: {e}"))
+        results.append(("migrations_execution", False, f"Execution error: {e}"))
     finally:
         if conn:
             conn.close()

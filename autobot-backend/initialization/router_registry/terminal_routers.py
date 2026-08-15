@@ -9,51 +9,34 @@ This module handles loading of terminal-related API routers.
 These routers provide terminal access, command execution, and remote terminal functionality.
 """
 
-from autobot_shared.logging_manager import get_logger
+from .loader import load_router_group
 
-logger = get_logger(__name__)
+# (module_path, prefix, tags, name). agent_terminal and terminal_tools carry
+# their own /api prefixes internally, hence the empty prefix.
+TERMINAL_ROUTER_CONFIGS = [
+    ("api.terminal", "/terminal", ["terminal"], "terminal"),
+    ("api.agent_terminal", "", ["agent-terminal"], "agent_terminal"),
+    ("api.terminal_tools", "", ["terminal-tools"], "terminal_tools"),
+]
+
+# NOTE: remote_terminal and base_terminal were archived and deleted in Issue #567
+# - remote_terminal: Future feature - implement with new architecture when Vue UI components are built
+# - base_terminal: Features migrated to terminal.py
+#   All endpoints now available in terminal.py (/health, /status, /capabilities, /security, /features, /stats)
 
 
 def load_terminal_routers():
     """
     Dynamically load terminal-related API routers with graceful fallback.
 
+    #14207: was three hand-written try/except blocks, each swallowing
+    ImportError with a WARNING and no record — so a terminal router that
+    failed to import left its endpoints 404ing with nothing but one log line
+    to say so. Now data-driven like every other registry, through the shared
+    loader that records the outcome and escalates a short count to ERROR.
+
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
-    optional_routers = []
-
-    # Terminal router
-    try:
-        from api.terminal import router as terminal_router
-
-        optional_routers.append((terminal_router, "/terminal", ["terminal"], "terminal"))
-        logger.info("✅ Optional router loaded: terminal")
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: terminal - %s", e)
-
-    # Agent Terminal router
-    try:
-        from api.agent_terminal import router as agent_terminal_router
-
-        optional_routers.append((agent_terminal_router, "", ["agent-terminal"], "agent_terminal"))
-        logger.info("✅ Optional router loaded: agent_terminal (includes prefix /api/agent-terminal)")
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: agent_terminal - %s", e)
-
-    # Terminal tools router
-    try:
-        from api.terminal_tools import router as terminal_tools_router
-
-        optional_routers.append((terminal_tools_router, "", ["terminal-tools"], "terminal_tools"))
-        logger.info("✅ Optional router loaded: terminal_tools")
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: terminal_tools - %s", e)
-
-    # NOTE: remote_terminal and base_terminal were archived and deleted in Issue #567
-    # - remote_terminal: Future feature - implement with new architecture when Vue UI components are built
-    # - base_terminal: Features migrated to terminal.py
-    #   All endpoints now available in terminal.py (/health, /status, /capabilities, /security, /features, /stats)
-
-    return optional_routers
+    return load_router_group("terminal", TERMINAL_ROUTER_CONFIGS)
