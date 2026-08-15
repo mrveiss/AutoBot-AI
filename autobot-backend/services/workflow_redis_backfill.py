@@ -93,7 +93,6 @@ async def _scan_redis_workflow_keys() -> List[str]:
     return keys
 
 
-
 def _legacy_status(blob: dict) -> str:
     """Map a legacy Redis blob onto ``WorkflowStatus`` (#14210).
 
