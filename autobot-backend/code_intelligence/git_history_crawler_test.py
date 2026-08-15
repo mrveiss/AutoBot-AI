@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from code_intelligence.co_change_test import hermetic_git_env
 from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler, _parse_numstat
 
 
@@ -33,7 +34,7 @@ def _git(repo: Path, *args: str) -> None:
     therefore read as a bare "exit status 128" with no indication of the cause,
     which is what made the intermittent failure undiagnosable from the log.
     """
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=hermetic_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
@@ -42,8 +43,15 @@ def _git(repo: Path, *args: str) -> None:
 
 
 def _git_init(path: Path) -> None:
-    """git init with the same stderr-surfacing contract as _git (#13882)."""
-    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True)
+    """git init with the same stderr-surfacing contract as _git (#13882).
+
+    #13882 round two: this file built real repos in ``tmp_path`` with **no**
+    ``env=`` at all — not even the denylist its sibling carried — so it was
+    exposed to the same cross-worker corruption under xdist, having simply never
+    been looked at when the sibling was fixed. A fix applied to one of two
+    identical call sites is half a fix.
+    """
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=hermetic_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
@@ -384,3 +392,22 @@ def test_commit_files_lists_what_a_commit_touched(repo):
 
 def test_commit_files_degrades_on_a_non_repository(tmp_path):
     assert GitHistoryCrawler(str(tmp_path)).get_commit_files("deadbeef") == []
+
+
+def test_this_file_builds_repos_hermetically_too():
+    """The recurrence mechanism, asserted where it happened.
+
+    #13882's first fix touched `co_change_test.py` and stopped there. This file
+    builds real repos in `tmp_path` the same way, under the same xdist config,
+    and carried no `env=` at all — not even the denylist the sibling had. It was
+    exposed the whole time and nothing said so, because the guard for the rule
+    lived only in the file that had already been fixed.
+    """
+    import inspect
+
+    for helper in (_git, _git_init):
+        source = inspect.getsource(helper)
+        assert "env=hermetic_git_env()" in source, (
+            f"{helper.__name__} runs git without the hermetic environment — "
+            "an inherited GIT_ variable makes -C advisory under xdist"
+        )
