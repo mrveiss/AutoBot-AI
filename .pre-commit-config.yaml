@@ -154,6 +154,27 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # #14015: every route in a covered package carries a deadline, or is declared
+  # unbounded with a reason. #13602 was an endpoint that held the socket open
+  # past 180s and logged nothing, because bounding was opt-in per call site and
+  # one handler simply had none. Only a check that covers every member by
+  # construction catches an omission.
+  #
+  # pass_filenames: false — the checker walks the covered packages itself, so a
+  # commit touching an unrelated file still validates the whole surface. A
+  # filename-scoped run would pass on the very commit that adds an unbounded
+  # route elsewhere.
+  - repo: local
+    hooks:
+      - id: route-deadlines
+        name: Every covered route carries a deadline (#14015)
+        entry: tools/lint/check_route_deadlines.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Add @bounded(seconds=...) or declare the route in UNBOUNDED_BY_DESIGN"
+
   # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
   # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
   # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production
@@ -255,6 +276,26 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
+
+      # #14216: 14 session/audit reports accumulated at the repository root —
+      # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
+      # and friends. Legitimate work product written to the front door because
+      # that is where the session happened to be. The root is the first screen a
+      # visitor sees, and nothing stopped them landing there. Reports now live in
+      # docs/reports/; this is the stop. Also blocks the MagicMock/ artifact tree
+      # that the #14217 path-sanitizer bug creates on every suite run.
+      - id: no-root-clutter
+        name: Keep session reports and test artifacts out of the repo root (#14216)
+        entry: tools/lint/check_no_root_clutter.py
+        language: python
+        # Trigger on any top-level path, or a MagicMock/ component at any depth
+        # — the artifact tree lands wherever the test process's CWD was, and a
+        # trigger narrower than the check means the check never runs for the
+        # case it was written to catch.
+        files: (^[^/]+$)|(^|/)MagicMock/
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"
 
       - id: no-open-without-encoding
         name: Require encoding= on text-mode open() (#3391 / #13151)
