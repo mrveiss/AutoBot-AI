@@ -11,7 +11,7 @@ import asyncio
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
@@ -80,6 +80,7 @@ def _build_declarations_response(all_declarations: list, storage_type: str) -> d
 
 
 @router.get("/declarations")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_declarations",

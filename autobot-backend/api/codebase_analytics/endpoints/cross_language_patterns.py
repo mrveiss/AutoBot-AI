@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 
@@ -76,6 +76,7 @@ async def _get_cached_analysis(source_id: str | None):
 
 
 @router.post("/cross-language/analyze")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_cross_language_analysis",
@@ -130,6 +131,7 @@ async def run_cross_language_analysis(
 
 
 @router.get("/cross-language/summary")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cross_language_summary",
@@ -201,6 +203,7 @@ async def get_cross_language_summary(
 
 
 @router.get("/cross-language/dto-mismatches")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dto_mismatches",
@@ -236,6 +239,7 @@ async def get_dto_mismatches(
 
 
 @router.get("/cross-language/validation-duplications")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_duplications",
@@ -271,6 +275,7 @@ async def get_validation_duplications(
 
 
 @router.get("/cross-language/api-mismatches")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_contract_mismatches",
@@ -315,6 +320,7 @@ async def get_api_contract_mismatches(
 
 
 @router.get("/cross-language/semantic-matches")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_semantic_matches",
@@ -367,6 +373,7 @@ async def get_semantic_matches(
 
 
 @router.get("/cross-language/patterns")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_patterns_by_category",
@@ -424,6 +431,7 @@ async def get_patterns_by_category(
 
 
 @router.post("/cross-language/clear-cache")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cross_language_cache",
