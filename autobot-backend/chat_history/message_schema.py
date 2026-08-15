@@ -19,11 +19,22 @@ stored conversation collapsed to an empty list. The pass then reported those
 conversations as distilled and advanced its cursor past them — #12809's pipeline
 had never extracted a skill from a real conversation.
 
-The knowledge was already in the codebase, twice, in hand-written pairs:
-``context_overflow._format_messages`` and ``api/chat.py``'s inbound mapping both
-do the ``or`` fallback. A third consumer simply did not, and nothing made the
-omission visible. Hence one function rather than a fourth copy — see the
-consolidate-never-fork rule.
+The knowledge was already in the codebase in hand-written pairs —
+``context_overflow._format_messages`` and ``api/chat.py``'s **inbound** mapping
+(``_to_persisted_message``) both do the ``or`` fallback. Several other readers
+do not, and nothing made the omissions visible. Hence one function rather than
+another copy — see the consolidate-never-fork rule.
+
+Known readers still on a single schema, each filed rather than silently fixed
+here because they sit in different subsystems with their own blast radius:
+
+* **#14305** — ``api/chat.py::_build_llm_context`` reads ``role`` from records
+  the sibling writer stores under ``sender``, so every prior turn reaches the
+  model as ``role: "user"``, the assistant's own replies included. Live on the
+  chat hot path.
+* **#14306** — ``api/chat_sessions.py::_preserve_system_messages`` filters on
+  ``role == "system"`` against disk-shape records, so ``keep_system_prompt``
+  preserves nothing and reports the count it kept as 0.
 
 Deliberately NOT applied to LLM-API-only readers (``llm_shared/providers/*``,
 ``token_optimizer``, ``complexity_router``, and ``context_overflow``'s
@@ -35,6 +46,11 @@ currently correct.
 from typing import Any, Dict, List
 
 _UNKNOWN_ROLE = "unknown"
+
+
+def _valid_text_value(value: Any) -> Any:
+    """The value if it is a shape a message body can take, else ``None``."""
+    return value if isinstance(value, (str, list)) else None
 
 
 def message_role(message: Dict[str, Any], default: str = _UNKNOWN_ROLE) -> str:
@@ -51,10 +67,24 @@ def message_text(message: Dict[str, Any]) -> str:
 
     Returns ``""`` when the message carries no text under either key, so callers
     can filter on emptiness without having to know which schema they were handed.
+
+    Only ``str`` and ``list`` are valid content shapes — a string body, or the
+    multimodal part list. Anything else (``None``, ``0``, ``False``, a stray
+    dict) is treated as *absent* and falls through to the other key, rather than
+    being ``str()``-ed into the conversation: a bare ``str(value)`` puts the
+    literal ``"False"`` or ``"0"`` in front of the model, which is worse than
+    reading the other field or returning nothing.
+
+    An **empty** ``str`` also falls through, but an **empty list** does not: a
+    list is a well-formed answer meaning *this message has no text parts*, so
+    there is nothing to look for elsewhere. That distinction is the reason this
+    is not the bare ``content or text`` it replaced, and it is pinned by tests.
     """
-    value = message.get("content")
+    value = _valid_text_value(message.get("content"))
     if value is None or value == "":
-        value = message.get("text")
+        other = _valid_text_value(message.get("text"))
+        if other is not None:
+            value = other
     if value is None:
         return ""
     # A list is the multimodal content shape (`[{"type": "text", ...}, ...]`);

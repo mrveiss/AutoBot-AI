@@ -208,11 +208,16 @@ def _message_text(msg: object) -> str:
     ``estimate_fast`` needs a string. A non-dict entry or a non-string ``text``
     (a provider emitting ``None``, an int, a content-part list) used to raise
     here — after the token tracker had already been reset.
+
+    #14259: this read only ``text``. Its caller at ``_create_summary`` is handed
+    the same disk-shape records the chat path stores, which carry ``content`` —
+    so every retained message measured as 0 tokens, and the tracker was reseeded
+    far below the true cost of the history it kept. That undercount feeds the
+    80/90% fill thresholds this module exists to enforce.
     """
     if not isinstance(msg, dict):
         return ""
-    text = msg.get("text", "")
-    return text if isinstance(text, str) else ""
+    return message_text(msg)
 
 
 def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:

@@ -81,6 +81,41 @@ class TestTheApiShapeStillWorks:
     def test_content_wins_when_both_are_present(self):
         assert message_text({"content": "api", "text": "stored"}) == "api"
 
+    def test_an_empty_content_falls_back_to_text(self):
+        """The case that makes `is None or == ""` necessary rather than tidy —
+        a bare `content or text` gets this right too, so it is the *next* test
+        that pins why the narrower check was chosen."""
+        assert message_text({"content": "", "text": "real"}) == "real"
+
+    def test_an_empty_list_content_does_NOT_fall_back(self):
+        """Pins the deliberate narrowing against a bare `or`.
+
+        An empty multimodal list is a well-formed answer — *this message has no
+        text parts* — so there is nothing to look for in `text`. A bare
+        `content or text` would fall back here and invent content.
+        """
+        assert message_text({"content": [], "text": "fallback"}) == ""
+
+    @pytest.mark.parametrize("invalid", [0, False, {"a": 1}], ids=["zero", "false", "dict"])
+    def test_an_invalid_content_type_is_treated_as_absent(self, invalid):
+        """Neither `str()`-ing it nor trusting it.
+
+        `str(value)` would put the literal "0" / "False" / "{'a': 1}" in front
+        of the model. A content field that is not a str or a part-list is not
+        content, so the other key is read instead.
+        """
+        assert message_text({"content": invalid, "text": "fallback"}) == "fallback"
+
+    @pytest.mark.parametrize("invalid", [0, False, 42])
+    def test_an_invalid_type_in_BOTH_keys_yields_empty(self, invalid):
+        assert message_text({"content": invalid, "text": invalid}) == ""
+
+    def test_a_present_but_null_sender_still_gets_the_default(self):
+        """`msg.get("sender", "unknown")` returns None when the key is present
+        and null — the default only applies to an absent key. The or-chain
+        degrades that to the default, which is what callers expect."""
+        assert message_role({"role": None, "sender": None}) == "unknown"
+
 
 class TestMultimodalContent:
     """`message_text` carries #14065's guard verbatim, not a re-derivation."""
