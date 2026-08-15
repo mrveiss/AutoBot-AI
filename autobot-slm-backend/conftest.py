@@ -248,6 +248,7 @@ _REAL_SERVICE_MODULES = (
     "a2a_card_fetcher",
     "hf_token_validator",
     "service_extra_data",
+    "ansible_utils",
 )
 
 for _name in _REAL_SERVICE_MODULES:
