@@ -97,7 +97,7 @@ if [ ! -f ${VNC_HOME}/.vnc/passwd ]; then
     x11vnc -storepasswd "$VNC_PASS" ${VNC_HOME}/.vnc/passwd
     echo "Generated VNC password: $VNC_PASS"
 fi
-chown -R kali:kali ${VNC_HOME}/.vnc
+chown -R "${VNC_USER}:${VNC_USER}" "${VNC_HOME}/.vnc"
 
 echo "Reloading systemd..."
 systemctl daemon-reload

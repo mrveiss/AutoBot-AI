@@ -50,10 +50,21 @@ _ASSIGNMENT = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)="
 )
 
-# Names systemd itself resolves at runtime, which must reach the unit file
-# unexpanded. A script wanting one writes it escaped; this list keeps the rule
-# from demanding a shell assignment for something the shell must not touch.
-_SYSTEMD_RUNTIME_VARS = frozenset({"MAINPID", "TERM", "PATH", "HOME", "USER", "LOGNAME", "SHELL"})
+# No allowlist. Review finding on this PR: the previous one exempted USER and
+# HOME — the two names #14036 was actually about — from the rule below.
+#
+# The reasoning it carried ("systemd resolves these at runtime") is backwards
+# for the case the rule governs. systemd's specifiers are `%u` and `%h`; it does
+# not resolve `$USER` or `$HOME` in a unit file at all. Inside an *unquoted*
+# heredoc those are live bash expansions at the moment the file is written —
+# under `sudo bash` that is root, which is exactly how `/home/root` got into
+# these units.
+#
+# A token that genuinely must reach the unit unexpanded — `$MAINPID` is the
+# real example — is written escaped as `\$MAINPID`, and escaped forms are
+# stripped before this rule runs. So requiring an assignment for every
+# unescaped reference costs nothing and closes the hole.
+_SYSTEMD_RUNTIME_VARS: frozenset = frozenset()
 
 
 def _shell_scripts() -> list[Path]:
@@ -200,3 +211,29 @@ def test_the_vnc_units_resolve_to_a_real_user():
                     assert resolved.split("=", 1)[1].strip(), f"{script.name}: {line} resolved to an empty value"
                     checked += 1
     assert checked >= 8, f"expected the four directives across both scripts' units, checked {checked}"
+
+
+_LITERAL_USER_CHOWN = re.compile(r"^\s*chown\s+(?:-\w+\s+)*(?P<owner>[A-Za-z_][A-Za-z0-9_-]*):")
+
+
+@pytest.mark.parametrize("script", _scripts_writing_units(), ids=lambda p: p.name)
+def test_no_chown_names_a_literal_user_in_a_script_that_writes_units(script):
+    """Ownership must follow the unit's ``User=``, not a hardcoded name.
+
+    Found by review, and invisible to every other rule here by design: the
+    heredoc scanner only reads inside heredoc bodies, and this is a plain shell
+    command outside one.
+
+    `fix-vnc-wsl.sh` kept `chown -R kali:kali` on the shared `.vnc` directory
+    while its units were rewritten to run as `${VNC_USER}` (default `autobot`).
+    On a host with no `kali` account the chown fails, and `set -e` aborts the
+    script before `daemon-reload` — so the units are written and never started.
+    On a host that has one, the password file ends up owned by `kali` while the
+    service runs as `autobot` and cannot read its own `rfbauth` file (mode 600).
+    """
+    offenders = []
+    for number, line in enumerate(script.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        match = _LITERAL_USER_CHOWN.match(line)
+        if match and "$" not in match.group("owner"):
+            offenders.append(f"{script.relative_to(_REPO_ROOT)}:{number}  {line.strip()}")
+    assert not offenders, "chown must use the same variable the unit's User= does:\n" + "\n".join(offenders)
