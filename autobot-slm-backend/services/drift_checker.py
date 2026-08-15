@@ -56,7 +56,13 @@ _INCLUDE_EXTENSIONS: frozenset[str] = _BACKEND_EXTENSIONS | _FRONTEND_EXTENSIONS
 #: autobot-backend and 126 under autobot-slm-backend on a live host. Excluding
 #: `*_test.py` everywhere would hide real drift in all of them.
 _SOURCE_ONLY_PATTERNS: dict[str, tuple[str, ...]] = {
-    "autobot-slm-agent": ("*_test.py", "test_*.py"),
+    # `*_test.py` only: this repo co-locates tests with that suffix, and the
+    # agent source carries exactly two. A `test_*.py` pattern was here too and
+    # matched nothing — dead configuration that reads as protection, which
+    # `test_every_excluded_pattern_matches_something_in_the_source` rejects. If
+    # the convention ever changes, that test fails and the pattern is added then,
+    # rather than being carried on speculation now.
+    "autobot-slm-agent": ("*_test.py",),
 }
 
 

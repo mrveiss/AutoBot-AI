@@ -1279,7 +1279,7 @@ _AGENT_SOURCE = _AGENT_ROLE / "files" / "slm" / "agent"
 
 
 def test_the_agent_excludes_its_undeployed_tests():
-    assert source_only_patterns("autobot-slm-agent") == ("*_test.py", "test_*.py")
+    assert source_only_patterns("autobot-slm-agent") == ("*_test.py",)
 
 
 def test_the_exclusion_is_not_global():
