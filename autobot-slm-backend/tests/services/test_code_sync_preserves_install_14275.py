@@ -246,3 +246,127 @@ def test_the_rewrite_rule_is_not_vacuous():
     ]
 
     assert len(using) >= 4, f"only {using} route through the rewrite"
+
+
+# ---------------------------------------------------------------------------
+# Install into the interpreter the service actually runs (#14275 review)
+# ---------------------------------------------------------------------------
+
+
+def _unit_runs_from_a_venv(service: str) -> bool | None:
+    """True/False from the role's systemd template, None when there is no unit."""
+    roles = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles"
+    for template in roles.rglob(f"{service}.service.j2"):
+        for line in template.read_text(encoding="utf-8").splitlines():
+            if line.startswith("ExecStart="):
+                return "venv/bin/" in line
+    return None
+
+
+def test_a_post_sync_pip_targets_the_same_interpreter_the_service_runs():
+    """A bare `pip` installs into whatever the SSH session's PATH resolves.
+
+    Where the unit runs `<install_dir>/venv/bin/...`, that means new code against
+    an unchanged dependency set — the "did not come back running" outcome,
+    reported as success. Where the unit runs `/usr/bin/python3` (slm-agent), a
+    bare `pip` is correct, so the rule is "match the unit", not "always venv".
+
+    The rewrite-routing test cannot catch this: it exempts anything calling
+    build-filtered-requirements.sh, conflating "the constraint resolves" with
+    "the right interpreter".
+    """
+    offenders = []
+    for entry in _registry_entries():
+        command = entry.get("post_sync_cmd") or ""
+        if "pip install" not in command:
+            continue
+        service = entry.get("systemd_service")
+        if not service:
+            continue
+        needs_venv = _unit_runs_from_a_venv(service)
+        if needs_venv is None:
+            continue
+        for match in re.finditer(r"(?:^|&&\s*|;\s*)([\w./-]*pip) install", command):
+            uses_venv = match.group(1).endswith("venv/bin/pip")
+            if needs_venv and not uses_venv:
+                offenders.append(f"{entry.get('name')}: unit runs from a venv but installs with `{match.group(1)}`")
+
+    assert offenders == [], "\n".join(offenders)
+
+
+def test_the_venv_rule_examined_something():
+    """Vacuity guard: if no entry has a pip install, the rule above proves nothing."""
+    checked = [
+        entry.get("name")
+        for entry in _registry_entries()
+        if "pip install" in (entry.get("post_sync_cmd") or "")
+        and _unit_runs_from_a_venv(entry.get("systemd_service") or "") is not None
+    ]
+
+    assert len(checked) >= 4, f"only {checked} were actually examined"
+
+
+# ---------------------------------------------------------------------------
+# A failed post-sync must stop the sync (#14275 review)
+# ---------------------------------------------------------------------------
+
+
+def _post_sync_source() -> str:
+    source = _ORCHESTRATOR.read_text(encoding="utf-8")
+    start = source.index("async def _run_post_sync_command")
+    return source[start : source.index("\n    async def ", start + 10)]
+
+
+def test_the_post_sync_runner_branches_on_the_return_code():
+    """Assert the STRUCTURE, not the words.
+
+    Three earlier attempts in this file checked that the module text contained
+    the right identifiers, and each survived a mutation that kept the words and
+    removed the behaviour — `if proc.returncode != 0:` → `if False:` leaves both
+    "returncode" and "return False" in the source. Executing the function is not
+    an option here: this suite's conftest stubs `services.*`, so the class is a
+    MagicMock and cannot be awaited.
+
+    So: find the `if` whose test actually reads `.returncode`, and require it to
+    return a falsy first element.
+    """
+    tree = ast.parse(_ORCHESTRATOR.read_text(encoding="utf-8"))
+    func = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_post_sync_command"
+    )
+
+    guards = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.If)
+        and any(
+            isinstance(sub, ast.Attribute) and sub.attr == "returncode"
+            for sub in ast.walk(node.test)
+        )
+    ]
+    assert guards, "nothing in _run_post_sync_command branches on proc.returncode"
+
+    returns_false = [
+        node
+        for guard in guards
+        for node in ast.walk(guard)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Tuple)
+        and isinstance(node.value.elts[0], ast.Constant)
+        and node.value.elts[0].value is False
+    ]
+    assert returns_false, "the returncode guard does not report failure"
+
+
+def test_a_failed_post_sync_stops_before_restart_and_before_marking_synced():
+    """Restarting into a half-installed dependency set is worse than leaving the
+    running process alone, and recording the commit as synced would claim an
+    update that did not happen."""
+    source = _ORCHESTRATOR.read_text(encoding="utf-8")
+    call = source.index("await self._run_post_sync_command(ctx)")
+    restart = source.index("_restart_systemd_service(ctx, node_id, restart)", call)
+    between = source[call:restart]
+
+    assert "return False" in between, "a failed post-sync does not stop the sync"

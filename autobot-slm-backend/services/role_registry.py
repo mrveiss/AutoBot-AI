@@ -39,7 +39,13 @@ _SLM_ROLES = [
         "health_check_port": 8000,
         "health_check_path": "/api/health",
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
+            # #14275: venv/bin, not bare. The unit runs
+            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
+            # targets system Python — new code against unchanged dependencies,
+            # and a migration run by a different interpreter than the service.
+            f"cd {_BASE_DIR}/autobot-slm-backend && "
+            "venv/bin/pip install -r requirements.txt && "
+            "venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -316,7 +322,7 @@ _OPTIONAL_ROLES = [
             f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
             f"requirements.txt {_BASE_DIR}/code_source "
             f"> /tmp/requirements-filtered-npu-worker.txt && "
-            f"pip install -r /tmp/requirements-filtered-npu-worker.txt"
+            f"venv/bin/pip install -r /tmp/requirements-filtered-npu-worker.txt"
         ),
         "required": False,
         "degraded_without": ["GPU inference offloading — backend falls back to local Ollama"],
@@ -346,7 +352,7 @@ _OPTIONAL_ROLES = [
             f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
             f"requirements.txt {_BASE_DIR}/code_source "
             f"> /tmp/requirements-filtered-tts-worker.txt && "
-            f"pip install -r /tmp/requirements-filtered-tts-worker.txt"
+            f"venv/bin/pip install -r /tmp/requirements-filtered-tts-worker.txt"
         ),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],

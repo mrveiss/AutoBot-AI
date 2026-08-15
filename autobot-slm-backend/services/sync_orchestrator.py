@@ -190,14 +190,21 @@ class SyncOrchestrator:
         except Exception as e:
             return False, f"Sync error: {e}"
 
-    async def _run_post_sync_command(self, ctx: SyncNodeContext) -> None:
+    async def _run_post_sync_command(self, ctx: SyncNodeContext) -> tuple[bool, str]:
         """
         Execute post-sync command on remote node.
 
         Helper for sync_node_role (Issue #665).
+
+        #14275: returns success rather than None. This never inspected
+        `proc.returncode`, so a failing `pip install` — permission denied, a
+        missing venv, an unresolvable constraint — was logged at WARNING and the
+        caller carried on to restart the service and mark the role synced. The
+        sync reported success while the dependencies it was meant to install had
+        not been installed, which is the failure this whole path exists to avoid.
         """
         if not ctx.post_sync_cmd:
-            return
+            return True, ""
 
         try:
             ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
@@ -208,9 +215,15 @@ class SyncOrchestrator:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            if proc.returncode != 0:
+                tail = (stdout or b"").decode("utf-8", errors="replace").strip()[-800:]
+                logger.error("Post-sync command exited %s: %s", proc.returncode, tail)
+                return False, f"post-sync command failed (exit {proc.returncode}): {tail}"
+            return True, ""
         except Exception as e:
-            logger.warning("Post-sync command failed: %s", e)
+            logger.error("Post-sync command failed: %s", e)
+            return False, f"post-sync command failed: {e}"
 
     async def _restart_systemd_service(self, ctx: SyncNodeContext, node_id: str, restart: bool) -> None:
         """
@@ -612,8 +625,16 @@ class SyncOrchestrator:
             if not success:
                 return False, msg
 
-        # Run post-sync command and restart service
-        await self._run_post_sync_command(ctx)
+        # Run post-sync command and restart service.
+        #
+        # #14275: a failed post-sync stops the sync here. Restarting into a
+        # half-installed dependency set is worse than leaving the running process
+        # alone with new files on disk, and marking the role synced would record a
+        # commit whose dependencies were never installed.
+        post_sync_ok, post_sync_msg = await self._run_post_sync_command(ctx)
+        if not post_sync_ok:
+            return False, post_sync_msg
+
         await self._restart_systemd_service(ctx, node_id, restart)
 
         # Update database record
