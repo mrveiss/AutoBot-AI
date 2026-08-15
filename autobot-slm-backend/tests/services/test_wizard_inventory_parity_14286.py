@@ -320,9 +320,7 @@ def _wizard_writer_ast() -> ast.AST:
     source = (_BACKEND_ROOT / "api" / "setup_wizard.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     functions = {
-        node.name: node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
     generator = functions.get("_generate_dynamic_inventory")
     assert generator is not None, "_generate_dynamic_inventory not found"
