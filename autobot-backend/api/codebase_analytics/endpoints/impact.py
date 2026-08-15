@@ -28,7 +28,7 @@ import asyncio
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.knowledge.impact_analysis import find_impact
 
@@ -40,6 +40,7 @@ router = APIRouter()
 
 
 @router.get("/impact")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_impact",

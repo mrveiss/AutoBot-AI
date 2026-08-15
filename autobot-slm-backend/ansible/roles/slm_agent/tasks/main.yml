@@ -117,13 +117,28 @@
   become: true
   tags: ['slm_agent', 'version']
 
-- name: "SLM Agent | Install Python dependencies"
-  pip:
+- name: "SLM Agent | Ensure python3-venv is present (#14278)"
+  ansible.builtin.package:
+    name: python3-venv
+    state: present
+  become: true
+  tags: ['slm_agent', 'packages']
+
+# #14278: into a venv, not system Python. Every other component on the platform
+# already works this way (ai-stack, npu-worker, tts-worker, slm-backend); the
+# agent was the only exception, and it is the one that could not be provisioned
+# on a node whose distro owns one of its transitive dependencies.
+#
+# `--break-system-packages` is gone with it: inside a venv it is neither needed
+# nor meaningful.
+- name: "SLM Agent | Install Python dependencies into the agent venv (#14278)"
+  ansible.builtin.pip:
     name: "{{ slm_agent_python_packages }}"
     state: present
-    executable: pip3
-    extra_args: "--break-system-packages"
+    virtualenv: "{{ slm_agent_venv }}"
+    virtualenv_command: python3 -m venv
   become: true
+  become_user: "{{ slm_agent_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution

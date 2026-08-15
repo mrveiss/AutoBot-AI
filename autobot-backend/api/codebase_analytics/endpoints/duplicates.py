@@ -23,7 +23,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
@@ -396,6 +396,7 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
 
 
 @router.get("/duplicates")
+@bounded(180.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
@@ -542,6 +543,7 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
 
 
 @router.get("/config-duplicates")
+@bounded(180.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_config_duplicates",
@@ -603,6 +605,7 @@ async def detect_config_duplicates_endpoint(
 
 
 @router.get("/duplicates/cached")
+@bounded(180.0)
 async def get_cached_duplicate_result(source_id: str = ""):
     """Return the latest completed duplicate analysis result (#1540)."""
     cached = await get_latest_task_result(_REDIS_PREFIX)
@@ -617,6 +620,7 @@ async def get_cached_duplicate_result(source_id: str = ""):
 
 
 @router.post("/duplicates/analyze")
+@bounded(180.0)
 async def start_duplicate_analysis():
     """Enqueue duplicate analysis as a Celery task (GH#6505)."""
     result = run_duplicate_analysis.delay()
@@ -625,6 +629,7 @@ async def start_duplicate_analysis():
 
 
 @router.get("/duplicates/status/{task_id}")
+@bounded(180.0)
 async def get_duplicate_status(task_id: str):
     """Get duplicate analysis task status."""
     status = celery_result_to_status(AsyncResult(task_id))
@@ -634,6 +639,7 @@ async def get_duplicate_status(task_id: str):
 
 
 @router.post("/duplicates/tasks/clear-stuck")
+@bounded(180.0)
 async def clear_stuck_dup_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
