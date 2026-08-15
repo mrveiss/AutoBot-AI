@@ -37,10 +37,12 @@ _TABLE = "llc_work_items"
 def upgrade() -> None:
     if not has_table(_TABLE):
         return
-    op.execute(f"UPDATE {_TABLE} SET co_worker_type = 'user' WHERE co_worker_type = 'human'")
+    # Literal, not an f-string: bandit B608 flags interpolated SQL, and a
+    # migration targets one named table, so the interpolation bought nothing.
+    op.execute("UPDATE llc_work_items SET co_worker_type = 'user' WHERE co_worker_type = 'human'")
 
 
 def downgrade() -> None:
     if not has_table(_TABLE):
         return
-    op.execute(f"UPDATE {_TABLE} SET co_worker_type = 'human' WHERE co_worker_type = 'user'")
+    op.execute("UPDATE llc_work_items SET co_worker_type = 'human' WHERE co_worker_type = 'user'")
