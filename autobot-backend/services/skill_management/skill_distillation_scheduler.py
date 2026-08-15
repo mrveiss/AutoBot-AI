@@ -36,6 +36,7 @@ from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from chat_history.message_schema import as_llm_messages
 
 from .skill_extractor import SkillExtractor
 from .skill_proposer import SkillProposer
@@ -625,11 +626,12 @@ class SkillDistillationScheduler:
         # a model-aware retrieval limit, and distillation wants the whole
         # conversation, not a context-window slice of it.
         messages = await manager.load_session(session_id)
-        return [
-            {"role": msg.get("role", "unknown"), "content": msg.get("content", "")}
-            for msg in messages
-            if msg.get("content")
-        ]
+        # #14259: read through the shared normaliser. This mapped `role`/`content`
+        # directly while the writer stores `sender`/`text`, and it *filtered* on
+        # `if msg.get("content")` — so every stored conversation collapsed to [],
+        # was reported as distilled, and had the cursor advanced past it. The
+        # pipeline had never extracted a skill from a real conversation.
+        return as_llm_messages(messages)
 
     # ------------------------------------------------------------------
     # Cursor

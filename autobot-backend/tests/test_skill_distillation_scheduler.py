@@ -35,7 +35,28 @@ def _skill(name: str = "deploy_service", confidence: float = 0.9) -> ExtractedSk
 
 
 def _history(count: int = 6):
-    return [{"role": "user" if i % 2 == 0 else "assistant", "content": f"message {i}"} for i in range(count)]
+    """A conversation in the shape the writer actually stores (#14259).
+
+    This returned `role`/`content` dicts — the API shape. `_load_history` read
+    the same keys, so the fixture and the code agreed with each other about a
+    shape `_build_message_dict` never produces, and the suite stayed green while
+    distillation read every real conversation as empty.
+
+    Built by the writer itself so the two cannot drift apart again.
+    """
+    from chat_history.messages import MessagesMixin
+
+    return [
+        MessagesMixin._build_message_dict(
+            None,
+            sender="user" if i % 2 == 0 else "assistant",
+            text=f"message {i}",
+            message_type="chat",
+            raw_data={},
+            tool_markers=None,
+        )
+        for i in range(count)
+    ]
 
 
 class _FakeRedis:
@@ -537,7 +558,7 @@ class TestQuarantineAfterRepeatedFailures:
         """The point of the escape hatch: healthy work behind the blockage runs."""
         from services.skill_management.skill_distillation_scheduler import MAX_CONSECUTIVE_FAILURES
 
-        redis.store[f"skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
+        redis.store["skills:distillation:failures:chat-a"] = MAX_CONSECUTIVE_FAILURES - 1
         extractor = MagicMock()
         extractor.extract_skills = AsyncMock(return_value=[_skill()])
         proposer = MagicMock()

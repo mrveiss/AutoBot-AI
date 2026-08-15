@@ -22,6 +22,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
+from chat_history.message_schema import message_role, message_text
 
 logger = get_logger(__name__)
 
@@ -370,19 +371,13 @@ class ConversationSummarizer:
         for msg in messages:
             if not isinstance(msg, dict):
                 continue
-            role = msg.get("role") or msg.get("sender", "unknown")
-            content = msg.get("content") or msg.get("text", "")
-            if isinstance(content, list):
-                # #14065 review: a multimodal part with ``text: None`` is a shape
-                # providers genuinely emit, and ``" ".join`` raises TypeError on
-                # it. This method runs outside the try, so that escaped as a 500
-                # on the live chat path. Skip the part instead — a summary
-                # missing one empty fragment is not a failure.
-                content = " ".join(
-                    p["text"]
-                    for p in content
-                    if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str)
-                )
+            # #14259: one normaliser for both schemas, shared with skill
+            # distillation. This pair was hand-written here and simply absent in
+            # that consumer, which therefore read every stored conversation as
+            # empty. `message_text` carries the #14065 multimodal guard verbatim
+            # — a part with ``text: None`` must be skipped, not stringified.
+            role = message_role(msg)
+            content = message_text(msg)
             if role and content:
                 lines.append(f"{role}: {content}")
         return "\n".join(lines)
