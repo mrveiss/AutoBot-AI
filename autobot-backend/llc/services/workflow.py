@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.workflow import SOURCE_CREATED, Workflow
 
 from ..models.activity import ActorType
+from ..models.enums import WorkflowStatus
 from .base import LLCServiceBase
 
 
@@ -41,12 +42,16 @@ class WorkflowService(LLCServiceBase):
         workflow_id: str,
         *,
         name: Optional[str] = None,
-        status: str = "planned",
+        status: str = WorkflowStatus.PLANNED.value,
         definition: Optional[Dict[str, Any]] = None,
         actor: Optional[uuid.UUID] = None,
     ) -> Workflow:
         if company_id is None:
             raise ValueError("company_id is required to create a workflow")
+        # Coerce rather than store free text: an unvalidated status column is
+        # #13937's defect and #13954 is what it cost. Raises on a bad value so it
+        # surfaces as an error, not as a row nothing can ever match.
+        status = WorkflowStatus(status).value
 
         workflow = Workflow(
             workflow_id=workflow_id,
@@ -106,6 +111,7 @@ class WorkflowService(LLCServiceBase):
         *,
         actor: Optional[uuid.UUID] = None,
     ) -> Optional[Workflow]:
+        status = WorkflowStatus(status).value
         workflow = await self.get(session, company_id, workflow_id)
         if workflow is None:
             return None

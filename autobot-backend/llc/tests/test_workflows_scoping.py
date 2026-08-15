@@ -21,6 +21,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.models.enums import WorkflowStatus
 from llc.services.workflow import WorkflowService
 from models.workflow import SOURCE_CREATED, SOURCE_LEGACY_REDIS, Workflow
 
@@ -171,3 +172,53 @@ async def test_legacy_backfilled_row_has_no_company_and_is_never_returned_by_lis
 
     assert [w.workflow_id for w in company_a_workflows] == ["wf-a1"]
     assert company_a_workflows[0].source == SOURCE_CREATED
+
+
+# `status` was a bare String(50) that the backfill populated from `current_step`
+# — a step name in a status column. That is #13937's untyped-discriminator
+# defect, and #13954 is what it cost: a filter on a value the backend never
+# wrote, matching nothing for months. These pin the constraint while the table
+# is still empty, which is the cheapest moment it will ever be.
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_a_status_outside_the_vocabulary(session_factory):  # noqa: ANN001
+    service = WorkflowService()
+    async with session_factory() as session:
+        with pytest.raises(ValueError):
+            await service.create(
+                session,
+                company_id=uuid.uuid4(),
+                workflow_id="wf-bad",
+                status="step_3",  # a step name, the exact shape the backfill used to write
+            )
+
+
+@pytest.mark.asyncio
+async def test_update_status_rejects_a_status_outside_the_vocabulary(session_factory):  # noqa: ANN001
+    service = WorkflowService()
+    company_id = uuid.uuid4()
+    async with session_factory() as session:
+        await service.create(session, company_id=company_id, workflow_id="wf-ok")
+        await session.commit()
+
+    async with session_factory() as session:
+        with pytest.raises(ValueError):
+            await service.update_status(session, company_id, "wf-ok", status="whatever")
+
+
+@pytest.mark.asyncio
+async def test_every_defined_status_is_accepted(session_factory):  # noqa: ANN001
+    """The case that must stay caught: coercion must not reject valid members."""
+    service = WorkflowService()
+    company_id = uuid.uuid4()
+    for index, member in enumerate(WorkflowStatus):
+        async with session_factory() as session:
+            created = await service.create(
+                session,
+                company_id=company_id,
+                workflow_id=f"wf-{index}",
+                status=member.value,
+            )
+            assert created.status == member.value
+            await session.commit()

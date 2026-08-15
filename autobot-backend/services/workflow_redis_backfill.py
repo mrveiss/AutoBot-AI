@@ -54,6 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.workflow_state import ACTIVE_SET, KEY_PREFIX
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from llc.models.enums import WorkflowStatus
 from models.workflow import SOURCE_LEGACY_REDIS, Workflow
 from user_management.database import get_async_session_factory
 
@@ -90,6 +91,26 @@ async def _scan_redis_workflow_keys() -> List[str]:
             continue
         keys.append(key)
     return keys
+
+
+
+def _legacy_status(blob: dict) -> str:
+    """Map a legacy Redis blob onto ``WorkflowStatus`` (#14210).
+
+    The previous form wrote ``blob["current_step"]`` straight into ``status`` —
+    a *step name* in a *status* column, so the field held a mix of lifecycle
+    states and arbitrary step identifiers from the first row. Nothing is lost by
+    normalising: the entire blob is preserved verbatim in ``definition``, so the
+    original ``current_step`` survives and can be re-read at any time.
+
+    A blob carrying a ``current_step`` had begun executing, so ``RUNNING`` is the
+    honest reading — not ``PLANNED``, which would claim it never started.
+    """
+    if blob.get("errors"):
+        return WorkflowStatus.FAILED.value
+    if blob.get("current_step"):
+        return WorkflowStatus.RUNNING.value
+    return WorkflowStatus.PLANNED.value
 
 
 async def backfill(*, dry_run: bool = False, session: AsyncSession | None = None) -> BackfillReport:
@@ -138,7 +159,7 @@ async def backfill(*, dry_run: bool = False, session: AsyncSession | None = None
                         workflow_id=workflow_id,
                         company_id=None,  # unattributable — see module docstring
                         name=blob.get("goal"),
-                        status="failed" if blob.get("errors") else blob.get("current_step", "planned"),
+                        status=_legacy_status(blob),
                         source=SOURCE_LEGACY_REDIS,
                         definition=blob,
                     )
