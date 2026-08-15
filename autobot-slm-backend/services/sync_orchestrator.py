@@ -45,7 +45,16 @@ class SyncNodeContext:
 
 
 # Code cache directory
+from autobot_shared.env_utils import env_int
+
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
+
+# #14275: seconds a post-sync command may run before it is abandoned. Was a
+# literal 300 at each call site; hoisted to an env-backed module constant because
+# the shape of the work behind it varies — a `pip install` on a slow link takes
+# far longer than a service restart, and an operator hitting the ceiling should
+# be able to raise it without editing code.
+POST_SYNC_TIMEOUT_S = env_int("AUTOBOT_SYNC_POST_CMD_TIMEOUT_S", 300)
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
@@ -215,7 +224,7 @@ class SyncOrchestrator:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=POST_SYNC_TIMEOUT_S)
             if proc.returncode != 0:
                 tail = (stdout or b"").decode("utf-8", errors="replace").strip()[-800:]
                 logger.error("Post-sync command exited %s: %s", proc.returncode, tail)
@@ -441,7 +450,7 @@ class SyncOrchestrator:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=POST_SYNC_TIMEOUT_S)
             if proc.returncode != 0:
                 output = stdout.decode("utf-8", errors="replace")
                 logger.error("Pull failed: %s", output[:500])
