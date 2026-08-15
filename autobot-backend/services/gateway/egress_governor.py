@@ -34,7 +34,6 @@ from typing import Awaitable, Callable, Dict
 
 from autobot_shared.env_utils import truthy
 from autobot_shared.logging_manager import get_logger
-
 from services.audit_logger import get_audit_logger
 
 logger = get_logger(__name__)
