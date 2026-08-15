@@ -164,9 +164,7 @@ def test_a_deferred_migration_is_not_marked_applied():
 
     tree = ast.parse(_runner_source())
     func = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
     )
     body = ast.dump(func)
 

@@ -82,7 +82,6 @@ def index_exists(cursor, index_name: str) -> bool:
     return cursor.fetchone()[0]
 
 
-
 # Operations skipped because their table was not present. The runner clears
 # this before each migration and consults it after, so a migration that did
 # nothing is not recorded as done (#14300).
