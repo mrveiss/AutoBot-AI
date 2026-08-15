@@ -25,6 +25,12 @@ slm_agent_group: autobot
 
 # Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
 slm_agent_dir: /opt/autobot/autobot-slm-agent
+# #14278: the agent's dependencies live in their own venv. Installing them into
+# system Python with --break-system-packages fails on any node whose distro owns
+# a transitive dependency: pip may write to the system environment but cannot
+# uninstall what dpkg installed, so an upgrade of e.g. typing_extensions aborts
+# provisioning with "RECORD file not found. The package was installed by debian."
+slm_agent_venv: "{{ slm_agent_dir }}/venv"
 slm_agent_data_dir: /var/lib/slm-agent
 
 # Python dependencies for the agent (#11508)
