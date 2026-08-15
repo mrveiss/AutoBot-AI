@@ -412,8 +412,7 @@ _INFRA_ROLES = [
         # not update the dependencies the agent actually imports — and on a
         # PEP 668 distro it fails outright with externally-managed-environment.
         "post_sync_cmd": (
-            f"cd {_SLM_AGENT_DIR} && "
-            "venv/bin/pip install aiohttp psutil redis pydantic-settings sqlalchemy pyyaml"
+            f"cd {_SLM_AGENT_DIR} && " "venv/bin/pip install aiohttp psutil redis pydantic-settings sqlalchemy pyyaml"
         ),
         "required": True,
         "degraded_without": [],
