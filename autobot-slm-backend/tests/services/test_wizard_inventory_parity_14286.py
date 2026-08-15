@@ -14,28 +14,74 @@ zero hosts and reported success having done nothing, and
 ``chromadb_service_owner`` derived from role defaults instead of from
 ``role_redis_active``.
 
-Co-located rather than under ``tests/services/`` deliberately: that directory's
-conftest stubs every ``services.*`` name as a MagicMock, and a MagicMock group
-set iterates as EMPTY — which is exactly the pre-fix behaviour, so the tests
-would pass while proving nothing. Real-loading around the stubs works but
-mutates ``sys.modules`` for whatever runs next in the same shard, which broke
-``services/inventory_builder_test.py``. Here the plain imports are the real
-modules and nothing needs unpicking.
+Placement and imports, both learned the hard way on this PR
+-----------------------------------------------------------
+
+Under ``api/`` the slm-backend root conftest stubs ``services`` as a MagicMock
+so api tests import without heavy dependencies — and a MagicMock group set
+iterates as EMPTY, which is exactly the pre-fix behaviour, so these tests would
+pass while proving nothing.
+
+Here under ``tests/services/`` the directory conftest rebinds ``services`` to a
+hollow package pointing at the real directory, so ``services.inventory_builder``
+and friends import for real with no help from this module.
+
+``api.setup_wizard`` still needs loading by path, because ``api`` is stubbed.
+The rule this module follows is: **never replace or remove a ``sys.modules``
+entry it did not create.** An earlier version stubbed ``services`` wholesale and
+popped ``services.inventory_builder`` on the way out; whatever ran next in the
+same shard then resolved that name through the leftover MagicMock parent, and
+``services/inventory_builder_test.py`` failed with mock objects in a PR that
+never touched it.
 """
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
-from api.setup_wizard import _build_inventory_children
 from services.playbook_executor import PlaybookExecutor, link_group_vars
 from services.role_registry import ROLE_ANSIBLE_GROUPS
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _ANSIBLE_DIR = _BACKEND_ROOT / "ansible"
+
+
+def _load_wizard():
+    """Load ``api/setup_wizard.py`` by path, adding only what is missing.
+
+    Every name it imports at module level that is not already in
+    ``sys.modules`` gets a hollow placeholder, and only those placeholders are
+    removed afterwards. Entries that were already there — real or stubbed by a
+    conftest — are left exactly as found.
+    """
+    needed = ("api", "api.websocket", "config", "services.ansible_secrets", "services.ansible_utils")
+    added = []
+    for name in needed:
+        if name not in sys.modules:
+            placeholder = ModuleType(name)
+            placeholder.ws_manager = SimpleNamespace()
+            placeholder.settings = SimpleNamespace()
+            placeholder.fetch_deploy_secrets = lambda *a, **k: {}
+            placeholder._extract_failure_summary = lambda *a, **k: ""
+            sys.modules[name] = placeholder
+            added.append(name)
+    try:
+        spec = importlib.util.spec_from_file_location("_wizard_14286", _BACKEND_ROOT / "api" / "setup_wizard.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        for name in added:
+            sys.modules.pop(name, None)
+
+
+_wiz = _load_wizard()
+_build_inventory_children = _wiz._build_inventory_children
 
 
 def _children_for(roles_by_node: dict[str, list[str]]) -> dict[str, dict]:
