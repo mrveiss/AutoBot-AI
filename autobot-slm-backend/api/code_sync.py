@@ -65,6 +65,7 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
+from services.ansible_utils import parse_unreachable_hosts
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
@@ -88,7 +89,6 @@ from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_trac
 from services.playbook_executor import get_playbook_executor
 from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
-from services.ansible_utils import parse_unreachable_hosts
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -5253,8 +5253,7 @@ async def _sync_fleet_node(
         job.completed_fleet_nodes += 1
         _stage_log(
             stage,
-            f"Node {node_id} updated successfully"
-            + (" (recovered while not operational)" if unhealthy else ""),
+            f"Node {node_id} updated successfully" + (" (recovered while not operational)" if unhealthy else ""),
         )
         return True
 

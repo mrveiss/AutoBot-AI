@@ -39,9 +39,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 def _load_ansible_utils():
     """The shared parser, loaded standalone — it imports only stdlib + env_utils."""
-    spec = importlib.util.spec_from_file_location(
-        "_au_14297", _BACKEND_ROOT / "services" / "ansible_utils.py"
-    )
+    spec = importlib.util.spec_from_file_location("_au_14297", _BACKEND_ROOT / "services" / "ansible_utils.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["_au_14297"] = module
     try:
