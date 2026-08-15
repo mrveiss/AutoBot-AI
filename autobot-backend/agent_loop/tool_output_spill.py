@@ -34,7 +34,7 @@ import json
 import os
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
@@ -389,6 +389,90 @@ def spill_results(task_id: str, tool_results: Dict[str, Any]) -> Tuple[Dict[str,
     return rewritten, spilled_count
 
 
+#: Fields a chat execution result may carry its payload in.
+#:
+#: `output` is what the builtin handlers write. **`stdout` is what shell results
+#: carry** — `_create_execution_result` emits
+#: `{command, host, stdout, stderr, return_code, status, approved}` with no
+#: `output`, no `result` and no `tool` key at all. Omitting it meant
+#: `execute_command`, the single likeliest source of a window-consuming result,
+#: was the one thing this never offloaded (#13997).
+_EXECUTION_RESULT_TEXT_KEYS = ("output", "result", "stdout", "stderr")
+
+
+def spill_execution_results(task_id: str, results: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
+    """Spill oversized output in a chat *execution-results list* (#13997).
+
+    The agent loop passes a ``{name: result}`` mapping; the chat seam collects a
+    **list of envelopes** — ``{"tool", "status", "output"}`` — and extends
+    ``execution_history`` with it, which is what the model then sees. So this is
+    the shape that needs offloading on the live path.
+
+    Only the payload field is replaced, never the envelope: ``status`` decides
+    error handling downstream (`tool_handler` counts ``status == "success"``,
+    delegation checks ``== "error"``), and swapping the whole dict for an
+    excerpt would drop it. The field stays a **str** because
+    ``_as_output_text`` and ``tool_handler`` read it as one.
+
+    Reuses :func:`spill_if_oversized`, so the measured
+    smaller-than-what-it-replaced guard, the artifact cap and the flag all apply
+    unchanged — this adds a shape adapter, not a second mechanism.
+    """
+    if not SPILL_ENABLED or not results:
+        return results, 0
+
+    rewritten: List[Dict[str, Any]] = []
+    spilled_count = 0
+    for entry in results:
+        if not isinstance(entry, dict):
+            rewritten.append(entry)
+            continue
+        keys = [k for k in _EXECUTION_RESULT_TEXT_KEYS if isinstance(entry.get(k), str) and entry[k]]
+        if not keys:
+            rewritten.append(entry)
+            continue
+
+        # Shell results carry no `tool` key; `command` is their identity. Without
+        # this every spilled shell result would bucket under the literal "tool",
+        # making anchors collide across unrelated commands in one session.
+        tool_name = str(entry.get("tool") or entry.get("command") or "tool")
+        updated = dict(entry)
+        anchors: List[str] = []
+        for key in keys:
+            value, was_spilled = spill_if_oversized(task_id, tool_name, entry[key])
+            if not was_spilled:
+                continue
+            # The note carries the anchor and names the read tool, so it must
+            # reach the model with the excerpt — it is the only place the
+            # capability is advertised on this path.
+            updated[key] = f"{value['excerpt']}\n\n{value['note']}"
+            anchors.append(value["anchor"])
+
+        if not anchors:
+            rewritten.append(entry)
+            continue
+
+        # A shell result can have both stdout and stderr oversized, so this is a
+        # list rather than a single key.
+        updated["anchors"] = anchors
+        rewritten.append(updated)
+        spilled_count += 1
+    return rewritten, spilled_count
+
+
+async def spill_execution_results_async(
+    task_id: str, results: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], int]:
+    """:func:`spill_execution_results` off the event loop.
+
+    Same reason as :func:`spill_results_async`: the write is large by definition
+    and the chat seam is async.
+    """
+    if not SPILL_ENABLED or not results:
+        return results, 0
+    return await asyncio.to_thread(spill_execution_results, task_id, results)
+
+
 async def spill_results_async(task_id: str, tool_results: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
     """:func:`spill_results` off the event loop.
 
@@ -413,6 +497,8 @@ __all__ = [
     "sweepable_spill_root",
     "read_spilled_window",
     "spill_if_oversized",
+    "spill_execution_results",
+    "spill_execution_results_async",
     "spill_results",
     "spill_results_async",
 ]
