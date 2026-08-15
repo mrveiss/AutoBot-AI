@@ -54,9 +54,9 @@ EnvironmentFile=-{{ slm_agent_data_dir }}/agent-secrets.env
 
 # Agent execution — admin_url resolved from SLM_ADMIN_URL env var above,
 # not baked into CLI args, so re-provisioning updates it (#2833).
-# #11508: the interpreter is the system python3, which the role provisions with
-# ALL agent deps (aiohttp + psutil + redis). A stale drop-in that repointed this
-# at the backend venv (which lacks aiohttp) is removed by the role's clean tasks
+# #11508 / #14278: the interpreter is the agent's own venv, which the role
+# provisions with ALL agent deps. A stale drop-in that repointed this at the
+# backend venv (which lacks aiohttp) is removed by the role's clean tasks
 # so this ExecStart stays authoritative.
 ExecStart={{ slm_agent_venv }}/bin/python -m slm.agent.agent \
     --node-id {{ slm_node_id }} \
