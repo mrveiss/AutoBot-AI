@@ -52,13 +52,28 @@ def _declared_real_modules() -> tuple[str, ...]:
 
 
 def _colocated_test_subjects() -> set[str]:
-    """Modules that a ``services/*_test.py`` imports via ``from services.X``."""
+    """Modules a ``services/*_test.py`` imports, in any of the three forms.
+
+    Review finding: matching only ``from services.X import Y`` meant a future
+    test written as ``import services.foo`` or ``from services import foo``
+    would never enter this set, so the rule below would pass over it — the
+    exact silence this file exists to prevent.
+    """
     subjects: set[str] = set()
     for test_file in _SERVICES_DIR.glob("*_test.py"):
         tree = ast.parse(test_file.read_text(encoding="utf-8", errors="replace"))
         for node in ast.walk(tree):
+            # `from services.X import Y`
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("services."):
                 subjects.add(node.module.split(".", 1)[1])
+            # `from services import X` — the submodule is the imported name
+            elif isinstance(node, ast.ImportFrom) and node.module == "services":
+                subjects.update(alias.name for alias in node.names)
+            # `import services.X`
+            elif isinstance(node, ast.Import):
+                subjects.update(
+                    alias.name.split(".", 1)[1] for alias in node.names if alias.name.startswith("services.")
+                )
     return subjects
 
 
