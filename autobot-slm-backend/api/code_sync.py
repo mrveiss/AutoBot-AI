@@ -65,11 +65,7 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
-<<<<<<< HEAD
-from services.ansible_utils import parse_unreachable_hosts
-=======
-from services.ansible_utils import summarize_playbook_failure
->>>>>>> origin/Dev_new_gui
+from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
