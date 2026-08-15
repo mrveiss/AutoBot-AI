@@ -238,64 +238,15 @@ def check_docs_freshness() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-# #14265: variables the checker could not see until it learned the env_utils
-# helpers. Registering all 45 at once means guessing 45 defaults and writing
-# 45 descriptions in one pass -- the way to get a registry that is complete
-# and wrong. They are listed here instead, so a NEW unregistered variable fails
-# immediately while the backlog stays visible and countable.
+# #14265: this held the 45 variables the checker could not see until it learned
+# the env_utils helper form. All of them are now registered, and the two that
+# were test fixtures are exempt by rule rather than by listing, so the set is
+# EMPTY — which is the state it was always meant to reach.
 #
-# This is a CEILING, not a permit. `_assert_baseline_only_shrinks` fails if the
-# list grows, because a grandfather list with no upper bound is how a temporary
-# exemption becomes permanent (#14236).
-_UNREGISTERED_BASELINE: frozenset[str] = frozenset(
-    {
-        "AUTOBOT_ALLOW_CONFIG_EDITS",
-        "AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS",
-        "AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS",
-        "AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY",
-        "AUTOBOT_CHAT_TRAJECTORY_CONTEXT",
-        "AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S",
-        "AUTOBOT_CHAT_TRAJECTORY_TOP_K",
-        "AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS",
-        "AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT",
-        "AUTOBOT_COCHANGE_MIN_CO_CHANGES",
-        "AUTOBOT_COCHANGE_STRENGTH_THRESHOLD",
-        "AUTOBOT_COCHANGE_WINDOW_DAYS",
-        "AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS",
-        "AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS",
-        "AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY",
-        "AUTOBOT_CODEEXEC_ENABLED",
-        "AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES",
-        "AUTOBOT_CODEEXEC_MAX_TOOL_CALLS",
-        "AUTOBOT_CODEEXEC_TIMEOUT_SECONDS",
-        "AUTOBOT_DELEGATION_ENABLED",
-        "AUTOBOT_FACT_FORCING",
-        "AUTOBOT_INJECTION_HARDBLOCK_ENABLED",
-        "AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD",
-        "AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN",
-        "AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS",
-        "AUTOBOT_MAX_DELEGATIONS_PER_TURN",
-        "AUTOBOT_MAX_DELEGATION_DEPTH",
-        "AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS",
-        "AUTOBOT_OWNERSHIP_BUDGET_SECONDS",
-        "AUTOBOT_OWNERSHIP_MAX_FILES",
-        "AUTOBOT_PLAN_BEST_OF_N_COUNT",
-        "AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS",
-        "AUTOBOT_SKILL_DISTILLATION_ENABLED",
-        "AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S",
-        "AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
-        "AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS",
-        "AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES",
-        "AUTOBOT_STT_PEAK_WINDOW_MS",
-        "AUTOBOT_TEST_FLAG_XYZ",
-        "AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
-        "AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN",
-        "AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN",
-        "AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS",
-        "AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR",
-        "AUTOBOT_TRAJECTORY_USER_SCOPED",
-    }
-)
+# Kept rather than deleted: `_stale_baseline_entries` still runs against it, so
+# the next time someone needs a temporary exemption there is a ceiling with a
+# shrink check already attached, instead of a fresh list with neither.
+_UNREGISTERED_BASELINE: frozenset[str] = frozenset()
 
 
 def _stale_baseline_entries() -> list[str]:

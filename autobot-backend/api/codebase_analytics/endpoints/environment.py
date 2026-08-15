@@ -18,7 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
@@ -83,6 +83,13 @@ def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | 
         )
 
 
+# #14015: module level so the route decorator can clear the LARGER of the two.
+# `use_llm_filter` is a caller-facing Query param, so the 240s path is
+# reachable on request and a 60s route bound would have 504'd it every time.
+ANALYSIS_TIMEOUT = 120  # 2 minute timeout for large codebases
+LLM_ANALYSIS_TIMEOUT = 240  # 2 min base + 2 min for the LLM pass
+
+
 async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
     """
     Run environment analysis with timeout.
@@ -95,7 +102,6 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
     Returns:
         Analysis result or None if timed out
     """
-    ANALYSIS_TIMEOUT = 120  # 2 minute timeout for large codebases
     try:
         coro = analyzer.analyze_codebase(path, pattern_list)
         if asyncio.iscoroutine(coro):
@@ -131,7 +137,6 @@ async def _run_llm_filtered_analysis(
         Analysis result with LLM filtering applied, or None if timed out
     """
     # Issue #633: Extended timeout for LLM filtering (2 min base + 2 min for LLM)
-    LLM_ANALYSIS_TIMEOUT = 240
     try:
         coro = analyzer.analyze_codebase_with_llm_filter(
             path,
@@ -381,6 +386,7 @@ async def _analyze_and_return_env_result(
 
 
 @router.get("/env-analysis")
+@bounded(LLM_ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_environment_analysis",
@@ -433,6 +439,7 @@ async def get_environment_analysis(
 
 
 @router.get("/env-recommendations")
+@bounded(LLM_ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_env_recommendations",
@@ -639,6 +646,7 @@ def _validate_export_severity(severity: str | None) -> JSONResponse | None:
 
 
 @router.get("/env-analysis/export")
+@bounded(LLM_ANALYSIS_TIMEOUT + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_env_analysis",

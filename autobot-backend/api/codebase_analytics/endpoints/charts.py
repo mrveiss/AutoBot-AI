@@ -13,7 +13,7 @@ from typing import Dict
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
@@ -270,6 +270,7 @@ async def _get_redis_fallback_chart_data(
 
 
 @router.get("/analytics/charts")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chart_data",

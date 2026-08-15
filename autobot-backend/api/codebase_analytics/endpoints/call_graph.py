@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
 from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
 from autobot_shared.env_utils import blank_to_none
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
@@ -736,6 +736,7 @@ def _build_call_graph_response(
 
 
 @router.get("/analytics/call-graph")
+@bounded(120.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_call_graph",
