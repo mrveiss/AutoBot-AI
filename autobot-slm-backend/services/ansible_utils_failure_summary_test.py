@@ -128,3 +128,31 @@ def test_the_tail_size_is_configurable_not_hardcoded():
 
 def test_the_default_comes_from_the_environment_backed_constant():
     assert _au.PLAYBOOK_FAILURE_TAIL_CHARS == 500
+
+
+def test_the_message_is_found_on_the_fatal_line_itself():
+    """Ansible's default callback is one line; the yaml callback is many.
+
+    CI caught this: the extractor scanned from the line *after* ``fatal:``, so
+    with the default callback — which is what these runs use — it produced a
+    summary naming the task and nothing else. The task is already visible in
+    the play output; the message is the part that says why it stopped.
+    """
+    one_line = (
+        'fatal: [host]: FAILED! => {"changed": true, "cmd": "pip install", '
+        '"msg": "ERROR: Cannot install tokenizers"}'
+    )
+
+    result = _au.summarize_playbook_failure("TASK [Install] ***\n" + one_line)
+
+    assert "Cannot install tokenizers" in result
+    assert not result.rstrip().endswith("}"), "the trailing JSON brace leaked into the summary"
+
+
+def test_the_multi_line_callback_form_still_works():
+    """The form the existing suite pins — it must not regress in the fix."""
+    multi = 'TASK [Restart] ***\nfatal: [host]: FAILED! => {\n    "msg": "Service restart failed"\n}'
+
+    result = _au.summarize_playbook_failure(multi)
+
+    assert "Service restart failed" in result

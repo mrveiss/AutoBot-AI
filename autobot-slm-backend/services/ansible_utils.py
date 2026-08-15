@@ -70,11 +70,18 @@ def _extract_failure_summary(output: str) -> str:
             host = host_match.group(1) if host_match else "unknown host"
             failure_type = "UNREACHABLE" if "UNREACHABLE" in line else "FAILED"
 
+            # #14298: start at the fatal line ITSELF, not the one after it.
+            # Ansible's default callback puts the whole result dict on the same
+            # line as `fatal: [host]: FAILED! => {...”msg”: ...}`, so scanning
+            # from i+1 found the message only in the multi-line (yaml/debug)
+            # callback form. A summary that names the task but drops the
+            # message is the half that matters least — the task is already in
+            # the play, the msg is why it stopped.
             msg = ""
-            for j in range(i + 1, min(i + 10, len(lines))):
+            for j in range(i, min(i + 10, len(lines))):
                 msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\']?\s*$', lines[j].strip())
                 if msg_match:
-                    msg = msg_match.group(1).strip().strip("'\"")
+                    msg = msg_match.group(1).strip().strip("'\"").rstrip("}").strip().strip("'\"")
                     break
 
             task_part = f' at "{current_task}"' if current_task else ""
