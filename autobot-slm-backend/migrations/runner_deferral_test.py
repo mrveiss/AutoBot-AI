@@ -51,31 +51,41 @@ _utils = _load("_mig_utils_14300", "migrations/utils.py")
 
 
 class _Cursor:
-    """Minimal cursor: knows which tables and columns exist, records ALTERs."""
+    """Minimal cursor matching the two queries the helpers actually issue.
+
+    CI caught this standing in badly: ``table_exists`` runs
+    ``SELECT EXISTS (...)`` and reads ``cursor.fetchone()[0]`` unconditionally,
+    so a *missing* table is the row ``(False,)`` — not the absence of a row.
+    Returning ``None`` for "no rows" made every missing-table case raise
+    ``TypeError: 'NoneType' object is not subscriptable`` instead of exercising
+    the deferral path this file exists to test.
+
+    A fake that answers a question the real code never asks is worse than no
+    fake: it fails for a reason the production code cannot produce.
+    """
 
     def __init__(self, tables: dict[str, list[str]]):
         self._tables = tables
         self.executed: list[str] = []
-        self._result = None
+        self._result: list = []
 
     def execute(self, sql, params=None):
         self.executed.append(sql)
         lowered = sql.lower()
+        name = params[0] if params else ""
         if "information_schema.tables" in lowered:
-            name = params[0] if params else ""
-            self._result = [(1,)] if name in self._tables else []
+            # SELECT EXISTS(...) always returns exactly one row: (bool,)
+            self._result = [(name in self._tables,)]
         elif "information_schema.columns" in lowered:
-            name = params[0] if params else ""
             self._result = [(c,) for c in self._tables.get(name, [])]
         else:
             self._result = []
 
     def fetchall(self):
-        return self._result or []
+        return list(self._result)
 
     def fetchone(self):
-        rows = self._result or []
-        return rows[0] if rows else None
+        return self._result[0] if self._result else None
 
 
 @pytest.fixture(autouse=True)
