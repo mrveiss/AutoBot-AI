@@ -17,7 +17,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_import_tree_analysis
 from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
@@ -224,6 +224,7 @@ async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[
 
 
 @router.get("/analytics/import-tree")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_tree",
@@ -354,6 +355,7 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
 
 
 @router.get("/analytics/import-tree/cached")
+@bounded(60.0)
 async def get_cached_import_tree_result(source_id: str = ""):
     """Return the latest completed import tree analysis result (#1540)."""
     cached = await get_latest_task_result(_REDIS_PREFIX)
@@ -368,6 +370,7 @@ async def get_cached_import_tree_result(source_id: str = ""):
 
 
 @router.post("/analytics/import-tree/analyze")
+@bounded(60.0)
 async def start_import_tree_analysis_endpoint():
     """Enqueue import tree analysis as a Celery task (GH#6505)."""
     result = run_import_tree_analysis.delay()
@@ -376,6 +379,7 @@ async def start_import_tree_analysis_endpoint():
 
 
 @router.get("/analytics/import-tree/status/{task_id}")
+@bounded(60.0)
 async def get_import_tree_status(task_id: str):
     """Get import tree analysis task status."""
     status = celery_result_to_status(AsyncResult(task_id))
@@ -385,6 +389,7 @@ async def get_import_tree_status(task_id: str):
 
 
 @router.post("/analytics/import-tree/tasks/clear-stuck")
+@bounded(60.0)
 async def clear_stuck_import_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
+from services.deploy_artifacts import rsync_artifact_excludes
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,16 @@ class SyncNodeContext:
 
 
 # Code cache directory
+from autobot_shared.env_utils import env_int
+
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
+
+# #14275: seconds a post-sync command may run before it is abandoned. Was a
+# literal 300 at each call site; hoisted to an env-backed module constant because
+# the shape of the work behind it varies — a `pip install` on a slow link takes
+# far longer than a service restart, and an operator hitting the ceiling should
+# be able to raise it without editing code.
+POST_SYNC_TIMEOUT_S = env_int("AUTOBOT_SYNC_POST_CMD_TIMEOUT_S", 300)
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
@@ -122,18 +132,49 @@ class SyncOrchestrator:
         """
         src = cache_path / source_path.rstrip("/")
         if not src.exists():
-            logger.warning("Source path not found in cache: %s", src)
-            return True, "skipped"
+            # #14275: this returned success. A role whose source_paths named a
+            # directory that is not in the checkout therefore reported a clean
+            # sync having copied nothing — the update silently did not happen,
+            # which is indistinguishable from one that did.
+            logger.error("Source path not found in cache: %s", src)
+            return False, f"source path not in checkout: {source_path}"
 
         rsync_src = f"{src}/" if source_path.endswith("/") else str(src)
+        # #14275: this is a DELETE-style sync onto a live install directory, and
+        # it carried no protection for host-generated state. `target_path` for
+        # several roles is the same directory the ansible role builds a venv in
+        # (ai-stack: /opt/autobot/autobot-ai-stack, venv at <dir>/venv), so a
+        # sync whose source lacks those paths removed them.
+        #
+        # Only the ARTIFACT excludes (`venv`, `node_modules`, `__pycache__`,
+        # `dist`, …) — deliberately NOT HOST_STATE_EXCLUDES.
+        #
+        # That vocabulary (`data`, `logs`, `config/`, `.env*`) describes
+        # host-generated state in api/code_sync.py's component layout. Here the
+        # same names are SOURCE: `autobot-backend/data/` and `config/`,
+        # `autobot-frontend/config/`, `autobot-slm-backend/data/` are all tracked
+        # directories a sync must deliver. Applying it here would have made the
+        # update silently incomplete — the opposite of this path's job.
+        #
+        # Safe to omit because there is no delete flag above: this sync only adds
+        # and overwrites, so host-only files are untouched whether excluded or
+        # not. The artifact set stays because it protects the venv from being
+        # clobbered by a repo directory of the same name.
+        # #14275: NO `--delete` here. This path's job is to update a live install
+        # and leave it running. `target_path` for several roles is the directory
+        # the ansible role also owns — ai-stack's is /opt/autobot/autobot-ai-stack,
+        # holding the venv, an ansible-generated `src/` of module symlinks and the
+        # deployed app files — and a delete-style sync whose source cannot supply
+        # those removes them, taking the service down until a re-provision.
+        #
+        # The excludes below stay as defence in depth. The ansible syncs keep
+        # `--delete` because their sources DO carry the full tree (#14231); this
+        # one does not, so the cost of a stale leftover file is far lower than the
+        # cost of deleting a live installation.
         rsync_cmd = [
             "rsync",
             "-avz",
-            "--delete",
-            "--exclude",
-            "__pycache__",
-            "--exclude",
-            "*.pyc",
+            *[arg for pattern in rsync_artifact_excludes() for arg in ("--exclude", pattern)],
             "-e",
             ssh_opts,
             rsync_src,
@@ -158,14 +199,21 @@ class SyncOrchestrator:
         except Exception as e:
             return False, f"Sync error: {e}"
 
-    async def _run_post_sync_command(self, ctx: SyncNodeContext) -> None:
+    async def _run_post_sync_command(self, ctx: SyncNodeContext) -> tuple[bool, str]:
         """
         Execute post-sync command on remote node.
 
         Helper for sync_node_role (Issue #665).
+
+        #14275: returns success rather than None. This never inspected
+        `proc.returncode`, so a failing `pip install` — permission denied, a
+        missing venv, an unresolvable constraint — was logged at WARNING and the
+        caller carried on to restart the service and mark the role synced. The
+        sync reported success while the dependencies it was meant to install had
+        not been installed, which is the failure this whole path exists to avoid.
         """
         if not ctx.post_sync_cmd:
-            return
+            return True, ""
 
         try:
             ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
@@ -176,9 +224,15 @@ class SyncOrchestrator:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=POST_SYNC_TIMEOUT_S)
+            if proc.returncode != 0:
+                tail = (stdout or b"").decode("utf-8", errors="replace").strip()[-800:]
+                logger.error("Post-sync command exited %s: %s", proc.returncode, tail)
+                return False, f"post-sync command failed (exit {proc.returncode}): {tail}"
+            return True, ""
         except Exception as e:
-            logger.warning("Post-sync command failed: %s", e)
+            logger.error("Post-sync command failed: %s", e)
+            return False, f"post-sync command failed: {e}"
 
     async def _restart_systemd_service(self, ctx: SyncNodeContext, node_id: str, restart: bool) -> None:
         """
@@ -396,7 +450,7 @@ class SyncOrchestrator:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=POST_SYNC_TIMEOUT_S)
             if proc.returncode != 0:
                 output = stdout.decode("utf-8", errors="replace")
                 logger.error("Pull failed: %s", output[:500])
@@ -580,8 +634,16 @@ class SyncOrchestrator:
             if not success:
                 return False, msg
 
-        # Run post-sync command and restart service
-        await self._run_post_sync_command(ctx)
+        # Run post-sync command and restart service.
+        #
+        # #14275: a failed post-sync stops the sync here. Restarting into a
+        # half-installed dependency set is worse than leaving the running process
+        # alone with new files on disk, and marking the role synced would record a
+        # commit whose dependencies were never installed.
+        post_sync_ok, post_sync_msg = await self._run_post_sync_command(ctx)
+        if not post_sync_ok:
+            return False, post_sync_msg
+
         await self._restart_systemd_service(ctx, node_id, restart)
 
         # Update database record

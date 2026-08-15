@@ -394,6 +394,10 @@ class SkillDistillationScheduler:
         session_id = session["id"]
         try:
             history = await self._load_history(session_id)
+            if history is None:
+                # Unreadable, not empty. Stop the pass rather than advance past
+                # a conversation nobody has looked at.
+                return None
             if len(history) < MIN_MESSAGES_TO_DISTILL:
                 return []
             skills = await self._get_extractor().extract_skills(history, self._list_existing_skills())
@@ -588,12 +592,39 @@ class SkillDistillationScheduler:
         pending.sort(key=lambda item: item["updated_at"])
         return pending[:MAX_SESSIONS_PER_RUN]
 
-    async def _load_history(self, session_id: str) -> List[Dict[str, str]]:
-        """Load one conversation as ``[{"role": ..., "content": ...}]``."""
+    async def _load_history(self, session_id: str) -> List[Dict[str, str]] | None:
+        """Load one conversation as ``[{"role": ..., "content": ...}]``.
+
+        ``None`` means **could not read**, which is not the same as *read it and
+        there was nothing there* (#14077). Returning ``[]`` for both let the
+        caller treat an unreadable conversation as processed and advance the
+        cursor past it — the pass reported "2/2 conversations distilled" having
+        read neither, and both were dropped permanently on the next run.
+
+        That is exactly what this module's docstring says cannot happen:
+        *bounded re-work, never a silently skipped conversation.*
+        """
         manager = await self._get_chat_history_manager()
         if manager is None:
-            return []
-        messages = await manager.get_session_messages(session_id)
+            logger.warning("Skill distillation: no chat history manager; cannot read conversation %s", session_id)
+            return None
+
+        # `load_session`, NOT `get_session_messages`. #1906 made `load_session`
+        # raise PermissionError/ValueError for a denied or corrupted session
+        # "instead of silently returning []" — precisely so a caller could tell
+        # unreadable from empty. `get_session_messages` then catches both and
+        # returns [], discarding the signal for every caller downstream of it.
+        #
+        # Routing through the wrapper is what made the manager-is-None fix
+        # insufficient: the common production case is a session file that exists
+        # and cannot be decrypted, and that arrived here as an empty
+        # conversation. The exceptions now reach `_distil_session`'s broad
+        # handler, which already means *stop the pass*.
+        #
+        # It is also the more correct read for this caller: the wrapper applies
+        # a model-aware retrieval limit, and distillation wants the whole
+        # conversation, not a context-window slice of it.
+        messages = await manager.load_session(session_id)
         return [
             {"role": msg.get("role", "unknown"), "content": msg.get("content", "")}
             for msg in messages
