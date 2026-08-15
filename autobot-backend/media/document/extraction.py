@@ -144,6 +144,24 @@ class PageText:
 
 
 @dataclass(frozen=True)
+class PageSpan:
+    """Where one page's text sits in a rendered string, as ``[start, end)``.
+
+    This is the provenance carrier: page numbers travel as offsets alongside the
+    text rather than as markers inside it, so retrieval can cite a page without
+    the citation having polluted the embedding (#13894).
+    """
+
+    number: int
+    start: int
+    end: int
+
+    def as_metadata(self) -> Dict[str, int]:
+        """Flat form for storage alongside a fact."""
+        return {"page": self.number, "start": self.start, "end": self.end}
+
+
+@dataclass(frozen=True)
 class ExtractedDocument:
     """Structured result of a document extraction."""
 
@@ -386,3 +404,83 @@ def strip_page_markers(text: str, marker: str = PAGE_MARKER_TEMPLATE) -> str:
     """
     pattern = re.escape(marker).replace(r"\{number\}", r"\d+")
     return re.sub(rf"^{pattern}\n?", "", text, flags=re.MULTILINE)
+
+
+PAGE_SEPARATOR = "\n\n"
+
+
+def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
+    """Join pages with **no** markers, returning the text and where each page sits.
+
+    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
+    ``## Page 7`` is structure, not meaning, and it competes with the document's
+    own words for similarity. This is the same text with the provenance moved out
+    of the string and into character spans a caller stores as metadata (#13894).
+
+    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
+    two renderings stay page-for-page comparable.
+    """
+    parts: List[str] = []
+    spans: List[PageSpan] = []
+    offset = 0
+    for page in pages:
+        if not page.text.strip():
+            continue
+        if parts:
+            offset += len(separator)
+        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
+        parts.append(page.text)
+        offset += len(page.text)
+    return separator.join(parts), tuple(spans)
+
+
+def page_for_offset(spans: Sequence[PageSpan], offset: int) -> int | None:
+    """Return the page number containing *offset*, or ``None`` if outside them all.
+
+    An offset landing in the separator between two pages belongs to neither; the
+    caller decides what that means rather than being handed a silent guess.
+    """
+    for span in spans:
+        if span.start <= offset < span.end:
+            return span.number
+    return None
+
+
+def pages_for_span(spans: Sequence[PageSpan], start: int, end: int) -> Tuple[int, ...]:
+    """Return every page number a ``[start, end)`` range touches.
+
+    A chunk that straddles a page break genuinely comes from two pages. Reporting
+    only the first would silently mis-cite half its content, so this returns the
+    range and lets the caller record it.
+    """
+    if end <= start:
+        return ()
+    return tuple(span.number for span in spans if span.start < end and start < span.end)
+
+
+def chunk_page_map(spans: Sequence[PageSpan], chunks: Sequence[str], text: str) -> Tuple[Tuple[int, ...], ...]:
+    """Map each chunk of *text* to the page numbers it came from.
+
+    Chunkers return strings, not offsets, so the offsets are recovered by
+    scanning forward through *text*. Searching forward from the previous chunk's
+    end — rather than with :meth:`str.find` from zero — keeps repeated boilerplate
+    (headers, footers, recurring table scaffolding) from collapsing every
+    occurrence onto the first page it appeared on.
+    """
+    result: List[Tuple[int, ...]] = []
+    cursor = 0
+    for chunk in chunks:
+        if not chunk:
+            result.append(())
+            continue
+        start = text.find(chunk, cursor)
+        if start < 0:
+            # The chunker transformed the text (trimmed, normalized whitespace),
+            # so offsets cannot be recovered for this chunk. Report nothing
+            # rather than a wrong page.
+            result.append(())
+            continue
+        end = start + len(chunk)
+        result.append(pages_for_span(spans, start, end))
+        cursor = end
+    return tuple(result)
