@@ -30,7 +30,18 @@ torchaudio>=2.11.0
 
 # Text Processing
 nltk>=3.10.2
-spacy>=3.8.14
+# spacy: NOT a dependency of the AI stack (#14279). Nothing under
+# autobot-infrastructure/shared/docker/ai-stack/ imports it — the only importer
+# in the repo is autobot-backend/knowledge/pipeline/cognifiers/entity_extractor.py,
+# where it is an OPTIONAL extra behind `_spacy_available()` and declared in
+# autobot-backend/requirements-nlp.txt.
+#
+# That guard's own docstring says why: "spaCy is not in the default image (its
+# build deps lack py3.14 wheels, #9825); when absent, entity extraction falls
+# back to the LLM path automatically." Listing it here as a HARD dependency made
+# provisioning fail on exactly the incompatibility the backend designed around —
+# no stable spacy declares support for 3.14, so pip fell through to the
+# 4.0.0.dev3 sdist and tried to build it on the node.
 
 # HTTP and API
 fastapi>=0.141.1
