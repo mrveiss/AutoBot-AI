@@ -5189,6 +5189,49 @@ def _extract_ansible_fatal(output: str) -> str:
     return output.strip()[-300:] if output.strip() else "playbook failed (no output)"
 
 
+async def _record_fleet_node_outcome(
+    node: Node,
+    node_id: str,
+    job: UpdateAllJob,
+    stage,
+    unhealthy: bool,
+    playbook_result: dict,
+) -> bool:
+    """Count one node's run and say whether the stage continues.
+
+    Split out of ``_sync_fleet_node`` (#14297) to keep it under the length
+    rule. Three outcomes, and the middle one is the whole point of #14297:
+
+    * success -> completed, noted as a recovery when the node was unhealthy
+    * unhealthy AND ansible said UNREACHABLE -> skipped, #11511's outcome
+    * anything else -> failed, which halts the stage
+
+    The third branch is deliberately not narrowed to healthy nodes: a broken
+    deploy against an unhealthy node must stay a failure, or the job goes green
+    while the node stays stale — the defect this change exists to end, wearing
+    a skip's costume.
+    """
+    if playbook_result["success"]:
+        await _update_fleet_node_version(node_id)
+        job.completed_fleet_nodes += 1
+        _stage_log(
+            stage,
+            f"Node {node_id} updated successfully" + (" (recovered while not operational)" if unhealthy else ""),
+        )
+        return True
+
+    if unhealthy and _node_was_unreachable(node, playbook_result):
+        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — unreachable")
+        job.skipped_fleet_nodes += 1
+        return True
+
+    error_msg = _extract_ansible_fatal(playbook_result["output"])
+    job.failed_fleet_nodes += 1
+    _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
+    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
+    return False
+
+
 async def _sync_fleet_node(
     executor,
     node_id: str,
@@ -5248,26 +5291,7 @@ async def _sync_fleet_node(
         playbook_name="update-all-nodes.yml",
         limit=["localhost", node_id],
     )
-    if playbook_result["success"]:
-        await _update_fleet_node_version(node_id)
-        job.completed_fleet_nodes += 1
-        _stage_log(
-            stage,
-            f"Node {node_id} updated successfully" + (" (recovered while not operational)" if unhealthy else ""),
-        )
-        return True
-
-    output = playbook_result["output"]
-    if unhealthy and _node_was_unreachable(node, playbook_result):
-        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — unreachable")
-        job.skipped_fleet_nodes += 1
-        return True
-
-    error_msg = _extract_ansible_fatal(output)
-    job.failed_fleet_nodes += 1
-    _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
-    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
-    return False
+    return await _record_fleet_node_outcome(node, node_id, job, stage, unhealthy, playbook_result)
 
 
 async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
@@ -5306,7 +5330,9 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     skipped = job.skipped_fleet_nodes
     summary = f"Updated {job.completed_fleet_nodes}/{job.total_fleet_nodes} nodes"
     if skipped:
-        summary += f" ({skipped} skipped — not operational)"
+        # A skip now means unhealthy AND unreachable, not unhealthy alone
+        # (#14297) — an unhealthy node that answers gets deployed to.
+        summary += f" ({skipped} skipped — unreachable)"
 
     stage.status = _StageStatus.SUCCESS
     stage.message = summary
