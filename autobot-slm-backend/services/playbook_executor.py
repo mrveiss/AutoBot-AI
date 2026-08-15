@@ -956,7 +956,6 @@ class PlaybookExecutor:
         """
         link_group_vars(inventory_path, self.ansible_dir)
 
-
     async def execute_playbook(
         self,
         playbook_name: str,

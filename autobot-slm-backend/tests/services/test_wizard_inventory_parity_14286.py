@@ -59,7 +59,9 @@ def _load_modules():
         "services.database",
         "services.playbook_executor",
     ]
-    saved = {n: sys.modules.get(n) for n in stubs + ["services", "services.inventory_builder", "services.role_registry"]}
+    saved = {
+        n: sys.modules.get(n) for n in stubs + ["services", "services.inventory_builder", "services.role_registry"]
+    }
     try:
         for n in stubs:
             sys.modules[n] = MagicMock()
