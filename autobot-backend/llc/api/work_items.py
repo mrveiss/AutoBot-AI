@@ -48,7 +48,6 @@ from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
     AssigneeType,
-    CoWorkerType,
     WorkItemPriority,
     WorkItemRelationType,
     WorkItemStatus,
