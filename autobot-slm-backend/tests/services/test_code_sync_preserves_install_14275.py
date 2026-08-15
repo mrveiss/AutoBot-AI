@@ -331,20 +331,13 @@ def test_the_post_sync_runner_branches_on_the_return_code():
     return a falsy first element.
     """
     tree = ast.parse(_ORCHESTRATOR.read_text(encoding="utf-8"))
-    func = next(
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_post_sync_command"
-    )
+    func = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_post_sync_command")
 
     guards = [
         node
         for node in ast.walk(func)
         if isinstance(node, ast.If)
-        and any(
-            isinstance(sub, ast.Attribute) and sub.attr == "returncode"
-            for sub in ast.walk(node.test)
-        )
+        and any(isinstance(sub, ast.Attribute) and sub.attr == "returncode" for sub in ast.walk(node.test))
     ]
     assert guards, "nothing in _run_post_sync_command branches on proc.returncode"
 
