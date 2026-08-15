@@ -94,10 +94,19 @@ def _load():
 
         inventory_builder = _real_module("_ib_14286", _BACKEND_ROOT / "services" / "inventory_builder.py")
         role_registry = _real_module("_rr_14286", _BACKEND_ROOT / "services" / "role_registry.py")
-        executor = _real_module("_pe_14286", _BACKEND_ROOT / "services" / "playbook_executor.py")
 
+        # Publish these BEFORE loading playbook_executor. Review finding: it
+        # does `from services.inventory_builder import build_registry_inventory,
+        # validate_inventory, write_temp_extra_vars, write_temp_inventory` at
+        # module level, so loading it first bound all four to MagicMock
+        # attributes of the stub — silently, while this module's docstring
+        # claimed everything was real. Harmless only because no test here calls
+        # `_build_dynamic_inventory`; a future one would have passed against
+        # mock behaviour, which is the failure this file exists to prevent.
         sys.modules["services.inventory_builder"] = inventory_builder
         sys.modules["services.role_registry"] = role_registry
+
+        executor = _real_module("_pe_14286", _BACKEND_ROOT / "services" / "playbook_executor.py")
         sys.modules["services.playbook_executor"] = executor
         wizard = _real_module("_wizard_14286", _BACKEND_ROOT / "api" / "setup_wizard.py")
         return inventory_builder, role_registry, executor, wizard
@@ -141,6 +150,12 @@ def test_the_modules_under_test_are_real_not_mocks():
     assert isinstance(ROLE_ANSIBLE_GROUPS, dict) and ROLE_ANSIBLE_GROUPS
     assert isinstance(PlaybookExecutor, type)
     assert callable(link_group_vars)
+    # The four names playbook_executor imports from inventory_builder must be
+    # the real functions, not MagicMock attributes of the stub — the ordering
+    # bug review found was invisible without this.
+    for name in ("build_registry_inventory", "validate_inventory", "write_temp_inventory", "write_temp_extra_vars"):
+        bound = getattr(_pe, name, None)
+        assert bound is not None and not isinstance(bound, MagicMock), f"_pe.{name} is a mock, not the real function"
     assert _ib.groups_for_role_tokens(["redis"]) >= {"redis", "database"}
 
 
@@ -294,12 +309,40 @@ def test_the_executor_method_still_links_after_the_extraction(tmp_path):
     assert (inventory.parent / "group_vars").is_symlink()
 
 
-def _wizard_generator_ast() -> ast.AST:
+def _wizard_writer_ast() -> ast.AST:
+    """The function that writes the inventory file.
+
+    Resolved by following `_generate_dynamic_inventory`'s own call rather than
+    naming a helper: the write moved into `_write_wizard_inventory` when that
+    function was decomposed, and a rule hard-coded to either name would have
+    silently stopped checking anything the moment it moved again.
+    """
     source = (_BACKEND_ROOT / "api" / "setup_wizard.py").read_text(encoding="utf-8")
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_generate_dynamic_inventory":
-            return node
-    raise AssertionError("_generate_dynamic_inventory not found")
+    tree = ast.parse(source)
+    functions = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    generator = functions.get("_generate_dynamic_inventory")
+    assert generator is not None, "_generate_dynamic_inventory not found"
+
+    # the generator either writes inline, or delegates to exactly one helper
+    for node in ast.walk(generator):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "mkstemp":
+            return generator
+    called = [
+        functions[node.func.id]
+        for node in ast.walk(generator)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in functions
+    ]
+    for candidate in called:
+        if any(
+            isinstance(inner, ast.Call) and getattr(inner.func, "attr", None) == "mkstemp"
+            for inner in ast.walk(candidate)
+        ):
+            return candidate
+    raise AssertionError("nothing reachable from _generate_dynamic_inventory calls mkstemp")
 
 
 def test_the_wizard_inventory_is_written_where_a_link_can_live():
@@ -311,7 +354,7 @@ def test_the_wizard_inventory_is_written_where_a_link_can_live():
     """
     calls = [
         node
-        for node in ast.walk(_wizard_generator_ast())
+        for node in ast.walk(_wizard_writer_ast())
         if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "mkstemp"
     ]
     assert calls, "no mkstemp call found — this test is pinned to the wrong thing"
@@ -322,7 +365,7 @@ def test_the_wizard_inventory_is_written_where_a_link_can_live():
 def test_the_wizard_path_links_group_vars():
     called = {
         node.func.id
-        for node in ast.walk(_wizard_generator_ast())
+        for node in ast.walk(_wizard_writer_ast())
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert "link_group_vars" in called, "the wizard inventory still has no group_vars sibling"

@@ -110,6 +110,39 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
+def _ansible_groups_for_nodes(node_roles, node_id_to_inv_name: dict[str, str]) -> dict[str, set[str]]:
+    """Group name -> inventory names, unioning both vocabularies (#14286).
+
+    Split out of ``_build_inventory_children`` to keep it under the length
+    rule. The union is the point: neither map is a superset of the other, so
+    dropping either would trade one set of silent no-ops for another.
+
+    Args:
+        node_roles: NodeRole rows, each carrying ``node_id`` and ``role_name``.
+        node_id_to_inv_name: node id -> the name the inventory uses.
+
+    Returns:
+        Every group each host belongs to, from both mappings.
+    """
+    roles_by_node: dict[str, list[str]] = {}
+    groups: dict[str, set[str]] = {}
+
+    for nr in node_roles:
+        inv_name = node_id_to_inv_name.get(nr.node_id)
+        if not inv_name:
+            continue
+        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
+        legacy = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
+        if legacy:
+            groups.setdefault(legacy, set()).add(inv_name)
+
+    for inv_name, role_tokens in roles_by_node.items():
+        for group in groups_for_role_tokens(role_tokens):
+            groups.setdefault(group, set()).add(inv_name)
+
+    return groups
+
+
 def _build_inventory_children(
     hosts: dict[str, dict],
     node_roles: list,
@@ -135,20 +168,7 @@ def _build_inventory_children(
     # them. Dropping either vocabulary would trade one silent no-op for
     # another; a host in more groups cannot make a previously-matching play
     # stop matching.
-    roles_by_node: dict[str, list[str]] = {}
-    ansible_groups: dict[str, set[str]] = {}
-    for nr in node_roles:
-        inv_name = node_id_to_inv_name.get(nr.node_id)
-        if not inv_name:
-            continue
-        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
-        group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
-        if group:
-            ansible_groups.setdefault(group, set()).add(inv_name)
-
-    for inv_name, role_tokens in roles_by_node.items():
-        for group in groups_for_role_tokens(role_tokens):
-            ansible_groups.setdefault(group, set()).add(inv_name)
+    ansible_groups = _ansible_groups_for_nodes(node_roles, node_id_to_inv_name)
 
     children: dict[str, dict] = {
         "slm_nodes": {"hosts": {h: None for h in hosts}},
@@ -514,6 +534,33 @@ async def _fetch_inventory_data(
     )
 
 
+def _write_wizard_inventory(inventory: dict) -> str:
+    """Write the wizard inventory where a group_vars sibling can live (#14286).
+
+    Into the uid-scoped ansible tmp dir rather than bare /tmp: the symlink
+    placed next to it must not land in a world-writable directory shared with
+    every other user on the box.
+
+    Without that sibling ansible resolves none of ``inventory/group_vars/*.yml``
+    on this path — ``role_redis_active``, and the ``chromadb_service_owner``
+    derived from it, fall back to role defaults, and a single-role redeploy
+    rewrites a unit the named role does not own (#4090's outage, verbatim).
+
+    Args:
+        inventory: the inventory dict to serialise.
+
+    Returns:
+        Path to the written file, as a string.
+    """
+    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
+    tmp_dir.mkdir(mode=0o700, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
+    with open(fd, "w", encoding="utf-8") as f:
+        yaml.dump(inventory, f, default_flow_style=False)
+    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
+    return path
+
+
 async def _generate_dynamic_inventory(
     node_ids: list[str] | None = None,
 ) -> Path | None:
@@ -562,19 +609,7 @@ async def _generate_dynamic_inventory(
         infra_vars["backend_chromadb_port"] = _CHROMADB_PORT
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
-    # #14286: written into the uid-scoped ansible tmp dir, not bare /tmp, so a
-    # `group_vars` symlink can be placed beside it without landing in a
-    # world-writable directory. Without that sibling, ansible resolves none of
-    # inventory/group_vars/*.yml for this path — `role_redis_active` and the
-    # `chromadb_service_owner` derived from it fall back to role defaults, and
-    # a single-role redeploy rewrites a unit the named role does not own
-    # (#4090's outage, verbatim).
-    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
-    tmp_dir.mkdir(mode=0o700, exist_ok=True)
-    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
-    with open(fd, "w", encoding="utf-8") as f:
-        yaml.dump(inventory, f, default_flow_style=False)
-    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
+    path = _write_wizard_inventory(inventory)
 
     grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
     logger.info(
