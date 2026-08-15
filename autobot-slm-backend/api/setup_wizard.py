@@ -31,6 +31,7 @@ from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
+from services.inventory_builder import groups_for_role_tokens
 from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,6 @@ def _build_inventory_children(
     Returns (children dict, ansible_groups) where ansible_groups maps
     group name to set of inventory names for logging.
     """
-    from services.inventory_builder import groups_for_role_tokens
     from services.role_registry import ROLE_ANSIBLE_GROUPS
 
     # #14286: this path used to emit ROLE_ANSIBLE_GROUPS alone — one group per

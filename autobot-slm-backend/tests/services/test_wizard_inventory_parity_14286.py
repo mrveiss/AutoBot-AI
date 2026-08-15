@@ -14,25 +14,23 @@ zero hosts and reported success having done nothing, and
 ``chromadb_service_owner`` derived from role defaults instead of from
 ``role_redis_active``.
 
-Placement and imports, both learned the hard way on this PR
------------------------------------------------------------
+Loading, learned across three CI rounds on this PR
+--------------------------------------------------
 
-Under ``api/`` the slm-backend root conftest stubs ``services`` as a MagicMock
-so api tests import without heavy dependencies — and a MagicMock group set
-iterates as EMPTY, which is exactly the pre-fix behaviour, so these tests would
-pass while proving nothing.
+Both conftests in play stub ``services.*`` names as MagicMocks, and a MagicMock
+group set iterates as EMPTY — which is precisely the pre-fix behaviour, so a
+test that accidentally gets one passes while proving nothing.
 
-Here under ``tests/services/`` the directory conftest rebinds ``services`` to a
-hollow package pointing at the real directory, so ``services.inventory_builder``
-and friends import for real with no help from this module.
+So every module under test is real-loaded from its path under a private name,
+following ``test_dynamic_inventory_group_vars_11781.py`` in this directory. Two
+rules this module keeps, each of which it broke once:
 
-``api.setup_wizard`` still needs loading by path, because ``api`` is stubbed.
-The rule this module follows is: **never replace or remove a ``sys.modules``
-entry it did not create.** An earlier version stubbed ``services`` wholesale and
-popped ``services.inventory_builder`` on the way out; whatever ran next in the
-same shard then resolved that name through the leftover MagicMock parent, and
-``services/inventory_builder_test.py`` failed with mock objects in a PR that
-never touched it.
+* Never leave a ``sys.modules`` entry different from how it was found. An
+  earlier version popped ``services.inventory_builder`` on the way out, and
+  ``services/inventory_builder_test.py`` — a file this PR does not touch — then
+  resolved that name through the leftover MagicMock parent and failed.
+* Never depend on a stub being absent. The names below are saved and restored
+  exactly, whether they were real, stubbed, or missing.
 """
 
 from __future__ import annotations
@@ -43,44 +41,73 @@ import re
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-
-from services.playbook_executor import PlaybookExecutor, link_group_vars
-from services.role_registry import ROLE_ANSIBLE_GROUPS
+from unittest.mock import MagicMock
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _ANSIBLE_DIR = _BACKEND_ROOT / "ansible"
 
 
-def _load_wizard():
-    """Load ``api/setup_wizard.py`` by path, adding only what is missing.
-
-    Every name it imports at module level that is not already in
-    ``sys.modules`` gets a hollow placeholder, and only those placeholders are
-    removed afterwards. Entries that were already there — real or stubbed by a
-    conftest — are left exactly as found.
-    """
-    needed = ("api", "api.websocket", "config", "services.ansible_secrets", "services.ansible_utils")
-    added = []
-    for name in needed:
-        if name not in sys.modules:
-            placeholder = ModuleType(name)
-            placeholder.ws_manager = SimpleNamespace()
-            placeholder.settings = SimpleNamespace()
-            placeholder.fetch_deploy_secrets = lambda *a, **k: {}
-            placeholder._extract_failure_summary = lambda *a, **k: ""
-            sys.modules[name] = placeholder
-            added.append(name)
+def _real_module(name: str, path: Path) -> ModuleType:
+    """Execute *path* as a module under *name* without touching sys.modules."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # a module must be findable while it executes
     try:
-        spec = importlib.util.spec_from_file_location("_wizard_14286", _BACKEND_ROOT / "api" / "setup_wizard.py")
-        module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return module
     finally:
-        for name in added:
-            sys.modules.pop(name, None)
+        sys.modules.pop(name, None)
+    return module
 
 
-_wiz = _load_wizard()
+def _load():
+    """Real-load inventory_builder, playbook_executor, role_registry and the wizard.
+
+    ``setup_wizard`` imports ``groups_for_role_tokens`` at module level, so the
+    real ``inventory_builder`` has to occupy ``services.inventory_builder``
+    while the wizard executes — and only while.
+    """
+    touched = (
+        "api",
+        "api.websocket",
+        "config",
+        "services",
+        "services.ansible_secrets",
+        "services.ansible_utils",
+        "services.auth",
+        "services.database",
+        "services.inventory_builder",
+        "services.playbook_executor",
+        "services.role_registry",
+    )
+    saved = {name: sys.modules.get(name) for name in touched}
+    try:
+        for name in touched:
+            sys.modules[name] = MagicMock()
+        placeholder = sys.modules["config"]
+        placeholder.settings = SimpleNamespace()
+
+        inventory_builder = _real_module("_ib_14286", _BACKEND_ROOT / "services" / "inventory_builder.py")
+        role_registry = _real_module("_rr_14286", _BACKEND_ROOT / "services" / "role_registry.py")
+        executor = _real_module("_pe_14286", _BACKEND_ROOT / "services" / "playbook_executor.py")
+
+        sys.modules["services.inventory_builder"] = inventory_builder
+        sys.modules["services.role_registry"] = role_registry
+        sys.modules["services.playbook_executor"] = executor
+        wizard = _real_module("_wizard_14286", _BACKEND_ROOT / "api" / "setup_wizard.py")
+        return inventory_builder, role_registry, executor, wizard
+    finally:
+        for name, original in saved.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+
+_ib, _rr, _pe, _wiz = _load()
+
+ROLE_ANSIBLE_GROUPS = _rr.ROLE_ANSIBLE_GROUPS
+PlaybookExecutor = _pe.PlaybookExecutor
+link_group_vars = _pe.link_group_vars
 _build_inventory_children = _wiz._build_inventory_children
 
 
@@ -96,6 +123,19 @@ def _children_for(roles_by_node: dict[str, list[str]]) -> dict[str, dict]:
 
 def _hosts_in(children: dict, group: str) -> set[str]:
     return set(children.get(group, {}).get("hosts", {}) or {})
+
+
+def test_the_modules_under_test_are_real_not_mocks():
+    """Every assertion below is worthless if this one does not hold.
+
+    A MagicMock group set iterates as empty, which is indistinguishable from
+    the bug being present — so the harness is checked before the behaviour.
+    """
+    assert not isinstance(_ib, MagicMock)
+    assert isinstance(ROLE_ANSIBLE_GROUPS, dict) and ROLE_ANSIBLE_GROUPS
+    assert isinstance(PlaybookExecutor, type)
+    assert callable(link_group_vars)
+    assert _ib.groups_for_role_tokens(["redis"]) >= {"redis", "database"}
 
 
 # --------------------------------------------------------------------------
