@@ -146,3 +146,81 @@ async def test_update_is_scoped_and_still_trims(session_factory):  # noqa: ANN00
         updated = await service.update(session, company_b, theirs_id, name="  Platform SRE  ")
         assert updated is not None and updated.name == "Platform SRE"
         await session.commit()
+
+
+class _RecordingActivityLog:
+    """Captures ``record()`` calls. A stateful fake, not a MagicMock.
+
+    A MagicMock would make "an event was emitted" and "nothing was written"
+    look identical, which is the failure this module has hit before — so the
+    calls are actually kept and asserted against.
+    """
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    async def record(self, **kwargs) -> None:  # noqa: ANN003
+        self.events.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_mutations_emit_activity_log_events(session_factory):  # noqa: ANN001
+    """The service claims an audit trail; this is what proves one exists.
+
+    ``role.deleted`` is the one that would silently vanish: it needs the row
+    read *before* the DELETE, so an implementation that logs afterwards emits
+    an event with no entity behind it — or none at all.
+    """
+    log = _RecordingActivityLog()
+    service = RoleService(activity_log=log)
+    company = uuid.uuid4()
+
+    async with session_factory() as session:
+        role = await service.create(session, company_id=company, name="SRE", actor="u1")
+        await service.update(session, company, role.id, name="Platform SRE", actor="u1")
+        assert await service.delete(session, company, role.id, actor="u1") is True
+        await session.commit()
+
+    assert [e["event_type"] for e in log.events] == [
+        "role.created",
+        "role.updated",
+        "role.deleted",
+    ]
+    assert {e["entity_id"] for e in log.events} == {str(role.id)}
+    assert all(e["entity_type"] == "llc_role" for e in log.events)
+    assert all(e["company_id"] == str(company) for e in log.events)
+
+
+@pytest.mark.asyncio
+async def test_a_no_op_update_emits_nothing(session_factory):  # noqa: ANN001
+    """An update that changes no permitted field is not an event."""
+    log = _RecordingActivityLog()
+    service = RoleService(activity_log=log)
+    company = uuid.uuid4()
+
+    async with session_factory() as session:
+        role = await service.create(session, company_id=company, name="SRE")
+        log.events.clear()
+        await service.update(session, company, role.id, not_a_column="ignored")
+        await session.commit()
+
+    assert log.events == []
+
+
+@pytest.mark.asyncio
+async def test_a_scoped_out_delete_emits_nothing(session_factory):  # noqa: ANN001
+    """Failing to delete another company's role must not log a deletion."""
+    log = _RecordingActivityLog()
+    service = RoleService(activity_log=log)
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+
+    async with session_factory() as session:
+        role = await service.create(session, company_id=company_b, name="SRE")
+        await session.commit()
+        log.events.clear()
+
+    async with session_factory() as session:
+        assert await service.delete(session, company_a, role.id) is False
+        await session.commit()
+
+    assert log.events == []

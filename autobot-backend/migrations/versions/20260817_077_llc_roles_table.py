@@ -7,15 +7,14 @@ its responsibilities, tools and workflows. Until now a role was a ``String(50)``
 on ``AgentOrgNode`` plus a display ``title``, so nothing could attach to it and
 everything attached to the occupant instead.
 
-Drift-safe, following 20260629_063 / 20260630_064 / 20260812_073: ``IF NOT
-EXISTS`` throughout, so it is correct whether or not the table already exists on
-a given database.
-
-**Ordering:** this chains off ``20260816_076`` (the workflows table, #14229),
-which is open but not yet merged. That is deliberate — chaining off ``075``
-instead would put this and ``076`` on the same parent and fork the graph, which
-is exactly the defect fixed on #14229 today and tracked as #14292. **#14229 must
-merge before this PR.**
+Follows the sibling new-table migrations ``20260811_072_llc_contacts`` and
+``20260523_028_llc_secrets``: plain ``op.create_table``. Deliberately **not**
+``CREATE TABLE IF NOT EXISTS`` — that pattern belongs to the drift
+reconciliations (``20260629_063``, ``20260812_073``), which re-add columns to
+tables that had already been changed out-of-band. ``llc_roles`` is born here, so
+there is no prior state to be tolerant of, and ``IF NOT EXISTS`` would instead
+succeed silently against a pre-existing table whose schema does not match this
+one — hiding exactly what a migration should surface.
 
 Revision ID: 20260817_077
 Revises: 20260816_076
@@ -23,7 +22,9 @@ Revises: 20260816_076
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import UUID
 
 revision: str = "20260817_077"
 down_revision: Union[str, None] = "20260816_076"
@@ -32,22 +33,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("""
-        CREATE TABLE IF NOT EXISTS llc_roles (
-            id UUID PRIMARY KEY,
-            company_id UUID NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-            CONSTRAINT uq_llc_roles_company_name UNIQUE (company_id, name)
-        )
-        """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_llc_roles_company_id ON llc_roles (company_id)")
+    op.create_table(
+        "llc_roles",
+        # No server_default gen_random_uuid() — the ORM always supplies id
+        # explicitly (RoleService.create), mirroring llc_contacts / llc_secrets.
+        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("company_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        # Per company, not global: two companies may each have a "Head of Sales"
+        # and they are different roles.
+        sa.UniqueConstraint("company_id", "name", name="uq_llc_roles_company_name"),
+    )
+    op.create_index("ix_llc_roles_company_id", "llc_roles", ["company_id"])
 
 
 def downgrade() -> None:
-    """Reverse of upgrade. Guarded so a downgrade cannot fail on a database
-    where the table was never created."""
-    op.execute("DROP INDEX IF EXISTS ix_llc_roles_company_id")
-    op.execute("DROP TABLE IF EXISTS llc_roles")
+    op.drop_index("ix_llc_roles_company_id", table_name="llc_roles")
+    op.drop_table("llc_roles")
