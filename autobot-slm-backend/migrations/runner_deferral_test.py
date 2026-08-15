@@ -167,9 +167,7 @@ def test_a_deferred_migration_is_not_marked_applied():
         node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "run_all_migrations"
     )
     called = {
-        node.func.attr
-        for node in ast.walk(func)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        node.func.attr for node in ast.walk(func) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     } | {node.func.id for node in ast.walk(func) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
 
     assert "reset_deferrals" in called, "the runner never clears deferrals, so they leak between migrations"
@@ -185,10 +183,7 @@ def test_a_deferred_migration_is_not_marked_applied():
         node
         for node in ast.walk(func)
         if isinstance(node, ast.If)
-        and any(
-            isinstance(inner, ast.Name) and inner.id == "deferred"
-            for inner in ast.walk(node.test)
-        )
+        and any(isinstance(inner, ast.Name) and inner.id == "deferred" for inner in ast.walk(node.test))
     ]
     assert deferral_branches, "no branch tests whether the migration deferred anything"
     assert any(
