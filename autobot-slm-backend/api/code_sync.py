@@ -65,7 +65,11 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
+<<<<<<< HEAD
 from services.ansible_utils import parse_unreachable_hosts
+=======
+from services.ansible_utils import summarize_playbook_failure
+>>>>>>> origin/Dev_new_gui
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
@@ -3420,7 +3424,9 @@ async def _ansible_self_update(node_id: str) -> None:
             detach=True,
         )
         if not result["success"]:
-            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+            logger.error(
+                "Ansible full-machine update failed for %s: %s", node_id, summarize_playbook_failure(result["output"])
+            )
             # C2-a: playbook failed before restart — clear plan so it never auto-fires
             await _clear_resume_plan()
         else:
@@ -3649,12 +3655,12 @@ async def _sync_single_node(
 
         if result["success"]:
             node_state.status = "success"
-            node_state.message = result["output"][:500]
+            node_state.message = summarize_playbook_failure(result["output"])
             # Update node version in DB (#1209)
             await _update_fleet_node_version(node_state.node_id)
         else:
             node_state.status = "failed"
-            node_state.message = f"Playbook failed: {result['output'][:500]}"
+            node_state.message = f"Playbook failed: {summarize_playbook_failure(result['output'])}"
 
         node_state.completed_at = datetime.now(timezone.utc)
 

@@ -69,6 +69,7 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
+from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import derive_code_status as _derive_code_status
 from services.code_status import get_latest_code_version as _get_latest_code_version
@@ -992,7 +993,7 @@ async def _execute_provision_playbook(
             "success": True,
             "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
             "roles": target_roles,
-            "output": result["output"][:500],
+            "output": summarize_playbook_failure(result["output"]),
         }
 
     logger.error("Failed to provision node %s: %s", node_id, result["output"])
