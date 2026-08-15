@@ -929,6 +929,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL",
+        type=bool,
+        default=False,
+        description=(
+            "Require approval before the Gateway hands an agent-authored message "
+            "to a channel adapter. Off means audit-only: every governed send is "
+            "recorded, none is blocked. On fails closed — no registered approver, "
+            "a denial, or an approver error all deny the send."
+        ),
+        component="gateway",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
         type=int,
         default=86400,
