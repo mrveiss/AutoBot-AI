@@ -25,10 +25,14 @@ from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
+import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.enums import RoleHolderType
+from llc.models.enums import MembershipRole, RoleHolderType
+from llc.models.membership import LLCCompanyMembership
 from llc.models.role_assignment import LLCRoleAssignment
+from llc.services.authz import NotAuthorisedError
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
 
@@ -43,7 +47,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [Role.__table__, LLCRoleAssignment.__table__]
+    tables = [Role.__table__, LLCRoleAssignment.__table__, LLCCompanyMembership.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
@@ -55,7 +59,37 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+#: Every mutation is admin-gated, so the suite acts as one admin throughout.
+#: Authorisation itself is tested in ``test_role_permissions.py`` and by
+#: ``test_a_member_cannot_assign_themselves_to_a_role`` below; these tests are
+#: about occupancy semantics, not about who may change it.
+_ADMIN_USER = uuid.uuid4()
+
+
+async def _grant_admin(session_factory, company_id: uuid.UUID) -> None:  # noqa: ANN001
+    """Make ``_ADMIN_USER`` an admin of this company, once."""
+    async with session_factory() as session:
+        existing = await session.execute(
+            sa.select(LLCCompanyMembership.id).where(
+                LLCCompanyMembership.company_id == company_id,
+                LLCCompanyMembership.user_id == _ADMIN_USER,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+        session.add(
+            LLCCompanyMembership(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                user_id=_ADMIN_USER,
+                role=MembershipRole.ADMIN.value,
+            )
+        )
+        await session.commit()
+
+
 async def _seed_role(session_factory, company_id: uuid.UUID, name: str) -> uuid.UUID:  # noqa: ANN001
+    await _grant_admin(session_factory, company_id)
     async with session_factory() as session:
         role = await RoleService().create(session, company_id=company_id, name=name)
         await session.commit()
@@ -77,6 +111,7 @@ async def test_ending_a_tenure_never_removes_the_row(session_factory):  # noqa: 
     async with session_factory() as session:
         assignment = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.USER,
@@ -86,7 +121,7 @@ async def test_ending_a_tenure_never_removes_the_row(session_factory):  # noqa: 
         assignment_id = assignment.id
 
     async with session_factory() as session:
-        ended = await service.end_tenure(session, company, assignment_id)
+        ended = await service.end_tenure(session, company, assignment_id, actor_user_id=_ADMIN_USER)
         await session.commit()
         assert ended is not None and ended.ended_at is not None
 
@@ -110,6 +145,7 @@ async def test_a_contact_can_hold_a_role_without_being_a_user(session_factory): 
     async with session_factory() as session:
         assignment = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.CONTACT,
@@ -133,6 +169,7 @@ async def test_one_role_may_have_several_concurrent_holders(session_factory):  #
         for _ in range(3):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type=RoleHolderType.AGENT,
@@ -154,6 +191,7 @@ async def test_the_same_holder_cannot_hold_one_role_twice_at_once(session_factor
     async with session_factory() as session:
         await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.AGENT,
@@ -165,6 +203,7 @@ async def test_the_same_holder_cannot_hold_one_role_twice_at_once(session_factor
         with pytest.raises(ValueError, match="already holds"):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type=RoleHolderType.AGENT,
@@ -183,6 +222,7 @@ async def test_reassigning_after_a_tenure_ended_is_allowed(session_factory):  # 
     async with session_factory() as session:
         first = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.AGENT,
@@ -192,12 +232,13 @@ async def test_reassigning_after_a_tenure_ended_is_allowed(session_factory):  # 
         first_id = first.id
 
     async with session_factory() as session:
-        await service.end_tenure(session, company, first_id)
+        await service.end_tenure(session, company, first_id, actor_user_id=_ADMIN_USER)
         await session.commit()
 
     async with session_factory() as session:
         await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.AGENT,
@@ -215,12 +256,16 @@ async def test_cannot_assign_to_another_companys_role(session_factory):  # noqa:
     """Knowing a role id must not be enough to assign into it."""
     service = RoleAssignmentService()
     company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    # Admin of company_a too: without this the authorisation gate fires
+    # first and the test would no longer reach the scoping check.
+    await _grant_admin(session_factory, company_a)
     theirs = await _seed_role(session_factory, company_b, "SRE")
 
     async with session_factory() as session:
         with pytest.raises(ValueError, match="does not exist in company"):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company_a,
                 role_id=theirs,
                 holder_type=RoleHolderType.AGENT,
@@ -237,6 +282,7 @@ async def test_current_holders_and_history_are_company_scoped(session_factory): 
     async with session_factory() as session:
         await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company_b,
             role_id=role_b,
             holder_type=RoleHolderType.AGENT,
@@ -254,11 +300,15 @@ async def test_current_holders_and_history_are_company_scoped(session_factory): 
 async def test_end_tenure_is_company_scoped(session_factory):  # noqa: ANN001
     service = RoleAssignmentService()
     company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    # Admin of company_a too: without this the authorisation gate fires
+    # first and the test would no longer reach the scoping check.
+    await _grant_admin(session_factory, company_a)
     role_b = await _seed_role(session_factory, company_b, "SRE")
 
     async with session_factory() as session:
         assignment = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company_b,
             role_id=role_b,
             holder_type=RoleHolderType.AGENT,
@@ -268,7 +318,7 @@ async def test_end_tenure_is_company_scoped(session_factory):  # noqa: ANN001
         assignment_id = assignment.id
 
     async with session_factory() as session:
-        assert await service.end_tenure(session, company_a, assignment_id) is None
+        assert await service.end_tenure(session, company_a, assignment_id, actor_user_id=_ADMIN_USER) is None
         await session.commit()
 
     async with session_factory() as session:
@@ -285,6 +335,7 @@ async def test_ending_an_already_ended_tenure_does_not_rewrite_it(session_factor
     async with session_factory() as session:
         assignment = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=role_id,
             holder_type=RoleHolderType.AGENT,
@@ -294,11 +345,11 @@ async def test_ending_an_already_ended_tenure_does_not_rewrite_it(session_factor
         assignment_id = assignment.id
 
     async with session_factory() as session:
-        await service.end_tenure(session, company, assignment_id, ended_at=original)
+        await service.end_tenure(session, company, assignment_id, ended_at=original, actor_user_id=_ADMIN_USER)
         await session.commit()
 
     async with session_factory() as session:
-        assert await service.end_tenure(session, company, assignment_id) is None
+        assert await service.end_tenure(session, company, assignment_id, actor_user_id=_ADMIN_USER) is None
         await session.commit()
 
     async with session_factory() as session:
@@ -320,6 +371,7 @@ async def test_vacate_holder_ends_every_role_and_keeps_the_history(session_facto
         for role_id in (sre, lead):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type=RoleHolderType.USER,
@@ -327,6 +379,7 @@ async def test_vacate_holder_ends_every_role_and_keeps_the_history(session_facto
             )
         await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company,
             role_id=sre,
             holder_type=RoleHolderType.USER,
@@ -335,7 +388,7 @@ async def test_vacate_holder_ends_every_role_and_keeps_the_history(session_facto
         await session.commit()
 
     async with session_factory() as session:
-        closed = await service.vacate_holder(session, company, RoleHolderType.USER, leaver)
+        closed = await service.vacate_holder(session, company, RoleHolderType.USER, leaver, actor_user_id=_ADMIN_USER)
         await session.commit()
 
     assert len(closed) == 2, "offboarding must surface every role left vacant"
@@ -360,6 +413,7 @@ async def test_roles_held_by_is_scoped_and_lists_only_open_tenures(session_facto
         for company, role_id in ((company_a, role_a), (company_b, role_b)):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type=RoleHolderType.USER,
@@ -384,6 +438,7 @@ async def test_an_invalid_holder_type_is_rejected_before_it_reaches_the_column(s
         with pytest.raises(ValueError, match="invalid holder_type"):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type="human",  # AssigneeType/CoWorkerType's word, never this enum's
@@ -435,11 +490,11 @@ async def test_offboarding_emits_one_event_per_vacated_role(session_factory):  #
         for role_id in (sre, lead):
             await service.assign(
                 session,
+                actor_user_id=_ADMIN_USER,
                 company_id=company,
                 role_id=role_id,
                 holder_type=RoleHolderType.USER,
                 holder_id=leaver,
-                actor="u1",
             )
         await session.commit()
 
@@ -447,7 +502,7 @@ async def test_offboarding_emits_one_event_per_vacated_role(session_factory):  #
     log.events.clear()
 
     async with session_factory() as session:
-        await service.vacate_holder(session, company, RoleHolderType.USER, leaver, actor="u1")
+        await service.vacate_holder(session, company, RoleHolderType.USER, leaver, actor_user_id=_ADMIN_USER)
         await session.commit()
 
     assert [e["event_type"] for e in log.events] == ["role_assignment.ended"] * 2
@@ -462,11 +517,15 @@ async def test_a_scoped_out_end_tenure_emits_nothing(session_factory):  # noqa: 
     log = _RecordingActivityLog()
     service = RoleAssignmentService(activity_log=log)
     company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    # Admin of company_a too: without this the authorisation gate fires
+    # first and the test would no longer reach the scoping check.
+    await _grant_admin(session_factory, company_a)
     role_b = await _seed_role(session_factory, company_b, "SRE")
 
     async with session_factory() as session:
         assignment = await service.assign(
             session,
+            actor_user_id=_ADMIN_USER,
             company_id=company_b,
             role_id=role_b,
             holder_type=RoleHolderType.AGENT,
@@ -477,7 +536,193 @@ async def test_a_scoped_out_end_tenure_emits_nothing(session_factory):  # noqa: 
         log.events.clear()
 
     async with session_factory() as session:
-        assert await service.end_tenure(session, company_a, assignment_id) is None
+        assert await service.end_tenure(session, company_a, assignment_id, actor_user_id=_ADMIN_USER) is None
         await session.commit()
 
     assert log.events == []
+
+
+@pytest.mark.asyncio
+async def test_a_member_cannot_assign_themselves_to_a_role(session_factory):  # noqa: ANN001
+    """The privilege escalation this gate exists to close.
+
+    Permission *granting* was admin-only, but occupancy was not — so a plain
+    member could assign themselves to a role an admin had granted permissions
+    to and inherit them immediately. ``effective_permissions()`` honours any
+    open tenure and cannot see who created it, so gating the grant path alone
+    was fully bypassable once the routes existed.
+    """
+    service = RoleAssignmentService()
+    company = uuid.uuid4()
+    role_id = await _seed_role(session_factory, company, "Head of Sales")
+    member = uuid.uuid4()
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyMembership(
+                id=uuid.uuid4(),
+                company_id=company,
+                user_id=member,
+                role=MembershipRole.MEMBER.value,
+            )
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        with pytest.raises(NotAuthorisedError, match="may not perform this change"):
+            await service.assign(
+                session,
+                company_id=company,
+                role_id=role_id,
+                holder_type=RoleHolderType.USER,
+                holder_id=member,
+                actor_user_id=member,
+            )
+
+    async with session_factory() as session:
+        assert await service.current_holders(session, company, role_id) == []
+
+
+@pytest.mark.asyncio
+async def test_a_member_cannot_end_another_holders_tenure(session_factory):  # noqa: ANN001
+    """Otherwise any member could strip an owner of their role."""
+    service = RoleAssignmentService()
+    company = uuid.uuid4()
+    role_id = await _seed_role(session_factory, company, "SRE")
+    member, holder = uuid.uuid4(), uuid.uuid4()
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyMembership(
+                id=uuid.uuid4(),
+                company_id=company,
+                user_id=member,
+                role=MembershipRole.MEMBER.value,
+            )
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        tenure = await service.assign(
+            session,
+            company_id=company,
+            role_id=role_id,
+            holder_type=RoleHolderType.AGENT,
+            holder_id=holder,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+        tenure_id = tenure.id
+
+    async with session_factory() as session:
+        with pytest.raises(NotAuthorisedError):
+            await service.end_tenure(session, company, tenure_id, actor_user_id=member)
+
+    async with session_factory() as session:
+        assert len(await service.current_holders(session, company, role_id)) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_database_itself_rejects_a_duplicate_open_tenure(session_factory):  # noqa: ANN001
+    """The partial unique index, exercised — not just the service pre-check.
+
+    ``assign()`` guards with a SELECT-then-INSERT, which a concurrent caller can
+    race. The real protection is the partial unique index, and it was declared
+    only in the migration — so ``create_all`` never built it and no test touched
+    it. This inserts directly, bypassing the service, and asserts the *database*
+    refuses.
+    """
+    company = uuid.uuid4()
+    role_id = await _seed_role(session_factory, company, "SRE")
+    holder = uuid.uuid4()
+
+    async with session_factory() as session:
+        await RoleAssignmentService().assign(
+            session,
+            company_id=company,
+            role_id=role_id,
+            holder_type=RoleHolderType.AGENT,
+            holder_id=holder,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        session.add(
+            LLCRoleAssignment(
+                company_id=company,
+                role_id=role_id,
+                holder_type=RoleHolderType.AGENT.value,
+                holder_agent_id=holder,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_the_database_allows_a_second_tenure_once_the_first_ended(session_factory):  # noqa: ANN001
+    """The partial index must not forbid returning to a role you once held."""
+    service = RoleAssignmentService()
+    company = uuid.uuid4()
+    role_id = await _seed_role(session_factory, company, "SRE")
+    holder = uuid.uuid4()
+
+    async with session_factory() as session:
+        first = await service.assign(
+            session,
+            company_id=company,
+            role_id=role_id,
+            holder_type=RoleHolderType.AGENT,
+            holder_id=holder,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+        first_id = first.id
+
+    async with session_factory() as session:
+        await service.end_tenure(session, company, first_id, actor_user_id=_ADMIN_USER)
+        await session.commit()
+
+    async with session_factory() as session:
+        await service.assign(
+            session,
+            company_id=company,
+            role_id=role_id,
+            holder_type=RoleHolderType.AGENT,
+            holder_id=holder,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        assert len(await service.history(session, company, role_id)) == 2
+
+
+@pytest.mark.asyncio
+async def test_vacate_holder_is_company_scoped(session_factory):  # noqa: ANN001
+    """The one mutating method that had no cross-company test."""
+    service = RoleAssignmentService()
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    role_b = await _seed_role(session_factory, company_b, "SRE")
+    await _grant_admin(session_factory, company_a)
+    holder = uuid.uuid4()
+
+    async with session_factory() as session:
+        await service.assign(
+            session,
+            company_id=company_b,
+            role_id=role_b,
+            holder_type=RoleHolderType.USER,
+            holder_id=holder,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        assert (
+            await service.vacate_holder(session, company_a, RoleHolderType.USER, holder, actor_user_id=_ADMIN_USER)
+            == []
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        assert len(await service.current_holders(session, company_b, role_b)) == 1

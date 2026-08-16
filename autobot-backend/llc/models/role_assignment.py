@@ -84,6 +84,27 @@ class LLCRoleAssignment(Base):
         onupdate=sa.func.now(),
     )
 
+    # One *open* tenure per holder per role. Declared here as well as in the
+    # migration on purpose: a constraint that lives only in the migration is
+    # never built by ``Base.metadata.create_all``, so every test runs against a
+    # table without it and the invariant is verified only by the service's
+    # SELECT-then-INSERT pre-check — which a concurrent caller can race.
+    #
+    # ``sqlite_where`` mirrors ``postgresql_where`` so the partial index exists
+    # in the SQLite test databases too, rather than being silently dropped and
+    # leaving the guard untested.
+    __table_args__ = tuple(
+        sa.Index(
+            f"uq_llc_role_assignments_open_{kind}",
+            "role_id",
+            f"holder_{kind}_id",
+            unique=True,
+            postgresql_where=sa.text(f"ended_at IS NULL AND holder_{kind}_id IS NOT NULL"),
+            sqlite_where=sa.text(f"ended_at IS NULL AND holder_{kind}_id IS NOT NULL"),
+        )
+        for kind in ("agent", "user", "contact")
+    )
+
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         state = "current" if self.ended_at is None else "ended"
         return f"<LLCRoleAssignment role={self.role_id} {self.holder_type} {state}>"

@@ -32,6 +32,7 @@ from user_management.models.role import Role
 from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
+from .authz import require_company_admin
 from .base import LLCServiceBase
 
 _HOLDER_COLUMNS = {
@@ -87,10 +88,15 @@ class RoleAssignmentService(LLCServiceBase):
         role_id: uuid.UUID,
         holder_type: object,
         holder_id: uuid.UUID,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
     ) -> LLCRoleAssignment:
         if company_id is None or role_id is None or holder_id is None:
             raise ValueError("company_id, role_id and holder_id are all required")
+        # Occupancy is an admin action. Without this, any member could assign
+        # themselves to a role an admin had granted permissions to and inherit
+        # them — effective_permissions() honours any open tenure and cannot see
+        # who created it, so gating the grant path alone was bypassable.
+        await require_company_admin(session, company_id, actor_user_id)
         resolved = _coerce_holder_type(holder_type)
         await self._require_role(session, company_id, role_id)
 
@@ -109,7 +115,7 @@ class RoleAssignmentService(LLCServiceBase):
             session,
             assignment,
             "role_assignment.created",
-            actor,
+            str(actor_user_id),
             {"role_id": str(role_id), "holder_type": resolved.value},
         )
         return assignment
@@ -204,7 +210,7 @@ class RoleAssignmentService(LLCServiceBase):
         assignment_id: uuid.UUID,
         *,
         ended_at: Optional[datetime] = None,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
     ) -> Optional[LLCRoleAssignment]:
         """Close an open tenure. The row survives — that is the whole point.
 
@@ -212,6 +218,8 @@ class RoleAssignmentService(LLCServiceBase):
         company. Re-ending an already-ended tenure is a no-op returning ``None``
         rather than silently rewriting the original end date.
         """
+        # Admin-gated too: otherwise any member could strip an owner of a role.
+        await require_company_admin(session, company_id, actor_user_id)
         result = await session.execute(
             select(LLCRoleAssignment).where(
                 LLCRoleAssignment.id == assignment_id,
@@ -223,7 +231,7 @@ class RoleAssignmentService(LLCServiceBase):
         if assignment is None:
             return None
 
-        await self._close(session, assignment, ended_at or datetime.now(timezone.utc), actor)
+        await self._close(session, assignment, ended_at or datetime.now(timezone.utc), str(actor_user_id))
         return assignment
 
     async def _close(
@@ -251,7 +259,7 @@ class RoleAssignmentService(LLCServiceBase):
         holder_id: uuid.UUID,
         *,
         ended_at: Optional[datetime] = None,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
     ) -> List[LLCRoleAssignment]:
         """End every open tenure for one holder — the offboarding entry point.
 
@@ -260,6 +268,7 @@ class RoleAssignmentService(LLCServiceBase):
         choosing the next holder is step 4, and inventing one here would hide
         that a role was left vacant.
         """
+        await require_company_admin(session, company_id, actor_user_id)
         resolved = _coerce_holder_type(holder_type)
         column = getattr(LLCRoleAssignment, _HOLDER_COLUMNS[resolved])
         result = await session.execute(
@@ -275,5 +284,5 @@ class RoleAssignmentService(LLCServiceBase):
         for assignment in closing:
             # One event per tenure, not one per departure: each role losing its
             # holder is a separate thing the org chart has to answer for.
-            await self._close(session, assignment, stamp, actor)
+            await self._close(session, assignment, stamp, str(actor_user_id))
         return closing
