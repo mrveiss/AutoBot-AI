@@ -93,7 +93,9 @@ def test_the_agent_names_the_playbook_this_registry_exposes():
     """
     agent = (_ANSIBLE_DIR / "roles" / "slm_agent" / "files" / "slm" / "agent" / "agent.py").read_text(encoding="utf-8")
 
-    assert "deploy-slm-agent.yml" in agent, "the agent no longer names deploy-slm-agent.yml — the registry entry may be stale"
+    assert (
+        "deploy-slm-agent.yml" in agent
+    ), "the agent no longer names deploy-slm-agent.yml — the registry entry may be stale"
 
 
 # --------------------------------------------------------------------------
@@ -110,9 +112,7 @@ def test_the_ansible_config_named_is_the_repo_one():
     """
     tree = ast.parse(_SOURCE)
     func = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "_get_ansible_environment"
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_get_ansible_environment"
     )
     literals = {n.value for n in ast.walk(func) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
 
@@ -120,9 +120,9 @@ def test_the_ansible_config_named_is_the_repo_one():
         "ANSIBLE_CONFIG points at a dotfile outside the repo — that file is empty on deployed "
         "hosts and disables roles_path, remote_user and private_key_file (#14351)"
     )
-    assert any("ansible.cfg" in v for v in literals) or "_ansible_dir" in ast.dump(func), (
-        "ANSIBLE_CONFIG is no longer derived from the repo ansible directory"
-    )
+    assert any("ansible.cfg" in v for v in literals) or "_ansible_dir" in ast.dump(
+        func
+    ), "ANSIBLE_CONFIG is no longer derived from the repo ansible directory"
 
 
 def test_the_subprocess_runs_from_the_ansible_directory():
@@ -142,9 +142,9 @@ def test_the_subprocess_runs_from_the_ansible_directory():
     assert subprocess_calls, "no create_subprocess_exec call found — this rule is pinned to the wrong thing"
 
     for call in subprocess_calls:
-        assert any(kw.arg == "cwd" for kw in call.keywords), (
-            "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
-        )
+        assert any(
+            kw.arg == "cwd" for kw in call.keywords
+        ), "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
 
 
 def test_the_repo_config_still_declares_a_relative_roles_path():
