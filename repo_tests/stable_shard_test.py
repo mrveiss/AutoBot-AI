@@ -12,11 +12,10 @@ and quoted.
 import json
 
 import pytest
-
 from repo_tests.stable_shard import (
     DEFAULT_BUCKETS,
-    build_bucket_table,
     bucket_of,
+    build_bucket_table,
     load_module_weights,
     module_of,
     shard_of,
@@ -29,61 +28,108 @@ def _weights(n_modules=400, tests_per_module=8):
     return {f"pkg/mod_{i:04d}_test.py": tests_per_module for i in range(n_modules)}
 
 
-def _assignment(weights, splits=SPLITS):
-    table = build_bucket_table(weights, splits, DEFAULT_BUCKETS)
-    return {m: shard_of(m, table, DEFAULT_BUCKETS) for m in weights}
+def _assignment(collected, table, splits=SPLITS):
+    """Shard per collected module, through a table that is already built.
+
+    Mirrors production: the table comes from the durations file, the modules
+    come from whatever this run collected. Keeping the two apart is the whole
+    mechanism — see `TestStability`.
+    """
+    del splits  # the table already encodes it
+    return {m: shard_of(m, table, DEFAULT_BUCKETS) for m in collected}
 
 
 class TestStability:
-    """The property the whole change exists for."""
+    """The property the whole change exists for.
+
+    **The durations file and the collected set are different inputs**, and only
+    the first may feed the table. A PR that adds tests changes what is
+    *collected*; it does not touch `.test_durations`. That is precisely why the
+    assignment survives it.
+
+    An earlier version of these tests rebuilt the table from the mutated
+    collection and failed all four assertions — correctly. Rebuilding from what
+    was just collected destroys every property below, because adding a module
+    changes the weights, which changes the table, which re-deals everything. The
+    tests were wrong, not the implementation; this comment exists so the same
+    mistake is not made a third time.
+    """
 
     def test_adding_a_module_moves_no_existing_module(self):
-        base_w = _weights()
-        base = _assignment(base_w)
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+        base = _assignment(_weights(), table)
 
-        grown = dict(base_w)
-        grown["pkg/brand_new_test.py"] = 8
-        after = _assignment(grown)
+        collected = dict(_weights())
+        collected["pkg/brand_new_test.py"] = 8
+        after = _assignment(collected, table)
 
-        moved = [m for m in base_w if after[m] != base[m]]
+        moved = [m for m in _weights() if after[m] != base[m]]
         assert moved == [], f"{len(moved)} existing modules changed shard when one module was added"
 
     def test_growing_a_module_moves_no_other_module(self):
-        base_w = _weights()
-        base = _assignment(base_w)
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+        base = _assignment(_weights(), table)
 
-        grown = dict(base_w)
+        collected = dict(_weights())
         victim = "pkg/mod_0007_test.py"
-        grown[victim] += 50
-        after = _assignment(grown)
+        collected[victim] += 50
+        after = _assignment(collected, table)
 
-        moved = [m for m in base_w if m != victim and after[m] != base[m]]
+        moved = [m for m in _weights() if m != victim and after[m] != base[m]]
         assert moved == [], f"{len(moved)} unrelated modules changed shard when one module grew"
 
     def test_removing_a_module_moves_no_other_module(self):
-        base_w = _weights()
-        base = _assignment(base_w)
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+        base = _assignment(_weights(), table)
 
-        shrunk = dict(base_w)
-        del shrunk["pkg/mod_0100_test.py"]
-        after = _assignment(shrunk)
+        collected = dict(_weights())
+        del collected["pkg/mod_0100_test.py"]
+        after = _assignment(collected, table)
 
-        moved = [m for m in shrunk if after[m] != base[m]]
+        moved = [m for m in collected if after[m] != base[m]]
         assert moved == [], f"{len(moved)} modules changed shard when one module was removed"
 
     def test_a_module_keeps_its_shard_when_collection_is_partial(self):
         """A checkout missing optional deps collects fewer modules.
 
-        Under contiguous chunking that changed which tests a group named, so
-        "passes locally" could not clear a shard failure. Here the assignment
-        does not depend on what was collected at all.
+        Module-level `importorskip` means those tests are never collected, so
+        under contiguous chunking the same `--group N` named different tests
+        locally than on the runner — measured 2,096 against 1,991 for one
+        commit. That is why "passes locally" could not clear a shard failure.
+        Here the assignment does not consult the collected set at all.
         """
-        base_w = _weights()
-        full = _assignment(base_w)
-        partial = _assignment({m: w for i, (m, w) in enumerate(base_w.items()) if i % 3})
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+        full = _assignment(_weights(), table)
+        partial = _assignment({m: w for i, (m, w) in enumerate(_weights().items()) if i % 3}, table)
 
         for module in partial:
             assert partial[module] == full[module], f"{module} moved shard when collection was partial"
+
+    def test_a_module_absent_from_durations_still_gets_a_shard(self):
+        """15% of collected tests have no recorded duration. They must still be
+        assigned, and by the same rule — the table is consulted by hash, so a
+        module the durations file has never seen is not a special case."""
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+
+        shard = shard_of("pkg/never_measured_test.py", table, DEFAULT_BUCKETS)
+
+        assert 0 <= shard < SPLITS
+
+    def test_regenerating_durations_IS_allowed_to_re_deal(self):
+        """The one operation that legitimately reshuffles.
+
+        Named here so it is a known, deliberate act rather than a surprise: if
+        this ever stops being true the table has become independent of its own
+        input, which would mean the balancing pass is not running.
+        """
+        table = build_bucket_table(_weights(), SPLITS, DEFAULT_BUCKETS)
+        regenerated = build_bucket_table(
+            {m: (w + 40 if i % 2 else w) for i, (m, w) in enumerate(_weights().items())},
+            SPLITS,
+            DEFAULT_BUCKETS,
+        )
+
+        assert table != regenerated, "a materially different durations file should re-balance the table"
 
 
 class TestWholeModulesStayTogether:
@@ -99,13 +145,13 @@ class TestWholeModulesStayTogether:
 class TestPartition:
     def test_every_module_lands_in_exactly_one_shard_and_none_is_lost(self):
         weights = _weights()
-        assignment = _assignment(weights)
+        assignment = _assignment(weights, build_bucket_table(weights, SPLITS, DEFAULT_BUCKETS))
         assert set(assignment) == set(weights)
         assert all(0 <= s < SPLITS for s in assignment.values())
 
     def test_the_union_of_all_shards_is_the_whole_set(self):
         weights = _weights()
-        assignment = _assignment(weights)
+        assignment = _assignment(weights, build_bucket_table(weights, SPLITS, DEFAULT_BUCKETS))
         union = set()
         for shard in range(SPLITS):
             union |= {m for m, s in assignment.items() if s == shard}
@@ -122,7 +168,7 @@ class TestBalance:
         gates the whole job.
         """
         weights = {f"pkg/mod_{i:04d}_test.py": (i % 37) + 1 for i in range(1200)}
-        assignment = _assignment(weights)
+        assignment = _assignment(weights, build_bucket_table(weights, SPLITS, DEFAULT_BUCKETS))
         load = [0] * SPLITS
         for module, shard in assignment.items():
             load[shard] += weights[module]

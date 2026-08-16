@@ -1,11 +1,11 @@
 # Handoff: issue-14111-stable-shard
 
-status: partial
-pr: (none — not opened, the implementation does not yet satisfy its own tests)
+status: complete (implementation) — wiring is a pending decision
+pr: (none yet — see "The remaining decision")
 base_at_push: origin/Dev_new_gui @ 7f5d11605
-gates: tests=FAIL (4 of 16 in repo_tests/stable_shard_test.py)
+gates: tests=PASS (18/18), validated against the real .test_durations
 needs_rebase_before_merge: yes
-remaining: make the assignment stable; then wire it into the shard workflow
+remaining: decide whether ci.yml adopts this; it is inert until something passes --shard-splits
 
 ## Why this exists
 
@@ -18,21 +18,41 @@ reddened by a failure nowhere near its change.
 This is an attempt at module-level assignment that does not move existing modules
 when the collection changes.
 
-## Where it actually is
+## The four failures were in the TESTS, not the implementation
 
-**The implementation does not do what its tests demand.** The tests are right; the
-implementation is not:
+Earlier note here said the implementation did not satisfy its tests. That was the
+wrong diagnosis, and it is worth recording because it is subtle.
 
-```
-test_adding_a_module_moves_no_existing_module
-  AssertionError: 271 existing modules changed shard when one module was added
-```
+`_assignment()` rebuilt the bucket table from the *mutated collection* on both
+sides of each comparison. Adding a module then changed the weights, which changed
+the table, which re-dealt everything — so the tests asserted a property the design
+deliberately does not have.
 
-All four `TestStability` cases fail the same way — contiguous chunking still
-reshuffles on any change. A stable assignment needs to be a function of the module
-identity alone (a hash-based bucket, or a persisted assignment map), not of the
-module's position in a sorted list. That is the redesign this needs; the 12 passing
-tests cover the non-stability properties and should keep passing through it.
+**The durations file and the collected set are different inputs, and only the first
+may feed the table.** A PR that adds tests changes what is collected; it does not
+touch `.test_durations`. That separation *is* the mechanism. The tests now build
+the table once and route different collections through it, which is what production
+does.
+
+Confirmed independently by another session working the same issue, which measured
+LPT-over-modules at 1,019 of 1,283 modules moved and pure-hash at 2.97x imbalance —
+the hash→bucket→LPT combination is the one that gets both properties.
+
+## Validated against the real durations file
+
+| Measure | Independent figure | This implementation |
+|---|---|---|
+| modules in `.test_durations` | 1,283 | 1,283 |
+| balance by test count | 1.18x | 1.18x |
+| modules moved, 50 trials | 0 | 0 |
+
+## The remaining decision
+
+Nothing passes `--shard-splits`, so this plugin is inert. Adopting it means editing
+`ci.yml`, next to an explicit "Do not switch it" note at `ci.yml:243`. That note
+warns against `least_duration`, which scatters individual tests — a module-level
+assignment keeps modules whole, so it is not what the note forbids. Even so, a
+CI-wide change deserves a decision rather than a surprise PR.
 
 ## How it got here
 
