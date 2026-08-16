@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import shutil
 import stat
-import subprocess  # nosec B404 - fixed argv, no shell
+import subprocess  # nosec B404  # fixed argv, no shell
 from pathlib import Path
 
 _SCRIPT = Path(__file__).with_name("detect-hardcoded-values.sh")
@@ -48,7 +48,7 @@ def _hermetic_repo(tmp_path: Path) -> Path:
 
 
 def _run(root: Path) -> dict:
-    result = subprocess.run(  # nosec B603 - fixed argv, no shell
+    result = subprocess.run(  # nosec B603  # fixed argv, no shell
         ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), "--json"],
         capture_output=True,
         text=True,
@@ -159,7 +159,7 @@ def test_the_real_repository_has_no_new_blocking_ssot_violations():
     once shell/yaml scanning was enabled would silently redden every future
     PR touching an unrelated file that happens to share this workflow.
     """
-    result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["bash", str(_SCRIPT), "--json"],
         capture_output=True,
         text=True,

@@ -73,6 +73,9 @@ jobs:
       - name: Install migration dependencies
         # Deliberately minimal — what runner.py and migration modules import.
         # psycopg2-binary: sync driver used by the custom runner.
+        # sqlalchemy: models/database.py (Base + all table definitions), used
+        # by the schema-bootstrap step below to replicate production's
+        # create_all() (#14326 review).
         # pydantic / pydantic-settings: autobot_shared.ssot_config, imported by
         # migrations.seed_agents (#14326 — see PYTHONPATH below for the other
         # half of that fix).
@@ -87,6 +90,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install \
             psycopg2-binary \
+            "sqlalchemy>=2.0.51" \
             pydantic pydantic-settings \
             pyyaml \
             pytest "pytest-asyncio>=0.24"
@@ -99,6 +103,47 @@ jobs:
           PGPASSWORD=slmtest psql -h 127.0.0.1 -U slmtest -d postgres \
             -c "CREATE DATABASE slm;" \
             -c "CREATE DATABASE slm_users;"
+
+      - name: Create base SLM schema (matches production's create_all)
+        # #14326 review: main.py's lifespan calls db_service.initialize()
+        # (services/database.py), which runs SQLAlchemy
+        # `Base.metadata.create_all()` BEFORE migrations ever run — so `nodes`
+        # and every other SLM-side table already exist by the time the real
+        # runner starts. This bare-CLI harness skipped that step entirely, so
+        # `nodes` never existed here and every migration that targets it
+        # (add_ssh_columns, add_code_version_columns,
+        # add_ansible_name_unique_constraint, widen_code_status_column, ...)
+        # deferred or failed for a harness reason, not a migration bug.
+        # Replicated with the SAME model layer production uses
+        # (models/database.py), loaded by file path rather than
+        # `from models.database import Base`: `models` is also a top-level
+        # package name under autobot-backend/, and the static import-smoke
+        # guard (repo_tests/test_ci_import_smoke_paths_14252.py) checks
+        # first-party import paths against a fixed root list that does not
+        # include autobot-slm-backend, so it cannot tell the two apart.
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import create_engine
+
+          spec = importlib.util.spec_from_file_location("_slm_models_database_14326", Path("models/database.py"))
+          slm_models_database = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_models_database)
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          try:
+              slm_models_database.Base.metadata.create_all(engine)
+          finally:
+              engine.dispose()
+
+          print(f"Created {len(slm_models_database.Base.metadata.tables)} SLM table(s) (matches production create_all)")
+          PY
 
       - name: (a) Apply all migrations on a fresh DB
         env:
@@ -136,29 +181,49 @@ jobs:
         # #14326: this used to be two psql SELECTs that printed rows and
         # compared nothing, so the step was green regardless of what the
         # table held. It now asserts every entry in migrations.runner.MIGRATIONS
-        # was recorded, with one documented harness-only exception.
+        # was recorded, with one documented permanent exception.
+        #
+        # MIGRATIONS is loaded from runner.py by file path, not
+        # `from migrations.runner import MIGRATIONS`: `migrations` is also a
+        # top-level package name under autobot-backend/ (a *different*
+        # migrations package, see #13084), and the static import-smoke guard
+        # (repo_tests/test_ci_import_smoke_paths_14252.py) checks first-party
+        # import paths against a fixed root list that does not include
+        # autobot-slm-backend, so a literal `from migrations.runner import
+        # ...` here reads as "autobot-backend/migrations/runner.py", which
+        # does not exist, and fails that guard.
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
           PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
           python3 - <<'PY'
+          import importlib.util
           import os
           import sys
+          from pathlib import Path
 
           import psycopg2
 
-          from migrations.runner import MIGRATIONS
+          spec = importlib.util.spec_from_file_location("_slm_migrations_runner_14326", Path("migrations/runner.py"))
+          slm_runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_runner)
+          MIGRATIONS = slm_runner.MIGRATIONS
 
-          # add_ssh_columns targets the `nodes` table. In production main.py
-          # runs SQLAlchemy create_all() before the migration runner, so
-          # `nodes` already exists. This gate invokes the bare CLI runner with
-          # no create_all step, so `nodes` never exists here - add_ssh_columns
-          # correctly defers (#14300 mechanism) on every run in this harness
-          # specifically. Documented allow-list of exactly one entry, not a
-          # blanket "some are deferred" skip, so a real regression elsewhere
-          # in the list still fails the gate.
-          ALLOWED_DEFERRED = {"add_ssh_columns"}
+          # add_role_permission_audit_log_timestamps targets role_permissions
+          # and audit_logs — user_management tables that live in the SEPARATE
+          # slm_users database (user_management/config.py:get_slm_db_config).
+          # The runner connects only to DATABASE_URL (the slm database, per
+          # runner.get_db_url()), so it can never reach those tables through
+          # this connection. That is true in production exactly as it is
+          # here — not a harness artifact, and not fixable by create_all()
+          # of any Base, since create_all only creates tables in the
+          # database its own engine is bound to. #14300's deferral mechanism
+          # is what keeps this migration retried rather than falsely marked
+          # applied; it is expected to stay pending indefinitely until the
+          # runner gains a second connection for user_management tables
+          # (tracked separately from #14326 — see the gate-review issue).
+          ALLOWED_DEFERRED = {"add_role_permission_audit_log_timestamps"}
 
           conn = psycopg2.connect(os.environ["DATABASE_URL"])
           try:
@@ -175,7 +240,7 @@ jobs:
 
           print(f"MIGRATIONS in runner: {len(MIGRATIONS)}")
           print(f"Applied in migrations_applied: {len(applied)}")
-          print(f"Allow-listed harness deferral: {sorted(ALLOWED_DEFERRED)}")
+          print(f"Allow-listed permanent deferral: {sorted(ALLOWED_DEFERRED)}")
 
           failed = False
           if missing:
