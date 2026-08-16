@@ -51,11 +51,12 @@ from api.schemas_chat import (
 )
 from api.schemas_common import DataResponse
 from api.user_management.dependencies import require_org_context
+from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
-from chat_history.message_schema import llm_role, message_text
+from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
@@ -199,8 +200,7 @@ def _has_longer_streaming_response(
 
 def _is_streaming_response(msg: Dict) -> bool:
     """Check if message is a streaming LLM response (Issue #281: module-level helper)."""
-    message_type = msg.get("messageType", msg.get("type", "default"))
-    return message_type in STREAMING_MESSAGE_TYPES
+    return message_type(msg) in STREAMING_MESSAGE_TYPES
 
 
 def _get_message_signature(msg: Dict) -> tuple:
@@ -215,7 +215,7 @@ def _get_message_signature(msg: Dict) -> tuple:
     For assistant messages, use sender + content (truncated) for deduplication.
     For terminal/system messages, use ID if available, else timestamp + content prefix.
     """
-    message_type = msg.get("messageType", msg.get("type", "default"))
+    msg_type = message_type(msg)
     sender = msg.get("sender", "")
     text_content = msg.get("text", "") or msg.get("content", "")
 
@@ -229,7 +229,7 @@ def _get_message_signature(msg: Dict) -> tuple:
         # Use first 300 chars of content - enough to identify unique messages
         # while handling minor whitespace differences
         normalized_content = text_content.strip()[:300]
-        return ("assistant", message_type, normalized_content)
+        return ("assistant", msg_type, normalized_content)
 
     # For TERMINAL/SYSTEM messages: use ID if available
     msg_id = msg.get("id") or msg.get("messageId")
@@ -572,10 +572,24 @@ def _build_llm_context(
     # paid for. That is the stance `as_llm_messages` and `_sanitize_tool_messages`
     # already take. Not switched to `as_llm_messages` wholesale: that also drops
     # empty-bodied messages, which would quietly change what the model sees here.
+    #
+    # #14342 review follow-up: `messageType` in NON_CONVERSATIONAL_WEBSOCKET_
+    # MESSAGE_TYPES excludes the websocket-broadcast UI telemetry (agent
+    # steps, tool output, workflow progress/errors, thoughts) that #14342 made
+    # reachable from a session for the first time. Before that fix these
+    # records never reached any session, so this builder never saw them.
+    # Filtered *before* the `[-message_limit:]` slice, not after: filtering
+    # after would still let a busy turn's telemetry consume slots in a
+    # count-bounded window and evict real dialogue that never even reaches
+    # this list. Terminal/approval/workflow-state records that predate
+    # #14342 keep a different `messageType` and are unaffected.
+    conversational_context = [
+        msg
+        for msg in chat_context
+        if isinstance(msg, dict) and message_type(msg) not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+    ]
     llm_context = [
-        {"role": llm_role(msg), "content": message_text(msg)}
-        for msg in chat_context[-message_limit:]
-        if isinstance(msg, dict)
+        {"role": llm_role(msg), "content": message_text(msg)} for msg in conversational_context[-message_limit:]
     ]
     llm_context.append({"role": message.role, "content": message.content})
 
@@ -2107,10 +2121,18 @@ async def _generate_ai_stack_chat_response(
         # path: this reads its context from the same store, in the same stored
         # shape, so the speaker was likewise never present and every turn — the
         # assistant's own replies included — arrived attributed to the caller.
+        #
+        # #14342 review follow-up: same UI-telemetry exclusion as
+        # `_build_llm_context`, and filtered before the slice for the same
+        # reason — this path reads from the same session store, so it is
+        # exposed to the same newly-reachable websocket event records.
+        conversational_context = [
+            msg
+            for msg in chat_context
+            if isinstance(msg, dict) and message_type(msg) not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+        ]
         formatted_history = [
-            {"role": llm_role(msg), "content": message_text(msg)}
-            for msg in chat_context[-message_limit:]
-            if isinstance(msg, dict)
+            {"role": llm_role(msg), "content": message_text(msg)} for msg in conversational_context[-message_limit:]
         ]
 
         ai_stack_response = await ai_client.chat_message(

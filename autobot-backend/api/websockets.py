@@ -262,6 +262,21 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "canvas_cell": _format_canvas_cell,
 }
 
+# Issue #14342 (review follow-up): these are UI telemetry — step/tool/workflow
+# progress the frontend renders live — not something the user or assistant
+# said. #14342 fixed *where* they are stored (their own session instead of a
+# bucket no session reader touched); before that fix an LLM context builder
+# could never see them, so nothing filtered them there. Now that they reach a
+# session, `api/chat.py`'s context builders must exclude them by this same
+# dispatch table, or the model receives them as conversation turns and they
+# evict real dialogue from a message_limit-bounded window. `user_message` and
+# `llm_response` are the two keys in this table that ARE a conversation turn
+# (the user's own text; the assistant's own reply) and stay eligible.
+NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES: frozenset[str] = frozenset(MESSAGE_TYPE_FORMATTERS) - {
+    "user_message",
+    "llm_response",
+}
+
 
 def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | None, str]:
     """Format event data for chat history (Issue #336 - extracted dispatch helper).
