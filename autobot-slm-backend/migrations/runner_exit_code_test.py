@@ -171,3 +171,81 @@ def test_a_single_failure_among_many_successes_still_fails(runner):
     """
     results = [(f"m{i}", True, "ok") for i in range(27)] + [("m28", False, "boom")]
     assert runner._exit_code_for(results) == 1
+
+
+# --- #14321: a module with no entry point must NOT report success -----------
+#
+# `run_migration` used to return (True, "Loaded migration: … (no migrate
+# function)") for a module exposing neither `migrate()` nor `run()`. That is
+# what hid #14321: `seed_agents` defined only a standalone async function, so
+# the runner called nothing, reported success, and recorded the migration as
+# applied. No bookkeeping check could see it, because the bookkeeping was the
+# thing that lied — the gate printed 26/27 both before and after the real fix.
+
+
+def test_a_module_with_no_entry_point_is_a_failure_not_a_load(runner, monkeypatch):
+    """The regression. A migration that did nothing must not be marked applied."""
+
+    class _NoEntryPoint:
+        """Neither migrate() nor run() — the seed_agents shape before #14321."""
+
+    monkeypatch.setattr(
+        runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False
+    )
+
+    success, message = runner.run_migration("postgresql://unused", "pretend_migration")
+
+    assert success is False, "a module that executed nothing must not report success"
+    assert "entry point" in message
+
+
+def test_the_failure_message_names_what_is_missing(runner, monkeypatch):
+    """An operator must be able to act on it without reading the runner."""
+
+    class _NoEntryPoint:
+        pass
+
+    monkeypatch.setattr(
+        runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False
+    )
+
+    _, message = runner.run_migration("postgresql://unused", "pretend_migration")
+
+    assert "pretend_migration" in message
+    assert "migrate(db_url)" in message and "run(db_url)" in message
+
+
+def test_every_registered_migration_exposes_an_entry_point(runner):
+    """Nothing may rely on the permissive branch this change removed.
+
+    Asserts the invariant rather than today's count: a future migration
+    registered without an entry point fails here instead of being silently
+    recorded as applied against a live database.
+
+    Read with AST rather than imported. ``migrations`` and ``models`` are also
+    top-level package names under ``autobot-backend`` (the #13084 collision), so
+    ``import_module("migrations.<name>")`` resolves against whichever copy is on
+    ``sys.path`` first — the same ambiguity that made #14321's own gate step
+    load modules by file path.
+    """
+    import ast
+    from pathlib import Path
+
+    migrations_dir = Path(runner.__file__).resolve().parent
+    missing = []
+
+    for name in runner.MIGRATIONS:
+        path = migrations_dir / f"{name}.py"
+        if not path.exists():
+            missing.append(f"{name} (file not found)")
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        entry_points = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        if not entry_points & {"migrate", "run"}:
+            missing.append(name)
+
+    assert missing == [], f"registered migrations with no entry point: {missing}"

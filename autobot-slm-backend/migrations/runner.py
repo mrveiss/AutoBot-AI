@@ -234,8 +234,26 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
             module.run(db_url)
             return True, f"Applied migration: {name}"
         else:
-            # Some migrations might just be seed scripts
-            return True, f"Loaded migration: {name} (no migrate function)"
+            # A module with no entry point did NOT run, so it must not report
+            # success (#14321). This branch is what hid the defect this change
+            # fixes: `seed_agents` exposed only a standalone async function, so
+            # the runner never called anything, returned success here, and
+            # recorded the migration in `migrations_applied` — a migration that
+            # is permanently "applied" while its table stays unseeded, and no
+            # bookkeeping check can ever see it because the bookkeeping is what
+            # lied. Marking a migration applied when it did nothing is strictly
+            # worse than failing: a failure is retried, a false success is not.
+            #
+            # Verified reachable-by-nobody at the time of the change: all 27
+            # entries in MIGRATIONS expose `migrate()` or `run()`, so nothing
+            # depends on the old permissive behaviour. Any migration that hits
+            # this branch in future is malformed, and saying so loudly is the
+            # only way the next one does not repeat #14321.
+            return False, (
+                f"{name} exposes no migrate(db_url) or run(db_url) entry point — "
+                "nothing was executed. A migration module must expose one, or be "
+                "removed from MIGRATIONS if it is not a migration."
+            )
 
     except Exception as e:
         return False, f"Failed to apply {name}: {e}"
