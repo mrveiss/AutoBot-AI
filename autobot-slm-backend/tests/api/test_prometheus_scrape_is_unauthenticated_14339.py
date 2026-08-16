@@ -86,6 +86,14 @@ def _mount_calls() -> dict[str, ast.Call]:
     "looks mounted but is not" — a 404, not an exposure — so it cannot hide a
     leak. Closing it means making `main` importable under pytest, which is a
     separate problem from this one.
+
+    A second limit, and this one points the other way: only `include_router`
+    calls are scanned. A route added with `@app.get(...)` or
+    `app.add_api_route(...)` never passes through here, so it is neither checked
+    nor declared. `main.py` already carries two legitimate instances of that
+    idiom, each justified inline. Catching them needs a different matcher rather
+    than a patch to this one — filed as #14365. Unlike the branch-wrap limit
+    above, this gap can hide an exposure, so it is worth closing.
     """
     calls, unparseable = _app_mounts()
     assert not unparseable, (
