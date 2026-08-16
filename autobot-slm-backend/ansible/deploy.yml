@@ -14,11 +14,20 @@
 
   vars:
     target_roles: "{{ target_roles | default('slm-agent') }}"
-    # #13870: this play selects roles from target_roles rather than the
-    # role_*_active facts, so it needs its own derivation. Without it a
-    # `target_roles=ai-stack` run falls to the role default and, on a host where
-    # redis also ran earlier, both roles write the unit again.
-    chromadb_service_owner: "{{ 'redis' if 'redis' in (target_roles.split(',') | map('trim') | list) else 'ai-stack' }}"
+
+  # #7050/#7051 shared role-active facts — see playbooks/vars/role_active_facts.yml
+  # for why this is needed (this play can run against a temp inventory with no
+  # sibling group_vars/, e.g. the SLM wizard path).
+  #
+  # #14289: chromadb_service_owner MUST derive from host state
+  # (role_redis_active / role_ai_stack_active), never from target_roles. A unit
+  # shared by two roles may only be claimed from facts about the host — target_roles
+  # says which roles THIS run deploys, not which roles are actually present. Deriving
+  # from target_roles meant a `target_roles=ai-stack` redeploy against an
+  # already-combined host reclaimed the unit from redis on every run, even though
+  # redis was never touched (#4090).
+  vars_files:
+    - playbooks/vars/role_active_facts.yml
 
   tasks:
     - name: Parse target roles
