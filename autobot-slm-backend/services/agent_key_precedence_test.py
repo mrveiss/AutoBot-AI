@@ -112,14 +112,47 @@ def test_the_slm_key_is_read_from_the_control_node():
     assert task.get("no_log") is True, "the key task must not log its value"
 
 
-def test_the_secret_is_never_logged():
-    """Every task touching the key keeps no_log."""
+def test_the_secret_is_never_exposed():
+    """`no_log` where the VALUE could leak — not merely where the name appears.
+
+    CI caught the first version of this rule demanding `no_log` on the
+    "Warn when no internal API key could be resolved" task. That task is a
+    `debug` gated on `when: not (_agent_internal_api_key | trim)` whose message
+    contains the hostname and no key at all — it fires precisely when there is
+    nothing to leak.
+
+    Silencing it would have suppressed the only signal an operator gets that no
+    key was resolved, to protect a value that is empty by definition. A guard
+    that hides a diagnostic is worse than no guard.
+
+    So: `when:` is a test, not an exposure. Strip it, then require `no_log` only
+    where the key reaches a module argument.
+    """
     for task in _TASKS:
         if not isinstance(task, dict):
             continue
-        body = str(task)
+        exposing = {k: v for k, v in task.items() if k not in ("when", "name", "tags")}
+        body = str(exposing)
         if _SLM_OWN in body or _NODE_FILE in body or "_agent_internal_api_key" in body:
-            assert task.get("no_log") is True, f"task {task.get('name')!r} handles the key without no_log"
+            assert task.get("no_log") is True, (
+                f"task {task.get('name')!r} passes the key to a module without no_log"
+            )
+
+
+def test_the_empty_key_warning_survives():
+    """The counterpart: that warning must stay visible.
+
+    It is the node-side signal for the case where every source came back empty,
+    and #14350 is about a key problem being invisible until someone reads a
+    journal. Pinned so a future tightening of the rule above cannot silence it.
+    """
+    warning = next(
+        (t for t in _TASKS if isinstance(t, dict) and "no internal API key could be resolved" in str(t.get("name", ""))),
+        None,
+    )
+
+    assert warning is not None, "the empty-key warning is gone"
+    assert warning.get("no_log") is not True, "the empty-key warning is silenced — it reports an absent value, not a secret"
 
 
 def test_the_agent_still_names_its_remedy():
