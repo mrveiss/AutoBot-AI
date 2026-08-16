@@ -221,7 +221,9 @@ def test_queued_run_behind_a_busy_pool_is_pending_not_failure(watchdog):
     ]
     state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, True)
     assert state == "pending"
-    assert "busy runner pool" in description
+    # "busy queue", not "busy runner pool" (#14364): this branch now also covers
+    # a GitHub-hosted backlog, which no runner pool is responsible for.
+    assert "busy queue" in description
 
 
 def test_a_busy_queue_is_still_never_success(watchdog):
@@ -1149,3 +1151,148 @@ def test_fork_runs_are_never_cancelled(watchdog):
 def test_a_lone_run_is_never_cancelled(watchdog):
     """With nothing newer, nothing supersedes it."""
     assert _select(watchdog, [_member(1, 60)]) == []
+
+
+# --- #14364: a starved run must be attributed to a pool before blaming it ----
+#
+# `pool_serving` is derived from self-hosted JOB LABELS, so an idle-but-healthy
+# pool reads as "not serving". Without attribution, any GitHub-hosted capacity
+# backlog past the stall threshold published `failure: no runner available` —
+# and the healthier the self-hosted pool was, the more reliably it did so.
+
+HOSTED_PATH = ".github/workflows/ci.yml"
+SELF_HOSTED_PATH = ".github/workflows/frontend-test.yml"
+WORKFLOW_DIR = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+
+# Assembled from fragments so this fixture cannot be mistaken for a real
+# self-hosted declaration by a scanner reading the test file itself.
+_LABEL = "self-" + "hosted"
+
+
+def _starved_on(path, **overrides):
+    return _run(
+        status="queued",
+        conclusion=None,
+        created_at=_ts(45),
+        path=path,
+        **overrides,
+    )
+
+
+def test_a_github_hosted_backlog_is_not_reported_as_a_runner_outage(watchdog):
+    """The regression: ci.yml has no self-hosted job, so it cannot starve one."""
+    runs = [_starved_on(HOSTED_PATH, name="AutoBot CI/CD Pipeline")]
+
+    state, description = watchdog.classify_dispatch(
+        runs, _ts(45), NOW, 10, 30, False, (), {SELF_HOSTED_PATH}
+    )
+
+    assert state == "pending"
+    assert "no runner available" not in description
+
+
+def test_a_starved_self_hosted_run_still_reports_the_outage(watchdog):
+    """The case that must keep working — removing the false positive must not
+    remove the true one."""
+    runs = [_starved_on(SELF_HOSTED_PATH, name="Frontend Testing Suite")]
+
+    state, description = watchdog.classify_dispatch(
+        runs, _ts(45), NOW, 10, 30, False, (), {SELF_HOSTED_PATH}
+    )
+
+    assert state == "failure"
+    assert "no runner available" in description
+
+
+def test_only_the_self_hosted_runs_are_counted_in_the_outage(watchdog):
+    """A mixed queue names the runs that can actually reach the pool."""
+    runs = [
+        _starved_on(HOSTED_PATH, id=1, name="AutoBot CI/CD Pipeline"),
+        _starved_on(HOSTED_PATH, id=2, name="Code Quality"),
+        _starved_on(SELF_HOSTED_PATH, id=3, name="Frontend Testing Suite"),
+    ]
+
+    state, description = watchdog.classify_dispatch(
+        runs, _ts(45), NOW, 10, 30, False, (), {SELF_HOSTED_PATH}
+    )
+
+    assert state == "failure"
+    assert description.startswith("1 self-hosted run(s)")
+    assert "Frontend Testing Suite" in description
+    assert "Code Quality" not in description
+
+
+def test_a_self_hosted_run_behind_a_serving_pool_is_still_contention(watchdog):
+    runs = [_starved_on(SELF_HOSTED_PATH, name="Frontend Testing Suite")]
+
+    state, _ = watchdog.classify_dispatch(
+        runs, _ts(45), NOW, 10, 30, True, (), {SELF_HOSTED_PATH}
+    )
+
+    assert state == "pending"
+
+
+def test_an_unattributable_run_stays_reportable(watchdog):
+    """Unknown must not silence a real outage — it resolves toward reporting."""
+    no_paths_known = None
+    no_path_on_run = {_LABEL}
+
+    assert watchdog.run_requires_self_hosted(_starved_on(HOSTED_PATH), no_paths_known) is True
+    assert watchdog.run_requires_self_hosted(_run(), no_path_on_run) is True
+    assert watchdog.run_requires_self_hosted(_starved_on(""), no_path_on_run) is True
+
+
+# --- workflow parsing: the comment trap ------------------------------------
+
+
+def test_a_self_hosted_mention_in_a_comment_is_not_a_declaration(watchdog):
+    """`code-quality.yml` really does carry this line. Matching the raw text
+    classifies a GitHub-hosted job as self-hosted — the exact misattribution
+    being removed, reintroduced by the fix for it."""
+    text = f"jobs:\n  lint:\n    runs-on: ubuntu-latest  # Temporary: {_LABEL} runner offline\n"
+
+    assert watchdog.declares_self_hosted(text) is False
+
+
+def test_a_whole_line_comment_is_not_a_declaration(watchdog):
+    text = f"# runs-on: ubuntu-latest on every job. The {_LABEL} runner is a singleton\njobs: {{}}\n"
+
+    assert watchdog.declares_self_hosted(text) is False
+
+
+def test_an_inline_sequence_is_a_declaration(watchdog):
+    text = f"jobs:\n  build:\n    runs-on: [{_LABEL}, Linux, X64]\n"
+
+    assert watchdog.declares_self_hosted(text) is True
+
+
+def test_a_block_sequence_is_a_declaration(watchdog):
+    text = f"jobs:\n  build:\n    runs-on:\n      - {_LABEL}\n      - Linux\n"
+
+    assert watchdog.declares_self_hosted(text) is True
+
+
+def test_a_block_sequence_of_hosted_labels_is_not_a_declaration(watchdog):
+    text = "jobs:\n  build:\n    runs-on:\n      - ubuntu-latest\n    steps: []\n"
+
+    assert watchdog.declares_self_hosted(text) is False
+
+
+def test_an_unreadable_workflow_dir_is_unknown_not_empty(watchdog, tmp_path):
+    """None, not an empty set: an empty set would silently classify every run
+    as GitHub-hosted and suppress every real outage."""
+    assert watchdog.self_hosted_workflow_paths(str(tmp_path / "absent")) is None
+
+
+def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watchdog):
+    """Pinned against the actual repository, which is where the trap lives."""
+    paths = watchdog.self_hosted_workflow_paths(str(WORKFLOW_DIR))
+
+    assert paths is not None
+    resolved = {Path(p).name for p in paths}
+    # Declares `runs-on: [self-hosted, Linux, X64]` on four jobs.
+    assert "frontend-test.yml" in resolved
+    # The three workflows named in the false `no runner available` status.
+    assert "ci.yml" not in resolved
+    assert "code-quality.yml" not in resolved
+    assert "frontend-required-context.yml" not in resolved
