@@ -50,7 +50,7 @@ from user_management.models.role import Permission, Role, RolePermission
 from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
-from .authz import NotAuthorisedError, require_company_admin
+from .authz import require_company_admin
 from .base import LLCServiceBase
 
 _HOLDER_COLUMNS = {

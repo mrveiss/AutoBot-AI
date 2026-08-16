@@ -30,7 +30,8 @@ from llc.models.membership import LLCCompanyMembership
 from llc.models.role_assignment import LLCRoleAssignment
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
-from llc.services.role_permission import NotAuthorisedError, RolePermissionService
+from llc.services.authz import NotAuthorisedError
+from llc.services.role_permission import RolePermissionService
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
