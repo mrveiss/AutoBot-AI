@@ -40,11 +40,16 @@ _ROUTER_DECORATOR_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern for router variable names to detect prefix
-# NOTE (#12985): currently unreferenced — it was already dead before this
-# convergence, so it is left in place rather than removed as a drive-by.
-# Kept pointing at the shared grammar so it cannot drift while unused.
-_ROUTER_INCLUDE_RE = _routing.INCLUDE_ROUTER_RE
+# ``include_router(name, ..., prefix="/x")`` — the prefix given at MOUNT time,
+# as opposed to the one declared on the router itself by ``APIRouter(prefix=)``.
+#
+# #13582: this was dead for so long that the question became whether to delete
+# it. It turned out to be missing wiring rather than surplus: a package that
+# mounts a submodule with a prefix has that prefix applied to every route in the
+# submodule, and nothing here was reading it. Renamed from _ROUTER_INCLUDE_RE,
+# which sat one transposition away from _INCLUDE_ROUTER_RE below and meant
+# something different.
+_INCLUDE_ROUTER_PREFIX_RE = _routing.INCLUDE_ROUTER_RE
 
 # Pattern for router prefix in APIRouter() initialization
 _APIROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
@@ -764,13 +769,23 @@ class BackendEndpointScanner:
         init_file = package / "__init__.py"
         init_content = init_file.read_text(encoding="utf-8", errors="ignore")
         package_prefix = self._get_file_router_prefix(init_content) or ""
-        if not _INCLUDE_ROUTER_RE.search(init_content):
-            return {}
 
         served_prefix = f"{registry_prefix}{package_prefix}"
         mounted = set(_INCLUDE_ROUTER_NAME_RE.findall(init_content))
         if not mounted:
             return {}
+
+        # #13582: a narrower `_INCLUDE_ROUTER_RE.search()` guard used to stand
+        # ahead of this check. It matched only `router.include_router(name)`
+        # with the call closing immediately after the name, so a package
+        # mounting with `prefix=`, `tags=`, or through `app.` failed it and
+        # returned {} — dropping every route in that package, silently. The
+        # `mounted` check below is the same question asked at the right width,
+        # and it was already here; the guard only ever subtracted from it.
+        #
+        # Prefixes given at mount time apply to every route in the mounted
+        # module, and are separate from the one the router declares for itself.
+        mount_prefixes = dict(_INCLUDE_ROUTER_PREFIX_RE.findall(init_content))
 
         files: Dict[Path, str] = {}
         # #12956: walk one level and recurse, rather than rglob'ing the tree.
@@ -782,13 +797,14 @@ class BackendEndpointScanner:
             if alias not in mounted:
                 # Declared but never mounted: it serves nothing.
                 continue
+            mounted_prefix = f"{served_prefix}{mount_prefixes.get(alias, '')}"
             module_file = (package / module_name).with_suffix(".py")
             if module_file.is_file():
-                files[module_file] = served_prefix
+                files[module_file] = mounted_prefix
                 continue
             subpackage = package / module_name
             if (subpackage / "__init__.py").is_file():
-                files.update(self._package_router_files(subpackage, served_prefix))
+                files.update(self._package_router_files(subpackage, mounted_prefix))
         return files
 
     def _get_module_prefix(self, file_path: Path) -> str:
