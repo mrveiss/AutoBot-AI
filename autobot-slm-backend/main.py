@@ -614,6 +614,18 @@ app.add_middleware(ApiRequestCounterMiddleware)
 #   sso_router      — SSO provider list; accessed before credentials are available
 #   sso_auth_router — OAuth callback; must complete before a token exists
 #   websocket_router — out of scope (#10198); has separate async auth handling
+#   scim_router     — authenticated per route by _require_scim_bearer, not by
+#       this gate; all 11 routes carry it. Declared here because "no
+#       service.management gate" is what this list tracks, and it was already
+#       absent before #14339 added the check below
+#   performance_metrics_router — prometheus scrape surface; a scraper cannot
+#       authenticate, so the gate returned 401 on every scrape (#14339)
+#
+# This list is enforced, not decorative: tests/api/
+# test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
+# mounted without the gate and is not named here. It had already gone stale
+# once, which is how a public surface stops being visible in the one place the
+# file keeps that inventory.
 
 # Service-management gate (#10198, epic #10193): all other routers require
 # Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)

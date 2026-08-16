@@ -77,6 +77,14 @@ def _mount_calls() -> dict[str, ast.Call]:
 
     This asserts on the shape of the call — which keywords it carries — not on
     the text of the line, so reformatting cannot make it pass or fail.
+
+    Scope limit, stated because review demonstrated it: `ast.walk` finds the call
+    wherever it sits, so wrapping the mount in a branch that never runs leaves
+    these tests green. What is verified is that the wiring is *declared*
+    correctly, not that it *executes*. The direction of that blind spot is
+    "looks mounted but is not" — a 404, not an exposure — so it cannot hide a
+    leak. Closing it means making `main` importable under pytest, which is a
+    separate problem from this one.
     """
     tree = ast.parse((Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8"))
     calls: dict[str, ast.Call] = {}
@@ -128,3 +136,41 @@ def test_the_mounted_path_is_the_one_prometheus_scrapes():
     """Guard the guard: the route path already carries the router's own prefix,
     so only the app-level mount prefix is added to reach the scraped URL."""
     assert f"/api{_SCRAPE_PATH}" == _MOUNTED_AT
+
+
+def test_every_ungated_router_is_named_in_the_registry():
+    """`main.py` keeps a list of routers deliberately mounted without the gate.
+
+    Nothing enforced it, and it had already gone stale before this change — a
+    public surface that is not in the one inventory the file maintains is a
+    public surface nobody reviewing auth will see. So the list is checked here
+    rather than trusted: mount a router without `dependencies` and this fails
+    until it is declared, which makes adding public surface a visible act.
+
+    Deliberately keyed on the mount, not on the comment. A name can be removed
+    from the list and the test still fails, because the mount is what decides
+    who can reach the route.
+    """
+    source = (Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8")
+    registry = source.split("# Routers intentionally left open", 1)
+    assert len(registry) == 2, "the public-router registry comment block is gone from main.py"
+    declared = registry[1].split("# Service-management gate", 1)[0]
+
+    ungated = {name for name, call in _mount_calls().items() if "dependencies" not in _keywords(call)}
+    undeclared = sorted(name for name in ungated if name not in declared)
+    assert not undeclared, (
+        f"mounted without the service-management gate but not declared in the registry: "
+        f"{undeclared}. Add each with the reason it must be reachable unauthenticated, "
+        f"or mount it with `dependencies=_SM` (#14339)."
+    )
+
+
+def test_the_registry_check_actually_sees_the_ungated_mounts():
+    """An empty `ungated` set would make the assertion above vacuous.
+
+    If the mount matcher stopped matching — a rename, a different idiom — every
+    router would look gated and the registry check would pass over all of them.
+    """
+    ungated = {name for name, call in _mount_calls().items() if "dependencies" not in _keywords(call)}
+    assert "performance_metrics_router" in ungated
+    assert len(ungated) >= 3, f"only {len(ungated)} ungated mounts found — the matcher is broken"
