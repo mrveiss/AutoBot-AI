@@ -209,7 +209,11 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         target_hosts=["slm_nodes"],
         variables={},
         estimated_duration="1-2 minutes",
-        requires_confirmation=False,
+        # Confirmation required: deploy-slm-agent.yml has `hosts: slm_nodes`
+        # and NO `serial:`, unlike update-all-nodes.yml (`serial: 3`). With
+        # limit_hosts omitted, one click restarts every agent in the fleet
+        # concurrently with no rolling or health-gated pacing (#14351 review).
+        requires_confirmation=True,
     ),
     PlaybookInfo(
         id="seed-fleet",
@@ -638,7 +642,16 @@ async def _run_playbook(
 
     try:
         # Build ansible-playbook command
-        playbook_path = os.path.join(PLAYBOOKS_DIR, playbook.playbook_file)
+        # #14351 review: this used to come from PLAYBOOKS_DIR (the DEPLOYED
+        # tree) while cwd/ANSIBLE_CONFIG/roles_path resolved against
+        # _ansible_dir() (which prefers code_source). code_source is hard-reset
+        # to origin HEAD on every canonical run, so it is routinely AHEAD of the
+        # deployed copy — meaning an OLD playbook could execute against NEW
+        # roles. That is the same class of bug this PR fixes, relocated.
+        #
+        # One tree for all four, mirroring services/playbook_executor.py's
+        # `playbook_path = self.ansible_dir / playbook_name`.
+        playbook_path = str(_ansible_dir() / playbook.playbook_file)
 
         # Check if playbook exists
         if not os.path.exists(playbook_path):

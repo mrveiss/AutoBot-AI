@@ -120,9 +120,21 @@ def test_the_ansible_config_named_is_the_repo_one():
         "ANSIBLE_CONFIG points at a dotfile outside the repo — that file is empty on deployed "
         "hosts and disables roles_path, remote_user and private_key_file (#14351)"
     )
-    assert any("ansible.cfg" in v for v in literals) or "_ansible_dir" in ast.dump(
-        func
-    ), "ANSIBLE_CONFIG is no longer derived from the repo ansible directory"
+    # Review finding: the previous version of this assertion was satisfied by the
+    # function's own DOCSTRING, which mentions ansible.cfg in prose — so a
+    # regression hardcoding some other *ansible.cfg path would have passed.
+    # Assert on the assigned VALUE instead: it must be built from _ansible_dir().
+    env_value = None
+    for node in ast.walk(func):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and key.value == "ANSIBLE_CONFIG":
+                    env_value = value
+    assert env_value is not None, "ANSIBLE_CONFIG is no longer set in the environment dict"
+    assert any(
+        isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == "_ansible_dir"
+        for inner in ast.walk(env_value)
+    ), "ANSIBLE_CONFIG is not derived from _ansible_dir() — it may point at an unrelated tree"
 
 
 def test_the_subprocess_runs_from_the_ansible_directory():
@@ -141,10 +153,50 @@ def test_the_subprocess_runs_from_the_ansible_directory():
     ]
     assert subprocess_calls, "no create_subprocess_exec call found — this rule is pinned to the wrong thing"
 
+    # Review finding: asserting only that `cwd` is PRESENT would pass on
+    # `cwd="/tmp"`. The value has to come from the same helper the config and
+    # the playbook path use, or the three can resolve against different trees —
+    # which is the cross-tree split this PR was blocked on.
     for call in subprocess_calls:
+        cwd_kw = next((kw for kw in call.keywords if kw.arg == "cwd"), None)
+        assert cwd_kw is not None, (
+            "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
+        )
         assert any(
-            kw.arg == "cwd" for kw in call.keywords
-        ), "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
+            isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == "_ansible_dir"
+            for inner in ast.walk(cwd_kw.value)
+        ), "cwd is not _ansible_dir() — config, roles and the playbook file could resolve from different trees"
+
+
+def test_the_playbook_file_comes_from_the_same_tree_as_the_config():
+    """The cross-tree split this PR was blocked on.
+
+    `PLAYBOOKS_DIR` defaults to the DEPLOYED tree; `_ansible_dir()` prefers
+    `code_source`, which is hard-reset to origin HEAD on every canonical run and
+    is therefore routinely ahead. Taking the playbook file from one and
+    roles/config from the other runs an old play against new roles — the same
+    failure this PR fixes, relocated somewhere harder to see.
+
+    `services/playbook_executor.py` derives both from one `ansible_dir`; this
+    asserts the endpoint does too.
+    """
+    tree = ast.parse(_SOURCE)
+    assignments = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "playbook_path" for t in node.targets)
+    ]
+    assert assignments, "playbook_path is no longer assigned — this rule is pinned to the wrong name"
+
+    for node in assignments:
+        names = {n.id for n in ast.walk(node.value) if isinstance(n, ast.Name)}
+        calls = {getattr(c.func, "id", None) for c in ast.walk(node.value) if isinstance(c, ast.Call)}
+        assert "PLAYBOOKS_DIR" not in names, (
+            "playbook_path is built from PLAYBOOKS_DIR while cwd/config use _ansible_dir() — "
+            "an old playbook can execute against new roles (#14351 review)"
+        )
+        assert "_ansible_dir" in calls, "playbook_path is not derived from _ansible_dir()"
 
 
 def test_the_repo_config_still_declares_a_relative_roles_path():
