@@ -32,6 +32,12 @@ _EXPECTED = {
     ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/workflows"),
     ("POST", f"{_PREFIX}/{{company_id}}/{{role_id}}/workflows"),
     ("DELETE", f"{_PREFIX}/{{company_id}}/{{role_id}}/workflows/{{workflow_id}}"),
+    ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/tools"),
+    ("POST", f"{_PREFIX}/{{company_id}}/{{role_id}}/tools"),
+    ("DELETE", f"{_PREFIX}/{{company_id}}/{{role_id}}/tools/{{tool_name}}"),
+    ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials"),
+    ("POST", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials"),
+    ("DELETE", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials/{{secret_id}}"),
 }
 
 
