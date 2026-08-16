@@ -73,13 +73,16 @@ jobs:
       - name: Install migration dependencies
         # Deliberately minimal — what runner.py and migration modules import.
         # psycopg2-binary: sync driver used by the custom runner.
+        # pydantic / pydantic-settings: autobot_shared.ssot_config, imported by
+        # migrations.seed_agents (#14326 — see PYTHONPATH below for the other
+        # half of that fix).
         # pyyaml: NOT a migration dependency. The pytest step below loads
         # autobot-slm-backend/conftest.py, which since #14307 real-loads
         # services/inventory_builder.py (that module imports yaml). The
         # conftest now degrades per-module rather than dying, so this is no
         # longer load-bearing — kept because inventory_builder is the one
         # listed module a migration test could plausibly want real, and one
-        # line is cheaper than discovering it is absent. See #14326.
+        # line is cheaper than discovering it is absent.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
@@ -100,27 +103,96 @@ jobs:
       - name: (a) Apply all migrations on a fresh DB
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          # #14326: migrations.seed_agents imports autobot_shared.ssot_config
+          # at module level. autobot_shared lives at the repo root, one level
+          # above working-directory below, so it is invisible to the
+          # interpreter without this. Without it every run died on
+          # "No module named 'autobot_shared'" applying seed_agents — the
+          # 12th of 27 entries in MIGRATIONS — so nothing after it, including
+          # add_role_permission_audit_log_timestamps (the last entry), was
+          # ever exercised by this gate.
+          PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the fresh-DB pass (a) - see the FAIL entry above for which migration failed"
+            exit 1
+          fi
 
       - name: (b) Idempotency — re-run migrations on already-migrated DB
         # The runner tracks applied migrations in migrations_applied.
         # A second run must succeed with 'No migrations to run' (no failures).
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the idempotency pass (b) - a second run must be a no-op"
+            exit 1
+          fi
 
-      - name: Verify migrations_applied table is populated
-        # Assert every migration in MIGRATIONS was recorded exactly once.
+      - name: Verify migrations_applied matches the full migration list
+        # #14326: this used to be two psql SELECTs that printed rows and
+        # compared nothing, so the step was green regardless of what the
+        # table held. It now asserts every entry in migrations.runner.MIGRATIONS
+        # was recorded, with one documented harness-only exception.
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
         run: |
-          PGPASSWORD=slmtest psql -h 127.0.0.1 -U slmtest -d slm \
-            -c "SELECT name FROM migrations_applied ORDER BY id;" \
-            -c "SELECT COUNT(*) AS total_applied FROM migrations_applied;"
+          python3 - <<'PY'
+          import os
+          import sys
+
+          import psycopg2
+
+          from migrations.runner import MIGRATIONS
+
+          # add_ssh_columns targets the `nodes` table. In production main.py
+          # runs SQLAlchemy create_all() before the migration runner, so
+          # `nodes` already exists. This gate invokes the bare CLI runner with
+          # no create_all step, so `nodes` never exists here - add_ssh_columns
+          # correctly defers (#14300 mechanism) on every run in this harness
+          # specifically. Documented allow-list of exactly one entry, not a
+          # blanket "some are deferred" skip, so a real regression elsewhere
+          # in the list still fails the gate.
+          ALLOWED_DEFERRED = {"add_ssh_columns"}
+
+          conn = psycopg2.connect(os.environ["DATABASE_URL"])
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT name FROM migrations_applied ORDER BY id")
+                  applied = {row[0] for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          expected = set(MIGRATIONS) - ALLOWED_DEFERRED
+          missing = expected - applied
+          unexpected_extra = applied - set(MIGRATIONS)
+          stale_allowlist = ALLOWED_DEFERRED - (set(MIGRATIONS) - applied)
+
+          print(f"MIGRATIONS in runner: {len(MIGRATIONS)}")
+          print(f"Applied in migrations_applied: {len(applied)}")
+          print(f"Allow-listed harness deferral: {sorted(ALLOWED_DEFERRED)}")
+
+          failed = False
+          if missing:
+              print(f"::error::migrations NOT applied and not allow-listed: {sorted(missing)}")
+              failed = True
+          if unexpected_extra:
+              print(f"::error::migrations_applied has entries runner.MIGRATIONS does not know: {sorted(unexpected_extra)}")
+              failed = True
+          if stale_allowlist:
+              print(
+                  "::error::allow-listed deferral actually applied cleanly, "
+                  f"remove from ALLOWED_DEFERRED: {sorted(stale_allowlist)}"
+              )
+              failed = True
+
+          sys.exit(1 if failed else 0)
+          PY
 
       - name: Run tablename-collision unit tests
         # Also exercise the validator that now RAISES on unallowlisted collisions
