@@ -93,21 +93,29 @@ def test_the_precedence_order_holds(higher, lower):
     ), f"{lower} is consulted before {higher} — a stale or drifted key would win (#14350)"
 
 
-def test_the_slm_key_is_read_from_the_control_node():
-    """It must be delegated, or it reads the *target* node's file again.
+def test_the_slm_key_is_read_from_the_slm_manager():
+    """It must be delegated to the SLM, or the fix is a no-op or worse.
 
-    Without `delegate_to: localhost` this task would read the same stale copy
-    the node file rule already covers, and the fix would be a no-op that looks
-    like a fix.
+    Undelegated, it re-reads the target node's stale copy and the fix does
+    nothing while looking like something.
+
+    Delegated to `localhost` -- the first version of this -- it reads whichever
+    machine invoked ansible-playbook. That is the SLM only by convention, and
+    any host carrying the slm_manager role has its own slm-secrets.env. Reading
+    the wrong one would OUTRANK the node's correct key: strictly worse than the
+    bug. `slm_manager_inventory_host` resolves it from group membership instead.
     """
     task = next(
         (t for t in _TASKS if isinstance(t, dict) and "#14350" in str(t.get("name", ""))),
         None,
     )
     assert task is not None, "the authoritative-key task is gone"
-    assert (
-        task.get("delegate_to") == "localhost"
-    ), "the SLM key task is not delegated, so it reads the target node rather than the SLM"
+    delegate_to = str(task.get("delegate_to") or "")
+    assert delegate_to, "the SLM key task is not delegated, so it reads the target node rather than the SLM"
+    assert "slm_manager_inventory_host" in delegate_to, (
+        f"the SLM key task delegates to {delegate_to!r} rather than the SLM resolved from inventory - "
+        "a non-SLM control host would supply a key that outranks the node's correct one (#14350 review)"
+    )
     assert task.get("failed_when") is False, "a control node without the file must fall through, not fail the deploy"
     assert task.get("no_log") is True, "the key task must not log its value"
 
@@ -128,13 +136,22 @@ def test_the_secret_is_never_exposed():
     So: `when:` is a test, not an exposure. Strip it, then require `no_log` only
     where the key reaches a module argument.
     """
+    matched = 0
     for task in _TASKS:
         if not isinstance(task, dict):
             continue
         exposing = {k: v for k, v in task.items() if k not in ("when", "name", "tags")}
         body = str(exposing)
         if _SLM_OWN in body or _NODE_FILE in body or "_agent_internal_api_key" in body:
+            matched += 1
             assert task.get("no_log") is True, f"task {task.get('name')!r} passes the key to a module without no_log"
+
+    # Review of #14350: without this, a rename of the three variables -- or the
+    # key tasks moving into a `block:`, which this top-level walk stops seeing --
+    # makes the loop match nothing and the rule pass having asserted nothing.
+    # A guard that inspects zero tasks reads exactly like a guard that found
+    # zero problems.
+    assert matched >= 3, f"the no_log rule inspected only {matched} tasks - it is no longer bound to the key tasks"
 
 
 def test_the_empty_key_warning_survives():

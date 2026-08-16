@@ -265,8 +265,9 @@
 #
 # The agent authenticates its heartbeat AGAINST the SLM backend, which loads
 # /etc/autobot/slm-secrets.env. That file is therefore the only source of truth
-# for what the agent's key must be. Every run originates on the SLM manager, so
-# `delegate_to: localhost` reads exactly that file.
+# for what the agent's key must be. It is read from the SLM manager as resolved
+# from inventory group membership, not from whatever host happens to be driving
+# the play.
 #
 # The two values this replaces as the primary source were each wrong in a
 # different direction, and the repo has an issue for both:
@@ -289,7 +290,17 @@
     fi
   args:
     executable: /bin/bash
-  delegate_to: localhost
+  # Review of #14350: NOT `localhost`. That would read whichever machine
+  # invoked ansible-playbook, which is the SLM only by convention -- the
+  # repo's own runbooks disagree on whether a fleet update may be driven from
+  # a dev box, and any host carrying the slm_manager role has its own
+  # slm-secrets.env. Reading the wrong one here would OUTRANK the node's
+  # correct key, which is worse than the bug being fixed.
+  #
+  # `slm_manager_inventory_host` resolves the SLM from group membership
+  # (group_vars/all.yml, #9956) and is already used this way by
+  # playbooks/setup-internal-ca.yml.
+  delegate_to: "{{ slm_manager_inventory_host }}"
   become: true
   register: _slm_own_key
   changed_when: false
