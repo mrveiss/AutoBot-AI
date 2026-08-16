@@ -47,6 +47,8 @@ from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
 from .replay_log import LLCRunReplayLog
 from .review_gate import LLCReviewGatePolicy
+from .role_assignment import LLCRoleAssignment
+from .role_workflow import LLCRoleWorkflow
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .template import TemplateCategory
@@ -91,6 +93,8 @@ __all__ = [
     "LLCProgram",
     "LLCProject",
     "LLCRunStatus",
+    "LLCRoleAssignment",
+    "LLCRoleWorkflow",
     "LLCSprint",
     "RoutineProduces",
     "LLCSecret",

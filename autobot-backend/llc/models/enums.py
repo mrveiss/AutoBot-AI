@@ -253,6 +253,42 @@ class AssigneeType(str, Enum):
     AGENT = "agent"
 
 
+class RoleHolderType(str, Enum):
+    """Who currently holds a role (#14221 step 2).
+
+    A **different axis** from :class:`AssigneeType`, not a wider version of it.
+    ``AssigneeType`` answers "who is working this work item"; this answers "who
+    occupies this role". They overlap on two members and diverge on the third,
+    which is exactly the shape that has bitten this module before — so:
+
+    **Never compare a member of this enum with a member of another.** Both are
+    ``str``-mixin enums, so ``RoleHolderType.AGENT == AssigneeType.AGENT`` is
+    silently ``True`` while a ``CONTACT`` holder compares equal to nothing at
+    all. That silent-True/silent-False pair is #13954's defect exactly.
+
+    ``CONTACT`` is why this is a separate enum rather than a new member on
+    ``AssigneeType``. Owner framing:
+
+        user = human, but not all humans are users — they could be part of a
+        process, like a contact person you send email to or call
+
+    A contact can therefore *hold a role* ("external accountant", "supplier
+    escalation contact") without ever being a user. Adding ``CONTACT`` to
+    ``AssigneeType`` instead would silently widen what a **work item** may be
+    assigned to, since assignment validates by enum membership — a data-model
+    change smuggled in as a vocabulary edit.
+
+    Minting a new vocabulary is deliberate and was checked first: no enum in
+    this codebase declares a ``contact`` member at all, so there was nothing to
+    reuse. Registered in #14263's inventory rather than left to become another
+    unowned status vocabulary.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+    CONTACT = "contact"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 
