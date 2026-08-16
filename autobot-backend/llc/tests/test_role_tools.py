@@ -24,6 +24,11 @@ import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+# Fully-qualified, matching RoleToolService._require_registered_tool (#14373):
+# the bare ``tool_sdk`` path would resolve to a *different* singleton object
+# than the one the service under test uses, so patching it here would be a
+# no-op against production behaviour.
+from autobot_shared.tool_sdk.registry import get_tool_registry
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_tool import LLCRoleTool
@@ -33,12 +38,6 @@ from llc.services.role_tool import RoleToolService, ToolRegistryUnavailable
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
-
-# Fully-qualified, matching RoleToolService._require_registered_tool (#14373):
-# the bare ``tool_sdk`` path would resolve to a *different* singleton object
-# than the one the service under test uses, so patching it here would be a
-# no-op against production behaviour.
-from autobot_shared.tool_sdk.registry import get_tool_registry
 from user_management.models.base import Base
 from user_management.models.role import Role
 
