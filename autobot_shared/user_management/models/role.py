@@ -18,7 +18,7 @@ relationships as ``Mapped[Optional["Organization"]]``; SLM already used the
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -102,6 +102,29 @@ class Role(Base):
     """
 
     __tablename__ = "roles"
+
+    # A company cannot hold two roles of the same name (#14325).
+    #
+    # PARTIAL, not a plain UniqueConstraint(org_id, name). System roles carry
+    # org_id IS NULL, and Postgres treats NULLs as distinct for uniqueness, so a
+    # plain constraint would silently permit any number of identically named
+    # system roles while appearing to forbid them. The predicate says what is
+    # actually meant: uniqueness applies within a company, and system roles are
+    # governed elsewhere.
+    #
+    # Declared on the model as well as in migration 20260821_081 so a fresh
+    # database built by ``Base.metadata.create_all()`` carries the index too —
+    # a create_all-provisioned schema would otherwise diverge from a migrated
+    # one, and only the migrated path would be protected.
+    __table_args__ = (
+        Index(
+            "uq_roles_org_id_name",
+            "org_id",
+            "name",
+            unique=True,
+            postgresql_where=text("org_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
