@@ -7745,7 +7745,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Systemzustand",
     "providerFallback": "Anbieter-Fallback",
-    "advancedControl": "Erweiterte Steuerung"
+    "advancedControl": "Erweiterte Steuerung",
+    "llcRoles": "Rollen"
   },
   "llcCompanyStatus": {
     "showArchived": "Archivierte anzeigen",
@@ -9100,5 +9101,40 @@
     "loadFailed": "Planer konnten nicht geladen werden.",
     "toggleFailed": "{name} konnte nicht geändert werden.",
     "resetFailed": "{name} konnte nicht zurückgesetzt werden."
+  },
+  "llcRoles": {
+    "title": "Rollen",
+    "subtitle": "Eine Rolle überdauert ihre Inhaber — Berechtigungen, Workflows, Werkzeuge und Zugangsdaten bleiben bestehen.",
+    "addRole": "Rolle hinzufügen",
+    "deleteRole": "Rolle löschen",
+    "noCompany": "Wählen Sie ein Unternehmen aus, um dessen Rollen zu sehen.",
+    "loading": "Wird geladen…",
+    "empty": "Noch keine Rollen.",
+    "systemRole": "System",
+    "holders": "Inhaber",
+    "noHolders": "Diese Rolle hat derzeit keinen Inhaber.",
+    "showPastHolders": "Frühere Inhaber anzeigen",
+    "pastHolder": "früher",
+    "permissions": "Berechtigungen",
+    "noPermissions": "Keine Berechtigungen erteilt.",
+    "workflows": "Workflows",
+    "noWorkflows": "Keine Workflows zugeordnet.",
+    "tools": "Werkzeuge",
+    "noTools": "Keine Werkzeuge zugeordnet.",
+    "credentials": "Zugangsdaten",
+    "noCredentials": "Keine Zugangsdaten zugeordnet.",
+    "fieldName": "Name",
+    "fieldDescription": "Beschreibung",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "errorLoad": "Rollen konnten nicht geladen werden.",
+    "errorLoadDetail": "Rollendetails konnten nicht geladen werden.",
+    "errorCreate": "Rolle konnte nicht erstellt werden.",
+    "errorDelete": "Rolle konnte nicht gelöscht werden.",
+    "holderType": {
+      "agent": "Agent",
+      "user": "Benutzer",
+      "contact": "Kontakt"
+    }
   }
 }

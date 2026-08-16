@@ -7745,7 +7745,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Sistēmas veselība",
     "providerFallback": "Nodrošinātāja rezerve",
-    "advancedControl": "Papildu vadība"
+    "advancedControl": "Papildu vadība",
+    "llcRoles": "Lomas"
   },
   "llcCompanyStatus": {
     "showArchived": "Rādīt arhivētos",
@@ -9100,5 +9101,40 @@
     "loadFailed": "Neizdevās ielādēt plānotājus.",
     "toggleFailed": "Neizdevās mainīt {name}.",
     "resetFailed": "Neizdevās atjaunot {name} noklusējumu."
+  },
+  "llcRoles": {
+    "title": "Lomas",
+    "subtitle": "Loma pastāv ilgāk nekā tās izpildītājs — atļaujas, darbplūsmas, rīki un akreditācijas dati paliek.",
+    "addRole": "Pievienot lomu",
+    "deleteRole": "Dzēst lomu",
+    "noCompany": "Atlasiet uzņēmumu, lai skatītu tā lomas.",
+    "loading": "Notiek ielāde…",
+    "empty": "Vēl nav lomu.",
+    "systemRole": "Sistēmas",
+    "holders": "Izpildītāji",
+    "noHolders": "Šo lomu pašlaik neviens nepilda.",
+    "showPastHolders": "Rādīt iepriekšējos",
+    "pastHolder": "iepriekšējais",
+    "permissions": "Atļaujas",
+    "noPermissions": "Nav piešķirtu atļauju.",
+    "workflows": "Darbplūsmas",
+    "noWorkflows": "Nav pievienotu darbplūsmu.",
+    "tools": "Rīki",
+    "noTools": "Nav pievienotu rīku.",
+    "credentials": "Akreditācijas dati",
+    "noCredentials": "Nav pievienotu akreditācijas datu.",
+    "fieldName": "Nosaukums",
+    "fieldDescription": "Apraksts",
+    "cancel": "Atcelt",
+    "save": "Saglabāt",
+    "errorLoad": "Neizdevās ielādēt lomas.",
+    "errorLoadDetail": "Neizdevās ielādēt lomas detaļas.",
+    "errorCreate": "Neizdevās izveidot lomu.",
+    "errorDelete": "Neizdevās dzēst lomu.",
+    "holderType": {
+      "agent": "Aģents",
+      "user": "Lietotājs",
+      "contact": "Kontaktpersona"
+    }
   }
 }
