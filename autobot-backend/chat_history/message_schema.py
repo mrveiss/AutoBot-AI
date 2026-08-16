@@ -49,6 +49,16 @@ Deliberately NOT applied to LLM-API-only readers (``llm_shared/providers/*``,
 tool-batch scan). Those handle messages that are already in API shape by
 construction, and teaching them a second schema would widen a contract that is
 currently correct.
+
+``llm_role`` is the one exception to that neutrality, and is marked as such
+rather than quietly admitted. Everything else here answers a question about the
+*stored data*; that one answers a question about what a **provider** will
+accept, which is a constraint from the other side of the boundary. It lives
+here anyway because the alternative is a second module reimplementing the
+both-schemas read, and because the constraint is not one provider's quirk —
+``vertexai``'s content builder independently collapses non-conversational roles
+the same way. If a third provider-facing rule ever wants to join it, that is the
+signal to split them out rather than to keep widening this module.
 """
 
 from typing import Any, Dict, List
@@ -135,10 +145,23 @@ def llm_role(message: Dict[str, Any], default: str = _CALLER_ROLE) -> str:
     speaker was never expressible, while the two roles that *are* expressible
     now survive instead of being flattened along with them.
 
+    This is an **allowlist**, not a list of known-bad speakers, and deliberately
+    so: the speakers above were found by grepping one keyword-argument form, so
+    a writer that passes its sender positionally or through a variable would not
+    have appeared. Naming what may pass keeps the unenumerated ones safe — and
+    they exist. The websocket layer formats about a dozen more (tool output,
+    workflow, agent-step and error variants); they are inert only because that
+    path drops its session id and writes to a bucket no session reader touches
+    (#14342). Closing that routing gap must not require revisiting this.
+
     The system role is deliberately not passed through. It is a legal role, but
-    it does not mean *a turn in the conversation*: an adapter that separates it
-    out hoists it into the system prompt, so a stored notice with that sender
-    would silently replace the real instructions rather than be read as history.
+    it does not mean *a turn in the conversation* — an adapter that separates it
+    out hoists it into the instruction channel, so a persisted operational
+    notice (an approval, a command result) would arrive as an instruction rather
+    than as history. That is an elevation of ordinary history into the
+    highest-trust slot, wrong on its own terms; it becomes destructive as well
+    on any route that carries a real system prompt for it to overwrite, which
+    `chat_optimized` already does and the plain chat path does not yet.
     Callers that genuinely carry a system prompt add it themselves.
     """
     role = message_role(message, default=default)
