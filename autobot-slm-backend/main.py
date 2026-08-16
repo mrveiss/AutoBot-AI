@@ -65,6 +65,7 @@ from api import (
     websocket_router,
 )
 from api.code_source import router as code_source_router
+from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
@@ -651,6 +652,10 @@ app.include_router(updates_router, prefix="/api", dependencies=_SM)
 app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
 app.include_router(performance_router, prefix="/api", dependencies=_SM)
+# #14339: the prometheus scrape route, mounted WITHOUT _SM. Prometheus cannot
+# authenticate, so while it sat behind the dependency above every scrape got a
+# 401 and the job never yielded a sample.
+app.include_router(performance_metrics_router, prefix="/api")
 app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)

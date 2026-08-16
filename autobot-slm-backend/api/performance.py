@@ -29,6 +29,23 @@ from services.database import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/performance", tags=["performance"])
 
+# Scrape surface, mounted WITHOUT the service-management dependency the rest of
+# this router carries (#14339).
+#
+# Prometheus cannot authenticate. While the metrics route sat on `router`, every
+# scrape got 401 and the job had never yielded a sample — so nothing built on
+# SLM performance metrics had ever had data, and the only visible symptom was an
+# empty panel, indistinguishable from a quiet system.
+#
+# Same shape the backend already uses for the same reason: a dedicated no-auth
+# router for scraping (#1288, api/prometheus_endpoint.py). The path is unchanged,
+# so the deployed scrape config starts working without being rewritten.
+#
+# What it exposes is trace ids, statuses, durations and SLO names — operational
+# data, no credentials and no user content. Anything sensitive must not be added
+# to this router; put it on `router` above, which is authenticated.
+metrics_router = APIRouter(prefix="/performance", tags=["performance"])
+
 
 # =============================================================================
 # Response Models
@@ -701,7 +718,7 @@ async def get_node_metrics(
     )
 
 
-@router.get("/metrics/prometheus")
+@metrics_router.get("/metrics/prometheus")
 async def get_prometheus_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
