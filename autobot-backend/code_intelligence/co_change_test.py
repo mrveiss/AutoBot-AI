@@ -42,6 +42,30 @@ _FIXTURE_IDENTITY = {
     "GIT_COMMITTER_EMAIL": "a@b.c",
 }
 
+#: #14323: ``git commit``/``git add`` can decide housekeeping is due and run
+#: ``git gc --auto``. ``gc.autoDetach`` defaults to ``true``, which makes that
+#: housekeeping fork a DETACHED background process — the triggering command
+#: returns to its caller, and ``subprocess.run`` returns to this fixture,
+#: before the background job has necessarily finished repacking the object
+#: store. A ``git log`` walk that follows (in this process or another) can
+#: then observe the store mid-transition: a commit whose parent was loose a
+#: moment ago and is, right now, in neither the old loose location nor the
+#: new pack yet — "Could not read <sha>" / "Failed to traverse parents of
+#: commit <sha>". That is exactly "a code path that can return before the
+#: objects are durable" from the issue this fixes. ``gc.auto = 0`` removes
+#: the trigger outright; ``gc.autoDetach = false`` is kept alongside it so
+#: that if any future git version or heuristic fires housekeeping anyway, it
+#: runs to completion before the triggering command returns, rather than
+#: racing whatever reads the repository next. Local (``.git/config``)
+#: settings, not ``-c`` flags on one invocation: every one of the many
+#: separate ``subprocess.run`` calls this fixture makes — and every read the
+#: crawler under test makes afterwards — must see the same setting, and only
+#: a persisted, repo-scoped config survives across all of them.
+_HOUSEKEEPING_OVERRIDES = {
+    "gc.auto": "0",
+    "gc.autoDetach": "false",
+}
+
 
 def _fixture_git_env() -> dict:
     """:func:`hermetic_git_env` plus this file's own identity."""
@@ -103,6 +127,19 @@ def _git_init(path: Path) -> None:
             f"git init failed in {path} with exit {result.returncode}\n"
             f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
         )
+    disable_background_housekeeping(path)
+
+
+def disable_background_housekeeping(path: Path) -> None:
+    """Persist :data:`_HOUSEKEEPING_OVERRIDES` into ``path``'s local config (#14323).
+
+    Shared with :mod:`code_intelligence.git_history_crawler_test`, which builds
+    throwaway repos the same way — a fix landed in only one of two identical
+    call sites is half a fix (see that file's own ``hermetic_git_env`` import,
+    added for the same reason by #13882).
+    """
+    for key, value in _HOUSEKEEPING_OVERRIDES.items():
+        _git(path, "config", key, value)
 
 
 def _commit(repo: Path, files: dict, message: str) -> None:
@@ -652,3 +689,48 @@ def test_a_worker_with_a_hostile_index_file_still_commits_its_own_tree(monkeypat
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.count("\n") == 1, f"{name} sees another repo's history: {result.stdout}"
+
+
+# ------------------------------------------------- background housekeeping (#14323)
+
+
+def test_git_init_disables_automatic_housekeeping(tmp_path):
+    """The invariant this fix depends on, pinned directly.
+
+    ``gc.auto`` and ``gc.autoDetach`` must be set in the repo's *local* config
+    the moment it exists — not merely "not configured to the contrary" — so
+    every later command on this repo (every ``_commit`` this fixture makes,
+    and every read the crawler under test makes) sees them regardless of
+    which environment dict that particular ``subprocess.run`` call used.
+    """
+    _git_init(tmp_path)
+
+    for key, expected in _HOUSEKEEPING_OVERRIDES.items():
+        result = subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "--get", key],
+            capture_output=True,
+            text=True,
+            env=_fixture_git_env(),
+        )
+        assert result.returncode == 0, f"{key} was never set: {result.stderr}"
+        assert result.stdout.strip() == expected, f"{key} = {result.stdout.strip()!r}, expected {expected!r}"
+
+
+def test_automatic_housekeeping_survives_every_later_commit(repo):
+    """Not just set once: still in force after the fixture's own 26 commits.
+
+    A config write that a later ``_commit`` could plausibly clobber (it
+    doesn't — nothing here touches ``gc.*`` again — but this is what would
+    catch it if a future edit did) would silently reopen the "commit can
+    return before housekeeping settles" window this issue is about.
+    """
+    for key, expected in _HOUSEKEEPING_OVERRIDES.items():
+        result = subprocess.run(
+            ["git", "-C", str(repo), "config", "--get", key],
+            capture_output=True,
+            text=True,
+            env=_fixture_git_env(),
+        )
+        assert result.stdout.strip() == expected, (
+            f"{key} drifted to {result.stdout.strip()!r} after the fixture's commits"
+        )
