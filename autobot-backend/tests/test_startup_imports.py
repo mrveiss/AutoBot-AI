@@ -351,7 +351,12 @@ def test_strict_mode_raises_on_router_import_failure(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "1")
     monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", "1")
     _fake_importlib = type("_FakeImportlib", (), {"import_module": staticmethod(_failing_import)})()
-    monkeypatch.setattr(feature_routers, "importlib", _fake_importlib)
+    # #14207: the import moved to the shared loader every registry now uses, so
+    # that is where the failure has to be injected. Patching feature_routers'
+    # own `importlib` would silently no-op — the module no longer imports it,
+    # and the fake would never be consulted.
+    _loader = _importlib.import_module("initialization.router_registry.loader")
+    monkeypatch.setattr(_loader, "importlib", _fake_importlib)
 
     with pytest.raises(RuntimeError, match="AUTOBOT_FEATURE_ROUTERS_STRICT=1"):
         feature_routers.load_feature_routers()
