@@ -177,7 +177,13 @@ def test_sensitive_tools_parity():
 
 
 def test_approval_categories_parity():
-    assert set(APPROVAL_CATEGORY_TOOLS) == set(_ORIG_APPROVAL)
+    # The extraction snapshot is a floor, not a ceiling (#14067). What this
+    # guards is *drift*: every category that existed at extraction time must
+    # still carry exactly its original tools, so a consolidation edit cannot
+    # quietly widen or narrow one. A category added since is an addition, not
+    # drift, and is asserted on its own terms in
+    # TestOutboundIsReachableThroughACategory below.
+    assert set(_ORIG_APPROVAL) <= set(APPROVAL_CATEGORY_TOOLS), "a category present at extraction time was removed"
     for category, tools in _ORIG_APPROVAL.items():
         assert set(APPROVAL_CATEGORY_TOOLS[category]) == tools, category
 
@@ -198,3 +204,49 @@ def test_consumers_reexport_the_catalogue():
     assert set(loop_sensitive) == _ORIG_SENSITIVE
     assert set(reg_infra) == _ORIG_INFRA_AND_SHELL
     assert handler_approval is APPROVAL_CATEGORY_TOOLS
+
+
+class TestOutboundIsReachableThroughACategory:
+    """#14067: the one action class that leaves the machine had no category.
+
+    `HTTP_WRITE_TOOLS` sat in `SENSITIVE_TOOLS` — so the agent-loop plane gated
+    it — while `APPROVAL_CATEGORY_TOOLS` named none of it, so a work item's
+    `requires_approval_before` could not express "ask me before you send
+    anything outward" at all.
+    """
+
+    def test_every_http_write_tool_is_reachable_through_some_category(self):
+        from autobot_shared.tool_catalogue import (
+            APPROVAL_CATEGORY_TOOLS,
+            HTTP_WRITE_TOOLS,
+            match_tool_name,
+        )
+
+        for tool in HTTP_WRITE_TOOLS:
+            assert any(
+                match_tool_name(tool, patterns, word_boundary=True) for patterns in APPROVAL_CATEGORY_TOOLS.values()
+            ), f"{tool!r} is sensitive but no approval category can gate it"
+
+    def test_the_new_category_is_in_the_controlled_vocabulary(self):
+        """A category absent from the enum "matches no tools at the seam and
+        silently disables the gate" — per ApprovalCategory's own docstring."""
+        from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, valid_approval_categories
+
+        assert set(APPROVAL_CATEGORY_TOOLS) <= valid_approval_categories()
+
+    def test_a_gateway_send_is_deliberately_not_a_tool_name_here(self):
+        """Guards against a future edit inventing tool names for the Gateway.
+
+        Gateway egress is governed at its own seam because a channel send is not
+        a tool call; adding a fictional tool name here would create an allowlist
+        entry that matches nothing and exempts nothing, silently.
+        """
+        from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
+
+        assert APPROVAL_CATEGORY_TOOLS["sending externally"] == (
+            "http_post",
+            "http_put",
+            "http_patch",
+            "http_delete",
+            "send_request",
+        )
