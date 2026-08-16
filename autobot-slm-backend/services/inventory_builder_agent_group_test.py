@@ -35,9 +35,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location(
-        "_ib_14328", _BACKEND_ROOT / "services" / "inventory_builder.py"
-    )
+    spec = importlib.util.spec_from_file_location("_ib_14328", _BACKEND_ROOT / "services" / "inventory_builder.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["_ib_14328"] = module
     try:
