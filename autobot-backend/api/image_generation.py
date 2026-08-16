@@ -105,7 +105,11 @@ async def generate_image(
     plugin is not loaded.
     """
     try:
-        from tool_sdk.registry import get_tool_registry
+        # Imported by the fully-qualified path (#14373): the module-level
+        # get_tool_registry() singleton must be reached through exactly one
+        # import identity, or this call would see an independently empty
+        # registry instead of the real one.
+        from autobot_shared.tool_sdk.registry import get_tool_registry  # noqa: PLC0415
 
         registry = get_tool_registry()
         input_data: Dict[str, Any] = {"prompt": request.prompt, "provider": request.provider}
