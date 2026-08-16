@@ -1169,10 +1169,17 @@ def publish_dispatch_states(
     """Write the dispatch commit status for each head. Returns the not-dispatched count."""
     now = datetime.now(timezone.utc)
     wedged = overdue_by_head(overdue)
-    self_hosted_paths = self_hosted_workflow_paths(config["workflow_dir"])
+    # `.get` with the module default, not `config["workflow_dir"]`: this is an
+    # env-var-backed knob like every other entry in `load_config`, and a caller
+    # that has not overridden it must get the real production directory rather
+    # than a KeyError. `load_config` still sets it explicitly, and
+    # `test_load_config_supplies_the_workflow_dir` pins that, so the default
+    # here is a fallback for partial configs — never the only thing wiring it.
+    workflow_dir = config.get("workflow_dir", DEFAULT_WORKFLOW_DIR)
+    self_hosted_paths = self_hosted_workflow_paths(workflow_dir)
     if self_hosted_paths is None:
         print(  # noqa: print
-            f"::warning::{config['workflow_dir']} unreadable — a starved run cannot be "
+            f"::warning::{workflow_dir} unreadable — a starved run cannot be "
             "attributed to a runner pool, so pool verdicts fall back to unfiltered."
         )
     blocked = 0
@@ -1355,7 +1362,9 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     # disk because the job checks the repository out. Attribution is therefore a
     # local read rather than an API call, and costs no budget.
     queued = api.recent_runs(run_status="queued")
-    self_hosted_paths = self_hosted_workflow_paths(config["workflow_dir"])
+    self_hosted_paths = self_hosted_workflow_paths(
+        config.get("workflow_dir", DEFAULT_WORKFLOW_DIR)
+    )
     starved = [
         run
         for run in starved_runs(queued, now, config["stall_minutes"])

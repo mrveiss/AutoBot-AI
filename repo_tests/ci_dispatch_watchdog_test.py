@@ -991,6 +991,25 @@ def test_missing_repository_is_rejected(watchdog, monkeypatch):
         watchdog.load_config()
 
 
+def test_load_config_supplies_the_workflow_dir(watchdog, monkeypatch):
+    """The production path must WIRE the directory, not lean on the fallback.
+
+    Both starvation call sites read it with `.get(..., DEFAULT_WORKFLOW_DIR)` so
+    a partial config cannot raise KeyError. That fallback is only safe while the
+    real config genuinely sets the key — otherwise the knob would be dead and
+    `WATCHDOG_WORKFLOW_DIR` would silently do nothing. This pins the wiring.
+    """
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
+    monkeypatch.delenv("WATCHDOG_WORKFLOW_DIR", raising=False)
+
+    assert watchdog.load_config()["workflow_dir"] == watchdog.DEFAULT_WORKFLOW_DIR
+
+    monkeypatch.setenv("WATCHDOG_WORKFLOW_DIR", "custom/workflows")
+
+    assert watchdog.load_config()["workflow_dir"] == "custom/workflows"
+
+
 # --- sweep polling ----------------------------------------------------------
 
 
