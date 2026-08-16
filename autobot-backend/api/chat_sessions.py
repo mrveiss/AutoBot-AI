@@ -41,6 +41,7 @@ from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.message_schema import message_role, message_text
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
@@ -73,6 +74,9 @@ from utils.response_helpers import create_success_response
 
 router = APIRouter(tags=["chat-sessions"])
 logger = get_logger(__name__)
+
+# The speaker a preserved prompt is stored under.
+_SYSTEM_ROLE = "system"
 
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
@@ -1481,11 +1485,19 @@ def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
     Extract system messages from session for preservation.
 
     Issue #665: Extracted helper for system message preservation during reset.
+
+    #14306: this filtered on the API-shape role key against records the session
+    store keeps under `sender`, so the comparison was never true and the reset
+    preserved nothing — while reporting the count it had preserved as 0, which
+    reads as "there was no system prompt" rather than as a failure. The flag
+    that asks for this defaults to on, so the default reset discarded it.
+
+    Reads through the shared normaliser (#14259), which resolves either shape.
     """
     try:
         existing_data = chat_manager.get_session(session_id)
         if existing_data and "messages" in existing_data:
-            return [m for m in existing_data["messages"] if m.get("role") == "system"]
+            return [m for m in existing_data["messages"] if isinstance(m, dict) and message_role(m) == _SYSTEM_ROLE]
     except Exception as e:
         logger.warning("Could not preserve system prompt: %s", e)
     return []
@@ -1499,11 +1511,16 @@ def _to_persisted_system_message(msg: Dict) -> Dict:
     ``add_messages_batch`` and the JSON files in ``data/chats/``) expects
     ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
     ``api/chat.py:_to_persisted_message`` for the system-message subset.
+
+    #14306: the body is read through the normaliser too. Its source claimed to
+    hand over API-shape records and did not, so a record whose body sits under
+    the stored key would have been preserved with an empty one — the prompt
+    surviving the reset in name only.
     """
     return {
         "id": msg.get("id", ""),
-        "sender": msg.get("role") or msg.get("sender") or "system",
-        "content": msg.get("content", ""),
+        "sender": message_role(msg, default=_SYSTEM_ROLE),
+        "content": message_text(msg),
         "timestamp": msg.get("timestamp"),
         "type": msg.get("type", "message"),
         "metadata": msg.get("metadata") or {},
