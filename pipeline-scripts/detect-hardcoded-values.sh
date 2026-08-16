@@ -16,6 +16,21 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IP_PATTERN='172\.16\.168\.[0-9]+'
 PORT_PATTERN='(8443|6379|3000|5432|8080|9090|11434)'
 
+# Account-name violations (#14316). ACCOUNT_PATH_PATTERN is the original
+# rule: a hardcoded /home/<user> path. ACCOUNT_POSITION_PATTERN is the
+# broadened half -- the SAME two account names (kali: a leftover dev-image
+# user; autobot: the correct production account, still a violation when
+# hardcoded rather than read from AUTOBOT_BASE_DIR/a variable) appearing bare,
+# in the positions that actually carry an account identity in shell/systemd/
+# sudoers text: a systemd User=/Group= directive, a chown owner:group, or a
+# sudoers rule. A path match alone misses exactly this shape -- it is how
+# `User=kali`, `chown kali:kali` and bare `kali ALL=(ALL) NOPASSWD:` sudoers
+# lines survived in autobot-infrastructure/shared/scripts/utilities/
+# fix-vnc-desktop.sh, fix-vnc-wsl.sh and setup_passwordless_sudo.sh.
+ACCOUNT_PATH_PATTERN='/home/kali|/home/autobot'
+ACCOUNT_POSITION_PATTERN='(User=|Group=)(kali|autobot)\b|chown[^=]*\b(kali|autobot):(kali|autobot)\b|^[[:space:]]*(kali|autobot)[[:space:]]+ALL='
+ACCOUNT_PATTERN="(${ACCOUNT_PATH_PATTERN}|${ACCOUNT_POSITION_PATTERN})"
+
 OUTPUT_FORMAT="text"
 REPORT_MODE=false
 
@@ -38,12 +53,17 @@ OTHER_VIOLATIONS=0
 VIOLATION_DETAILS=""
 
 # Directories to scan
+# autobot-infrastructure (#14316): the deployment/ops scripts that actually
+# touch hosts, paths and accounts directly -- and had no type system or
+# linter enforcing indirection on them -- were never in this list, so a
+# shell-script fix below would still have found nothing there.
 SCAN_DIRS=(
     "autobot-backend"
     "autobot-frontend/src"
     "autobot_shared"
     "autobot-slm-backend"
     "autobot-slm-frontend/src"
+    "autobot-infrastructure"
 )
 
 # Files/patterns to exclude from scanning
@@ -65,6 +85,11 @@ EXCLUDE_PATTERNS=(
     # SSOT definition files (they ARE the config source)
     "registry_defaults.py"
     "ssot_mappings.py"
+    # autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh (#14316):
+    # a second, dormant hardcoded-value scanner whose own body is a literal
+    # table of every SSOT IP/port -- an SSOT definition file, exactly like
+    # ssot_mappings.py above, not a violation of the rule it implements.
+    "detect-hardcoded-values.sh"
     # Test files (assertions verify known config values) — cover both pytest
     # conventions (test_*.py prefix AND *_test.py suffix) and both TS conventions
     # (*.spec.ts AND *.test.ts). NOTE: this deliberately stops the design-value
@@ -97,6 +122,10 @@ scan_directory() {
     fi
 
     # Scan for hardcoded IPs (SSOT violations)
+    # #14316: *.sh/*.yml/*.yaml added -- Ansible playbooks/roles and shell
+    # utilities are exactly where a raw fleet IP is most likely to be typed
+    # directly rather than read from config, and neither extension was
+    # scanned before.
     while IFS= read -r line; do
         if [ -n "$line" ]; then
             SSOT_VIOLATIONS=$((SSOT_VIOLATIONS + 1))
@@ -104,10 +133,12 @@ scan_directory() {
             VIOLATION_DETAILS="${VIOLATION_DETAILS}SSOT|${line}\n"
         fi
     done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
+        --include="*.sh" --include="*.yml" --include="*.yaml" \
         $EXCLUDE_ARGS -E "$IP_PATTERN" "$full_path" 2>/dev/null \
         | grep -v '#.*noqa' | grep -v '//.*noqa' || true)
 
-    # Scan for hardcoded /home/kali or /opt/autobot paths (other violations)
+    # Scan for hardcoded account paths/identities (other violations) — see
+    # ACCOUNT_PATTERN above for the path vs. bare-position halves (#14316).
     while IFS= read -r line; do
         if [ -n "$line" ]; then
             OTHER_VIOLATIONS=$((OTHER_VIOLATIONS + 1))
@@ -115,7 +146,8 @@ scan_directory() {
             VIOLATION_DETAILS="${VIOLATION_DETAILS}OTHER|${line}\n"
         fi
     done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-        $EXCLUDE_ARGS -E '(/home/kali|/home/autobot)' "$full_path" 2>/dev/null \
+        --include="*.sh" --include="*.yml" --include="*.yaml" \
+        $EXCLUDE_ARGS -E "$ACCOUNT_PATTERN" "$full_path" 2>/dev/null \
         | grep -v '#.*noqa' | grep -v '//.*noqa' \
         | grep -v 'AUTOBOT_BASE_DIR' || true)
 }
