@@ -87,16 +87,48 @@ def _mount_calls() -> dict[str, ast.Call]:
     leak. Closing it means making `main` importable under pytest, which is a
     separate problem from this one.
     """
+    calls, unparseable = _app_mounts()
+    assert not unparseable, (
+        f"mount calls this check cannot read: {unparseable}. A shape it does not "
+        "recognise used to be skipped in silence, which let an ungated router be "
+        "invisible rather than flagged. Mount with a plain router name, or teach "
+        "this parser the new shape (#14339)."
+    )
+    return calls
+
+
+def _app_mounts() -> tuple[dict[str, ast.Call], list[str]]:
+    """`app.include_router(...)` calls, split into readable and unreadable.
+
+    Two things this deliberately does NOT do, both fail-open holes review
+    demonstrated with working exploits:
+
+    * It no longer matches any receiver. Only `app` mounts decide what is
+      reachable from outside; a router-on-router include is a different question.
+    * It no longer skips a call whose first argument is not a plain name.
+      `app.include_router(*routers)` and `app.include_router(module.router)` are
+      ordinary FastAPI idioms, and each left a genuinely ungated, undeclared
+      router reachable while every test here stayed green. An unreadable mount is
+      now returned for the caller to fail on, because "I could not parse this"
+      and "there is nothing here" must not look the same.
+    """
     tree = ast.parse((Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8"))
     calls: dict[str, ast.Call] = {}
+    unparseable: list[str] = []
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
             continue
-        if node.func.attr != "include_router" or not node.args:
+        if node.func.attr != "include_router":
             continue
-        if isinstance(node.args[0], ast.Name):
+        receiver = node.func.value
+        if not (isinstance(receiver, ast.Name) and receiver.id == "app"):
+            continue
+        if node.args and isinstance(node.args[0], ast.Name):
             calls[node.args[0].id] = node
-    return calls
+        else:
+            shape = ast.dump(node.args[0])[:80] if node.args else "no arguments"
+            unparseable.append(f"line {node.lineno}: {shape}")
+    return calls, unparseable
 
 
 def _keywords(call: ast.Call) -> set[str]:
@@ -213,18 +245,59 @@ def test_the_registry_block_is_bounded_at_both_ends():
 
 
 def test_a_name_is_declared_only_as_a_whole_word():
-    """`auth_router` must not be declared by `sso_auth_router` appearing.
+    """A router must not be declared by a longer neighbour containing its name.
 
-    Seven such collisions exist among this file's router names, so a substring
-    test would let a future router be declared by a longer neighbour it has
-    nothing to do with.
+    Asserted against synthetic text, not the live registry. An earlier version
+    used the real block and was decorative: `auth_router` is declared there on
+    its own line *as well as* being a substring of `sso_auth_router`, so it
+    matched under both the buggy and the fixed logic. Review proved it by
+    reinstating the substring bug and watching this test stay green.
+
+    So the input here contains the name ONLY as a substring — the one condition
+    under which the two behaviours differ. Seven such collisions exist among the
+    real router names in this file (`services_router` inside
+    `fleet_services_router`, `agents_router` inside `external_agents_router`,
+    and five more), so it is the shape a future router would hit.
     """
-    declared = _registry_block()
-    assert re.search(r"\bsso_auth_router\b", declared), "expected sso_auth_router in the registry"
-    assert not re.search(r"\bnot_a_real_router\b", declared)
-    # The collision itself: a name contained in a declared one is not declared.
-    assert "auth_router" in declared  # substring of sso_auth_router, present either way
-    assert re.search(r"\bauth_router\b", declared), "auth_router is declared on its own line, not only as a substring"
+    declared = "#   sso_auth_router - OAuth callback; must complete before a token exists"
+
+    assert "auth_router" in declared, "the substring collision this guards against is real"
+    assert not re.search(
+        r"\bauth_router\b", declared
+    ), "a name present only inside a longer neighbour must not count as declared"
+    assert re.search(r"\bsso_auth_router\b", declared), "the neighbour itself is still declared"
+
+
+def test_an_unreadable_mount_is_a_failure_not_a_skip():
+    """The parser must not treat "I cannot read this" as "there is nothing here".
+
+    Review demonstrated two working exploits against the earlier version, both
+    ordinary FastAPI idioms: `app.include_router(*routers)` and
+    `app.include_router(module.router)`. Neither has a bare name as its first
+    argument, so both were skipped in silence, leaving a genuinely ungated,
+    undeclared router reachable with every test green.
+    """
+    calls, unparseable = _app_mounts()
+    assert not unparseable, f"main.py has mounts this check cannot read: {unparseable}"
+    assert calls, "no app-level mounts found at all - the matcher is broken"
+
+    for source in ("app.include_router(*routers, prefix='/api')", "app.include_router(module.router, prefix='/x')"):
+        node = ast.parse(source).body[0].value
+        assert not (
+            node.args and isinstance(node.args[0], ast.Name)
+        ), f"{source!r} would be read as a plain named mount instead of flagged as unreadable"
+
+
+def test_only_app_level_mounts_are_checked():
+    """A router included on another router is a different question.
+
+    The registry answers which surfaces are reachable from outside, and that is
+    decided by the `app` mounts. Matching every receiver made an inner include
+    look ungated even when the outer app mount gated it.
+    """
+    node = ast.parse("sub_router.include_router(other_router)").body[0].value
+    receiver = node.func.value
+    assert not (isinstance(receiver, ast.Name) and receiver.id == "app")
 
 
 def test_the_registry_check_actually_sees_the_ungated_mounts():
