@@ -43,7 +43,6 @@ def migrate(db_url: str) -> None:
     version main.py runs on every startup).
     """
     from autobot_shared.ssot_config import config as _ssot_config
-
     from services.agent_seeder import SEED_AGENT_CONFIGS
 
     ollama_endpoint = _ssot_config.llm.ollama_endpoint

@@ -189,9 +189,7 @@ def test_a_module_with_no_entry_point_is_a_failure_not_a_load(runner, monkeypatc
     class _NoEntryPoint:
         """Neither migrate() nor run() — the seed_agents shape before #14321."""
 
-    monkeypatch.setattr(
-        runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False
-    )
+    monkeypatch.setattr(runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False)
 
     success, message = runner.run_migration("postgresql://unused", "pretend_migration")
 
@@ -205,9 +203,7 @@ def test_the_failure_message_names_what_is_missing(runner, monkeypatch):
     class _NoEntryPoint:
         pass
 
-    monkeypatch.setattr(
-        runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False
-    )
+    monkeypatch.setattr(runner.importlib, "import_module", lambda _name: _NoEntryPoint(), raising=False)
 
     _, message = runner.run_migration("postgresql://unused", "pretend_migration")
 
@@ -240,11 +236,7 @@ def test_every_registered_migration_exposes_an_entry_point(runner):
             missing.append(f"{name} (file not found)")
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        entry_points = {
-            node.name
-            for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
+        entry_points = {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
         if not entry_points & {"migrate", "run"}:
             missing.append(name)
 
