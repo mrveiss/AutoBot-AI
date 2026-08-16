@@ -49,7 +49,7 @@ _ROUTER_DECORATOR_RE = re.compile(
 # submodule, and nothing here was reading it. Renamed from _ROUTER_INCLUDE_RE,
 # which sat one transposition away from _INCLUDE_ROUTER_RE below and meant
 # something different.
-_INCLUDE_ROUTER_PREFIX_RE = _routing.INCLUDE_ROUTER_RE
+_include_router_prefixes = _routing.include_router_prefixes
 
 # Pattern for router prefix in APIRouter() initialization
 _APIROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
@@ -785,7 +785,7 @@ class BackendEndpointScanner:
         #
         # Prefixes given at mount time apply to every route in the mounted
         # module, and are separate from the one the router declares for itself.
-        mount_prefixes = dict(_INCLUDE_ROUTER_PREFIX_RE.findall(init_content))
+        mount_prefixes = dict(_include_router_prefixes(init_content))
 
         files: Dict[Path, str] = {}
         # #12956: walk one level and recurse, rather than rglob'ing the tree.

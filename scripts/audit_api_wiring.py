@@ -95,7 +95,7 @@ ROUTE_DECORATOR_RE = re.compile(
 # autobot_shared/api_routing/router_prefixes.py. It was duplicated here and in
 # api_endpoint_scanner.py with separate regexes, and the two had diverged —
 # the scanner got package resolution (#12945/#12956), this gate did not.
-INCLUDE_ROUTER_RE = _routing.INCLUDE_ROUTER_RE
+include_router_prefixes = _routing.include_router_prefixes
 FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
 # #12326: the dominant idiom composes the path from a helper —
 # ``apiClient.get(`${getApiBase()}/knowledge_base/health/status`)``. getApiBase()
@@ -232,7 +232,7 @@ ROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
 # + a top-level ``from api.overseer_handlers import router as overseer_router``
 # in core_routers.py — never a literal ``include_router(prefix=...)`` call
 # (app_factory.py does that generically: ``prefix=f"/api{prefix}"``), so
-# INCLUDE_ROUTER_RE never sees these prefixes at all. Without resolving them,
+# include_router_prefixes never sees these prefixes at all. Without resolving them,
 # a sub-router's routes (including websocket ones) get NO prefix, not merely
 # the wrong one — e.g. advanced_control.py's ``/ws/monitoring`` never becomes
 # ``/advanced-control/ws/monitoring``.
@@ -282,7 +282,7 @@ def _scan_route_decorators(
             module_prefix[sp] = mp.group(1).rstrip("/")
         for method, path in ROUTE_DECORATOR_RE.findall(txt):
             raw[sp].append((method, path))
-        for _var, prefix in INCLUDE_ROUTER_RE.findall(txt):
+        for _var, prefix in include_router_prefixes(txt):
             prefixes.add(prefix.rstrip("/"))
     return raw, module_prefix, prefixes
 
