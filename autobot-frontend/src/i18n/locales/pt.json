@@ -7745,7 +7745,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Saúde do sistema",
     "providerFallback": "Fallback de provedor",
-    "advancedControl": "Controle avançado"
+    "advancedControl": "Controle avançado",
+    "llcRoles": "Funções"
   },
   "llcCompanyStatus": {
     "showArchived": "Mostrar arquivadas",
@@ -9100,5 +9101,40 @@
     "loadFailed": "Não foi possível carregar os agendadores.",
     "toggleFailed": "Não foi possível alterar {name}.",
     "resetFailed": "Não foi possível voltar {name} ao padrão."
+  },
+  "llcRoles": {
+    "title": "Funções",
+    "subtitle": "Uma função sobrevive a quem a ocupa: permissões, fluxos, ferramentas e credenciais permanecem.",
+    "addRole": "Adicionar função",
+    "deleteRole": "Excluir função",
+    "noCompany": "Selecione uma empresa para ver as suas funções.",
+    "loading": "A carregar…",
+    "empty": "Ainda não há funções.",
+    "systemRole": "Sistema",
+    "holders": "Titulares",
+    "noHolders": "Ninguém ocupa esta função atualmente.",
+    "showPastHolders": "Mostrar titulares anteriores",
+    "pastHolder": "anterior",
+    "permissions": "Permissões",
+    "noPermissions": "Nenhuma permissão concedida.",
+    "workflows": "Fluxos de trabalho",
+    "noWorkflows": "Nenhum fluxo associado.",
+    "tools": "Ferramentas",
+    "noTools": "Nenhuma ferramenta associada.",
+    "credentials": "Credenciais",
+    "noCredentials": "Nenhuma credencial associada.",
+    "fieldName": "Nome",
+    "fieldDescription": "Descrição",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "errorLoad": "Não foi possível carregar as funções.",
+    "errorLoadDetail": "Não foi possível carregar os detalhes da função.",
+    "errorCreate": "Não foi possível criar a função.",
+    "errorDelete": "Não foi possível excluir a função.",
+    "holderType": {
+      "agent": "Agente",
+      "user": "Utilizador",
+      "contact": "Contacto"
+    }
   }
 }
