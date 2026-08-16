@@ -19,11 +19,11 @@ function rather than exercise its mapping. So these tests build their records
 with the **real writer** and call the **real function**.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.chat import _build_llm_context, _to_persisted_message
+from api.chat import _build_llm_context, _generate_ai_stack_chat_response, _to_persisted_message
 
 
 def _persisted(role: str, content: str) -> dict:
@@ -78,6 +78,44 @@ class TestTheSpeakerSurvives:
         assert [m["content"] for m in context[:2]] == ["deploy it", "running code-sync"]
 
 
+class TestSpeakersThatAreNotConversationalRoles:
+    """A session is not written only by the chat turn.
+
+    Terminal integration, the agent terminal and the workflow state machine
+    persist into the *same* session under speakers of their own. Reading the
+    speaker faithfully and forwarding it builds a request the provider rejects,
+    which fails the whole turn — strictly worse than the mislabelling this fix
+    is about. So the LLM reader clamps.
+    """
+
+    @pytest.mark.parametrize("speaker", ["terminal", "agent_terminal", "main-backend"])
+    def test_a_non_conversational_speaker_never_reaches_the_provider(self, speaker):
+        history = [{"sender": speaker, "text": "$ ls -la", "messageType": "terminal_output"}]
+
+        context = _build_llm_context(history, _incoming(), _manager(), None)
+
+        assert {m["role"] for m in context} <= {"user", "assistant"}
+
+    def test_the_body_of_such_a_record_is_still_carried(self):
+        """Clamping the speaker must not also drop the turn — terminal output
+        is context the model legitimately needs."""
+        history = [{"sender": "terminal", "text": "$ ls -la", "messageType": "terminal_output"}]
+
+        context = _build_llm_context(history, _incoming(), _manager(), None)
+
+        assert context[0]["content"] == "$ ls -la"
+
+    def test_a_stored_system_notice_does_not_become_a_system_turn(self):
+        """The approval handler persists under that speaker. An adapter that
+        splits the system role out overwrites the system prompt with whatever
+        it finds, so passing this through would replace the real instructions."""
+        history = [{"sender": "system", "text": "Command approved"}]
+
+        context = _build_llm_context(history, _incoming(), _manager(), None)
+
+        assert context[0]["role"] != "system"
+
+
 class TestTheApiShapeStillWorks:
     """Both schemas reach this function; fixing one must not break the other."""
 
@@ -87,6 +125,40 @@ class TestTheApiShapeStillWorks:
         context = _build_llm_context(history, _incoming(), _manager(), None)
 
         assert context[0] == {"role": "assistant", "content": "from the api"}
+
+
+class TestTheAiStackPathCarriedTheSameDefect:
+    """`_generate_ai_stack_chat_response` builds its history from the same
+    store, in the same stored shape — so it mislabelled every turn identically.
+
+    Found by review of this change: fixing one reader in a file that holds two
+    leaves the second one live.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_assistant_turn_is_not_attributed_to_the_caller(self):
+        client = MagicMock()
+        client.chat_message = AsyncMock(return_value={"response": "ok"})
+        history = [_persisted("user", "deploy it"), _persisted("assistant", "running code-sync")]
+
+        with patch("api.chat.get_ai_stack_client", AsyncMock(return_value=client)):
+            await _generate_ai_stack_chat_response(_incoming(), history, None, _manager(), None)
+
+        sent = client.chat_message.call_args.kwargs["chat_history"]
+        assert [m["role"] for m in sent] == ["user", "assistant"]
+        assert [m["content"] for m in sent] == ["deploy it", "running code-sync"]
+
+    @pytest.mark.asyncio
+    async def test_a_non_conversational_speaker_never_reaches_the_provider(self):
+        client = MagicMock()
+        client.chat_message = AsyncMock(return_value={"response": "ok"})
+        history = [{"sender": "terminal", "text": "$ ls -la"}]
+
+        with patch("api.chat.get_ai_stack_client", AsyncMock(return_value=client)):
+            await _generate_ai_stack_chat_response(_incoming(), history, None, _manager(), None)
+
+        sent = client.chat_message.call_args.kwargs["chat_history"]
+        assert {m["role"] for m in sent} <= {"user", "assistant"}
 
 
 class TestTheIncomingTurnAndLimit:
