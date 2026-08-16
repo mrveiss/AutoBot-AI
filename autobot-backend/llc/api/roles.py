@@ -45,7 +45,9 @@ from ..models.enums import RoleHolderType
 from ..services.authz import NotAuthorisedError
 from ..services.role import RoleService
 from ..services.role_assignment import RoleAssignmentService
+from ..services.role_credential import RoleCredentialService
 from ..services.role_permission import RolePermissionService
+from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_workflow import RoleWorkflowService
 
 router = APIRouter(prefix="/roles", tags=["llc-roles"])
@@ -54,6 +56,8 @@ _get_roles = lazy_singleton(RoleService)
 _get_holders = lazy_singleton(RoleAssignmentService)
 _get_permissions = lazy_singleton(RolePermissionService)
 _get_workflows = lazy_singleton(RoleWorkflowService)
+_get_tools = lazy_singleton(RoleToolService)
+_get_credentials = lazy_singleton(RoleCredentialService)
 
 _NAME_MAX = 100  # matches Role.name = String(100)
 _DESCRIPTION_MAX = 2000
@@ -404,6 +408,146 @@ async def detach_workflow(
     try:
         detached = await _get_workflows().detach(
             session, company_id, role_id, workflow_id, actor_user_id=_actor_id(current_user)
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    if not detached:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    await session.commit()
+
+
+class ToolAttach(BaseModel):
+    tool_name: str = Field(..., min_length=1, max_length=255)
+
+
+class CredentialAttach(BaseModel):
+    secret_id: uuid.UUID
+
+
+def _unavailable(exc: ToolRegistryUnavailable) -> HTTPException:
+    """503, not 400.
+
+    An unpopulated tool registry is an environment problem; reporting it as a
+    bad request would send the caller looking for a typo in their own payload.
+    """
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+
+
+@router.get("/{company_id}/{role_id}/tools", response_model=List[str])
+async def list_role_tools(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[str]:
+    assert_company_access(ctx, company_id)
+    return await _get_tools().list_for_role(session, company_id, role_id)
+
+
+@router.post("/{company_id}/{role_id}/tools", status_code=status.HTTP_204_NO_CONTENT)
+async def attach_tool(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    payload: ToolAttach,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    assert_company_access(ctx, company_id)
+    try:
+        await _get_tools().attach(
+            session,
+            company_id=company_id,
+            role_id=role_id,
+            tool_name=payload.tool_name,
+            actor_user_id=_actor_id(current_user),
+        )
+    except ToolRegistryUnavailable as exc:
+        raise _unavailable(exc) from exc
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    await session.commit()
+
+
+@router.delete("/{company_id}/{role_id}/tools/{tool_name}", status_code=status.HTTP_204_NO_CONTENT)
+async def detach_tool(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    tool_name: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    assert_company_access(ctx, company_id)
+    try:
+        detached = await _get_tools().detach(
+            session, company_id, role_id, tool_name, actor_user_id=_actor_id(current_user)
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    if not detached:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    await session.commit()
+
+
+@router.get("/{company_id}/{role_id}/credentials", response_model=List[uuid.UUID])
+async def list_role_credentials(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    include_revoked: bool = False,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[uuid.UUID]:
+    """Secret ids only — never values. Revoked ones are excluded by default."""
+    assert_company_access(ctx, company_id)
+    service = _get_credentials()
+    if include_revoked:
+        return [a.secret_id for a in await service.list_for_role(session, company_id, role_id)]
+    return await service.list_active_for_role(session, company_id, role_id)
+
+
+@router.post("/{company_id}/{role_id}/credentials", status_code=status.HTTP_204_NO_CONTENT)
+async def attach_credential(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    payload: CredentialAttach,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    assert_company_access(ctx, company_id)
+    try:
+        await _get_credentials().attach(
+            session,
+            company_id=company_id,
+            role_id=role_id,
+            secret_id=payload.secret_id,
+            actor_user_id=_actor_id(current_user),
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    await session.commit()
+
+
+@router.delete("/{company_id}/{role_id}/credentials/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def detach_credential(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    secret_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    assert_company_access(ctx, company_id)
+    try:
+        detached = await _get_credentials().detach(
+            session, company_id, role_id, secret_id, actor_user_id=_actor_id(current_user)
         )
     except NotAuthorisedError as exc:
         raise _forbidden(exc) from exc
