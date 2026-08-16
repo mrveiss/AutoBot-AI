@@ -263,6 +263,82 @@ jobs:
           sys.exit(1 if failed else 0)
           PY
 
+      - name: Verify seed_agents actually seeded the canonical agent roster (#14321)
+        # #14321: seed_agents was recorded applied purely because
+        # migrations.runner.run_migration treats a module with neither
+        # migrate() nor run() as a success — it never seeded a row. The step
+        # above only asserts migrations_applied bookkeeping, which cannot
+        # tell that phantom success apart from a real one (that gap is
+        # exactly this bug, one layer up). This asserts the actual effect:
+        # every agent_id services.agent_seeder.SEED_AGENT_CONFIGS defines —
+        # the same roster main.py's startup lifespan seeds on every boot —
+        # must be a row in `agents` once the runner claims seed_agents ran.
+        #
+        # Connects via discrete PG* libpq env vars (psycopg2.connect() reads
+        # them with no args) rather than a DATABASE_URL literal, matching
+        # this step's own credential-free style.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: slm
+          PGUSER: slmtest
+          PGPASSWORD: slmtest
+          # services/agent_seeder.py imports autobot_shared.ssot_config at
+          # module level; autobot_shared lives at the repo root, one level
+          # above working-directory below (same reason the (a)/(b) steps set
+          # this — see their comments).
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import sys
+          import types
+          from pathlib import Path
+
+          import psycopg2
+
+          # Stub the `models` package so `from models.database import Agent`
+          # inside services/agent_seeder.py resolves to the real
+          # models/database.py without executing models/__init__.py (which
+          # pulls in user_management schemas this gate does not install) —
+          # same technique autobot-slm-backend/conftest.py uses for the same
+          # reason.
+          models_pkg = types.ModuleType("models")
+          models_pkg.__path__ = [str(Path("models").resolve())]
+          sys.modules["models"] = models_pkg
+
+          spec = importlib.util.spec_from_file_location("models.database", Path("models/database.py"))
+          slm_models_database = importlib.util.module_from_spec(spec)
+          sys.modules["models.database"] = slm_models_database
+          spec.loader.exec_module(slm_models_database)
+          models_pkg.database = slm_models_database
+
+          spec = importlib.util.spec_from_file_location("services.agent_seeder", Path("services/agent_seeder.py"))
+          agent_seeder = importlib.util.module_from_spec(spec)
+          sys.modules["services.agent_seeder"] = agent_seeder
+          spec.loader.exec_module(agent_seeder)
+
+          expected = {cfg["agent_id"] for cfg in agent_seeder.SEED_AGENT_CONFIGS}
+
+          conn = psycopg2.connect()
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT agent_id FROM agents")
+                  present = {row[0] for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          missing = expected - present
+
+          print(f"SEED_AGENT_CONFIGS roster size: {len(expected)}")
+          print(f"agents rows present: {len(present)}")
+
+          if missing:
+              print(f"::error::seed_agents did not seed: {sorted(missing)}")
+              sys.exit(1)
+          PY
+
       - name: Run tablename-collision unit tests
         # Also exercise the validator that now RAISES on unallowlisted collisions
         # (#10862), so the test suite is always verified alongside the runner gate.
