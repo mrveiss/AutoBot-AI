@@ -134,9 +134,7 @@ def test_the_secret_is_never_exposed():
         exposing = {k: v for k, v in task.items() if k not in ("when", "name", "tags")}
         body = str(exposing)
         if _SLM_OWN in body or _NODE_FILE in body or "_agent_internal_api_key" in body:
-            assert task.get("no_log") is True, (
-                f"task {task.get('name')!r} passes the key to a module without no_log"
-            )
+            assert task.get("no_log") is True, f"task {task.get('name')!r} passes the key to a module without no_log"
 
 
 def test_the_empty_key_warning_survives():
@@ -147,12 +145,18 @@ def test_the_empty_key_warning_survives():
     journal. Pinned so a future tightening of the rule above cannot silence it.
     """
     warning = next(
-        (t for t in _TASKS if isinstance(t, dict) and "no internal API key could be resolved" in str(t.get("name", ""))),
+        (
+            t
+            for t in _TASKS
+            if isinstance(t, dict) and "no internal API key could be resolved" in str(t.get("name", ""))
+        ),
         None,
     )
 
     assert warning is not None, "the empty-key warning is gone"
-    assert warning.get("no_log") is not True, "the empty-key warning is silenced — it reports an absent value, not a secret"
+    assert (
+        warning.get("no_log") is not True
+    ), "the empty-key warning is silenced — it reports an absent value, not a secret"
 
 
 def test_the_agent_still_names_its_remedy():
