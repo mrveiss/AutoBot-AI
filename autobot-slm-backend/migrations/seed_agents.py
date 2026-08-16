@@ -42,8 +42,6 @@ def migrate(db_url: str) -> None:
     exist, matching services.agent_seeder.seed_default_agents (the async
     version main.py runs on every startup).
     """
-    from autobot_shared.ssot_config import config as _ssot_config
-
     # #14321: read the roster from its leaf module, NOT via
     # services.agent_seeder — services/__init__.py eagerly imports .auth /
     # .deployment / .reconciler, and models/__init__.py imports
@@ -51,6 +49,7 @@ def migrate(db_url: str) -> None:
     # (FastAPI, then bcrypt) into the migration runner. agent_seed_roster is
     # a TOP-LEVEL module precisely so no package __init__ runs on import.
     from agent_seed_roster import SEED_AGENT_CONFIGS
+    from autobot_shared.ssot_config import config as _ssot_config
 
     ollama_endpoint = _ssot_config.llm.ollama_endpoint
 
