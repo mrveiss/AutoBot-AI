@@ -52,7 +52,7 @@ _ROUTER_DECORATOR_RE = re.compile(
 _include_router_prefixes = _routing.include_router_prefixes
 
 # Pattern for router prefix in APIRouter() initialization
-_APIROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
+_apirouter_prefix = _routing.apirouter_prefix
 
 # Frontend patterns for API calls
 _API_CALL_PATTERNS = [
@@ -973,10 +973,7 @@ class BackendEndpointScanner:
 
     def _get_file_router_prefix(self, content: str) -> str | None:
         """Extract router prefix from file content."""
-        match = _APIROUTER_PREFIX_RE.search(content)
-        if match:
-            return match.group(1)
-        return None
+        return _apirouter_prefix(content)
 
 
 # =============================================================================

@@ -223,7 +223,7 @@ def backend_paths_from_openapi(src: str) -> set[str]:
     return paths
 
 
-ROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
+apirouter_prefix = _routing.apirouter_prefix
 # #12432: feature/core routers are mounted via *data-driven config tuples* in
 # initialization/router_registry/*.py — e.g.
 #   ("api.advanced_control", "/advanced-control", ["advanced-control"], "advanced_control")
@@ -277,9 +277,9 @@ def _scan_route_decorators(
         if "__pycache__" in sp or "/tests/" in sp or sp.endswith("_test.py") or "/test_" in sp:
             continue
         txt = py.read_text(encoding="utf-8", errors="ignore")
-        mp = ROUTER_PREFIX_RE.search(txt)
-        if mp:
-            module_prefix[sp] = mp.group(1).rstrip("/")
+        mp = apirouter_prefix(txt)
+        if mp is not None:
+            module_prefix[sp] = mp.rstrip("/")
         for method, path in ROUTE_DECORATOR_RE.findall(txt):
             raw[sp].append((method, path))
         for _var, prefix in include_router_prefixes(txt):
@@ -357,8 +357,8 @@ def _module_served_by_openapi(txt: str, backend: set[str]) -> bool:
     """Authoritative suppression: a module is mounted when ALL of its declared
     routes appear in the real route table (any-route matching would let one
     coincidental suffix like /status suppress a whole unmounted module)."""
-    own = ROUTER_PREFIX_RE.search(txt)
-    prefix = own.group(1).rstrip("/") if own else ""
+    own = apirouter_prefix(txt)
+    prefix = own.rstrip("/") if own is not None else ""
     checked = 0
     for _m, route in ROUTE_DECORATOR_RE.findall(txt):
         full = norm_path(prefix + (route if route.startswith("/") or not route else "/" + route))

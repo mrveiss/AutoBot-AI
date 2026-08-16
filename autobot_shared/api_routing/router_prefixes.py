@@ -42,6 +42,7 @@ from typing import Dict, Iterable, Tuple
 
 __all__ = [
     "INCLUDE_ROUTER_NAME_RE",
+    "apirouter_prefix",
     "include_router_prefixes",
     "RELATIVE_ROUTER_IMPORT_RE",
     "ROUTER_CONFIG_ENTRY_RE",
@@ -186,8 +187,8 @@ def include_router_prefixes(text: str) -> list[Tuple[str, str]]:
 # ── Resolution ───────────────────────────────────────────────────────────────
 
 
-def file_router_prefix(source: str) -> str:
-    """The ``APIRouter(prefix=...)`` a file declares, or ``""``.
+def apirouter_prefix(source: str) -> str | None:
+    """The raw ``APIRouter(prefix=...)`` a file declares, or ``None``.
 
     Scanned the same way as ``include_router`` and for the same reason: the old
     ``APIRouter\\([^)]*?prefix=`` carried the identical defect, so a constructor
@@ -197,12 +198,22 @@ def file_router_prefix(source: str) -> str:
     The example is described rather than written out. A literal constructor call
     in this docstring is found by this module's own scanner when the file is
     read as source — the doc becoming a false positive in the tool it documents.
+
+    Returns the prefix verbatim. ``None`` and ``""`` are distinct answers here —
+    "no prefix declared" versus "a declared empty prefix" — so callers that
+    normalise choose to, rather than being unable to tell the two apart.
     """
     for call in _calls(source, "APIRouter"):
         prefix = _PREFIX_KWARG_RE.search(_own_arguments(call))
         if prefix:
-            return prefix.group(1).rstrip("/")
-    return ""
+            return prefix.group(1)
+    return None
+
+
+def file_router_prefix(source: str) -> str:
+    """The ``APIRouter(prefix=...)`` a file declares, trailing slash removed, or ``""``."""
+    prefix = apirouter_prefix(source)
+    return prefix.rstrip("/") if prefix is not None else ""
 
 
 def registry_entries(registry_dir: Path) -> list[Tuple[str, str]]:

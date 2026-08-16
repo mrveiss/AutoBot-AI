@@ -275,3 +275,15 @@ def test_both_tools_use_the_shared_grammar_and_keep_no_private_copy():
         assert (
             're.compile(r"include_router' not in source and "re.compile(r'include_router" not in source
         ), f"{name} declares its own include_router regex again"
+
+
+def test_apirouter_prefix_distinguishes_absent_from_empty():
+    """`file_router_prefix` normalises; the raw form must not.
+
+    `api_endpoint_scanner._get_file_router_prefix` returns the prefix verbatim
+    and `None` when none is declared, so collapsing both onto `""` would change
+    what the scanner reports.
+    """
+    assert routing.apirouter_prefix('APIRouter(prefix="/llc/")') == "/llc/"
+    assert routing.apirouter_prefix("x = 1") is None
+    assert routing.file_router_prefix('APIRouter(prefix="/llc/")') == "/llc"
