@@ -159,9 +159,9 @@ def test_the_subprocess_runs_from_the_ansible_directory():
     # which is the cross-tree split this PR was blocked on.
     for call in subprocess_calls:
         cwd_kw = next((kw for kw in call.keywords if kw.arg == "cwd"), None)
-        assert cwd_kw is not None, (
-            "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
-        )
+        assert (
+            cwd_kw is not None
+        ), "ansible-playbook is launched without cwd, so the relative roles_path cannot resolve (#14351)"
         assert any(
             isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == "_ansible_dir"
             for inner in ast.walk(cwd_kw.value)
