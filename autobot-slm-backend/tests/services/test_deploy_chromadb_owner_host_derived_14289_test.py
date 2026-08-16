@@ -116,4 +116,6 @@ def test_the_two_group_vars_copies_and_deploy_yml_agree_on_the_derivation():
     play = _deploy_play()
     vars_files = [Path(v) for v in play.get("vars_files") or []]
     resolved = {(_ANSIBLE / v).resolve() for v in vars_files}
-    assert canonical.resolve() in resolved, "deploy.yml's vars_files does not point at the canonical role_active_facts.yml"
+    assert (
+        canonical.resolve() in resolved
+    ), "deploy.yml's vars_files does not point at the canonical role_active_facts.yml"
