@@ -41,7 +41,6 @@ from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import CategoryDefaults
 from chat_history.message_schema import message_role, message_text
 
 # Import session lifecycle hooks (Issue #4260)
@@ -72,6 +71,10 @@ from utils.response_helpers import create_success_response
 # ====================================================================
 # Router Configuration
 # ====================================================================
+
+# The speaker an API-shape system record carries. Not sourced from the stored
+# schema on purpose — see `_preserve_system_messages` (#14306, #14359).
+_API_SYSTEM_ROLE = "system"
 
 router = APIRouter(tags=["chat-sessions"])
 logger = get_logger(__name__)
@@ -1486,21 +1489,31 @@ async def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]
     Issue #665: Extracted helper for system message preservation during reset.
 
     #14306: this filtered on the API-shape role key against records the session
-    store keeps under `sender`, so the comparison was never true and the reset
-    preserved nothing — while reporting the count it had preserved as 0, which
-    reads as "there was no system prompt" rather than as a failure. The flag
-    that asks for this defaults to on, so the default reset discarded it.
+    store keeps under `sender`, so the comparison was never true. That looked
+    like the defect. It is not.
 
-    Reads through the shared normaliser (#14259), which resolves either shape.
+    **Nothing persists a system prompt into a session.** `_get_system_prompt()`
+    composes one per turn and sends it straight to the provider; it is never
+    written to storage. The only production writers using this speaker are
+    operational notices (command approval, cancellation) and overflow summaries.
+
+    So resolving the schema mismatch would have made the default reset preserve
+    "Command approved" notices as though they were the prompt — worse than
+    preserving nothing, which is what the broken comparison did by accident.
+
+    The filter therefore stays as-is, deliberately, and the flag is vestigial:
+    there is no state here for a reset to destroy. Deprecating it is #14359.
+    Do not "fix" this comparison without reading that issue first.
+
+    What was genuinely broken on this path, and is fixed, is that the reset
+    never ran at all — see the call below and `_clear_and_restore_session`.
     """
     try:
         existing_data = await chat_manager.get_session(session_id)
         if existing_data and "messages" in existing_data:
-            return [
-                m
-                for m in existing_data["messages"]
-                if isinstance(m, dict) and message_role(m) == CategoryDefaults.ROLE_SYSTEM
-            ]
+            # Intentionally the API-shape key: see the docstring. Matching the
+            # stored key here would preserve operational notices, not a prompt.
+            return [m for m in existing_data["messages"] if isinstance(m, dict) and m.get("role") == _API_SYSTEM_ROLE]
     except Exception as e:
         logger.warning("Could not preserve system prompt: %s", e)
     return []
@@ -1515,14 +1528,14 @@ def _to_persisted_system_message(msg: Dict) -> Dict:
     ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
     ``api/chat.py:_to_persisted_message`` for the system-message subset.
 
-    #14306: the body is read through the normaliser too. Its source claimed to
-    hand over API-shape records and did not, so a record whose body sits under
-    the stored key would have been preserved with an empty one — the prompt
-    surviving the reset in name only.
+    #14306: the body is read through the normaliser, so a record whose body sits
+    under the stored key is not written back with an empty one. #7025's claim
+    that its source "returns messages with role keys" was never true, and the
+    two functions agreed with each other about a shape no writer produces.
     """
     return {
         "id": msg.get("id", ""),
-        "sender": message_role(msg, default=CategoryDefaults.ROLE_SYSTEM),
+        "sender": message_role(msg, default=_API_SYSTEM_ROLE),
         "content": message_text(msg),
         "timestamp": msg.get("timestamp"),
         "type": msg.get("type", "message"),
