@@ -46,7 +46,7 @@ import yaml
 _ANSIBLE = Path(__file__).resolve().parents[2] / "ansible"
 _ROLE = _ANSIBLE / "roles" / "monitoring"
 _TEMPLATE = _ROLE / "templates" / "prometheus.yml.j2"
-_TASKS = _ROLE / "tasks" / "prometheus.yml"
+_TASK_DIR = _ROLE / "tasks"
 
 _TOPOLOGY_FACT = "_backend_metrics_on_loopback"
 
@@ -84,8 +84,25 @@ def _backend_job(rendered: dict) -> dict:
     return next(j for j in rendered["scrape_configs"] if j["job_name"] == "autobot-backend")
 
 
+def _config_task_file() -> Path:
+    """The role task file that renders the scrape config, wherever it now lives.
+
+    Located by what it does rather than by name. #14337 moved these tasks into
+    their own file so a second render pass could run them after the fleet roles
+    exist, and a hard-coded filename here turned every assertion below red for a
+    move that changed no behaviour.
+    """
+    for candidate in sorted(_TASK_DIR.glob("*.yml")):
+        tasks = yaml.safe_load(candidate.read_text(encoding="utf-8")) or []
+        for task in tasks:
+            spec = task.get("ansible.builtin.template") or task.get("template") or {}
+            if spec.get("src") == "prometheus.yml.j2":
+                return candidate
+    raise AssertionError(f"no task file under {_TASK_DIR} renders prometheus.yml.j2")
+
+
 def _tasks() -> list[dict]:
-    return yaml.safe_load(_TASKS.read_text(encoding="utf-8"))
+    return yaml.safe_load(_config_task_file().read_text(encoding="utf-8"))
 
 
 def _module(task: dict, name: str) -> dict:
