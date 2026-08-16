@@ -19,7 +19,7 @@ import io
 
 import pytest
 
-from skills.builtin.document_analysis import DocumentAnalysisSkill
+from skills.builtin.document_analysis import DocumentAnalysisSkill  # nosemgrep: skill-no-sibling-import
 
 
 def _write_pdf(tmp_path, pages: list, name: str = "doc.pdf"):
