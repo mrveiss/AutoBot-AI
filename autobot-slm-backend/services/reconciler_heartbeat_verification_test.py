@@ -105,9 +105,7 @@ def _run(beats, wait_s=5, poll_s=0, restarted_at=None):
 
     with _patched(sessions, wait_s, poll_s):
         node = SimpleNamespace(node_id="node-under-test", last_heartbeat=None)
-        result = asyncio.run(
-            reconciler.ReconcilerService._heartbeat_returned(SimpleNamespace(), node, restarted_at)
-        )
+        result = asyncio.run(reconciler.ReconcilerService._heartbeat_returned(SimpleNamespace(), node, restarted_at))
 
     return result, sessions.reads
 

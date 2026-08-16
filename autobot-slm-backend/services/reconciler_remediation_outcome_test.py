@@ -66,9 +66,7 @@ def test_success_is_not_bound_to_the_restart_alone():
         if "success" not in targets:
             continue
         call_attrs = {
-            getattr(inner.func, "attr", None)
-            for inner in ast.walk(node.value)
-            if isinstance(inner, ast.Call)
+            getattr(inner.func, "attr", None) for inner in ast.walk(node.value) if isinstance(inner, ast.Call)
         }
         assert "_heartbeat_returned" in call_attrs, (
             "`success` is bound without consulting the heartbeat — a restart that achieves "
@@ -123,9 +121,7 @@ def test_the_timings_are_env_backed_not_hardcoded(constant):
     fleet, so it is not a value to bake in.
     """
     for node in _TREE.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == constant for t in node.targets
-        ):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == constant for t in node.targets):
             func_id = getattr(node.value.func, "id", None) if isinstance(node.value, ast.Call) else None
             assert func_id in ("env_int", "env_int_clamped"), f"{constant} is not env-backed"
             return
@@ -134,13 +130,11 @@ def test_the_timings_are_env_backed_not_hardcoded(constant):
 
 def _fstring_text(node: ast.AST) -> str:
     """Flatten an f-string to its literal parts, ignoring interpolations."""
-    return " ".join(
-        n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)
-    ).lower()
+    return " ".join(n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)).lower()
 
 
 def test_the_success_message_reports_the_verified_outcome():
-    """"Successfully restarted" was true and misleading.
+    """ "Successfully restarted" was true and misleading.
 
     It is the line an operator greps to ask whether self-healing worked, and it
     answered a narrower question in language claiming the broader one.
@@ -157,9 +151,9 @@ def test_the_success_message_reports_the_verified_outcome():
     text = " ".join(_fstring_text(n) for n in branch.body)
 
     assert "heartbeat" in text, "the success message does not report the heartbeat it verified"
-    assert "awaiting" not in text, (
-        "the success message says the heartbeat is still awaited, but success now means it already returned"
-    )
+    assert (
+        "awaiting" not in text
+    ), "the success message says the heartbeat is still awaited, but success now means it already returned"
 
 
 def test_failure_distinguishes_the_restart_from_the_heartbeat():
