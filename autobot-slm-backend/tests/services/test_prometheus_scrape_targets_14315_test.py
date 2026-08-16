@@ -193,11 +193,37 @@ def test_detection_does_not_claim_loopback_when_no_backend_runs_here():
     assert _detect(unit_exists=False, vhost_exists=True) == "False"
 
 
-def test_an_explicit_colocated_flag_still_wins_over_the_filesystem():
-    """During a full provisioning run the backend role may not have torn the
-    vhost down yet when monitoring renders, so the flag is ahead of the disk.
-    The filesystem must not overrule a topology the play already knows."""
-    assert _detect(unit_exists=True, vhost_exists=True, slm_colocated_frontend=True) == "True"
+def test_a_colocated_frontend_does_not_imply_a_colocated_backend():
+    """The SLM host carries the frontend role; the backend is on a remote node.
+
+    `setup_wizard._apply_colocation_vars` sets `slm_colocated_frontend` whenever
+    the SLM host carries the *frontend* role, and treats a co-located backend as
+    a separate, nested condition — so the flag is true here while no backend is
+    reachable on loopback at all. An earlier revision of this fix OR-ed the flag
+    into the detection and would have pointed prometheus at nothing.
+
+    Two decisions that look like one: where the frontend is served, and where
+    the backend can be reached. The whole issue is what happens when those get
+    collapsed.
+    """
+    assert _detect(unit_exists=False, vhost_exists=False, slm_colocated_frontend=True) == "False"
+
+
+def test_the_flag_never_overrules_what_is_on_disk():
+    """No value of `slm_colocated_frontend` may change the answer.
+
+    The flag cannot be ahead of the filesystem either: provision-fleet-roles.yml
+    runs Backend at Phase 4a, before Frontend at 4b, so by the time the flag can
+    become true the backend role has already made its vhost decision.
+    """
+    for unit in (True, False):
+        for vhost in (True, False):
+            baseline = _detect(unit_exists=unit, vhost_exists=vhost)
+            for flag in (True, False):
+                assert _detect(unit_exists=unit, vhost_exists=vhost, slm_colocated_frontend=flag) == baseline, (
+                    f"slm_colocated_frontend={flag} changed the verdict for "
+                    f"unit={unit} vhost={vhost}; the flag answers a different question"
+                )
 
 
 def test_the_detection_result_survives_the_round_trip_into_the_template():

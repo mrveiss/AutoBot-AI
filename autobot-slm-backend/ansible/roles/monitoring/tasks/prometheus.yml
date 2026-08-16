@@ -76,16 +76,21 @@
 
 - name: "Prometheus | Resolve which backend metrics endpoint is reachable (#14315)"
   # Loopback is correct only when the backend runs HERE and the vhost that would
-  # otherwise front it is gone — exactly the state #2829 leaves behind. An
-  # explicitly-set slm_colocated_frontend still wins: during a full provisioning
-  # run the backend role may not have torn the vhost down yet at render time, so
-  # the flag is ahead of the filesystem and the filesystem must not overrule it.
+  # otherwise front it is gone — exactly the state #2829 leaves behind.
+  #
+  # Deliberately NOT `slm_colocated_frontend or ...`. That flag answers a
+  # different question: setup_wizard sets it whenever the SLM host carries the
+  # *frontend* role, and co-locates the backend as a separate, nested condition.
+  # An SLM host with the frontend role and a remote backend is a topology the
+  # wizard generates, and there the flag is true while no backend is reachable
+  # on loopback at all — so an `or` would point prometheus at nothing.
+  #
+  # Nor is the flag ever ahead of what is on disk: provision-fleet-roles.yml
+  # runs Backend at Phase 4a, before Frontend at 4b, so by the time the flag can
+  # become true the backend role has already made its vhost decision.
   ansible.builtin.set_fact:
     _backend_metrics_on_loopback: >-
-      {{
-        (slm_colocated_frontend | default(false) | bool) or
-        (_backend_unit.stat.exists and not _backend_vhost.stat.exists)
-      }}
+      {{ _backend_unit.stat.exists and not _backend_vhost.stat.exists }}
 
 - name: Create Prometheus config
   ansible.builtin.template:
