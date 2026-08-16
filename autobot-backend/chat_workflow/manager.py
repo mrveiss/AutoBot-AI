@@ -198,11 +198,13 @@ def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
 def _as_output_text(value: Any) -> str:
     """Render an execution-result field as prompt text (#14120).
 
-    ``stdout``/``stderr`` are strings, but the tool vocabularies are not. The
-    shape that actually occurs is a **dict** — ``_handle_llc_tool`` records one
-    (its caller immediately reads ``result.get("entity_type")``), and the MCP
-    bridge records one under ``result``. Web search records a ``str``; a list is
-    reachable only if an ``AFTER_TOOL_EXECUTE`` hook returns one. A bare
+    ``stdout``/``stderr`` are strings, but the tool vocabularies are not. A
+    **dict** is reachable — the MCP bridge records one under ``result`` — and a
+    list is reachable only if an ``AFTER_TOOL_EXECUTE`` hook returns one. (
+    ``_handle_llc_tool`` used to store a dict under ``output`` too; #14284
+    serialises it at the producer instead, so the envelope's payload fields stay
+    a uniform str — this dict branch now exists for the MCP bridge and any
+    future producer, not for that one.) Web search records a ``str``. A bare
     ``.strip()`` raised on every non-string case.
 
     Dicts go through ``json.dumps`` rather than ``str()``, matching the

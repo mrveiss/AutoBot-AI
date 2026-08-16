@@ -19,7 +19,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
+# Fully-qualified (#14373) — see plugins/core-plugins/video-generation-plugin/main.py.
+from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 from .providers import ProviderError, get_provider
 
