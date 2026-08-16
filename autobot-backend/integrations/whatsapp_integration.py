@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -31,6 +32,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -246,6 +248,29 @@ class WhatsAppIntegration(BaseIntegration):
             return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
+    async def _egress_denied(self, to: str) -> "Dict[str, Any] | None":
+        """Egress governance for a message to a person, or None when allowed (#14270).
+
+        Applies to ``send_text_message`` / ``send_media_message`` /
+        ``send_template_message`` — the three that deliver something a recipient
+        reads. ``mark_message_read`` is deliberately **not** governed: a read
+        receipt is control traffic, not a message, and gating it would make an
+        armed approval policy silently stop acknowledging inbound messages. That
+        exclusion is pinned by a test so it stays a decision rather than drift.
+
+        The recipient is masked in the audit record — a phone number is PII and
+        the record outlives the send.
+        """
+        verdict = await egress_governor.evaluate(
+            platform="whatsapp",
+            channel_id=_mask_phone(to),
+            message_id="",
+        )
+        if verdict.allowed:
+            return None
+        logger.warning("WhatsApp send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+        return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
+
     async def send_text_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send text message to WhatsApp number.
 
@@ -275,6 +300,10 @@ class WhatsAppIntegration(BaseIntegration):
                     "error": "recipient_not_opted_in",
                     "to": _mask_phone(to),
                 }
+
+            denied = await self._egress_denied(to)
+            if denied is not None:
+                return denied
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
             headers = {
@@ -353,6 +382,10 @@ class WhatsAppIntegration(BaseIntegration):
                     "error": "recipient_not_opted_in",
                     "to": _mask_phone(to),
                 }
+
+            denied = await self._egress_denied(to)
+            if denied is not None:
+                return denied
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
             headers = {
@@ -439,6 +472,10 @@ class WhatsAppIntegration(BaseIntegration):
                     "error": "recipient_not_opted_in",
                     "to": _mask_phone(to),
                 }
+
+            denied = await self._egress_denied(to)
+            if denied is not None:
+                return denied
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
             headers = {

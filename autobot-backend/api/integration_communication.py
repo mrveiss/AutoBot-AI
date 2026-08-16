@@ -31,6 +31,7 @@ from integrations.communication_integration import (
 )
 from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
 from integrations.protocols import MessagingProtocol
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -181,6 +182,19 @@ async def send_message(
     # reaches FastAPI directly instead of being re-wrapped as a 500
     # (#11524 review blocker) — same pattern as _get_integration elsewhere.
     adapter = _build_messaging_adapter(provider_lower, config)
+
+    # Egress governance (#14270), applied before the branch so it covers BOTH
+    # send paths. Guarding only the MessagingProtocol branch would leave the
+    # Teams webhook fallback below ungoverned — the bypass reads as covered
+    # because the governor's name appears in the function.
+    verdict = await egress_governor.evaluate(
+        platform=provider_lower,
+        channel_id=str(getattr(message, "channel_id", "") or ""),
+        message_id="",
+    )
+    if not verdict.allowed:
+        logger.warning("%s send blocked by egress governance (%s): %s", provider_lower, verdict.rule, verdict.reason)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
 
     try:
         if isinstance(adapter, MessagingProtocol):

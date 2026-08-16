@@ -14,7 +14,6 @@ Dispatches workflow event notifications over four channels:
 Usage::
 
     from services.notification_service import (
-from autobot_shared.logging_manager import get_logger
         NotificationService,
         NotificationChannel,
         NotificationEvent,
@@ -41,11 +40,13 @@ from string import Template
 from typing import Any, Dict, List
 
 import aiohttp
+from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -468,6 +469,17 @@ class NotificationService:
         Raises on non-2xx response or network error so the caller's error
         handler can log and continue.
         """
+        # #14270: audited, never blocked. ``require_approval=False`` is passed
+        # explicitly rather than relying on the env default, so arming the policy
+        # cannot silence outage alerts or deadlock APPROVAL_NEEDED. The record
+        # still lands, so an operator can see what left the machine.
+        await egress_governor.evaluate(
+            platform="webhook",
+            channel_id=urlparse(url).hostname or "unknown",
+            message_id="",
+            require_approval=False,
+        )
+
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "AutoBot-Notifier/1.0",
@@ -516,6 +528,12 @@ class NotificationService:
             await service.send_message(
                 chat_id=chat_id,
                 text=message,
+                # #14270: operational alerts are audited but never blocked. This
+                # path carries WORKFLOW_FAILED, SERVICE_FAILED and APPROVAL_NEEDED
+                # — gating the last one behind the approval system would deadlock
+                # it, and gating the first two would silence outage alerts exactly
+                # when they matter.
+                require_approval=False,
             )
             logger.info(f"Sent Telegram notification to chat {chat_id}")
         except Exception as exc:

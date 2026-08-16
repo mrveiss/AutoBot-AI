@@ -19,6 +19,8 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 
+from services.gateway.egress_governor import egress_governor
+
 logger = get_logger(__name__)
 
 # Redis keys for storing Telegram bot config
@@ -84,6 +86,7 @@ class TelegramBotService:
         text: str,
         reply_to_message_id: Optional[int] = None,
         parse_mode: str = "Markdown",
+        require_approval: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Send a message via Telegram Bot API.
@@ -112,6 +115,23 @@ class TelegramBotService:
 
         if reply_to_message_id:
             payload["reply_to_message_id"] = reply_to_message_id
+
+        # Egress governance (#14270). This is the live send seam — the Gateway's
+        # governed path (#14067) is dormant, so without this the bytes reach a
+        # real person with no record and no gate. Audit-only until armed.
+        # require_approval=False is the operational-alert exemption: an alert about
+        # a failure — APPROVAL_NEEDED above all — must never be gated by the
+        # approval system it exists to serve, or arming the policy deadlocks it.
+        # Callers opt into that explicitly; the default (None) follows the env flag.
+        verdict = await egress_governor.evaluate(
+            platform="telegram",
+            channel_id=str(chat_id),
+            message_id=str(reply_to_message_id or ""),
+            require_approval=require_approval,
+        )
+        if not verdict.allowed:
+            logger.warning("Telegram send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+            return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
 
         url = f"{self.base_url}/sendMessage"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
