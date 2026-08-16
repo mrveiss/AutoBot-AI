@@ -73,17 +73,24 @@ jobs:
       - name: Install migration dependencies
         # Deliberately minimal — what runner.py and migration modules import.
         # psycopg2-binary: sync driver used by the custom runner.
+        # sqlalchemy: models/database.py (Base + all table definitions), used
+        # by the schema-bootstrap step below to replicate production's
+        # create_all() (#14326 review).
+        # pydantic / pydantic-settings: autobot_shared.ssot_config, imported by
+        # migrations.seed_agents (#14326 — see PYTHONPATH below for the other
+        # half of that fix).
         # pyyaml: NOT a migration dependency. The pytest step below loads
         # autobot-slm-backend/conftest.py, which since #14307 real-loads
         # services/inventory_builder.py (that module imports yaml). The
         # conftest now degrades per-module rather than dying, so this is no
         # longer load-bearing — kept because inventory_builder is the one
         # listed module a migration test could plausibly want real, and one
-        # line is cheaper than discovering it is absent. See #14326.
+        # line is cheaper than discovering it is absent.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             psycopg2-binary \
+            "sqlalchemy>=2.0.51" \
             pydantic pydantic-settings \
             pyyaml \
             pytest "pytest-asyncio>=0.24"
@@ -97,30 +104,164 @@ jobs:
             -c "CREATE DATABASE slm;" \
             -c "CREATE DATABASE slm_users;"
 
-      - name: (a) Apply all migrations on a fresh DB
+      - name: Create base SLM schema (matches production's create_all)
+        # #14326 review: main.py's lifespan calls db_service.initialize()
+        # (services/database.py), which runs SQLAlchemy
+        # `Base.metadata.create_all()` BEFORE migrations ever run — so `nodes`
+        # and every other SLM-side table already exist by the time the real
+        # runner starts. This bare-CLI harness skipped that step entirely, so
+        # `nodes` never existed here and every migration that targets it
+        # (add_ssh_columns, add_code_version_columns,
+        # add_ansible_name_unique_constraint, widen_code_status_column, ...)
+        # deferred or failed for a harness reason, not a migration bug.
+        # Replicated with the SAME model layer production uses
+        # (models/database.py), loaded by file path rather than
+        # `from models.database import Base`: `models` is also a top-level
+        # package name under autobot-backend/, and the static import-smoke
+        # guard (repo_tests/test_ci_import_smoke_paths_14252.py) checks
+        # first-party import paths against a fixed root list that does not
+        # include autobot-slm-backend, so it cannot tell the two apart.
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import create_engine
+
+          spec = importlib.util.spec_from_file_location("_slm_models_database_14326", Path("models/database.py"))
+          slm_models_database = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_models_database)
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          try:
+              slm_models_database.Base.metadata.create_all(engine)
+          finally:
+              engine.dispose()
+
+          print(f"Created {len(slm_models_database.Base.metadata.tables)} SLM table(s) (matches production create_all)")
+          PY
+
+      - name: (a) Apply all migrations on a fresh DB
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          # #14326: migrations.seed_agents imports autobot_shared.ssot_config
+          # at module level. autobot_shared lives at the repo root, one level
+          # above working-directory below, so it is invisible to the
+          # interpreter without this. Without it every run died on
+          # "No module named 'autobot_shared'" applying seed_agents — the
+          # 12th of 27 entries in MIGRATIONS — so nothing after it, including
+          # add_role_permission_audit_log_timestamps (the last entry), was
+          # ever exercised by this gate.
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the fresh-DB pass (a) - see the FAIL entry above for which migration failed"
+            exit 1
+          fi
 
       - name: (b) Idempotency — re-run migrations on already-migrated DB
         # The runner tracks applied migrations in migrations_applied.
         # A second run must succeed with 'No migrations to run' (no failures).
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the idempotency pass (b) - a second run must be a no-op"
+            exit 1
+          fi
 
-      - name: Verify migrations_applied table is populated
-        # Assert every migration in MIGRATIONS was recorded exactly once.
+      - name: Verify migrations_applied matches the full migration list
+        # #14326: this used to be two psql SELECTs that printed rows and
+        # compared nothing, so the step was green regardless of what the
+        # table held. It now asserts every entry in migrations.runner.MIGRATIONS
+        # was recorded, with one documented permanent exception.
+        #
+        # MIGRATIONS is loaded from runner.py by file path, not
+        # `from migrations.runner import MIGRATIONS`: `migrations` is also a
+        # top-level package name under autobot-backend/ (a *different*
+        # migrations package, see #13084), and the static import-smoke guard
+        # (repo_tests/test_ci_import_smoke_paths_14252.py) checks first-party
+        # import paths against a fixed root list that does not include
+        # autobot-slm-backend, so a literal `from migrations.runner import
+        # ...` here reads as "autobot-backend/migrations/runner.py", which
+        # does not exist, and fails that guard.
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
         run: |
-          PGPASSWORD=slmtest psql -h 127.0.0.1 -U slmtest -d slm \
-            -c "SELECT name FROM migrations_applied ORDER BY id;" \
-            -c "SELECT COUNT(*) AS total_applied FROM migrations_applied;"
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          import sys
+          from pathlib import Path
+
+          import psycopg2
+
+          spec = importlib.util.spec_from_file_location("_slm_migrations_runner_14326", Path("migrations/runner.py"))
+          slm_runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_runner)
+          MIGRATIONS = slm_runner.MIGRATIONS
+
+          # add_role_permission_audit_log_timestamps targets role_permissions
+          # and audit_logs — user_management tables that live in the SEPARATE
+          # slm_users database (user_management/config.py:get_slm_db_config).
+          # The runner connects only to DATABASE_URL (the slm database, per
+          # runner.get_db_url()), so it can never reach those tables through
+          # this connection. That is true in production exactly as it is
+          # here — not a harness artifact, and not fixable by create_all()
+          # of any Base, since create_all only creates tables in the
+          # database its own engine is bound to. #14300's deferral mechanism
+          # is what keeps this migration retried rather than falsely marked
+          # applied; it is expected to stay pending indefinitely until the
+          # runner gains a second connection for user_management tables
+          # (tracked separately from #14326 as #14300, which reports the
+          # user-visible symptom: audit_logs.updated_at missing on the live DB.
+          # Remove this entry when #14300 lands — `stale_allowlist` above fails
+          # the gate the moment the migration starts applying, so this cannot
+          # rot into a permanent exemption).
+          ALLOWED_DEFERRED = {"add_role_permission_audit_log_timestamps"}
+
+          conn = psycopg2.connect(os.environ["DATABASE_URL"])
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT name FROM migrations_applied ORDER BY id")
+                  applied = {row[0] for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          expected = set(MIGRATIONS) - ALLOWED_DEFERRED
+          missing = expected - applied
+          unexpected_extra = applied - set(MIGRATIONS)
+          stale_allowlist = ALLOWED_DEFERRED - (set(MIGRATIONS) - applied)
+
+          print(f"MIGRATIONS in runner: {len(MIGRATIONS)}")
+          print(f"Applied in migrations_applied: {len(applied)}")
+          print(f"Allow-listed permanent deferral: {sorted(ALLOWED_DEFERRED)}")
+
+          failed = False
+          if missing:
+              print(f"::error::migrations NOT applied and not allow-listed: {sorted(missing)}")
+              failed = True
+          if unexpected_extra:
+              print(f"::error::migrations_applied has entries runner.MIGRATIONS does not know: {sorted(unexpected_extra)}")
+              failed = True
+          if stale_allowlist:
+              print(
+                  "::error::allow-listed deferral actually applied cleanly, "
+                  f"remove from ALLOWED_DEFERRED: {sorted(stale_allowlist)}"
+              )
+              failed = True
+
+          sys.exit(1 if failed else 0)
+          PY
 
       - name: Run tablename-collision unit tests
         # Also exercise the validator that now RAISES on unallowlisted collisions

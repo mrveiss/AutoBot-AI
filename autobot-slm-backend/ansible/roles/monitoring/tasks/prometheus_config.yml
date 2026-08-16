@@ -1,0 +1,55 @@
+---
+# Resolving the scrape topology and writing prometheus.yml, in one file so it can
+# be run again on its own (#14337).
+#
+# The monitoring role renders this in Play 1 of deploy-slm-manager.yml, before
+# provision-fleet-roles.yml has run the backend (Phase 4a) or frontend (4b)
+# roles. On a first-ever provisioning run there is therefore no backend unit and
+# no nginx vhost to observe when the decision below is made, so every host looks
+# like a remote-backend topology and prometheus is left scraping an address that
+# answers nothing. Nothing re-rendered the file afterwards, so it stayed wrong
+# until an operator redeployed monitoring by hand — which is how the deployed
+# config came to carry a target the backend never bound (#14315) and one job
+# fewer than the template defines.
+#
+# So the same tasks run once more at the end of the playbook, when the roles
+# they describe actually exist. Both entry points include this file rather than
+# duplicating it: a second copy of a topology decision is how the two ended up
+# disagreeing in the first place.
+
+- name: "Prometheus | Stat the standalone backend nginx vhost (#14315)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_vhost
+
+- name: "Prometheus | Stat the backend service unit (#14315)"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-backend.service
+  register: _backend_unit
+
+- name: "Prometheus | Resolve which backend metrics endpoint is reachable (#14315)"
+  # Loopback is correct only when the backend runs HERE and the vhost that would
+  # otherwise front it is gone — exactly the state #2829 leaves behind.
+  #
+  # Deliberately NOT `slm_colocated_frontend or ...`. That flag answers a
+  # different question: setup_wizard sets it whenever the SLM host carries the
+  # *frontend* role, and co-locates the backend as a separate, nested condition.
+  # An SLM host with the frontend role and a remote backend is a topology the
+  # wizard generates, and there the flag is true while no backend is reachable
+  # on loopback at all — so an `or` would point prometheus at nothing.
+  #
+  # Nor is the flag ever ahead of what is on disk: provision-fleet-roles.yml
+  # runs Backend at Phase 4a, before Frontend at 4b, so by the time the flag can
+  # become true the backend role has already made its vhost decision.
+  ansible.builtin.set_fact:
+    _backend_metrics_on_loopback: >-
+      {{ _backend_unit.stat.exists and not _backend_vhost.stat.exists }}
+
+- name: Create Prometheus config
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ prometheus_config_dir }}/prometheus.yml"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: "0644"
+  notify: Restart prometheus

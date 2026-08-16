@@ -55,51 +55,12 @@
     group: "{{ prometheus_group }}"
   when: not _prometheus_binary.stat.exists
 
-# The backend scrape target depends on topology (#14315). Resolved HERE, from
-# this host's own deployed state, so the role is correct under any playbook that
-# renders it — including deploy-monitoring.yml, which runs `roles: [monitoring]`
-# and nothing else. Trusting `slm_colocated_frontend` alone would leave the
-# answer to whether some other role happened to run first in the same play.
-#
-# Observed state rather than a re-derived prediction: what decides the target is
-# whether the standalone vhost is actually serving, and that is a file on disk,
-# not something to infer from the flag that governed its teardown.
-- name: "Prometheus | Stat the standalone backend nginx vhost (#14315)"
-  ansible.builtin.stat:
-    path: /etc/nginx/sites-enabled/autobot-backend.conf
-  register: _backend_vhost
-
-- name: "Prometheus | Stat the backend service unit (#14315)"
-  ansible.builtin.stat:
-    path: /etc/systemd/system/autobot-backend.service
-  register: _backend_unit
-
-- name: "Prometheus | Resolve which backend metrics endpoint is reachable (#14315)"
-  # Loopback is correct only when the backend runs HERE and the vhost that would
-  # otherwise front it is gone — exactly the state #2829 leaves behind.
-  #
-  # Deliberately NOT `slm_colocated_frontend or ...`. That flag answers a
-  # different question: setup_wizard sets it whenever the SLM host carries the
-  # *frontend* role, and co-locates the backend as a separate, nested condition.
-  # An SLM host with the frontend role and a remote backend is a topology the
-  # wizard generates, and there the flag is true while no backend is reachable
-  # on loopback at all — so an `or` would point prometheus at nothing.
-  #
-  # Nor is the flag ever ahead of what is on disk: provision-fleet-roles.yml
-  # runs Backend at Phase 4a, before Frontend at 4b, so by the time the flag can
-  # become true the backend role has already made its vhost decision.
-  ansible.builtin.set_fact:
-    _backend_metrics_on_loopback: >-
-      {{ _backend_unit.stat.exists and not _backend_vhost.stat.exists }}
-
-- name: Create Prometheus config
-  ansible.builtin.template:
-    src: prometheus.yml.j2
-    dest: "{{ prometheus_config_dir }}/prometheus.yml"
-    owner: "{{ prometheus_user }}"
-    group: "{{ prometheus_group }}"
-    mode: "0644"
-  notify: Restart prometheus
+# Topology detection and the config render live in their own file so the same
+# tasks can run again after the fleet roles exist (#14337). In this play they
+# run before the backend role has been provisioned at all, so on a first-ever
+# run the decision they make is based on a host that has no backend on it yet.
+- name: "Prometheus | Resolve the scrape topology and write the config"
+  ansible.builtin.include_tasks: prometheus_config.yml
 
 # #12460: the alert rules live in the repo under autobot-monitoring/ and were
 # never installed, so `rule_files` had nothing to point at on a fleet host.
