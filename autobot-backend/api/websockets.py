@@ -451,12 +451,22 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
     """
     text, sender = _format_event_for_chat(message_type, raw_data)
 
+    # Issue #14342: the event payload is the only session context a broadcast
+    # event carries (the /ws connection itself is not session-scoped). Route
+    # on it when the producer set it; fall back to the default bucket
+    # otherwise, same as before, instead of always mixing every session in.
+    session_id = raw_data.get("session_id") if isinstance(raw_data, dict) else None
+
     # Add to chat history if we have meaningful text and chat_history_manager is available
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
     if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
         try:
             await chat_history_manager.add_message(
-                sender=sender, text=text, message_type=message_type, raw_data=raw_data
+                sender=sender,
+                text=text,
+                message_type=message_type,
+                raw_data=raw_data,
+                session_id=session_id,
             )
         except Exception as e:
             logger.error("Failed to add message to chat history: %s", e)

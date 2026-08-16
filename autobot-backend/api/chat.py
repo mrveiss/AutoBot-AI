@@ -405,7 +405,11 @@ def _to_persisted_message(api_data: Dict[str, Any], default_type: str) -> Dict[s
     persisted: Dict[str, Any] = {
         "id": api_data["id"],
         "sender": sender,
-        "content": api_data.get("content", ""),
+        # #14341: api_data may be API-shape ("content") or stored-shape
+        # ("text") — create_summary_message returns the latter. Resolving
+        # through message_text handles both instead of reading only "content"
+        # and silently persisting an empty summary.
+        "content": message_text(api_data),
         "timestamp": api_data.get("timestamp"),
         "type": default_type,
         "metadata": api_data.get("metadata") or {},
