@@ -50268,6 +50268,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/roles/{company_id}/{role_id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Role Tools */
+        get: operations["list_role_tools_api_llc_roles__company_id___role_id__tools_get"];
+        put?: never;
+        /** Attach Tool */
+        post: operations["attach_tool_api_llc_roles__company_id___role_id__tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/tools/{tool_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Tool */
+        delete: operations["detach_tool_api_llc_roles__company_id___role_id__tools__tool_name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Role Credentials
+         * @description Secret ids only — never values. Revoked ones are excluded by default.
+         */
+        get: operations["list_role_credentials_api_llc_roles__company_id___role_id__credentials_get"];
+        put?: never;
+        /** Attach Credential */
+        post: operations["attach_credential_api_llc_roles__company_id___role_id__credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/credentials/{secret_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Credential */
+        delete: operations["detach_credential_api_llc_roles__company_id___role_id__credentials__secret_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -65664,6 +65737,16 @@ export interface components {
             scopes: string[];
             /** Label */
             label: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CredentialAttach */
+        CredentialAttach: {
+            /**
+             * Secret Id
+             * Format: uuid
+             */
+            secret_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -97411,6 +97494,13 @@ export interface components {
             last_used: number | null;
             /** Masked Secret */
             masked_secret: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ToolAttach */
+        ToolAttach: {
+            /** Tool Name */
+            tool_name: string;
         } & {
             [key: string]: unknown;
         };
@@ -169677,6 +169767,202 @@ export interface operations {
                 company_id: string;
                 role_id: string;
                 workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_tools_api_llc_roles__company_id___role_id__tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_tool_api_llc_roles__company_id___role_id__tools_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_tool_api_llc_roles__company_id___role_id__tools__tool_name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_credentials_api_llc_roles__company_id___role_id__credentials_get: {
+        parameters: {
+            query?: {
+                include_revoked?: boolean;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_credential_api_llc_roles__company_id___role_id__credentials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_credential_api_llc_roles__company_id___role_id__credentials__secret_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                secret_id: string;
             };
             cookie?: never;
         };
