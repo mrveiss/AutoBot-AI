@@ -179,12 +179,20 @@ _BACKEND_NOTIF_PATH = _find_backend_notif_path()
 def _load_backend_notification_service():
     import importlib.util
 
+    # Every top-level import the backend module makes has to be stubbed: this
+    # loads it by path, so `services` resolves to the *slm* package here and any
+    # `services.*` the backend imports is genuinely absent. A new import over
+    # there fails this test with a bare ModuleNotFoundError naming a module that
+    # exists perfectly well in its own tree — which reads as a broken checkout
+    # rather than a missing stub. #14270 added the egress governor.
     stubs = {
         "constants": MagicMock(),
         "constants.ttl_constants": MagicMock(TTL_7_DAYS=7 * 24 * 3600),
         "autobot_shared.ssot_config": MagicMock(config=MagicMock()),
         "autobot_shared.redis_client": MagicMock(),
         "autobot_shared.logging_manager": MagicMock(get_logger=MagicMock(return_value=MagicMock())),
+        "services.gateway": MagicMock(),
+        "services.gateway.egress_governor": MagicMock(egress_governor=MagicMock()),
     }
     with patch.dict(sys.modules, stubs):
         spec = importlib.util.spec_from_file_location("_backend_notification_service", _BACKEND_NOTIF_PATH)
