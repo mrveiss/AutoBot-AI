@@ -88,9 +88,9 @@ def test_the_precedence_order_holds(higher, lower):
     """
     expression = _resolution_expression()
 
-    assert expression.index(higher) < expression.index(lower), (
-        f"{lower} is consulted before {higher} — a stale or drifted key would win (#14350)"
-    )
+    assert expression.index(higher) < expression.index(
+        lower
+    ), f"{lower} is consulted before {higher} — a stale or drifted key would win (#14350)"
 
 
 def test_the_slm_key_is_read_from_the_control_node():
@@ -105,12 +105,10 @@ def test_the_slm_key_is_read_from_the_control_node():
         None,
     )
     assert task is not None, "the authoritative-key task is gone"
-    assert task.get("delegate_to") == "localhost", (
-        "the SLM key task is not delegated, so it reads the target node rather than the SLM"
-    )
-    assert task.get("failed_when") is False, (
-        "a control node without the file must fall through, not fail the deploy"
-    )
+    assert (
+        task.get("delegate_to") == "localhost"
+    ), "the SLM key task is not delegated, so it reads the target node rather than the SLM"
+    assert task.get("failed_when") is False, "a control node without the file must fall through, not fail the deploy"
     assert task.get("no_log") is True, "the key task must not log its value"
 
 
