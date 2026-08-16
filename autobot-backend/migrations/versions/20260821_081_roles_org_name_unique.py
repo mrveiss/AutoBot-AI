@@ -63,9 +63,7 @@ def upgrade() -> None:
     duplicates = list(connection.exec_driver_sql(_DUPLICATE_SCAN))
 
     if duplicates:
-        listed = "\n".join(
-            f"  org_id={row[0]} name={row[1]!r} occurrences={row[2]}" for row in duplicates
-        )
+        listed = "\n".join(f"  org_id={row[0]} name={row[1]!r} occurrences={row[2]}" for row in duplicates)
         raise RuntimeError(
             f"#14325: cannot add {INDEX_NAME} — {len(duplicates)} (org_id, name) group(s) "
             f"already hold more than one role:\n{listed}\n"

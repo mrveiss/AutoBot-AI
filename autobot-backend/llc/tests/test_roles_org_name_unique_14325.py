@@ -32,9 +32,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parents[3]
-_MIGRATION = (
-    _REPO / "autobot-backend" / "migrations" / "versions" / "20260821_081_roles_org_name_unique.py"
-)
+_MIGRATION = _REPO / "autobot-backend" / "migrations" / "versions" / "20260821_081_roles_org_name_unique.py"
 _MODEL = _REPO / "autobot_shared" / "user_management" / "models" / "role.py"
 
 INDEX_NAME = "uq_roles_org_id_name"
@@ -69,9 +67,7 @@ def test_the_model_declares_the_same_partial_index(model_source: str) -> None:
     assert "__table_args__" in model_source
 
 
-def test_the_model_and_migration_agree_on_the_index_name(
-    migration_source: str, model_source: str
-) -> None:
+def test_the_model_and_migration_agree_on_the_index_name(migration_source: str, model_source: str) -> None:
     """Two spellings would mean two indexes, and a migrated DB drifting from a fresh one."""
     assert INDEX_NAME in migration_source
     assert INDEX_NAME in model_source
@@ -85,11 +81,7 @@ def test_upgrade_scans_for_duplicates_before_creating_the_index(migration_source
     shape. The scan must come first and report the full set.
     """
     tree = ast.parse(migration_source)
-    upgrade = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "upgrade"
-    )
+    upgrade = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "upgrade")
     body = ast.dump(upgrade)
 
     scan_at = body.find("_DUPLICATE_SCAN")
@@ -103,11 +95,7 @@ def test_upgrade_scans_for_duplicates_before_creating_the_index(migration_source
 def test_upgrade_refuses_rather_than_letting_postgres_fail(migration_source: str) -> None:
     """A found duplicate must raise with the offending groups, not fall through."""
     tree = ast.parse(migration_source)
-    upgrade = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "upgrade"
-    )
+    upgrade = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "upgrade")
 
     raises = [node for node in ast.walk(upgrade) if isinstance(node, ast.Raise)]
 
