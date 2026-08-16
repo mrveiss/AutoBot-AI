@@ -90,7 +90,7 @@ _ROLE_TO_GROUPS: dict[str, frozenset] = {
     # targets. That play does
     #     git -C /opt/autobot/code_source rev-parse HEAD > /opt/autobot/autobot-slm-backend/.deployed_commit
     # and neither path exists on a node that is not the manager, so it failed
-    # with a non-zero rc and halted the whole fleet stage (#14328).
+    # with a non-zero rc and halted the whole fleet stage (#14330).
     #
     # The manager keeps `slm_server` through its own slm-backend/-frontend/
     # -database/-monitoring roles; only a node carrying the agent alone drops

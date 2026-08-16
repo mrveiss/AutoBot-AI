@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The slm-agent must not put a fleet node in slm_server (#14328).
+"""The slm-agent must not put a fleet node in slm_server (#14330).
 
 `_ROLE_TO_GROUPS` had one `"slm-"` prefix key covering the manager's own
 components — `slm-backend`, `slm-frontend`, `slm-database`, `slm-monitoring` —
@@ -74,15 +74,23 @@ def test_a_node_carrying_only_the_agent_is_not_an_slm_server(roles):
 
     assert _MANAGER_ONLY_GROUP not in groups, (
         f"roles {roles} put the node in {_MANAGER_ONLY_GROUP}, so Play 1 of "
-        "update-all-nodes.yml would run the manager's update against it (#14328)"
+        "update-all-nodes.yml would run the manager's update against it (#14330)"
     )
 
 
-@pytest.mark.parametrize(
-    "role",
-    ["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"],
-)
-def test_the_managers_own_components_still_are(role):
+# Only these two reach `slm_server` through the `"slm-"` prefix. `slm-database`
+# and `slm-monitoring` have their own EXACT keys ({redis, database} and
+# {monitoring_vm}), and an exact match wins and `continue`s — so they have
+# never been in `slm_server`, before this change or after it.
+#
+# CI caught the first version of this test asserting all four. That was a
+# premise I assumed rather than read, which is the same mistake the fix itself
+# is about: checking a rule I chose instead of the behaviour in question.
+_PREFIX_MATCHED_MANAGER_ROLES = ["slm-backend", "slm-frontend"]
+
+
+@pytest.mark.parametrize("role", _PREFIX_MATCHED_MANAGER_ROLES)
+def test_the_prefix_matched_manager_components_still_are(role):
     """The other half, which the fix must not break.
 
     Removing `slm_server` from the agent is only correct while the manager
@@ -91,6 +99,17 @@ def test_the_managers_own_components_still_are(role):
     manager.
     """
     assert _MANAGER_ONLY_GROUP in _ib.groups_for_role_tokens([role])
+
+
+@pytest.mark.parametrize("role", ["slm-database", "slm-monitoring"])
+def test_the_exact_keyed_manager_components_never_were(role):
+    """Pins the premise the first version of this test got wrong.
+
+    Stated as a test rather than a comment so that if someone later removes
+    those exact keys — putting these two back under the prefix and into
+    `slm_server` — the change is deliberate and visible instead of incidental.
+    """
+    assert _MANAGER_ONLY_GROUP not in _ib.groups_for_role_tokens([role])
 
 
 def test_the_real_manager_role_set_is_still_an_slm_server():
