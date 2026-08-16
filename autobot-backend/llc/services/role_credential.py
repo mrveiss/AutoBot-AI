@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from user_management.models.role import Role
 
 from ..models.activity import ActorType

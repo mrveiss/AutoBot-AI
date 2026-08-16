@@ -25,7 +25,6 @@ import pytest
 import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from user_management.models.role import Role
 
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
@@ -38,6 +37,7 @@ from llc.services.role_credential import RoleCredentialService
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
+from user_management.models.role import Role
 
 _ADMIN_USER = uuid.uuid4()
 
