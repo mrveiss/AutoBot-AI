@@ -10,9 +10,9 @@ singleton behaviour, and the get_tool_sdk_registry alias.
 
 import pytest
 
-from tool_sdk import get_tool_sdk_registry
-from tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
-from tool_sdk.registry import (
+from autobot_shared.tool_sdk import get_tool_sdk_registry
+from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
+from autobot_shared.tool_sdk.registry import (
     PermissionDeniedError,
     ToolNotFoundError,
     ToolSDKRegistry,
