@@ -242,12 +242,9 @@ def test_the_migration_never_imports_the_service_package():
             offenders.append(f"line {node.lineno}: from {node.module} import ...")
         elif isinstance(node, ast.Import):
             offenders += [
-                f"line {node.lineno}: import {alias.name}"
-                for alias in node.names
-                if alias.name.startswith("services")
+                f"line {node.lineno}: import {alias.name}" for alias in node.names if alias.name.startswith("services")
             ]
 
     assert offenders == [], (
-        "the migration imports the services package, which drags FastAPI into "
-        f"the migration runner: {offenders}"
+        "the migration imports the services package, which drags FastAPI into " f"the migration runner: {offenders}"
     )
