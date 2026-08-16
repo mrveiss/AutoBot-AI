@@ -320,6 +320,17 @@ async def run_migrations_async(db_url: str = None) -> List[Tuple[str, bool, str]
     return await loop.run_in_executor(None, run_all_migrations, db_url)
 
 
+def _exit_code_for(results: List[Tuple[str, bool, str]]) -> int:
+    """Non-zero exit whenever any migration in ``results`` failed (#14326).
+
+    Extracted so the SLM migration gate's core assertion — a real migration
+    failure must fail the process, not print a checkmark and exit 0 — is a
+    plain function a unit test can call, rather than logic buried in
+    ``__main__`` that only a live subprocess run could exercise.
+    """
+    return 1 if any(not success for _, success, _ in results) else 0
+
+
 if __name__ == "__main__":
     # Allow running directly: python3 -m migrations.runner
     logging.basicConfig(level=logging.INFO)
@@ -336,3 +347,5 @@ if __name__ == "__main__":
             logger.info(f"  {status} {message}")
     else:
         logger.info("No migrations to run")
+
+    sys.exit(_exit_code_for(results))
