@@ -28,28 +28,47 @@ another copy — see the consolidate-never-fork rule.
 Known readers still on a single schema, each filed rather than silently fixed
 here because they sit in different subsystems with their own blast radius:
 
-* **#14305** — ``api/chat.py::_build_llm_context`` reads the role key from
-  records whose sibling writer stores the speaker under ``sender``, so every
-  prior turn reaches the model attributed to the caller, the assistant's own
-  replies included. Live on the chat hot path.
 * **#14306** — ``api/chat_sessions.py::_preserve_system_messages`` filters on
   the role key against disk-shape records, so ``keep_system_prompt`` preserves
   nothing and reports the count it kept as 0.
 
-(Both described without quoting the literal values: the hardcoded-value gate
-scans added lines including prose, and a comment citing a banned pattern trips
-its own lint.)
+(Described without quoting the literal values: the hardcoded-value gate scans
+added lines including prose, and a comment citing a banned pattern trips its
+own lint.)
+
+Two further readers are filed but not fixed here, because both are outages of a
+different shape than the schema mismatch this module addresses — they lose the
+record rather than mislabel it, and they sit in subsystems with their own blast
+radius: **#14340** (the shared-link viewer filters on a key stored records have
+never carried, so every shared session renders empty) and **#14341** (the
+overflow summary is written under one body key and persisted from another, so
+every auto-summary is stored empty and the conversation it condensed is gone).
 
 Deliberately NOT applied to LLM-API-only readers (``llm_shared/providers/*``,
 ``token_optimizer``, ``complexity_router``, and ``context_overflow``'s
 tool-batch scan). Those handle messages that are already in API shape by
 construction, and teaching them a second schema would widen a contract that is
 currently correct.
+
+``llm_role`` is the one exception to that neutrality, and is marked as such
+rather than quietly admitted. Everything else here answers a question about the
+*stored data*; that one answers a question about what a **provider** will
+accept, which is a constraint from the other side of the boundary. It lives
+here anyway because the alternative is a second module reimplementing the
+both-schemas read, and because the constraint is not one provider's quirk —
+``vertexai``'s content builder independently collapses non-conversational roles
+the same way. If a third provider-facing rule ever wants to join it, that is the
+signal to split them out rather than to keep widening this module.
 """
 
 from typing import Any, Dict, List
 
 _UNKNOWN_ROLE = "unknown"
+
+# The roles a conversation turn can carry into a provider request.
+_CALLER_ROLE = "user"
+_RESPONDER_ROLE = "assistant"
+_CONVERSATION_ROLES = frozenset({_CALLER_ROLE, _RESPONDER_ROLE})
 
 
 def _valid_text_value(value: Any) -> Any:
@@ -107,6 +126,46 @@ def message_text(message: Dict[str, Any]) -> str:
             if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str)
         ).strip()
     return str(value)
+
+
+def llm_role(message: Dict[str, Any], default: str = _CALLER_ROLE) -> str:
+    """The speaker as a role a provider will actually accept (#14305).
+
+    `message_role` answers *who spoke*, faithfully — and a chat session records
+    speakers that are not conversational roles at all. Terminal integration,
+    the agent terminal and the workflow state machine all persist into the same
+    session under names of their own, so a reader that hands `message_role`'s
+    answer straight to a provider builds a request the API rejects, failing the
+    whole turn.
+
+    Anything outside the two conversational roles therefore collapses to the
+    caller. That is exactly what the hand-written readers did for these records
+    before — they asked for a key the stored shape has never carried and took
+    their default — so this preserves their behaviour for every record whose
+    speaker was never expressible, while the two roles that *are* expressible
+    now survive instead of being flattened along with them.
+
+    This is an **allowlist**, not a list of known-bad speakers, and deliberately
+    so: the speakers above were found by grepping one keyword-argument form, so
+    a writer that passes its sender positionally or through a variable would not
+    have appeared. Naming what may pass keeps the unenumerated ones safe — and
+    they exist. The websocket layer formats about a dozen more (tool output,
+    workflow, agent-step and error variants); they are inert only because that
+    path drops its session id and writes to a bucket no session reader touches
+    (#14342). Closing that routing gap must not require revisiting this.
+
+    The system role is deliberately not passed through. It is a legal role, but
+    it does not mean *a turn in the conversation* — an adapter that separates it
+    out hoists it into the instruction channel, so a persisted operational
+    notice (an approval, a command result) would arrive as an instruction rather
+    than as history. That is an elevation of ordinary history into the
+    highest-trust slot, wrong on its own terms; it becomes destructive as well
+    on any route that carries a real system prompt for it to overwrite, which
+    `chat_optimized` already does and the plain chat path does not yet.
+    Callers that genuinely carry a system prompt add it themselves.
+    """
+    role = message_role(message, default=default)
+    return role if role in _CONVERSATION_ROLES else default
 
 
 def as_llm_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:

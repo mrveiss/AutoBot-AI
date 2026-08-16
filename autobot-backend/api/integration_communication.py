@@ -31,6 +31,7 @@ from integrations.communication_integration import (
 )
 from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
 from integrations.protocols import MessagingProtocol
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -182,6 +183,19 @@ async def send_message(
     # (#11524 review blocker) — same pattern as _get_integration elsewhere.
     adapter = _build_messaging_adapter(provider_lower, config)
 
+    # Egress governance (#14270), applied before the branch so it covers BOTH
+    # send paths. Guarding only the MessagingProtocol branch would leave the
+    # Teams webhook fallback below ungoverned — the bypass reads as covered
+    # because the governor's name appears in the function.
+    verdict = await egress_governor.evaluate(
+        platform=provider_lower,
+        channel_id=str(getattr(message, "channel_id", "") or ""),
+        message_id="",
+    )
+    if not verdict.allowed:
+        logger.warning("%s send blocked by egress governance (%s): %s", provider_lower, verdict.rule, verdict.reason)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
+
     try:
         if isinstance(adapter, MessagingProtocol):
             channel_id, text = _extract_channel_and_text(provider_lower, message)
@@ -267,6 +281,16 @@ async def send_webhook_message(
         extra={"webhook_url": webhook.webhook_url},
     )
     integration = TeamsIntegration(config)
+
+    # #14270: this endpoint is a *sibling* of `send_message` above, not a branch
+    # of it. The comment there covers the Teams fallback inside that function and
+    # says nothing about this one, which reaches the same Teams webhook by its
+    # own route — so governing that function left this bypass wide open, reading
+    # as covered because the governor appears elsewhere in the module.
+    verdict = await egress_governor.evaluate(platform="teams", channel_id="", message_id="")
+    if not verdict.allowed:
+        logger.warning("teams webhook send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
 
     try:
         params = {"text": webhook.text}

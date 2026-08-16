@@ -55,6 +55,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+from chat_history.message_schema import llm_role, message_text
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
@@ -549,8 +550,28 @@ def _build_llm_context(
         message_limit = 20
         logger.warning("Context manager not available, using default limit")
 
+    # #14305: read through the shared normaliser. This asked for the role key
+    # with a caller-shaped default, over records `_to_persisted_message` in this
+    # same file stores the speaker under `sender` — so the key was always absent
+    # and every prior turn, the assistant's own replies included, reached the
+    # model attributed to the caller. The body survived only because that writer
+    # happens to name its field the same as the API does; the speaker did not.
+    #
+    # `llm_role`, not `message_role`: a session also carries records written by
+    # terminal integration and the workflow state machine, whose speakers are
+    # not roles any provider accepts. Reading them faithfully and forwarding
+    # them would turn a mislabelled-but-working turn into a rejected request.
+    #
+    # Non-dict entries are skipped rather than raising. They raised here both
+    # before and after this fix, and this runs *after* the answer has been
+    # generated — so a malformed record would lose a reply the user already
+    # paid for. That is the stance `as_llm_messages` and `_sanitize_tool_messages`
+    # already take. Not switched to `as_llm_messages` wholesale: that also drops
+    # empty-bodied messages, which would quietly change what the model sees here.
     llm_context = [
-        {"role": msg.get("role", "user"), "content": msg.get("content", "")} for msg in chat_context[-message_limit:]
+        {"role": llm_role(msg), "content": message_text(msg)}
+        for msg in chat_context[-message_limit:]
+        if isinstance(msg, dict)
     ]
     llm_context.append({"role": message.role, "content": message.content})
 
@@ -2078,9 +2099,14 @@ async def _generate_ai_stack_chat_response(
         model_name = message.metadata.get("model") if message.metadata else None
         message_limit = _get_ai_stack_message_limit(chat_history_manager, model_name)
 
+        # The same defect `_build_llm_context` carried (#14305), on the AI Stack
+        # path: this reads its context from the same store, in the same stored
+        # shape, so the speaker was likewise never present and every turn — the
+        # assistant's own replies included — arrived attributed to the caller.
         formatted_history = [
-            {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+            {"role": llm_role(msg), "content": message_text(msg)}
             for msg in chat_context[-message_limit:]
+            if isinstance(msg, dict)
         ]
 
         ai_stack_response = await ai_client.chat_message(
