@@ -444,12 +444,22 @@ class NotificationService:
         # the control look complete while one door stayed open.
         # require_approval=False for the same reason as the other alert channels:
         # an APPROVAL_NEEDED alert must not be gated by the approval system.
-        await egress_governor.evaluate(
+        #
+        # The verdict is still checked. With require_approval=False the governor
+        # currently always allows, so this reads as dead — it is not. It stops
+        # the seam depending on `_decide`'s present shape: a policy that denies
+        # for a reason other than approval (a blocklist, a kill switch) would
+        # otherwise be silently ignored here, and nothing in this file would say
+        # so. Two reviews flagged the discarded verdict as a fail-open gate.
+        verdict = await egress_governor.evaluate(
             platform="email",
             channel_id="",
             message_id="",
             require_approval=False,
         )
+        if not verdict.allowed:
+            logger.warning("email notification blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+            return
 
         try:
             if use_tls:
@@ -486,12 +496,15 @@ class NotificationService:
         # explicitly rather than relying on the env default, so arming the policy
         # cannot silence outage alerts or deadlock APPROVAL_NEEDED. The record
         # still lands, so an operator can see what left the machine.
-        await egress_governor.evaluate(
+        verdict = await egress_governor.evaluate(
             platform="webhook",
             channel_id=urlparse(url).hostname or "unknown",
             message_id="",
             require_approval=False,
         )
+        if not verdict.allowed:
+            logger.warning("webhook notification blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+            return
 
         headers = {
             "Content-Type": "application/json",

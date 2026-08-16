@@ -285,3 +285,43 @@ class TestTheSiblingSendersReviewFound:
 
         spy.assert_awaited(), "the email seam sent without an audit record"
         assert spy.await_args.kwargs["platform"] == "email"
+
+
+class TestTheNotificationSeamsHonourADenial:
+    """Flagged by security review as fail-open gates.
+
+    Both notification seams awaited the governor and discarded the verdict.
+    That is *currently* equivalent to checking it — `_decide` returns allowed
+    unconditionally when `require_approval=False` — so it was not a reachable
+    bypass. It was a dependency on the governor's present shape that nothing in
+    the calling file recorded, which is the same trap as reusing a flag that
+    happens to answer a different question.
+
+    These tests force a denial through, so the seams cannot go back to ignoring
+    one if `_decide` ever grows a non-approval rule.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_denied_verdict_stops_the_email(self):
+        from services.notification_service import NotificationService
+
+        svc = NotificationService()
+        with patch("services.notification_service.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+            with patch("smtplib.SMTP") as smtp, patch("smtplib.SMTP_SSL") as smtp_ssl:
+                await svc._send_email("someone@example.invalid", "subj", "body")
+
+        smtp.assert_not_called()
+        smtp_ssl.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_denied_verdict_stops_the_webhook_post(self):
+        from services.notification_service import NotificationService
+
+        svc = NotificationService()
+        http = MagicMock()
+        with patch("services.notification_service.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+            with patch("autobot_shared.http_client.get_http_client", return_value=http) as client:
+                await svc._send_webhook("https://hooks.example.invalid/x", {"t": 1})
+
+        client.assert_not_called()
+        http.tracked_request.assert_not_called()
