@@ -94,9 +94,7 @@ def test_exit_code_helper_returns_nonzero_on_any_failure_structurally():
     not indexing.
     """
     tree = _tree()
-    func = next(
-        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_exit_code_for"
-    )
+    func = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_exit_code_for")
     calls = {node.func.id for node in ast.walk(func) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
     assert "any" in calls, "_exit_code_for must scan every result, not special-case one entry"
 
