@@ -1655,6 +1655,34 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S",
+        type=int,
+        default=90,
+        description=(
+            "Seconds to wait for a heartbeat after the reconciler restarts a node's agent "
+            "before recording the remediation as failed. Remediation exists to restore the "
+            "heartbeat, so the heartbeat is what success means — the restart exiting 0 only "
+            "says the command ran (services/reconciler.py, #14344)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S",
+        type=int,
+        default=5,
+        description=(
+            "How often to re-read the node row while waiting for a post-restart heartbeat "
+            "(services/reconciler.py, #14344)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
         type=int,
         default=500,
