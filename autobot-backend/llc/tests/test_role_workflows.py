@@ -28,12 +28,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import MembershipRole, RoleHolderType
-from llc.models.role_assignment import LLCRoleAssignment
 from llc.models.membership import LLCCompanyMembership
+from llc.models.role_assignment import LLCRoleAssignment
 from llc.models.role_workflow import LLCRoleWorkflow
+from llc.services.authz import NotAuthorisedError
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
-from llc.services.authz import NotAuthorisedError
 from llc.services.role_workflow import RoleWorkflowService
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.

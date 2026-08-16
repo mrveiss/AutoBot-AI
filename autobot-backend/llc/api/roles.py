@@ -42,9 +42,9 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..models.enums import RoleHolderType
+from ..services.authz import NotAuthorisedError
 from ..services.role import RoleService
 from ..services.role_assignment import RoleAssignmentService
-from ..services.authz import NotAuthorisedError
 from ..services.role_permission import RolePermissionService
 from ..services.role_workflow import RoleWorkflowService
 
