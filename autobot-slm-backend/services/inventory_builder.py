@@ -79,9 +79,24 @@ logger = logging.getLogger(__name__)
 #   monitoring
 
 _ROLE_TO_GROUPS: dict[str, frozenset] = {
-    # SLM manager / slm-agent / any slm-* role
+    # SLM manager's own components. The "slm-" prefix catches slm-backend,
+    # slm-frontend, slm-database and slm-monitoring — all of which run only on
+    # the manager, which is what makes `slm_server` right for them.
     "slm-": frozenset({"slm", "slm_server", "slm_nodes"}),
-    "slm_agent": frozenset({"slm", "slm_server", "slm_nodes"}),
+    # slm-agent is NOT one of those: it runs on EVERY fleet node. Listed
+    # explicitly so the exact-key match above wins over the "slm-" prefix,
+    # because inheriting `slm_server` put every agent-carrying node into the
+    # group `update-all-nodes.yml`'s "Play 1 - Update SLM Server First"
+    # targets. That play does
+    #     git -C /opt/autobot/code_source rev-parse HEAD > /opt/autobot/autobot-slm-backend/.deployed_commit
+    # and neither path exists on a node that is not the manager, so it failed
+    # with a non-zero rc and halted the whole fleet stage (#14330).
+    #
+    # The manager keeps `slm_server` through its own slm-backend/-frontend/
+    # -database/-monitoring roles; only a node carrying the agent alone drops
+    # out, which is the intent.
+    "slm-agent": frozenset({"slm", "slm_nodes"}),
+    "slm_agent": frozenset({"slm", "slm_nodes"}),
     # Backend / API server
     "backend": frozenset({"backend", "main"}),
     "celery": frozenset({"backend", "main"}),
