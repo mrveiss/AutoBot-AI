@@ -2747,7 +2747,12 @@ class ToolHandlerMixin:
         user_id = _cctx.get("user_id")
         try:
             result = await dispatch_llc_tool(tool_name, params, company_id, user_id)
-            execution_results.append({"tool": tool_name, "status": "success", "output": result})
+            # #14284: `output` must stay a str — the offload adapter
+            # (spill_execution_results) type-guards on str before it looks at a
+            # key, so a raw dict here silently defeated it. Serialise at the
+            # producer, matching every other handler's envelope.
+            output_text = json.dumps(result, default=str, ensure_ascii=False)
+            execution_results.append({"tool": tool_name, "status": "success", "output": output_text})
             entity = result.get("entity_type", "item")
             entity_id = result.get("entity_id")
             summary = f"Done ({entity})" + (f" [{entity_id}]" if entity_id else "")
