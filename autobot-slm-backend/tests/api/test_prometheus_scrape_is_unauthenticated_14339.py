@@ -135,6 +135,17 @@ def _keywords(call: ast.Call) -> set[str]:
     return {kw.arg for kw in call.keywords if kw.arg}
 
 
+def _is_declared(name: str, declared: str) -> bool:
+    """Whether *name* appears in the registry block as a whole word.
+
+    A function rather than an inline expression so a test can pin the decision
+    itself. Inline, reverting this to a substring check went undetected: the
+    whole-word test asserted the technique on its own synthetic string and never
+    touched the line that actually decides.
+    """
+    return bool(re.search(rf"\b{re.escape(name)}\b", declared))
+
+
 _REGISTRY_OPENS = "# Routers intentionally left open"
 _REGISTRY_CLOSES = "# Service-management gate"
 
@@ -215,7 +226,7 @@ def test_every_ungated_router_is_named_in_the_registry():
     declared = _registry_block()
 
     ungated = {name for name, call in _mount_calls().items() if "dependencies" not in _keywords(call)}
-    undeclared = sorted(name for name in ungated if not re.search(rf"\b{re.escape(name)}\b", declared))
+    undeclared = sorted(name for name in ungated if not _is_declared(name, declared))
     assert not undeclared, (
         f"mounted without the service-management gate but not declared in the registry: "
         f"{undeclared}. Add each with the reason it must be reachable unauthenticated, "
@@ -262,10 +273,10 @@ def test_a_name_is_declared_only_as_a_whole_word():
     declared = "#   sso_auth_router - OAuth callback; must complete before a token exists"
 
     assert "auth_router" in declared, "the substring collision this guards against is real"
-    assert not re.search(
-        r"\bauth_router\b", declared
+    assert not _is_declared(
+        "auth_router", declared
     ), "a name present only inside a longer neighbour must not count as declared"
-    assert re.search(r"\bsso_auth_router\b", declared), "the neighbour itself is still declared"
+    assert _is_declared("sso_auth_router", declared), "the neighbour itself is still declared"
 
 
 def test_an_unreadable_mount_is_a_failure_not_a_skip():
