@@ -89,6 +89,7 @@ Environment:
     WATCHDOG_BASE_BRANCH             PR base to watch (default Dev_new_gui)
     WATCHDOG_GRACE_MINUTES           age before "no runs at all" is a failure
     WATCHDOG_STALL_MINUTES           age before a job-less queued run is a failure
+    WATCHDOG_WORKFLOW_DIR            workflow definitions, for runner-pool attribution
     WATCHDOG_MAX_APPROVALS           per-sweep approval cap (blast-radius guard; exceeding it fails)
     WATCHDOG_POLL_ATTEMPTS           re-list attempts while runs appear
     WATCHDOG_POLL_INTERVAL_SECONDS   delay between those attempts
@@ -125,6 +126,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import socket
 import sys
 import time
@@ -132,6 +134,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 # GitHub returns this message when the *token* lacks `actions: write`.
@@ -146,6 +149,16 @@ UPDATE_BOT_LOGIN = "github-actions[bot]"
 
 # A job carrying this label ran on the self-hosted pool.
 SELF_HOSTED_LABEL = "self-hosted"
+
+# Where workflow definitions are read from, so a QUEUED run can be attributed to
+# a runner pool (#14364). Labels live on jobs and a starved run has none — that
+# absence is the condition being detected — but the run payload carries the
+# workflow's `path`, and `runs-on` is declared in that file. Reading it answers
+# the attribution question the job listing cannot.
+DEFAULT_WORKFLOW_DIR = ".github/workflows"
+WORKFLOW_SUFFIXES = frozenset({".yml", ".yaml"})
+RUNS_ON_RE = re.compile(r"^\s*runs-on:\s*(?P<value>.*)$")
+YAML_LIST_ITEM_RE = re.compile(r"^\s*-\s*(?P<value>.+)$")
 
 # GitHub truncates commit-status descriptions beyond this length.
 MAX_STATUS_DESCRIPTION = 140
@@ -494,6 +507,86 @@ def job_is_self_hosted(job: Dict[str, Any]) -> bool:
     return SELF_HOSTED_LABEL in labels
 
 
+def _strip_comment(value: str) -> str:
+    """A YAML scalar with any trailing `#` comment removed."""
+    return value.split("#", 1)[0].strip()
+
+
+def _block_list_items(lines: Sequence[str], start: int) -> List[str]:
+    """Items of a block-form sequence beginning at *start*."""
+    items: List[str] = []
+    for line in lines[start:]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = YAML_LIST_ITEM_RE.match(line)
+        if not match:
+            break
+        items.append(_strip_comment(match.group("value")))
+    return items
+
+
+def declares_self_hosted(text: str) -> bool:
+    """True when a workflow declares at least one job on the self-hosted pool.
+
+    Comments are stripped before matching, which is correctness rather than
+    tidiness: `code-quality.yml` carries
+
+        runs-on: ubuntu-latest  # Temporary: self-hosted runner offline
+
+    and a substring match on the raw line classifies that GitHub-hosted job as
+    self-hosted — reproducing the very misattribution this function removes.
+    `marker-tests.yml` has the same trap in a whole-line comment.
+    """
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        match = RUNS_ON_RE.match(line)
+        if not match:
+            continue
+        inline = _strip_comment(match.group("value"))
+        values = [inline] if inline else _block_list_items(lines, index + 1)
+        if any(SELF_HOSTED_LABEL in value.lower() for value in values):
+            return True
+    return False
+
+
+def self_hosted_workflow_paths(workflow_dir: str) -> Optional[Set[str]]:
+    """Repo-relative paths of workflows declaring at least one self-hosted job.
+
+    ``None`` means the directory could not be read at all, so no run can be
+    attributed to a pool — the caller must say "unknown", never guess.
+    """
+    root = Path(workflow_dir)
+    try:
+        files = sorted(path for path in root.iterdir() if path.suffix in WORKFLOW_SUFFIXES)
+    except OSError:
+        return None
+    paths: Set[str] = set()
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            # Unreadable file: a self-hosted job cannot be ruled out, so keep it.
+            paths.add(path.as_posix())
+            continue
+        if declares_self_hosted(text):
+            paths.add(path.as_posix())
+    return paths
+
+
+def run_requires_self_hosted(run: Dict[str, Any], self_hosted_paths: Optional[Set[str]]) -> bool:
+    """True when this run's workflow declares at least one self-hosted job.
+
+    Unknown resolves to True from both directions — an unreadable workflow set,
+    or a run carrying no `path`. The verdict this gates asserts a specific
+    cause, and suppressing a real self-hosted outage is the worse error of the
+    two, so an unattributable run stays reportable.
+    """
+    if self_hosted_paths is None:
+        return True
+    path = str(run.get("path") or "")
+    return not path or path in self_hosted_paths
+
+
 def job_is_overdue(job: Dict[str, Any], now: datetime, overdue_minutes: int) -> bool:
     """
     True when a self-hosted job has been executing past the point of plausibility.
@@ -523,6 +616,7 @@ def classify_dispatch(
     stall_minutes: int,
     pool_serving: bool = True,
     overdue: Sequence[OverdueJob] = (),
+    self_hosted_paths: Optional[Set[str]] = None,
 ) -> Tuple[str, str]:
     """
     Decide the commit-status state for one PR head.
@@ -555,21 +649,28 @@ def classify_dispatch(
 
     starved = starved_runs(runs, now, stall_minutes)
     if starved:
-        names = ", ".join(sorted({str(run.get("name", "?")) for run in starved})[:3])
-        if pool_serving:
-            # Contention, not an outage — still never green, because the head is
-            # demonstrably not verified yet.
+        # Only runs that can actually reach the self-hosted pool may be cited as
+        # evidence it is starved (#14364). `pool_serving` is derived from
+        # self-hosted job labels alone, so an idle-but-healthy pool reads as not
+        # serving; without this filter a GitHub-hosted capacity backlog was
+        # published as `no runner available`, and the healthier the pool was the
+        # more reliably that happened.
+        needs_pool = [run for run in starved if run_requires_self_hosted(run, self_hosted_paths)]
+        if needs_pool and not pool_serving:
+            names = ", ".join(sorted({str(run.get("name", "?")) for run in needs_pool})[:3])
             return (
-                "pending",
+                "failure",
                 _truncate(
-                    f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy runner pool: {names}"
+                    f"{len(needs_pool)} self-hosted run(s) queued over {stall_minutes}m "
+                    f"with no runner available: {names}"
                 ),
             )
+        # Contention, not an outage — still never green, because the head is
+        # demonstrably not verified yet.
+        names = ", ".join(sorted({str(run.get("name", "?")) for run in starved})[:3])
         return (
-            "failure",
-            _truncate(
-                f"{len(starved)} run(s) queued over {stall_minutes}m with no runner available: {names}"
-            ),
+            "pending",
+            _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy queue: {names}"),
         )
 
     if not runs:
@@ -1068,6 +1169,12 @@ def publish_dispatch_states(
     """Write the dispatch commit status for each head. Returns the not-dispatched count."""
     now = datetime.now(timezone.utc)
     wedged = overdue_by_head(overdue)
+    self_hosted_paths = self_hosted_workflow_paths(config["workflow_dir"])
+    if self_hosted_paths is None:
+        print(
+            f"::warning::{config['workflow_dir']} unreadable — a starved run cannot be "
+            "attributed to a runner pool, so pool verdicts fall back to unfiltered."
+        )
     blocked = 0
     for head in heads:
         try:
@@ -1086,6 +1193,7 @@ def publish_dispatch_states(
                 config["stall_minutes"],
                 pool_serving is not False,
                 wedged.get(head.sha, ()),
+                self_hosted_paths,
             )
         target = _run_url(api.repository, runs[0]) if runs else head.url
         if dry_run:
@@ -1235,17 +1343,24 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     # Filtered server-side: an unfiltered page is dominated by the hundreds of
     # parked runs this repository carries, which can hide every queued run.
     #
-    # KNOWN LIMIT, stated rather than papered over: this listing cannot tell the
-    # two runner pools apart. Labels live on JOBS, and a starved run has no jobs
-    # — that absence IS the condition being detected — so a run queued past the
-    # threshold cannot be attributed to the self-hosted pool from the API alone,
-    # and a GitHub-hosted capacity backlog would read the same way. The verdict
-    # below is therefore never taken from the queue on its own; it is qualified
-    # by the pool inspection, which IS label-attributed. Whether a starved queue
-    # can be attributed to a pool by any means the workflow token can read
-    # remains open.
+    # The listing cannot tell the two pools apart on its own: labels live on
+    # JOBS, and a starved run has no jobs — that absence IS the condition being
+    # detected. That limit used to be stated and left open, and qualifying the
+    # verdict with the label-attributed pool inspection was not enough: an idle
+    # pool is "not serving", so a GitHub-hosted capacity backlog read as a
+    # self-hosted outage (#14364).
+    #
+    # It is answered here without a job listing. The run payload carries the
+    # workflow's `path`, `runs-on` is declared in that file, and the file is on
+    # disk because the job checks the repository out. Attribution is therefore a
+    # local read rather than an API call, and costs no budget.
     queued = api.recent_runs(run_status="queued")
-    starved = starved_runs(queued, now, config["stall_minutes"])
+    self_hosted_paths = self_hosted_workflow_paths(config["workflow_dir"])
+    starved = [
+        run
+        for run in starved_runs(queued, now, config["stall_minutes"])
+        if run_requires_self_hosted(run, self_hosted_paths)
+    ]
     pool = inspect_self_hosted_pool(
         api, config["max_job_lookups"], config["job_overdue_minutes"], now
     )
@@ -1255,7 +1370,8 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
         if pool.overdue:
             return 1
         print(
-            f"No run has been queued longer than {config['stall_minutes']}m — runner pool is keeping up."
+            f"No self-hosted run has been queued longer than {config['stall_minutes']}m — "
+            "runner pool is keeping up."
         )
         return 0
 
@@ -1279,7 +1395,8 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
         else "while no self-hosted job is executing"
     )
     print(
-        f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m {reason}"
+        f"::error::{len(starved)} self-hosted workflow run(s) queued over "
+        f"{config['stall_minutes']}m {reason}"
     )
     for run in starved:
         waited = age_minutes(run.get("created_at"), now)
@@ -1302,6 +1419,7 @@ def load_config() -> Dict[str, Any]:
         "repository": repository,
         "api_root": os.environ.get("GITHUB_API_URL", DEFAULT_API_ROOT),
         "base_branch": os.environ.get("WATCHDOG_BASE_BRANCH", DEFAULT_BASE_BRANCH),
+        "workflow_dir": os.environ.get("WATCHDOG_WORKFLOW_DIR", DEFAULT_WORKFLOW_DIR),
         "grace_minutes": _env_int("WATCHDOG_GRACE_MINUTES", DEFAULT_GRACE_MINUTES),
         "stall_minutes": _env_int("WATCHDOG_STALL_MINUTES", DEFAULT_STALL_MINUTES),
         "max_approvals": _env_int("WATCHDOG_MAX_APPROVALS", DEFAULT_MAX_APPROVALS),
