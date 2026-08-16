@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 
 from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
+from .egress_governor import egress_governor
 from .ingest_governor import ingest_governor
 from .message_router import MessageRouter
 from .session_manager import SessionManager
@@ -255,6 +256,26 @@ class Gateway:
         ):
             logger.warning("Message exceeds size limit")
             return False
+
+        # Egress governance (#14067). Applied here, at the shared seam, so a
+        # newly added adapter inherits it without adapter-side work — the same
+        # structural argument #14028 makes for ingest. Scoped to agent-authored
+        # conversational turns: session/system control traffic (SESSION_START,
+        # heartbeats, SYSTEM_ERROR) is not a message to a person and would only
+        # add noise to the audit trail.
+        if message.message_type in _AGENT_MESSAGE_TYPES:
+            verdict = await egress_governor.evaluate(
+                platform=session.channel.value,
+                channel_id=session.session_id,
+                message_id=message.message_id,
+            )
+            if not verdict.allowed:
+                logger.warning(
+                    "Outbound send blocked by egress governance (%s): %s",
+                    verdict.rule,
+                    verdict.reason,
+                )
+                return False
 
         # Send through adapter
         connection_context = self._connection_contexts.get(message.session_id)
