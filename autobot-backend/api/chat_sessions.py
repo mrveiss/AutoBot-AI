@@ -41,6 +41,7 @@ from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from chat_history.message_schema import message_role, message_text
 
 # Import session lifecycle hooks (Issue #4260)
@@ -75,8 +76,6 @@ from utils.response_helpers import create_success_response
 router = APIRouter(tags=["chat-sessions"])
 logger = get_logger(__name__)
 
-# The speaker a preserved prompt is stored under.
-_SYSTEM_ROLE = "system"
 
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
@@ -1480,7 +1479,7 @@ async def export_session(
 # =============================================================================
 
 
-def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
+async def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
     """
     Extract system messages from session for preservation.
 
@@ -1495,9 +1494,13 @@ def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
     Reads through the shared normaliser (#14259), which resolves either shape.
     """
     try:
-        existing_data = chat_manager.get_session(session_id)
+        existing_data = await chat_manager.get_session(session_id)
         if existing_data and "messages" in existing_data:
-            return [m for m in existing_data["messages"] if isinstance(m, dict) and message_role(m) == _SYSTEM_ROLE]
+            return [
+                m
+                for m in existing_data["messages"]
+                if isinstance(m, dict) and message_role(m) == CategoryDefaults.ROLE_SYSTEM
+            ]
     except Exception as e:
         logger.warning("Could not preserve system prompt: %s", e)
     return []
@@ -1519,7 +1522,7 @@ def _to_persisted_system_message(msg: Dict) -> Dict:
     """
     return {
         "id": msg.get("id", ""),
-        "sender": message_role(msg, default=_SYSTEM_ROLE),
+        "sender": message_role(msg, default=CategoryDefaults.ROLE_SYSTEM),
         "content": message_text(msg),
         "timestamp": msg.get("timestamp"),
         "type": msg.get("type", "message"),
@@ -1543,7 +1546,7 @@ async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_
 
     Returns number of messages restored.
     """
-    chat_manager.clear_session(session_id)
+    await chat_manager.update_session(session_id, {"messages": []})
     if not messages_to_restore:
         return 0
     if hasattr(chat_manager, "add_messages_batch"):
@@ -1588,7 +1591,9 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
 
         if clear_context:
-            messages_to_keep = _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
+            messages_to_keep = (
+                await _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
+            )
             restored = await _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
             logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
 
