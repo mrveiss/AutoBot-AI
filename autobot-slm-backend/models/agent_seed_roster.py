@@ -22,6 +22,30 @@ the migration — the duplication #14321 explicitly set out to avoid.
 
 from __future__ import annotations
 
+from autobot_shared.ssot_config import (
+    CLASSIFICATION_MODEL,
+    INSTRUCTION_MODEL,
+    LIGHT_PROCESSING_MODEL,
+    QUALITY_MODEL,
+    ROUTING_MODEL,
+    SYSTEM_MODEL,
+)
+
+# 6-tier model mapping from SSOT constants (#2553). These moved here with the
+# roster: they are referenced by the entries below and by nothing else, so
+# leaving them in `services/agent_seeder.py` would have meant the roster could
+# not be read without importing the service package — the exact FastAPI drag
+# this extraction removes.
+#
+# `autobot_shared.ssot_config` is safe from a migration: it pulls pydantic, not
+# the HTTP layer, and the SLM migration gate already installs pydantic for it.
+_ROUTING = ROUTING_MODEL
+_CLASSIFICATION = CLASSIFICATION_MODEL
+_LIGHT = LIGHT_PROCESSING_MODEL
+_INSTRUCTION = INSTRUCTION_MODEL
+_SYSTEM = SYSTEM_MODEL
+_QUALITY = QUALITY_MODEL
+
 SEED_AGENT_CONFIGS: list[dict] = [
     # Tier 1: Core Agents
     {

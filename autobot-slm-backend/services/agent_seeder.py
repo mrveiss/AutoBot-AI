@@ -17,14 +17,6 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.ssot_config import (
-    CLASSIFICATION_MODEL,
-    INSTRUCTION_MODEL,
-    LIGHT_PROCESSING_MODEL,
-    QUALITY_MODEL,
-    ROUTING_MODEL,
-    SYSTEM_MODEL,
-)
 from autobot_shared.ssot_config import config as _ssot_config
 from models.database import Agent
 
@@ -32,14 +24,6 @@ logger = logging.getLogger(__name__)
 
 # Default Ollama endpoint used for all seeded agents — resolved from SSOT (AUTOBOT_OLLAMA_ENDPOINT)
 _DEFAULT_OLLAMA_ENDPOINT = _ssot_config.llm.ollama_endpoint
-
-# 6-tier model mapping from SSOT constants (#2553)
-_ROUTING = ROUTING_MODEL
-_CLASSIFICATION = CLASSIFICATION_MODEL
-_LIGHT = LIGHT_PROCESSING_MODEL
-_INSTRUCTION = INSTRUCTION_MODEL
-_SYSTEM = SYSTEM_MODEL
-_QUALITY = QUALITY_MODEL
 
 # All 29 AutoBot agents — mirrors DEFAULT_AGENT_CONFIGS exactly.
 # model/provider/endpoint can be overridden via /agent-config in the SLM UI.
