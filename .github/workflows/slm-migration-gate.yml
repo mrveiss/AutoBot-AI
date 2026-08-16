@@ -222,7 +222,11 @@ jobs:
           # is what keeps this migration retried rather than falsely marked
           # applied; it is expected to stay pending indefinitely until the
           # runner gains a second connection for user_management tables
-          # (tracked separately from #14326 — see the gate-review issue).
+          # (tracked separately from #14326 as #14300, which reports the
+          # user-visible symptom: audit_logs.updated_at missing on the live DB.
+          # Remove this entry when #14300 lands — `stale_allowlist` above fails
+          # the gate the moment the migration starts applying, so this cannot
+          # rot into a permanent exemption).
           ALLOWED_DEFERRED = {"add_role_permission_audit_log_timestamps"}
 
           conn = psycopg2.connect(os.environ["DATABASE_URL"])
