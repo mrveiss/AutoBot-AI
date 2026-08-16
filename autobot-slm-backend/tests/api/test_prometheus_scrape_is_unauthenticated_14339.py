@@ -121,14 +121,36 @@ def _app_mounts() -> tuple[dict[str, ast.Call], list[str]]:
         if node.func.attr != "include_router":
             continue
         receiver = node.func.value
-        if not (isinstance(receiver, ast.Name) and receiver.id == "app"):
+        if not _is_app_receiver(receiver):
+            # Not `app.include_router(...)`. A plain name that is not `app` is a
+            # router-on-router include — a different question, correctly skipped.
+            # Anything else is a receiver this parser cannot resolve, and
+            # `app.router.include_router(...)` proved that reaches the app just
+            # as directly, so it is reported rather than skipped.
+            if not isinstance(receiver, ast.Name):
+                unparseable.append(f"line {node.lineno}: receiver {ast.dump(receiver)[:70]}")
             continue
-        if node.args and isinstance(node.args[0], ast.Name):
+        if _is_plain_name_arg(node):
             calls[node.args[0].id] = node
         else:
             shape = ast.dump(node.args[0])[:80] if node.args else "no arguments"
-            unparseable.append(f"line {node.lineno}: {shape}")
+            unparseable.append(f"line {node.lineno}: argument {shape}")
     return calls, unparseable
+
+
+def _is_app_receiver(receiver: ast.expr) -> bool:
+    """Whether a call's receiver is the application object itself.
+
+    A named helper, not an inline condition, so the tests below can pin the
+    decision rather than restate it. Restating it is how two tests here came to
+    pass while the production branch they claimed to guard was deleted.
+    """
+    return isinstance(receiver, ast.Name) and receiver.id == "app"
+
+
+def _is_plain_name_arg(call: ast.Call) -> bool:
+    """Whether the first argument is a bare router name this parser can read."""
+    return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
 def _keywords(call: ast.Call) -> set[str]:
@@ -294,8 +316,8 @@ def test_an_unreadable_mount_is_a_failure_not_a_skip():
 
     for source in ("app.include_router(*routers, prefix='/api')", "app.include_router(module.router, prefix='/x')"):
         node = ast.parse(source).body[0].value
-        assert not (
-            node.args and isinstance(node.args[0], ast.Name)
+        assert not _is_plain_name_arg(
+            node
         ), f"{source!r} would be read as a plain named mount instead of flagged as unreadable"
 
 
@@ -306,9 +328,11 @@ def test_only_app_level_mounts_are_checked():
     decided by the `app` mounts. Matching every receiver made an inner include
     look ungated even when the outer app mount gated it.
     """
-    node = ast.parse("sub_router.include_router(other_router)").body[0].value
-    receiver = node.func.value
-    assert not (isinstance(receiver, ast.Name) and receiver.id == "app")
+    assert not _is_app_receiver(ast.parse("sub_router.include_router(x)").body[0].value.func.value)
+    assert _is_app_receiver(ast.parse("app.include_router(x)").body[0].value.func.value)
+    # `app.router.include_router(...)` reaches the app just as directly, and is
+    # NOT a plain `app` receiver — so it must be reported, never skipped.
+    assert not _is_app_receiver(ast.parse("app.router.include_router(x)").body[0].value.func.value)
 
 
 def test_the_registry_check_actually_sees_the_ungated_mounts():
