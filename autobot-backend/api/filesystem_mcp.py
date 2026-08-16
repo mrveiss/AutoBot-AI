@@ -103,10 +103,12 @@ Other MCP bridges can follow this pattern by:
 
 import asyncio
 import base64
+import fnmatch
 import mimetypes
 import os
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
@@ -192,6 +194,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
+from constants.path_constants import PATH as LEGACY_DATA_ROOT
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 logger = get_logger(__name__)
@@ -209,11 +212,120 @@ ALLOWED_DIRECTORIES = [
 # Maximum file size for read operations (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
+# Security Configuration: Excluded Subtrees (#14081, widened by #14124)
+#
+# Since #14050, an unset AUTOBOT_BASE_DIR (every dev checkout and CI runner)
+# resolves ALLOWED_DIRECTORIES to the whole git checkout, and the only gate on
+# this bridge is admin role or the shared X-Internal-API-Key header. Without
+# an exclusion, either credential grants read *and write* access to VCS
+# history and any local secrets.
+#
+# Enforced in _resolve_allowed_path (the single seam every path goes through,
+# shared by is_path_allowed and _validated_path) rather than by curating
+# ALLOWED_DIRECTORIES, so the exclusion holds regardless of how base_dir is
+# configured -- including a deployment that legitimately points it at a
+# directory containing these.
+#
+# #14124: the original exclusion listed four exact filenames
+# (secrets.key/json/db, service-keys/). That missed SQLite sidecars
+# (secrets.db-journal, secrets.db-wal), a store backup (secrets.json.bak),
+# and material that other subsystems write under the same data directory
+# without going through the secrets manager at all -- the SSO/SAML signing
+# key (security/enterprise/sso_integration.py) and, sharpest of all, a
+# threat-detection profile store
+# (security/enterprise/threat_detection/engine.py). That store was a pickle
+# until #14159, so a bridge write there was arbitrary code execution rather
+# than mere disclosure; it is schema-validated JSON now, and this exclusion
+# covers both it and the legacy .pkl deliberately left on disk. A filename
+# denylist can't keep up with sidecars, backups, and subsystems that don't
+# exist yet.
+#
+# No production code path needs this LLM-facing bridge to reach anything
+# under the data directory: application state goes through purpose-built
+# APIs (workflow scheduler, KB ingestion), and the one user-facing
+# file-management feature (api/files.py) is already sandboxed to its own
+# root under a *separate* security boundary, not this bridge. So the whole
+# data-directory subtree is excluded rather than allowlisting individual
+# survivors.
+#
+# Two resolvers name the data directory in this codebase and are not
+# structurally guaranteed to agree: ssot_config's ``config.path.data_path``
+# (honours AUTOBOT_BASE_DIR/AUTOBOT_DATA_DIR) and the restored
+# ``constants.path_constants.PATH`` (derives the root from this source
+# file's on-disk location, ignoring both env vars). The exact paths this
+# issue names -- the SSO/SAML signing key (sso_integration.py) and the
+# threat-detection pickle (threat_detection/engine.py) -- both resolve
+# through the *second* one. #14110's own history is a warning here: its
+# first attempt excluded a location the real secrets store never wrote to
+# because the exclusion and the writer used different resolvers. Excluding
+# both roots (they coincide in the common case; a topology where a base/data
+# dir env var points somewhere other than the checkout is exactly where they
+# would not) closes that gap without depending on every current and future
+# caller picking the same one.
+_EXCLUDED_DIR_PATHS = [
+    config.path.data_path,  # SSOT resolver: secrets manager/service storage
+    LEGACY_DATA_ROOT.DATA_DIR,  # legacy resolver: SSO keys, threat-detection
+    # pickle, security policies, tool-output spill -- see call sites above
+]
+_EXCLUDED_ROOTS = [Path(os.path.realpath(str(p))) for p in _EXCLUDED_DIR_PATHS]
+
+# Committed, non-secret dotenv templates (review follow-up on #14081): a
+# ".env*" basename denylist alone also blocks these commonly-committed
+# examples, which is over-broad -- they carry no real credential material by
+# convention. Checked against the case-folded *leaf* only, so a directory
+# genuinely named e.g. ".env.example" stays denied no matter what the file
+# inside it is called (#14125).
+_ENV_TEMPLATE_ALLOWLIST = frozenset({".env.example", ".env.sample", ".env.template"})
+
+
+def _is_excluded_path(resolved: Path) -> bool:
+    """Refuse ``.git/``, ``.env*`` and the data directory (#14081, #14124, #14125).
+
+    Checked against the *resolved* (symlink-followed, canonicalized) path so
+    a symlink or an encoded traversal that lands inside an excluded subtree
+    can't slip past a check on the raw input string.
+
+    Accepted gap: this is a path-prefix check, not an inode check, so a
+    *hardlink* to an excluded file placed at an unexcluded path would read
+    through (``os.path.realpath`` follows symlinks but not hardlinks).
+    Creating that hardlink already requires local filesystem write access to
+    the excluded file's directory -- at which point the attacker can already
+    read the excluded file directly without the bridge, so this is
+    defence-in-depth against a caller who only has bridge access, not a hole
+    in the boundary the bridge actually enforces.
+    """
+    # Lower-cased for every comparison below (#14125). ``fnmatch`` and the
+    # ``in parts`` test are case-sensitive on POSIX, so ".GIT/config" and
+    # ".ENV" walked straight past this gate; on a case-insensitive mount
+    # (WSL DrvFs, macOS, SMB) they resolve to the *real* ``.git``/``.env``,
+    # making the exclusion bypassable by changing the case of the request.
+    # Refusing the odd-cased names on a case-sensitive filesystem too is the
+    # fail-closed direction and costs nothing real.
+    lowered = [part.lower() for part in resolved.parts]
+    if ".git" in lowered:
+        return True
+    # The template allowlist applies to the *leaf only* (#14125). Applied to
+    # the whole path it short-circuited the component scan, so a directory
+    # named ".env" or ".envs" became traversable whenever the leaf happened
+    # to be named like a template (``<root>/.env/.env.example`` was allowed).
+    # A directory is never a template, so every non-leaf component is denied
+    # unconditionally.
+    if any(fnmatch.fnmatch(part, ".env*") for part in lowered[:-1]):
+        return True
+    leaf = lowered[-1] if lowered else ""
+    if leaf not in _ENV_TEMPLATE_ALLOWLIST and fnmatch.fnmatch(leaf, ".env*"):
+        return True
+    for excluded_root in _EXCLUDED_ROOTS:
+        try:
+            resolved.relative_to(excluded_root)
+            return True
+        except ValueError:
+            continue
+    return False
+
 
 def _should_include_file(filename: str, pattern: str, exclude_patterns: list) -> bool:
     """Check if a file should be included in search results. (Issue #315 - extracted)"""
-    import fnmatch
-
     if not fnmatch.fnmatch(filename, pattern):
         return False
     return not any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
@@ -236,7 +348,10 @@ def _resolve_allowed_path(path: str):
     """
     if "\\" in path:
         raise ValueError("Path contains a backslash; use '/' as the separator")
-    return validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+    resolved = validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+    if _is_excluded_path(resolved):
+        raise ValueError("Path is within an excluded subtree (.git, .env, or the data directory)")
+    return resolved
 
 
 def is_path_allowed(path: str) -> bool:

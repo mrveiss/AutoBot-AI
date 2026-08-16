@@ -521,6 +521,7 @@ class TestGatewayManagerNinePlusPlatforms:
             "chat_id": "+1",
             "text": "hi",
             "timestamp": 1700000000.0,
+            "id": "msg-guid-gw-1",
         }
         unified = await gateway.normalize_message(raw)
         assert unified.platform == "imessage"

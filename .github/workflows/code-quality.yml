@@ -191,7 +191,12 @@ jobs:
         echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
 
     - name: Block hardcoded value regressions (#694, #6725)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-hardcoded-values
+      # --changed-lines-only (#13950): this hook reads each changed file whole,
+      # so editing one line of a legacy module made the PR answerable for that
+      # file's entire backlog — four PRs in one session failed on violations
+      # blame attributes to other commits. Scoped to added lines here; the
+      # pre-commit stage and a direct run still scan whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-hardcoded-values
 
     - name: Block hardcoded-IP fallback regressions (#6783, #6991)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_hardcoded_ip_fallbacks.py --ext py
@@ -200,7 +205,13 @@ jobs:
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
 
     - name: Block print/console regressions (#1082, #6785)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
+      # --changed-lines-only (#14051, same treatment #13950 gave the
+      # hardcoded-value guard): without it, a PR that edits one line of a
+      # legacy file is blamed for that file's entire print()/console.*
+      # backlog. Combined with the hook's own multi-line-noqa fix (#14051),
+      # this closes the class rather than one shape of it — the pre-commit
+      # stage and a direct run of the hook still scan whole files.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --changed-lines-only pre-commit-no-print-console
 
     - name: Check repo conventions — third-party names, doc cross-links (#13876)
       env:

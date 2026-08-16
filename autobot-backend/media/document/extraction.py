@@ -28,7 +28,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -40,6 +42,78 @@ _PDF_MAGIC = b"%PDF"
 _ZIP_MAGIC = b"PK"
 _DOCX_MARKER = b"word/"
 _DOCX_SNIFF_BYTES = 2000
+
+# #13884: fraction of pages that must carry text before an extraction counts as
+# usable. Default 0.5 — a document where most pages are unreadable is a scan,
+# whatever the remaining pages contain. Override when a corpus is legitimately
+# mixed (title pages, plates, appendices of figures).
+DEFAULT_MIN_TEXT_PAGE_RATIO = 0.5
+
+# #13884 finding 1: the ratio above counts a page as readable when it carries a
+# single character, which a scanner/DMS/Bates page-number stamp satisfies on
+# every page. Measured against synthesized fixtures (reportlab + PIL): a
+# "Page N of 10" stamp averages ~13 characters/page, a Bates+"CONFIDENTIAL"
+# stamp ~25; a genuine single-field born-digital page (an invoice with five
+# short lines) averages ~109, and ordinary dense prose ~3900. 50 sits between
+# the stamp cluster and the real-content cluster with margin on both sides.
+DEFAULT_MIN_CHARS_PER_PAGE = 50.0
+
+
+def min_text_page_ratio() -> float:
+    """Resolve the usable-text-layer ratio threshold from config.
+
+    Resolved per call rather than captured at import so a deployment can retune
+    it without a restart, and so tests can exercise the bounds.
+    """
+    raw = blank_to_none(config.misc.document_min_text_page_ratio)
+    if raw is None:
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO=%r is not a number; falling back to %s",
+            raw,
+            DEFAULT_MIN_TEXT_PAGE_RATIO,
+        )
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO=%s must be within [0.0, 1.0]; falling back to %s",
+            value,
+            DEFAULT_MIN_TEXT_PAGE_RATIO,
+        )
+        return DEFAULT_MIN_TEXT_PAGE_RATIO
+    return value
+
+
+def min_chars_per_page() -> float:
+    """Resolve the characters-per-page floor from config.
+
+    Companion to :func:`min_text_page_ratio`, same ``blank_to_none`` handling
+    and the same "fall back to the default with a warning" contract for a
+    misconfigured value (#13884).
+    """
+    raw = blank_to_none(config.misc.document_min_chars_per_page)
+    if raw is None:
+        return DEFAULT_MIN_CHARS_PER_PAGE
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE=%r is not a number; falling back to %s",
+            raw,
+            DEFAULT_MIN_CHARS_PER_PAGE,
+        )
+        return DEFAULT_MIN_CHARS_PER_PAGE
+    if value < 0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE=%s must be >= 0; falling back to %s",
+            value,
+            DEFAULT_MIN_CHARS_PER_PAGE,
+        )
+        return DEFAULT_MIN_CHARS_PER_PAGE
+    return value
 
 
 class DocumentExtractionError(Exception):
@@ -70,6 +144,24 @@ class PageText:
 
 
 @dataclass(frozen=True)
+class PageSpan:
+    """Where one page's text sits in a rendered string, as ``[start, end)``.
+
+    This is the provenance carrier: page numbers travel as offsets alongside the
+    text rather than as markers inside it, so retrieval can cite a page without
+    the citation having polluted the embedding (#13894).
+    """
+
+    number: int
+    start: int
+    end: int
+
+    def as_metadata(self) -> Dict[str, int]:
+        """Flat form for storage alongside a fact."""
+        return {"page": self.number, "start": self.start, "end": self.end}
+
+
+@dataclass(frozen=True)
 class ExtractedDocument:
     """Structured result of a document extraction."""
 
@@ -79,6 +171,11 @@ class ExtractedDocument:
     page_count: int | None = None
     tables: Tuple[Any, ...] = ()
     info: Mapping[str, str] = field(default_factory=dict)
+    # #13895: whether table extraction was actually run for this format. Without
+    # it an empty ``tables`` means both "this document has no tables" and "we
+    # never looked", and the caller cannot tell which — PDF always returned []
+    # while DOCX did real work, from an identical-looking result.
+    tables_attempted: bool = False
 
     @property
     def char_count(self) -> int:
@@ -94,6 +191,70 @@ class ExtractedDocument:
         the signal a scanned document needs OCR (#13884, #13896).
         """
         return bool(self.text.strip())
+
+    @property
+    def empty_page_numbers(self) -> Tuple[int, ...]:
+        """Pages that carried no recoverable text, 1-indexed.
+
+        Non-empty only for paginated formats. This is what lets a caller say
+        *which* pages need OCR instead of failing or succeeding wholesale.
+        """
+        return tuple(page.number for page in self.pages if not page.text.strip())
+
+    @property
+    def text_page_ratio(self) -> float:
+        """Fraction of pages that carried text; ``1.0`` for unpaginated formats.
+
+        A 40-page scan with one stray text page reports ``has_text`` as True,
+        which is technically correct and practically misleading — this is the
+        measure that separates the two.
+        """
+        if not self.pages:
+            return 1.0 if self.has_text else 0.0
+        return (len(self.pages) - len(self.empty_page_numbers)) / len(self.pages)
+
+    @property
+    def avg_chars_per_page(self) -> float:
+        """Average characters of raw page text, page markers excluded.
+
+        :attr:`text_page_ratio` only asks whether a page has *any* text — one
+        character qualifies, which a page-number stamp, Bates number, or
+        filename footer satisfies on every page of a scan. This measures *how
+        much* text landed per page, which is what actually separates a
+        stamped scan from a page of real content (#13884).
+        """
+        if not self.pages:
+            return float(self.char_count)
+        return sum(len(page.text) for page in self.pages) / len(self.pages)
+
+    @property
+    def has_usable_text_layer(self) -> bool:
+        """Whether enough of the document was readable to treat it as extracted.
+
+        Distinct from :attr:`has_text`: a document can carry text and still be
+        unusable, which is the case a scanned PDF with an OCR cover page hits,
+        or one stamped with a page number or Bates number on every page.
+        Unpaginated formats (no ``pages``) have no ratio or per-page floor to
+        apply, so any recovered text is usable there.
+        """
+        if not self.has_text:
+            return False
+        if not self.pages:
+            return True
+        return self.text_page_ratio >= min_text_page_ratio() and self.avg_chars_per_page >= min_chars_per_page()
+
+    @property
+    def has_usable_content(self) -> bool:
+        """Whether the extraction recovered anything a consumer can use.
+
+        Distinct from :attr:`has_usable_text_layer`: a DOCX whose content is
+        entirely a table has no text layer at all and is still a complete,
+        successful extraction — its data lives in ``tables`` (#13884). PDF
+        table extraction is not implemented, which :attr:`tables_attempted`
+        reports rather than leaving callers to infer it from an empty list
+        (#13895), so this collapses back to the text-layer check for PDFs.
+        """
+        return self.has_usable_text_layer or bool(self.tables)
 
 
 def render_pages(pages: Sequence[PageText], marker: str = PAGE_MARKER_TEMPLATE) -> str:
@@ -193,6 +354,7 @@ def extract_docx(raw: bytes) -> ExtractedDocument:
         text="\n".join(paragraphs),
         tables=tables,
         info=_docx_info(doc),
+        tables_attempted=True,
     )
 
 
@@ -242,3 +404,83 @@ def strip_page_markers(text: str, marker: str = PAGE_MARKER_TEMPLATE) -> str:
     """
     pattern = re.escape(marker).replace(r"\{number\}", r"\d+")
     return re.sub(rf"^{pattern}\n?", "", text, flags=re.MULTILINE)
+
+
+PAGE_SEPARATOR = "\n\n"
+
+
+def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
+    """Join pages with **no** markers, returning the text and where each page sits.
+
+    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
+    ``## Page 7`` is structure, not meaning, and it competes with the document's
+    own words for similarity. This is the same text with the provenance moved out
+    of the string and into character spans a caller stores as metadata (#13894).
+
+    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
+    two renderings stay page-for-page comparable.
+    """
+    parts: List[str] = []
+    spans: List[PageSpan] = []
+    offset = 0
+    for page in pages:
+        if not page.text.strip():
+            continue
+        if parts:
+            offset += len(separator)
+        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
+        parts.append(page.text)
+        offset += len(page.text)
+    return separator.join(parts), tuple(spans)
+
+
+def page_for_offset(spans: Sequence[PageSpan], offset: int) -> int | None:
+    """Return the page number containing *offset*, or ``None`` if outside them all.
+
+    An offset landing in the separator between two pages belongs to neither; the
+    caller decides what that means rather than being handed a silent guess.
+    """
+    for span in spans:
+        if span.start <= offset < span.end:
+            return span.number
+    return None
+
+
+def pages_for_span(spans: Sequence[PageSpan], start: int, end: int) -> Tuple[int, ...]:
+    """Return every page number a ``[start, end)`` range touches.
+
+    A chunk that straddles a page break genuinely comes from two pages. Reporting
+    only the first would silently mis-cite half its content, so this returns the
+    range and lets the caller record it.
+    """
+    if end <= start:
+        return ()
+    return tuple(span.number for span in spans if span.start < end and start < span.end)
+
+
+def chunk_page_map(spans: Sequence[PageSpan], chunks: Sequence[str], text: str) -> Tuple[Tuple[int, ...], ...]:
+    """Map each chunk of *text* to the page numbers it came from.
+
+    Chunkers return strings, not offsets, so the offsets are recovered by
+    scanning forward through *text*. Searching forward from the previous chunk's
+    end — rather than with :meth:`str.find` from zero — keeps repeated boilerplate
+    (headers, footers, recurring table scaffolding) from collapsing every
+    occurrence onto the first page it appeared on.
+    """
+    result: List[Tuple[int, ...]] = []
+    cursor = 0
+    for chunk in chunks:
+        if not chunk:
+            result.append(())
+            continue
+        start = text.find(chunk, cursor)
+        if start < 0:
+            # The chunker transformed the text (trimmed, normalized whitespace),
+            # so offsets cannot be recovered for this chunk. Report nothing
+            # rather than a wrong page.
+            result.append(())
+            continue
+        end = start + len(chunk)
+        result.append(pages_for_span(spans, start, end))
+        cursor = end
+    return tuple(result)

@@ -202,13 +202,27 @@
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
+      # Re-includes come first -- rsync applies the first matching rule, and
+      # `.env.example` is tracked source that the `.env.*` family below would
+      # otherwise swallow (#14231).
+      - "--include=/.env.example"
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
       - "--exclude=.git"
       - "--exclude=venv"
+      # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+      # services/deploy_artifacts.py. This task and the code-sync API both write
+      # this tree; they disagreed about which files may be deleted, and whichever
+      # ran last decided (#14231). tests/api/test_host_state_excludes_14231.py
+      # fails if the two lists drift apart again.
+      - "--exclude=.env"
+      - "--exclude=.env.*"
       - "--exclude=data"
-      - "--exclude=.deployed_commit"
+      - "--exclude=logs"
+      - "--exclude=/config/"
+      - "--exclude=/.deployed_commit"
+      - "--exclude=/ansible/enroll.yml"
     delete: true
   notify: restart slm backend
   tags: ['slm', 'backend', 'deploy']
@@ -220,7 +234,7 @@
 - name: "SLM | Record deployed commit marker (#12202)"
   ansible.builtin.shell:
     cmd: >-
-      git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }} -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
       > {{ slm_backend_dir }}/.deployed_commit
   changed_when: false
   tags: ['slm', 'backend', 'deploy']
@@ -674,8 +688,18 @@
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
-      - "--exclude=.env"
       - "--exclude=*.env"
+      # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+      # services/deploy_artifacts.py (#14231). Anchored entries cannot match
+      # anything here, and cost nothing -- carrying the whole vocabulary is what
+      # keeps the delete-style syncs from disagreeing with each other again.
+      - "--exclude=.env"
+      - "--exclude=.env.*"
+      - "--exclude=data"
+      - "--exclude=logs"
+      - "--exclude=/config/"
+      - "--exclude=/.deployed_commit"
+      - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']
 
@@ -692,8 +716,18 @@
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
-      - "--exclude=.env"
       - "--exclude=*.env"
+      # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+      # services/deploy_artifacts.py (#14231). Anchored entries cannot match
+      # anything here, and cost nothing -- carrying the whole vocabulary is what
+      # keeps the delete-style syncs from disagreeing with each other again.
+      - "--exclude=.env"
+      - "--exclude=.env.*"
+      - "--exclude=data"
+      - "--exclude=logs"
+      - "--exclude=/config/"
+      - "--exclude=/.deployed_commit"
+      - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']
 

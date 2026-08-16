@@ -20,6 +20,11 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
+from utils.secrets_store_migration import (
+    ALL_SECRETS_STORE_FILES,
+    ensure_and_read_shared_key,
+    migrate_legacy_secrets_store,
+)
 
 logger = get_logger(__name__)
 
@@ -40,11 +45,28 @@ class SecretsService:
     def __init__(self, db_path: str = None, encryption_key: str | None = None) -> None:
         """Initialize the secrets service with encryption"""
         if db_path is None:
-            # Use centralized path management for default path
-            from utils.paths_manager import ensure_data_directory, get_data_path
+            # Canonical data directory (#14081): resolve through ssot_config
+            # directly rather than the legacy utils.paths_manager, which
+            # reads an unset config.yaml "paths" key and silently falls
+            # back to a CWD-relative "data/" -- landing the live secrets DB
+            # outside the subtree the filesystem MCP bridge excludes in
+            # production.
+            data_dir = config.path.data_path
+            data_dir.mkdir(parents=True, exist_ok=True)
 
-            ensure_data_directory()
-            db_path = str(get_data_path("secrets.db"))
+            # One-time migration off the legacy CWD-relative resolver
+            # (#14081 review, #14113): must run before _init_database()
+            # creates a fresh, empty database, or an existing deployment's
+            # real store is silently orphaned. Migrates the FULL
+            # secrets-store file set, not just this class's own db (#14081
+            # review round 5, finding 2): a process that constructs
+            # SecretsService alone (a celery worker, with no SecretsManager
+            # ever running) must still get the shared key moved here, or
+            # _init_encryption below finds no key file and silently mints
+            # an unpersisted one nothing else can ever decrypt.
+            migrate_legacy_secrets_store(data_dir, ALL_SECRETS_STORE_FILES, "secrets store")
+
+            db_path = str(data_dir / "secrets.db")
 
         self.db_path = db_path
         self._ensure_db_directory()
@@ -68,29 +90,24 @@ class SecretsService:
             # Check multiple sources for the encryption key
             # 1. Environment variable (direct)
             # 2. Config manager (may map from env)
-            # 3. Key file in data directory
-            pass
-
+            # 3. Shared canonical key file (#14081 review round 5): minted
+            #    and persisted if it doesn't exist yet via the same helper
+            #    SecretsManager uses, cross-process-locked, so the two
+            #    classes can never disagree about the key and two processes
+            #    racing a genuine first boot can't each mint their own.
+            #    Replaces the previous fallback here, which generated a key
+            #    on a WARNING and never wrote it to disk -- indistinguishable
+            #    from first boot even with a real store present, and
+            #    undecryptable by any other process or the next restart.
             env_key = config.secrets_key
             if not env_key:
                 env_key = config_manager.get("security.secrets_key", None)
-            if not env_key:
-                # Try loading from key file
-                key_file = Path(self.db_path).parent / "secrets.key"
-                if key_file.exists():
-                    env_key = key_file.read_text().strip()
-                    logger.info("Loaded encryption key from %s", key_file)
 
             if env_key:
                 self.cipher = Fernet(env_key.encode())
                 logger.info("Secrets encryption initialized with configured key")
             else:
-                # Generate and save a new key
-                key = Fernet.generate_key()
-                self.cipher = Fernet(key)
-                logger.warning(
-                    "Generated new encryption key. Set AUTOBOT_SECRETS_KEY environment variable for persistence."
-                )
+                self.cipher = Fernet(ensure_and_read_shared_key(Path(self.db_path).parent))
 
     def _init_database(self) -> None:
         """Initialize the SQLite database with secrets table"""

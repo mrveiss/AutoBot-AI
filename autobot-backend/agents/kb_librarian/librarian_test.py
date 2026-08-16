@@ -25,7 +25,8 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from agents.kb_librarian.librarian import KBLibrarian
+from agents.kb_librarian.librarian import KBLibrarian, _build_basic_info_section
+from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
@@ -65,3 +66,18 @@ async def test_get_tool_instructions_returns_real_content():
 
     assert instructions is not None
     mock_kb.search.assert_called_once_with("curl installation usage", top_k=3, filters=RESEARCH_QUARANTINE_FILTER)
+
+
+class TestBuildBasicInfoSection:
+    """Coverage for the ``category`` default in ``_build_basic_info_section`` (#14047)."""
+
+    def test_missing_category_defaults_to_general(self):
+        section = _build_basic_info_section({}, "curl")
+
+        assert f"- Category: {CategoryDefaults.GENERAL}" in section
+
+    def test_explicit_category_overrides_default(self):
+        section = _build_basic_info_section({"category": "network"}, "curl")
+
+        assert "- Category: network" in section
+        assert f"- Category: {CategoryDefaults.GENERAL}" not in section

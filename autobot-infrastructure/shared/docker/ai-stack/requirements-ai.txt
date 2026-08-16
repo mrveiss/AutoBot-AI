@@ -17,7 +17,12 @@ sentence-transformers>=5.7.0
 
 # Model and Tokenization
 transformers>=5.14.1
-tokenizers>=0.23.1,<0.24  # #10331: transformers 5.12.x caps tokenizers<=0.23.0; >=0.23.1 (was #9424) is unsatisfiable
+tokenizers>=0.22.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
+                          # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
+                          # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
+                          # ai-stack + npu-worker installs have failed to resolve ever since.
+                          # scripts/tokenizers_transformers_range_test.py now fails on a floor
+                          # that excludes 0.23.0.
 huggingface-hub>=1.26.1
 tiktoken>=0.13.0
 
@@ -30,7 +35,18 @@ torchaudio>=2.11.0
 
 # Text Processing
 nltk>=3.10.2
-spacy>=3.8.14
+# spacy: NOT a dependency of the AI stack (#14279). Nothing under
+# autobot-infrastructure/shared/docker/ai-stack/ imports it — the only importer
+# in the repo is autobot-backend/knowledge/pipeline/cognifiers/entity_extractor.py,
+# where it is an OPTIONAL extra behind `_spacy_available()` and declared in
+# autobot-backend/requirements-nlp.txt.
+#
+# That guard's own docstring says why: "spaCy is not in the default image (its
+# build deps lack py3.14 wheels, #9825); when absent, entity extraction falls
+# back to the LLM path automatically." Listing it here as a HARD dependency made
+# provisioning fail on exactly the incompatibility the backend designed around —
+# no stable spacy declares support for 3.14, so pip fell through to the
+# 4.0.0.dev3 sdist and tried to build it on the node.
 
 # HTTP and API
 fastapi>=0.141.1

@@ -40,8 +40,8 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
+from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
 from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
-from knowledge.connectors.content_extraction import extract_text_from_pdf as _extract_text_from_pdf
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -248,12 +248,14 @@ class OneDriveConnector(AbstractConnector):
 
         # Extract text based on file type
         text = ""
+        extracted_pdf = None
         if file_ext == ".docx":
             text = _extract_text_from_docx(content_bytes)
         elif file_ext == ".xlsx":
             text = _extract_text_from_xlsx(content_bytes)
         elif file_ext == ".pdf":
-            text = _extract_text_from_pdf(content_bytes)
+            extracted_pdf = _extract_pdf_document(content_bytes)
+            text = extracted_pdf.text if extracted_pdf else ""
         elif file_ext == ".pptx":
             text = _extract_text_from_pptx(content_bytes)
         elif file_ext in [".md", ".txt"]:
@@ -266,8 +268,27 @@ class OneDriveConnector(AbstractConnector):
             self.logger.warning("Unsupported file extension for %s: %s", file_id, file_ext)
             return None
 
+        if extracted_pdf is not None and not extracted_pdf.has_usable_text_layer:
+            # #13884 finding 1: a page-number stamp or Bates number on every
+            # page passes the ``not text.strip()`` check below, so the scan
+            # would otherwise reach the KB as an unsearchable document.
+            self.logger.warning(
+                "Skipping %s (%s): no usable text layer — the document is scanned or " "image-only and needs OCR.",
+                file_name,
+                file_id,
+            )
+            return None
+
         if not text.strip():
-            self.logger.debug("Extracted empty text from file %s", file_id)
+            # #13884: this was logger.debug, so a sync over a folder of scanned
+            # PDFs skipped every file and reported nothing at all. The skip is
+            # correct; its invisibility was not. Kept format-agnostic here —
+            # OCR is only the fix for a scan, not for a blank .md (#13884).
+            self.logger.warning(
+                "Skipping %s (%s): no text could be extracted.",
+                file_name,
+                file_id,
+            )
             return None
 
         # Add file header

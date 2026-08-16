@@ -19,7 +19,7 @@ from dataclasses import asdict
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_1_HOUR
+from autobot_shared.ssot_constants import TTL_1_HOUR, CategoryDefaults
 
 # Issue #469: Import Prometheus metrics manager
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -464,7 +464,7 @@ class PerformanceMonitor:
         if not alerts:
             return
         for alert in alerts:
-            category = alert.get("category", "unknown")
+            category = alert.get("category", CategoryDefaults.UNKNOWN)
             severity = alert.get("severity", "info")
             self._prometheus.record_performance_alert(category, severity)
 

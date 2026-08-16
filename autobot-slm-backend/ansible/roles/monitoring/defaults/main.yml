@@ -56,3 +56,15 @@ autobot_repo_dir: "/opt/autobot"  # Override per inventory for your deployment p
 code_source_dir: "/opt/autobot/code_source"  # Full repo clone; matches slm_manager default
 autobot_log_dir: "/var/log/autobot"
 health_check_cron_wrapper: "/usr/local/bin/autobot-health-check-cron.sh"
+
+# #14315: mirrored from roles/backend/defaults/main.yml.
+#
+# The monitoring role renders the scrape config but runs against `slm_server`,
+# while the backend role runs against `backend` — role defaults do not cross
+# hosts, so `backend_port` is simply undefined here. A `| default(8001)` inline
+# would have been a second hardcoded literal wearing a derivation's clothes,
+# which is the failure being fixed. Mirrored explicitly instead, and
+# test_prometheus_scrape_targets_14315_test.py fails if these drift from the
+# backend role's own values.
+backend_port: 8001           # uvicorn: plain HTTP, loopback only
+backend_nginx_port: 8443     # nginx: external TLS, the only LAN-facing entry

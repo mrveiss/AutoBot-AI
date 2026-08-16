@@ -51,6 +51,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
 from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
@@ -495,10 +496,17 @@ class AgentLoop:
             self._iteration_count,
         )
 
-        results = await self._execute_main_loop()
-        result = await self._finalize_task(results)
-        await self._clear_run_checkpoint(task_id)
-        return result
+        try:
+            results = await self._execute_main_loop()
+            result = await self._finalize_task(results)
+            await self._clear_run_checkpoint(task_id)
+            return result
+        finally:
+            # #13865: same release as `run_task`. Without it a resumed run left
+            # its binding live, so the next run in this asyncio context
+            # inherited it and could read the resumed run's artifacts — the hole
+            # the run_task fix closes, reopened on the resume path.
+            _bind_spill_task(None)
 
     async def cancel(self) -> None:
         """Cancel the current task."""
@@ -1025,7 +1033,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )
@@ -1057,7 +1065,7 @@ class AgentLoop:
         )
 
         event = create_message_event(
-            role="assistant",
+            role=CategoryDefaults.ROLE_ASSISTANT,
             content=message.to_dict(),
             task_id=message.task_id,
         )

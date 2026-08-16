@@ -47,6 +47,7 @@ from user_management.services import TenantContext
 from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
+    AssigneeType,
     WorkItemPriority,
     WorkItemRelationType,
     WorkItemStatus,
@@ -260,24 +261,24 @@ class RelationDelete(BaseModel):
 
 async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info resolved from user_management.users (GH#8476)."""
-    if item.assignee_type == "user" and item.assignee_user_id:
+    if item.assignee_type == AssigneeType.USER.value and item.assignee_user_id:
         row = (
             await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
         ).one_or_none()
         name = (row.display_name or row.username) if row else None
         return {
-            "type": "user",
+            "type": AssigneeType.USER.value,
             "id": str(item.assignee_user_id),
             "display_name": name,
             "name": name,
         }
-    if item.assignee_type == "agent" and item.assignee_agent_id:
+    if item.assignee_type == AssigneeType.AGENT.value and item.assignee_agent_id:
         row = (
             await session.execute(select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id))
         ).one_or_none()
         name = row.name if row else None
         return {
-            "type": "agent",
+            "type": AssigneeType.AGENT.value,
             "id": str(item.assignee_agent_id),
             "display_name": name,
             "name": name,
@@ -289,16 +290,16 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured co-worker display info (GH#8230)."""
     if not item.co_working_enabled:
         return None
-    if item.co_worker_type == "human" and item.co_worker_user_id:
+    if item.co_worker_type == AssigneeType.USER.value and item.co_worker_user_id:
         return {
-            "type": "human",
+            "type": AssigneeType.USER.value,
             "id": str(item.co_worker_user_id),
             "display_name": None,
             "name": None,
         }
-    if item.co_worker_type == "agent" and item.co_worker_agent_id:
+    if item.co_worker_type == AssigneeType.AGENT.value and item.co_worker_agent_id:
         return {
-            "type": "agent",
+            "type": AssigneeType.AGENT.value,
             "id": str(item.co_worker_agent_id),
             "display_name": None,
             "name": None,
@@ -525,6 +526,20 @@ async def delete_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
     await session.commit()
+    # #13920: drop the KB collection with its entity. Post-commit and
+    # non-fatal — the row is gone either way, and a stranded collection is a
+    # tidiness problem where a failed delete would be a correctness one.
+    await _drop_kb_collection(work_item_id)
+
+
+async def _drop_kb_collection(work_item_id: str) -> None:
+    """Best-effort removal of a deleted work item's KB collection (#13920)."""
+    from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
+
+    try:
+        await KbCollectionManager().drop_collection(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
+    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
+        logger.warning("Could not drop KB collection for work item %s", work_item_id, exc_info=True)
 
 
 @router.post("/{work_item_id}/checkout")

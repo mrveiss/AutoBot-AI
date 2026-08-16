@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projekta analītika"
+      },
+      "impact": {
+        "title": "Ietekmes analīze",
+        "hint": "Kas tranzitīvi izsauc mezglu — pārbaudiet pirms mainīšanas vai dzēšanas.",
+        "nodeIdPlaceholder": "piem. pakotne.modulis.KlasesNosaukums",
+        "nodeIdLabel": "Grafa mezgla ID",
+        "analyze": "Analizēt",
+        "analyzing": "Analizē…",
+        "notIndexedTitle": "Koda grafs nav izveidots",
+        "notIndexedBody": "Indeksējiet šo avotu pirms ietekmes analīzes.",
+        "partialTitle": "Daļējs rezultāts — tā ir apakšējā robeža",
+        "partialDepth": "Apstaigāšana apstājās {depth}. līmenī ar {frontier} neizvērstiem mezgliem. Izsaucēju var būt vairāk.",
+        "partialUnresolved": "{count} šķautni(-es) neizdevās atrisināt, tāpēc daži izsaucēji var trūkt.",
+        "callers": "izsaucēji",
+        "callersAtLeast": "izsaucēji (vismaz)",
+        "callersHeading": "Sasniegtie izsaucēji",
+        "edgesResolved": "atrisinātās šķautnes",
+        "edgesUnresolved": "neatrisinātās šķautnes",
+        "depth": "sasniegtais dziļums",
+        "noCallersTitle": "Izsaucēji nav atrasti",
+        "noCallersBody": "Nekas indeksētajā grafā neizsauc šo mezglu.",
+        "skippedHeading": "Rādīt {count} neatrisinātās šķautnes"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8190,13 +8214,16 @@
       "title": "Org Chart",
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
-      "empty": "No agents found.",
+      "empty": "Nav atrasta neviena persona vai aģents.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
+      "personDetail": "Personas informācija",
+      "humanNoAgentControls": "Aģenta vadīklas neattiecas uz personām.",
       "human": "Human",
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "Loma",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",
@@ -8205,7 +8232,106 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Skata režīms",
+      "viewTree": "Koks",
+      "viewCanvas": "Audekls",
+      "canvasTabAll": "Visas vienības",
+      "canvasUnit": "Vienība {name}",
+      "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas.",
+      "viewPeople": "Cilvēki",
+      "peopleLegend": "Personu veidi",
+      "peopleKind": {
+        "agent": "Aģents",
+        "user": "Lietotājs",
+        "contact": "Kontaktpersona"
+      },
+      "peopleKindHint": {
+        "agent": "Nolīgts izpildītājs",
+        "user": "Konta īpašnieks, var pieteikties",
+        "contact": "Procesa kontaktpersona, bez konta"
+      },
+      "peopleNoTeam": "Nav komandā",
+      "peopleTeamEmpty": "Šajā komandā nav dalībnieku.",
+      "peopleNoTeamsDefined": "Šim uzņēmumam nav definētu komandu — visi ir uzskaitīti kopā.",
+      "peopleTeamsUnavailable": "Komandu informācija pašlaik nav pieejama — grupēšana var būt nepilnīga.",
+      "peopleUnavailable": "Šī uzņēmuma cilvēkus neizdevās ielādēt. Tā ir ielādes problēma, nevis tukšs uzņēmums.",
+      "peopleTeamsCoverUsersOnly": "Komandas aptver kontu īpašniekus. Aģenti un kontaktpersonas nepieder nevienai komandai.",
+      "peopleContactNotInHierarchy": "Kontaktpersonas nav pakļautības hierarhijas daļa — tām nav vadītāja, budžeta vai sirdspukstu.",
+      "peopleEmpty": "Šim uzņēmumam vēl nav neviena cilvēka.",
+      "roleLensLabel": "Skatīt pēc lomas",
+      "roleLensAll": "Visas lomas",
+      "roleLensHint": "Tikai skata filtrs — tas nemaina to, kam kāds var piekļūt.",
+      "roleLensBanner": "Skata filtrs: {role} — rāda {shown} no {total} mezgliem. Piekļuve nemainās.",
+      "roleLensEmpty": "Skata filtrs: nevienam mezglam neatbilst \"{role}\" šajā skatā. Piekļuve nemainās — notīriet filtru, lai redzētu visus.",
+      "roleLensClear": "Notīrīt filtru",
+      "sidebar": {
+        "owner": "Īpašnieks",
+        "tools": "Rīki",
+        "toolsNotApplicable": "Neattiecas uz cilvēkiem.",
+        "notes": "Piezīmes",
+        "notesOverview": "Pārskats",
+        "notesChecklist": "Kontrolsaraksts",
+        "notesOutput": "Rezultāts",
+        "attributes": "Atribūti",
+        "railLabel": "Sānjoslas sadaļas",
+        "railInfo": "Info",
+        "railChecklist": "Kontrolsaraksts",
+        "railCost": "Izmaksas",
+        "railActivity": "Aktivitāte",
+        "railHandoff": "Nodošana",
+        "itemsUnavailable": "Vienumus neizdevās ielādēt. Tā ir ielādes problēma, nevis tukšs saraksts.",
+        "itemsEmpty": "Nav aktīvu vienumu.",
+        "itemsNotApplicableHuman": "Vienumu saraksti pa personām vēl nav pieejami — pēc atbildīgā var filtrēt tikai aģentus.",
+        "outputEmpty": "Vēl nav pabeigtu vienumu.",
+        "costTotalTokens": "Kopējie žetoni",
+        "costUsd": "Izmaksas (USD)",
+        "costUnavailable": "Izmaksu datus neizdevās ielādēt.",
+        "costEmpty": "Šim aģentam vēl nav reģistrētu izmaksu.",
+        "costNotApplicableHuman": "Izmaksu uzskaite attiecas tikai uz aģentiem.",
+        "activityUnavailable": "Aktivitāti neizdevās ielādēt.",
+        "activityEmpty": "Šim mezglam vēl nav reģistrētas aktivitātes.",
+        "activityNotApplicableHuman": "Aktivitātes vēsture pa personām vēl nav pieejama.",
+        "handoffButton": "Nodot cilvēkam",
+        "handoffEmpty": "Nav aktīvu vienumu, ko nodot.",
+        "handoffNotApplicableHuman": "Nodošana attiecas tikai uz aģentiem."
+      }
+    },
+    "executorRollup": {
+      "title": "Izpildītāju kopsavilkums",
+      "totalItems": "{count} darba vienības",
+      "unavailable": "Neizdevās ielādēt izpildītāju kopsavilkumu. Tā ir ielādes problēma, nevis nulle darba vienību.",
+      "empty": "Vēl nav darba vienību.",
+      "statusColumn": "Statuss",
+      "class": {
+        "user": "Persona",
+        "agent": "MI aģents",
+        "orphaned": "Pamests",
+        "unassigned": "Nav piešķirts"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Apzīmējumi",
+      "colourBy": "Krāsot pēc",
+      "dimension": {
+        "status": "Statuss",
+        "owner": "Īpašnieks",
+        "tool": "Rīks"
+      },
+      "status": {
+        "active": "Aktīvs",
+        "idle": "Dīkstāvē",
+        "paused": "Apturēts",
+        "error": "Kļūda",
+        "terminated": "Pārtraukts",
+        "unknown": "Nezināms"
+      },
+      "owner": {
+        "unassigned": "Nav piešķirts"
+      },
+      "tool": {
+        "none": "Nav rīka"
+      }
     },
     "goals": {
       "title": "Goal Tree",

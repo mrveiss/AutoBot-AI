@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
 
-_DEFAULT_SNAPSHOT_PATH = "/opt/autobot/snapshots"
+# #13149: derived from the canonical project root instead of a hardcoded
+# `/opt/autobot` literal, so a dev checkout stores its snapshot index under
+# the checkout rather than the live install's snapshot directory.
+_DEFAULT_SNAPSHOT_PATH = str(project_root() / "snapshots")
 _INDEX_FILENAME = "snapshot_index.json"
 
 _SNAPSHOT_STORAGE_PATH: str = os.getenv("AUTOBOT_SNAPSHOT_STORAGE_PATH", _DEFAULT_SNAPSHOT_PATH)

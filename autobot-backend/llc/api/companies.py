@@ -19,6 +19,7 @@ Route group: /llc/companies
   POST   /{id}/members             — add a member (GH#8223)
   DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
   GET    /{id}/members             — list members (GH#8223)
+  GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
   POST   /{id}/export/snapshot     — full-state export for backup/migration (GH#8245)
 
@@ -46,7 +47,14 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
+from llc.models.enums import (
+    AssigneeType,
+    ExternalPMType,
+    LLCAgentStatus,
+    LLCCompanyStatus,
+    MembershipRole,
+    WorkItemStatus,
+)
 from llc.models.membership import LLCCompanyMembership
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -318,6 +326,12 @@ async def delete_company(
     try:
         await svc.delete(company_id)
         await svc.session.commit()
+        # #13920: drop the three collections create_company's ensure_collection
+        # loop makes (base, agents, decisions). Derived from the same constants
+        # rather than restated, so a fourth suffix cannot be created and then
+        # silently never cleaned up.
+        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
+            await _kb_manager.drop_collection(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -832,7 +846,7 @@ class OrgChartNode(BaseModel):
     node_id: str
     name: str
     title: str
-    status: str  # active | idle | error | paused
+    status: str  # active | idle | error | paused | terminated
     adapter_type: str
     is_human: bool
     last_heartbeat: Optional[str]
@@ -856,6 +870,131 @@ def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
         return "error"
     # completed / cancelled / rate_limited / queued / no-run → idle
     return "idle"
+
+
+# Persisted ``LLCAgentStatus`` values that must win over the heartbeat-derived
+# status (#14108). Both are terminal *from the org chart's point of view*: an
+# agent an operator paused or terminated must read that way even while a
+# stale/queued heartbeat run would otherwise derive ``active`` or ``idle``.
+_STOP_STATUSES = frozenset({LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value})
+
+
+def _resolve_org_status(persisted_status: Optional[str], run_status: Optional[str]) -> str:
+    """Combine ``agent_org_nodes.status`` with the derived heartbeat status.
+
+    Precedence rule (#14108): an explicit *stop* lifecycle state — ``paused``
+    or ``terminated`` — always wins over the heartbeat-derived liveness. A
+    terminated agent must never read as ``active``/``idle`` merely because a
+    stale ``llc_heartbeat_runs`` row exists; the same is true of ``paused``.
+    ``controls_service.py`` sets exactly these two values as terminal writes
+    (pause/terminate); resume restores ``pre_pause_status`` or ``available``,
+    neither of which is a stop state, so control returns to the heartbeat
+    derivation on the very next org-chart read after a resume.
+
+    Every other ``LLCAgentStatus`` member (``available``, ``assigned``,
+    ``in_sprint``, ``on_leave``, ``onboarding``, ``offboarding``,
+    ``inactive``) describes work assignment, not liveness — it has no
+    dedicated slot in the org chart's 5-member display vocabulary
+    (``active`` / ``idle`` / ``error`` / ``paused`` / ``terminated``,
+    ``AgentDisplayStatus`` in ``llcStatus.ts``) and falls through to the
+    heartbeat-derived value exactly as before this fix. Per #13485, this is a
+    mapping onto the existing vocabulary — not a tenth status vocabulary.
+    """
+    if persisted_status in _STOP_STATUSES:
+        return persisted_status
+    return _heartbeat_status_to_org_status(run_status)
+
+
+# ``adapter_type`` is agent vocabulary; for a person the honest value is the kind,
+# not an adapter. The frontend suppresses the "Adapter" row for human nodes.
+_HUMAN_ADAPTER_TYPE = "human"
+
+
+async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> List[OrgChartNode]:
+    """Return the company's people as org-chart nodes (#13936).
+
+    The org chart is the native place to display the people of a company, not
+    only its hired agents. Before this, the only ``OrgChartNode`` construction
+    site hardcoded ``is_human=False`` and ``llc_company_memberships`` was never
+    read here, so the human branch the frontend already renders
+    (``OrgTreeNode.vue``) was structurally unreachable.
+
+    Two queries at most, and none at all beyond the first when the company has
+    no members. No schema change, no migration.
+    """
+    from sqlalchemy import func, select  # noqa: PLC0415
+
+    from llc.models.work_item import LLCWorkItem  # noqa: PLC0415
+    from user_management.models.user import User  # noqa: PLC0415
+
+    # One outer join rather than membership-then-names: both models sit on the
+    # same declarative Base, and selecting the four columns avoids loading full
+    # ORM entities for two fields. LEFT join so a membership whose user row is
+    # gone still yields a node instead of vanishing silently.
+    member_rows = (
+        await session.execute(
+            select(
+                LLCCompanyMembership.user_id,
+                LLCCompanyMembership.role,
+                User.display_name,
+                User.username,
+            )
+            .outerjoin(User, User.id == LLCCompanyMembership.user_id)
+            .where(LLCCompanyMembership.company_id == company_id)
+            .order_by(LLCCompanyMembership.created_at, LLCCompanyMembership.user_id)
+        )
+    ).all()
+
+    if not member_rows:
+        return []
+
+    # Assigned work-item counts per person — keyed by ``assignee_user_id``, the
+    # human half of the assignment keyspace delivered under #10532. Mirrors the
+    # agent query: one grouped statement, no N+1, terminal states excluded.
+    count_rows = (
+        await session.execute(
+            select(LLCWorkItem.assignee_user_id, func.count(LLCWorkItem.id).label("cnt"))
+            .where(
+                LLCWorkItem.company_id == company_id,
+                LLCWorkItem.assignee_user_id.isnot(None),
+                LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),
+            )
+            .group_by(LLCWorkItem.assignee_user_id)
+        )
+    ).all()
+    human_counts: Dict[uuid.UUID, int] = {row.assignee_user_id: row.cnt for row in count_rows}
+
+    nodes: List[OrgChartNode] = []
+    for user_id, role, display_name, username in member_rows:
+        # ``role`` is mapped through sa.Enum, so the ORM hands back the enum
+        # member — str() on it yields "MembershipRole.LEAD", not "lead". Take
+        # .value when present so the wire format stays the lowercase label.
+        role_label = str(getattr(role, "value", role))
+        nodes.append(
+            OrgChartNode(
+                # ``id`` is namespaced so a person can never collide with an
+                # agent slug; ``node_id`` keeps the raw user id, the keyspace
+                # ``assignee_user_id`` references.
+                id=f"user:{user_id}",
+                node_id=str(user_id),
+                name=display_name or username or str(user_id),
+                title=role_label,
+                # ``idle`` is exactly what ``_heartbeat_status_to_org_status``
+                # returns for an agent with no run, so it asserts no liveness we
+                # do not have. Budget stays 0/0 — people are not metered by
+                # LLCAgentBudget.
+                status="idle",
+                adapter_type=_HUMAN_ADAPTER_TYPE,
+                is_human=True,
+                last_heartbeat=None,
+                budget_spent=0.0,
+                budget_total=0.0,
+                assigned_item_count=human_counts.get(user_id, 0),
+                parent_id=None,
+                children=[],
+            )
+        )
+    return nodes
 
 
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
@@ -964,8 +1103,17 @@ async def get_org_chart(
             node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
             name=row.name,
             title=row.title or row.org_role,
-            status=_heartbeat_status_to_org_status(run.status if run else None),
-            adapter_type=row.org_role,
+            # #14108: an explicit pause/terminate must win over a derived
+            # heartbeat status — see `_resolve_org_status` for the precedence
+            # rule and why every other lifecycle value falls through to it.
+            status=_resolve_org_status(row.status, run.status if run else None),
+            # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
+            # back to "" (not the role) when NULL: the hire flow
+            # (agent_hires.py) always sets a concrete adapter — "claude_code"
+            # by default — so a NULL here means a legacy/manually-seeded row
+            # with genuinely no configured adapter, and reusing ``org_role``
+            # is exactly the dishonest substitution this fix removes.
+            adapter_type=row.adapter_type or "",
             is_human=False,
             # Liveness: latest run is picked by created_at; a just-queued run
             # may have no started_at, so fall back to created_at.
@@ -1006,14 +1154,293 @@ async def get_org_chart(
         else:
             roots.append(node)
 
+    # People join the forest as roots — memberships carry no ``reports_to`` edge,
+    # so they are siblings of the agent hierarchy rather than grafted onto it.
+    roots.extend(await _compose_human_nodes(session, company_id))
+
     return OrgChartResponse(nodes=roots)
+
+
+# ------------------------------------------------------------------
+# Executor rollup (#13942) — work items counted by assignee class and status
+# ------------------------------------------------------------------
+
+# The value ``unassigned`` in ``ExecutorRollupCell.executor_class`` — not an
+# ``AssigneeType`` member (that enum only names the two *typed* assignees), but
+# the third state ``assignee_type`` can legitimately hold: absent. Kept as a
+# literal string constant, not a new enum member, per #13970: the axis already
+# forked once under different member names, and adding a member here would be
+# a third fork of the same concept rather than a value the column ever needs
+# to store — no work item row is ever written with assignee_type="unassigned".
+_UNASSIGNED_EXECUTOR_CLASS = "unassigned"
+
+# A work item whose assignee id is present but no longer resolves to a live
+# member/agent of *this* company (#14222) — the membership was deleted
+# (`membership_service`) or the agent was terminated (`controls_service`),
+# and neither reassigns the work it left behind. Kept distinct from
+# ``unassigned`` rather than folded into it: "never assigned" and "the
+# assignee is gone" are different facts about the row, and the second is the
+# one that tells an operator a handover was missed (#14221's owner framing —
+# "work items remain behind when someone leaves — they still need someone to
+# work on them"). Same literal-constant convention as
+# ``_UNASSIGNED_EXECUTOR_CLASS`` above: a third value on the existing
+# executor axis, never a fourth ``AssigneeType``/``CoWorkerType`` fork
+# (#13970).
+_ORPHANED_EXECUTOR_CLASS = "orphaned"
+
+
+class ExecutorRollupCell(BaseModel):
+    """One (executor_class, status) count — one bar of the rollup panel.
+
+    ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
+    / ``_UNASSIGNED_EXECUTOR_CLASS`` / ``_ORPHANED_EXECUTOR_CLASS`` — never a
+    value invented for this endpoint (#13942's "no parallel executor enum"
+    constraint). ``status`` is a ``WorkItemStatus`` value.
+    """
+
+    executor_class: str
+    status: str
+    count: int
+
+
+class ExecutorRollupResponse(BaseModel):
+    cells: List[ExecutorRollupCell]
+
+
+def _executor_class_case(work_item_model):
+    """SQL ``CASE`` classifying a work item's assignee (#13942, #14222).
+
+    Four branches, evaluated in order:
+
+    1. ``AssigneeType.USER`` — typed "user", a non-NULL ``assignee_user_id``,
+       AND that user is a *current* member of *this* company
+       (``llc_company_memberships``, scoped by ``company_id`` — a member of a
+       *different* company must not count here; that row-level scope has had
+       to be pinned independently three times already: #13936, #13969,
+       #13942).
+    2. ``AssigneeType.AGENT`` — typed "agent", a non-NULL ``assignee_agent_id``,
+       AND that id resolves to an ``AgentOrgNode`` of *this* company whose
+       ``status`` is not ``LLCAgentStatus.TERMINATED``. A paused/on-leave/
+       inactive agent still counts as existing — those are recoverable
+       states the agent can return from, so the work stays "owned, agent
+       temporarily unavailable" rather than orphaned. Terminated is the one
+       status that is final for this purpose (#14221's owner framing): the
+       work still needs an owner, so it must not be reported as covered.
+    3. ``orphaned`` — the discriminator and id column agree (so branch 1/2's
+       *shape* matched — this is a real, non-dangling id) but the existence
+       check failed: the id is present yet does not resolve inside this
+       company. This is #14222's defect — the id existing was previously
+       treated as sufficient to call the item owned.
+    4. ``unassigned`` — nothing above matched: no assignee was ever set, or
+       the discriminator/id pair is dangling in the pre-existing #13942
+       sense (mis-typed discriminator, or a typed row with a NULL id
+       column).
+
+    ``work_item_model`` is passed in (not imported at module scope) to match
+    this file's existing convention of importing ``LLCWorkItem`` locally
+    inside each endpoint function (see ``get_org_chart``, ``_compose_human_nodes``).
+    """
+    from sqlalchemy import and_, case, or_, select  # noqa: PLC0415
+
+    from models.agent_org import AgentOrgNode  # noqa: PLC0415
+
+    user_assigned = and_(
+        work_item_model.assignee_type == AssigneeType.USER.value,
+        work_item_model.assignee_user_id.isnot(None),
+    )
+    agent_assigned = and_(
+        work_item_model.assignee_type == AssigneeType.AGENT.value,
+        work_item_model.assignee_agent_id.isnot(None),
+    )
+
+    user_exists = (
+        select(LLCCompanyMembership.id)
+        .where(
+            LLCCompanyMembership.company_id == work_item_model.company_id,
+            LLCCompanyMembership.user_id == work_item_model.assignee_user_id,
+        )
+        .exists()
+    )
+    agent_exists = (
+        select(AgentOrgNode.id)
+        .where(
+            AgentOrgNode.id == work_item_model.assignee_agent_id,
+            AgentOrgNode.company_id == work_item_model.company_id,
+            # NULL-safe: `status != 'terminated'` evaluates to NULL — not TRUE —
+            # for a NULL status, which would fail the EXISTS and mark EVERY
+            # agent's work orphaned. The column is NOT NULL on a migrated
+            # database, but #14189 records that we do not yet know whether it
+            # pre-existed out-of-band, and 20260812_073 uses
+            # ADD COLUMN IF NOT EXISTS — so a nullable variant is possible in
+            # the field and invisible to tests (the SQLite harness builds the
+            # NOT NULL column from the model).
+            or_(
+                AgentOrgNode.status.is_(None),
+                AgentOrgNode.status != LLCAgentStatus.TERMINATED.value,
+            ),
+        )
+        .exists()
+    )
+
+    return case(
+        (and_(user_assigned, user_exists), AssigneeType.USER.value),
+        (and_(agent_assigned, agent_exists), AssigneeType.AGENT.value),
+        (or_(user_assigned, agent_assigned), _ORPHANED_EXECUTOR_CLASS),
+        else_=_UNASSIGNED_EXECUTOR_CLASS,
+    )
+
+
+@router.get("/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse)
+async def get_work_item_executor_rollup(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ExecutorRollupResponse:
+    """Company-wide work-item counts by executor class and status (#13942, #14222).
+
+    Executor class is derived from the *item's own assignee* — ``assignee_type``
+    (typed via ``AssigneeType``, #13937) plus the matching id column, plus (#14222)
+    whether that id still resolves to a live member/agent of this company —
+    never a new discriminator. There is no ``PersonKind``-style provenance
+    derivation here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type``
+    is already a backend-typed value, not something only knowable from the
+    frontend, so counting it server-side introduces no honesty gap.
+
+    Grouped in SQL rather than paginated to the frontend and counted there:
+    ``GET /work-items`` caps at 500 rows per page, and a company can hold far
+    more than that — a client-side count over one page would silently be
+    a lie about companies past the cap. ``COUNT(*) ... GROUP BY`` has no such
+    ceiling.
+    """
+    from sqlalchemy import func, select  # noqa: PLC0415
+
+    from llc.models.work_item import LLCWorkItem  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)  # #12184 canonical tenant guard
+
+    executor_class = _executor_class_case(LLCWorkItem).label("executor_class")
+    rows = (
+        await session.execute(
+            select(executor_class, LLCWorkItem.status, func.count(LLCWorkItem.id).label("item_count"))
+            .where(LLCWorkItem.company_id == company_id)
+            .group_by(executor_class, LLCWorkItem.status)
+        )
+    ).all()
+
+    return ExecutorRollupResponse(
+        cells=[
+            ExecutorRollupCell(executor_class=row.executor_class, status=row.status, count=row.item_count)
+            for row in rows
+        ]
+    )
+
+
+# ------------------------------------------------------------------
+# Company teams (#13938) — read-only projection of existing team data
+# ------------------------------------------------------------------
+
+
+class CompanyTeam(BaseModel):
+    """One team of a company, with the user ids that belong to it.
+
+    Read-only projection of ``teams`` / ``team_memberships`` — the team data
+    plane that already exists (#6042). No new table, no migration, and no new
+    vocabulary: a company inside AutoBot *is* an ``Organization`` (see
+    ``CompanyService.delete``, which soft-deletes ``Organization.deleted_at``),
+    so ``Team.org_id == company_id`` is the company's own team list.
+
+    Only ``member_user_ids`` is returned because teams cover exactly one of the
+    three person kinds the Org Chart shows: account holders. Hired agents
+    (``agent_org_nodes``) and contacts (``llc_contacts``) carry no team column,
+    so inventing a team for them would be fabricated grouping. The frontend
+    renders them under an explicit "not in a team" bucket instead.
+    """
+
+    id: str
+    name: str
+    member_user_ids: List[str]
+
+
+class CompanyTeamsResponse(BaseModel):
+    teams: List[CompanyTeam]
+
+
+@router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
+async def get_company_teams(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> CompanyTeamsResponse:
+    """Return the company's teams and their member user ids (#13938).
+
+    Company-scoped by path parameter through the same shared
+    :func:`assert_company_access` guard the rest of the LLC router uses, rather
+    than by the ambient org context that ``/teams`` relies on — a platform
+    admin viewing another company's Org Chart must see that company's teams,
+    not their own.
+
+    Two queries, both bounded by the company: teams, then the memberships of
+    those teams. Soft-deleted teams are excluded, matching every other team
+    listing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from user_management.models.team import Team, TeamMembership  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    team_rows = (
+        (
+            await session.execute(
+                select(Team).where(Team.org_id == company_id, Team.deleted_at.is_(None)).order_by(Team.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not team_rows:
+        return CompanyTeamsResponse(teams=[])
+
+    team_ids = [team.id for team in team_rows]
+    membership_rows = (
+        await session.execute(
+            select(TeamMembership.team_id, TeamMembership.user_id)
+            .where(TeamMembership.team_id.in_(team_ids))
+            .order_by(TeamMembership.joined_at)
+        )
+    ).all()
+
+    members_by_team: Dict[uuid.UUID, List[str]] = {team_id: [] for team_id in team_ids}
+    for team_id, user_id in membership_rows:
+        members_by_team[team_id].append(str(user_id))
+
+    return CompanyTeamsResponse(
+        teams=[
+            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id]) for team in team_rows
+        ]
+    )
+
+
+# Capability-search result bounds. These literals predate #13936; they were named
+# when the hardcoded-values gate flagged them on this PR. (#13950 has since made
+# that gate line-scoped, so the original file-scoped rationale no longer applies —
+# the constants are kept because naming them is right, not because a gate forces it.)
+_AGENT_SEARCH_DEFAULT_LIMIT = 10
+_AGENT_SEARCH_MAX_LIMIT = 100
 
 
 @router.get("/{company_id}/agents/search")
 async def search_agents(
     company_id: uuid.UUID,
     q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
-    limit: int = Query(10, ge=1, le=100, description="Max results"),
+    limit: int = Query(
+        _AGENT_SEARCH_DEFAULT_LIMIT,
+        ge=1,
+        le=_AGENT_SEARCH_MAX_LIMIT,
+        description="Max results",
+    ),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

@@ -169,7 +169,7 @@
     - name: Set up authorized_keys for autobot user (if public key provided)
       authorized_key:
         user: "{{ autobot_user }}"
-        key: "{{ lookup('file', autobot_ssh_key_path ~ '.pub') }}"
+        key: "{{ lookup('file', (autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key')) ~ '.pub') }}"
         state: present
       ignore_errors: true  # In case key doesn't exist yet
 
@@ -250,11 +250,11 @@
     - name: Update /etc/hosts with VM information
       lineinfile:
         path: /etc/hosts
-        regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}"
-        line: "{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }} {{ item }} {{ item }}.{{ network.domain }}"
+        regexp: "^{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}"
+        line: "{{ hostvars[item]['ansible_facts']['default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }} {{ item }} {{ item }}.{{ network.domain }}"
         state: present
       loop: "{{ groups['all'] }}"
-      when: hostvars[item]['ansible_default_ipv4']['address'] is defined
+      when: hostvars[item]['ansible_facts']['default_ipv4']['address'] is defined
 
     - name: Configure DNS servers
       lineinfile:

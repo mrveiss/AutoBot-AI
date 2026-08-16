@@ -201,10 +201,92 @@ class ContextMode(str, Enum):
 
 
 class CoWorkerType(str, Enum):
-    """Identifies whether the co-worker is an agent or human (GH#8230)."""
+    """DEPRECATED — use :class:`AssigneeType` (GH#8230, converged in #13970).
+
+    This and ``AssigneeType`` described the same axis — is this actor an agent or
+    a person — with different strings for the person side (``"human"`` here,
+    ``"user"`` there). That fork produced a live bug: #13954, a Kanban swimlane
+    filtering ``assignee_type == "human"`` against a backend that only ever wrote
+    ``"user"``, which matched nothing for months.
+
+    ``AssigneeType`` won because a *contact* (#13969) is also a human, so
+    ``"human"`` stops discriminating the moment the third person kind exists,
+    while ``"user"`` keeps naming exactly one thing: a ``users`` row.
+
+    Retained only so a stored ``"human"`` can still be recognised during the
+    transition — see ``migrations/versions/20260815_075_co_worker_type_human_to_user.py``.
+    Do not use in new code, and never compare across the two: both are
+    ``str``-mixin enums, so ``AssigneeType.AGENT == CoWorkerType.AGENT`` is
+    silently ``True`` while ``AssigneeType.USER == CoWorkerType.HUMAN`` is
+    silently ``False``.
+    """
 
     AGENT = "agent"
     HUMAN = "human"
+
+
+class AssigneeType(str, Enum):
+    """Discriminator for the primary assignee of a work item (GH#13937).
+
+    Selects between ``assignee_agent_id`` and ``assignee_user_id`` on
+    ``LLCWorkItem``. Values match the string literals already persisted by
+    existing rows ("user" / "agent") — additive only, no data migration.
+    The column itself stays ``String(16)`` (same *column* pattern as
+    ``co_worker_type`` / ``CoWorkerType`` above); every write site must
+    construct/compare through this enum instead of a bare string literal so
+    an invalid value raises at write time rather than being silently stored.
+
+    Converged in #13970: ``co_worker_type`` now uses this enum too, so there is
+    one vocabulary for the actor axis. Historically the column-pattern
+    precedent above was NOT a vocabulary precedent — this
+    enum's human-actor member is ``USER = "user"``, while ``CoWorkerType``'s
+    is ``HUMAN = "human"`` — same axis (agent vs. human), different string
+    for the human side. Applying one enum's member to the other field is
+    exactly the bug in #13954 (a frontend filter compared ``assignee_type``
+    against ``'human'``, which this enum never emits). Converged in #13970. Because both are ``str``-mixin enums,
+    ``AssigneeType.AGENT == CoWorkerType.AGENT`` is silently ``True`` while
+    ``AssigneeType.USER == CoWorkerType.HUMAN`` is silently ``False`` —
+    never compare across the two enums.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+
+
+class RoleHolderType(str, Enum):
+    """Who currently holds a role (#14221 step 2).
+
+    A **different axis** from :class:`AssigneeType`, not a wider version of it.
+    ``AssigneeType`` answers "who is working this work item"; this answers "who
+    occupies this role". They overlap on two members and diverge on the third,
+    which is exactly the shape that has bitten this module before — so:
+
+    **Never compare a member of this enum with a member of another.** Both are
+    ``str``-mixin enums, so ``RoleHolderType.AGENT == AssigneeType.AGENT`` is
+    silently ``True`` while a ``CONTACT`` holder compares equal to nothing at
+    all. That silent-True/silent-False pair is #13954's defect exactly.
+
+    ``CONTACT`` is why this is a separate enum rather than a new member on
+    ``AssigneeType``. Owner framing:
+
+        user = human, but not all humans are users — they could be part of a
+        process, like a contact person you send email to or call
+
+    A contact can therefore *hold a role* ("external accountant", "supplier
+    escalation contact") without ever being a user. Adding ``CONTACT`` to
+    ``AssigneeType`` instead would silently widen what a **work item** may be
+    assigned to, since assignment validates by enum membership — a data-model
+    change smuggled in as a vocabulary edit.
+
+    Minting a new vocabulary is deliberate and was checked first: no enum in
+    this codebase declares a ``contact`` member at all, so there was nothing to
+    reuse. Registered in #14263's inventory rather than left to become another
+    unowned status vocabulary.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+    CONTACT = "contact"
 
 
 class AssignmentType(str, Enum):
@@ -368,3 +450,26 @@ class ActivityEventType(str, Enum):
 
     # Notification
     NOTIFICATION_SENT = "notification.sent"
+
+
+class WorkflowStatus(str, Enum):
+    """Lifecycle of a workflow *definition* (#14210).
+
+    A new axis, not a duplicate of an existing one — ``LLCRunStatus`` describes a
+    single *execution*, while a workflow definition can sit ``PLANNED`` having
+    never run, or stay ``RUNNING`` across many runs. #14263 is the umbrella for
+    telling a genuine axis apart from a fork; this is the former, and it is
+    deliberately small so it does not grow into a second run vocabulary.
+
+    Before this existed ``Workflow.status`` was a bare ``String(50)`` that the
+    Redis backfill populated from ``current_step`` — i.e. a *step name* stored in
+    a *status* column. That is the same untyped-discriminator defect as #13937,
+    whose cost was #13954: a Kanban swimlane filtering on a value the backend
+    never wrote, which matched nothing for months.
+    """
+
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"

@@ -23,6 +23,19 @@ After=network-online.target
 Wants=network-online.target
 # Guard: skip start (no crash loop) if agent files not yet deployed by Ansible (#MVA-1036)
 ConditionPathExists={{ slm_agent_dir }}/slm/agent/agent.py
+# #4090: these live in [Unit], NOT [Service]. systemd's own verdict on the
+# wrong placement is "Unknown key name 'StartLimitIntervalSec' in section
+# 'Service', ignoring" — so the fix merged for #4090 was discarded on every unit
+# and chromadb still reached NRestarts=4399 while showing `activating`, never
+# `failed`. That is the exact outage #4090 exists to make visible.
+#
+# Without them a unit that can never exec restarts forever and stays out of
+# `systemctl --failed`. systemd's defaults do not help: DefaultStartLimitIntervalSec=10s
+# with DefaultStartLimitBurst=5 needs 5 restarts inside 10s, and RestartSec spaces
+# them further apart, so the rate never reaches the limit. The window must exceed
+# RestartSec * StartLimitBurst for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -34,9 +47,12 @@ WorkingDirectory={{ slm_agent_dir }}
 # Environment variables
 Environment=SLM_NODE_ID={{ slm_node_id }}
 Environment=SLM_ADMIN_URL={{ effective_admin_url }}
-# #11508: PYTHONPATH must let the SYSTEM interpreter (ExecStart below) import
-# autobot_shared on its own — the agent no longer borrows it from the SLM backend
-# venv. `{{ slm_agent_dir }}` resolves `slm.agent.*`; `{{ slm_agent_dir | dirname }}`
+# #11508: PYTHONPATH must let the agent's interpreter (ExecStart below) import
+# autobot_shared on its own — it does not borrow it from the SLM backend venv.
+# #14278: that interpreter is now the agent's OWN venv rather than system
+# python3. PYTHONPATH is honoured by any interpreter, so this resolution is
+# unchanged; what changed is that the agent's dependencies no longer collide
+# with the ones apt owns. `{{ slm_agent_dir }}` resolves `slm.agent.*`; `{{ slm_agent_dir | dirname }}`
 # is the install base (/opt/autobot) so `import autobot_shared` finds
 # /opt/autobot/autobot_shared directly, independent of the per-dir symlink.
 Environment=PYTHONPATH={{ slm_agent_dir }}:{{ slm_agent_dir | dirname }}
@@ -51,11 +67,11 @@ EnvironmentFile=-{{ slm_agent_data_dir }}/agent-secrets.env
 
 # Agent execution — admin_url resolved from SLM_ADMIN_URL env var above,
 # not baked into CLI args, so re-provisioning updates it (#2833).
-# #11508: the interpreter is the system python3, which the role provisions with
-# ALL agent deps (aiohttp + psutil + redis). A stale drop-in that repointed this
-# at the backend venv (which lacks aiohttp) is removed by the role's clean tasks
+# #11508 / #14278: the interpreter is the agent's own venv, which the role
+# provisions with ALL agent deps. A stale drop-in that repointed this at the
+# backend venv (which lacks aiohttp) is removed by the role's clean tasks
 # so this ExecStart stays authoritative.
-ExecStart=/usr/bin/python3 -m slm.agent.agent \
+ExecStart={{ slm_agent_venv }}/bin/python -m slm.agent.agent \
     --node-id {{ slm_node_id }} \
     --interval {{ slm_heartbeat_interval }}{% if slm_services_to_monitor | length > 0 %} \
     --services {{ slm_services_to_monitor | join(' ') }}{% endif %}{% if slm_agent_debug %} \
@@ -65,15 +81,6 @@ ExecStart=/usr/bin/python3 -m slm.agent.agent \
 # Restart policy
 Restart=always
 RestartSec={{ slm_agent_restart_sec }}
-# #4090: without these, a unit that can never exec restarts forever and stays
-# out of `systemctl --failed`, so the one thing an operator checks cannot see it
-# (chromadb: 1681 restarts over ~4h45m, invisible). systemd's OWN defaults do not
-# help — DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
-# restarts inside 10s, and RestartSec spaces them further apart than that, so the
-# rate never reaches the limit. The window has to be wider than
-# RestartSec * StartLimitBurst for the limit to be reachable at all.
-StartLimitIntervalSec=120
-StartLimitBurst=5
 
 # Watchdog (systemd will restart if agent becomes unresponsive)
 WatchdogSec={{ slm_agent_watchdog_sec }}

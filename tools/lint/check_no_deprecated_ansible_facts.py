@@ -110,6 +110,19 @@ FACT_ATTRS = frozenset(
 # positives on inventory vars (host, user, become_*, etc.).
 PATTERN = re.compile(r"\{\{[^}]*?\bansible_([a-z][a-z0-9_]*)\b")
 
+# #14181: Ansible evaluates `when:` and friends as Jinja **without** `{{ }}`, so
+# the pattern above cannot see them. That is not academic -- `deploy-base.yml`
+# carried the same fact on the same task in all three forms, two inside `{{ }}`
+# and one in a `when:`. Fixing only the reported two would have moved the
+# ansible-core 2.24 breakage from the template to the conditional while the
+# hook reported the file clean. Both patterns filter through FACT_ATTRS, so
+# inventory/connection vars (ansible_host, ansible_user, ansible_become_*, ...)
+# stay valid in either form.
+_BARE_EXPR_KEYS = ("when", "failed_when", "changed_when", "until", "that")
+BARE_EXPR_PATTERN = re.compile(
+    r"^\s*-?\s*(?:" + "|".join(_BARE_EXPR_KEYS) + r")\s*:.*?\bansible_([a-z][a-z0-9_]*)\b"
+)
+
 # Files allowed to contain the banned patterns (the hook itself + tests).
 ALLOWLIST = frozenset(
     {
@@ -147,10 +160,13 @@ def find_violations(path: Path) -> List[Tuple[int, str, str]]:
         return []
     violations: List[Tuple[int, str, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        for match in PATTERN.finditer(line):
-            attr = match.group(1)
-            if attr in FACT_ATTRS:
-                violations.append((lineno, attr, line.strip()[:120]))
+        seen_on_line = set()
+        for pattern in (PATTERN, BARE_EXPR_PATTERN):
+            for match in pattern.finditer(line):
+                attr = match.group(1)
+                if attr in FACT_ATTRS and attr not in seen_on_line:
+                    seen_on_line.add(attr)
+                    violations.append((lineno, attr, line.strip()[:120]))
     return violations
 
 

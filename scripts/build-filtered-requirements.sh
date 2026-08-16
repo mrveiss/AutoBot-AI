@@ -34,5 +34,12 @@ set -euo pipefail
 requirements_file="${1:?usage: build-filtered-requirements.sh <requirements_file> <code_source_dir>}"
 code_source_dir="${2:?usage: build-filtered-requirements.sh <requirements_file> <code_source_dir>}"
 
+# #14272: the `\.\./` prefix is matched at ANY depth, not just one level.
+# The pattern used to be a literal `\.\./`, which fitted the backend's
+# requirements.txt (one level up from autobot-backend/) and silently did not
+# match autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt, which
+# needs four. A rewrite that only handles the depth it was written against does
+# not transfer to the next caller, and the failure is a provisioning abort:
+#   ERROR: Could not open constraint file: '/constraints/shared.txt'
 grep -Ev '^-e.*autobot[-_]shared' "${requirements_file}" \
-  | sed "s|^-c \\.\\./constraints/|-c ${code_source_dir}/constraints/|; s|^-r \\.\\./requirements.txt|-r ${code_source_dir}/requirements.txt|"
+  | sed -E "s|^-c (\\.\\./)+constraints/|-c ${code_source_dir}/constraints/|; s|^-r (\\.\\./)+requirements\\.txt|-r ${code_source_dir}/requirements.txt|"

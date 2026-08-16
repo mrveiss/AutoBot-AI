@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import no_data_response
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
@@ -187,6 +187,7 @@ def _build_indexing_response(
 
 
 @router.get("/stats")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_stats",
@@ -326,6 +327,7 @@ _normalize_hardcode_record = normalize_hardcode_record
 
 
 @router.get("/hardcodes")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardcoded_values",
@@ -483,6 +485,7 @@ async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | 
 
 
 @router.get("/embedding-stats")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_stats",
@@ -545,6 +548,7 @@ async def get_embedding_stats() -> JSONResponse:
 
 
 @router.post("/embedding-stats/reset")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_embedding_stats",
@@ -589,6 +593,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
 
 
 @router.get("/problems")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_problems",

@@ -102,11 +102,27 @@ def _is_test_file(path: str) -> bool:
 
 
 def _get_staged_files() -> list[str]:
+    # GH#14167: no `check=True` and no returncode inspection meant a git
+    # failure (corrupted index, missing .git, permissions problem) produced
+    # empty stdout — indistinguishable from "nothing staged" — so the hook
+    # scanned nothing and exited 0 reporting clean. Mirrors the bash-hook
+    # fix in GH#14151/#14160: inspect the return code and fail closed
+    # instead of reading a broken git as an empty, valid answer. Checked
+    # here rather than relying on a caller-side `if not files: ...` because
+    # an *empty but successful* diff must still read as "0 staged files",
+    # not as an error — the two have to be told apart at the source.
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        print(
+            "FATAL: git diff --cached failed — cannot determine staged files, "
+            "refusing to report clean",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     return [f for f in result.stdout.splitlines() if f.endswith(".py")]
 
 

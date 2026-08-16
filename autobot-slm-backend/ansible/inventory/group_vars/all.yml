@@ -349,6 +349,11 @@ role_redis_active: >-
 # matching role_xrdp_active below.
 # Migration: a backend/main host that relied on implicit activation must now list
 # 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
+# #13870: ChromaDB is a database, so the db stack owns its unit wherever that
+# stack is present. It is also the only venv with chromadb installed — the
+# ai-stack fallback exists solely for a topology that runs ai-stack alone.
+chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}

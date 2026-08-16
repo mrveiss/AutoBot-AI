@@ -213,23 +213,70 @@ _EXTRA_SERVICE_MODULES = (
 for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
     _stub(_m)
 
-# ── services.ssh_utils — REAL module, not a stub (#11793) ─────────────────────
-# api/code_sync.py imports it, so the AST-derived loop above just stubbed it —
-# but its ``_ssh_key_usable()`` gate must stay real under test: a MagicMock is
-# truthy, which would silently re-add ``-i <key>`` at every migrated ssh build
-# site.  The module is dependency-light (os/logging/pathlib only), so real-load
-# it via its file spec (the ``services`` parent is a MagicMock, not a package,
-# so a normal import cannot traverse it) and re-bind it onto the parent stub
-# so ``patch("services.ssh_utils.X")`` resolves to the same object.
+# ── services.* modules that must be REAL, not stubs ──────────────────────────
+# ``services`` itself is a MagicMock, not a package, so a normal import cannot
+# traverse it — each of these is loaded from its file spec and re-bound onto
+# the parent stub so ``patch("services.x.Y")`` resolves to the same object.
+#
+# Each entry earns its place by a failure that a MagicMock made invisible:
+#
+#   ssh_utils          #11793 — ``_ssh_key_usable()`` is a gate, and a MagicMock
+#                      is truthy, so every migrated ssh build site silently
+#                      re-added ``-i <key>``.
+#   deploy_artifacts   #14231 — pure data, and a MagicMock iterates as EMPTY, so
+#                      every ``for pattern in HOST_STATE_EXCLUDES`` loop ran zero
+#                      times and the rsync chokepoint's protections vanished
+#                      under test while looking perfectly healthy.
+#   inventory_builder  #14307 — same emptiness, one layer up: a group set that
+#                      iterates as empty is indistinguishable from the inventory
+#                      bug being present. Its co-located test passed only when
+#                      ``tests/services/conftest.py`` happened to be collected
+#                      first in the same shard, which pytest-split decides.
+#   a2a_card_fetcher   #14307 — co-located test, same shard-order dependency.
+#   hf_token_validator #14307 — ditto.
+#   service_extra_data #14307 — ditto; pure data, so the emptiness failure mode
+#                      is deploy_artifacts' verbatim.
+#
+# All six are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
+# which is the bar for being loadable here at all.
 import importlib.util as _importlib_util  # noqa: E402
 
-_ssh_utils_spec = _importlib_util.spec_from_file_location(
-    "services.ssh_utils", Path(__file__).parent / "services" / "ssh_utils.py"
+_REAL_SERVICE_MODULES = (
+    "ssh_utils",
+    "deploy_artifacts",
+    "inventory_builder",
+    "a2a_card_fetcher",
+    "hf_token_validator",
+    "service_extra_data",
+    "ansible_utils",
 )
-_ssh_utils_mod = _importlib_util.module_from_spec(_ssh_utils_spec)
-sys.modules["services.ssh_utils"] = _ssh_utils_mod
-_ssh_utils_spec.loader.exec_module(_ssh_utils_mod)
-setattr(sys.modules["services"], "ssh_utils", _ssh_utils_mod)
+
+for _name in _REAL_SERVICE_MODULES:
+    _path = Path(__file__).parent / "services" / f"{_name}.py"
+    if not _path.is_file():
+        raise RuntimeError(f"conftest: services/{_name}.py is named here but does not exist")
+    _spec = _importlib_util.spec_from_file_location(f"services.{_name}", _path)
+    _mod = _importlib_util.module_from_spec(_spec)
+    sys.modules[f"services.{_name}"] = _mod
+    try:
+        _spec.loader.exec_module(_mod)
+    except ImportError as _exc:
+        # A third-party dependency this module needs is absent here (#14326).
+        # Leave the name ABSENT rather than stubbed: a MagicMock is what
+        # #14307 removed, because it iterates as empty and turns a missing
+        # dependency into a silently wrong result instead of an error.
+        #
+        # Absent means a test that genuinely needs the module fails with a
+        # plain ImportError naming it, while unrelated tests in the same
+        # directory still run. Eager real-loading otherwise imposes every
+        # listed module's dependencies on every environment that loads this
+        # conftest — the deliberately-minimal migration gate hit exactly that,
+        # first with `yaml` (inventory_builder) and then `aiohttp`
+        # (a2a_card_fetcher), taking down tests unrelated to either.
+        sys.modules.pop(f"services.{_name}", None)
+        print(f"conftest: services.{_name} not real-loaded ({_exc}) — left absent, not stubbed")
+        continue
+    setattr(sys.modules["services"], _name, _mod)
 
 # ── python-multipart ─────────────────────────────────────────────────────────
 # FastAPI's ensure_multipart_is_installed() is called when any route uses

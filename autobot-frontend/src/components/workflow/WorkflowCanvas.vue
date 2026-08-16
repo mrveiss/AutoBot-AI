@@ -3,6 +3,39 @@
     <!-- Toolbar -->
     <div class="canvas-toolbar">
       <div class="toolbar-left">
+        <!-- GH#13939: tab strip — rendered only when the consumer supplies tabs -->
+        <div v-if="tabs.length > 0" class="canvas-tabs" role="tablist">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="canvas-tab"
+            :class="{ active: tab.id === activeTabId }"
+            role="tab"
+            :aria-selected="tab.id === activeTabId"
+            @click="emit('tab-selected', tab.id)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+        <!-- GH#13941: which declarative rule set colours the nodes. Offered only
+             when there are org nodes to colour, so workflow authoring is
+             untouched. -->
+        <div v-if="hasOrgNodes" class="rule-mode" role="group" :aria-label="$t('llc.canvasRules.colourBy')">
+          <span class="rule-mode-label">{{ $t('llc.canvasRules.colourBy') }}</span>
+          <button
+            v-for="dimension in SELECTABLE_RULE_DIMENSIONS"
+            :key="dimension"
+            type="button"
+            class="rule-mode-btn"
+            :class="{ active: colourMode === dimension }"
+            :aria-pressed="colourMode === dimension"
+            :data-testid="`rule-mode-${dimension}`"
+            @click="colourMode = dimension"
+          >
+            {{ dimensionLabels[dimension] }}
+          </button>
+        </div>
+        <template v-if="!readonly">
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
           <Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}
         </button>
@@ -34,15 +67,18 @@
         <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')" :aria-label="$t('workflow.canvas.autoLayout')">
           <Icon name="magic" />
         </button>
+        </template>
       </div>
       <div class="toolbar-right">
         <button class="tool-btn" @click="zoomIn" :aria-label="$t('common.zoomIn')"><Icon name="search-plus" /></button>
         <button class="tool-btn" @click="zoomOut" :aria-label="$t('common.zoomOut')"><Icon name="search-minus" /></button>
         <button class="tool-btn" @click="resetZoom" :aria-label="$t('common.fitToView')"><Icon name="compress-arrows-alt" /></button>
+        <template v-if="!readonly">
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
           <Icon name="save" /> {{ $t('workflow.canvas.save') }}
         </button>
+        </template>
       </div>
     </div>
 
@@ -62,13 +98,15 @@
         </svg>
 
         <!-- Nodes -->
-        <div v-for="node in nodes" :key="node.id" class="workflow-node" :class="[node.type, { selected: selectedNodeId === node.id }]"
-             :style="{ left: node.position.x + 'px', top: node.position.y + 'px' }"
-             @mousedown.stop="startDrag(node, $event)" @click.stop="selectNode(node.id)">
+        <div v-for="node in nodes" :key="node.id" class="workflow-node"
+             :class="[node.type, { selected: selectedNodeId === node.id }, ...ruleClasses(node)]"
+             :data-rule-id="nodeRuleId(node)"
+             :style="nodeStyle(node)"
+             @mousedown="onNodeMouseDown(node, $event)" @click.stop="selectNode(node.id)">
           <div class="node-header">
-            <i :class="nodeIcons[node.type]"></i>
-            <span>{{ nodeLabels[node.type] }}</span>
-            <button class="delete-btn" @click.stop="deleteNode(node.id)" :aria-label="$t('common.delete')"><Icon name="times" /></button>
+            <Icon :name="nodeIcons[node.type]" />
+            <span>{{ nodeTitle(node) }}</span>
+            <button v-if="!readonly" class="delete-btn" @click.stop="deleteNode(node.id)" :aria-label="$t('common.delete')"><Icon name="times" /></button>
           </div>
           <div class="node-body">
             <template v-if="node.type === 'step'">
@@ -141,9 +179,30 @@
                 <input v-model.number="(node.data as any).timeout_ms" type="number" placeholder="Timeout (ms)" @click.stop />
               </template>
             </template>
+            <!-- GH#13939: Company OS org nodes are read-only descriptors -->
+            <template v-else-if="node.type === 'org-person'">
+              <p class="org-title">{{ nodeText(node, 'title') }}</p>
+              <div class="org-meta">
+                <!-- GH#13941: this was a bare coloured dot — colour was the only
+                     signal it carried, and a paused agent was indistinguishable
+                     from an errored one to a reader who cannot separate the
+                     hues. The chip pairs the active rule's colour with a
+                     distinct marker shape and the rule's translated name. -->
+                <span class="rule-chip">
+                  <span class="rule-marker" aria-hidden="true"></span>
+                  <span class="rule-chip-label">{{ nodeRuleLabel(node) }}</span>
+                </span>
+                <!-- GH#13936: adapter_type is agent vocabulary. A person's node
+                     already shows their role as the title, and their adapter_type
+                     is the literal "human" — untranslated in all 11 locales. This
+                     mirrors the same guard in OrgTreeNode.vue; the canvas is the
+                     second renderer of the same org-chart payload. -->
+                <span v-if="!nodeFlag(node, 'is_human')" class="org-adapter">{{ nodeText(node, 'adapter_type') }}</span>
+              </div>
+            </template>
           </div>
-          <div class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>
-          <div class="port port-out" @mousedown.stop="startConnect(node.id, 'out', $event)"></div>
+          <div v-if="!readonly" class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>
+          <div v-if="!readonly" class="port port-out" @mousedown.stop="startConnect(node.id, 'out', $event)"></div>
         </div>
 
         <!-- Empty State -->
@@ -151,8 +210,27 @@
           <Icon name="project-diagram" />
           <h3>{{ $t('workflow.canvas.emptyTitle') }}</h3>
           <p>{{ $t('workflow.canvas.emptyDescription') }}</p>
-          <button class="btn-primary" @click="addStepNode"><Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}</button>
+          <button v-if="!readonly" class="btn-primary" @click="addStepNode"><Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}</button>
         </div>
+      </div>
+
+      <!-- GH#13941: legend — derived from the same evaluation the nodes use, so
+           it lists exactly the rules that won on a node currently drawn. Sits
+           outside `.canvas-content` so panning and zooming never move it. -->
+      <div v-if="legendRules.length > 0" class="canvas-legend" data-testid="canvas-legend">
+        <span class="canvas-legend-title">{{ $t('llc.canvasRules.legendTitle') }}</span>
+        <ul class="canvas-legend-items">
+          <li
+            v-for="rule in legendRules"
+            :key="rule.id"
+            class="canvas-legend-item"
+            :class="[`rule-${rule.swatch}`, `rule-shape-${rule.shape}`]"
+            :data-rule-id="rule.id"
+          >
+            <span class="rule-marker" aria-hidden="true"></span>
+            <span>{{ ruleLabel(rule) }}</span>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -172,16 +250,42 @@
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
+import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
+import {
+  SELECTABLE_RULE_DIMENSIONS,
+  activeRules,
+  matchRule,
+  orgNodeFacts,
+  rulesForDimension,
+  type CanvasNodeFacts,
+  type CanvasNodeRule,
+  type CanvasRuleDimension,
+} from './canvasNodeRules';
 
 const { t } = useI18n();
 const { confirm } = useConfirmDialog();
 
-const props = defineProps<{ nodes: WorkflowNode[]; selectedNodeId: string | null }>();
+/**
+ * GH#13939: `readonly` and `tabs` are additive and default to the previous
+ * behaviour, so `WorkflowBuilderView.vue` is unaffected. `nodes` widens to
+ * `CanvasNode` (a superset of `WorkflowNode`) so Company OS can draw org
+ * nodes on the same canvas.
+ */
+const props = withDefaults(
+  defineProps<{
+    nodes: CanvasNode[];
+    selectedNodeId: string | null;
+    readonly?: boolean;
+    tabs?: CanvasTab[];
+    activeTabId?: string | null;
+  }>(),
+  { readonly: false, tabs: () => [], activeTabId: null },
+);
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
   (e: 'node-removed', nodeId: string): void;
@@ -189,21 +293,29 @@ const emit = defineEmits<{
   (e: 'node-selected', nodeId: string | null): void;
   (e: 'nodes-connected', src: string, tgt: string): void;
   (e: 'save-workflow', name: string, desc: string): void;
+  (e: 'tab-selected', tabId: string): void;
 }>();
 
 const showVisionDropdown = ref(false);
 
-const nodeIcons: Record<string, string> = {
+// #13939: these are Icon component names — they were previously rendered as
+// `<i :class="…">`, which silently produced no icon at all.
+// #13996: keyed by CanvasNodeType (not `string`), so a node type without an
+// icon is a compile error rather than an `<Icon :name="undefined">` warning.
+const nodeIcons: Record<CanvasNodeType, IconName> = {
   step: 'terminal',
   condition: 'code-branch',
   switch: 'random',
   parallel: 'columns',
+  loop: 'sync-alt',
   'vision-capture': 'camera',
   'vision-find-element': 'search',
   'vision-click': 'mouse-pointer',
   'vision-type-text': 'keyboard',
   'vision-ocr': 'font',
   'vision-wait': 'clock',
+  'org-person': 'user',
+  'org-group': 'sitemap',
 };
 const nodeLabels = computed(() => ({
   step: t('workflow.canvas.stepLabel'),
@@ -211,7 +323,9 @@ const nodeLabels = computed(() => ({
   switch: t('workflow.canvas.switchLabel'),
   parallel: t('workflow.canvas.parallelLabel'),
   // #9724: 'loop' is part of WorkflowNode['type'] but had no label entry
-  loop: t('workflow.canvas.loopLabel', 'Loop'),
+  // #13996: the key exists in all 11 locales, so the hard-coded English
+  // fallback was both dead and a hard-coded UI string.
+  loop: t('workflow.canvas.loopLabel'),
   'vision-capture': t('workflow.canvas.visionCapture'),
   'vision-find-element': t('workflow.canvas.visionFindElement'),
   'vision-click': t('workflow.canvas.visionClick'),
@@ -220,12 +334,109 @@ const nodeLabels = computed(() => ({
   'vision-wait': t('workflow.canvas.visionWait'),
 }));
 
+/**
+ * Header caption: authoring nodes are labelled by type, org nodes carry their
+ * own label (the person's or unit's name) in `data.label` (GH#13939).
+ */
+function nodeTitle(node: CanvasNode): string {
+  const byType = (nodeLabels.value as Record<string, string | undefined>)[node.type];
+  return byType ?? nodeText(node, 'label');
+}
+
+/** Read a string field off a node's untyped `data` bag. */
+function nodeText(node: CanvasNode, key: string): string {
+  const value = (node.data as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
+}
+
+/** Boolean counterpart to `nodeText` — `nodeText` returns '' for a boolean, so a
+ *  flag read through it is always falsy and can never gate anything (GH#13936). */
+function nodeFlag(node: CanvasNode, key: string): boolean {
+  return (node.data as Record<string, unknown>)[key] === true;
+}
+
+/**
+ * Position, plus the size a grouping container carries in `data`.
+ * #13996: only `org-group` is sized from `data` — `WorkflowNode['data']` is an
+ * arbitrary bag, so honouring width/height for every type let unrelated
+ * authoring payloads silently resize their node.
+ */
+function nodeStyle(node: CanvasNode): Record<string, string> {
+  const style: Record<string, string> = {
+    left: `${node.position.x}px`,
+    top: `${node.position.y}px`,
+  };
+  if (node.type !== 'org-group') return style;
+  const data = node.data as Record<string, unknown>;
+  if (typeof data.width === 'number') style.width = `${data.width}px`;
+  if (typeof data.height === 'number') style.height = `${data.height}px`;
+  return style;
+}
+
+/* ------------------------------------------------------------------ *
+ * GH#13941: declarative node colouring + legend.
+ *
+ * Presentation only — the rules read facts the nodes already carry and
+ * change nothing that is fetched, authorised or persisted. The chosen
+ * dimension is component state; it is deliberately not persisted, so the
+ * canvas keeps its single source of truth in the org-chart payload.
+ * ------------------------------------------------------------------ */
+
+const colourMode = ref<CanvasRuleDimension>('status');
+
+/** Facts per node id, for the nodes the rules apply to (org people only). */
+const orgFacts = computed(() => {
+  const byId = new Map<string, CanvasNodeFacts>();
+  for (const node of props.nodes) {
+    const facts = orgNodeFacts(node);
+    if (facts) byId.set(node.id, facts);
+  }
+  return byId;
+});
+
+const hasOrgNodes = computed(() => orgFacts.value.size > 0);
+const factsOnCanvas = computed(() => [...orgFacts.value.values()]);
+const activeRuleSet = computed(() => rulesForDimension(colourMode.value, factsOnCanvas.value));
+/** Only rules that won on a node currently drawn — the legend's contents. */
+const legendRules = computed(() => activeRules(activeRuleSet.value, factsOnCanvas.value));
+
+const dimensionLabels = computed<Record<CanvasRuleDimension, string>>(() => ({
+  status: t('llc.canvasRules.dimension.status'),
+  owner: t('llc.canvasRules.dimension.owner'),
+  tool: t('llc.canvasRules.dimension.tool'),
+}));
+
+function ruleForNode(node: CanvasNode): CanvasNodeRule | null {
+  const facts = orgFacts.value.get(node.id);
+  return facts ? matchRule(activeRuleSet.value, facts) : null;
+}
+
+/** Translated rule name, or the raw data value for a data-derived rule. */
+function ruleLabel(rule: CanvasNodeRule): string {
+  return rule.labelKey ? t(rule.labelKey) : (rule.labelText ?? '');
+}
+
+function nodeRuleLabel(node: CanvasNode): string {
+  const rule = ruleForNode(node);
+  return rule ? ruleLabel(rule) : '';
+}
+
+function nodeRuleId(node: CanvasNode): string | undefined {
+  return ruleForNode(node)?.id;
+}
+
+/** Swatch (colour token) + shape classes for a node; empty for authoring nodes. */
+function ruleClasses(node: CanvasNode): string[] {
+  const rule = ruleForNode(node);
+  return rule ? [`rule-${rule.swatch}`, `rule-shape-${rule.shape}`] : [];
+}
+
 const canvasRef = ref<HTMLElement | null>(null);
 const zoom = ref(1);
 const pan = reactive({ x: 50, y: 50 });
 const isPanning = ref(false);
 const panStart = reactive({ x: 0, y: 0 });
-const dragNode = ref<WorkflowNode | null>(null);
+const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
 const drawingLine = ref(false);
 const lineStart = reactive({ nodeId: '', x: 0, y: 0 });
@@ -292,14 +503,14 @@ function addSwitchNode() {
   emit('node-selected', node.id);
 }
 
-function addCase(node: WorkflowNode) {
+function addCase(node: CanvasNode) {
   const data = node.data as Record<string, unknown>;
   const cases = (data.cases as string[]) || [];
   cases.push('');
   data.cases = cases;
 }
 
-function removeCase(node: WorkflowNode, index: number) {
+function removeCase(node: CanvasNode, index: number) {
   const data = node.data as Record<string, unknown>;
   const cases = (data.cases as string[]) || [];
   cases.splice(index, 1);
@@ -356,7 +567,20 @@ function startPan(e: MouseEvent) {
   if (e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
 }
 
-function startDrag(node: WorkflowNode, e: MouseEvent) {
+/**
+ * #13996: a press on a node used to stop dead here (`@mousedown.stop`), so it
+ * never reached `startPan` on `.canvas-area`. An `org-group` container is
+ * sized to its whole subtree and covers the drawing area, which left the
+ * shift-drag pan the UI advertises working only in the canvas gutters. A pan
+ * gesture is handed on; everything else still starts a node drag.
+ */
+function onNodeMouseDown(node: CanvasNode, e: MouseEvent) {
+  if (e.shiftKey || e.button === 1) return;
+  e.stopPropagation();
+  startDrag(node, e);
+}
+
+function startDrag(node: CanvasNode, e: MouseEvent) {
   dragNode.value = node;
   dragOffset.x = e.clientX - node.position.x * zoom.value - pan.x;
   dragOffset.y = e.clientY - node.position.y * zoom.value - pan.y;
@@ -427,7 +651,71 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
 .workflow-node.switch .node-header { background: var(--wfcanvas-node-switch); }
-.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, var(--wfcanvas-node-vision-from), var(--wfcanvas-node-vision-to)); }
+.workflow-node.org-person .node-header { background: var(--color-info); }
+.workflow-node.org-group { background: var(--color-info-bg); border-style: dashed; cursor: default; }
+.workflow-node.org-group .node-header { background: transparent; color: var(--text-secondary); border-bottom: 1px dashed var(--border-default); }
+.org-title { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); }
+.org-meta { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-tertiary); }
+
+/* GH#13941: one swatch class per rule, each binding a single design token to
+   --rule-accent. The node accent stripe and every marker read the accent from
+   there, so a rule's colour is declared exactly once and never as a literal. */
+.rule-status-active { --rule-accent: var(--color-success); }
+.rule-status-idle { --rule-accent: var(--color-info); }
+.rule-status-paused { --rule-accent: var(--color-warning); }
+.rule-status-error { --rule-accent: var(--color-error); }
+.rule-status-terminated { --rule-accent: var(--color-secondary); }
+.rule-status-unknown { --rule-accent: var(--text-muted); }
+.rule-owner-human { --rule-accent: var(--chart-blue); }
+.rule-owner-agent { --rule-accent: var(--chart-purple); }
+.rule-owner-unassigned { --rule-accent: var(--color-warning); }
+.rule-tool-1 { --rule-accent: var(--chart-1); }
+.rule-tool-2 { --rule-accent: var(--chart-2); }
+.rule-tool-3 { --rule-accent: var(--chart-3); }
+.rule-tool-4 { --rule-accent: var(--chart-4); }
+.rule-tool-5 { --rule-accent: var(--chart-5); }
+.rule-tool-6 { --rule-accent: var(--chart-6); }
+.rule-tool-7 { --rule-accent: var(--chart-7); }
+.rule-tool-8 { --rule-accent: var(--chart-8); }
+.rule-tool-none { --rule-accent: var(--text-muted); }
+
+/* The accent stripe. Selection still reads on the remaining three sides plus
+   the focus ring, so a coloured node never hides which node is selected. */
+/* Must stay AFTER `.workflow-node.selected`: equal specificity (0,2,0), so the
+   inline-start accent wins on source order alone. Move this above it and the
+   stripe silently vanishes on the selected node. */
+.workflow-node.org-person { border-inline-start-width: 6px; border-inline-start-color: var(--rule-accent, var(--border-default)); }
+
+.rule-chip { display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
+.rule-chip-label { white-space: nowrap; }
+.rule-marker { flex: none; width: var(--spacing-2-5); height: var(--spacing-2-5); background: var(--rule-accent, var(--text-muted)); }
+.rule-shape-disc .rule-marker { border-radius: 50%; }
+.rule-shape-ring .rule-marker { border-radius: 50%; background: transparent; border: 2px solid var(--rule-accent, var(--text-muted)); }
+.rule-shape-square .rule-marker { border-radius: var(--radius-default); }
+.rule-shape-diamond .rule-marker { border-radius: var(--radius-default); transform: rotate(45deg); }
+.rule-shape-triangle .rule-marker { background: transparent; width: 0; height: 0; border-inline: 5px solid transparent; border-bottom: 10px solid var(--rule-accent, var(--text-muted)); }
+.rule-shape-bar .rule-marker { height: var(--spacing-1); border-radius: var(--radius-default); }
+
+.rule-mode { display: flex; align-items: center; gap: var(--spacing-1); }
+.rule-mode-label { font-size: var(--text-xs); color: var(--text-tertiary); }
+.rule-mode-btn { padding: var(--spacing-1) var(--spacing-2); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-secondary); font-size: var(--text-xs); cursor: pointer; }
+.rule-mode-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.rule-mode-btn.active { background: var(--bg-tertiary); border-color: var(--color-primary); color: var(--text-primary); }
+.rule-mode-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* max-height: one legend entry per distinct value, so a large company would
+   otherwise grow the box up over the nodes it is explaining. */
+.canvas-legend { position: absolute; bottom: var(--spacing-3); inset-inline-start: var(--spacing-3); max-width: 240px; max-height: 220px; overflow-y: auto; padding: var(--spacing-2) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+.canvas-legend-title { display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--spacing-1); }
+.canvas-legend-items { list-style: none; margin: var(--spacing-0); padding: var(--spacing-0); display: flex; flex-direction: column; gap: var(--spacing-1); }
+.canvas-legend-item { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-secondary); }
+
+.canvas-tabs { display: flex; align-items: center; gap: var(--spacing-1); }
+.canvas-tab { padding: var(--spacing-1-5) var(--spacing-3); background: transparent; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--text-secondary); font-size: var(--text-sm); cursor: pointer; }
+.canvas-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.canvas-tab.active { background: var(--bg-tertiary); border-color: var(--color-primary); color: var(--text-primary); }
+
 .branch-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); margin-top: var(--spacing-1); }
 .branch-true { color: var(--color-success); font-weight: 600; }
 .branch-false { color: var(--color-error); font-weight: 600; }

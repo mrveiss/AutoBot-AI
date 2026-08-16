@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "پروجیکٹ کے تجزیات"
+      },
+      "impact": {
+        "title": "اثر کا تجزیہ",
+        "hint": "کون سی چیز بالواسطہ کسی نوڈ کو کال کرتی ہے — تبدیلی یا حذف سے پہلے دیکھیں۔",
+        "nodeIdPlaceholder": "مثلاً package.module.ClassName",
+        "nodeIdLabel": "گراف نوڈ آئی ڈی",
+        "analyze": "تجزیہ کریں",
+        "analyzing": "تجزیہ جاری…",
+        "notIndexedTitle": "کوڈ گراف نہیں بنایا گیا",
+        "notIndexedBody": "اثر کا تجزیہ کرنے سے پہلے اس ماخذ کو انڈیکس کریں۔",
+        "partialTitle": "جزوی نتیجہ — یہ کم از کم حد ہے",
+        "partialDepth": "چال {depth} گہرائی پر رک گئی، {frontier} نوڈز باقی رہ گئے۔ مزید کالرز ہو سکتے ہیں۔",
+        "partialUnresolved": "{count} کنارے حل نہیں ہو سکے، اس لیے کچھ کالرز غائب ہو سکتے ہیں۔",
+        "callers": "کالرز",
+        "callersAtLeast": "کالرز (کم از کم)",
+        "callersHeading": "پائے گئے کالرز",
+        "edgesResolved": "حل شدہ کنارے",
+        "edgesUnresolved": "غیر حل شدہ کنارے",
+        "depth": "طے شدہ گہرائی",
+        "noCallersTitle": "کوئی کالر نہیں ملا",
+        "noCallersBody": "انڈیکس شدہ گراف میں کوئی چیز اس نوڈ کو کال نہیں کرتی۔",
+        "skippedHeading": "{count} غیر حل شدہ کنارے دکھائیں"
       }
     },
     "patterns": {
@@ -3674,7 +3696,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "آپ کی کمپنی کی آٹومیشن کھولی جا رہی ہے…",
+      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔"
     },
     "runner": {
       "completed": "Completed",
@@ -8190,13 +8214,16 @@
       "title": "Org Chart",
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
-      "empty": "No agents found.",
+      "empty": "کوئی شخص یا ایجنٹ نہیں ملا۔",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
+      "personDetail": "شخص کی تفصیل",
+      "humanNoAgentControls": "ایجنٹ کنٹرولز افراد پر لاگو نہیں ہوتے۔",
       "human": "Human",
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "کردار",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",
@@ -8205,7 +8232,106 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "منظر کا انداز",
+      "viewTree": "درخت",
+      "viewCanvas": "کینوس",
+      "canvasTabAll": "تمام یونٹس",
+      "canvasUnit": "{name} یونٹ",
+      "canvasHint": "پین کرنے کے لیے Shift دبا کر گھسیٹیں، زوم کے لیے اسکرول کریں، تفصیلات کے لیے نوڈ پر کلک کریں۔",
+      "viewPeople": "افراد",
+      "peopleLegend": "افراد کی اقسام",
+      "peopleKind": {
+        "agent": "ایجنٹ",
+        "user": "صارف",
+        "contact": "رابطہ کار"
+      },
+      "peopleKindHint": {
+        "agent": "بھرتی شدہ عمل کار",
+        "user": "اکاؤنٹ رکھنے والا، لاگ اِن کر سکتا ہے",
+        "contact": "عمل کا رابطہ کار، بغیر اکاؤنٹ"
+      },
+      "peopleNoTeam": "کسی ٹیم میں نہیں",
+      "peopleTeamEmpty": "اس ٹیم میں کوئی رکن نہیں۔",
+      "peopleNoTeamsDefined": "اس کمپنی کے لیے کوئی ٹیم متعین نہیں — سب کو ایک ساتھ درج کیا گیا ہے۔",
+      "peopleTeamsUnavailable": "ٹیم کی معلومات اس وقت دستیاب نہیں ہیں — گروپ بندی نامکمل ہو سکتی ہے۔",
+      "peopleUnavailable": "اس کمپنی کے افراد لوڈ نہیں ہو سکے۔ یہ لوڈنگ کا مسئلہ ہے، خالی کمپنی نہیں۔",
+      "peopleTeamsCoverUsersOnly": "ٹیمیں اکاؤنٹ رکھنے والوں پر محیط ہیں۔ ایجنٹ اور رابطہ کار کسی ٹیم سے تعلق نہیں رکھتے۔",
+      "peopleContactNotInHierarchy": "رابطہ کار رپورٹنگ کے درجہ بندی کا حصہ نہیں — ان کا کوئی منتظم، بجٹ یا ہارٹ بیٹ نہیں۔",
+      "peopleEmpty": "اس کمپنی میں ابھی کوئی فرد نہیں۔",
+      "roleLensLabel": "کردار کے مطابق دیکھیں",
+      "roleLensAll": "تمام کردار",
+      "roleLensHint": "صرف ایک ویو فلٹر ہے — یہ تبدیل نہیں کرتا کہ کسی کو کیا رسائی حاصل ہے۔",
+      "roleLensBanner": "ویو فلٹر: {role} — {total} میں سے {shown} نوڈز دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
+      "roleLensEmpty": "ویو فلٹر: اس منظر میں \"{role}\" سے کوئی نوڈ میل نہیں کھاتا۔ رسائی تبدیل نہیں ہوتی — سب کو دیکھنے کے لیے فلٹر صاف کریں۔",
+      "roleLensClear": "فلٹر صاف کریں",
+      "sidebar": {
+        "owner": "مالک",
+        "tools": "اوزار",
+        "toolsNotApplicable": "افراد پر لاگو نہیں ہوتا۔",
+        "notes": "نوٹس",
+        "notesOverview": "جائزہ",
+        "notesChecklist": "چیک لسٹ",
+        "notesOutput": "پیداوار",
+        "attributes": "خصوصیات",
+        "railLabel": "سائیڈبار کے حصے",
+        "railInfo": "معلومات",
+        "railChecklist": "چیک لسٹ",
+        "railCost": "لاگت",
+        "railActivity": "سرگرمی",
+        "railHandoff": "منتقلی",
+        "itemsUnavailable": "آئٹمز لوڈ نہیں ہو سکے۔ یہ لوڈنگ کا مسئلہ ہے، خالی فہرست نہیں۔",
+        "itemsEmpty": "کوئی فعال آئٹم نہیں۔",
+        "itemsNotApplicableHuman": "فی فرد آئٹم کی فہرستیں ابھی دستیاب نہیں ہیں — صرف ایجنٹس کو تفویض کے لحاظ سے فلٹر کیا جا سکتا ہے۔",
+        "outputEmpty": "ابھی تک کوئی مکمل آئٹم نہیں۔",
+        "costTotalTokens": "کل ٹوکنز",
+        "costUsd": "لاگت (USD)",
+        "costUnavailable": "لاگت کا ڈیٹا لوڈ نہیں ہو سکا۔",
+        "costEmpty": "اس ایجنٹ کے لیے ابھی تک کوئی لاگت درج نہیں ہے۔",
+        "costNotApplicableHuman": "لاگت کی نگرانی صرف ایجنٹس پر لاگو ہوتی ہے۔",
+        "activityUnavailable": "سرگرمی لوڈ نہیں ہو سکی۔",
+        "activityEmpty": "اس نوڈ کے لیے ابھی تک کوئی سرگرمی درج نہیں ہے۔",
+        "activityNotApplicableHuman": "فی فرد سرگرمی کی تاریخ ابھی دستیاب نہیں ہے۔",
+        "handoffButton": "انسان کے حوالے کریں",
+        "handoffEmpty": "منتقلی کے لیے کوئی فعال آئٹم نہیں۔",
+        "handoffNotApplicableHuman": "منتقلی صرف ایجنٹس پر لاگو ہوتی ہے۔"
+      }
+    },
+    "executorRollup": {
+      "title": "عمل کنندہ خلاصہ",
+      "totalItems": "{count} کام کے آئٹمز",
+      "unavailable": "عمل کنندہ خلاصہ لوڈ نہیں ہو سکا۔ یہ لوڈنگ کا مسئلہ ہے، صفر کام کے آئٹمز نہیں۔",
+      "empty": "ابھی تک کوئی کام کا آئٹم نہیں۔",
+      "statusColumn": "حیثیت",
+      "class": {
+        "user": "شخص",
+        "agent": "AI ایجنٹ",
+        "orphaned": "بے وارث",
+        "unassigned": "غیر تفویض شدہ"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "کلید",
+      "colourBy": "رنگ بندی بلحاظ",
+      "dimension": {
+        "status": "حیثیت",
+        "owner": "مالک",
+        "tool": "آلہ"
+      },
+      "status": {
+        "active": "فعال",
+        "idle": "بیکار",
+        "paused": "معطل",
+        "error": "خرابی",
+        "terminated": "ختم شدہ",
+        "unknown": "نامعلوم"
+      },
+      "owner": {
+        "unassigned": "غیر تفویض شدہ"
+      },
+      "tool": {
+        "none": "کوئی آلہ نہیں"
+      }
     },
     "goals": {
       "title": "Goal Tree",

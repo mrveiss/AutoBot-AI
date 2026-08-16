@@ -823,6 +823,28 @@
         "codeQuality": "Code Quality",
         "codeGeneration": "Code Generation",
         "ariaLabel": "ניתוחי פרויקט"
+      },
+      "impact": {
+        "title": "ניתוח השפעה",
+        "hint": "מה קורא לצומת באופן טרנזיטיבי — בדוק לפני שינוי או הסרה.",
+        "nodeIdPlaceholder": "לדוגמה package.module.ClassName",
+        "nodeIdLabel": "מזהה צומת בגרף",
+        "analyze": "נתח",
+        "analyzing": "מנתח…",
+        "notIndexedTitle": "גרף הקוד לא נבנה",
+        "notIndexedBody": "בצע אינדוקס למקור זה לפני ניתוח ההשפעה.",
+        "partialTitle": "תוצאה חלקית — זהו חסם תחתון",
+        "partialDepth": "המעבר נעצר בעומק {depth} עם {frontier} צמתים שלא הורחבו. ייתכנו קוראים נוספים.",
+        "partialUnresolved": "לא ניתן היה לפתור {count} קשתות, ולכן ייתכן שחסרים קוראים.",
+        "callers": "קוראים",
+        "callersAtLeast": "קוראים (לפחות)",
+        "callersHeading": "קוראים שנמצאו",
+        "edgesResolved": "קשתות שנפתרו",
+        "edgesUnresolved": "קשתות שלא נפתרו",
+        "depth": "עומק שהושג",
+        "noCallersTitle": "לא נמצאו קוראים",
+        "noCallersBody": "דבר בגרף המאונדקס אינו קורא לצומת זה.",
+        "skippedHeading": "הצג {count} קשתות שלא נפתרו"
       }
     },
     "patterns": {
@@ -3674,7 +3696,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "פותח את האוטומציה של החברה שלך…",
+      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה."
     },
     "runner": {
       "completed": "Completed",
@@ -8190,13 +8214,16 @@
       "title": "Org Chart",
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
-      "empty": "No agents found.",
+      "empty": "לא נמצאו אנשים או סוכנים.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
+      "personDetail": "פרטי אדם",
+      "humanNoAgentControls": "פקדי סוכן אינם חלים על אנשים.",
       "human": "Human",
       "aiAgent": "AI Agent",
       "never": "Never",
       "adapter": "Adapter",
+      "role": "תפקיד",
       "type": "Type",
       "lastHeartbeat": "Last Heartbeat",
       "budget": "Budget",
@@ -8205,7 +8232,106 @@
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "מצב תצוגה",
+      "viewTree": "עץ",
+      "viewCanvas": "קנבס",
+      "canvasTabAll": "כל היחידות",
+      "canvasUnit": "יחידת {name}",
+      "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים.",
+      "viewPeople": "אנשים",
+      "peopleLegend": "סוגי אנשים",
+      "peopleKind": {
+        "agent": "סוכן",
+        "user": "משתמש",
+        "contact": "איש קשר"
+      },
+      "peopleKindHint": {
+        "agent": "מבצע שנשכר",
+        "user": "בעל חשבון, יכול להתחבר",
+        "contact": "איש קשר בתהליך, ללא חשבון"
+      },
+      "peopleNoTeam": "ללא צוות",
+      "peopleTeamEmpty": "אין חברים בצוות הזה.",
+      "peopleNoTeamsDefined": "לא הוגדרו צוותים לחברה הזו — כולם מוצגים יחד.",
+      "peopleTeamsUnavailable": "מידע על צוותים אינו זמין כעת — הקיבוץ עשוי להיות חלקי.",
+      "peopleUnavailable": "לא ניתן היה לטעון את האנשים של חברה זו. זו בעיית טעינה, לא חברה ריקה.",
+      "peopleTeamsCoverUsersOnly": "צוותים מכסים בעלי חשבון. סוכנים ואנשי קשר אינם שייכים לאף צוות.",
+      "peopleContactNotInHierarchy": "אנשי קשר אינם חלק מהיררכיית הדיווח — אין להם מנהל, תקציב או פעימת לב.",
+      "peopleEmpty": "לחברה הזו אין עדיין אנשים.",
+      "roleLensLabel": "הצג לפי תפקיד",
+      "roleLensAll": "כל התפקידים",
+      "roleLensHint": "רק מסנן תצוגה — הוא לא משנה למה למישהו יש גישה.",
+      "roleLensBanner": "מסנן תצוגה: {role} — מציג {shown} מתוך {total} צמתים. הגישה לא משתנה.",
+      "roleLensEmpty": "מסנן תצוגה: אין צמתים התואמים ל-\"{role}\" בתצוגה זו. הגישה לא משתנה — נקה את המסנן כדי לראות את כולם.",
+      "roleLensClear": "נקה מסנן",
+      "sidebar": {
+        "owner": "בעלים",
+        "tools": "כלים",
+        "toolsNotApplicable": "לא רלוונטי לאנשים.",
+        "notes": "הערות",
+        "notesOverview": "סקירה",
+        "notesChecklist": "רשימת בדיקה",
+        "notesOutput": "פלט",
+        "attributes": "מאפיינים",
+        "railLabel": "אזורי סרגל צד",
+        "railInfo": "מידע",
+        "railChecklist": "רשימת בדיקה",
+        "railCost": "עלות",
+        "railActivity": "פעילות",
+        "railHandoff": "העברה",
+        "itemsUnavailable": "לא ניתן היה לטעון את הפריטים. זו בעיית טעינה, לא רשימה ריקה.",
+        "itemsEmpty": "אין פריטים פעילים.",
+        "itemsNotApplicableHuman": "רשימות פריטים לפי אדם אינן זמינות עדיין — ניתן לסנן לפי אחראי רק עבור סוכנים.",
+        "outputEmpty": "אין עדיין פריטים שהושלמו.",
+        "costTotalTokens": "סה\"כ טוקנים",
+        "costUsd": "עלות (דולר)",
+        "costUnavailable": "לא ניתן היה לטעון את נתוני העלות.",
+        "costEmpty": "אין עדיין עלות רשומה עבור סוכן זה.",
+        "costNotApplicableHuman": "מעקב עלויות חל על סוכנים בלבד.",
+        "activityUnavailable": "לא ניתן היה לטעון את הפעילות.",
+        "activityEmpty": "לא נרשמה עדיין פעילות עבור צומת זה.",
+        "activityNotApplicableHuman": "היסטוריית פעילות לפי אדם אינה זמינה עדיין.",
+        "handoffButton": "העבר לאדם",
+        "handoffEmpty": "אין פריטים פעילים להעברה.",
+        "handoffNotApplicableHuman": "ההעברה חלה על סוכנים בלבד."
+      }
+    },
+    "executorRollup": {
+      "title": "סיכום מבצעים",
+      "totalItems": "{count} פריטי עבודה",
+      "unavailable": "לא ניתן היה לטעון את סיכום המבצעים. זו בעיית טעינה, לא אפס פריטי עבודה.",
+      "empty": "אין עדיין פריטי עבודה.",
+      "statusColumn": "סטטוס",
+      "class": {
+        "user": "אדם",
+        "agent": "סוכן בינה מלאכותית",
+        "orphaned": "מיותם",
+        "unassigned": "לא משויך"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "מקרא",
+      "colourBy": "צביעה לפי",
+      "dimension": {
+        "status": "סטטוס",
+        "owner": "בעלים",
+        "tool": "כלי"
+      },
+      "status": {
+        "active": "פעיל",
+        "idle": "במנוחה",
+        "paused": "מושהה",
+        "error": "שגיאה",
+        "terminated": "הופסק",
+        "unknown": "לא ידוע"
+      },
+      "owner": {
+        "unassigned": "לא הוקצה"
+      },
+      "tool": {
+        "none": "אין כלי"
+      }
     },
     "goals": {
       "title": "Goal Tree",

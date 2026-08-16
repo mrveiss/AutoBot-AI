@@ -43,14 +43,22 @@ async def client(tmp_path):
     a.state._test_rid = rid
     a.state._test_sid = sid
 
-    async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
-        # Inject user into request state via middleware shim
-        @a.middleware("http")
-        async def inject_user(request, call_next):
-            request.state.user = SimpleNamespace(id=a.state._user_id)
-            return await call_next(request)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
+            # Inject user into request state via middleware shim
+            @a.middleware("http")
+            async def inject_user(request, call_next):
+                request.state.user = SimpleNamespace(id=a.state._user_id)
+                return await call_next(request)
 
-        yield c
+            yield c
+
+    finally:
+        # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+        # fixture that connects and never closes keeps the interpreter alive after the
+        # suite has passed. Under xdist the execnet worker exits hard and hides it; in a
+        # serial invocation the job hangs until CI cancels it, with no failure to look at.
+        await db.close()
 
 
 @pytest_asyncio.fixture
@@ -71,14 +79,22 @@ async def client_other_user(tmp_path):
     a.state._test_seg_id = seg_id
     a.state._test_note_id = note_id
 
-    async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
+    try:
+        async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
 
-        @a.middleware("http")
-        async def inject_user(request, call_next):
-            request.state.user = SimpleNamespace(id="u2")
-            return await call_next(request)
+            @a.middleware("http")
+            async def inject_user(request, call_next):
+                request.state.user = SimpleNamespace(id="u2")
+                return await call_next(request)
 
-        yield c
+            yield c
+
+    finally:
+        # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+        # fixture that connects and never closes keeps the interpreter alive after the
+        # suite has passed. Under xdist the execnet worker exits hard and hides it; in a
+        # serial invocation the job hangs until CI cancels it, with no failure to look at.
+        await db.close()
 
 
 @pytest.mark.asyncio

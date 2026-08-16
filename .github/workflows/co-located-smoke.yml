@@ -87,13 +87,29 @@ jobs:
           # Hermetic essentials for both test files (no Postgres/Redis needed).
           python -m pip install aiosqlite aiofiles pytest pytest-asyncio httpx python-multipart --prefer-binary
 
+      # #13861: per-STEP timeouts, well under the job's 15 minutes. Without them
+      # a hanging step consumed the whole job budget and GitHub reported
+      # `cancelled` — 20 of 20 runs across seven branches, never once pass or
+      # fail. A cancelled job names no step and carries no verdict, so nobody
+      # could tell which of the two invocations was stuck, or that anything was
+      # wrong at all. A step that exceeds its own timeout FAILS and is named.
+      #
+      # These bound wall clock, they do not fix hangs — the leak behind this one
+      # is fixed in the test fixture. They exist so the next hang is legible.
       - name: (d) transcriber multi-user authz — #9968 IDOR class
+        timeout-minutes: 5
         run: |
           python -m pytest autobot-backend/transcriber/tests/test_multiuser_authz.py -v --tb=short
 
       - name: (c) one-click update self-node selection — #9996 class
         # Separate pytest process: autobot-slm-backend/conftest.py stubs
         # sys.modules globally and must not bleed into the transcriber run.
+        #
+        # `if: !cancelled()` so a failure in (d) no longer hides (c) entirely:
+        # for the week this job was hanging, (c) never executed once, because
+        # the step before it never finished.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
         run: |
           python -m pytest autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py -v --tb=short
 

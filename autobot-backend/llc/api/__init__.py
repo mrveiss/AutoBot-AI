@@ -17,6 +17,7 @@ from .boards import router as boards_router
 from .budget import cost_events_router, costs_by_model_router
 from .budget import router as budget_router
 from .companies import router as companies_router
+from .contacts import router as contacts_router
 from .context import router as context_router
 from .controls import router as controls_router
 from .costs import router as costs_router
@@ -29,6 +30,7 @@ from .labels import router as labels_router
 from .portability import router as portability_router
 from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
+from .roles import router as roles_router
 from .routines import router as routines_router
 from .runs import heartbeat_runs_router
 from .runs import router as runs_router
@@ -36,6 +38,7 @@ from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
+from .workflows import router as workflows_router
 
 # All LLC routes are Postgres-backed, which AutoBot always provides (#10636);
 # single_user mode is retired, so no availability gate is needed (#10202).
@@ -49,11 +52,13 @@ router.include_router(budget_router)
 router.include_router(cost_events_router)
 router.include_router(costs_by_model_router)
 router.include_router(companies_router)
+router.include_router(contacts_router)
 router.include_router(agent_hires_router)
 router.include_router(goals_router)
 router.include_router(health_router)
 router.include_router(secrets_router)
 router.include_router(findings_router)
+router.include_router(roles_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(github_webhooks_router)
@@ -74,6 +79,7 @@ router.include_router(labels_router)
 router.include_router(templates_router)
 router.include_router(agent_hires_router)
 router.include_router(costs_router)
+router.include_router(workflows_router)
 
 
 @router.get("/health")

@@ -50,7 +50,7 @@
           @drop="onDrop(col.id)"
         >
           <div class="column-header">
-            <span class="column-title">{{ col.title }}</span>
+            <span class="column-title">{{ col.name }}</span>
             <span class="column-count">{{ itemsByColumn(col.id).length }}</span>
           </div>
           <div class="column-cards">
@@ -150,8 +150,11 @@ import type { WorkItem } from './workItemTypes'
 
 interface BoardColumn {
   id: string
-  title: string
-  status_mapping: string[]
+  // GH#13993: the board endpoint (`_board_response` in llc/api/boards.py) emits
+  // `name`/`status_filter`, never `title`/`status_mapping`. The old names
+  // rendered a blank header on every column.
+  name: string
+  status_filter: string[]
 }
 
 interface Sprint {
@@ -256,12 +259,14 @@ async function fetchBoard() {
   try {
     const [boardData, sprintData] = await Promise.all([
       api.get<{ columns: BoardColumn[]; sprint: Sprint; burndown: BurndownPoint[] }>(`/api/llc/boards/${boardId.value}`),
-      api.get<{ items: WorkItem[] }>(`/api/llc/boards/${boardId.value}/items`),
+      // GH#13993: the board-items endpoint nests items inside each column —
+      // there is no top-level `items` key. Flatten before storing.
+      api.get<{ columns: Array<{ id: string; items: WorkItem[] }> }>(`/api/llc/boards/${boardId.value}/items`),
     ])
     columns.value = boardData.columns ?? []
     sprint.value = boardData.sprint ?? null
     burndown.value = boardData.burndown ?? []
-    items.value = sprintData.items ?? []
+    items.value = (sprintData.columns ?? []).flatMap(col => col.items ?? [])
   } catch (err) {
     logger.error('Failed to load board', err)
   } finally {

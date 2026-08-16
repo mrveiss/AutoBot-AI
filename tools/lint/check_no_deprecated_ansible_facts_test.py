@@ -104,3 +104,57 @@ if __name__ == "__main__":
     test_multiple_violations_in_one_file()
     test_jinja_template_file()
     print("All tests passed.")
+
+
+# --- #14181: `when:` and friends are Jinja without `{{ }}` --------------------
+
+
+def test_a_deprecated_fact_in_a_when_clause_is_blocked() -> None:
+    """Ansible evaluates `when:` as Jinja with no braces, so the `{{ }}`-anchored
+    pattern could not see it.
+
+    `deploy-base.yml` carried the same fact on the same task in all three forms
+    — two inside `{{ }}` and one in a `when:`. Fixing only the reported two
+    would have moved the ansible-core 2.24 breakage from the template to the
+    conditional while the hook reported the file clean.
+    """
+    body = "      when: hostvars[item]['ansible_default_ipv4']['address'] is defined\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "when.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_other_bare_expression_keys_are_covered() -> None:
+    body = (
+        "      failed_when: ansible_distribution == 'Ubuntu'\n"
+        "      changed_when: ansible_os_family != 'Debian'\n"
+        "      until: ansible_hostname is defined\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "bare.yml", body)
+        assert len(find_violations(f)) == 3
+
+
+def test_inventory_vars_stay_valid_in_a_when_clause() -> None:
+    """`ansible_host`/`ansible_user` are connection vars, not facts.
+
+    Widening the match without keeping the FACT_ATTRS filter would block the
+    inventory vars the migration deliberately left alone — worse than the
+    blind spot it closes.
+    """
+    body = (
+        "      when: hostvars[item]['ansible_host'] is defined\n"
+        "      failed_when: ansible_user != 'root'\n"
+        "      changed_when: ansible_python_interpreter is defined\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "inventory.yml", body)
+        assert find_violations(f) == []
+
+
+def test_a_line_is_not_double_counted_across_both_patterns() -> None:
+    """A `when:` that also contains `{{ }}` must report once, not twice."""
+    body = "      when: \"{{ ansible_distribution }}\" == 'Ubuntu'\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "both.yml", body)
+        assert len(find_violations(f)) == 1

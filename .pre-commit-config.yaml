@@ -154,6 +154,27 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # #14015: every route in a covered package carries a deadline, or is declared
+  # unbounded with a reason. #13602 was an endpoint that held the socket open
+  # past 180s and logged nothing, because bounding was opt-in per call site and
+  # one handler simply had none. Only a check that covers every member by
+  # construction catches an omission.
+  #
+  # pass_filenames: false — the checker walks the covered packages itself, so a
+  # commit touching an unrelated file still validates the whole surface. A
+  # filename-scoped run would pass on the very commit that adds an unbounded
+  # route elsewhere.
+  - repo: local
+    hooks:
+      - id: route-deadlines
+        name: Every covered route carries a deadline (#14015)
+        entry: tools/lint/check_route_deadlines.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Add @bounded(seconds=...) or declare the route in UNBOUNDED_BY_DESIGN"
+
   # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
   # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
   # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production
@@ -213,6 +234,69 @@ repos:
   # file list but added no guard, so the pattern drifted back.
   - repo: local
     hooks:
+      # #14171: core.fileMode=false hides a hook script committed as 100644 --
+      # the working tree stays executable, so the mismatch is invisible on the
+      # machine that introduced it and only breaks a fresh checkout. It has
+      # reached CI twice (#14151's sweep, #14162), and #14181 records the 16
+      # hooks it found already dormant.
+      # #14198: 19 sites fell back to ${AUTOBOT_BROWSER_SERVICE_PORT:-3000} --
+      # Grafana's port, not the browser service's 9001 (#4052). Dead while
+      # lib/ssot-config.sh loads (it assigns the SSOT value with := first), and
+      # live the moment it does not, because every source line is `|| true`.
+      # Bans divergence, not the shape: 145 other fallbacks agree with the SSOT.
+      - id: port-fallbacks-match-ssot
+        name: Shell port fallbacks must agree with the SSOT (#14198)
+        entry: tools/lint/check_port_fallbacks_match_ssot.py
+        language: python
+        files: (\.sh|ssot_config\.py)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
+
+      # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
+      # so pip sees both files as one set and aborts when the same distribution
+      # arrives with different specifiers. openpyxl and python-pptx did exactly
+      # that and killed a live provisioning run. pip reports only the FIRST, so a
+      # one-at-a-time fix moves the failure to the next deploy.
+      - id: requirements-no-conflicting-dupes
+        name: A requirements file and its include must not pin a package differently (#14228)
+        entry: pipeline-scripts/check_requirements_no_conflicting_dupes.py
+        language: python
+        files: requirements.*\.txt$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "pip aborts on a differing duplicate across `-r` includes; identical duplicates are tolerated and not flagged"
+
+      - id: hook-exec-bits
+        name: Pre-commit hook entries must be tracked executable (#14171)
+        entry: pipeline-scripts/check_hook_exec_bits.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^(\.pre-commit-config\.yaml|autobot-infrastructure/shared/config/\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
+
+      # #14216: 14 session/audit reports accumulated at the repository root —
+      # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
+      # and friends. Legitimate work product written to the front door because
+      # that is where the session happened to be. The root is the first screen a
+      # visitor sees, and nothing stopped them landing there. Reports now live in
+      # docs/reports/; this is the stop. Also blocks the MagicMock/ artifact tree
+      # that the #14217 path-sanitizer bug creates on every suite run.
+      - id: no-root-clutter
+        name: Keep session reports and test artifacts out of the repo root (#14216)
+        entry: tools/lint/check_no_root_clutter.py
+        language: python
+        # Trigger on any top-level path, or a MagicMock/ component at any depth
+        # — the artifact tree lands wherever the test process's CWD was, and a
+        # trigger narrower than the check means the check never runs for the
+        # case it was written to catch.
+        files: (^[^/]+$)|(^|/)MagicMock/
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"
+
       - id: no-open-without-encoding
         name: Require encoding= on text-mode open() (#3391 / #13151)
         entry: pipeline-scripts/check_open_encoding.py
@@ -459,6 +543,51 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
 
+  # No tracked symlink entries — mode 120000 checks out as a plain file
+  # under this repo's core.symlinks=false, silently clobbering whatever
+  # real path was there (Issue #14137)
+  - repo: local
+    hooks:
+      - id: no-tracked-symlink
+        name: No Tracked Symlink Entries (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a NEW tracked mode-120000 entry — a symlink materialises as a plain file under core.symlinks=false, silently overwriting whatever real path was there"
+
+  # No tracked path shadows a name in .gitignore's virtualenv section
+  # (Issue #14137) — the other half of how the venv symlink got in
+  - repo: local
+    hooks:
+      - id: no-gitignore-shadow
+        name: No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
+
+  # Shell SSOT library regression guard (#14041)
+  # 23 tracked scripts silently no-op'd for years because they sourced a path
+  # with a wrong directory segment (infrastructure/ instead of
+  # autobot-infrastructure/); the library itself never existed at all. Runs
+  # the library's own bash self-test -- including the "no tracked *.sh file
+  # sources the non-autobot- path" guard -- whenever a shell script changes,
+  # so the wrong path (or a broken library) cannot regrow silently again.
+  - repo: local
+    hooks:
+      - id: ssot-config-lib-guard
+        name: Shell SSOT Library Self-Test (#14041)
+        entry: bash autobot-infrastructure/shared/tests/test_ssot_config_lib.sh
+        language: system
+        files: \.sh$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Sources lib/ssot-config.sh under every known call shape and asserts no tracked *.sh file still points at the wrong infrastructure/ path (#14041)"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
@@ -467,6 +596,19 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
         types: [python, ts, vue]
+        # Generated clients are machine-produced from the OpenAPI schema; a
+        # "hardcoded value" in one is a symptom of the schema, not of code
+        # anyone wrote, so scanning them finds nothing actionable.
+        #
+        # It is also ruinously slow. Measured 2026-08-11 on this hook:
+        #   3 changed .py files ........  3.7s
+        #   generated/api.ts alone .....  >240s (173,665 lines, timed out)
+        # Every PR that touches an API response model regenerates that file,
+        # which drags it into the changed set and turns `code-quality` — a
+        # REQUIRED check — into a 40-70 minute job. Observed on #13976.
+        #
+        # Same pattern the line-length hook above already uses.
+        exclude: ^(.*(_generated|generated)/)
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"

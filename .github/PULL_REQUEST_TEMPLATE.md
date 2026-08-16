@@ -24,6 +24,19 @@
 <!-- Closes #N or related #N -->
 Closes #
 
+## Changelog fragment
+<!-- Carried here from the duplicate template removed in #14156. The release
+     workflow compiles changelog/unreleased/*.md into the per-version file
+     (.github/workflows/release.yml, strategy B, #1296), so this is a live
+     process and this was the only place a PR author was prompted about it.
+
+     Copy changelog/unreleased/TEMPLATE.md, rename it to {issue}-{slug}.md,
+     fill in the frontmatter and description, and commit it with this PR.
+
+     Skip only for: docs-only changes, internal refactors, CI fixes, and
+     dependency bumps with no behaviour change. -->
+- [ ] Added `changelog/unreleased/{issue}-{slug}.md` — or N/A (internal change)
+
 ## Checklist
 - [ ] Code follows AutoBot patterns from `CLAUDE.md`
 - [ ] Tests added or updated (or N/A with reason)

@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from utils.file_categorization import FILE_CATEGORY_CODE, SKIP_DIRS
+from utils.file_categorization import FILE_CATEGORY_CODE
 from utils.file_categorization import get_file_category as _get_file_category
+from utils.file_categorization import is_skipped_path
 
 from .analyzers import (
     analyze_documentation_file,
@@ -119,7 +120,7 @@ async def _process_single_file(
     is_file = await run_in_thread_fn(file_path.is_file)
     if not is_file:
         return False, False
-    if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+    if is_skipped_path(file_path, root_path_obj):  # #13602: relative to the scan root
         return False, False
 
     extension = file_path.suffix.lower()

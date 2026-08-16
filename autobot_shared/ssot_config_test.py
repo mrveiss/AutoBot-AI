@@ -597,3 +597,101 @@ class TestCheckoutRootDetection:
         assert not (inner / ".env").exists()
 
         assert resolve_project_root(inner / "autobot_shared" / "mod.py") == inner
+
+
+class TestPathConfigLazyDefaults:
+    """#14050: base_dir and code_source_dir now resolve lazily via
+    project_root() instead of freezing "/opt/autobot" as an import-time
+    literal.
+
+    ``PathConfig`` is the canonical SSOT config, so its defaults are what
+    every consumer inherits when no ``AUTOBOT_*`` override is set. A frozen
+    literal here silently outranked #13149's module-level fixes elsewhere.
+    """
+
+    def test_base_dir_resolves_to_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.base_dir == str(project_root())
+        assert not cfg.base_dir.startswith("/opt/autobot")
+
+    def test_base_dir_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        """Only the *unset* case changes — a deployment setting AUTOBOT_BASE_DIR
+        must resolve exactly as it did before this fix."""
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_BASE_DIR", "/opt/autobot")
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.base_dir == "/opt/autobot"
+
+    def test_code_source_dir_resolves_to_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_CODE_SOURCE", raising=False)
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.code_source_dir == str(project_root())
+        assert not cfg.code_source_dir.startswith("/opt/autobot")
+
+    def test_code_source_dir_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_CODE_SOURCE", "/opt/autobot/code_source")
+
+        cfg = PathConfig(_env_file=None)
+
+        assert cfg.code_source_dir == "/opt/autobot/code_source"
+
+
+class TestAuditLogFileLazyDefault:
+    """#14050: MiscConfig.audit_log_file is the field security_layer.py's own
+    project_root()-derived fallback (#13149) was silently overridden by —
+    ``_resolve_audit_log_file()`` only ever reaches its fallback when
+    ``config.audit_log_file`` is falsy, and a hardcoded "/opt/autobot/..."
+    default here was never falsy.
+    """
+
+    def test_resolves_under_the_checkout_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.paths import project_root
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
+
+        cfg = MiscConfig(_env_file=None)
+
+        assert cfg.audit_log_file == str(project_root() / "logs" / "audit.log")
+        assert not cfg.audit_log_file.startswith("/opt/autobot")
+
+    def test_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.setenv("AUTOBOT_AUDIT_LOG_FILE", "/opt/autobot/logs/audit.log")
+
+        cfg = MiscConfig(_env_file=None)
+
+        assert cfg.audit_log_file == "/opt/autobot/logs/audit.log"
+
+
+class TestNoHardcodedLiveInstallLiterals:
+    """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default literal may
+    return to this file. A regex over the source, not an import-time check,
+    so it also catches new fields nobody wrote a dedicated test for."""
+
+    def test_no_field_default_hardcodes_the_live_install(self) -> None:
+        import re
+
+        from autobot_shared import ssot_config
+
+        source = Path(ssot_config.__file__).read_text(encoding="utf-8")
+        offenders = re.findall(r'default(?:_factory)?\s*=\s*"[^"]*/opt/autobot[^"]*"', source)
+
+        assert offenders == [], f"hardcoded /opt/autobot Field default(s) found: {offenders}"

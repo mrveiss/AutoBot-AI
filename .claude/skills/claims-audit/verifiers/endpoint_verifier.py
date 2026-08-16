@@ -4,7 +4,7 @@
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .base import (
@@ -43,7 +43,7 @@ class EndpointVerifier(BaseVerifier):
                 status=VerificationStatus.MANUAL,
                 confidence=VerificationConfidence.LOW,
                 notes="Could not extract endpoint path from claim",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
         # Search for endpoint definition in codebase
@@ -58,7 +58,7 @@ class EndpointVerifier(BaseVerifier):
                 evidence_content=search_results.get("match"),
                 method=f"grep -r '{endpoint}' --include='*.py'",
                 notes=f"Endpoint {endpoint} found in router definition",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
         else:
             # Endpoint not found
@@ -67,7 +67,7 @@ class EndpointVerifier(BaseVerifier):
                 confidence=VerificationConfidence.HIGH,
                 method=f"grep -r '{endpoint}' --include='*.py'",
                 notes=f"Endpoint {endpoint} not found in codebase",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
     def _extract_endpoint(self, text: str) -> Optional[str]:

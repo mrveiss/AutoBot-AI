@@ -132,7 +132,10 @@ class TestDocumentPipelinePdf:
     @pytest.mark.asyncio
     async def test_pdf_extraction_success(self):
         pipe = DocumentPipeline()
-        result = await pipe._process_impl(_make_input(_make_pdf(["page content"]), "application/pdf"))
+        # Long enough to clear the #13884 per-page character floor — a
+        # single short word would (correctly) score like a stamped scan.
+        page_text = "page content: a full paragraph of real prose for the pipeline test"
+        result = await pipe._process_impl(_make_input(_make_pdf([page_text]), "application/pdf"))
         data = result.result_data
 
         assert data["format"] == "pdf"

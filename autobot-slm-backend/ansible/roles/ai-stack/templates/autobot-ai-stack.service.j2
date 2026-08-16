@@ -5,6 +5,19 @@
 Description=AutoBot AI Processing Stack (LangChain/LlamaIndex Agent Router)
 After=network.target autobot-chromadb.service
 Wants=autobot-chromadb.service
+# #4090: these live in [Unit], NOT [Service]. systemd's own verdict on the
+# wrong placement is "Unknown key name 'StartLimitIntervalSec' in section
+# 'Service', ignoring" — so the fix merged for #4090 was discarded on every unit
+# and chromadb still reached NRestarts=4399 while showing `activating`, never
+# `failed`. That is the exact outage #4090 exists to make visible.
+#
+# Without them a unit that can never exec restarts forever and stays out of
+# `systemctl --failed`. systemd's defaults do not help: DefaultStartLimitIntervalSec=10s
+# with DefaultStartLimitBurst=5 needs 5 restarts inside 10s, and RestartSec spaces
+# them further apart, so the rate never reaches the limit. The window must exceed
+# RestartSec * StartLimitBurst for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -20,15 +33,6 @@ EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 ExecStart={{ backend_install_dir | default('/opt/autobot/autobot-backend') }}/venv/bin/uvicorn ai_api_server:app --host {{ ai_host }} --port {{ ai_port }} --workers 2
 Restart=always
 RestartSec=10
-# #4090: without these, a unit that can never exec restarts forever and stays
-# out of `systemctl --failed`, so the one thing an operator checks cannot see it
-# (chromadb: 1681 restarts over ~4h45m, invisible). systemd's OWN defaults do not
-# help — DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
-# restarts inside 10s, and RestartSec spaces them further apart than that, so the
-# rate never reaches the limit. The window has to be wider than
-# RestartSec * StartLimitBurst for the limit to be reachable at all.
-StartLimitIntervalSec=120
-StartLimitBurst=5
 StandardOutput=append:{{ ai_log_dir }}/ai-stack.log
 StandardError=append:{{ ai_log_dir }}/ai-stack-error.log
 

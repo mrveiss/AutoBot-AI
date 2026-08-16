@@ -76,4 +76,4 @@ jobs:
           echo "Reduce duplication (extract shared modules / shims) or, if the new"
           echo "duplication is unavoidable and justified, raise THRESHOLD in"
           echo ".github/workflows/duplication-guard.yml with a documented reason."
-          echo "See DEDUP_REPORT.md and the dedup methodology in #9794."
+          echo "See docs/reports/DEDUP_REPORT.md and the dedup methodology in #9794."

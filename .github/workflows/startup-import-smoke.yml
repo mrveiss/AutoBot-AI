@@ -98,6 +98,23 @@ jobs:
             exit 1
           }
 
+      # #14035: this is the only CI job that runs `pip install -e autobot_shared`
+      # (the sharded python-suite job relies on pytest.ini's `pythonpath =`
+      # instead), so it is the only place a broken editable-install mapping can
+      # actually be caught. The guard skips itself everywhere else.
+      - name: Run editable-install packaging guard
+        run: |
+          python -m pytest autobot_shared/editable_install_layout_test.py -v --tb=short || {
+            echo ""
+            echo "autobot_shared editable-install packaging guard FAILED (#14035)."
+            echo ""
+            echo "The editable finder is registering autobot_shared's submodules"
+            echo "as top-level names instead of (or in addition to) autobot_shared"
+            echo "itself. Check autobot_shared/pyproject.toml's"
+            echo "[tool.setuptools]/[tool.setuptools.packages.find] config."
+            exit 1
+          }
+
       # #13041: this guard has stdlib-only deps (ast/pathlib — no imports of
       # backend modules) and was never collected by any CI workflow, letting
       # the raw-ClientSession ceiling silently regress 12->13 unnoticed. This

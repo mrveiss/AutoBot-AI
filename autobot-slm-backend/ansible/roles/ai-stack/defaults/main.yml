@@ -72,3 +72,19 @@ ai_sentiment_analysis_model: "gemma2:2b"
 ai_llm_failsafe_model: "phi3:mini"
 # System tier (dolphin-llama3:8b)
 ai_system_commands_model: "dolphin-llama3:8b"
+
+# #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
+#
+# This default is the role's OWN name, and it is a FAIL-SAFE FLOOR, not the
+# answer. It decides only what happens when this role is applied alone with no
+# vars layer loaded — `api/setup_wizard.py::_generate_dynamic_inventory()` writes
+# a bare temp inventory with no group_vars sibling and no role_active_facts
+# include, so the "Setup AI Stack Node" action resolves nothing but these
+# defaults. A shared default of one role's name means that host deploys NO unit
+# at all, which is worse than the flip this issue fixes.
+#
+# The real decision is one precedence level up: `chromadb_service_owner` in
+# group_vars/all.yml hands a combined host to the db stack, because ChromaDB is
+# a database and that is the only role that installs it. On an ai-stack-only
+# host the ai-stack role installs chromadb itself, so owning it there is correct.
+chromadb_service_owner: "ai-stack"

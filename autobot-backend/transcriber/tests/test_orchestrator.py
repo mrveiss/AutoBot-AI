@@ -53,8 +53,15 @@ async def client(tmp_path):
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c
+    finally:
+        # #13861: the `db` fixture above closes its connection; this one
+        # did not, and aiosqlite's worker thread is non-daemon — so the
+        # whole directory hung in a serial run even though every file
+        # passed on its own.
+        await _db.close()
 
 
 # ── helper ────────────────────────────────────────────────────────────────────

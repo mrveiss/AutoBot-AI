@@ -136,8 +136,12 @@ REGISTRY: list[ScheduledJob] = [
             "Distils conversations finished since the last run into proposed skills "
             "(SkillExtractor -> SkillProposer). Leader-elected so N workers do not each "
             "propose the same skill; cursor advances only after a proposal returns. "
-            "Interval defaults to 3600 s; gated off by default behind "
-            "AUTOBOT_SKILL_DISTILLATION_ENABLED. Wired in lifespan.py (GH#12809)."
+            "Interval defaults to 3600 s and remains the backstop, but since #13695 a pass "
+            "also runs early once the chat corpus has been quiet for "
+            "AUTOBOT_SKILL_DISTILLATION_IDLE_FLUSH_S (default 900 s) and work is pending — "
+            "so the effective cadence is at most one extra pass per idle window, not hourly. "
+            "Gated off by default behind AUTOBOT_SKILL_DISTILLATION_ENABLED. "
+            "Wired in lifespan.py (GH#12809)."
         ),
         startup_marker="_init_skill_distillation_scheduler",
         # Ships off: an hourly pass costs real LLM tokens, so it is opt-in (GH#12809).

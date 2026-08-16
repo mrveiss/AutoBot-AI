@@ -62,7 +62,11 @@
     # ChromaDB always runs on the same host as AI Stack.
     # On WSL2: use 127.0.0.1 when ai-stack is co-located on this node,
     # otherwise mirror backend_ai_stack_host (already WSL2-adjusted above).
-    backend_chromadb_host: "{{ '127.0.0.1' if ('ai-stack' in node_roles | default([])) else backend_ai_stack_host }}"
+    # #14181: was `'ai-stack' in node_roles` -- the deprecated short form
+    # (#7053). role_ai_stack_active is the shared fact the rule prefers: it
+    # already ORs the short form, the canonical `autobot-ai-stack`, and the
+    # ai_stack/aiml inventory groups, so this gate widens rather than narrows.
+    backend_chromadb_host: "{{ '127.0.0.1' if (role_ai_stack_active | default(false) | bool) else backend_ai_stack_host }}"
   when:
     - _proc_version.content is defined
     - (_proc_version.content | b64decode | lower) is search('microsoft')
@@ -539,6 +543,17 @@
         - "--exclude=*.pyc"
         - "--exclude=.git"
         - "--exclude=archives"
+        # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+        # services/deploy_artifacts.py (#14231). Anchored entries cannot match
+        # anything here, and cost nothing -- carrying the whole vocabulary is what
+        # keeps the delete-style syncs from disagreeing with each other again.
+        - "--exclude=.env"
+        - "--exclude=.env.*"
+        - "--exclude=data"
+        - "--exclude=logs"
+        - "--exclude=/config/"
+        - "--exclude=/.deployed_commit"
+        - "--exclude=/ansible/enroll.yml"
     tags: ['backend', 'deploy']
 
   # Issue #10020: backend_install_dir/autobot_shared is now a symlink to

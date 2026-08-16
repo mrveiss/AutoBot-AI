@@ -20,7 +20,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
 from ..kb.handoff_brief import HandoffBriefGenerator
-from ..models.enums import ActivityEventType, WorkItemStatus
+from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
 
@@ -107,7 +107,7 @@ class HandoffService(LLCServiceBase):
             "kb_indexed": bool(kb_doc_ids),
         }
         item.status = WorkItemStatus.READY
-        item.assignee_type = "agent"
+        item.assignee_type = AssigneeType.AGENT.value
         item.assignee_agent_id = uuid.UUID(target_agent_id)
         item.assignee_user_id = None
         item.checkout_run_id = None
@@ -156,7 +156,7 @@ class HandoffService(LLCServiceBase):
         item.status = WorkItemStatus.IN_REVIEW
         item.reviewer_user_id = uuid.UUID(reviewer_user_id)
         item.review_brief = brief
-        item.assignee_type = "user"
+        item.assignee_type = AssigneeType.USER.value
         item.assignee_agent_id = None
         item.assignee_user_id = uuid.UUID(reviewer_user_id)
         item.checkout_run_id = None
@@ -267,7 +267,7 @@ class HandoffService(LLCServiceBase):
         item.status = WorkItemStatus.IN_PROGRESS
         item.reviewer_user_id = None
         item.review_brief = None
-        item.assignee_type = "agent" if return_to_agent_id else None
+        item.assignee_type = AssigneeType.AGENT.value if return_to_agent_id else None
         item.assignee_agent_id = uuid.UUID(return_to_agent_id) if return_to_agent_id else None
         item.assignee_user_id = None
         item.version += 1
@@ -317,7 +317,7 @@ class HandoffService(LLCServiceBase):
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
         holder_user_id = str(item.assignee_user_id) if item.assignee_user_id else None
-        if item.assignee_type != "user" or holder_user_id != user_id:
+        if item.assignee_type != AssigneeType.USER.value or holder_user_id != user_id:
             raise HandoffNotAuthorized(
                 f"User {user_id} does not hold work item {work_item_id} (current holder: {holder_user_id!r}, type: {item.assignee_type!r})"  # noqa: E501
             )
@@ -411,7 +411,7 @@ class HandoffService(LLCServiceBase):
                 entity_type="work_item",
                 entity_id=work_item_id,
                 after={
-                    "assignee_type": "agent",
+                    "assignee_type": AssigneeType.AGENT.value,
                     "assignee_agent_id": target_agent_id,
                     "status": WorkItemStatus.READY.value,
                     "has_human_handoff_context": True,

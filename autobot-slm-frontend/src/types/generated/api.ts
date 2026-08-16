@@ -8741,12 +8741,18 @@ export interface components {
         FileDriftReport: {
             /** Checked At */
             checked_at: string;
+            /** Deploy In Progress */
+            deploy_in_progress?: boolean | null;
+            /** Deploy State Reason */
+            deploy_state_reason?: string | null;
             /** Deployed Dir */
             deployed_dir: string;
             /** Drift Detected */
             drift_detected: boolean;
             /** Drifted Files */
             drifted_files: components["schemas"]["DriftedFile"][];
+            /** Last Completed Play At */
+            last_completed_play_at?: string | null;
             /** Source Dir */
             source_dir: string;
             /** Total Compared */

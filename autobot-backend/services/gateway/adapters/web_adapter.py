@@ -22,6 +22,8 @@ class WebAdapter(BaseAdapter):
     async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert web message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
+        message_id = str(raw_message.get("message_id") or "")
+        metadata["message_id"] = message_id
         metadata["session_id"] = raw_message.get("session_id")
         metadata["user_agent"] = raw_message.get("user_agent")
 
@@ -32,6 +34,7 @@ class WebAdapter(BaseAdapter):
             message=raw_message["message"],
             timestamp=float(raw_message.get("timestamp", 0)),
             metadata=metadata,
+            message_id=message_id,
         )
 
     async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:

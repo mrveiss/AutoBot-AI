@@ -23,7 +23,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
@@ -112,32 +112,54 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
 
     cancel_token = threading.Event()
     _duplicate_scan_cancel = cancel_token
+    released = False
+    # Issue #1233: Use dedicated analytics executor to prevent
+    # default thread pool starvation
+    future = asyncio.get_running_loop().run_in_executor(
+        get_analytics_executor(),
+        lambda: DuplicateCodeDetector(
+            project_root=project_root,
+            min_similarity=min_similarity,
+            cancel_token=cancel_token,
+        ).run_analysis(),
+    )
     try:
-        # Issue #1233: Use dedicated analytics executor to prevent
-        # default thread pool starvation
-        analysis = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                lambda: DuplicateCodeDetector(
-                    project_root=project_root,
-                    min_similarity=min_similarity,
-                    cancel_token=cancel_token,
-                ).run_analysis(),
-            ),
-            timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
-        )
+        analysis = await asyncio.wait_for(asyncio.shield(future), timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
+        _duplicate_scan_lock.release()
+        released = True
         return analysis
     except asyncio.TimeoutError:
         # The executor thread survives this cancellation — signal it to stop, or
         # it keeps scanning for a result that is already discarded (#12779).
         cancel_token.set()
+        # #13602: hold the lock until that thread actually exits. Releasing it
+        # here let the next poll queue a second full scan while the first was
+        # still running, so abandoned scans stacked up — the accumulation #12779
+        # set out to stop. The token above is what makes this bounded rather
+        # than a permanent block: the thread now checks it in its long phases.
+        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        released = True
         logger.warning(
-            "Duplicate detection timed out after %d seconds — signalled the " "orphaned scan to stop",
+            "Duplicate detection timed out after %d seconds — signalled the "
+            "orphaned scan to stop and holding the single-flight lock until it does",
             AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return None
+    except asyncio.CancelledError:
+        # #13602: CancelledError is NOT TimeoutError, so it skipped the handler
+        # above and fell to `finally`, releasing the lock with the token never
+        # set — and the shield guarantees the orphan keeps burning an executor
+        # thread. That is the accumulation both #12779 and this change exist to
+        # close, reachable via uvicorn graceful shutdown and via any outer
+        # deadline tighter than this one. Same treatment as a timeout.
+        cancel_token.set()
+        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        released = True
+        logger.warning("Duplicate detection cancelled — signalled the orphaned scan to stop")
+        raise
     finally:
-        _duplicate_scan_lock.release()
+        if not released:
+            _duplicate_scan_lock.release()
 
 
 def _convert_analysis_to_result(analysis, project_root: str) -> dict:
@@ -374,6 +396,7 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
 
 
 @router.get("/duplicates")
+@bounded(180.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
@@ -520,6 +543,7 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
 
 
 @router.get("/config-duplicates")
+@bounded(180.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_config_duplicates",
@@ -581,6 +605,7 @@ async def detect_config_duplicates_endpoint(
 
 
 @router.get("/duplicates/cached")
+@bounded(180.0)
 async def get_cached_duplicate_result(source_id: str = ""):
     """Return the latest completed duplicate analysis result (#1540)."""
     cached = await get_latest_task_result(_REDIS_PREFIX)
@@ -595,6 +620,7 @@ async def get_cached_duplicate_result(source_id: str = ""):
 
 
 @router.post("/duplicates/analyze")
+@bounded(180.0)
 async def start_duplicate_analysis():
     """Enqueue duplicate analysis as a Celery task (GH#6505)."""
     result = run_duplicate_analysis.delay()
@@ -603,6 +629,7 @@ async def start_duplicate_analysis():
 
 
 @router.get("/duplicates/status/{task_id}")
+@bounded(180.0)
 async def get_duplicate_status(task_id: str):
     """Get duplicate analysis task status."""
     status = celery_result_to_status(AsyncResult(task_id))
@@ -612,6 +639,7 @@ async def get_duplicate_status(task_id: str):
 
 
 @router.post("/duplicates/tasks/clear-stuck")
+@bounded(180.0)
 async def clear_stuck_dup_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):

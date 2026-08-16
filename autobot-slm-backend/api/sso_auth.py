@@ -473,8 +473,13 @@ async def saml_slo_callback(
                 error_message=str(exc),
             )
             await audit_db.commit()
-        except Exception:
-            pass
+        except Exception as audit_err:
+            # #13849: this was `pass`. Losing the audit record for a FAILED SLO
+            # attempt is bad; losing the fact that it was lost is worse — absence
+            # of evidence reads as evidence of absence during a review. Every
+            # other audit-write handler in this file logs it, including the SLO
+            # SUCCESS path directly below.
+            logger.warning("SAML SLO audit write failed: %s", audit_err)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="SAML SLO validation failed") from exc
 
     try:

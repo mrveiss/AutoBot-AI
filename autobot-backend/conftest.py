@@ -127,9 +127,21 @@ for _chromadb_mod in [
     "chromadb.config",
     "chromadb.telemetry",
     "chromadb.telemetry.opentelemetry",
+    # #13920: production code catches chromadb.errors.NotFoundError to tell
+    # "this collection does not exist" from every other failure. Without this
+    # entry the stub has no such submodule and the import raises inside the
+    # method under test.
+    "chromadb.errors",
 ]:
     if _chromadb_mod not in sys.modules:
         sys.modules[_chromadb_mod] = _make_pkg_stub(_chromadb_mod)
+
+# The exceptions on the stub must be REAL classes: a MagicMock attribute is not
+# a valid `except` target, so a stubbed-out error type turns a handled absence
+# into a TypeError at the catch site (#13920). Named to match chromadb's own.
+if not isinstance(getattr(sys.modules["chromadb.errors"], "NotFoundError", None), type):
+    _stub_not_found = type("NotFoundError", (Exception,), {})
+    sys.modules["chromadb.errors"].NotFoundError = _stub_not_found
 
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.
@@ -972,6 +984,39 @@ if "code_intelligence.shared" not in sys.modules:
 _real_load_and_bind(
     "code_intelligence.shared.scoring",
     backend_root / "code_intelligence" / "shared" / "scoring.py",
+)
+
+# code_intelligence.fingerprinting.* real-load (#13509) — services/knowledge/code_indexer.py
+# imports compute_graph_shape_fingerprint/shape_matches to decide whether a changed file
+# produced the same graph nodes/edges (skip re-embedding) or a different shape (rebuild).
+#
+# Real-loaded rather than stubbed, and the distinction is the whole point: a MagicMock
+# compute_graph_shape_fingerprint returns a Mock, shape_matches rejects it as a non-str,
+# and every file re-embeds. That is the correct fail-open, so the stub produces a GREEN
+# test suite for a feature that never once ran — the saving under test is invisible.
+#
+# graph_shape is stdlib-only (hashlib, typing) plus logging_manager, so this bypasses
+# code_intelligence/__init__ exactly like diff and scoring above.
+# NOTE: a `_make_pkg_stub` here would be wrong — its ``__path__`` is empty, so the package
+# would stop resolving its OTHER submodules and code_fingerprinting's real-load would die on
+# `code_intelligence.fingerprinting.detector`. The real directory is used instead, which keeps
+# every sibling importable while graph_shape is the only leaf executed eagerly.
+if "code_intelligence.fingerprinting" not in sys.modules:
+    _fp_pkg = types.ModuleType("code_intelligence.fingerprinting")
+    _fp_pkg.__path__ = [str(backend_root / "code_intelligence" / "fingerprinting")]
+    _fp_pkg.__package__ = "code_intelligence.fingerprinting"
+    sys.modules["code_intelligence.fingerprinting"] = _fp_pkg
+    # The namespace bind is load-bearing, same as in code_intelligence/conftest.py:
+    # `import code_intelligence.fingerprinting.X as m` binds via getattr on the PARENT,
+    # not via sys.modules. Without this, that walks the code_intelligence stub's catch-all
+    # __getattr__ and hands back a MagicMock, while `from ... import f` in the same file
+    # resolves through sys.modules to the real function — two different objects, so
+    # monkeypatching the module has no effect on the function under test.
+    if "code_intelligence" in sys.modules:
+        sys.modules["code_intelligence"].fingerprinting = _fp_pkg
+_real_load_and_bind(
+    "code_intelligence.fingerprinting.graph_shape",
+    backend_root / "code_intelligence" / "fingerprinting" / "graph_shape.py",
 )
 
 # code_intelligence.shared.process_offload real-load (#12866) — api/code_intelligence.py

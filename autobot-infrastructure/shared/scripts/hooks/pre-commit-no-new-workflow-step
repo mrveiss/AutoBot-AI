@@ -35,14 +35,17 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files).
 # This hook reads `git diff --cached -U0` (line-level diff) rather than a file
 # list, so get_staged_files isn't applicable; only colors are reused.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 EXEMPT_PATHS=(
     "autobot_shared/workflow/types.py"
@@ -115,7 +118,12 @@ main() {
         fi
         echo -e "  ${RED}VIOLATION${NC} ${path}:${lineno}"
         echo "    ${text}"
-        ((count++))
+        # GH#14151: `((count++))` evaluates to the PRE-increment value —
+        # 0 on the very first violation — and a bare `((expr))` compound
+        # command that evaluates to 0 returns exit status 1. Under
+        # `set -e` that aborted the script on the FIRST violation found,
+        # before the "COMMIT BLOCKED" summary ever printed.
+        count=$((count + 1))
     done <<< "$violations"
 
     echo ""

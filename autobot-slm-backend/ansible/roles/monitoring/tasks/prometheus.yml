@@ -55,14 +55,12 @@
     group: "{{ prometheus_group }}"
   when: not _prometheus_binary.stat.exists
 
-- name: Create Prometheus config
-  ansible.builtin.template:
-    src: prometheus.yml.j2
-    dest: "{{ prometheus_config_dir }}/prometheus.yml"
-    owner: "{{ prometheus_user }}"
-    group: "{{ prometheus_group }}"
-    mode: "0644"
-  notify: Restart prometheus
+# Topology detection and the config render live in their own file so the same
+# tasks can run again after the fleet roles exist (#14337). In this play they
+# run before the backend role has been provisioned at all, so on a first-ever
+# run the decision they make is based on a host that has no backend on it yet.
+- name: "Prometheus | Resolve the scrape topology and write the config"
+  ansible.builtin.include_tasks: prometheus_config.yml
 
 # #12460: the alert rules live in the repo under autobot-monitoring/ and were
 # never installed, so `rule_files` had nothing to point at on a fleet host.

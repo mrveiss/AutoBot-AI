@@ -195,6 +195,12 @@ class SessionListingMixin:
                 "createdTime": created_time,
                 "updatedAt": last_modified,
                 "lastModified": last_modified,
+                # #13948: the ISO fields above are naive LOCAL time, so during a
+                # DST fallback two different instants render as the same hour and
+                # neither sorts nor compares reliably. The raw mtime is the
+                # unambiguous ordering key; consumers that must not skip a session
+                # use this, not the strings.
+                "updatedAtEpoch": stat.st_mtime,
                 "isActive": False,
                 "fileSize": file_size,
                 "fast_mode": True,
@@ -304,6 +310,7 @@ class SessionListingMixin:
             "createdTime": created_time,
             "updatedAt": last_modified,
             "lastModified": last_modified,
+            "updatedAtEpoch": stat.st_mtime,  # #13948, as above
             "isActive": False,
             "fileSize": stat.st_size,
             "fast_mode": True,

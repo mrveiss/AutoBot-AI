@@ -13,28 +13,175 @@
 # Intentional exceptions:
 # - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
 # - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
-# - Lines with "# noqa: print" or "// noqa: console" comments
+# - Lines with "# noqa: print" or "// noqa: console" comments — for a
+#   multi-line call this is recognised on any line from the opening
+#   "print("/"console.*(" through its closing paren (#14051). Every
+#   candidate line is normalized first via lib/strip-significant.awk —
+#   string/template/regex-literal BODIES and (for balance tracking) the
+#   trailing comment are stripped, so punctuation living inside a string
+#   argument or a comment cannot masquerade as call structure or as a
+#   suppression (#14051 review round 2: the original scan compared a
+#   stripped opening line against RAW candidate lines, which a comment's or
+#   a regex literal's stray '(' — or a noqa-shaped string of characters
+#   inside a string argument — could fool).
+#   Both opening- and closing-line placement are black-stable for a call
+#   that is genuinely multi-line (its collapsed single-line form would
+#   exceed the 120-char limit, so black has no reason to touch it). What is
+#   NOT stable: manually collapsing a wrapped call onto one line just to
+#   attach the comment — if that collapsed line is still over 120 chars,
+#   `black` re-splits it right back onto the closing-paren line regardless
+#   of where the comment started.
+#   Note: the doctor.py calls that motivated #14051 all carry their noqa on
+#   the OPENING line, which the pre-#14051 hook already honoured — the CI
+#   failure there was the *unscoped* wrapper blaming a PR for pre-existing
+#   violations elsewhere in the file, fixed by --changed-lines-only, not by
+#   this recognition change.
 # - ansible/ (deployed copies with doctest examples)
 #
 # Issue: #1082 - Pre-commit hooks not blocking print/console violations
+# Issue: #14051 - multi-line noqa recognition + changed-lines scoping (CI wrapper)
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 VIOLATIONS=0
+
+# Normalize a line via lib/strip-significant.awk — see that file for the
+# per-language rules and the keep_comment contract. `sq` is passed in rather
+# than embedded so this invocation never has to quote a literal single quote.
+# Deliberately does NOT try to `exit` here on awk failure: every call site
+# captures this function's output via command substitution, which runs it in
+# a SUBSHELL — an exit inside would only end that subshell, silently
+# returning empty output to the caller instead of the intended hard stop.
+# The actual enforcement is _self_test_strip_significant below.
+_strip_significant() {
+    local lang="$1" keep_comment="$2" line="$3"
+    awk -v lang="$lang" -v keep_comment="$keep_comment" -v sq="'" \
+        -f "$SCRIPT_DIR/lib/strip-significant.awk" <<< "$line"
+}
+
+# One-shot startup check (#14051 review round 3, finding 4): a missing or
+# unparseable strip-significant.awk must not read as "line is empty, nothing
+# matches" — a silent fail-OPEN that would make every check pass. Runs
+# directly from main() (not subshelled), so its own `exit 2` on failure
+# actually terminates the script — unlike a failure inside _strip_significant
+# itself, see above. Covers the case reproduced in review: the lib file
+# missing or containing invalid awk, both persistent for the whole run.
+_self_test_strip_significant() {
+    local result
+    result=$(_strip_significant py 1 'print("x")')
+    if [ "$result" != 'print()' ]; then
+        echo "FATAL: strip-significant.awk self-test failed (got: '${result}')." >&2
+        echo "  Check that lib/strip-significant.awk exists and is parseable by awk." >&2
+        exit 2
+    fi
+}
+
+_strip_py_for_balance() { _strip_significant py 0 "$1"; }
+_strip_py_for_noqa()    { _strip_significant py 1 "$1"; }
+_strip_ts_for_balance() { _strip_significant ts 0 "$1"; }
+_strip_ts_for_noqa()    { _strip_significant ts 1 "$1"; }
+
+# Net unmatched '(' on an already-normalized line: opens minus closes. Used to
+# detect a call left open at end-of-line and to track when it closes again.
+_paren_balance() {
+    local s="$1"
+    local opens closes
+    opens=$(printf '%s' "$s" | tr -cd '(' | wc -c)
+    closes=$(printf '%s' "$s" | tr -cd ')' | wc -c)
+    echo $((opens - closes))
+}
+
+# Bounded forward scan: a print(/console.*( call that reads as still-open at
+# the end of the matched line may close (and carry its noqa) several lines
+# later. A suppression is accepted ONLY on a line where the running balance
+# actually reaches zero on THAT line — i.e. only the call's true closing
+# line, matching the "opening line or closing-paren line" contract in this
+# file's header comment (#14051 review round 3, finding 3: a noqa found on
+# an INTERMEDIATE line — one the call is still open past, even if a
+# tokenizer gap misjudged that — must never suppress; this is a second,
+# independent layer under the normalization fix, not a replacement for it —
+# a Python triple-quoted argument or a TS '!'/'++'/'--' before a division
+# can still fool the balance count, but can no longer reach an unrelated
+# noqa several lines down, because no line's noqa is even inspected until
+# the call is confirmed closed).
+#
+# Populates LAST_CALL_CLOSE_LINE (1-based, out-parameter): the line the call
+# closed and was found suppressed on. If the scan exits WITHOUT the balance
+# ever reaching zero (bound hit, or EOF), it is set to the LAST line
+# actually scanned — not left at the opening line — so the caller reports a
+# too-WIDE range rather than a too-NARROW one. A single-line (opening-line)
+# key there was invisible to the CI wrapper's added-line scoping when only
+# the true closing line was edited (#14051 review finding 4 — round 1's
+# fix for this collapsed back to a single line exactly on this path).
+MULTILINE_NOQA_SCAN_LIMIT=20
+LAST_CALL_CLOSE_LINE=0
+
+# Args: <array-name> <next-idx> <first-line-raw> <noqa-regex> <match-line-num>
+#       <balance-strip-fn> <noqa-strip-fn>
+suppressed_in_multiline_call() {
+    local -n _lines_ref="$1"
+    local next_idx="$2" first_line="$3" noqa_regex="$4" match_line_num="$5"
+    local balance_fn="$6" noqa_fn="$7"
+
+    LAST_CALL_CLOSE_LINE="$match_line_num"
+    local balance
+    balance=$(_paren_balance "$("$balance_fn" "$first_line")")
+    [ "$balance" -le 0 ] && return 1  # closes on the same line — not multi-line
+
+    local scanned=0 j="$next_idx" total="${#_lines_ref[@]}"
+    while [ "$balance" -gt 0 ] && [ "$j" -lt "$total" ] && [ "$scanned" -lt "$MULTILINE_NOQA_SCAN_LIMIT" ]; do
+        local candidate="${_lines_ref[$j]}" candidate_line=$((j + 1))
+        balance=$((balance + $(_paren_balance "$("$balance_fn" "$candidate")")))
+        if [ "$balance" -le 0 ]; then
+            LAST_CALL_CLOSE_LINE="$candidate_line"
+            "$noqa_fn" "$candidate" | grep -qE "$noqa_regex" && return 0
+        fi
+        j=$((j + 1))
+        scanned=$((scanned + 1))
+    done
+
+    [ "$balance" -gt 0 ] && LAST_CALL_CLOSE_LINE="$j"
+    return 1
+}
+
+# Report a VIOLATION, as a line RANGE when the call spans more than one line
+# (#14051 review finding 4) so the CI wrapper's --changed-lines-only key
+# comparison covers every line the suppression could live on.
+report_violation() {
+    local file="$1" line_num="$2" close_line="$3" code="$4"
+    if [ "$close_line" -gt "$line_num" ]; then
+        echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}-${close_line}"
+    else
+        echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
+    fi
+    echo "    ${code:0:100}"
+    VIOLATIONS=$((VIOLATIONS + 1))
+}
 
 # Get Python files to scan (production code only).
 # Uses get_staged_files (#7185) for the staged-files lookup with positional-args
 # override (#6785: same hook runs as local pre-commit AND CI gate). The
 # multi-stage allowlist below is hook-specific and must remain.
+# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
+# used to be masked by the trailing `|| true` below, which existed only to
+# tolerate "the filters matched nothing" — a real git failure looked
+# identical. Captured separately so get_staged_files' non-zero return
+# propagates (set -e turns that into a hard stop); the later filter chain's
+# `|| true` still only ever tolerates an empty *result*, not a git error.
 get_staged_python_files() {
-    get_staged_files '\.py$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.py$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
@@ -45,8 +192,11 @@ get_staged_python_files() {
 
 # Get TypeScript/Vue files to scan (production code only).
 # Same #7185 + #6785 pattern as get_staged_python_files.
+# GH#14151: same masking fix as get_staged_python_files above.
 get_staged_ts_files() {
-    get_staged_files '\.(ts|vue|js)$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.(ts|vue|js)$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(node_modules|\.venv|venv|archive|temp|dist)' | \
         grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
         grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \
@@ -55,73 +205,60 @@ get_staged_ts_files() {
         grep -v -E '(autobot-browser-worker/)' || true  # Node.js server: console.* is appropriate
 }
 
+# Shared driver: both languages are "read file, walk lines, skip the
+# language's own comment/doc-comment lines, match the call on a normalized
+# line, resolve any multi-line suppression, report" — only the regexes and
+# strip functions differ (#14051 review finding 6: check_python_print and
+# check_ts_console had grown past the ≤30-line convention by duplicating
+# this exact shape).
+# Args: <file> <skip-regex> <match-regex> <noqa-regex> <balance-fn> <noqa-fn>
+_scan_file_for_calls() {
+    local file="$1" skip_regex="$2" match_regex="$3" noqa_regex="$4"
+    local balance_fn="$5" noqa_fn="$6"
+    local -a lines
+    mapfile -t lines < "$file"
+    local total="${#lines[@]}" idx=0
+
+    while [ "$idx" -lt "$total" ]; do
+        local line="${lines[$idx]}" line_num=$((idx + 1))
+        idx=$((idx + 1))
+        [[ -z "$line" ]] && continue
+        [[ "$line" =~ $skip_regex ]] && continue
+
+        # Strings (TS also: templates/regex bodies) stripped — a noqa or a
+        # call MENTIONED inside one must not count (#14051 findings 1/2) —
+        # comment kept; also what the call match below runs against.
+        local sig
+        sig=$("$noqa_fn" "$line")
+        printf '%s' "$sig" | grep -qE "$noqa_regex" && continue
+
+        if printf '%s' "$sig" | grep -qE "$match_regex"; then
+            if suppressed_in_multiline_call lines "$idx" "$line" "$noqa_regex" \
+                "$line_num" "$balance_fn" "$noqa_fn"; then
+                continue
+            fi
+            report_violation "$file" "$line_num" "$LAST_CALL_CLOSE_LINE" "$line"
+        fi
+    done
+}
+
 # Check a Python file for print() calls
 check_python_print() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        ((line_num++))
-
-        # Skip empty lines
-        [[ -z "$line" ]] && continue
-
-        # Skip comments
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-
-        # Skip noqa exemption (specific "noqa: print" or bare "noqa" suppressing all rules)
-        echo "$line" | grep -qE '# noqa(: print)?($| )' && continue
-
-        # Strip quoted spans BEFORE matching (#13880). The comment below used to
-        # claim string definitions were skipped, but a word boundary alone does
-        # not do that: `"... e.g. \`print(json.dumps(x))\` ..."` inside a prompt
-        # or docstring was reported as a logging violation. Removing "..." and
-        # '...' spans first keeps real calls (`print("hi")` -> `print()`, still
-        # matched) while dropping mentions (`log.info("use print(x)")` ->
-        # `log.info()`, no longer matched).
-        # Known limitation: line-based, so a print( inside a TRIPLE-quoted block
-        # spanning lines is still reported. Add `# noqa: print` there.
-        stripped=$(printf '%s' "$line" | sed 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')
-
-        # Match actual print( calls — word boundary before print
-        if printf '%s' "$stripped" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
-            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
-            echo "    ${line:0:100}"
-            ((VIOLATIONS++))
-        fi
-    done < "$file"
+    _scan_file_for_calls "$1" '^[[:space:]]*#' \
+        '(^|[^a-zA-Z0-9_.])print\s*\(' '# noqa(: print)?($| )' \
+        _strip_py_for_balance _strip_py_for_noqa
 }
 
 # Check a TypeScript/Vue file for console.* calls
 check_ts_console() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        ((line_num++))
-
-        # Skip empty lines
-        [[ -z "$line" ]] && continue
-
-        # Skip comments (single-line)
-        [[ "$line" =~ ^[[:space:]]*//.* ]] && continue
-
-        # Skip noqa exemption
-        echo "$line" | grep -q 'noqa: console' && continue
-
-        # Skip lines inside JSDoc/multiline comments (starts with *)
-        [[ "$line" =~ ^[[:space:]]*\* ]] && continue
-
-        # Match console.log/warn/error/debug/info calls
-        if echo "$line" | grep -qE 'console\.(log|warn|error|debug|info)\s*\('; then
-            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
-            echo "    ${line:0:100}"
-            ((VIOLATIONS++))
-        fi
-    done < "$file"
+    _scan_file_for_calls "$1" '^[[:space:]]*(//.*|\*)' \
+        'console\.(log|warn|error|debug|info)\s*\(' 'noqa: console' \
+        _strip_ts_for_balance _strip_ts_for_noqa
 }
 
 main() {
+    _self_test_strip_significant
+
     echo -e "${BOLD}${CYAN}Pre-commit: No print()/console.* in Production Code${NC}"
     echo "Issue #1082 - Logging Standard Enforcement"
     echo "================================================"

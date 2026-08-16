@@ -155,3 +155,79 @@ def test_chromadb_the_unit_that_looped_1681_times_is_covered():
     for unit in units:
         text = unit.read_text(encoding="utf-8")
         assert _directive(text, "StartLimitBurst") is not None, f"{unit} lost its start limit"
+
+
+# ---------------------------------------------------------------------------
+# #4090's fix was inert on every unit for weeks, and nothing noticed.
+#
+# `StartLimitIntervalSec` and `StartLimitBurst` belong to [Unit]. Placed in
+# [Service], systemd discards them and says so:
+#
+#   Unknown key name 'StartLimitIntervalSec' in section 'Service', ignoring.
+#
+# All 23 templates had them in [Service]. Observed consequence on a live host:
+# autobot-chromadb reached NRestarts=4399 while reporting `activating`, never
+# `failed` — the precise outage #4090 exists to make visible.
+#
+# The original guard asserted the directives were PRESENT IN THE TEMPLATE. They
+# were. Presence is not effect, and only the second one was ever the point.
+# ---------------------------------------------------------------------------
+
+_UNIT_ONLY_DIRECTIVES = ("StartLimitIntervalSec", "StartLimitBurst")
+
+
+def _section_of(text: str, directive: str) -> str | None:
+    """The ini section a directive is declared in, or None if absent."""
+    section = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped
+        elif stripped.startswith(f"{directive}="):
+            return section
+    return None
+
+
+def _templates_declaring_start_limits() -> list[Path]:
+    """Only templates that declare the directives — the rest have nothing to
+    place, and asserting over them would fail for the wrong reason."""
+    return sorted(p for p in _ANSIBLE_ROOT.rglob("*.j2") if "StartLimitIntervalSec" in p.read_text(encoding="utf-8"))
+
+
+def test_there_are_unit_templates_to_check():
+    """Guard the guard: a rename would make every assertion below vacuous."""
+    assert len(_templates_declaring_start_limits()) >= 20, "expected the #4090 unit templates"
+
+
+@pytest.mark.parametrize("template", _templates_declaring_start_limits(), ids=lambda p: p.name)
+@pytest.mark.parametrize("directive", _UNIT_ONLY_DIRECTIVES)
+def test_start_limit_directives_live_in_the_unit_section(template: Path, directive: str):
+    """In [Service] systemd ignores them, so the unit restarts forever and stays
+    out of `systemctl --failed` — which is the whole failure #4090 describes."""
+    section = _section_of(template.read_text(encoding="utf-8"), directive)
+    assert section == "[Unit]", (
+        f"{template.name}: {directive} is in {section or 'no section'}, not [Unit]. "
+        "systemd discards it there — 'Unknown key name ... in section Service, ignoring' — "
+        "so the unit can never reach `failed` (#4090)."
+    )
+
+
+def test_the_window_still_exceeds_restartsec_times_burst():
+    """The limit must be REACHABLE, not merely declared. RestartSec spaces
+    restarts further apart than the default 10s window, so a too-narrow window
+    means the rate never reaches the limit and nothing ever trips."""
+    import re as _re
+
+    for template in _templates_declaring_start_limits():
+        text = template.read_text(encoding="utf-8")
+        window = _re.search(r"^StartLimitIntervalSec=(\d+)", text, _re.MULTILINE)
+        burst = _re.search(r"^StartLimitBurst=(\d+)", text, _re.MULTILINE)
+        delay = _re.search(r"^RestartSec=(\d+)", text, _re.MULTILINE)
+        if not (window and burst and delay):
+            continue
+        needed = int(delay.group(1)) * int(burst.group(1))
+        assert int(window.group(1)) > needed, (
+            f"{template.name}: StartLimitIntervalSec={window.group(1)}s does not exceed "
+            f"RestartSec({delay.group(1)}) * StartLimitBurst({burst.group(1)}) = {needed}s, "
+            "so the restart rate can never reach the limit"
+        )

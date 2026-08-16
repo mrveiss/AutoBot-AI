@@ -20,6 +20,8 @@ from typing import Any, Dict, List
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.token_count import estimate_fast
+from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
 
@@ -193,8 +195,19 @@ class EssentialStoryGenerator:
             return _DEFAULT_BUDGET
 
     def _estimate_tokens(self, text: str) -> int:
-        """Approximate token count: word count * 1.3."""
-        return int(len(text.split()) * 1.3)
+        """Approximate token count via the shared estimator (#13694).
+
+        Was ``len(text.split()) * 1.3``, which returns **1** for any
+        non-space-delimited script — so a CJK essential story was budgeted as a
+        single token and every fact fitted. AutoBot is i18n across 11 locales,
+        so that is not hypothetical.
+
+        The replacement is not accurate either; see
+        ``autobot_shared.token_count`` for the measured error in both
+        directions. What changes is that this site now agrees with every other
+        token estimate in the system instead of disagreeing with all of them.
+        """
+        return estimate_fast(text)
 
     async def _fetch_top_facts(self, max_tokens: int) -> List[Dict[str, Any]]:
         """Query KB, sort by quality_score desc, return top facts within budget."""
@@ -248,7 +261,7 @@ class EssentialStoryGenerator:
         lines = ["## Essential Context"]
         for fact in facts:
             meta = fact.get("metadata") or {}
-            category = meta.get("category", "general")
+            category = meta.get("category", CategoryDefaults.GENERAL)
             content = fact.get("content", "").strip()
             if content:
                 lines.append(f"[{category}] {content}")

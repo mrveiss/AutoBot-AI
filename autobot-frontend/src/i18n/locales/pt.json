@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Análises do projeto"
+      },
+      "impact": {
+        "title": "Análise de impacto",
+        "hint": "O que chama transitivamente um nó — use antes de alterar ou remover.",
+        "nodeIdPlaceholder": "ex. pacote.modulo.NomeClasse",
+        "nodeIdLabel": "ID do nó do grafo",
+        "analyze": "Analisar",
+        "analyzing": "A analisar…",
+        "notIndexedTitle": "Grafo de código não construído",
+        "notIndexedBody": "Indexe esta fonte antes de analisar o impacto.",
+        "partialTitle": "Resultado parcial — é um limite inferior",
+        "partialDepth": "A travessia parou na profundidade {depth} com {frontier} nó(s) por expandir. Pode haver mais chamadores.",
+        "partialUnresolved": "{count} aresta(s) não puderam ser resolvidas, pelo que podem faltar chamadores.",
+        "callers": "chamadores",
+        "callersAtLeast": "chamadores (pelo menos)",
+        "callersHeading": "Chamadores alcançados",
+        "edgesResolved": "arestas resolvidas",
+        "edgesUnresolved": "arestas não resolvidas",
+        "depth": "profundidade alcançada",
+        "noCallersTitle": "Nenhum chamador encontrado",
+        "noCallersBody": "Nada no grafo indexado chama este nó.",
+        "skippedHeading": "Mostrar {count} aresta(s) não resolvida(s)"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "A abrir a automação da sua empresa…",
+      "companyRequired": "Selecione uma empresa para abrir a automação."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8190,13 +8214,16 @@
       "title": "Organograma",
       "hireAgent": "Contratar agente",
       "loading": "Carregando…",
-      "empty": "Nenhum agente encontrado.",
+      "empty": "Nenhuma pessoa ou agente encontrado.",
       "retry": "Tentar novamente",
       "agentDetail": "Detalhe do agente",
+      "personDetail": "Detalhes da pessoa",
+      "humanNoAgentControls": "Os controlos de agente não se aplicam a pessoas.",
       "human": "Humano",
       "aiAgent": "Agente de IA",
       "never": "Nunca",
       "adapter": "Adaptador",
+      "role": "Função",
       "type": "Tipo",
       "lastHeartbeat": "Último sinal",
       "budget": "Orçamento",
@@ -8205,7 +8232,106 @@
       "pauseAgent": "Pausar agente",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Modo de visualização",
+      "viewTree": "Árvore",
+      "viewCanvas": "Tela",
+      "canvasTabAll": "Todas as unidades",
+      "canvasUnit": "Unidade {name}",
+      "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes.",
+      "viewPeople": "Pessoas",
+      "peopleLegend": "Tipos de pessoa",
+      "peopleKind": {
+        "agent": "Agente",
+        "user": "Utilizador",
+        "contact": "Contacto"
+      },
+      "peopleKindHint": {
+        "agent": "Executor contratado",
+        "user": "Titular de conta, pode iniciar sessão",
+        "contact": "Contacto de processo, sem conta"
+      },
+      "peopleNoTeam": "Sem equipa",
+      "peopleTeamEmpty": "Sem membros nesta equipa.",
+      "peopleNoTeamsDefined": "Não há equipas definidas para esta empresa — todos são listados em conjunto.",
+      "peopleTeamsUnavailable": "As informações de equipa estão indisponíveis neste momento — o agrupamento pode estar incompleto.",
+      "peopleUnavailable": "Não foi possível carregar as pessoas desta empresa. É um problema de carregamento, não uma empresa vazia.",
+      "peopleTeamsCoverUsersOnly": "As equipas abrangem titulares de conta. Agentes e contactos não pertencem a nenhuma equipa.",
+      "peopleContactNotInHierarchy": "Os contactos não fazem parte da hierarquia de reporte — não têm responsável, orçamento nem heartbeat.",
+      "peopleEmpty": "Esta empresa ainda não tem pessoas.",
+      "roleLensLabel": "Ver como função",
+      "roleLensAll": "Todas as funções",
+      "roleLensHint": "Apenas um filtro de visualização — não altera o que alguém pode acessar.",
+      "roleLensBanner": "Filtro de visualização: {role} — mostrando {shown} de {total} nós. O acesso permanece inalterado.",
+      "roleLensEmpty": "Filtro de visualização: nenhum nó corresponde a \"{role}\" nesta vista. O acesso permanece inalterado — limpe o filtro para ver todos.",
+      "roleLensClear": "Limpar filtro",
+      "sidebar": {
+        "owner": "Responsável",
+        "tools": "Ferramentas",
+        "toolsNotApplicable": "Não aplicável a pessoas.",
+        "notes": "Notas",
+        "notesOverview": "Visão geral",
+        "notesChecklist": "Lista de verificação",
+        "notesOutput": "Resultado",
+        "attributes": "Atributos",
+        "railLabel": "Seções da barra lateral",
+        "railInfo": "Info",
+        "railChecklist": "Lista de verificação",
+        "railCost": "Custo",
+        "railActivity": "Atividade",
+        "railHandoff": "Transferência",
+        "itemsUnavailable": "Não foi possível carregar os itens. É um problema de carregamento, não uma lista vazia.",
+        "itemsEmpty": "Nenhum item ativo.",
+        "itemsNotApplicableHuman": "Listas de itens por pessoa ainda não estão disponíveis — apenas agentes podem ser filtrados por responsável.",
+        "outputEmpty": "Ainda não há itens concluídos.",
+        "costTotalTokens": "Tokens totais",
+        "costUsd": "Custo (USD)",
+        "costUnavailable": "Não foi possível carregar os dados de custo.",
+        "costEmpty": "Ainda não há custo registrado para este agente.",
+        "costNotApplicableHuman": "O rastreamento de custo se aplica apenas a agentes.",
+        "activityUnavailable": "Não foi possível carregar a atividade.",
+        "activityEmpty": "Ainda não há atividade registrada para este nó.",
+        "activityNotApplicableHuman": "O histórico de atividade por pessoa ainda não está disponível.",
+        "handoffButton": "Transferir para humano",
+        "handoffEmpty": "Nenhum item ativo para transferir.",
+        "handoffNotApplicableHuman": "A transferência se aplica apenas a agentes."
+      }
+    },
+    "executorRollup": {
+      "title": "Resumo de executores",
+      "totalItems": "{count} itens de trabalho",
+      "unavailable": "Não foi possível carregar o resumo de executores. É um problema de carregamento, não zero itens de trabalho.",
+      "empty": "Ainda não há itens de trabalho.",
+      "statusColumn": "Estado",
+      "class": {
+        "user": "Pessoa",
+        "agent": "Agente de IA",
+        "orphaned": "Órfão",
+        "unassigned": "Não atribuído"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Legenda",
+      "colourBy": "Colorir por",
+      "dimension": {
+        "status": "Estado",
+        "owner": "Proprietário",
+        "tool": "Ferramenta"
+      },
+      "status": {
+        "active": "Ativo",
+        "idle": "Inativo",
+        "paused": "Em pausa",
+        "error": "Erro",
+        "terminated": "Terminado",
+        "unknown": "Desconhecido"
+      },
+      "owner": {
+        "unassigned": "Não atribuído"
+      },
+      "tool": {
+        "none": "Sem ferramenta"
+      }
     },
     "goals": {
       "title": "Árvore de objetivos",

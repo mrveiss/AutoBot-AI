@@ -20,12 +20,15 @@
 #
 # Install: pre-commit install (uses .pre-commit-config.yaml)
 
-set -uo pipefail
+set -euo pipefail
 
 # Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 VIOLATIONS=0
 
@@ -33,8 +36,16 @@ VIOLATIONS=0
 # Uses get_staged_files (#7185) for the staged-files lookup with positional-args
 # override (#6785: same hook runs as local pre-commit AND CI gate). The
 # multi-stage allowlist below is hook-specific and must remain.
+# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
+# used to be masked by the trailing `|| true` below, which existed only to
+# tolerate "the filters matched nothing" — a real git failure looked
+# identical. Captured separately so get_staged_files' non-zero return
+# propagates (set -e turns that into a hard stop); the later filter chain's
+# `|| true` still only ever tolerates an empty *result*, not a git error.
 get_staged_python_files() {
-    get_staged_files '\.py$' "$@" | \
+    local staged
+    staged="$(get_staged_files '\.py$' "$@")" || return 1
+    printf '%s\n' "$staged" | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
@@ -54,7 +65,7 @@ get_staged_python_files() {
 # Issue #1829 — false positives on comments/docstrings
 check_direct_redis() {
     local file="$1"
-    local violations
+    local violations py_exit=0
     violations=$(python3 - "$file" <<'PYEOF'
 import sys
 import re
@@ -92,8 +103,15 @@ except Exception:
 
 try:
     tokens = list(tokenize.tokenize(io.BytesIO(src).readline))
-except tokenize.TokenError:
-    # Untokenisable file — fall back to skipping it silently.
+except (tokenize.TokenError, SyntaxError, ValueError) as exc:
+    # Untokenisable file — skip it. GH#13936: IndentationError is a SyntaxError,
+    # NOT a TokenError, so it escaped this handler, killed the interpreter with a
+    # non-zero exit, and the shell wrapper counted that as a Redis violation. A
+    # file that is not parseable Python cannot contain a Python redis.Redis()
+    # call worth flagging, and reporting a parse failure as a credential-policy
+    # violation is worse than not scanning it. Announce the skip so a genuinely
+    # broken Python file is visible rather than silently unscanned.
+    print(f"  SKIP  {path}: not parseable as Python ({type(exc).__name__})", file=sys.stderr)
     sys.exit(0)
 
 # Lines that belong exclusively to comments or string literals.
@@ -129,15 +147,14 @@ for lno in sorted(code_lines):
 
 sys.exit(1 if found else 0)
 PYEOF
-)
-    local py_exit=$?
+) || py_exit=$?
     if [[ $py_exit -ne 0 ]]; then
         while IFS= read -r entry; do
             local lno="${entry%%:*}"
             local text="${entry#*:}"
             echo -e "  ${RED}VIOLATION${NC} ${file}:${lno}"
             echo "    ${text}"
-            ((VIOLATIONS++))
+            VIOLATIONS=$((VIOLATIONS + 1))
         done <<< "$violations"
     fi
 }

@@ -1303,8 +1303,14 @@ class PathConfig(RedactedSettings):
     )
 
     # Installation root — all derived paths use this as their base.
-    # Default matches the standard Ansible deployment target.
-    base_dir: str = Field(default="/opt/autobot", alias="AUTOBOT_BASE_DIR")
+    #
+    # Default is lazily resolved via the canonical ``project_root()`` (#13149,
+    # #14050) rather than frozen at import time to a hardcoded literal: a real
+    # Ansible deployment always sets AUTOBOT_BASE_DIR explicitly (see
+    # ansible/roles/backend/templates/backend.env.j2), so this default only
+    # governs the *unset* case — a developer running from a checkout, who must
+    # resolve into the checkout rather than into the live install.
+    base_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_BASE_DIR")
 
     # Well-known sub-directories (all relative to base_dir unless absolute).
     # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
@@ -1313,14 +1319,29 @@ class PathConfig(RedactedSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
-    # code_source lives at /opt/autobot/code_source, a sibling of autobot-backend/ —
-    # NOT inside base_dir. Absolute default ensures correct resolution regardless
-    # of what AUTOBOT_BASE_DIR is set to.
-    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
+    # On a real deployment, code_source lives at /opt/autobot/code_source, a
+    # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
+    # only governs the unset case. In a checkout there is no separate
+    # code_source sibling: the checkout root *is* the git repo root, so the
+    # default resolves lazily via project_root() (#13149, #14050) to that
+    # same checkout instead of the live install.
+    code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
 
     # VNC password file — absolute path, not relative to base_dir.
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
     vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
+
+    # noVNC web root — absolute path, not relative to base_dir.
+    #
+    # #13069: pinned to /opt/novnc, NOT the distro /usr/share/novnc package.
+    # roles/vnc removes that package (state: absent) and installs a checksummed
+    # upstream release at this path instead, because the distro build
+    # (novnc 1:1.0.0-5 on Ubuntu 22.04) predates VeNCrypt support and was the
+    # cause of the handshake failure in #13060. Keep in sync with
+    # autobot-slm-backend/ansible/roles/vnc/defaults/main.yml novnc_path.
+    # Override via AUTOBOT_NOVNC_PATH env var.
+    novnc_path: str = Field(default="/opt/novnc", alias="AUTOBOT_NOVNC_PATH")
 
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
@@ -1421,7 +1442,18 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
+    # #14050: lazily resolved via project_root() rather than a hardcoded
+    # literal. security_layer.py's own module-level fallback (#13149) is
+    # only ever reached when this field is falsy, so a frozen "/opt/autobot"
+    # default here silently overrode that fix — a checkout without
+    # AUTOBOT_AUDIT_LOG_FILE set would still write into the live install.
+    # A real deployment always sets AUTOBOT_AUDIT_LOG_FILE explicitly (see
+    # ansible/roles/backend/templates/backend.env.j2), so only the unset
+    # case changes here.
+    audit_log_file: str = Field(
+        default_factory=lambda: str(project_root() / "logs" / "audit.log"),
+        alias="AUTOBOT_AUDIT_LOG_FILE",
+    )
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
@@ -1485,6 +1517,22 @@ class MiscConfig(RedactedSettings):
     contradiction_surface_threshold: str = Field(
         default="",
         alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
+    )
+    # #13884: fraction of a paginated document's pages that must carry a text
+    # layer before the extraction is treated as usable. Below it the document is
+    # reported as having no usable text layer rather than as a successful
+    # extraction that happens to be empty.
+    document_min_text_page_ratio: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
+    )
+    # #13884: minimum average characters per page, alongside the ratio above.
+    # The ratio alone counts a page as readable when it carries a single
+    # character, which a page-number stamp, Bates number, or filename footer
+    # satisfies on every page of a scan. This floor catches that shape.
+    document_min_chars_per_page: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE",
     )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
@@ -1855,6 +1903,12 @@ class MiscConfig(RedactedSettings):
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    # #14028: ingest governance stage in front of MessageRouter/agent routing —
+    # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
+    # window. See services/gateway/ingest_governor.py.
+    gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
+    gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
+    gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
     gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
     gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")

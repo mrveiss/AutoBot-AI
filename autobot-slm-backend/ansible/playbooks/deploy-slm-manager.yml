@@ -79,3 +79,25 @@
 - name: Provision Fleet Roles
   import_playbook: provision-fleet-roles.yml
   tags: ['provision']
+
+# The monitoring role rendered prometheus.yml back in Play 1, before the backend
+# and frontend roles above had run. Its scrape targets depend on which of them
+# landed on this host, so on a first-ever provisioning run that render decided
+# the topology against a host where neither existed yet — and nothing re-read it
+# afterwards, leaving the config wrong until an operator redeployed monitoring
+# by hand (#14337).
+#
+# Scoped to the config tasks rather than re-running the whole role: prometheus
+# is already installed and running by this point, and reinstalling it would
+# restart the service for no reason. The handler still fires if the rendered
+# file actually changed.
+- name: Re-render monitoring config now the fleet roles exist
+  hosts: slm_server
+  become: true
+  gather_facts: false
+  tags: ['provision', 'monitoring']
+  tasks:
+    - name: "Monitoring | Resolve the scrape topology against the provisioned host (#14337)"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: prometheus_config.yml

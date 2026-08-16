@@ -64,6 +64,7 @@ import logging
 import time
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_2_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,7 @@ class RateLimiter:
             # Remove entries older than one hour
             pipe.zremrangebyscore(hour_key, "-inf", now - 3600)
             # Expire the whole key after 2 hours so stale keys auto-clean
-            pipe.expire(hour_key, 7200)
+            pipe.expire(hour_key, TTL_2_HOURS)
             await pipe.execute()
         except Exception as exc:
             logger.warning(

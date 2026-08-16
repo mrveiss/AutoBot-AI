@@ -65,10 +65,16 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
+from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
-from services.deploy_artifacts import rsync_artifact_excludes
+from services.deploy_activity import read_deploy_activity
+from services.deploy_artifacts import (
+    HOST_STATE_EXCLUDES,
+    rsync_artifact_excludes,
+    rsync_host_state_args,
+)
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
@@ -847,11 +853,27 @@ async def get_file_drift(
         functools.partial(build_drift_report, source_dir, deployed_dir, component),
     )
 
+    # #13913: annotate the reading with whether a deploy was running when it was
+    # taken. Read after the comparison, not before: a play that starts mid-scan
+    # still makes the reading unstable, and checking afterwards catches that
+    # ordering while checking first does not.
+    activity = await read_deploy_activity()
+    report["deploy_in_progress"] = activity.in_progress
+    report["deploy_state_reason"] = activity.reason
+    report["last_completed_play_at"] = activity.last_completed_play_at
+
     logger.info(
-        "drift check: %d drifted files out of %d compared",
+        "drift check: %d drifted files out of %d compared (deploy_in_progress=%s)",
         len(report["drifted_files"]),
         report["total_compared"],
+        activity.in_progress,
     )
+    if activity.readings_are_unstable and report["drift_detected"]:
+        logger.warning(
+            "drift check: %d drifted files reported while a self-update play is running — "
+            "these are likely files mid-write, not drift",
+            len(report["drifted_files"]),
+        )
 
     return FileDriftReport(**report)
 
@@ -897,6 +919,14 @@ async def resolve_drift(
             status_code=409,
             detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
         )
+    # #13913: a resolve is a delete-style rsync (#13851). Running one against a
+    # tree ansible is mid-write is destructive against files that are simply
+    # being copied, and the drift that prompted it is very likely phantom —
+    # 28 of 30 drifts in one measurement evaporated when the play finished.
+    # Unknown does NOT block: on a host where the unit cannot be queried this
+    # would otherwise disable remediation permanently, which is a worse
+    # failure than the pre-existing behaviour. It is logged instead.
+    await _reject_if_deploy_in_progress()
 
     try:
         source_dir = get_default_source_dir(request.component)
@@ -1029,6 +1059,14 @@ async def resolve_drift_async(
             status_code=409,
             detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
         )
+    # #13913: a resolve is a delete-style rsync (#13851). Running one against a
+    # tree ansible is mid-write is destructive against files that are simply
+    # being copied, and the drift that prompted it is very likely phantom —
+    # 28 of 30 drifts in one measurement evaporated when the play finished.
+    # Unknown does NOT block: on a host where the unit cannot be queried this
+    # would otherwise disable remediation permanently, which is a worse
+    # failure than the pre-existing behaviour. It is logged instead.
+    await _reject_if_deploy_in_progress()
 
     from services.database import db_service
 
@@ -1209,19 +1247,14 @@ _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
 ]
 
 
-# #9970: secret/runtime paths that must survive every sync. The deployed .env
-# is the systemd EnvironmentFile (#2824) and exists only in the deployment --
-# a delete-style sync without these excludes removes it and the service cannot
-# start ("Failed to load environment files"). `data` holds per-service runtime
-# state with the same property. Applied at the rsync chokepoint so no caller
-# or future component list can forget them.
-#
-# #13851: `logs` joins them. A dry run of the autobot-backend resolve on a live
-# host listed logs/audit/*.jsonl among 55 deletions — the audit trail, removed
-# by the remediation for what turned out to be a false drift signal. No
-# component in the repo tracks a `logs/` directory, so excluding it cannot
-# suppress a legitimate source file.
-_PROTECTED_EXCLUDES: List[str] = [".env", "data", "logs"]
+# #14231: the list of paths that must survive every sync now lives in
+# services/deploy_artifacts.py, next to the artifact vocabulary it sits beside
+# at the rsync chokepoint. It was extended here three times by incident (#9970
+# `.env`/`data`, #13851 `logs`, #14231 four more) while the ansible sync path
+# in roles/slm_manager/tasks/main.yml carried its own partial copy -- two code
+# paths writing the same tree, disagreeing about which files may be deleted.
+# One source, one guard test (tests/api/test_host_state_excludes_14231.py).
+_PROTECTED_EXCLUDES: List[str] = list(HOST_STATE_EXCLUDES)
 
 
 def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> List[str]:
@@ -1253,8 +1286,11 @@ def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> Li
     if component is not None:
         foreign = [f"/{sub}/" for sub in sorted(owned_subtrees(component))]
         foreign += [f"/{path}" for path in sorted(deploy_only_entries(component))]
-    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *_PROTECTED_EXCLUDES, *foreign]))
-    return [f"--exclude={exc}" for exc in merged]
+    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *foreign]))
+    # Host-state args go FIRST: they carry `--include` entries, and rsync applies
+    # the first matching rule (#14231). Dedup spans the whole list, not just
+    # `merged` -- a caller passing `.env` would otherwise emit it twice.
+    return list(dict.fromkeys([*rsync_host_state_args(), *(f"--exclude={exc}" for exc in merged)]))
 
 
 # #13851: rsync itemize marker for a delete. `--dry-run --delete --itemize-changes`
@@ -1595,6 +1631,34 @@ _SELF_KILLING_COMPONENTS = frozenset({"autobot-slm-backend", "autobot_shared"})
 # in a restart sequence never runs when the self-restart lands.
 _SELF_SERVICE_NAME = "autobot-slm-backend"
 _restart_pending: bool = False
+
+
+async def _reject_if_deploy_in_progress() -> None:
+    """409 when a self-update play is running; log-and-continue when unknown (#13913).
+
+    Split from the endpoints so both the sync and async resolve paths share one
+    rule — two copies of a safety check is how one of them ends up outdated.
+    """
+    try:
+        activity = await read_deploy_activity()
+    except Exception as exc:  # noqa: BLE001 - a safety probe must not 500 the endpoint
+        # read_deploy_activity is documented never to raise, so this is
+        # defence in depth rather than an expected path: a probe added to make
+        # a destructive operation safer must never be the thing that takes it
+        # down. Failing to probe is the unknown case, handled as such below.
+        logger.warning("drift resolve: deploy-state probe failed (%s) — treating state as unknown", exc)
+        return
+    if activity.readings_are_unstable:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A self-update play is running — resolving now would rsync over files that are "
+                "mid-write, and the drift prompting it is likely transient. Retry once the play "
+                "finishes (#13913)."
+            ),
+        )
+    if activity.in_progress is None:
+        logger.warning("drift resolve: proceeding with deploy state unknown — %s", activity.reason)
 
 
 def _restart_is_pending() -> bool:
@@ -3356,7 +3420,9 @@ async def _ansible_self_update(node_id: str) -> None:
             detach=True,
         )
         if not result["success"]:
-            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+            logger.error(
+                "Ansible full-machine update failed for %s: %s", node_id, summarize_playbook_failure(result["output"])
+            )
             # C2-a: playbook failed before restart — clear plan so it never auto-fires
             await _clear_resume_plan()
         else:
@@ -3585,12 +3651,12 @@ async def _sync_single_node(
 
         if result["success"]:
             node_state.status = "success"
-            node_state.message = result["output"][:500]
+            node_state.message = summarize_playbook_failure(result["output"])
             # Update node version in DB (#1209)
             await _update_fleet_node_version(node_state.node_id)
         else:
             node_state.status = "failed"
-            node_state.message = f"Playbook failed: {result['output'][:500]}"
+            node_state.message = f"Playbook failed: {summarize_playbook_failure(result['output'])}"
 
         node_state.completed_at = datetime.now(timezone.utc)
 
@@ -5087,6 +5153,25 @@ def _is_node_operational(node: Node) -> bool:
     return node.status not in _NON_OPERATIONAL_STATUSES
 
 
+def _node_was_unreachable(node: Node, playbook_result: dict) -> bool:
+    """Did ansible report *this* node as UNREACHABLE?
+
+    Matched on node_id, hostname or ip_address, because the inventory name a
+    play reports is not always the one the DB stores — ``ansible_hostname`` is
+    the OS hostname while ``nodes.hostname`` is a display name (#1789 hit the
+    same mismatch and fell back to IP).
+
+    A run that failed for some other reason is NOT unreachable, and must stay a
+    failure: treating every failure as "node was down" is how a broken deploy
+    would come to report itself as a skip.
+    """
+    unreachable = parse_unreachable_hosts(playbook_result.get("output") or "")
+    if not unreachable:
+        return False
+    identities = {node.node_id, node.hostname, node.ip_address} - {None, ""}
+    return bool(identities & set(unreachable))
+
+
 def _extract_ansible_fatal(output: str) -> str:
     """Return the first meaningful ansible error line from playbook output (#11511).
 
@@ -5104,6 +5189,49 @@ def _extract_ansible_fatal(output: str) -> str:
         if any(kw in stripped for kw in fatal_keywords):
             return stripped[:300]
     return output.strip()[-300:] if output.strip() else "playbook failed (no output)"
+
+
+async def _record_fleet_node_outcome(
+    node: Node,
+    node_id: str,
+    job: UpdateAllJob,
+    stage,
+    unhealthy: bool,
+    playbook_result: dict,
+) -> bool:
+    """Count one node's run and say whether the stage continues.
+
+    Split out of ``_sync_fleet_node`` (#14297) to keep it under the length
+    rule. Three outcomes, and the middle one is the whole point of #14297:
+
+    * success -> completed, noted as a recovery when the node was unhealthy
+    * unhealthy AND ansible said UNREACHABLE -> skipped, #11511's outcome
+    * anything else -> failed, which halts the stage
+
+    The third branch is deliberately not narrowed to healthy nodes: a broken
+    deploy against an unhealthy node must stay a failure, or the job goes green
+    while the node stays stale — the defect this change exists to end, wearing
+    a skip's costume.
+    """
+    if playbook_result["success"]:
+        await _update_fleet_node_version(node_id)
+        job.completed_fleet_nodes += 1
+        _stage_log(
+            stage,
+            f"Node {node_id} updated successfully" + (" (recovered while not operational)" if unhealthy else ""),
+        )
+        return True
+
+    if unhealthy and _node_was_unreachable(node, playbook_result):
+        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — unreachable")
+        job.skipped_fleet_nodes += 1
+        return True
+
+    error_msg = _extract_ansible_fatal(playbook_result["output"])
+    job.failed_fleet_nodes += 1
+    _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
+    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
+    return False
 
 
 async def _sync_fleet_node(
@@ -5137,30 +5265,35 @@ async def _sync_fleet_node(
         job.completed_fleet_nodes += 1
         return True
 
-    # Skip non-operational nodes rather than attempting a deploy that will fail (#11511).
-    if not _is_node_operational(node):
+    # #11511 skipped non-operational nodes outright, on the reasoning that a
+    # deploy against them "will always fail". That holds for a node that is
+    # down; it does not hold for one that is merely unhealthy — and #14297 is
+    # the case where the two diverge. A node whose agent is too old to
+    # heartbeat is marked degraded, so it is skipped, so it never receives the
+    # update that would replace the agent. The health signal gates the only
+    # thing that could repair it.
+    #
+    # Health is not transport. The attempt goes ahead, and ansible's own
+    # UNREACHABLE verdict — which it reports distinctly from a failure — is
+    # what decides whether the node was actually contactable. Unreachable on
+    # this path is counted as skipped exactly as before, so a genuinely down
+    # node still does not fail the job.
+    unhealthy = not _is_node_operational(node)
+    if unhealthy:
         reason = (
             f"status={node.status}, last_heartbeat={'none' if node.last_heartbeat is None else node.last_heartbeat}"
         )
-        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — not operational ({reason})")
-        job.skipped_fleet_nodes += 1
-        return True
+        _stage_log(
+            stage,
+            f"Node {node_id} ({node.hostname}) is not operational ({reason}) — "
+            f"attempting anyway; ansible decides whether it is reachable (#14297)",
+        )
 
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
         limit=["localhost", node_id],
     )
-    if playbook_result["success"]:
-        await _update_fleet_node_version(node_id)
-        job.completed_fleet_nodes += 1
-        _stage_log(stage, f"Node {node_id} updated successfully")
-        return True
-
-    error_msg = _extract_ansible_fatal(playbook_result["output"])
-    job.failed_fleet_nodes += 1
-    _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
-    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
-    return False
+    return await _record_fleet_node_outcome(node, node_id, job, stage, unhealthy, playbook_result)
 
 
 async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
@@ -5199,7 +5332,9 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     skipped = job.skipped_fleet_nodes
     summary = f"Updated {job.completed_fleet_nodes}/{job.total_fleet_nodes} nodes"
     if skipped:
-        summary += f" ({skipped} skipped — not operational)"
+        # A skip now means unhealthy AND unreachable, not unhealthy alone
+        # (#14297) — an unhealthy node that answers gets deployed to.
+        summary += f" ({skipped} skipped — unreachable)"
 
     stage.status = _StageStatus.SUCCESS
     stage.message = summary

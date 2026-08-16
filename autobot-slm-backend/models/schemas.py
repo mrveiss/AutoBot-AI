@@ -1680,6 +1680,18 @@ class FileDriftReport(BaseModel):
     total_compared: int
     drift_detected: bool
     checked_at: str
+    # #13913: a reading taken while ansible is mid-write reports files that are
+    # simply being copied — 28 of 30 drifts in one measurement evaporated once
+    # the play settled. None means the signal could not be read; it is NOT
+    # collapsed into False, because "could not ask" and "no deploy running" are
+    # different answers and only one of them makes the reading trustworthy.
+    deploy_in_progress: bool | None = None
+    #: Why deploy_in_progress is what it is, for an operator reading the response.
+    deploy_state_reason: str | None = None
+    #: ISO-8601 UTC time the last completed self-update play finished, so a
+    #: caller can judge how fresh this reading is. None when no completed run
+    #: is on record.
+    last_completed_play_at: str | None = None
 
 
 class DriftResolveRequest(BaseModel):

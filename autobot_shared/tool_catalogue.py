@@ -84,6 +84,12 @@ APPROVAL_CATEGORY_TOOLS = {
     "publishing": ("deploy", "publish", "content_reach"),
     "destructive operations": FILE_DELETE_TOOLS + SHELL_EXEC_TOOLS + CONTAINER_ORCH_TOOLS,
     "rotating credentials": ("rotate_credentials", "rotate_key", "vault_rotate"),
+    # #14067: HTTP_WRITE_TOOLS was in SENSITIVE_TOOLS (the agent-loop plane) but
+    # reachable through no category at all, so a work item could not gate the one
+    # action class that leaves the machine. The Gateway's own outbound path is
+    # governed separately at its seam (services/gateway/egress_governor.py) —
+    # a gateway send is not a tool call, so it cannot be covered by a tool name.
+    "sending externally": HTTP_WRITE_TOOLS,
 }
 
 
@@ -99,6 +105,7 @@ class ApprovalCategory(str, Enum):
     PUBLISHING = "publishing"
     DESTRUCTIVE_OPERATIONS = "destructive operations"
     ROTATING_CREDENTIALS = "rotating credentials"
+    SENDING_EXTERNALLY = "sending externally"
 
 
 _VALID_APPROVAL_CATEGORIES = frozenset(c.value for c in ApprovalCategory)

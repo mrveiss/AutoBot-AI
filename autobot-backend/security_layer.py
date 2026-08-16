@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
 from config import get_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
@@ -31,7 +32,10 @@ logger = get_logger(__name__)
 
 # Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
 # Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
-_AUDIT_LOG_FILE_DEFAULT = "/opt/autobot/logs/audit.log"
+# #13149: derived from the canonical project root rather than a hardcoded
+# `/opt/autobot` literal, so a dev checkout writes its audit log under the
+# checkout instead of (attempting to write into) the live install.
+_AUDIT_LOG_FILE_DEFAULT = str(project_root() / "logs" / "audit.log")
 
 
 def _resolve_audit_log_file() -> str:

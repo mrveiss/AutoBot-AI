@@ -1,12 +1,29 @@
 # === PYTHON VIRTUAL ENVIRONMENT ===
 # Virtual environment directories (created by setup_agent.sh)
+#
+# The entries below carry a trailing slash, which matches a DIRECTORY only. A
+# worktree that reaches the shared interpreter through a `venv` *symlink* was
+# therefore not ignored, and a `git add -A` committed it (#14133). With
+# `core.symlinks=false` — which this repo sets — checking that out replaces the
+# real venv directory with a 40-byte text file containing its own path,
+# destroying the interpreter for every tree that pulls.
+#
+# The slashless entries match a file, a directory or a symlink of that name.
+#
+# This stops a REPEAT of that instance; it does not stop a NEW tracked
+# symlink or a narrowed pattern in this section from doing the same thing
+# again. autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+# and pre-commit-no-gitignore-shadow guard those cases directly (#14137).
 AutoBot/
+venv
 venv/
+venvs
 venvs/
 bin/
 lib/
 !scripts/lib/
 !autobot-infrastructure/shared/scripts/hooks/lib/
+!autobot-infrastructure/shared/scripts/lib/
 lib64/
 include/
 share/
@@ -264,6 +281,13 @@ tests/**/*.log
 # === REPORTS FOLDER ===
 # All reports are generated content and should not be committed
 reports/
+# ...except docs/reports/, which is curated, tracked documentation (#14216).
+# The blanket rule above matches at any depth, so it swallowed docs/reports/
+# whole — which made every "docs/reports/*.json" rule in the next block dead
+# code, and silently dropped new files added there. Git cannot re-include a
+# path whose parent directory is excluded, so the directory itself must be
+# negated here, before those narrower rules can apply to its contents.
+!docs/reports/
 
 # === REPORTS AND ANALYSIS (GENERATED) ===
 # Generated reports that can be recreated
@@ -500,3 +524,16 @@ docs/.obsidian/core-plugins.json
 # the exact ".paperclip" name, so .paperclip-work/ was tracked — it carried a
 # design doc at the repo root instead of docs/archives/plans/.
 .paperclip-*/
+
+# Test artifact, not scratch: a path sanitizer promotes a mock's repr into a
+# real nested directory tree instead of rejecting it, so a suite run leaves
+# MagicMock/mock.settings.backup_dir/<id>/ at the repo root. Ignored so it
+# cannot be committed by accident; the sanitizer itself is fixed under #14217,
+# and tools/lint/check_no_root_clutter.py blocks a forced `git add`.
+MagicMock/
+
+# Test-run artifacts (#14295): Playwright recordings and scheduler state written
+# into the working tree by running the suite. Regenerated every run; a `git add -A`
+# after a test run would otherwise commit however many have accumulated.
+autobot-backend/tests/results/
+autobot-backend/data/scheduled_workflows.json

@@ -1424,6 +1424,28 @@
         "codeGeneration": "Code Generation",
         "codeQuality": "Code Quality",
         "ariaLabel": "Projektanalysen"
+      },
+      "impact": {
+        "title": "Auswirkungsanalyse",
+        "hint": "Was einen Knoten transitiv aufruft — vor Änderung oder Entfernung prüfen.",
+        "nodeIdPlaceholder": "z. B. paket.modul.KlassenName",
+        "nodeIdLabel": "Graph-Knoten-ID",
+        "analyze": "Analysieren",
+        "analyzing": "Analysiere…",
+        "notIndexedTitle": "Code-Graph nicht erstellt",
+        "notIndexedBody": "Indexieren Sie diese Quelle, bevor Sie die Auswirkungen analysieren.",
+        "partialTitle": "Teilergebnis — dies ist eine Untergrenze",
+        "partialDepth": "Der Durchlauf endete bei Tiefe {depth}; {frontier} Knoten wurden nicht expandiert. Es kann mehr Aufrufer geben.",
+        "partialUnresolved": "{count} Kante(n) konnten nicht aufgelöst werden, daher fehlen möglicherweise Aufrufer.",
+        "callers": "Aufrufer",
+        "callersAtLeast": "Aufrufer (mindestens)",
+        "callersHeading": "Erreichte Aufrufer",
+        "edgesResolved": "aufgelöste Kanten",
+        "edgesUnresolved": "nicht aufgelöste Kanten",
+        "depth": "erreichte Tiefe",
+        "noCallersTitle": "Keine Aufrufer gefunden",
+        "noCallersBody": "Nichts im indexierten Graphen ruft diesen Knoten auf.",
+        "skippedHeading": "{count} nicht aufgelöste Kante(n) anzeigen"
       }
     },
     "patterns": {
@@ -4239,7 +4261,9 @@
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
       "agentsAriaLabel": "Agent capabilities",
-      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
+      "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8190,13 +8214,16 @@
       "title": "Organigramm",
       "hireAgent": "Agent einstellen",
       "loading": "Wird geladen…",
-      "empty": "Keine Agenten gefunden.",
+      "empty": "Keine Personen oder Agenten gefunden.",
       "retry": "Erneut versuchen",
       "agentDetail": "Agentendetails",
+      "personDetail": "Personendetails",
+      "humanNoAgentControls": "Agentensteuerung gilt nicht für Personen.",
       "human": "Mensch",
       "aiAgent": "KI-Agent",
       "never": "Nie",
       "adapter": "Adapter",
+      "role": "Rolle",
       "type": "Typ",
       "lastHeartbeat": "Letzter Heartbeat",
       "budget": "Budget",
@@ -8205,7 +8232,106 @@
       "pauseAgent": "Agent pausieren",
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
-      "terminatedNote": "This agent has been terminated."
+      "terminatedNote": "This agent has been terminated.",
+      "viewMode": "Ansicht",
+      "viewTree": "Baum",
+      "viewCanvas": "Leinwand",
+      "canvasTabAll": "Alle Einheiten",
+      "canvasUnit": "Einheit {name}",
+      "canvasHint": "Umschalt+Ziehen zum Verschieben, Scrollen zum Zoomen, Knoten anklicken für Details.",
+      "viewPeople": "Personen",
+      "peopleLegend": "Personenarten",
+      "peopleKind": {
+        "agent": "Agent",
+        "user": "Benutzer",
+        "contact": "Kontakt"
+      },
+      "peopleKindHint": {
+        "agent": "Beauftragter Ausführender",
+        "user": "Kontoinhaber, kann sich anmelden",
+        "contact": "Prozesskontakt, kein Konto"
+      },
+      "peopleNoTeam": "Keinem Team zugeordnet",
+      "peopleTeamEmpty": "Keine Mitglieder in diesem Team.",
+      "peopleNoTeamsDefined": "Für dieses Unternehmen sind keine Teams definiert — alle werden gemeinsam aufgeführt.",
+      "peopleTeamsUnavailable": "Teaminformationen sind derzeit nicht verfügbar — die Gruppierung ist möglicherweise unvollständig.",
+      "peopleUnavailable": "Die Personen dieses Unternehmens konnten nicht geladen werden. Das ist ein Ladeproblem, kein leeres Unternehmen.",
+      "peopleTeamsCoverUsersOnly": "Teams umfassen Kontoinhaber. Agenten und Kontakte gehören keinem Team an.",
+      "peopleContactNotInHierarchy": "Kontakte sind nicht Teil der Berichtshierarchie — sie haben keine Führungskraft, kein Budget und keinen Heartbeat.",
+      "peopleEmpty": "Dieses Unternehmen hat noch keine Personen.",
+      "roleLensLabel": "Nach Rolle anzeigen",
+      "roleLensAll": "Alle Rollen",
+      "roleLensHint": "Nur ein Ansichtsfilter — ändert nicht, worauf jemand zugreifen kann.",
+      "roleLensBanner": "Ansichtsfilter: {role} — zeigt {shown} von {total} Knoten. Der Zugriff bleibt unverändert.",
+      "roleLensEmpty": "Ansichtsfilter: Keine Knoten entsprechen „{role}“ in dieser Ansicht. Der Zugriff bleibt unverändert — Filter zurücksetzen, um alle zu sehen.",
+      "roleLensClear": "Filter zurücksetzen",
+      "sidebar": {
+        "owner": "Inhaber",
+        "tools": "Werkzeuge",
+        "toolsNotApplicable": "Gilt nicht für Personen.",
+        "notes": "Notizen",
+        "notesOverview": "Übersicht",
+        "notesChecklist": "Checkliste",
+        "notesOutput": "Ergebnis",
+        "attributes": "Attribute",
+        "railLabel": "Seitenleisten-Bereiche",
+        "railInfo": "Info",
+        "railChecklist": "Checkliste",
+        "railCost": "Kosten",
+        "railActivity": "Aktivität",
+        "railHandoff": "Übergabe",
+        "itemsUnavailable": "Elemente konnten nicht geladen werden. Das ist ein Ladeproblem, keine leere Liste.",
+        "itemsEmpty": "Keine aktiven Elemente.",
+        "itemsNotApplicableHuman": "Personenbezogene Listen sind noch nicht verfügbar — nur Agenten können nach Zuständigkeit gefiltert werden.",
+        "outputEmpty": "Noch keine abgeschlossenen Elemente.",
+        "costTotalTokens": "Tokens gesamt",
+        "costUsd": "Kosten (USD)",
+        "costUnavailable": "Kostendaten konnten nicht geladen werden.",
+        "costEmpty": "Für diesen Agenten sind noch keine Kosten erfasst.",
+        "costNotApplicableHuman": "Kostenerfassung gilt nur für Agenten.",
+        "activityUnavailable": "Aktivität konnte nicht geladen werden.",
+        "activityEmpty": "Für diesen Knoten wurde noch keine Aktivität erfasst.",
+        "activityNotApplicableHuman": "Personenbezogener Aktivitätsverlauf ist noch nicht verfügbar.",
+        "handoffButton": "An Mensch übergeben",
+        "handoffEmpty": "Keine aktiven Elemente zur Übergabe.",
+        "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
+      }
+    },
+    "executorRollup": {
+      "title": "Ausführungs-Übersicht",
+      "totalItems": "{count} Arbeitselemente",
+      "unavailable": "Die Ausführungs-Übersicht konnte nicht geladen werden. Das ist ein Ladeproblem, nicht null Arbeitselemente.",
+      "empty": "Noch keine Arbeitselemente.",
+      "statusColumn": "Status",
+      "class": {
+        "user": "Person",
+        "agent": "KI-Agent",
+        "orphaned": "Verwaist",
+        "unassigned": "Nicht zugewiesen"
+      }
+    },
+    "canvasRules": {
+      "legendTitle": "Legende",
+      "colourBy": "Einfärben nach",
+      "dimension": {
+        "status": "Status",
+        "owner": "Inhaber",
+        "tool": "Werkzeug"
+      },
+      "status": {
+        "active": "Aktiv",
+        "idle": "Leerlauf",
+        "paused": "Pausiert",
+        "error": "Fehler",
+        "terminated": "Beendet",
+        "unknown": "Unbekannt"
+      },
+      "owner": {
+        "unassigned": "Nicht zugewiesen"
+      },
+      "tool": {
+        "none": "Kein Werkzeug"
+      }
     },
     "goals": {
       "title": "Zielbaum",
