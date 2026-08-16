@@ -25,8 +25,6 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from autobot_shared.tool_sdk.registry import get_tool_registry
 from user_management.models.role import Role
 
 from ..models.activity import ActorType
@@ -79,6 +77,20 @@ class RoleToolService(LLCServiceBase):
         cleaned = (tool_name or "").strip()
         if not cleaned:
             raise ValueError("a tool name is required")
+
+        # Imported lazily, and by the top-level ``tool_sdk`` path rather than
+        # ``autobot_shared.tool_sdk``. Both matter:
+        #
+        # * Lazily, because a module-level import runs while the feature
+        #   routers load — before ``autobot_shared/`` is on ``sys.path`` — and
+        #   an ImportError there takes the whole LLC router down, not just this
+        #   service. Every other consumer imports it the same way
+        #   (``tools/tool_registry.py``, ``api/image_generation.py``).
+        # * By the top-level path, because ``get_tool_registry()`` returns a
+        #   module-level singleton. Importing the same file under a second
+        #   module identity would yield a *second, empty* registry, so every
+        #   tool would look unregistered while the real registry was fine.
+        from tool_sdk.registry import get_tool_registry  # noqa: PLC0415
 
         known = {meta.name for meta in get_tool_registry().list_tools()}
         if not known:

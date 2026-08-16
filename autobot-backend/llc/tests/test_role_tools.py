@@ -23,8 +23,10 @@ import pytest
 import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from user_management.models.role import Role
 
-from autobot_shared.tool_sdk.registry import get_tool_registry
+from tool_sdk.registry import get_tool_registry
+
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_tool import LLCRoleTool
@@ -35,7 +37,6 @@ from llc.services.role_tool import RoleToolService, ToolRegistryUnavailable
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
-from user_management.models.role import Role
 
 _ADMIN_USER = uuid.uuid4()
 _TOOL = "llc.role_tool_fixture"
