@@ -43,7 +43,11 @@ def migrate(db_url: str) -> None:
     version main.py runs on every startup).
     """
     from autobot_shared.ssot_config import config as _ssot_config
-    from services.agent_seeder import SEED_AGENT_CONFIGS
+    # #14321: read the roster from its leaf module, NOT via
+    # services.agent_seeder — services/__init__.py eagerly imports .auth /
+    # .deployment / .reconciler, so that route drags FastAPI into the
+    # migration runner and fails the gate with No module named 'fastapi'.
+    from models.agent_seed_roster import SEED_AGENT_CONFIGS
 
     ollama_endpoint = _ssot_config.llm.ollama_endpoint
 

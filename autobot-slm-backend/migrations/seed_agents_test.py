@@ -16,7 +16,7 @@ this path.
 
 These tests drive the real `migrate(db_url)` entry point this issue adds
 against a fake psycopg2 connection and assert the canonical roster
-(`services.agent_seeder.SEED_AGENT_CONFIGS` -- the same list main.py's
+(`models.agent_seed_roster.SEED_AGENT_CONFIGS` -- the same list main.py's
 startup lifespan seeds with on every boot) actually lands as rows, not
 merely that the function returns without raising. A `migrate()` reverted to
 a no-op (e.g. `return` before the loop, or an empty SEED_AGENT_CONFIGS) goes
@@ -52,22 +52,32 @@ def _real_load(name: str, relative: str):
 
 @pytest.fixture
 def real_agent_seeder():
-    """`migrate()` imports `services.agent_seeder.SEED_AGENT_CONFIGS` lazily
-    (inside the function body) so it always resolves the roster current at
-    call time. Force that name to the REAL module for the duration of the
-    test, restoring whatever was there before."""
-    previous = sys.modules.get("services.agent_seeder")
-    module = _real_load("services.agent_seeder", "services/agent_seeder.py")
-    services_pkg = sys.modules.get("services")
-    if services_pkg is not None:
-        setattr(services_pkg, "agent_seeder", module)
+    """The real roster, loaded from its leaf module (#14321).
+
+    `migrate()` imports `models.agent_seed_roster.SEED_AGENT_CONFIGS` lazily
+    (inside the function body) so it always resolves the roster current at call
+    time. Force that name to the REAL module for the duration of the test,
+    restoring whatever was there before.
+
+    Deliberately NOT loaded through `services.agent_seeder`: importing that
+    package executes `services/__init__.py`, which eagerly imports `.auth` /
+    `.deployment` / `.reconciler` and drags FastAPI in. That is the same import
+    chain that failed the SLM migration gate with `No module named 'fastapi'`,
+    and a test reaching the roster by a heavier route than production does would
+    stop reproducing the environment the migration actually runs in.
+    """
+    previous = sys.modules.get("models.agent_seed_roster")
+    module = _real_load("models.agent_seed_roster", "models/agent_seed_roster.py")
+    models_pkg = sys.modules.get("models")
+    if models_pkg is not None:
+        setattr(models_pkg, "agent_seed_roster", module)
     yield module
     if previous is not None:
-        sys.modules["services.agent_seeder"] = previous
-        if services_pkg is not None:
-            setattr(services_pkg, "agent_seeder", previous)
+        sys.modules["models.agent_seed_roster"] = previous
+        if models_pkg is not None:
+            setattr(models_pkg, "agent_seed_roster", previous)
     else:
-        sys.modules.pop("services.agent_seeder", None)
+        sys.modules.pop("models.agent_seed_roster", None)
 
 
 class _FakeCursor:
@@ -208,3 +218,36 @@ def test_migrate_defers_rather_than_crashes_when_agents_table_is_absent(monkeypa
 
     assert store == {}
     assert _utils.deferrals() == ["agents"]
+
+
+def test_the_migration_never_imports_the_service_package():
+    """Regression guard for the FastAPI drag (#14321).
+
+    `services/__init__.py` eagerly imports `.auth`, `.database`, `.deployment`
+    and `.reconciler`, so ANY `from services.… import …` inside a migration
+    pulls FastAPI into the migration runner — which does not have it, and
+    should not: a schema migration must not depend on the HTTP layer. That is
+    exactly how this migration first failed the SLM migration gate.
+
+    Asserts the invariant rather than the one import that was fixed: any future
+    `services.` import in this module reddens here instead of in a live gate run.
+    """
+    import ast
+
+    migration = _BACKEND_ROOT / "migrations" / "seed_agents.py"
+    tree = ast.parse(migration.read_text(encoding="utf-8"))
+    offenders = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("services"):
+            offenders.append(f"line {node.lineno}: from {node.module} import ...")
+        elif isinstance(node, ast.Import):
+            offenders += [
+                f"line {node.lineno}: import {alias.name}"
+                for alias in node.names
+                if alias.name.startswith("services")
+            ]
+
+    assert offenders == [], (
+        "the migration imports the services package, which drags FastAPI into "
+        f"the migration runner: {offenders}"
+    )
