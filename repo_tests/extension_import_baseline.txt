@@ -1,0 +1,21 @@
+# extension/skill/plugin -> core-backend imports grandfathered by #14329.
+#
+# Before #14329 the boundary rule blocked only a hand-written list of package
+# names, so anything nobody remembered to add was importable from an extension
+# with no complaint — while the docstring claimed the whole autobot-backend
+# namespace was closed. The namespace is now derived from the directory listing,
+# which surfaced the imports below.
+#
+# THIS LIST ONLY SHRINKS. Never add a line to make a new change pass — a new
+# violation means either use autobot_shared, or move the shared code there.
+#
+# Entries are validated: `check_extension_import_boundaries.py --audit-baseline`
+# fails on any line whose import no longer exists, so a stale exemption cannot
+# sit here quietly exempting nothing after a rename.
+#
+# Format: <repo-relative path><TAB><top-level package>
+
+autobot-backend/middleware/builtin/transcriber_extension.py	transcriber
+autobot-backend/skills/builtin/document_analysis.py	media
+plugins/core-plugins/image-generation-plugin/main.py	tools
+plugins/core-plugins/video-generation-plugin/main.py	tools
