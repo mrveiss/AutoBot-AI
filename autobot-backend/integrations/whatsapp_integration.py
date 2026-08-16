@@ -24,7 +24,6 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

@@ -18,7 +18,6 @@ from autobot_shared.field_encryption import decrypt_field, encrypt_field
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-
 from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)

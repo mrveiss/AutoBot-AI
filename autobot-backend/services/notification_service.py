@@ -38,9 +38,9 @@ from email.mime.text import MIMEText
 from enum import Enum
 from string import Template
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import aiohttp
-from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
