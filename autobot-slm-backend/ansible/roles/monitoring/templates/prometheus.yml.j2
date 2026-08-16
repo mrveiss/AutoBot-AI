@@ -53,23 +53,38 @@ scrape_configs:
           - "localhost:{{ node_exporter_port }}"
 {% endif %}
 
-  # AutoBot backend metrics.
+  # AutoBot backend metrics — the target depends on TOPOLOGY (#14315).
   #
-  # #14315: this targeted :8443 over https — the nginx TLS front — and NOTHING
-  # listens there. The target sat `down` with "connect: connection refused" and
-  # Prometheus has never collected a single backend series, so #13765's cgroup
-  # alerting has never had data to evaluate. The endpoint itself is fine: it
-  # answers 200 on the uvicorn port and exports 120 autobot_cgroup_memory
-  # series across 8 units.
+  # uvicorn is hard-bound to 127.0.0.1 (roles/backend/defaults/main.yml:24), so
+  # its port is reachable only from the same host. nginx on backend_nginx_port
+  # is the only LAN-facing entry — EXCEPT when co-located, where #2829 tears
+  # that standalone vhost down because SLM's own nginx proxies to uvicorn
+  # directly.
   #
-  # The uvicorn port, not the TLS front — exactly as the slm-backend job above
-  # already documents for the same reason. Derived from backend_port rather than
-  # a literal, so it cannot drift from the port the service actually binds.
+  # So neither target is universally right, and picking one breaks the other
+  # topology with an identical "connection refused". The original :8443 was
+  # correct for a distributed fleet and wrong on this co-located host; scraping
+  # 8001 unconditionally would have inverted that. Mirrors the same
+  # `slm_colocated_frontend` branch roles/backend/tasks/main.yml already uses
+  # for this exact reachability problem.
+{% if slm_colocated_frontend | default(false) | bool %}
+  # Co-located: the standalone nginx vhost is gone; uvicorn is on loopback.
   - job_name: "autobot-backend"
     static_configs:
-      - targets: ["{{ backend_host | default(infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1') }}:{{ backend_port | default(8001) }}"]
+      - targets: ["localhost:{{ backend_port }}"]
     metrics_path: /api/metrics/prometheus
     scheme: http
+{% else %}
+  # Distributed: uvicorn is loopback-only on a remote host, so the TLS front is
+  # the only reachable entry. Self-signed, hence insecure_skip_verify (#944).
+  - job_name: "autobot-backend"
+    static_configs:
+      - targets: ["{{ backend_host | default(infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1') }}:{{ backend_nginx_port }}"]
+    metrics_path: /api/metrics/prometheus
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+{% endif %}
 
   # Redis exporter (if available)
   - job_name: "redis"

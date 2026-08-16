@@ -2,84 +2,126 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Prometheus must scrape ports the services actually bind (#14315).
+"""The backend scrape target depends on topology (#14315, #13765).
 
-The `autobot-backend` job targeted `:8443` over https — the nginx TLS front —
-and nothing listens there. Measured on a live host:
+Prometheus reported `autobot-backend down — dial tcp <host>:8443: connection
+refused`, so it had never collected a single backend series and #13765's cgroup
+alerting had never had data to evaluate. The endpoint was never at fault: on the
+uvicorn port it answers 200 and exports 120 `autobot_cgroup_memory` series
+across 8 units, chromadb included.
 
-    autobot-backend  down  dial tcp <host>:8443: connect: connection refused
+The reason is that neither target is universally correct:
 
-So Prometheus has never collected a single backend series, and #13765's cgroup
-alerting has never had data to evaluate. The rules load, the collector runs, the
-metric is computed — and the target was never up.
+* uvicorn binds 127.0.0.1 only, so its port is reachable from the same host only.
+* nginx on `backend_nginx_port` is the only LAN-facing entry — EXCEPT co-located,
+  where #2829 tears that standalone vhost down because SLM's own nginx proxies
+  to uvicorn directly.
 
-The endpoint was never the problem. On the uvicorn port it answers 200 and
-exports 120 `autobot_cgroup_memory` series across 8 units, chromadb included.
+So the original `:8443` was right for a distributed fleet and wrong on a
+co-located host, and scraping `:8001` unconditionally would simply have inverted
+which topology is broken — the same "connection refused", relocated.
 
-A literal port in a scrape config is a second source of truth for something the
-service already declares. These assert it stays derived.
+These tests render the template for BOTH topologies rather than asserting on its
+text, because the defect is which target each one produces.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 import yaml
 
-_TEMPLATE = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "monitoring" / "templates" / "prometheus.yml.j2"
+_ANSIBLE = Path(__file__).resolve().parents[2] / "ansible"
+_TEMPLATE = _ANSIBLE / "roles" / "monitoring" / "templates" / "prometheus.yml.j2"
 
 
-def _job(name: str) -> str:
-    """The raw text block for one scrape job."""
-    text = _TEMPLATE.read_text(encoding="utf-8")
-    start = text.index(f'- job_name: "{name}"')
-    nxt = text.find("- job_name:", start + 1)
-    return text[start : nxt if nxt != -1 else len(text)]
-
-
-def test_the_template_still_defines_the_backend_job():
-    """Guard the guard: a rename makes every assertion below vacuous."""
-    assert '- job_name: "autobot-backend"' in _TEMPLATE.read_text(encoding="utf-8")
-
-
-def test_the_backend_target_derives_its_port():
-    """A literal is a second source of truth for something the backend role
-    already declares (`backend_port: 8001 # uvicorn: plain HTTP port`), and it
-    drifted to a port nothing listens on."""
-    job = _job("autobot-backend")
-    assert "backend_port" in job, "the backend scrape target hardcodes a port instead of deriving it"
-    assert ":8443" not in job, (
-        "the backend job targets 8443 — the nginx TLS front, where nothing listens. "
-        "Prometheus reported `connection refused` and collected no backend series at all (#14315)"
+def _render(**overrides) -> dict:
+    """Render the scrape config with ansible-equivalent Jinja settings."""
+    jinja2 = pytest.importorskip("jinja2")
+    context = {
+        "prometheus_port": 9090,
+        "node_exporter_port": 9100,
+        "groups": {"slm_nodes": []},
+        "hostvars": {},
+        "backend_port": 8001,
+        "backend_nginx_port": 8443,
+        "backend_host": "backend-node",
+        "redis_host": "db-node",
+    }
+    context.update(overrides)
+    env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True, undefined=jinja2.ChainableUndefined)
+    # `bool` is an Ansible filter, not stock Jinja2. Shimmed with Ansible's own
+    # truthiness so the rendered result matches what a play produces — a test
+    # that renders differently from ansible proves nothing about the template.
+    env.filters["bool"] = lambda v: (
+        str(v).strip().lower() in {"true", "yes", "on", "1"} if not isinstance(v, bool) else v
     )
+    return yaml.safe_load(env.from_string(_TEMPLATE.read_text(encoding="utf-8")).render(**context))
 
 
-def test_the_backend_job_scrapes_the_uvicorn_port_over_http():
-    """The slm-backend job above it already documents this distinction: plain
-    http on the uvicorn port, not the TLS front. The backend job did the
-    opposite."""
-    job = _job("autobot-backend")
-    scheme = re.search(r"^\s*scheme:\s*(\S+)", job, re.MULTILINE)
-    assert (
-        scheme and scheme.group(1) == "http"
-    ), f"backend job scheme is {scheme.group(1) if scheme else 'unset'} — the uvicorn port serves plain http"
+def _backend_job(rendered: dict) -> dict:
+    return next(j for j in rendered["scrape_configs"] if j["job_name"] == "autobot-backend")
 
 
-@pytest.mark.parametrize("job_name", ["autobot-backend", "slm", "slm-backend"])
-def test_no_scrape_job_targets_a_tls_front_port(job_name: str):
-    """8443 is nginx. Every job here scrapes an application directly."""
-    assert ":8443" not in _job(job_name), f"{job_name} scrapes the TLS front rather than the app"
+def test_the_template_still_defines_a_backend_job():
+    """Guard the guard: a rename makes every assertion below vacuous."""
+    assert _backend_job(_render(slm_colocated_frontend=False))
 
 
-def test_the_rendered_config_is_valid_yaml():
+def test_colocated_scrapes_uvicorn_on_loopback():
+    """Co-located: #2829 removes the standalone nginx vhost, so the TLS front
+    does not exist and uvicorn on loopback is the only reachable target. This is
+    the case that was live-broken — `:8443` refused the connection."""
+    job = _backend_job(_render(slm_colocated_frontend=True))
+    assert job["scheme"] == "http"
+    assert job["static_configs"][0]["targets"] == ["localhost:8001"]
+
+
+def test_distributed_scrapes_the_tls_front():
+    """Distributed: uvicorn is loopback-only on a REMOTE host, so its port is
+    unreachable and nginx is the only LAN-facing entry. Scraping 8001 here would
+    reproduce the original failure with the topologies swapped."""
+    job = _backend_job(_render(slm_colocated_frontend=False))
+    assert job["scheme"] == "https"
+    assert job["static_configs"][0]["targets"] == ["backend-node:8443"]
+    assert job["tls_config"]["insecure_skip_verify"] is True
+
+
+def test_the_default_topology_is_the_distributed_one():
+    """`slm_colocated_frontend` defaults to false, so an unset value must not
+    silently select the loopback target on a remote backend."""
+    job = _backend_job(_render())
+    assert job["static_configs"][0]["targets"] == ["backend-node:8443"]
+
+
+def test_neither_topology_targets_a_port_the_other_needs():
+    """The two must not converge — that is the whole finding."""
+    colocated = _backend_job(_render(slm_colocated_frontend=True))["static_configs"][0]["targets"]
+    distributed = _backend_job(_render(slm_colocated_frontend=False))["static_configs"][0]["targets"]
+    assert colocated != distributed, "both topologies resolve the same target — one of them is unreachable"
+
+
+def test_the_mirrored_ports_have_not_drifted_from_the_backend_role():
+    """The monitoring role runs against `slm_server` and the backend role
+    against `backend`, so role defaults never cross and these values are
+    duplicated by necessity. Duplication that nothing checks is how the original
+    literal drifted to a port nothing binds."""
+    monitoring = yaml.safe_load(
+        (_ANSIBLE / "roles" / "monitoring" / "defaults" / "main.yml").read_text(encoding="utf-8")
+    )
+    backend = yaml.safe_load((_ANSIBLE / "roles" / "backend" / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    for key in ("backend_port", "backend_nginx_port"):
+        assert monitoring[key] == backend[key], (
+            f"{key} drifted: monitoring={monitoring[key]} backend={backend[key]}. "
+            "The scrape config would target a port the service does not bind (#14315)."
+        )
+
+
+def test_the_rendered_config_is_valid_yaml_in_both_topologies():
     """Prometheus refuses its ENTIRE configuration if any part is malformed, so
-    a broken scrape block silently removes every alert too."""
-    text = _TEMPLATE.read_text(encoding="utf-8")
-    rendered = re.sub(r"\{%.*?%\}", "", text, flags=re.DOTALL)
-    rendered = re.sub(r"\{\{.*?\}\}", "PLACEHOLDER", rendered, flags=re.DOTALL)
-    parsed = yaml.safe_load(rendered)
-    assert "scrape_configs" in parsed
-    names = {j.get("job_name") for j in parsed["scrape_configs"]}
-    assert "autobot-backend" in names
+    one broken scrape block silently removes every alert too."""
+    for colocated in (True, False):
+        rendered = _render(slm_colocated_frontend=colocated)
+        assert "scrape_configs" in rendered
+        assert all(j.get("job_name") for j in rendered["scrape_configs"])
