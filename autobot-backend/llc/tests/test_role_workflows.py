@@ -28,12 +28,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import MembershipRole, RoleHolderType
-from llc.models.membership import LLCCompanyMembership
 from llc.models.role_assignment import LLCRoleAssignment
+from llc.models.membership import LLCCompanyMembership
 from llc.models.role_workflow import LLCRoleWorkflow
-from llc.services.authz import NotAuthorisedError
 from llc.services.role import RoleService
 from llc.services.role_assignment import RoleAssignmentService
+from llc.services.authz import NotAuthorisedError
 from llc.services.role_workflow import RoleWorkflowService
 
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
@@ -94,7 +94,7 @@ async def _grant_admin(session_factory, company_id: uuid.UUID) -> None:  # noqa:
 async def _seed_role(session_factory, company_id: uuid.UUID, name: str) -> uuid.UUID:  # noqa: ANN001
     await _grant_admin(session_factory, company_id)
     async with session_factory() as session:
-        role = await RoleService().create(session, company_id=company_id, name=name)
+        role = await RoleService().create(session, company_id=company_id, name=name, actor_user_id=_ADMIN_USER)
         await session.commit()
         return role.id
 

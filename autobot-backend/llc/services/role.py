@@ -58,6 +58,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.models.role import Role
 
 from ..models.activity import ActorType
+from .authz import require_company_admin
 from .base import LLCServiceBase
 
 
@@ -71,10 +72,11 @@ class RoleService(LLCServiceBase):
         company_id: uuid.UUID,
         name: str,
         description: Optional[str] = None,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
     ) -> Role:
         if company_id is None:
             raise ValueError("company_id is required to create a role")
+        await require_company_admin(session, company_id, actor_user_id)
         cleaned = (name or "").strip()
         if not cleaned:
             # A blank name would satisfy NOT NULL while naming nothing.
@@ -86,7 +88,7 @@ class RoleService(LLCServiceBase):
         role = Role(org_id=company_id, name=cleaned, description=description, is_system=False)
         session.add(role)
         await session.flush()
-        await self._record(session, role, "role.created", actor, {"id": str(role.id)})
+        await self._record(session, role, "role.created", str(actor_user_id), {"id": str(role.id)})
         return role
 
     async def _find_by_name(self, session: AsyncSession, company_id: uuid.UUID, name: str) -> Optional[Role]:
@@ -130,9 +132,10 @@ class RoleService(LLCServiceBase):
         company_id: uuid.UUID,
         role_id: uuid.UUID,
         *,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
         **fields: Any,
     ) -> Optional[Role]:
+        await require_company_admin(session, company_id, actor_user_id)
         role = await self.get(session, company_id, role_id)
         if role is None:
             return None
@@ -153,7 +156,7 @@ class RoleService(LLCServiceBase):
             setattr(role, key, value)
         await session.flush()
         if allowed:
-            await self._record(session, role, "role.updated", actor, allowed)
+            await self._record(session, role, "role.updated", str(actor_user_id), allowed)
         return role
 
     async def delete(
@@ -162,13 +165,14 @@ class RoleService(LLCServiceBase):
         company_id: uuid.UUID,
         role_id: uuid.UUID,
         *,
-        actor: Optional[str] = None,
+        actor_user_id: uuid.UUID,
     ) -> bool:
         """Delete a company role. Returns True when a row was actually removed.
 
         Refuses system roles. The DELETE carries the ``org_id`` predicate itself
         rather than trusting the prior read, so losing the read cannot widen it.
         """
+        await require_company_admin(session, company_id, actor_user_id)
         role = await self.get(session, company_id, role_id)
         if role is None:
             return False
@@ -184,5 +188,5 @@ class RoleService(LLCServiceBase):
         )
         deleted = bool(result.rowcount)
         if deleted:
-            await self._record(session, role, "role.deleted", actor, None)
+            await self._record(session, role, "role.deleted", str(actor_user_id), None)
         return deleted
