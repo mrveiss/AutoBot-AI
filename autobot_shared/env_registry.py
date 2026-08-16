@@ -929,6 +929,58 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_COMPACTION_USER_MESSAGE_CAP",
+        type=int,
+        default=40,
+        description=(
+            "How many of the most recent user messages cross a context compaction "
+            "verbatim instead of being summarised. Bounded so repeated compaction "
+            "cannot grow the preserved set without limit."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS",
+        type=int,
+        default=400,
+        description=(
+            "Maximum characters of a tool result in the summarised region before "
+            "it is clipped for the summariser; a file read many turns ago is "
+            "cheaper to re-read than to carry."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_BOUNDARY_WINDOW",
+        type=int,
+        default=10,
+        description=(
+            "How far back the compaction boundary looks for a user turn before "
+            "settling for any turn start, so the cut cannot be dragged far from "
+            "the midpoint."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_STATE_COMMAND_CAP",
+        type=int,
+        default=10,
+        description="Most recent shell commands named in a compaction's extracted state block.",
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL",
         type=bool,
         default=False,
@@ -1598,6 +1650,21 @@ register_env_var(
             "for everyone (#11089)."
         ),
         component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
+        type=int,
+        default=500,
+        description=(
+            "How many characters of a failed playbook's output to fall back to when no "
+            "failed task can be parsed out of it. Taken from the END of the run: ansible "
+            "opens with its banner, so a head slice returns deprecation warnings and hides "
+            "the failure (services/ansible_utils.py, #14298)."
+        ),
+        component="backend",
     )
 )
 

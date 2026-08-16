@@ -253,6 +253,42 @@ class AssigneeType(str, Enum):
     AGENT = "agent"
 
 
+class RoleHolderType(str, Enum):
+    """Who currently holds a role (#14221 step 2).
+
+    A **different axis** from :class:`AssigneeType`, not a wider version of it.
+    ``AssigneeType`` answers "who is working this work item"; this answers "who
+    occupies this role". They overlap on two members and diverge on the third,
+    which is exactly the shape that has bitten this module before — so:
+
+    **Never compare a member of this enum with a member of another.** Both are
+    ``str``-mixin enums, so ``RoleHolderType.AGENT == AssigneeType.AGENT`` is
+    silently ``True`` while a ``CONTACT`` holder compares equal to nothing at
+    all. That silent-True/silent-False pair is #13954's defect exactly.
+
+    ``CONTACT`` is why this is a separate enum rather than a new member on
+    ``AssigneeType``. Owner framing:
+
+        user = human, but not all humans are users — they could be part of a
+        process, like a contact person you send email to or call
+
+    A contact can therefore *hold a role* ("external accountant", "supplier
+    escalation contact") without ever being a user. Adding ``CONTACT`` to
+    ``AssigneeType`` instead would silently widen what a **work item** may be
+    assigned to, since assignment validates by enum membership — a data-model
+    change smuggled in as a vocabulary edit.
+
+    Minting a new vocabulary is deliberate and was checked first: no enum in
+    this codebase declares a ``contact`` member at all, so there was nothing to
+    reuse. Registered in #14263's inventory rather than left to become another
+    unowned status vocabulary.
+    """
+
+    USER = "user"
+    AGENT = "agent"
+    CONTACT = "contact"
+
+
 class AssignmentType(str, Enum):
     """How a work item was assigned to an agent (GH#8230)."""
 
@@ -414,3 +450,26 @@ class ActivityEventType(str, Enum):
 
     # Notification
     NOTIFICATION_SENT = "notification.sent"
+
+
+class WorkflowStatus(str, Enum):
+    """Lifecycle of a workflow *definition* (#14210).
+
+    A new axis, not a duplicate of an existing one — ``LLCRunStatus`` describes a
+    single *execution*, while a workflow definition can sit ``PLANNED`` having
+    never run, or stay ``RUNNING`` across many runs. #14263 is the umbrella for
+    telling a genuine axis apart from a fork; this is the former, and it is
+    deliberately small so it does not grow into a second run vocabulary.
+
+    Before this existed ``Workflow.status`` was a bare ``String(50)`` that the
+    Redis backfill populated from ``current_step`` — i.e. a *step name* stored in
+    a *status* column. That is the same untyped-discriminator defect as #13937,
+    whose cost was #13954: a Kanban swimlane filtering on a value the backend
+    never wrote, which matched nothing for months.
+    """
+
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"

@@ -37,6 +37,7 @@ from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
+from .workflows import router as workflows_router
 
 # All LLC routes are Postgres-backed, which AutoBot always provides (#10636);
 # single_user mode is retired, so no availability gate is needed (#10202).
@@ -76,6 +77,7 @@ router.include_router(labels_router)
 router.include_router(templates_router)
 router.include_router(agent_hires_router)
 router.include_router(costs_router)
+router.include_router(workflows_router)
 
 
 @router.get("/health")
