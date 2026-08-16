@@ -18,7 +18,7 @@ entities carry `observations`.
 
 import pytest
 
-from chat_history.message_schema import as_llm_messages, message_role, message_text
+from chat_history.message_schema import as_llm_messages, llm_role, message_role, message_text
 
 
 def _stored(sender: str, text: str) -> dict:
@@ -137,6 +137,41 @@ class TestMultimodalContent:
         msg = {"role": "user", "content": [{"type": "image_url", "image_url": {}}, {"type": "text", "text": "caption"}]}
 
         assert message_text(msg) == "caption"
+
+
+class TestTheRoleAProviderWillAccept:
+    """`llm_role` is the clamped answer; `message_role` is the faithful one.
+
+    A chat session is not written only by the chat turn. Terminal integration,
+    the agent terminal and the workflow state machine persist into the *same*
+    session under speakers of their own, and forwarding those verbatim builds a
+    request the provider rejects — failing the whole turn, where before it
+    merely mislabelled it.
+    """
+
+    @pytest.mark.parametrize("speaker", ["terminal", "agent_terminal", "main-backend"])
+    def test_a_speaker_that_is_not_a_conversational_role_collapses_to_the_caller(self, speaker):
+        assert llm_role({"sender": speaker, "text": "$ ls"}) == "user"
+
+    @pytest.mark.parametrize("speaker", ["terminal", "agent_terminal", "main-backend"])
+    def test_message_role_still_answers_faithfully_for_those(self, speaker):
+        """The clamp belongs to the LLM reader, not to the schema itself —
+        anything reporting on a session still needs the real speaker."""
+        assert message_role({"sender": speaker, "text": "$ ls"}) == speaker
+
+    def test_the_two_conversational_roles_survive(self):
+        assert llm_role({"sender": "assistant", "text": "done"}) == "assistant"
+        assert llm_role({"sender": "user", "text": "do it"}) == "user"
+
+    def test_a_stored_system_notice_does_not_reach_the_model_as_a_system_turn(self):
+        """Approval notices are persisted under that speaker. An adapter that
+        separates the system role out hoists it into the system prompt, so
+        passing it through would replace the real instructions with 'Command
+        approved'."""
+        assert llm_role({"sender": "system", "text": "Command approved"}) == "user"
+
+    def test_a_message_with_no_speaker_at_all_gets_the_caller(self):
+        assert llm_role({"text": "orphaned"}) == "user"
 
 
 class TestMalformedHistoryIsData:
