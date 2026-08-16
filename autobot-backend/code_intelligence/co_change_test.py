@@ -731,6 +731,6 @@ def test_automatic_housekeeping_survives_every_later_commit(repo):
             text=True,
             env=_fixture_git_env(),
         )
-        assert result.stdout.strip() == expected, (
-            f"{key} drifted to {result.stdout.strip()!r} after the fixture's commits"
-        )
+        assert (
+            result.stdout.strip() == expected
+        ), f"{key} drifted to {result.stdout.strip()!r} after the fixture's commits"
