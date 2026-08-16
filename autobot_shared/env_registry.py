@@ -1603,6 +1603,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
+        type=int,
+        default=500,
+        description=(
+            "How many characters of a failed playbook's output to fall back to when no "
+            "failed task can be parsed out of it. Taken from the END of the run: ansible "
+            "opens with its banner, so a head slice returns deprecation warnings and hides "
+            "the failure (services/ansible_utils.py, #14298)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_SYNC_POST_CMD_TIMEOUT_S",
         type=int,
         default=300,
