@@ -12,6 +12,7 @@ such as database deployment, monitoring setup, and other infrastructure tasks.
 import asyncio
 import logging
 import os
+from pathlib import Path
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
@@ -195,6 +196,20 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         variables={},
         estimated_duration="20-30 minutes",
         requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="deploy-slm-agent",
+        name="Redeploy SLM Agent",
+        description="Redeploy the SLM agent on selected nodes — code, "
+        "agent-secrets.env and a restart. This is the remedy the agent's own "
+        "401 log line names when its X-Internal-API-Key stops matching the "
+        "server's, and it was previously unreachable from the builtin (#14351).",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="playbooks/deploy-slm-agent.yml",
+        target_hosts=["slm_nodes"],
+        variables={},
+        estimated_duration="1-2 minutes",
+        requires_confirmation=False,
     ),
     PlaybookInfo(
         id="seed-fleet",
@@ -552,15 +567,41 @@ def _build_playbook_command(
     return cmd
 
 
-def _get_ansible_environment():
-    """Get environment variables for Ansible subprocess.
+def _ansible_dir() -> Path:
+    """The repo ansible directory this stack must run from (#14351).
 
-    Helper for _run_playbook (Issue #665).
+    Same directory ``services/playbook_executor.py`` uses as its cwd. Resolved
+    through the executor rather than rebuilt so the two stacks cannot drift
+    apart on where "the ansible directory" is.
+    """
+    from services.playbook_executor import get_playbook_executor
+
+    return Path(get_playbook_executor().ansible_dir)
+
+
+def _get_ansible_environment():
+    """Environment for the Ansible subprocess.
+
+    #14351: this pointed ANSIBLE_CONFIG at ``/opt/autobot/.ansible.cfg``, which
+    is **empty** on a deployed host. An empty config is not a neutral one — it
+    overrides discovery, so ansible fell back to built-in defaults and lost
+    every setting the repo's ``ansible/ansible.cfg`` provides:
+
+        roles_path       = roles      <- `import_role: slm_agent` could not resolve
+        remote_user      = autobot
+        private_key_file = /etc/autobot/ssh/autobot_key
+        timeout / forks
+
+    The symptom was ``ERROR! the role 'slm_agent' was not found``, with a search
+    path missing the one directory that contains it. The canonical executor
+    sets no ANSIBLE_CONFIG at all and lets cwd discovery find the repo file;
+    this now names it explicitly, which is the same result without depending on
+    the process's working directory being right.
     """
     env = os.environ.copy()
     env.update(
         {
-            "ANSIBLE_CONFIG": "/opt/autobot/.ansible.cfg",
+            "ANSIBLE_CONFIG": str(_ansible_dir() / "ansible.cfg"),
             "ANSIBLE_HOME": "/opt/autobot/.ansible",
             "ANSIBLE_LOCAL_TEMP": "/opt/autobot/.ansible/tmp",
         }
@@ -635,11 +676,16 @@ async def _run_playbook(
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")
 
+        # cwd matters even with ANSIBLE_CONFIG named explicitly: `roles_path`
+        # in that file is the RELATIVE value `roles`, so it resolves against
+        # the process working directory. The canonical executor runs from the
+        # ansible dir for exactly this reason (#14351).
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=_get_ansible_environment(),
+            cwd=str(_ansible_dir()),
         )
 
         await _stream_process_output(process, execution)
