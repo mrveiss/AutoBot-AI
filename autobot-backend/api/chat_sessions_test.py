@@ -51,13 +51,23 @@ class TestToPersistedSystemMessage:
 
 
 class TestClearAndRestoreSession:
-    """Issue #7025: async helper uses add_messages_batch (not broken add_message)."""
+    """Issue #7025: async helper uses add_messages_batch (not broken add_message).
+
+    #14306: these previously asserted on `clear_session`, a method **no chat
+    manager has ever implemented**. They passed because each test supplied its
+    own mock carrying it — the fixture and the production code agreed about an
+    interface that does not exist, so the real reset raised `AttributeError` on
+    every request while this file stayed green.
+
+    The mocks below are `spec`-bound for that reason: an auto-created attribute
+    is what let a wrong method name survive since #7196.
+    """
 
     @pytest.mark.asyncio
     async def test_calls_add_messages_batch_with_persisted_shape(self):
         """The helper must translate role→sender and call add_messages_batch."""
-        chat_manager = MagicMock()
-        chat_manager.clear_session = MagicMock()
+        chat_manager = MagicMock(spec=["update_session", "add_messages_batch"])
+        chat_manager.update_session = AsyncMock(return_value=True)
         chat_manager.add_messages_batch = AsyncMock(return_value=None)
 
         messages = [
@@ -68,7 +78,7 @@ class TestClearAndRestoreSession:
         restored = await _clear_and_restore_session(chat_manager, "session-X", messages)
 
         assert restored == 2
-        chat_manager.clear_session.assert_called_once_with("session-X")
+        chat_manager.update_session.assert_awaited_once_with("session-X", {"messages": []})
         chat_manager.add_messages_batch.assert_awaited_once()
 
         call_args = chat_manager.add_messages_batch.await_args
@@ -82,14 +92,14 @@ class TestClearAndRestoreSession:
     @pytest.mark.asyncio
     async def test_no_op_when_no_messages_to_restore(self):
         """Empty list must clear the session but not call add_messages_batch."""
-        chat_manager = MagicMock()
-        chat_manager.clear_session = MagicMock()
+        chat_manager = MagicMock(spec=["update_session", "add_messages_batch"])
+        chat_manager.update_session = AsyncMock(return_value=True)
         chat_manager.add_messages_batch = AsyncMock(return_value=None)
 
         restored = await _clear_and_restore_session(chat_manager, "session-Y", [])
 
         assert restored == 0
-        chat_manager.clear_session.assert_called_once_with("session-Y")
+        chat_manager.update_session.assert_awaited_once_with("session-Y", {"messages": []})
         chat_manager.add_messages_batch.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -97,8 +107,9 @@ class TestClearAndRestoreSession:
         """Older chat managers without add_messages_batch must not blow up."""
 
         class _Legacy:
-            def clear_session(self, sid):
-                self.cleared = sid
+            async def update_session(self, sid, updates):
+                self.cleared = (sid, updates)
+                return True
 
         legacy = _Legacy()
         # Note: pre-fix, this code called add_message which DOES exist on the
@@ -110,4 +121,4 @@ class TestClearAndRestoreSession:
         )
 
         assert restored == 1  # we still report the count
-        assert legacy.cleared == "session-Z"
+        assert legacy.cleared == ("session-Z", {"messages": []})
