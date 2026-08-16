@@ -7745,7 +7745,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Kondycja systemu",
     "providerFallback": "Przełączanie dostawcy",
-    "advancedControl": "Sterowanie zaawansowane"
+    "advancedControl": "Sterowanie zaawansowane",
+    "llcRoles": "Role"
   },
   "llcCompanyStatus": {
     "showArchived": "Pokaż zarchiwizowane",
@@ -9100,5 +9101,40 @@
     "loadFailed": "Nie udało się wczytać harmonogramów.",
     "toggleFailed": "Nie udało się zmienić {name}.",
     "resetFailed": "Nie udało się przywrócić domyślnych dla {name}."
+  },
+  "llcRoles": {
+    "title": "Role",
+    "subtitle": "Rola trwa dłużej niż osoba, która ją pełni — uprawnienia, przepływy, narzędzia i poświadczenia pozostają.",
+    "addRole": "Dodaj rolę",
+    "deleteRole": "Usuń rolę",
+    "noCompany": "Wybierz firmę, aby zobaczyć jej role.",
+    "loading": "Ładowanie…",
+    "empty": "Brak ról.",
+    "systemRole": "Systemowa",
+    "holders": "Pełniący",
+    "noHolders": "Nikt obecnie nie pełni tej roli.",
+    "showPastHolders": "Pokaż poprzednich",
+    "pastHolder": "poprzedni",
+    "permissions": "Uprawnienia",
+    "noPermissions": "Brak przyznanych uprawnień.",
+    "workflows": "Przepływy pracy",
+    "noWorkflows": "Brak powiązanych przepływów.",
+    "tools": "Narzędzia",
+    "noTools": "Brak powiązanych narzędzi.",
+    "credentials": "Poświadczenia",
+    "noCredentials": "Brak powiązanych poświadczeń.",
+    "fieldName": "Nazwa",
+    "fieldDescription": "Opis",
+    "cancel": "Anuluj",
+    "save": "Zapisz",
+    "errorLoad": "Nie udało się wczytać ról.",
+    "errorLoadDetail": "Nie udało się wczytać szczegółów roli.",
+    "errorCreate": "Nie udało się utworzyć roli.",
+    "errorDelete": "Nie udało się usunąć roli.",
+    "holderType": {
+      "agent": "Agent",
+      "user": "Użytkownik",
+      "contact": "Kontakt"
+    }
   }
 }
