@@ -23,6 +23,7 @@ router, which would expose every service-management endpoint on this service.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -102,6 +103,34 @@ def _keywords(call: ast.Call) -> set[str]:
     return {kw.arg for kw in call.keywords if kw.arg}
 
 
+_REGISTRY_OPENS = "# Routers intentionally left open"
+_REGISTRY_CLOSES = "# Service-management gate"
+
+
+def _registry_block() -> str:
+    """The text between the registry's two markers.
+
+    Both markers are required. Review found the first version took
+    ``split(closing, 1)[0]``, and ``str.split`` on a separator it cannot find
+    returns a single element — so a reworded closing comment silently made the
+    block *the rest of the file*, which contains every router's own name in its
+    own mount call. Every router then read as declared and the check passed over
+    all of them.
+
+    That is the same shape as the bug being guarded: something stops matching,
+    and the result is indistinguishable from having nothing to report. So a
+    missing marker is an error here, never an empty block.
+    """
+    source = (Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8")
+    assert source.count(_REGISTRY_OPENS) == 1, f"expected exactly one {_REGISTRY_OPENS!r} marker in main.py"
+    assert source.count(_REGISTRY_CLOSES) == 1, (
+        f"the registry's closing marker {_REGISTRY_CLOSES!r} is missing from main.py. "
+        "Without it this check cannot tell where the declarations end, and would "
+        "treat the rest of the file as declarations (#14339)."
+    )
+    return source.split(_REGISTRY_OPENS, 1)[1].split(_REGISTRY_CLOSES, 1)[0]
+
+
 def test_the_app_mounts_the_scrape_router_without_auth_and_the_rest_with_it():
     """The mount is where the defect lived — the route was always fine, the
     router-level dependency it inherited was not."""
@@ -151,18 +180,51 @@ def test_every_ungated_router_is_named_in_the_registry():
     from the list and the test still fails, because the mount is what decides
     who can reach the route.
     """
-    source = (Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8")
-    registry = source.split("# Routers intentionally left open", 1)
-    assert len(registry) == 2, "the public-router registry comment block is gone from main.py"
-    declared = registry[1].split("# Service-management gate", 1)[0]
+    declared = _registry_block()
 
     ungated = {name for name, call in _mount_calls().items() if "dependencies" not in _keywords(call)}
-    undeclared = sorted(name for name in ungated if name not in declared)
+    undeclared = sorted(name for name in ungated if not re.search(rf"\b{re.escape(name)}\b", declared))
     assert not undeclared, (
         f"mounted without the service-management gate but not declared in the registry: "
         f"{undeclared}. Add each with the reason it must be reachable unauthenticated, "
         f"or mount it with `dependencies=_SM` (#14339)."
     )
+
+
+def test_the_registry_block_is_bounded_at_both_ends():
+    """The block must not run past its closing marker.
+
+    Review demonstrated the fail-open: with the closing marker reworded, the
+    block became the rest of the file, every router matched its own mount line,
+    and an undeclared ungated router passed unnoticed. Sized rather than merely
+    non-empty, because "the rest of the file" is also non-empty.
+    """
+    block = _registry_block()
+    source = (Path(__file__).resolve().parents[2] / "main.py").read_text(encoding="utf-8")
+    assert block.strip(), "the registry block is empty"
+    assert len(block) < len(source) / 4, (
+        f"the registry block is {len(block)} chars of a {len(source)}-char file — "
+        "it has run past its closing marker and would declare everything (#14339)"
+    )
+    assert "include_router" not in block, (
+        "the registry block contains mount calls, so it has swallowed code rather "
+        "than stopping at the comment that ends it"
+    )
+
+
+def test_a_name_is_declared_only_as_a_whole_word():
+    """`auth_router` must not be declared by `sso_auth_router` appearing.
+
+    Seven such collisions exist among this file's router names, so a substring
+    test would let a future router be declared by a longer neighbour it has
+    nothing to do with.
+    """
+    declared = _registry_block()
+    assert re.search(r"\bsso_auth_router\b", declared), "expected sso_auth_router in the registry"
+    assert not re.search(r"\bnot_a_real_router\b", declared)
+    # The collision itself: a name contained in a declared one is not declared.
+    assert "auth_router" in declared  # substring of sso_auth_router, present either way
+    assert re.search(r"\bauth_router\b", declared), "auth_router is declared on its own line, not only as a substring"
 
 
 def test_the_registry_check_actually_sees_the_ungated_mounts():
