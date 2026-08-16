@@ -10,7 +10,7 @@ DB lifecycle (connect on app startup, close on shutdown).
 Enabled via TRANSCRIBER_ENABLED=true in environment.
 
 The module-level ``router`` attribute is consumed by feature_routers.py
-(``_load_single_router`` fetches ``module.router`` via ``getattr``).
+(the shared router loader fetches ``module.router`` via ``getattr``).
 ``get_transcriber_router()`` is provided for callers that prefer the
 factory-function style and for unit-test assertions.
 """
@@ -54,7 +54,7 @@ def get_transcriber_router() -> APIRouter:
     return combined
 
 
-# Module-level router consumed by feature_routers._load_single_router via
+# Module-level router consumed by the shared router loader via
 # ``getattr(module, "router")``.  Built once at import time so repeated
 # calls to load_feature_routers() in test environments get the same object.
 router: APIRouter = get_transcriber_router()
