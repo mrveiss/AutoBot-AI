@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_path
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
-from utils.path_validation import contains_dotdot_traversal
 
 logger = get_logger(__name__)
 
@@ -127,16 +127,21 @@ class DocumentAnalysisSkill(BaseSkill):
         if not raw_path or not isinstance(raw_path, str):
             return None, {"success": False, "error": "file_path is required"}
 
-        # This skill reads whatever it is handed, so the traversal check happens
-        # before the open() rather than after — a rejected path must never have
-        # been touched. contains_dotdot_traversal, not contains_path_traversal:
-        # the latter treats "/" itself as suspicious because it guards bare
-        # filenames, and would reject every absolute path (#9670).
-        if contains_dotdot_traversal(raw_path):
-            logger.warning("Rejected document path containing traversal")
-            return None, {"success": False, "error": "file_path must not contain path traversal"}
+        # This skill reads whatever it is handed, so validation happens before
+        # the open() rather than after — a rejected path must never have been
+        # touched.
+        #
+        # autobot_shared's validator, not utils.path_validation: a skill may only
+        # import autobot_shared (#7372 layer boundary), and this one is stronger
+        # anyway. It canonicalizes and then confines the resolved path to the
+        # allowed roots, rather than denylisting ".." in the raw string — #14050
+        # records why a raw-string denylist is the wrong check.
+        try:
+            path = validate_path(raw_path)
+        except ValueError as exc:
+            logger.warning("Rejected document path: %s", exc)
+            return None, {"success": False, "error": f"Invalid file_path: {exc}"}
 
-        path = Path(raw_path)
         if path.suffix.lower() not in SUPPORTED_SUFFIXES:
             return None, {
                 "success": False,

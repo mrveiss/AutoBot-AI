@@ -217,10 +217,19 @@ def test_ocr_enabled_no_longer_defaults_to_true():
 
 
 @pytest.mark.asyncio
-async def test_path_traversal_is_rejected_before_any_read(skill):
+async def test_path_outside_allowed_roots_is_rejected_before_any_read(skill):
+    """Confinement, not a ".." denylist — see #14050 on why the denylist is wrong."""
     result = await skill.execute("extract_text", {"file_path": "../../etc/passwd"})
     assert result["success"] is False
-    assert "traversal" in result["error"]
+    assert "Invalid file_path" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_absolute_path_outside_allowed_roots_is_rejected(skill):
+    """A path with no ".." in it at all must still be confined."""
+    result = await skill.execute("extract_text", {"file_path": "/etc/hosts.txt"})
+    assert result["success"] is False
+    assert "Invalid file_path" in result["error"]
 
 
 @pytest.mark.asyncio
