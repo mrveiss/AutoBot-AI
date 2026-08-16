@@ -781,8 +781,13 @@ class ToolRegistry:
             is not in the SDK registry.
         """
         try:
-            from tool_sdk.registry import ToolNotFoundError  # noqa: PLC0415
-            from tool_sdk.registry import get_tool_registry as _get_sdk_registry  # noqa: PLC0415
+            # Imported by the fully-qualified path (#14373), not the bare
+            # ``tool_sdk`` name: get_tool_registry() returns a module-level
+            # singleton, and reaching it through a second import identity
+            # would return an independently empty registry instead of the
+            # real one.
+            from autobot_shared.tool_sdk.registry import ToolNotFoundError  # noqa: PLC0415
+            from autobot_shared.tool_sdk.registry import get_tool_registry as _get_sdk_registry  # noqa: PLC0415
 
             registry = _get_sdk_registry()
             # Probe registry without instantiating — raises ToolNotFoundError if absent
@@ -792,7 +797,7 @@ class ToolRegistry:
                 return None
 
             # Tool is registered; execute via the registry (handles validation + timing)
-            from tool_sdk.base import ToolPermission
+            from autobot_shared.tool_sdk.base import ToolPermission  # noqa: PLC0415
 
             result = await registry.execute(
                 tool_name,

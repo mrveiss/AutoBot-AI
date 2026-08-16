@@ -79,19 +79,22 @@ class RoleToolService(LLCServiceBase):
         if not cleaned:
             raise ValueError("a tool name is required")
 
-        # Imported lazily, and by the top-level ``tool_sdk`` path rather than
-        # ``autobot_shared.tool_sdk``. Both matter:
+        # Imported lazily, by the fully-qualified ``autobot_shared.tool_sdk``
+        # path (#14373). Both matter:
         #
         # * Lazily, because a module-level import runs while the feature
-        #   routers load — before ``autobot_shared/`` is on ``sys.path`` — and
-        #   an ImportError there takes the whole LLC router down, not just this
-        #   service. Every other consumer imports it the same way
-        #   (``tools/tool_registry.py``, ``api/image_generation.py``).
-        # * By the top-level path, because ``get_tool_registry()`` returns a
-        #   module-level singleton. Importing the same file under a second
-        #   module identity would yield a *second, empty* registry, so every
-        #   tool would look unregistered while the real registry was fine.
-        from tool_sdk.registry import get_tool_registry  # noqa: PLC0415
+        #   routers load, and an ImportError there takes the whole LLC router
+        #   down, not just this service. Every other consumer imports it the
+        #   same way (``tools/tool_registry.py``, ``api/image_generation.py``).
+        # * Fully-qualified, not the bare top-level ``tool_sdk`` path, because
+        #   ``get_tool_registry()`` returns a module-level singleton stored on
+        #   ``autobot_shared/tool_sdk/registry.py``. Reaching that file under a
+        #   second module identity (the bare name) would load a *second* copy
+        #   of it with its own, independently empty, registry — every tool
+        #   would look unregistered while the real registry was fine. The bare
+        #   ``tool_sdk`` path is exactly what caused the original
+        #   ``ModuleNotFoundError`` here (#14373) and is not a supported alias.
+        from autobot_shared.tool_sdk.registry import get_tool_registry  # noqa: PLC0415
 
         known = {meta.name for meta in get_tool_registry().list_tools()}
         if not known:
