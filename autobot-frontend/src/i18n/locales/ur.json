@@ -196,7 +196,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "سسٹم کی صحت",
     "providerFallback": "فراہم کنندہ فال بیک",
-    "advancedControl": "ایڈوانسڈ کنٹرول"
+    "advancedControl": "ایڈوانسڈ کنٹرول",
+    "llcRoles": "کردار"
   },
   "llcCompanyStatus": {
     "showArchived": "محفوظ شدہ دکھائیں",
@@ -9100,5 +9101,40 @@
     "loadFailed": "شیڈولر لوڈ نہیں ہو سکے۔",
     "toggleFailed": "{name} تبدیل نہیں ہو سکا۔",
     "resetFailed": "{name} کو ڈیفالٹ پر واپس نہیں کیا جا سکا۔"
+  },
+  "llcRoles": {
+    "title": "کردار",
+    "subtitle": "کردار اپنے حامل سے زیادہ دیر قائم رہتا ہے — اس کی اجازتیں، ورک فلو، اوزار اور اسناد باقی رہتی ہیں۔",
+    "addRole": "کردار شامل کریں",
+    "deleteRole": "کردار حذف کریں",
+    "noCompany": "کردار دیکھنے کے لیے کمپنی منتخب کریں۔",
+    "loading": "لوڈ ہو رہا ہے…",
+    "empty": "ابھی کوئی کردار نہیں۔",
+    "systemRole": "سسٹم",
+    "holders": "حاملین",
+    "noHolders": "فی الحال کوئی یہ کردار نہیں رکھتا۔",
+    "showPastHolders": "سابقہ حاملین دکھائیں",
+    "pastHolder": "سابقہ",
+    "permissions": "اجازتیں",
+    "noPermissions": "کوئی اجازت نہیں دی گئی۔",
+    "workflows": "ورک فلو",
+    "noWorkflows": "کوئی ورک فلو منسلک نہیں۔",
+    "tools": "اوزار",
+    "noTools": "کوئی اوزار منسلک نہیں۔",
+    "credentials": "اسناد",
+    "noCredentials": "کوئی اسناد منسلک نہیں۔",
+    "fieldName": "نام",
+    "fieldDescription": "تفصیل",
+    "cancel": "منسوخ",
+    "save": "محفوظ کریں",
+    "errorLoad": "کردار لوڈ نہیں ہو سکے۔",
+    "errorLoadDetail": "کردار کی تفصیلات لوڈ نہیں ہو سکیں۔",
+    "errorCreate": "کردار نہیں بن سکا۔",
+    "errorDelete": "کردار حذف نہیں ہو سکا۔",
+    "holderType": {
+      "agent": "ایجنٹ",
+      "user": "صارف",
+      "contact": "رابطہ"
+    }
   }
 }

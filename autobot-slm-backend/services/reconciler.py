@@ -378,15 +378,15 @@ class ReconcilerService:
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
+                message=f"Restart command executed for SLM agent on {node.hostname}; awaiting heartbeat",
                 details={"action": "restart_agent", "success": True},
             )
-            logger.info("Remediation successful for node %s", node_id)
+            logger.info("Remediation restart executed for node %s; awaiting heartbeat", node_id)
             await self._broadcast_remediation_event(
                 node_id,
                 "completed",
                 success=True,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
+                message=f"Restart command executed for SLM agent on {node.hostname}; awaiting heartbeat",
             )
         else:
             event = NodeEvent(
