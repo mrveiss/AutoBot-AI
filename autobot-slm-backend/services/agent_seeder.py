@@ -27,11 +27,12 @@ _DEFAULT_OLLAMA_ENDPOINT = _ssot_config.llm.ollama_endpoint
 
 # All 29 AutoBot agents — mirrors DEFAULT_AGENT_CONFIGS exactly.
 # model/provider/endpoint can be overridden via /agent-config in the SLM UI.
-# #14321: the roster lives in models/agent_seed_roster.py so the migration
-# runner can read it without importing this package (services/__init__.py
-# pulls FastAPI). Re-exported here so existing callers are unchanged and the
-# roster stays one definition.
-from models.agent_seed_roster import SEED_AGENT_CONFIGS  # noqa: E402
+# #14321: the roster lives in the TOP-LEVEL agent_seed_roster module so the
+# migration runner can read it without executing ANY package __init__:
+# services/__init__.py pulls FastAPI, and models/__init__.py pulls bcrypt via
+# user_management.models.user. Re-exported here so existing callers are
+# unchanged and the roster stays one definition.
+from agent_seed_roster import SEED_AGENT_CONFIGS  # noqa: E402
 
 
 async def seed_default_agents(db: AsyncSession) -> int:

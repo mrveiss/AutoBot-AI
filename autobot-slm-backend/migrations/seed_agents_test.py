@@ -16,7 +16,7 @@ this path.
 
 These tests drive the real `migrate(db_url)` entry point this issue adds
 against a fake psycopg2 connection and assert the canonical roster
-(`models.agent_seed_roster.SEED_AGENT_CONFIGS` -- the same list main.py's
+(`agent_seed_roster.SEED_AGENT_CONFIGS` -- the same list main.py's
 startup lifespan seeds with on every boot) actually lands as rows, not
 merely that the function returns without raising. A `migrate()` reverted to
 a no-op (e.g. `return` before the loop, or an empty SEED_AGENT_CONFIGS) goes
@@ -54,30 +54,25 @@ def _real_load(name: str, relative: str):
 def real_agent_seeder():
     """The real roster, loaded from its leaf module (#14321).
 
-    `migrate()` imports `models.agent_seed_roster.SEED_AGENT_CONFIGS` lazily
+    `migrate()` imports `agent_seed_roster.SEED_AGENT_CONFIGS` lazily
     (inside the function body) so it always resolves the roster current at call
     time. Force that name to the REAL module for the duration of the test,
     restoring whatever was there before.
 
-    Deliberately NOT loaded through `services.agent_seeder`: importing that
-    package executes `services/__init__.py`, which eagerly imports `.auth` /
-    `.deployment` / `.reconciler` and drags FastAPI in. That is the same import
-    chain that failed the SLM migration gate with `No module named 'fastapi'`,
-    and a test reaching the roster by a heavier route than production does would
-    stop reproducing the environment the migration actually runs in.
+    Loaded as a TOP-LEVEL module, exactly as the migration does. Reaching it
+    through `services.agent_seeder` executes `services/__init__.py` (pulls
+    FastAPI); reaching it through a `models.` path executes `models/__init__.py`
+    (pulls bcrypt via `user_management.models.user`). The gate failed on each in
+    turn. A test that reaches the roster by a heavier route than production does
+    stops reproducing the environment the migration actually runs in.
     """
-    previous = sys.modules.get("models.agent_seed_roster")
-    module = _real_load("models.agent_seed_roster", "models/agent_seed_roster.py")
-    models_pkg = sys.modules.get("models")
-    if models_pkg is not None:
-        setattr(models_pkg, "agent_seed_roster", module)
+    previous = sys.modules.get("agent_seed_roster")
+    module = _real_load("agent_seed_roster", "agent_seed_roster.py")
     yield module
     if previous is not None:
-        sys.modules["models.agent_seed_roster"] = previous
-        if models_pkg is not None:
-            setattr(models_pkg, "agent_seed_roster", previous)
+        sys.modules["agent_seed_roster"] = previous
     else:
-        sys.modules.pop("models.agent_seed_roster", None)
+        sys.modules.pop("agent_seed_roster", None)
 
 
 class _FakeCursor:

@@ -7,12 +7,17 @@
 Extracted from ``services/agent_seeder.py`` so it can be read without importing
 the service layer.
 
-``services/__init__.py`` eagerly imports ``.auth``, ``.database``,
-``.deployment`` and ``.reconciler``, so ``from services.agent_seeder import
-SEED_AGENT_CONFIGS`` pulls the whole web stack — including FastAPI — behind it.
-The migration runner has no FastAPI (nor should it: a schema migration must not
-depend on the HTTP layer), so importing the roster through the service package
-failed the SLM migration gate with ``No module named 'fastapi'``.
+Deliberately **top-level**, so importing it executes no package ``__init__``.
+Both obvious homes drag a heavy dependency into the migration runner:
+
+* ``services/__init__.py`` eagerly imports ``.auth`` / ``.database`` /
+  ``.deployment`` / ``.reconciler`` — pulls FastAPI.
+* ``models/__init__.py`` imports ``user_management.models.user`` — pulls bcrypt.
+
+The gate failed on each in turn (``No module named 'fastapi'``, then
+``No module named 'bcrypt'``) before the roster moved out of packages entirely.
+A schema migration must not depend on the HTTP or auth layer to read a list of
+agent names.
 
 This module holds data and nothing else: no imports, no side effects, importable
 from a migration and from the running service alike. ``agent_seeder`` re-exports

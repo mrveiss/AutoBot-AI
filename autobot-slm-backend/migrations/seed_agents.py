@@ -46,9 +46,11 @@ def migrate(db_url: str) -> None:
 
     # #14321: read the roster from its leaf module, NOT via
     # services.agent_seeder — services/__init__.py eagerly imports .auth /
-    # .deployment / .reconciler, so that route drags FastAPI into the
-    # migration runner and fails the gate with No module named 'fastapi'.
-    from models.agent_seed_roster import SEED_AGENT_CONFIGS
+    # .deployment / .reconciler, and models/__init__.py imports
+    # user_management.models.user. Either route drags a heavy dependency
+    # (FastAPI, then bcrypt) into the migration runner. agent_seed_roster is
+    # a TOP-LEVEL module precisely so no package __init__ runs on import.
+    from agent_seed_roster import SEED_AGENT_CONFIGS
 
     ollama_endpoint = _ssot_config.llm.ollama_endpoint
 
