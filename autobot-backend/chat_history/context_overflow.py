@@ -323,9 +323,26 @@ def _clip_tool_results(messages: List[Dict], max_chars: int) -> List[Dict]:
             clipped.append(msg)
             continue
         copy = dict(msg)
-        copy["content" if isinstance(msg.get("content"), str) else "text"] = body[:max_chars] + "… [clipped]"
+        copy[_body_key(msg)] = body[:max_chars] + "… [clipped]"
         clipped.append(copy)
     return clipped
+
+
+def _body_key(msg: Dict) -> str:
+    """The key whose value ``_message_text`` read, so a rewrite lands where it is read.
+
+    Keying on ``isinstance(content, str)`` alone was wrong twice: a tool result
+    whose ``content`` is a multimodal *list* would have its clipped body written
+    to ``text`` while ``_format_messages`` still read the untouched list, and an
+    empty-string ``content`` beside a populated ``text`` would have the clip
+    written to ``content`` where the ``content or text`` fallback skips it. Both
+    leave the full body reaching the summarizer while the clip looks applied —
+    an empty result reading as a clean one.
+    """
+    content = msg.get("content")
+    if isinstance(content, list):
+        return "content" if _text_parts(content) else "text"
+    return "content" if isinstance(content, str) and content else "text"
 
 
 def _tool_calls_of(msg: object) -> List[Dict]:

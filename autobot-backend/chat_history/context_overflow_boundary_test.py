@@ -413,3 +413,43 @@ class TestExistingBehaviourIsPreserved:
         await protection._create_summary("session-1", history, "gpt-4")
         protection.tracker.reset_session.assert_awaited_once_with("session-1")
         assert protection.tracker.add_message_tokens.await_count > 0
+
+
+class TestClippingLandsWhereTheSummarizerReads:
+    """Review finding on this PR: the clip must land in the key that is *read*.
+
+    `_format_messages` reads `msg.get("content") or msg.get("text", "")`. Writing
+    the clipped body to `text` while a truthy `content` survives means the full
+    body still reaches the summarizer — with every clipping test still green,
+    because they all used string content.
+    """
+
+    def _summarizer_view(self, msg):
+        """What ConversationSummarizer._format_messages would actually read."""
+        from chat_history.context_overflow import ConversationSummarizer
+
+        return ConversationSummarizer()._format_messages([msg])
+
+    def test_a_list_content_tool_result_is_actually_clipped(self):
+        long_text = "x" * (_TOOL_RESULT_CLIP_CHARS + 500)
+        msg = {"role": "tool", "content": [{"type": "text", "text": long_text}]}
+        clipped = _clip_tool_results([msg], _TOOL_RESULT_CLIP_CHARS)[0]
+        assert len(self._summarizer_view(clipped)) < len(long_text)
+
+    def test_an_empty_content_beside_a_populated_text_is_actually_clipped(self):
+        long_text = "y" * (_TOOL_RESULT_CLIP_CHARS + 500)
+        msg = {"role": "tool", "content": "", "text": long_text}
+        clipped = _clip_tool_results([msg], _TOOL_RESULT_CLIP_CHARS)[0]
+        assert len(self._summarizer_view(clipped)) < len(long_text)
+
+    def test_a_string_content_tool_result_is_still_clipped(self):
+        long_text = "z" * (_TOOL_RESULT_CLIP_CHARS + 500)
+        msg = {"role": "tool", "content": long_text}
+        clipped = _clip_tool_results([msg], _TOOL_RESULT_CLIP_CHARS)[0]
+        assert len(self._summarizer_view(clipped)) < len(long_text)
+
+    def test_a_list_content_with_no_text_parts_falls_back_to_text(self):
+        long_text = "w" * (_TOOL_RESULT_CLIP_CHARS + 500)
+        msg = {"role": "tool", "content": [{"type": "image", "url": "u"}], "text": long_text}
+        clipped = _clip_tool_results([msg], _TOOL_RESULT_CLIP_CHARS)[0]
+        assert len(clipped["text"]) < len(long_text)
