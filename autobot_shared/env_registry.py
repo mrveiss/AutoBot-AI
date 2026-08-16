@@ -929,6 +929,58 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_COMPACTION_USER_MESSAGE_CAP",
+        type=int,
+        default=40,
+        description=(
+            "How many of the most recent user messages cross a context compaction "
+            "verbatim instead of being summarised. Bounded so repeated compaction "
+            "cannot grow the preserved set without limit."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS",
+        type=int,
+        default=400,
+        description=(
+            "Maximum characters of a tool result in the summarised region before "
+            "it is clipped for the summariser; a file read many turns ago is "
+            "cheaper to re-read than to carry."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_BOUNDARY_WINDOW",
+        type=int,
+        default=10,
+        description=(
+            "How far back the compaction boundary looks for a user turn before "
+            "settling for any turn start, so the cut cannot be dragged far from "
+            "the midpoint."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPACTION_STATE_COMMAND_CAP",
+        type=int,
+        default=10,
+        description="Most recent shell commands named in a compaction's extracted state block.",
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
         type=int,
         default=86400,
