@@ -60,6 +60,22 @@ _DUPLICATE_SCAN = """
 
 def upgrade() -> None:
     connection = op.get_bind()
+
+    # Idempotent by necessity, not by taste (#14325).
+    #
+    # This revision creates only an index, and `baseline.extract_artifacts`
+    # observes revisions solely through `op.create_table` / `op.add_column`, so
+    # an index-only revision is structurally invisible to it. An unobservable
+    # *intermediate* revision is re-run when an existing schema is adopted into
+    # the chain — and a plain `op.create_index` fails second time round with
+    # "relation already exists", stranding the adoption.
+    #
+    # Skipping when the index is already present is what makes the re-run safe,
+    # and is why `20260821_081` is listed in `test_observability_coverage`'s
+    # allowlist rather than given a fake marker column to look observable.
+    if INDEX_NAME in {index["name"] for index in sa.inspect(connection).get_indexes("roles")}:
+        return
+
     duplicates = list(connection.exec_driver_sql(_DUPLICATE_SCAN))
 
     if duplicates:
