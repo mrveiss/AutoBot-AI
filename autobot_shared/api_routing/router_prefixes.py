@@ -155,24 +155,30 @@ def _package_router_files(package: Path, registry_prefix: str) -> Dict[Path, str
     """
     init_file = package / "__init__.py"
     init_content = init_file.read_text(encoding="utf-8", errors="ignore")
-    if not INCLUDE_ROUTER_NAME_RE.search(init_content):
-        return {}
-
     mounted = set(INCLUDE_ROUTER_NAME_RE.findall(init_content))
     if not mounted:
         return {}
 
     served_prefix = f"{registry_prefix}{file_router_prefix(init_content)}"
+    # #13582: a prefix given on the mount call applies to every route in the
+    # mounted module and is invisible to APIRouter(prefix=) parsing. The
+    # analytics scanner grew this at the same time; the two implementations of
+    # this function must stay in step, which
+    # tests/api_routing/package_router_files_parity_13582_test.py enforces —
+    # this one backs the blocking api-wiring gate, so a divergence means the
+    # gate and the analytics report disagree about what the API serves.
+    mount_prefixes = dict(INCLUDE_ROUTER_RE.findall(init_content))
 
     files: Dict[Path, str] = {}
     for module_name, alias in RELATIVE_ROUTER_IMPORT_RE.findall(init_content):
         if alias not in mounted:
             continue  # declared but never mounted: it serves nothing
+        mounted_prefix = f"{served_prefix}{mount_prefixes.get(alias, '')}"
         module_file = (package / module_name).with_suffix(".py")
         if module_file.is_file():
-            files[module_file] = served_prefix
+            files[module_file] = mounted_prefix
             continue
         subpackage = package / module_name
         if (subpackage / "__init__.py").is_file():
-            files.update(_package_router_files(subpackage, served_prefix))
+            files.update(_package_router_files(subpackage, mounted_prefix))
     return files

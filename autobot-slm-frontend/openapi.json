@@ -28242,11 +28242,6 @@
             "description": "Successful Response"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Get Prometheus Metrics",
         "tags": [
           "performance"
