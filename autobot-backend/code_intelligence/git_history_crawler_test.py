@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from code_intelligence.co_change_test import hermetic_git_env
+from code_intelligence.co_change_test import disable_background_housekeeping, hermetic_git_env
 from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler, _parse_numstat
 
 
@@ -57,6 +57,12 @@ def _git_init(path: Path) -> None:
             f"git init failed in {path} with exit {result.returncode}\n"
             f"stdout: {result.stdout.strip()}\nstderr: {result.stderr.strip()}"
         )
+    # #14323: same "half a fix" lesson as the env= above — this file builds
+    # throwaway repos the same way co_change_test.py does, so it needs the
+    # same guard against git gc --auto's detached housekeeping racing a
+    # later read. See co_change_test.py's docstring on this call for the
+    # full mechanism.
+    disable_background_housekeeping(path)
 
 
 def _commit(repo: Path, files: dict, message: str) -> None:
@@ -411,3 +417,23 @@ def test_this_file_builds_repos_hermetically_too():
             f"{helper.__name__} runs git without the hermetic environment — "
             "an inherited GIT_ variable makes -C advisory under xdist"
         )
+
+
+def test_repos_here_get_the_same_housekeeping_guard_as_co_change_test(tmp_path):
+    """#14323, the other of the two call sites this file's own docstring warns about.
+
+    ``_git_init`` delegates to ``co_change_test.disable_background_housekeeping``
+    rather than reimplementing it, so there is exactly one place that decides
+    what the override is — but the *call* still has to happen from here too,
+    or this file's repos are exactly as exposed as they were before #13882.
+    """
+    _git_init(tmp_path)
+
+    for key, expected in ("gc.auto", "0"), ("gc.autoDetach", "false"):
+        result = subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "--get", key],
+            capture_output=True,
+            text=True,
+            env=hermetic_git_env(),
+        )
+        assert result.stdout.strip() == expected, f"{key} = {result.stdout.strip()!r}, expected {expected!r}"
