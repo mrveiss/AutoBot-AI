@@ -55,6 +55,38 @@
     group: "{{ prometheus_group }}"
   when: not _prometheus_binary.stat.exists
 
+# The backend scrape target depends on topology (#14315). Resolved HERE, from
+# this host's own deployed state, so the role is correct under any playbook that
+# renders it — including deploy-monitoring.yml, which runs `roles: [monitoring]`
+# and nothing else. Trusting `slm_colocated_frontend` alone would leave the
+# answer to whether some other role happened to run first in the same play.
+#
+# Observed state rather than a re-derived prediction: what decides the target is
+# whether the standalone vhost is actually serving, and that is a file on disk,
+# not something to infer from the flag that governed its teardown.
+- name: "Prometheus | Stat the standalone backend nginx vhost (#14315)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+  register: _backend_vhost
+
+- name: "Prometheus | Stat the backend service unit (#14315)"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-backend.service
+  register: _backend_unit
+
+- name: "Prometheus | Resolve which backend metrics endpoint is reachable (#14315)"
+  # Loopback is correct only when the backend runs HERE and the vhost that would
+  # otherwise front it is gone — exactly the state #2829 leaves behind. An
+  # explicitly-set slm_colocated_frontend still wins: during a full provisioning
+  # run the backend role may not have torn the vhost down yet at render time, so
+  # the flag is ahead of the filesystem and the filesystem must not overrule it.
+  ansible.builtin.set_fact:
+    _backend_metrics_on_loopback: >-
+      {{
+        (slm_colocated_frontend | default(false) | bool) or
+        (_backend_unit.stat.exists and not _backend_vhost.stat.exists)
+      }}
+
 - name: Create Prometheus config
   ansible.builtin.template:
     src: prometheus.yml.j2

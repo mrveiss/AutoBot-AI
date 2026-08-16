@@ -21,8 +21,19 @@ So the original `:8443` was right for a distributed fleet and wrong on a
 co-located host, and scraping `:8001` unconditionally would simply have inverted
 which topology is broken — the same "connection refused", relocated.
 
-These tests render the template for BOTH topologies rather than asserting on its
-text, because the defect is which target each one produces.
+Two layers are tested, because the fix has two halves that fail independently:
+
+1. The template renders the right target for a given topology.
+2. The ROLE resolves that topology for itself. Branching on a variable another
+   role `set_fact`s makes the template correct only under a playbook that runs
+   both roles; the targeted redeploy path runs `roles: [monitoring]` alone, and
+   there the variable is simply undefined and the fallback fires. A template
+   that is right about a value nobody supplies is the same silent-default shape
+   this whole issue is about.
+
+The detection expression is read out of the role's own task file and evaluated,
+rather than restated here — a copy of the logic would keep passing after the
+role stopped matching it.
 """
 
 from __future__ import annotations
@@ -33,12 +44,28 @@ import pytest
 import yaml
 
 _ANSIBLE = Path(__file__).resolve().parents[2] / "ansible"
-_TEMPLATE = _ANSIBLE / "roles" / "monitoring" / "templates" / "prometheus.yml.j2"
+_ROLE = _ANSIBLE / "roles" / "monitoring"
+_TEMPLATE = _ROLE / "templates" / "prometheus.yml.j2"
+_TASKS = _ROLE / "tasks" / "prometheus.yml"
+
+_TOPOLOGY_FACT = "_backend_metrics_on_loopback"
+
+
+def _env():
+    """A Jinja environment that renders the way an ansible play does."""
+    jinja2 = pytest.importorskip("jinja2")
+    env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True, undefined=jinja2.ChainableUndefined)
+    # `bool` is an Ansible filter, not stock Jinja2. Shimmed with Ansible's own
+    # truthiness so the rendered result matches what a play produces — a test
+    # that renders differently from ansible proves nothing about the template.
+    env.filters["bool"] = lambda v: (
+        str(v).strip().lower() in {"true", "yes", "on", "1"} if not isinstance(v, bool) else v
+    )
+    return env
 
 
 def _render(**overrides) -> dict:
     """Render the scrape config with ansible-equivalent Jinja settings."""
-    jinja2 = pytest.importorskip("jinja2")
     context = {
         "prometheus_port": 9090,
         "node_exporter_port": 9100,
@@ -50,30 +77,58 @@ def _render(**overrides) -> dict:
         "redis_host": "db-node",
     }
     context.update(overrides)
-    env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True, undefined=jinja2.ChainableUndefined)
-    # `bool` is an Ansible filter, not stock Jinja2. Shimmed with Ansible's own
-    # truthiness so the rendered result matches what a play produces — a test
-    # that renders differently from ansible proves nothing about the template.
-    env.filters["bool"] = lambda v: (
-        str(v).strip().lower() in {"true", "yes", "on", "1"} if not isinstance(v, bool) else v
-    )
-    return yaml.safe_load(env.from_string(_TEMPLATE.read_text(encoding="utf-8")).render(**context))
+    return yaml.safe_load(_env().from_string(_TEMPLATE.read_text(encoding="utf-8")).render(**context))
 
 
 def _backend_job(rendered: dict) -> dict:
     return next(j for j in rendered["scrape_configs"] if j["job_name"] == "autobot-backend")
 
 
+def _tasks() -> list[dict]:
+    return yaml.safe_load(_TASKS.read_text(encoding="utf-8"))
+
+
+def _module(task: dict, name: str) -> dict:
+    """A task's arguments for *name*, accepting the short or FQCN spelling.
+
+    Matching only `set_fact` would make every assertion below vacuous the moment
+    someone writes `ansible.builtin.set_fact` — which is the spelling this role
+    actually uses, and which is how the first draft of these tests silently
+    found no tasks at all.
+    """
+    for key in (name, f"ansible.builtin.{name}"):
+        if isinstance(task.get(key), dict):
+            return task[key]
+    return {}
+
+
+def _detect(*, unit_exists: bool, vhost_exists: bool, **overrides) -> str:
+    """Evaluate the role's OWN detection expression for a filesystem state.
+
+    Returns the raw rendered string, exactly as ansible stores a folded-scalar
+    `set_fact` — `"True"` / `"False"`, not a bool. Feeding that string onward to
+    the template is the point: the round trip through a string is where a
+    stock-Jinja truthiness check would quietly accept `"False"`.
+    """
+    task = next(t for t in _tasks() if _TOPOLOGY_FACT in _module(t, "set_fact"))
+    context = {
+        "_backend_unit": {"stat": {"exists": unit_exists}},
+        "_backend_vhost": {"stat": {"exists": vhost_exists}},
+    }
+    context.update(overrides)
+    return _env().from_string(_module(task, "set_fact")[_TOPOLOGY_FACT]).render(**context).strip()
+
+
 def test_the_template_still_defines_a_backend_job():
     """Guard the guard: a rename makes every assertion below vacuous."""
-    assert _backend_job(_render(slm_colocated_frontend=False))
+    assert _backend_job(_render(**{_TOPOLOGY_FACT: False}))
 
 
 def test_colocated_scrapes_uvicorn_on_loopback():
     """Co-located: #2829 removes the standalone nginx vhost, so the TLS front
     does not exist and uvicorn on loopback is the only reachable target. This is
     the case that was live-broken — `:8443` refused the connection."""
-    job = _backend_job(_render(slm_colocated_frontend=True))
+    job = _backend_job(_render(**{_TOPOLOGY_FACT: True}))
     assert job["scheme"] == "http"
     assert job["static_configs"][0]["targets"] == ["localhost:8001"]
 
@@ -82,24 +137,80 @@ def test_distributed_scrapes_the_tls_front():
     """Distributed: uvicorn is loopback-only on a REMOTE host, so its port is
     unreachable and nginx is the only LAN-facing entry. Scraping 8001 here would
     reproduce the original failure with the topologies swapped."""
-    job = _backend_job(_render(slm_colocated_frontend=False))
+    job = _backend_job(_render(**{_TOPOLOGY_FACT: False}))
     assert job["scheme"] == "https"
     assert job["static_configs"][0]["targets"] == ["backend-node:8443"]
     assert job["tls_config"]["insecure_skip_verify"] is True
 
 
-def test_the_default_topology_is_the_distributed_one():
-    """`slm_colocated_frontend` defaults to false, so an unset value must not
-    silently select the loopback target on a remote backend."""
-    job = _backend_job(_render())
-    assert job["static_configs"][0]["targets"] == ["backend-node:8443"]
-
-
 def test_neither_topology_targets_a_port_the_other_needs():
     """The two must not converge — that is the whole finding."""
-    colocated = _backend_job(_render(slm_colocated_frontend=True))["static_configs"][0]["targets"]
-    distributed = _backend_job(_render(slm_colocated_frontend=False))["static_configs"][0]["targets"]
+    colocated = _backend_job(_render(**{_TOPOLOGY_FACT: True}))["static_configs"][0]["targets"]
+    distributed = _backend_job(_render(**{_TOPOLOGY_FACT: False}))["static_configs"][0]["targets"]
     assert colocated != distributed, "both topologies resolve the same target — one of them is unreachable"
+
+
+def test_the_role_resolves_the_topology_before_rendering():
+    """The template must never depend on a variable this role did not set.
+
+    `deploy-monitoring.yml` runs `roles: [monitoring]` and nothing else — it is
+    what the role registry invokes for a per-role redeploy, i.e. the normal way
+    a fix like this one ships. Any variable another role `set_fact`s is
+    undefined there, so a template branching on one silently takes its fallback
+    and a co-located host regresses on every targeted update.
+    """
+    names = [t.get("name", "") for t in _tasks()]
+    setters = [i for i, t in enumerate(_tasks()) if _TOPOLOGY_FACT in _module(t, "set_fact")]
+    template_task = next(i for i, t in enumerate(_tasks()) if _module(t, "template").get("src") == "prometheus.yml.j2")
+    assert (
+        setters
+    ), f"no task sets {_TOPOLOGY_FACT}; the template's branch would always take its default. Tasks: {names}"
+    assert setters[0] < template_task, "the topology fact is resolved after the config that reads it is written"
+
+
+def test_detection_selects_loopback_only_when_the_vhost_is_actually_gone():
+    """The live co-located host: backend unit present, standalone vhost removed.
+
+    Observed state, not a re-derivation. What decides reachability is whether
+    the vhost is serving — inferring that from the flag that governed its
+    teardown reintroduces the dependency on another role having run.
+    """
+    assert _detect(unit_exists=True, vhost_exists=False) == "True"
+
+
+def test_detection_keeps_the_tls_front_while_the_vhost_still_serves():
+    """Both present: the vhost is reachable and is the established target.
+
+    Switching to loopback here would be a behaviour change on hosts that were
+    never broken — the failure mode this fix exists to avoid inverting.
+    """
+    assert _detect(unit_exists=True, vhost_exists=True) == "False"
+
+
+def test_detection_does_not_claim_loopback_when_no_backend_runs_here():
+    """A monitoring-only host has neither. Loopback would be nothing at all."""
+    assert _detect(unit_exists=False, vhost_exists=False) == "False"
+    assert _detect(unit_exists=False, vhost_exists=True) == "False"
+
+
+def test_an_explicit_colocated_flag_still_wins_over_the_filesystem():
+    """During a full provisioning run the backend role may not have torn the
+    vhost down yet when monitoring renders, so the flag is ahead of the disk.
+    The filesystem must not overrule a topology the play already knows."""
+    assert _detect(unit_exists=True, vhost_exists=True, slm_colocated_frontend=True) == "True"
+
+
+def test_the_detection_result_survives_the_round_trip_into_the_template():
+    """`set_fact` stores a folded scalar as the STRING "True"/"False".
+
+    So the template's `| bool` is load-bearing: plain Jinja truthiness accepts
+    `"False"` as true and would pin every host to the loopback target.
+    """
+    for unit, vhost, expected in ((True, False, "localhost:8001"), (True, True, "backend-node:8443")):
+        resolved = _detect(unit_exists=unit, vhost_exists=vhost)
+        assert isinstance(resolved, str)
+        job = _backend_job(_render(**{_TOPOLOGY_FACT: resolved}))
+        assert job["static_configs"][0]["targets"] == [expected], f"{resolved!r} resolved to the wrong target"
 
 
 def test_the_mirrored_ports_have_not_drifted_from_the_backend_role():
@@ -107,9 +218,7 @@ def test_the_mirrored_ports_have_not_drifted_from_the_backend_role():
     against `backend`, so role defaults never cross and these values are
     duplicated by necessity. Duplication that nothing checks is how the original
     literal drifted to a port nothing binds."""
-    monitoring = yaml.safe_load(
-        (_ANSIBLE / "roles" / "monitoring" / "defaults" / "main.yml").read_text(encoding="utf-8")
-    )
+    monitoring = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
     backend = yaml.safe_load((_ANSIBLE / "roles" / "backend" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     for key in ("backend_port", "backend_nginx_port"):
         assert monitoring[key] == backend[key], (
@@ -122,6 +231,6 @@ def test_the_rendered_config_is_valid_yaml_in_both_topologies():
     """Prometheus refuses its ENTIRE configuration if any part is malformed, so
     one broken scrape block silently removes every alert too."""
     for colocated in (True, False):
-        rendered = _render(slm_colocated_frontend=colocated)
+        rendered = _render(**{_TOPOLOGY_FACT: colocated})
         assert "scrape_configs" in rendered
         assert all(j.get("job_name") for j in rendered["scrape_configs"])

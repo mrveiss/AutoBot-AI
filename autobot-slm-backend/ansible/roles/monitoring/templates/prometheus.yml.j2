@@ -64,10 +64,18 @@ scrape_configs:
   # So neither target is universally right, and picking one breaks the other
   # topology with an identical "connection refused". The original :8443 was
   # correct for a distributed fleet and wrong on this co-located host; scraping
-  # 8001 unconditionally would have inverted that. Mirrors the same
-  # `slm_colocated_frontend` branch roles/backend/tasks/main.yml already uses
-  # for this exact reachability problem.
-{% if slm_colocated_frontend | default(false) | bool %}
+  # 8001 unconditionally would have inverted that.
+  #
+  # The branch reads a fact this role resolves for ITSELF, in tasks/prometheus.yml.
+  # Branching directly on `slm_colocated_frontend` — the variable the backend
+  # role uses for the same reachability decision — would have been wrong here:
+  # it is `set_fact`-ed by the slm_manager role, so it is in scope only when a
+  # full provisioning play runs both roles on this host. A monitoring-only
+  # redeploy (deploy-monitoring.yml, which is what the role registry runs for a
+  # per-role push) never executes slm_manager, so the variable would be
+  # undefined, `default(false)` would fire, and a co-located host would silently
+  # regress to the unreachable target on every targeted update.
+{% if _backend_metrics_on_loopback | default(false) | bool %}
   # Co-located: the standalone nginx vhost is gone; uvicorn is on loopback.
   - job_name: "autobot-backend"
     static_configs:
