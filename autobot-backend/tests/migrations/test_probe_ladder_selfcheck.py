@@ -119,6 +119,13 @@ def test_observability_coverage():
         "20260630_064",  # llc reviewer cols (UUID) + kb_summary (TEXT) drift fix
         # (#10750) — non-TIMESTAMPTZ cols added via raw ADD COLUMN IF NOT EXISTS,
         # so unparseable; fully idempotent (IF NOT EXISTS + has_table) if re-run
+        "20260821_081",  # roles (org_id, name) partial unique index (#14325) —
+        # creates only an index, and extract_artifacts observes revisions solely
+        # through create_table/add_column, so an index-only revision cannot be
+        # observable by construction. Extended consciously, not to silence the
+        # guard: upgrade() returns early when the index already exists, so the
+        # adoption re-run this allowlist permits is a genuine no-op rather than
+        # a "relation already exists" failure.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
