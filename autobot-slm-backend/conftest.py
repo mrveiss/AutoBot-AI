@@ -258,7 +258,24 @@ for _name in _REAL_SERVICE_MODULES:
     _spec = _importlib_util.spec_from_file_location(f"services.{_name}", _path)
     _mod = _importlib_util.module_from_spec(_spec)
     sys.modules[f"services.{_name}"] = _mod
-    _spec.loader.exec_module(_mod)
+    try:
+        _spec.loader.exec_module(_mod)
+    except ImportError as _exc:
+        # A third-party dependency this module needs is absent here (#14326).
+        # Leave the name ABSENT rather than stubbed: a MagicMock is what
+        # #14307 removed, because it iterates as empty and turns a missing
+        # dependency into a silently wrong result instead of an error.
+        #
+        # Absent means a test that genuinely needs the module fails with a
+        # plain ImportError naming it, while unrelated tests in the same
+        # directory still run. Eager real-loading otherwise imposes every
+        # listed module's dependencies on every environment that loads this
+        # conftest — the deliberately-minimal migration gate hit exactly that,
+        # first with `yaml` (inventory_builder) and then `aiohttp`
+        # (a2a_card_fetcher), taking down tests unrelated to either.
+        sys.modules.pop(f"services.{_name}", None)
+        print(f"conftest: services.{_name} not real-loaded ({_exc}) — left absent, not stubbed")
+        continue
     setattr(sys.modules["services"], _name, _mod)
 
 # ── python-multipart ─────────────────────────────────────────────────────────
