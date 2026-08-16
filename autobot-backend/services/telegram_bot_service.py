@@ -79,6 +79,34 @@ class TelegramBotService:
 
         return cls(bot_token=bot_token)
 
+    async def _egress_denied(
+        self,
+        chat_id: str,
+        reply_to_message_id: Optional[int] = None,
+        require_approval: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """The egress gate every live Telegram send passes through (#14270).
+
+        One helper rather than the check inlined per method: this class has three
+        senders that each reach the Bot API, and the first version of #14270
+        gated only ``send_message``. Review found ``send_photo`` and
+        ``send_document`` still posting ungoverned — both reachable from the
+        agent-response dispatcher this control exists to protect. A copied guard
+        is a guard the next sender silently omits.
+
+        Returns the denial response to hand straight back, or ``None`` to proceed.
+        """
+        verdict = await egress_governor.evaluate(
+            platform="telegram",
+            channel_id=str(chat_id),
+            message_id=str(reply_to_message_id or ""),
+            require_approval=require_approval,
+        )
+        if verdict.allowed:
+            return None
+        logger.warning("Telegram send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+        return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
+
     async def send_message(
         self,
         chat_id: str,
@@ -122,15 +150,9 @@ class TelegramBotService:
         # a failure — APPROVAL_NEEDED above all — must never be gated by the
         # approval system it exists to serve, or arming the policy deadlocks it.
         # Callers opt into that explicitly; the default (None) follows the env flag.
-        verdict = await egress_governor.evaluate(
-            platform="telegram",
-            channel_id=str(chat_id),
-            message_id=str(reply_to_message_id or ""),
-            require_approval=require_approval,
-        )
-        if not verdict.allowed:
-            logger.warning("Telegram send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
-            return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
+        denied = await self._egress_denied(chat_id, reply_to_message_id, require_approval)
+        if denied:
+            return denied
 
         url = f"{self.base_url}/sendMessage"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
@@ -302,6 +324,10 @@ class TelegramBotService:
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
+        denied = await self._egress_denied(chat_id, reply_to_message_id)
+        if denied:
+            return denied
+
         url = f"{self.base_url}/sendPhoto"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
             if response.status != 200:
@@ -355,6 +381,10 @@ class TelegramBotService:
 
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
+
+        denied = await self._egress_denied(chat_id, reply_to_message_id)
+        if denied:
+            return denied
 
         url = f"{self.base_url}/sendDocument"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:

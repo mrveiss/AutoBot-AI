@@ -282,6 +282,16 @@ async def send_webhook_message(
     )
     integration = TeamsIntegration(config)
 
+    # #14270: this endpoint is a *sibling* of `send_message` above, not a branch
+    # of it. The comment there covers the Teams fallback inside that function and
+    # says nothing about this one, which reaches the same Teams webhook by its
+    # own route — so governing that function left this bypass wide open, reading
+    # as covered because the governor appears elsewhere in the module.
+    verdict = await egress_governor.evaluate(platform="teams", channel_id="", message_id="")
+    if not verdict.allowed:
+        logger.warning("teams webhook send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
+
     try:
         params = {"text": webhook.text}
         if webhook.title:

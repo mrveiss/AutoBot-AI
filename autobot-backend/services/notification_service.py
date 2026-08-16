@@ -438,6 +438,19 @@ class NotificationService:
         msg["To"] = to
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
+        # #14270: email was the one notification channel left ungated while its
+        # siblings were wired. SMTP delivers to a real external recipient — the
+        # same class of action as the webhook path above — so leaving it out made
+        # the control look complete while one door stayed open.
+        # require_approval=False for the same reason as the other alert channels:
+        # an APPROVAL_NEEDED alert must not be gated by the approval system.
+        await egress_governor.evaluate(
+            platform="email",
+            channel_id="",
+            message_id="",
+            require_approval=False,
+        )
+
         try:
             if use_tls:
                 from autobot_shared.tls import get_internal_tls_context

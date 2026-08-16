@@ -13,7 +13,7 @@ Every test here drives the **producer**, not the governor. A test that asserts
 patch the governor to deny and assert nothing reaches the transport.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -211,3 +211,77 @@ class TestNotificationAlertsAreAuditedButNeverBlocked:
 
         assert spy.await_args.kwargs["channel_id"] == "hooks.example.invalid"
         assert "secret-token-path" not in spy.await_args.kwargs["channel_id"]
+
+
+class TestTheSiblingSendersReviewFound:
+    """The gaps that shipped in the first version of #14270.
+
+    Every seam below reaches a real recipient and was ungoverned while a sibling
+    in the same file was carefully gated — which is the shape that makes a
+    bypass invisible: the governor's name appears in the module, so a reader
+    checking for coverage finds it and stops.
+
+    `send_photo` and `send_document` matter most: both are reachable from the
+    agent-response dispatcher this control exists to protect, so an agent
+    answering with an image bypassed the gate entirely.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method,kwargs",
+        [
+            ("send_photo", {"chat_id": "c-1", "photo": "file-id"}),
+            ("send_document", {"chat_id": "c-1", "document": "file-id"}),
+        ],
+    )
+    async def test_a_denied_verdict_stops_the_telegram_upload(self, method, kwargs):
+        from services.telegram_bot_service import TelegramBotService
+
+        svc = TelegramBotService(bot_token="t")
+        http = MagicMock()
+        with patch("services.telegram_bot_service.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+            with patch("services.telegram_bot_service.get_http_client", return_value=http) as client:
+                result = await getattr(svc, method)(**kwargs)
+
+        assert result["error"] == "egress_denied"
+        client.assert_not_called()
+        http.tracked_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_denied_verdict_stops_the_teams_webhook_endpoint(self):
+        """`send_webhook_message` is a sibling route, not a branch of
+        `send_message` — governing that function left this one open."""
+        from fastapi import HTTPException
+
+        from api.integration_communication import send_webhook_message
+
+        integration = MagicMock()
+        integration.execute_action = AsyncMock()
+        with patch("api.integration_communication.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+            with patch("api.integration_communication.TeamsIntegration", return_value=integration):
+                with pytest.raises(HTTPException) as raised:
+                    await send_webhook_message(
+                        provider="teams",
+                        webhook=MagicMock(text="hello", title=None, webhook_url="https://example.invalid/hook"),
+                    )
+
+        assert raised.value.status_code == 403
+        integration.execute_action.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_email_seam_is_audited(self):
+        """SMTP reaches a real external recipient. It was the one notification
+        channel left out while its siblings were wired."""
+        from services.notification_service import NotificationService
+
+        svc = NotificationService()
+        spy = AsyncMock(side_effect=_allow)
+        with patch("services.notification_service.egress_governor.evaluate", new=spy):
+            with patch("smtplib.SMTP"), patch("smtplib.SMTP_SSL"):
+                try:
+                    await svc._send_email("someone@example.invalid", "subj", "body")
+                except Exception:
+                    pass
+
+        spy.assert_awaited(), "the email seam sent without an audit record"
+        assert spy.await_args.kwargs["platform"] == "email"
