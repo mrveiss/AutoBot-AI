@@ -51,8 +51,82 @@ def test_a_file_without_a_router_prefix_yields_empty():
 
 
 def test_include_router_captures_name_and_prefix():
-    found = routing.INCLUDE_ROUTER_RE.findall('app.include_router(chat_router, prefix="/chat")')
+    found = routing.include_router_prefixes('app.include_router(chat_router, prefix="/chat")')
     assert found == [("chat_router", "/chat")]
+
+
+# --- #14356: an earlier argument containing parentheses must not hide prefix ---
+#
+# The old grammar reached `prefix=` through `[^)]*?`, which cannot cross a `)`.
+# `dependencies=[Depends(...)]` therefore hid the mount's own prefix and it was
+# dropped with no error — a route reported one segment short, at a path nothing
+# answers on. Silent omission, never a wrong pairing.
+
+
+def test_a_parenthesised_earlier_argument_does_not_hide_the_prefix():
+    source = 'router.include_router(a_router, dependencies=[Depends(get_current_user)], prefix="/a")'
+
+    assert routing.include_router_prefixes(source) == [("a_router", "/a")]
+
+
+def test_two_levels_of_nesting_still_reach_the_prefix():
+    """A depth-bounded regex would pass the case above and fail this one."""
+    source = 'router.include_router(a_router, dependencies=[Depends(scoped(admin))], prefix="/a")'
+
+    assert routing.include_router_prefixes(source) == [("a_router", "/a")]
+
+
+def test_a_multiline_call_is_read_as_one_call():
+    source = (
+        "router.include_router(\n"
+        "    a_router,\n"
+        "    dependencies=[Depends(get_current_user)],\n"
+        '    prefix="/a",\n'
+        ")\n"
+        'router.include_router(b_router, prefix="/b")\n'
+    )
+
+    assert routing.include_router_prefixes(source) == [("a_router", "/a"), ("b_router", "/b")]
+
+
+def test_the_prefix_of_a_nested_call_is_not_claimed_by_the_outer_one():
+    source = 'router.include_router(build(inner, prefix="/inner"), prefix="/outer")'
+
+    assert routing.include_router_prefixes(source) == [("build", "/outer")]
+
+
+def test_a_parenthesis_inside_a_string_does_not_unbalance_the_scan():
+    source = 'router.include_router(a_router, tags=["x)y"], prefix="/a")\n'
+
+    assert routing.include_router_prefixes(source) == [("a_router", "/a")]
+
+
+def test_a_call_without_a_prefix_contributes_nothing():
+    assert routing.include_router_prefixes("app.include_router(chat_router)") == []
+
+
+def test_a_keyword_only_call_does_not_capture_the_keyword_as_the_router():
+    """Regression on the fix itself.
+
+    The router-name pattern is greedy, so a bare `(?!\\s*=)` backtracks: given a
+    keyword named `prefix` it matches `prefi` so the next character is `x` rather
+    than `=`, and the keyword is captured as a router under a truncated name.
+    A comment in `audit_api_wiring_test.py` contains exactly this shape.
+    """
+    assert routing.include_router_prefixes('include_router(prefix="/api")') == []
+
+
+def test_a_dotted_router_name_is_captured_whole():
+    source = 'app.include_router(sub.mod_router, prefix="/s")'
+
+    assert routing.include_router_prefixes(source) == [("sub.mod_router", "/s")]
+
+
+def test_apirouter_prefix_survives_a_parenthesised_earlier_argument():
+    """`file_router_prefix` carried the identical defect and is fixed with it."""
+    source = 'router = APIRouter(dependencies=[Depends(get_current_user)], prefix="/llc")'
+
+    assert routing.file_router_prefix(source) == "/llc"
 
 
 def test_a_registry_tuple_naming_a_package_is_parsed():
@@ -201,3 +275,15 @@ def test_both_tools_use_the_shared_grammar_and_keep_no_private_copy():
         assert (
             're.compile(r"include_router' not in source and "re.compile(r'include_router" not in source
         ), f"{name} declares its own include_router regex again"
+
+
+def test_apirouter_prefix_distinguishes_absent_from_empty():
+    """`file_router_prefix` normalises; the raw form must not.
+
+    `api_endpoint_scanner._get_file_router_prefix` returns the prefix verbatim
+    and `None` when none is declared, so collapsing both onto `""` would change
+    what the scanner reports.
+    """
+    assert routing.apirouter_prefix('APIRouter(prefix="/llc/")') == "/llc/"
+    assert routing.apirouter_prefix("x = 1") is None
+    assert routing.file_router_prefix('APIRouter(prefix="/llc/")') == "/llc"

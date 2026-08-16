@@ -18,14 +18,20 @@ on:
     branches: [ main, Dev_new_gui, develop ]
     # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
     # pipeline-scripts/detect-hardcoded-values.sh scans with
-    # `grep -rn --include="*.py" --include="*.ts" --include="*.vue"` and nothing
-    # else, so a pull request touching none of those three extensions cannot
-    # change the violation count this workflow reports. The script itself and this
-    # file are included because either can change the verdict.
+    # `grep -rn --include="*.py" --include="*.ts" --include="*.vue" --include="*.sh"
+    # --include="*.yml" --include="*.yaml"` and nothing else (#14316 added the last
+    # three — shell scripts and Ansible YAML are where hardcoded accounts and
+    # paths actually live), so a pull request touching none of those six
+    # extensions cannot change the violation count this workflow reports. The
+    # script itself and this file are included because either can change the
+    # verdict.
     paths:
       - '**/*.py'
       - '**/*.ts'
       - '**/*.vue'
+      - '**/*.sh'
+      - '**/*.yml'
+      - '**/*.yaml'
       - 'pipeline-scripts/detect-hardcoded-values.sh'
       - '.github/workflows/ssot-coverage.yml'
 
