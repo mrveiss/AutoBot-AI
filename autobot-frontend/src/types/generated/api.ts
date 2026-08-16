@@ -50118,6 +50118,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/roles/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Roles */
+        get: operations["list_roles_api_llc_roles__company_id__get"];
+        put?: never;
+        /** Create Role */
+        post: operations["create_role_api_llc_roles__company_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Role */
+        delete: operations["delete_role_api_llc_roles__company_id___role_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Role */
+        patch: operations["update_role_api_llc_roles__company_id___role_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Holders
+         * @description Current holders, or the full tenure history when ``include_past`` is set.
+         */
+        get: operations["list_holders_api_llc_roles__company_id___role_id__holders_get"];
+        put?: never;
+        /** Assign Holder */
+        post: operations["assign_holder_api_llc_roles__company_id___role_id__holders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/holders/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End Tenure
+         * @description Ends the tenure. The row survives — a DELETE here is not a row deletion.
+         */
+        delete: operations["end_tenure_api_llc_roles__company_id___role_id__holders__assignment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Permissions */
+        get: operations["list_permissions_api_llc_roles__company_id___role_id__permissions_get"];
+        put?: never;
+        /**
+         * Grant Permission
+         * @description Admin-only — the service enforces it, so this route cannot forget to.
+         */
+        post: operations["grant_permission_api_llc_roles__company_id___role_id__permissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/permissions/{permission}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Permission */
+        delete: operations["revoke_permission_api_llc_roles__company_id___role_id__permissions__permission__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Role Workflows */
+        get: operations["list_role_workflows_api_llc_roles__company_id___role_id__workflows_get"];
+        put?: never;
+        /** Attach Workflow */
+        post: operations["attach_workflow_api_llc_roles__company_id___role_id__workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Workflow */
+        delete: operations["detach_workflow_api_llc_roles__company_id___role_id__workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -75573,6 +75723,40 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** HolderCreate */
+        HolderCreate: {
+            holder_type: components["schemas"]["RoleHolderType"];
+            /**
+             * Holder Id
+             * Format: uuid
+             */
+            holder_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** HolderResponse */
+        HolderResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Holder Type */
+            holder_type: string;
+            /** Holder Id */
+            holder_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * HookConfig
          * @description Configuration for pre-commit hooks.
@@ -85942,6 +86126,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** PermissionCreate */
+        PermissionCreate: {
+            /** Permission */
+            permission: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * PermissionLevel
          * @description Collaboration permission levels.
@@ -89614,25 +89805,54 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * RoleResponse
-         * @description Role information in responses.
-         */
-        RoleResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
+        /** RoleCreate */
+        RoleCreate: {
             /** Name */
             name: string;
             /** Description */
             description?: string | null;
-            /**
-             * Is System
-             * @default false
-             */
-            is_system: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleHolderType
+         * @description Who currently holds a role (#14221 step 2).
+         *
+         *     A **different axis** from :class:`AssigneeType`, not a wider version of it.
+         *     ``AssigneeType`` answers "who is working this work item"; this answers "who
+         *     occupies this role". They overlap on two members and diverge on the third,
+         *     which is exactly the shape that has bitten this module before — so:
+         *
+         *     **Never compare a member of this enum with a member of another.** Both are
+         *     ``str``-mixin enums, so ``RoleHolderType.AGENT == AssigneeType.AGENT`` is
+         *     silently ``True`` while a ``CONTACT`` holder compares equal to nothing at
+         *     all. That silent-True/silent-False pair is #13954's defect exactly.
+         *
+         *     ``CONTACT`` is why this is a separate enum rather than a new member on
+         *     ``AssigneeType``. Owner framing:
+         *
+         *         user = human, but not all humans are users — they could be part of a
+         *         process, like a contact person you send email to or call
+         *
+         *     A contact can therefore *hold a role* ("external accountant", "supplier
+         *     escalation contact") without ever being a user. Adding ``CONTACT`` to
+         *     ``AssigneeType`` instead would silently widen what a **work item** may be
+         *     assigned to, since assignment validates by enum membership — a data-model
+         *     change smuggled in as a vocabulary edit.
+         *
+         *     Minting a new vocabulary is deliberate and was checked first: no enum in
+         *     this codebase declares a ``contact`` member at all, so there was nothing to
+         *     reuse. Registered in #14263's inventory rather than left to become another
+         *     unowned status vocabulary.
+         * @enum {string}
+         */
+        RoleHolderType: "user" | "agent" | "contact";
+        /** RoleUpdate */
+        RoleUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -98444,7 +98664,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Roles */
-            roles?: components["schemas"]["RoleResponse"][];
+            roles?: components["schemas"]["autobot_shared__user_management__schemas__user__RoleResponse"][];
             /** Last Login At */
             last_login_at?: string | null;
             /**
@@ -100876,6 +101096,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowAttach */
+        WorkflowAttach: {
+            /** Workflow Id */
+            workflow_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WorkflowAuditLogEntry
          * @description Serialised workflow audit log entry.
@@ -101933,6 +102160,28 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RoleResponse
+         * @description Role information in responses.
+         */
+        autobot_shared__user_management__schemas__user__RoleResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ClearAllResponse
          * @description Shape of ``POST /api/knowledge_base/clear_all``.
          *
@@ -102016,6 +102265,30 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RoleResponse */
+        llc__api__roles__RoleResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -168988,6 +169261,433 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_llc_roles__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_role_api_llc_roles__company_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_role_api_llc_roles__company_id___role_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_role_api_llc_roles__company_id___role_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_holders_api_llc_roles__company_id___role_id__holders_get: {
+        parameters: {
+            query?: {
+                include_past?: boolean;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_holder_api_llc_roles__company_id___role_id__holders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_tenure_api_llc_roles__company_id___role_id__holders__assignment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_permissions_api_llc_roles__company_id___role_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_permission_api_llc_roles__company_id___role_id__permissions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_permission_api_llc_roles__company_id___role_id__permissions__permission__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                permission: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_workflows_api_llc_roles__company_id___role_id__workflows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_workflow_api_llc_roles__company_id___role_id__workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_workflow_api_llc_roles__company_id___role_id__workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

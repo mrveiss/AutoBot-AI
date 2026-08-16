@@ -30,6 +30,7 @@ from .labels import router as labels_router
 from .portability import router as portability_router
 from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
+from .roles import router as roles_router
 from .routines import router as routines_router
 from .runs import heartbeat_runs_router
 from .runs import router as runs_router
@@ -57,6 +58,7 @@ router.include_router(goals_router)
 router.include_router(health_router)
 router.include_router(secrets_router)
 router.include_router(findings_router)
+router.include_router(roles_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(github_webhooks_router)
