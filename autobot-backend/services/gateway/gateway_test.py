@@ -194,3 +194,157 @@ class TestChannelAdapterIngestGovernance:
 
         assert result is not None
         assert result.content == "hello"
+
+
+class TestEgressGovernanceIsWiredAtTheSharedSeam:
+    """#14067: outbound sends crossed no approval seam and left no record.
+
+    These drive `Gateway.send_message` for real. The governor's own unit tests
+    all stay green if the seam is never called, which is exactly the failure
+    mode these exist to catch.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_egress_stage_actually_runs_on_an_agent_send(self, fake_redis, monkeypatch):
+        from services.gateway import egress_governor as governor_module
+        from services.gateway.types import ChannelMessage, MessageType
+
+        calls = []
+        real_evaluate = governor_module.egress_governor.evaluate
+
+        async def _spy(**kwargs):
+            calls.append(kwargs)
+            return await real_evaluate(**kwargs)
+
+        monkeypatch.setattr(governor_module.egress_governor, "evaluate", _spy)
+
+        gateway, session = await _build_gateway_with_session()
+        reply = ChannelMessage(
+            message_id="egress-1",
+            session_id=session.session_id,
+            channel=session.channel,
+            message_type=MessageType.AGENT_TEXT,
+            content="a reply to a real person",
+        )
+        assert await gateway.send_message(reply) is True
+        assert len(calls) == 1
+        assert calls[0]["message_id"] == "egress-1"
+
+    @pytest.mark.asyncio
+    async def test_a_denied_send_never_reaches_the_adapter(self, fake_redis, monkeypatch):
+        """The property that matters: blocked at the seam, not merely reported."""
+        from services.gateway import egress_governor as governor_module
+        from services.gateway.egress_governor import EgressVerdict
+        from services.gateway.types import ChannelMessage, MessageType
+
+        gateway, session = await _build_gateway_with_session()
+        adapter = gateway._channel_adapters[ChannelType.WEBSOCKET]
+        delivered = []
+
+        async def _spy_send(message, session_, connection_context=None):
+            delivered.append(message)
+            return True
+
+        monkeypatch.setattr(adapter, "send_message", _spy_send)
+
+        async def _deny(**_kwargs):
+            return EgressVerdict(allowed=False, reason="denied by test", rule="approver")
+
+        monkeypatch.setattr(governor_module.egress_governor, "evaluate", _deny)
+
+        reply = ChannelMessage(
+            session_id=session.session_id,
+            channel=session.channel,
+            message_type=MessageType.AGENT_TEXT,
+            content="must not be sent",
+        )
+        assert await gateway.send_message(reply) is False
+        assert delivered == [], "a denied message was handed to the adapter anyway"
+
+    @pytest.mark.asyncio
+    async def test_an_approved_send_reaches_the_adapter_unchanged(self, fake_redis, monkeypatch):
+        from services.gateway.types import ChannelMessage, MessageType
+
+        gateway, session = await _build_gateway_with_session()
+        adapter = gateway._channel_adapters[ChannelType.WEBSOCKET]
+        delivered = []
+
+        async def _spy_send(message, session_, connection_context=None):
+            delivered.append(message)
+            return True
+
+        monkeypatch.setattr(adapter, "send_message", _spy_send)
+
+        reply = ChannelMessage(
+            session_id=session.session_id,
+            channel=session.channel,
+            message_type=MessageType.AGENT_TEXT,
+            content="allowed content",
+        )
+        assert await gateway.send_message(reply) is True
+        assert [m.content for m in delivered] == ["allowed content"]
+
+    @pytest.mark.asyncio
+    async def test_a_newly_added_adapter_inherits_the_gate_with_no_adapter_change(self, fake_redis, monkeypatch):
+        """The structural claim, asserted rather than asserted-about.
+
+        A brand-new adapter subclass with no knowledge of egress governance must
+        still be gated, because the stage lives at the Gateway seam.
+        """
+        from services.gateway import egress_governor as governor_module
+        from services.gateway.egress_governor import EgressVerdict
+        from services.gateway.types import ChannelMessage, MessageType
+
+        class _BrandNewAdapter(_FakeChannelAdapter):
+            def __init__(self) -> None:
+                super().__init__()
+                self.delivered = []
+
+            async def send_message(self, message, session, connection_context=None) -> bool:
+                self.delivered.append(message)
+                return True
+
+        gateway = Gateway(config=GatewayConfig())
+        adapter = _BrandNewAdapter()
+        gateway.register_channel_adapter(ChannelType.WEBSOCKET, adapter)
+        session = await gateway.session_manager.create_session(user_id="u2", channel=ChannelType.WEBSOCKET)
+
+        async def _deny(**_kwargs):
+            return EgressVerdict(allowed=False, reason="denied by test", rule="approver")
+
+        monkeypatch.setattr(governor_module.egress_governor, "evaluate", _deny)
+
+        reply = ChannelMessage(
+            session_id=session.session_id,
+            channel=session.channel,
+            message_type=MessageType.AGENT_TEXT,
+            content="new adapter, same gate",
+        )
+        assert await gateway.send_message(reply) is False
+        assert adapter.delivered == []
+
+    @pytest.mark.asyncio
+    async def test_session_control_traffic_is_not_governed(self, fake_redis, monkeypatch):
+        """Heartbeats and lifecycle events are not messages to a person."""
+        from services.gateway import egress_governor as governor_module
+        from services.gateway.types import ChannelMessage, MessageType
+
+        calls = []
+
+        async def _spy(**kwargs):
+            calls.append(kwargs)
+            from services.gateway.egress_governor import EgressVerdict
+
+            return EgressVerdict(allowed=True)
+
+        monkeypatch.setattr(governor_module.egress_governor, "evaluate", _spy)
+
+        gateway, session = await _build_gateway_with_session()
+        control = ChannelMessage(
+            session_id=session.session_id,
+            channel=session.channel,
+            message_type=MessageType.SESSION_START,
+            content="",
+        )
+        await gateway.send_message(control)
+        assert calls == []
