@@ -4,96 +4,106 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
+Agent Seed Migration (Issue #760 Phase 3, #14321)
 
-Agent Seed Migration Script (Issue #760 Phase 3)
+Seeds the SLM `agents` table with the canonical AutoBot agent roster from
+services/agent_seeder.py -- the same SEED_AGENT_CONFIGS list main.py's
+startup lifespan seeds with on every boot (see main.py::_seed_default_agents),
+so this migration and the runtime seeder can never drift apart.
 
-Seeds the SLM agents table with DEFAULT_AGENT_CONFIGS from the backend.
-Run this once to populate SLM with existing agent configurations.
+#14321: this used to define its own seed logic around an async
+`seed_agents()` function that imported `backend.api.agent_config` -- a
+cross-codebase module path that was never resolvable from this package (the
+top-level directory is `autobot-backend`, not `backend`) -- and, because the
+migrations runner only invokes a module-level `migrate()`/`run()`, that
+function was never even called. The runner recorded `seed_agents` as
+applied anyway, so the seeding never happened via this path. This exposes
+the `migrate(db_url)` entry point the runner looks for and reuses the
+already-canonical roster instead of forking a second copy of it.
 
 Usage:
-    cd <autobot-root>
-    python slm-server/migrations/seed_agents.py
+    cd <autobot-root>/autobot-slm-backend
+    python -m migrations.seed_agents
 """
 
-import asyncio
 import logging
 import sys
-from pathlib import Path
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-from autobot_shared.ssot_config import config as _ssot_config
+from migrations import utils as _migration_utils
+from migrations.utils import get_connection, table_exists
 
-# Add parent directories to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Default Ollama endpoint — resolved from SSOT (AUTOBOT_OLLAMA_ENDPOINT env var)
-DEFAULT_OLLAMA_ENDPOINT = _ssot_config.llm.ollama_endpoint
 
+def migrate(db_url: str) -> None:
+    """Seed `agents` from SEED_AGENT_CONFIGS (#14321).
 
-async def seed_agents():
-    """Seed agents from backend DEFAULT_AGENT_CONFIGS."""
-    # Import here to avoid circular imports
-    from sqlalchemy import select
+    Idempotent: ON CONFLICT (agent_id) DO NOTHING skips agents that already
+    exist, matching services.agent_seeder.seed_default_agents (the async
+    version main.py runs on every startup).
+    """
+    from autobot_shared.ssot_config import config as _ssot_config
 
-    from config import settings  # noqa: F401
-    from models.database import Agent
-    from services.database import db_service
+    from services.agent_seeder import SEED_AGENT_CONFIGS
 
-    # Initialize database
-    await db_service.initialize()
+    ollama_endpoint = _ssot_config.llm.ollama_endpoint
+
+    conn = get_connection(db_url)
+    cursor = conn.cursor()
 
     try:
-        # Import backend agent configs
-        from backend.api.agent_config import DEFAULT_AGENT_CONFIGS
-    except ImportError as e:
-        logger.error("Failed to import backend agent configs: %s", e)
-        logger.info("Make sure you're running from the AutoBot root directory")
-        return False
+        if not table_exists(cursor, "agents"):
+            # add_agents (immediately before this entry in runner.MIGRATIONS)
+            # always creates this table first; defer rather than crash so a
+            # future run retries if that invariant is ever violated (#14300).
+            _migration_utils.defer("agents")
+            logger.warning("Deferring seed_agents: agents table does not exist yet")
+            return
 
-    async with db_service.session() as db:
-        created_count = 0
-        skipped_count = 0
-
-        for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-            # Check if agent already exists
-            result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
-            if result.scalar_one_or_none():
-                logger.debug("Agent %s already exists, skipping", agent_id)
-                skipped_count += 1
-                continue
-
-            # Determine model from config
-            default_model = config.get("default_model", DEFAULT_LLM_MODEL)
-
-            # Create agent
-            agent = Agent(
-                agent_id=agent_id,
-                name=config["name"],
-                description=config.get("description", ""),
-                llm_provider=config.get("provider", "ollama"),
-                llm_endpoint=DEFAULT_OLLAMA_ENDPOINT,
-                llm_model=default_model,
-                llm_timeout=30,
-                llm_temperature=0.7,
-                llm_max_tokens=None,
-                is_default=(agent_id == "orchestrator"),
-                is_active=config.get("enabled", True),
+        created = 0
+        for cfg in SEED_AGENT_CONFIGS:
+            cursor.execute(
+                """
+                INSERT INTO agents (
+                    agent_id, name, description, llm_provider, llm_endpoint,
+                    llm_model, llm_timeout, llm_temperature, llm_max_tokens,
+                    is_default, is_active
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (agent_id) DO NOTHING
+                """,
+                (
+                    cfg["agent_id"],
+                    cfg["name"],
+                    cfg["description"],
+                    "ollama",
+                    ollama_endpoint,
+                    cfg["llm_model"],
+                    30,
+                    0.7,
+                    None,
+                    cfg["is_default"],
+                    cfg["is_active"],
+                ),
             )
-            db.add(agent)
-            created_count += 1
-            logger.info("Created agent: %s (%s)", agent_id, config["name"])
+            if cursor.rowcount:
+                created += 1
 
-        await db.commit()
-        logger.info("Seed complete: %d created, %d skipped", created_count, skipped_count)
-
-    await db_service.close()
-    return True
+        conn.commit()
+        logger.info(
+            "seed_agents: %d agent(s) created, %d already present",
+            created,
+            len(SEED_AGENT_CONFIGS) - created,
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
-    success = asyncio.run(seed_agents())
-    sys.exit(0 if success else 1)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    from migrations.runner import get_db_url
+
+    migrate(sys.argv[1] if len(sys.argv) > 1 else get_db_url())
+    sys.exit(0)
