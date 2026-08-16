@@ -1171,7 +1171,7 @@ def publish_dispatch_states(
     wedged = overdue_by_head(overdue)
     self_hosted_paths = self_hosted_workflow_paths(config["workflow_dir"])
     if self_hosted_paths is None:
-        print(
+        print(  # noqa: print
             f"::warning::{config['workflow_dir']} unreadable — a starved run cannot be "
             "attributed to a runner pool, so pool verdicts fall back to unfiltered."
         )
@@ -1369,7 +1369,7 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     if not starved:
         if pool.overdue:
             return 1
-        print(
+        print(  # noqa: print
             f"No self-hosted run has been queued longer than {config['stall_minutes']}m — "
             "runner pool is keeping up."
         )
@@ -1394,7 +1394,7 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
         if pool.overdue
         else "while no self-hosted job is executing"
     )
-    print(
+    print(  # noqa: print
         f"::error::{len(starved)} self-hosted workflow run(s) queued over "
         f"{config['stall_minutes']}m {reason}"
     )
