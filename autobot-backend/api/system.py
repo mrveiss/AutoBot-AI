@@ -68,11 +68,62 @@ from api.system_health import (  # noqa: E402 — registration must happen at im
 )
 
 
+@register_health_probe("routers")
+async def _probe_all_routers(request=None) -> ComponentHealth:
+    """Every router group's mount status, not just the feature group (#14207).
+
+    A router that fails to import is not mounted, and every endpoint it owns
+    returns 404 — indistinguishable from an endpoint that was never built.
+    Six of the seven registries recorded nothing at all, so the only way to
+    tell was to find one WARNING among the startup logs. This reflects the
+    shared load registry so "was this router ever mounted in this process?"
+    is answerable without them.
+
+    The ``feature_routers`` probe below predates this one and stays: it is the
+    per-group view with cross-worker aggregation (#6808), while this is the
+    fleet-of-groups roll-up.
+    """
+    from initialization.router_registry.loader import get_load_results
+
+    results = get_load_results()
+    if not results:
+        return ComponentHealth(
+            name="routers",
+            status="degraded",
+            detail="load results empty — routers may not have been loaded yet",
+        )
+    failed = [r for r in results if not r.get("loaded")]
+    by_group: dict[str, dict[str, int]] = {}
+    for entry in results:
+        counts = by_group.setdefault(entry.get("group", "unknown"), {"loaded": 0, "total": 0})
+        counts["total"] += 1
+        counts["loaded"] += 1 if entry.get("loaded") else 0
+    data = {
+        "loaded": len(results) - len(failed),
+        "total": len(results),
+        "groups": by_group,
+        "failed": [{"name": r["name"], "group": r.get("group"), "error": r.get("error")} for r in failed],
+    }
+    if failed:
+        return ComponentHealth(
+            name="routers",
+            status="degraded",
+            detail=f"{len(failed)} router(s) failed to import: " + ", ".join(r["name"] for r in failed),
+            data=data,
+        )
+    return ComponentHealth(
+        name="routers",
+        status="ok",
+        detail=f"{len(results)}/{len(results)} routers loaded across {len(by_group)} groups",
+        data=data,
+    )
+
+
 @register_health_probe("feature_routers")
 async def _probe_feature_routers(request=None) -> ComponentHealth:
-    """Reflect ``_LOAD_RESULTS`` from #6797 into the canonical aggregator.
+    """Reflect the feature group's load results from #6797 into the aggregator.
 
-    Per #6808, ``_LOAD_RESULTS`` is per-uvicorn-worker — each worker reports
+    Per #6808, those results are per-uvicorn-worker — each worker reports
     its own snapshot. Cross-worker aggregation is tracked separately; this
     probe is the per-worker view, which is sufficient for the canonical
     surface to flag any partial boot.
