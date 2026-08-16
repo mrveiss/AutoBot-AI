@@ -23,7 +23,7 @@
 #
 #   # Or with a one-off inventory for an unregistered host:
 #   ansible-playbook playbooks/bootstrap-node.yml \
-#     -i "172.16.168.26," \  # noqa: doc example, not a real host (#14316)
+#     -i "192.0.2.10," \
 #     -e "ansible_user=martins" \
 #     --ask-pass --ask-become-pass
 #
