@@ -185,4 +185,108 @@ describe('RolesView (#14221 step 6)', () => {
 
     expect(wrapper.text()).toContain(en.llcRoles.empty)
   })
+
+  it('requests past holders when the toggle is on', async () => {
+    respond()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      includePastHolders: boolean
+      loadDetail: () => Promise<void>
+    }
+
+    vm.includePastHolders = true
+    await vm.loadDetail()
+    await flushPromises()
+
+    const holderCalls = get.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/holders'))
+    expect(holderCalls.at(-1)).toContain('include_past=true')
+  })
+
+  it('opens and closes the create modal', async () => {
+    respond()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      isCreateModalOpen: boolean
+      newRoleName: string
+      openCreateModal: () => void
+      closeCreateModal: () => void
+    }
+
+    vm.newRoleName = 'left over from last time'
+    vm.openCreateModal()
+    expect(vm.isCreateModalOpen).toBe(true)
+    // Reopening must not present the previous attempt's text as a new draft.
+    expect(vm.newRoleName).toBe('')
+
+    vm.closeCreateModal()
+    expect(vm.isCreateModalOpen).toBe(false)
+  })
+
+  it('surfaces the refusal when creating a role is not permitted', async () => {
+    respond()
+    post.mockRejectedValue(new Error("HTTP 403: membership role 'member' may not perform this change"))
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      newRoleName: string
+      createRole: () => Promise<void>
+    }
+
+    vm.newRoleName = 'SRE'
+    await vm.createRole()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('may not perform this change')
+  })
+
+  it('deletes a role and reloads the list', async () => {
+    respond()
+    del.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      selectedRoleId: string | null
+      removeRole: (id: string) => Promise<void>
+    }
+
+    // The reload must see the role gone. Leaving it in the mock response would
+    // model an impossible state, and the view would legitimately re-select it.
+    respond({ roles: [] })
+    const before = get.mock.calls.length
+    await vm.removeRole('r1')
+    await flushPromises()
+
+    expect(del).toHaveBeenCalledWith('/api/llc/roles/c1/r1')
+    expect(get.mock.calls.length).toBeGreaterThan(before)
+    // Selection must not survive the row it pointed at, or the detail pane
+    // renders a role that no longer exists.
+    expect(vm.selectedRoleId).toBeNull()
+    expect(wrapper.text()).toContain(en.llcRoles.empty)
+  })
+
+  it('re-selects a remaining role after a delete', async () => {
+    respond()
+    del.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      selectedRoleId: string | null
+      removeRole: (id: string) => Promise<void>
+    }
+
+    respond({ roles: [SYSTEM_ROLE] })
+    await vm.removeRole('r1')
+    await flushPromises()
+
+    expect(vm.selectedRoleId).toBe('r2')
+  })
+
+  it('surfaces the reason a delete was refused', async () => {
+    respond()
+    del.mockRejectedValue(new Error('HTTP 400: a system role cannot be deleted'))
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { removeRole: (id: string) => Promise<void> }
+
+    await vm.removeRole('r1')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('system role cannot be deleted')
+  })
 })
