@@ -46,7 +46,7 @@ from api.schemas_workflows import (
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from skills.manager import SkillManager
+from skills.manager import SkillManager, get_skill_manager
 from skills.registry import get_skill_registry
 
 logger = get_logger(__name__)
@@ -54,18 +54,14 @@ logger = get_logger(__name__)
 logger = get_logger(__name__)
 router = APIRouter()
 
-_manager: SkillManager | None = None
-
-
 def _get_manager() -> SkillManager:
-    """Get or create the SkillManager singleton.
+    """Get the process-wide SkillManager.
 
-    Helper for API endpoints (Issue #731).
+    Helper for API endpoints (Issue #731).  #14406 replaced this module's own
+    global with the shared singleton in ``skills/manager.py`` so API-driven and
+    trigger-driven invocations are metered by the same instance.
     """
-    global _manager
-    if _manager is None:
-        _manager = SkillManager()
-    return _manager
+    return get_skill_manager()
 
 
 # --- Endpoints ---

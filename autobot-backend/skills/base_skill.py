@@ -186,6 +186,22 @@ class BaseSkill(ABC):
         """Return list of tool names this skill provides."""
         return self.get_manifest().tools
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Map each declared trigger to the action that handles it (#14406).
+
+        ``manifest.triggers`` names the events a skill responds to; this binding
+        says *how* it responds, by naming one of the skill's own
+        ``manifest.tools`` entries.  ``skills/trigger_dispatcher.py`` needs both
+        halves to turn an emitted event into an invocation — a declared trigger
+        with no binding here is dispatchable by nobody.
+
+        The default is empty because ``DeclarativeSkill`` has no Python
+        execution path.  Every skill declaring event triggers must override it;
+        ``trigger_dispatcher_test.py`` fails when a declared trigger has no
+        binding or binds an action absent from ``manifest.tools``.
+        """
+        return {}
+
 
 class DeclarativeSkill(BaseSkill):
     """Concrete BaseSkill for SKILL.md-only builtin skills.

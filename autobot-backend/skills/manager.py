@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.cache_wrapper import RedisCache
+from autobot_shared.singleton_factory import lazy_singleton
 from skills.registry import SkillRegistry, get_skill_registry
 
 logger = get_logger(__name__)
@@ -340,6 +341,13 @@ def _matches_query(skill_info: Dict[str, Any], query: str) -> bool:
         if query in tag.lower():
             return True
     return False
+
+
+#: Process-wide SkillManager (#14406).  api/skills.py, api/onboarding.py and
+#: skills/trigger_dispatcher.py each used to construct their own, so a
+#: trigger-driven invocation and an API-driven one were metered by different
+#: instances.  They wrap the same registry singleton, so one manager is correct.
+get_skill_manager = lazy_singleton(SkillManager)
 
 
 async def _get_redis():

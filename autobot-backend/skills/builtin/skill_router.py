@@ -268,17 +268,9 @@ class SkillRouterSkill(BaseSkill):
         research = await self._research_capability(task, registry)
 
         # Step 3: Build the skill, enriching the capability with research context.
-        build_skill = registry.get("autonomous-skill-development")
-        if not build_skill:
-            return {"success": False, "error": "no skills registered"}
-        enriched = _enrich_capability(task, research)
-        result = await build_skill.execute(
-            {
-                "capability": enriched,
-                "requested_by": "skill-router",
-                "context": research,
-            }
-        )
+        result = await self._delegate_gap_build(task, research)
+        if result is None:
+            return {"success": False, "error": "no skill is dispatchable on explicit_gap_signal"}
         return {
             "success": result.get("success", False),
             "enabled_skill": None,
@@ -288,6 +280,27 @@ class SkillRouterSkill(BaseSkill):
             "reason": ("No matching skill; researched and delegated to " "autonomous-skill-development"),
             "dry_run": False,
         }
+
+    @staticmethod
+    async def _delegate_gap_build(task: str, research: Dict[str, Any]) -> Dict[str, Any] | None:
+        """Emit ``explicit_gap_signal`` and return the first skill result (#14406).
+
+        This used to call ``autonomous-skill-development`` by name.  Emitting the
+        declared trigger instead means the manifest and the routing path describe
+        the same mechanism — a user task no skill covers *is* the explicit gap
+        signal.  Returns ``None`` when no enabled skill is dispatchable on it.
+        """
+        from skills.trigger_dispatcher import emit_skill_trigger
+
+        results = await emit_skill_trigger(
+            "explicit_gap_signal",
+            {
+                "capability": _enrich_capability(task, research),
+                "requested_by": "skill-router",
+                "context": research,
+            },
+        )
+        return results[0] if results else None
 
     async def _research_capability(self, task: str, registry: Any) -> Dict[str, Any]:
         """Call skill-researcher if registered; return empty dict on any failure."""

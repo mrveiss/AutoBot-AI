@@ -21,6 +21,10 @@ from skills.base_skill import BaseSkill, SkillManifest
 
 logger = get_logger(__name__)
 
+#: The skill's only action.  Named once so the manifest, the trigger bindings
+#: and the ``execute`` guard cannot drift apart (#14406).
+TOOL_TRIGGER_GAP_DEVELOPMENT = "trigger_gap_development"
+
 
 class AutonomousSkillDevelopmentSkill(BaseSkill):
     """Self-improvement skill: detect gaps, generate, and activate new skills."""
@@ -40,15 +44,32 @@ class AutonomousSkillDevelopmentSkill(BaseSkill):
             author="mrveiss",
             category="self-improvement",
             dependencies=[],
-            tools=["trigger_gap_development"],
+            tools=[TOOL_TRIGGER_GAP_DEVELOPMENT],
             triggers=["agent_capability_gap", "explicit_gap_signal"],
             tags=["self-improvement", "meta", "governance", "gap-detection"],
         )
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind each declared trigger to the action that handles it (#14406).
+
+        Both gap signals start the same pipeline; they differ only in how the
+        gap was noticed, which the emitter passes through in ``context``.
+        """
+        return {
+            "agent_capability_gap": TOOL_TRIGGER_GAP_DEVELOPMENT,
+            "explicit_gap_signal": TOOL_TRIGGER_GAP_DEVELOPMENT,
+        }
+
+    async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Orchestrate the gap-to-skill pipeline.
 
+        #14406: this took ``(params)`` only, breaking the ``BaseSkill.execute``
+        contract, so every canonical invocation path — ``SkillManager.execute_skill``
+        and therefore ``POST /api/skills/{name}/execute`` — raised ``TypeError``
+        against this skill.  Only the two hand-written direct callers worked.
+
         Args:
+            action: The tool name to run; only ``trigger_gap_development``.
             params: dict with keys:
                 - capability: str   description of the missing capability
                 - requested_by: str  caller identity (default "autobot-self")
@@ -57,6 +78,9 @@ class AutonomousSkillDevelopmentSkill(BaseSkill):
         Returns:
             dict with keys: success, state, approval_id, skill_name, message
         """
+        if action != TOOL_TRIGGER_GAP_DEVELOPMENT:
+            return {"success": False, "message": f"Unknown action: {action}"}
+
         capability = params.get("capability", "")
         requested_by = params.get("requested_by", "autobot-self")
         if not capability:

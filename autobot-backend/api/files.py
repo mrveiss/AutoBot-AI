@@ -496,6 +496,26 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
         )
 
 
+async def _emit_document_uploaded(target_file: Path) -> None:
+    """Emit the ``document_uploaded`` skill trigger for a stored upload (#14406).
+
+    ``DocumentAnalysisSkill`` declares this trigger, and before #14406 nothing
+    anywhere produced it — the manifest and the dashboard advertised a response
+    to document uploads that could not happen.  This is that producer.
+
+    Dispatch is a no-op unless an operator has enabled a skill declaring the
+    trigger, and the skill rejects formats it does not handle, so an upload of
+    any other kind of file costs one registry lookup.  Failures are logged and
+    swallowed: a skill must never turn a successful upload into a 500.
+    """
+    try:
+        from skills.trigger_dispatcher import emit_skill_trigger
+
+        await emit_skill_trigger("document_uploaded", {"file_path": str(target_file)})
+    except Exception as exc:
+        logger.debug("document_uploaded dispatch failed (non-critical): %s", exc)
+
+
 async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:
     """
     Write uploaded file to target location.
@@ -676,6 +696,11 @@ async def upload_file(
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
+
+    # #14406: the file is now on disk at a real path, which is what
+    # DocumentAnalysisSkill needs and what makes it the honest emission point
+    # for the `document_uploaded` trigger it declares.
+    await _emit_document_uploaded(target_file)
 
     # Get file info for response
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
