@@ -96,6 +96,21 @@ class TestSignalCancelToken:
         ct.signal_cancel_token("op", token, "second signal")
         assert calls == [], "an already-signalled token must not be logged again"
 
+    def test_records_the_prometheus_metric(self):
+        """#14244 item 3: a metric, not only a log line, so the gap between
+        'the client got a response' and 'the work actually stopped' shows up
+        on a dashboard instead of only in logs someone has to go looking for.
+        """
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        manager = get_metrics_manager()
+        before = manager.executor_cancel_signalled_total.labels(operation="metric_test")._value.get()
+
+        ct.signal_cancel_token("metric_test", ct.new_cancel_token(), "timed out")
+
+        after = manager.executor_cancel_signalled_total.labels(operation="metric_test")._value.get()
+        assert after == before + 1
+
 
 class TestSubmitCancellable:
     @pytest.mark.asyncio
