@@ -41,6 +41,11 @@ pnpm-lock.yaml
 *.tsbuildinfo
 .vue-tsc-cache/
 
+# === CI vue-tsc OUTPUT CAPTURE (#14481) ===
+# check-ts-delta.sh's status marker; vue-tsc-output.log is already covered
+# by the *.log rule above.
+vue-tsc-status.txt
+
 # === TESTING FRAMEWORK GENERATED FILES ===
 # Cypress
 /cypress/videos/
