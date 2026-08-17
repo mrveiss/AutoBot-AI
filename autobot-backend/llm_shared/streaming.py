@@ -121,6 +121,29 @@ class StreamingManager:
         self.streaming_failures.clear()
 
 
+def mark_stream_start() -> float:
+    """Return a monotonic reference time marking the start of a streaming request.
+
+    Issue #14211: streaming never captured a first-chunk timestamp, so
+    ``autobot_llm_time_to_first_token_seconds`` stayed empty even while
+    clients streamed real responses. Callers record this value when a
+    stream begins, then pass it to ``time_to_first_token`` once the first
+    content chunk arrives.
+    """
+    return time.monotonic()
+
+
+def time_to_first_token(start_time: float) -> float:
+    """Return elapsed seconds between ``start_time`` and now.
+
+    ``start_time`` must come from ``mark_stream_start()`` called at the
+    start of the same streaming request. Issue #14211.
+    """
+    return time.monotonic() - start_time
+
+
 __all__ = [
     "StreamingManager",
+    "mark_stream_start",
+    "time_to_first_token",
 ]
