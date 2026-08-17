@@ -49892,6 +49892,13 @@ export interface paths {
         /**
          * Delete Contact
          * @description Permanently delete the contact — its PII no longer exists at rest afterward.
+         *
+         *     Delegates to :meth:`ContactDirectoryService.delete` (#14464 review) rather
+         *     than ``ContactService.delete``. The directory is shared across companies, so
+         *     a delete here is global — routing it through the same guard as
+         *     ``/{company_id}/directory/{contact_id}`` is what stops a plain member of the
+         *     contact's legacy company from hard-deleting someone who still holds a role
+         *     (and therefore permissions) in a company they were never a member of.
          */
         delete: operations["delete_contact_api_llc_contacts__company_id___contact_id__delete"];
         options?: never;
