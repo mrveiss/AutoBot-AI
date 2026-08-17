@@ -107,7 +107,8 @@ def test_package_level_reexports_still_work_for_every_public_name():
     jwt_core-backed names are still expected to pull bcrypt/jwt — they are not
     blocked here — this only proves the lazy re-export resolves correctly.
     """
-    result = _run_in_subprocess("""
+    result = _run_in_subprocess(
+        """
         from autobot_shared.auth import (
             ApiKeyAuth,
             BasicAuth,
@@ -130,7 +131,9 @@ def test_package_level_reexports_still_work_for_every_public_name():
         ):
             assert value is not None
         print("OK")
-        """, block_bcrypt_jwt=False)
+        """,
+        block_bcrypt_jwt=False,
+    )
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
 
@@ -141,7 +144,8 @@ def test_package_level_jwt_reexport_still_works_when_jwt_core_is_allowed():
     Unlike the tests above, this one does NOT block bcrypt/jwt — a caller that
     actually wants a jwt_core symbol must still get it lazily.
     """
-    result = _run_in_subprocess("""
+    result = _run_in_subprocess(
+        """
         from autobot_shared.auth import decode_jwt, encode_jwt, hash_password, verify_password
 
         for value in (decode_jwt, encode_jwt, hash_password, verify_password):
@@ -149,6 +153,8 @@ def test_package_level_jwt_reexport_still_works_when_jwt_core_is_allowed():
 
         assert "autobot_shared.auth.jwt_core" in sys.modules
         print("OK")
-        """, block_bcrypt_jwt=False)
+        """,
+        block_bcrypt_jwt=False,
+    )
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
