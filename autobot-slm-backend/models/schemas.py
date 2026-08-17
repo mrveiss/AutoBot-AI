@@ -450,6 +450,11 @@ class HealthResponse(BaseModel):
     version: str
     uptime_seconds: float
     database: str
+    # #14299: Redis was never part of this response — a backend with an open
+    # circuit breaker on its main database still reported itself healthy, as
+    # long as Postgres answered. Required (not Optional): the single caller
+    # (api/health.py::health_check) always sets it.
+    redis: str
     nodes_online: int
     nodes_total: int
 

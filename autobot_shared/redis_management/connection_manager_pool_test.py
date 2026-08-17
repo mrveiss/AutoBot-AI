@@ -27,25 +27,59 @@ def _bare_manager() -> RedisConnectionManager:
     return m
 
 
+def _bare_validate_manager() -> RedisConnectionManager:
+    """Manager instance with the state _validate_config_host/
+    _open_circuit_for_config_error touch (#14299: it stopped being a
+    staticmethod so it could log the config error once instead of on every
+    call — see _open_circuit_for_config_error)."""
+    m = object.__new__(RedisConnectionManager)
+    m._config_broken = set()
+    m._circuit_open = {}
+    m._states = {}
+    m._failure_counts = {}
+    m._last_failure_times = {}
+    m._metrics = {}
+    return m
+
+
 class TestValidateConfigHost:
     def test_empty_host_raises_configuration_error(self):
         cfg = SimpleNamespace(host="")
         with pytest.raises(RedisConfigurationError):
-            RedisConnectionManager._validate_config_host("main", cfg)
+            _bare_validate_manager()._validate_config_host("main", cfg)
 
     def test_blank_host_raises_configuration_error(self):
         cfg = SimpleNamespace(host="   ")
         with pytest.raises(RedisConfigurationError):
-            RedisConnectionManager._validate_config_host("main", cfg)
+            _bare_validate_manager()._validate_config_host("main", cfg)
 
     def test_none_host_raises_configuration_error(self):
         cfg = SimpleNamespace(host=None)
         with pytest.raises(RedisConfigurationError):
-            RedisConnectionManager._validate_config_host("main", cfg)
+            _bare_validate_manager()._validate_config_host("main", cfg)
 
     def test_valid_host_passes(self):
         cfg = SimpleNamespace(host="127.0.0.1")
-        RedisConnectionManager._validate_config_host("main", cfg)  # no raise
+        _bare_validate_manager()._validate_config_host("main", cfg)  # no raise
+
+    def test_repeated_empty_host_opens_circuit_once_not_every_call(self):
+        """#14299: a config error must log/open the circuit ONCE, then every
+        later call short-circuits without re-deriving or re-logging."""
+        cfg = SimpleNamespace(host="")
+        manager = _bare_validate_manager()
+
+        for _ in range(5):
+            with pytest.raises(RedisConfigurationError):
+                manager._validate_config_host("main", cfg)
+
+        assert manager._failure_counts["main"] == 1, (
+            "5 calls raised the same permanent config error — only the FIRST "
+            "may record a failure, or the breaker cycles exactly the noisy "
+            "way #14299 reports"
+        )
+        assert manager._circuit_open["main"] is True
+        assert manager._check_circuit_breaker("main") is True
+        assert "main" in manager._config_broken
 
     def test_configuration_error_is_not_retryable_connection_error(self):
         """The retry mechanism keys on ConnectionError/TimeoutError — the

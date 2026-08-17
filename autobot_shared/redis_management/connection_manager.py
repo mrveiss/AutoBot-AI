@@ -263,6 +263,12 @@ class RedisConnectionManager:
         self._failure_counts: Dict[str, int] = {}
         self._last_failure_times: Dict[str, float] = {}
         self._circuit_open: Dict[str, bool] = {}
+        # #14299: databases whose host resolved to nothing configured. A config
+        # error is permanent for the life of this process (nothing here re-reads
+        # the environment), unlike a transient connection failure, so it is
+        # tracked separately from the time-based circuit breaker below and never
+        # auto-resets — see _check_circuit_breaker and _validate_config_host.
+        self._config_broken: set[str] = set()
 
     def _init_tcp_keepalive_options(self) -> None:
         """
@@ -301,13 +307,25 @@ class RedisConnectionManager:
 
         Loads from multiple sources with priority ordering.
         Issue #620.
+
+        #14299: ``self._config`` (host/port/enabled) now resolves BEFORE
+        ``_load_configurations`` builds the "main" database's default, so
+        "main" uses the same resolution chain (config-manager -> env ->
+        NetworkConstants -> ssot_config -> loopback, see
+        ``_load_redis_config``/``_ssot_redis_host``) as every other
+        not-yet-configured database — instead of ``RedisConfig.host``'s
+        dataclass field default, which is a *class-body* expression evaluated
+        once at whichever process happens to import
+        ``redis_management.config`` first, and empty outside autobot-backend.
         """
+        # Load existing configuration (backward compatibility) — resolved
+        # first; _load_configurations's "main" default consumes it below.
+        self._config = self._load_redis_config()
+
         # Load configurations from multiple sources
         self._configs: Dict[str, RedisConfig] = {}
         self._load_configurations()
 
-        # Load existing configuration (backward compatibility)
-        self._config = self._load_redis_config()
         self._pool_config = self._load_pool_config()
 
     def _init_statistics_tracking(self) -> None:
@@ -365,6 +383,37 @@ class RedisConnectionManager:
                 return value
         return None
 
+    @staticmethod
+    def _ssot_redis_host() -> str:
+        """Resolve the Redis host via the canonical SSOT config (#14299).
+
+        ``NetworkConstants.REDIS_VM_IP`` depends on ``config.registry.ConfigRegistry``,
+        which lives only in autobot-backend (see ``network_constants._get_config_value``'s
+        own docstring: "avoiding dependency issues when autobot_shared is used
+        independently"). Importing it from any other process — autobot-slm-backend,
+        whose own ``config.py`` is a single file, not a package, so
+        ``config.registry`` cannot resolve at all — is silently caught and falls
+        back to the caller-supplied default, which for REDIS_VM_IP is the empty
+        string. That is why a deployed SLM backend resolved the 'main' database's
+        host to nothing, continuously (#14299): every other tier already came up
+        empty (no config-manager module there either — see ``_get_config_manager``
+        — and neither REDIS_HOST nor AUTOBOT_REDIS_HOST was set on that process).
+
+        ``autobot_shared.ssot_config`` has no such dependency (pydantic-settings
+        reading an env var / project-root ``.env``) and defaults to '127.0.0.1' —
+        the same co-located default every other Ansible-templated component
+        already falls back to (``roles/*/defaults/main.yml``:
+        ``"{{ redis_host | default('127.0.0.1') }}"``), so this brings the SLM
+        backend's own resolution in line with its siblings instead of the empty
+        string NetworkConstants defaults to outside autobot-backend.
+        """
+        try:
+            from autobot_shared.ssot_config import get_config
+
+            return (get_config().vm.redis or "").strip()
+        except Exception:
+            return ""
+
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config (#2477)."""
         try:
@@ -376,7 +425,16 @@ class RedisConnectionManager:
         # #12778: env beats the NetworkConstants fallback, but NOT an explicit
         # config-manager value — a deployment that configures Redis centrally
         # must still win over a stray env var.
-        host = redis_config.get("host") or self._redis_host_from_env() or NetworkConstants.REDIS_VM_IP
+        # #14299: NetworkConstants.REDIS_VM_IP silently resolves to "" outside
+        # autobot-backend (see _ssot_redis_host's docstring) — ssot_config and
+        # finally a literal loopback keep this from ever landing on empty.
+        host = (
+            redis_config.get("host")
+            or self._redis_host_from_env()
+            or NetworkConstants.REDIS_VM_IP
+            or self._ssot_redis_host()
+            or "127.0.0.1"
+        )
         return {
             "host": host,
             "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
@@ -423,9 +481,15 @@ class RedisConnectionManager:
 
         # Priority 3: Default configuration with timeout config
         timeout_config = RedisConfigLoader.load_timeout_config()
+        # #14299: host/port come from self._config (set in _init_configurations,
+        # before this runs) rather than RedisConfig's dataclass field defaults —
+        # see _init_configurations's docstring for why those defaults cannot be
+        # trusted outside autobot-backend.
         default_config = RedisConfig(
             name="main",
             db=0,
+            host=self._config["host"],
+            port=self._config["port"],
             socket_timeout=timeout_config.get("socket_timeout", 5.0),
             socket_connect_timeout=timeout_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=timeout_config.get("retry_on_timeout", True),
@@ -672,6 +736,14 @@ class RedisConnectionManager:
 
     def _check_circuit_breaker(self, database_name: str) -> bool:
         """Check if circuit breaker is open for a database."""
+        # #14299: a config error (blank host) is permanent for this process —
+        # nothing here re-reads the environment, so it cannot resolve
+        # differently on a later call. Skip the time-based reset entirely so a
+        # config error does not cycle open/closed roughly once a minute
+        # forever; it stays open until a restart picks up corrected config.
+        if database_name in self._config_broken:
+            return True
+
         if database_name not in self._circuit_open:
             self._circuit_open[database_name] = False
             self._failure_counts[database_name] = 0
@@ -685,6 +757,57 @@ class RedisConnectionManager:
                 self._failure_counts[database_name] = 0
 
         return self._circuit_open[database_name]
+
+    def _open_circuit_for_config_error(self, database_name: str, error: Exception) -> None:
+        """Permanently open the circuit for a configuration error (#14299).
+
+        Unlike a transient connection failure — which needs
+        ``circuit_breaker_threshold`` occurrences before the breaker opens, and
+        resets after ``circuit_breaker_timeout`` — a blank host cannot be
+        retried into success: nothing here re-reads the environment, so the
+        value will not change until the process restarts with corrected
+        config. Opening on the FIRST occurrence and never resetting turns
+        "refusing to retry" from a broken promise (the previous behaviour
+        re-derived and re-logged the same failure every ~2s, reopening the
+        circuit breaker roughly once a minute) into what the log line already
+        claimed.
+
+        Called once per database, from ``_validate_config_host`` — every
+        subsequent call short-circuits at ``_check_circuit_breaker`` before
+        reaching here, so this never runs twice for the same database.
+        """
+        self._config_broken.add(database_name)
+        self._circuit_open[database_name] = True
+        self._states[database_name] = ConnectionState.FAILED
+
+        self._failure_counts[database_name] = self._failure_counts.get(database_name, 0) + 1
+        self._last_failure_times[database_name] = time.time()
+
+        if database_name not in self._metrics:
+            self._metrics[database_name] = ConnectionMetrics()
+        metrics = self._metrics[database_name]
+        metrics.failed_connections += 1
+        metrics.failed_requests += 1
+        metrics.last_error = str(error)
+        metrics.last_error_time = time.time()
+        metrics.circuit_breaker_state = "open"
+
+        logger.error(str(error))
+
+        try:
+            prom_metrics = _get_metrics_manager()
+            prom_metrics.record_circuit_breaker_event(
+                database=database_name,
+                event="opened",
+                reason=str(error)[:100],
+            )
+            prom_metrics.update_circuit_breaker_state(
+                database=database_name,
+                state="open",
+                failure_count=self._failure_counts[database_name],
+            )
+        except Exception as prom_err:
+            logger.debug(f"Failed to record Prometheus circuit breaker metrics: {prom_err}")
 
     def _record_failure(self, database_name: str, error: Exception) -> None:
         """Record a connection failure and update circuit breaker."""
@@ -792,21 +915,35 @@ class RedisConnectionManager:
         self._validate_config_host(database_name, config)
         return self._create_sync_pool_with_keepalive(database_name, config)
 
-    @staticmethod
-    def _validate_config_host(database_name: str, config: "RedisConfig") -> None:
+    def _validate_config_host(self, database_name: str, config: "RedisConfig") -> None:
         """Reject blank Redis hosts before any connect attempt (#11449).
 
         An empty host (e.g. unresolvable ``vm.redis`` in a process that cannot
         import the backend ConfigRegistry) is a configuration error, not a
         transient outage — retrying it burned ~60 s of exponential backoff per
         caller during the 2026-07-10 SLM auth incident.
+
+        #14299: the resolution chain in ``_load_redis_config``/
+        ``_ssot_redis_host`` now reaches a working default almost everywhere,
+        so this should be rare in practice — but when it does still fire (a
+        ``_configs`` entry loaded from YAML/service-registry with an explicit
+        blank host, for example), the failure is opened onto
+        ``_open_circuit_for_config_error`` (logs once, opens the circuit
+        breaker permanently) instead of being re-derived and re-logged on
+        every call — the previous behaviour opened the circuit breaker
+        roughly once a minute, indefinitely, and the "refusing to retry" log
+        line was itself re-emitted every ~2s.
         """
         host = (config.host or "").strip()
-        if not host:
-            raise RedisConfigurationError(
-                f"Redis host for database '{database_name}' is empty — configuration "
-                "error (set REDIS_HOST / vm.redis); refusing to retry"
-            )
+        if host:
+            return
+        message = (
+            f"Redis host for database '{database_name}' is empty — configuration "
+            "error (set REDIS_HOST / vm.redis); refusing to retry"
+        )
+        if database_name not in self._config_broken:
+            self._open_circuit_for_config_error(database_name, RedisConfigurationError(message))
+        raise RedisConfigurationError(message)
 
     async def _create_async_pool(self, database_name: str) -> async_redis.ConnectionPool:
         """
@@ -855,7 +992,11 @@ class RedisConnectionManager:
             return False
 
         if self._check_circuit_breaker(database_name):
-            logger.warning(f"Circuit breaker is open for database '{database_name}', rejecting request")
+            # #14299: a config-broken database already logged once, in
+            # _validate_config_host / _open_circuit_for_config_error — do not
+            # re-log "circuit breaker is open" on every subsequent call too.
+            if database_name not in self._config_broken:
+                logger.warning(f"Circuit breaker is open for database '{database_name}', rejecting request")
             return False
 
         return None
@@ -892,7 +1033,16 @@ class RedisConnectionManager:
 
         Records failure metrics and updates connection state.
         Issue #620.
+
+        #14299: a RedisConfigurationError was already logged and recorded once
+        by _validate_config_host -> _open_circuit_for_config_error, on the
+        first occurrence — recording it again here would double-count the
+        failure and re-log a message that already went out.
         """
+        if isinstance(error, RedisConfigurationError):
+            self._update_stats(database_name, success=False, error=str(error))
+            self._states[database_name] = ConnectionState.FAILED
+            return
         logger.warning(f"Failed to get sync Redis client for database '{database_name}': {error}")
         self._record_failure(database_name, error)
         self._update_stats(database_name, success=False, error=str(error))
@@ -926,15 +1076,22 @@ class RedisConnectionManager:
             self._handle_sync_client_failure(database_name, e)
             return None
 
-    @staticmethod
-    def _log_pool_task_failure(database_name: str, task: "asyncio.Task") -> None:
+    def _log_pool_task_failure(self, database_name: str, task: "asyncio.Task") -> None:
         """Done-callback: retrieve (and log) a failed pool-creation's exception
         so asyncio never reports it as unretrieved, even when every waiter was
-        cancelled by its own deadline (#11451)."""
+        cancelled by its own deadline (#11451).
+
+        #14299: a RedisConfigurationError was already logged once by
+        _validate_config_host -> _open_circuit_for_config_error — this
+        callback still MUST retrieve the exception (asyncio.Task.exception()
+        below) so it is never reported as unretrieved, it just does not log a
+        second time for the one error type that is guaranteed to repeat on
+        every call until a restart.
+        """
         if task.cancelled():
             return
         exc = task.exception()
-        if exc is not None:
+        if exc is not None and not isinstance(exc, RedisConfigurationError):
             logger.warning("Async pool creation for '%s' failed: %s", database_name, exc)
 
     async def _ensure_async_pool_exists(self, database_name: str) -> None:
@@ -1012,7 +1169,11 @@ class RedisConnectionManager:
             return None
 
         if self._check_circuit_breaker(database_name):
-            logger.warning(f"Circuit breaker is open for database '{database_name}', rejecting request")
+            # #14299: a config-broken database already logged once, in
+            # _validate_config_host / _open_circuit_for_config_error — do not
+            # re-log "circuit breaker is open" on every subsequent call too.
+            if database_name not in self._config_broken:
+                logger.warning(f"Circuit breaker is open for database '{database_name}', rejecting request")
             return None
 
         try:
@@ -1028,6 +1189,15 @@ class RedisConnectionManager:
             return client
 
         except Exception as e:
+            # #14299: a RedisConfigurationError was already logged and recorded
+            # once by _validate_config_host -> _open_circuit_for_config_error,
+            # on the first occurrence — recording it again here would
+            # double-count the failure and re-log a message that already went
+            # out.
+            if isinstance(e, RedisConfigurationError):
+                self._update_stats(database_name, success=False, error="Internal server error")
+                self._states[database_name] = ConnectionState.FAILED
+                return None
             logger.warning(f"Failed to get async Redis client for database '{database_name}': {e}")
             self._record_failure(database_name, e)
             self._update_stats(database_name, success=False, error="Internal server error")
