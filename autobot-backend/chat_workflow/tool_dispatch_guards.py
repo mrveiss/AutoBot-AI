@@ -200,9 +200,7 @@ async def enforce_pre_action_verifier(
             f"(prob={result.refutation_probability:.2f}): {result.rationale}"
         )
         logger.warning("[#14031] verifier hard-blocked tool '%s' — %s", tool_name, result.rationale[:120])
-        execution_results.append(
-            {"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True}
-        )
+        execution_results.append({"tool": tool_name, "status": "error", "error": error, "verifier_hard_block": True})
         return WorkflowMessage(
             type="error",
             content=error,
