@@ -44,6 +44,7 @@ compared here in dash form to match AGENT_TIER_MAP's own key convention.
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 
 from agent_tier_classifier import AGENT_TIER_MAP
@@ -73,12 +74,25 @@ def _claude_subagent_names() -> set[str]:
 
 def _agent_orchestration_type_values() -> set[str]:
     """AgentType's string values, loaded without importing the ``agents`` package."""
-    spec = importlib.util.spec_from_file_location("_agent_orchestration_types_isolated", _AGENT_TYPES_FILE)
+    name = "_agent_orchestration_types_isolated"
+    spec = importlib.util.spec_from_file_location(name, _AGENT_TYPES_FILE)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load {_AGENT_TYPES_FILE}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return {member.value.replace("_", "-") for member in module.AgentType}
+
+    # Registered in sys.modules BEFORE exec_module, then removed. `enum`
+    # resolves a member's defining module through `sys.modules[cls.__module__]`
+    # while building the class; with the module absent that lookup returns None
+    # and class creation dies on `'NoneType' object has no attribute '__dict__'`.
+    # Executing a module out-of-band is only safe for modules that define no
+    # enums -- `types.py` defines several. Same register-then-pop shape as
+    # `migrations/runner_deferral_test.py` and `migrations/seed_agents_test.py`.
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+        return {member.value.replace("_", "-") for member in module.AgentType}
+    finally:
+        sys.modules.pop(name, None)
 
 
 def test_claude_subagent_roster_is_non_empty():
