@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from starlette.datastructures import UploadFile
 
-from skills.base_skill import DeclarativeSkill
+from skills.base_skill import BaseSkill, DeclarativeSkill, SkillManifest
 from skills.builtin.autonomous_skill_development import AutonomousSkillDevelopmentSkill
 from skills.builtin.document_analysis import DocumentAnalysisSkill
 from skills.gap_detector import GapTrigger, SkillGapDetector
@@ -44,7 +44,15 @@ def anyio_backend():
 
 @pytest.fixture
 def registry(monkeypatch):
-    """An isolated registry wired into the dispatcher in place of the singleton."""
+    """An isolated registry wired into the dispatcher in place of the singleton.
+
+    ``get_skill_registry`` and ``get_skill_manager`` are both process-wide
+    ``lazy_singleton``s and nothing resets them between tests.  These tests stay
+    isolated because they replace the dispatcher's module-local names rather
+    than calling either factory, so a test added here that calls the real
+    ``get_skill_manager()`` would inherit whatever earlier tests registered and
+    enabled.  Use this fixture rather than the factories.
+    """
     fresh = SkillRegistry()
     manager = SkillManager(registry=fresh)
     monkeypatch.setattr("skills.trigger_dispatcher.get_skill_registry", lambda: fresh)
@@ -111,6 +119,47 @@ def test_a_declared_trigger_with_no_bound_action_is_not_dispatchable(registry):
         assert resolve_trigger_targets("document_uploaded") == []
 
 
+class _SecondListener(BaseSkill):
+    """A second skill declaring ``document_uploaded``, for the fan-out case."""
+
+    @staticmethod
+    def get_manifest() -> SkillManifest:
+        """Manifest declaring the same trigger as DocumentAnalysisSkill."""
+        return SkillManifest(
+            name="second-listener",
+            description="Test double that also listens for document_uploaded",
+            tools=["record"],
+            triggers=["document_uploaded"],
+        )
+
+    def get_trigger_actions(self):
+        """Bind the shared trigger to this skill's own action."""
+        return {"document_uploaded": "record"}
+
+    async def execute(self, action, params):
+        """Report which skill ran, so fan-out is distinguishable from a re-run."""
+        return {"success": True, "by": "second-listener", "action": action}
+
+
+@pytest.mark.anyio
+async def test_a_trigger_fans_out_to_every_declaring_skill(registry):
+    """Two skills declaring one event must both run, and both results returned.
+
+    ``SkillRouterSkill._delegate_gap_build`` returns the whole list for this
+    reason: keeping only ``results[0]`` would discard the second listener
+    silently the moment one is bound.
+    """
+    _enabled(registry, DocumentAnalysisSkill)
+    _enabled(registry, _SecondListener)
+
+    handler = AsyncMock(return_value={"success": True, "by": "document-analysis"})
+    with patch.object(DocumentAnalysisSkill, "_analyze", new=handler):
+        results = await emit_skill_trigger("document_uploaded", {"file_path": "/tmp/a.pdf"})  # nosec B108
+
+    handler.assert_awaited_once()
+    assert {r["by"] for r in results} == {"document-analysis", "second-listener"}
+
+
 # ---------------------------------------------------------------------------
 # Emitters — asserted from the producing function, not from the dispatcher
 # ---------------------------------------------------------------------------
@@ -152,7 +201,9 @@ async def test_agent_response_signalling_a_gap_emits_explicit_gap_signal(registr
     pipeline = AsyncMock(return_value={"success": True, "state": "pending"})
     with (
         patch("skills.registry.get_skill_registry", lambda: registry),
-        patch("skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")),
+        patch(
+            "skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")
+        ),
         patch("skills.builtin.autonomous_skill_development._run_development_pipeline", new=pipeline),
     ):
         await executor._maybe_trigger_gap_development("I don't have a tool to convert FLAC files.\n", {})
@@ -173,7 +224,9 @@ async def test_router_finding_no_matching_skill_emits_agent_capability_gap(regis
     pipeline = AsyncMock(return_value={"success": True, "state": "pending"})
     with (
         patch.object(SkillRouterSkill, "_research_capability", new=AsyncMock(return_value={})),
-        patch("skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")),
+        patch(
+            "skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")
+        ),
         patch("skills.builtin.autonomous_skill_development._run_development_pipeline", new=pipeline),
     ):
         result = await router._build_missing_skill("summarise a spreadsheet", registry, dry_run=False)
@@ -284,7 +337,9 @@ async def test_autonomous_skill_development_is_reachable_through_execute_skill(r
 
     pipeline = AsyncMock(return_value={"success": True, "state": "pending"})
     with (
-        patch("skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")),
+        patch(
+            "skills.builtin.autonomous_skill_development._get_governance_mode", new=AsyncMock(return_value="semi_auto")
+        ),
         patch("skills.builtin.autonomous_skill_development._run_development_pipeline", new=pipeline),
     ):
         result = await manager.execute_skill(

@@ -505,15 +505,21 @@ async def _emit_document_uploaded(target_file: Path) -> None:
 
     Dispatch is a no-op unless an operator has enabled a skill declaring the
     trigger, and the skill rejects formats it does not handle, so an upload of
-    any other kind of file costs one registry lookup.  Failures are logged and
-    swallowed: a skill must never turn a successful upload into a 500.
+    any other kind of file costs one registry lookup.  Failures are swallowed:
+    a skill must never turn a successful upload into a 500.
+
+    Swallowed, but logged at WARNING rather than DEBUG.  Nothing reaches this
+    handler except a broken dispatch path — a failed import, or the registry
+    itself raising — and DEBUG is off in most deployments, so the one code path
+    that exists to make triggers observable would have gone silent exactly when
+    it stopped working.  That is the shape #14406 was filed about.
     """
     try:
         from skills.trigger_dispatcher import emit_skill_trigger
 
         await emit_skill_trigger("document_uploaded", {"file_path": str(target_file)})
     except Exception as exc:
-        logger.debug("document_uploaded dispatch failed (non-critical): %s", exc)
+        logger.warning("document_uploaded dispatch failed for %s: %s", target_file.name, exc)
 
 
 async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:

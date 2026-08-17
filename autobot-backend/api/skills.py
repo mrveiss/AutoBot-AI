@@ -54,6 +54,7 @@ logger = get_logger(__name__)
 logger = get_logger(__name__)
 router = APIRouter()
 
+
 def _get_manager() -> SkillManager:
     """Get the process-wide SkillManager.
 

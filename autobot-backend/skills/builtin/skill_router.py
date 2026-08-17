@@ -9,7 +9,8 @@ Three-phase pipeline for skill selection and generation:
   Phase 1 — Keyword scoring: score registered skills against task tokens.
   Phase 2 — LLM re-ranking: send top-K candidates to LLM for best match.
   Phase 3 — Gap fill: when no skill matches, research the capability via
-             skill-researcher, then delegate to autonomous-skill-development.
+             skill-researcher, then emit the `agent_capability_gap` trigger
+             for whichever skills declare it (#14406).
 """
 
 import json
@@ -261,40 +262,46 @@ class SkillRouterSkill(BaseSkill):
                 "success": True,
                 "enabled_skill": None,
                 "build_triggered": False,
-                "reason": ("No matching skill; would research then trigger " "autonomous-skill-development"),
+                "reason": "No matching skill; would research then emit agent_capability_gap",
                 "dry_run": True,
             }
         # Step 2: Research the capability from multiple angles.
         research = await self._research_capability(task, registry)
 
         # Step 3: Build the skill, enriching the capability with research context.
-        result = await self._delegate_gap_build(task, research)
-        if result is None:
+        results = await self._delegate_gap_build(task, research)
+        if not results:
             return {"success": False, "error": "no skill is dispatchable on agent_capability_gap"}
         return {
-            "success": result.get("success", False),
+            "success": any(r.get("success", False) for r in results),
             "enabled_skill": None,
             "build_triggered": True,
             "research_performed": bool(research),
-            "build_result": result,
-            "reason": ("No matching skill; researched and delegated to " "autonomous-skill-development"),
+            "build_results": results,
+            "reason": "No matching skill; researched and delegated via agent_capability_gap",
             "dry_run": False,
         }
 
     @staticmethod
-    async def _delegate_gap_build(task: str, research: Dict[str, Any]) -> Dict[str, Any] | None:
-        """Emit ``agent_capability_gap`` and return the first skill result (#14406).
+    async def _delegate_gap_build(task: str, research: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Emit ``agent_capability_gap`` and return every declaring skill's result (#14406).
 
         This used to call ``autonomous-skill-development`` by name.  Emitting the
         declared trigger instead means the manifest and the routing path describe
         the same mechanism.  The event is ``agent_capability_gap`` rather than
         ``explicit_gap_signal`` because the router *derived* the gap — no skill
         scored above zero — instead of the agent stating outright that it lacks
-        a tool.  Returns ``None`` when no enabled skill is dispatchable on it.
+        a tool.
+
+        Every result is returned, not just the first.  Exactly one skill binds
+        this trigger today, but a trigger fanning out to several declaring skills
+        is the whole point of the dispatcher, so keeping only ``results[0]``
+        would silently discard the others the moment a second one is bound.
+        Returns an empty list when no enabled skill is dispatchable on it.
         """
         from skills.trigger_dispatcher import emit_skill_trigger
 
-        results = await emit_skill_trigger(
+        return await emit_skill_trigger(
             "agent_capability_gap",
             {
                 "capability": _enrich_capability(task, research),
@@ -302,7 +309,6 @@ class SkillRouterSkill(BaseSkill):
                 "context": research,
             },
         )
-        return results[0] if results else None
 
     async def _research_capability(self, task: str, registry: Any) -> Dict[str, Any]:
         """Call skill-researcher if registered; return empty dict on any failure."""
