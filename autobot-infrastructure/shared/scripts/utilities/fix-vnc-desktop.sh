@@ -20,14 +20,35 @@ set -e
 # (autobot-slm-backend/ansible/roles/vnc/defaults/main.yml) resolves the same
 # name. AUTOBOT_VNC_USER remains a deprecated alias for one release, since an
 # existing host may already have only it set; VNC_USER wins when both are set.
+#
+# #14319: default changed from 'autobot' (the SSH/ansible operational
+# identity) to 'autobot-vnc' (VNC's own dedicated service account). The
+# emergency admin safety-net account is rejected outright below, whatever
+# the default is — see autobot-slm-backend/ansible/roles/vnc/tasks/main.yml
+# for why it must never run VNC.
 if [ -n "${VNC_USER:-}" ]; then
     : # already set by the caller — keep it
 elif [ -n "${AUTOBOT_VNC_USER:-}" ]; then
     VNC_USER="$AUTOBOT_VNC_USER"
 else
-    VNC_USER="autobot"
+    VNC_USER="autobot-vnc"
 fi
+
+if [ "${VNC_USER}" = "autobot_admin" ]; then
+    echo "ERROR: VNC_USER=autobot_admin — the emergency admin safety-net account is rejected (#14319)." >&2
+    echo "Set VNC_USER to a different account, or unset it to use the default (autobot-vnc)." >&2
+    exit 1
+fi
+
 VNC_HOME="/home/${VNC_USER}"
+
+if ! id "${VNC_USER}" &>/dev/null; then
+    echo "ERROR: account '${VNC_USER}' does not exist." >&2
+    echo "Run the ansible vnc role first (autobot-slm-backend/ansible/roles/vnc) —" >&2
+    echo "it creates the dedicated VNC service account — or set VNC_USER to an" >&2
+    echo "existing account." >&2
+    exit 1
+fi
 
 echo "Setting up VNC with XFCE desktop..."
 
