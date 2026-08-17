@@ -304,7 +304,8 @@ def _preserved_user_messages(messages: List[Dict], cap: int) -> List[str]:
     user stated once cannot be dropped by that pass; the cap is what keeps this
     unconditionally bounded.
 
-    Scoped to raw ``role == "user"`` turns, not to a *prior* compaction's own
+    Scoped to raw user-role turns (``CategoryDefaults.ROLE_USER``), not to a
+    *prior* compaction's own
     composed summary (#14322). That artifact is injected with ``sender ==
     "system"`` (``overflow_integration.create_summary_message``), so it is
     never picked up here — and it should not be: its "### User messages
