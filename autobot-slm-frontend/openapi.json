@@ -4606,6 +4606,10 @@
             "title": "Nodes Total",
             "type": "integer"
           },
+          "redis": {
+            "title": "Redis",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4624,6 +4628,7 @@
           "version",
           "uptime_seconds",
           "database",
+          "redis",
           "nodes_online",
           "nodes_total"
         ],

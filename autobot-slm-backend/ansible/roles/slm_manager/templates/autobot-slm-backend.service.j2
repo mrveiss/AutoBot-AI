@@ -24,6 +24,12 @@ WorkingDirectory={{ slm_backend_dir }}
 Environment="PATH={{ slm_backend_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH={{ slm_backend_dir }}:{{ slm_shared_dir }}:{{ slm_base_dir }}"
 Environment="PYTHONUNBUFFERED=1"
+# #14299: this process cannot import config.registry.ConfigRegistry (its own
+# config.py is a single file, not a package — see connection_manager.py's
+# _ssot_redis_host docstring), so REDIS_HOST/AUTOBOT_REDIS_HOST must be set
+# explicitly, the same way slm-agent's own unit already does.
+Environment="REDIS_HOST={{ slm_manager_redis_host }}"
+Environment="AUTOBOT_REDIS_HOST={{ slm_manager_redis_host }}"
 EnvironmentFile=-{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
 EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 # #11668: bound uvicorn's SIGTERM shutdown (see autobot-backend.service.j2) so the
