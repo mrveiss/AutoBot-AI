@@ -24,6 +24,16 @@ in ``sys.modules`` is sufficient: Python's import machinery resolves a
 fully-qualified name straight from ``sys.modules`` without walking parent
 packages, which is also exactly how ``pickle``'s own ``find_class`` resolves
 a GLOBAL opcode. Verified against CPython's import machinery, not assumed.
+
+The ``chromadb_hnsw_stub`` fixture installs those synthetic package levels
+and removes them in a ``finally`` around each test that needs them
+(``repo_tests/sys_modules_leak_guard.py`` fails the run if a test-installed
+stub is still live while pytest handles a node outside this file -- a
+module-level, permanent registration here was exactly that leak, caught in
+review of PR #14416). Only the levels genuinely absent beforehand are
+touched; ``chromadb`` itself is always already present (owned by
+``conftest.py``, which is on the leak-guard baseline) and this file never
+installs or removes that key.
 """
 
 from __future__ import annotations
@@ -68,63 +78,65 @@ def _load_real_chromadb_client_module():
     return module
 
 
-def _ensure_stub_module_chain(dotted: str) -> None:
-    """Register every missing package level of ``dotted`` as a minimal stub.
-
-    Real or already-stubbed modules (e.g. ``chromadb`` itself, which
-    ``conftest.py`` stubs globally) are left untouched -- only genuinely
-    missing intermediate levels get a placeholder. Needed because
-    ``pickle``'s own ``save_global`` re-validates the full parent chain via
-    ``getattr``, which is stricter than a plain ``import`` statement (proven
-    against CPython's pickle module, not assumed).
-    """
-    parts = dotted.split(".")
-    prefix_parts: list[str] = []
-    for index, part in enumerate(parts):
-        prefix_parts.append(part)
-        prefix = ".".join(prefix_parts)
-        if prefix in sys.modules:
-            continue
-        stub = types.ModuleType(prefix)
-        if index < len(parts) - 1:
-            stub.__path__ = []  # marks it as a package for the import system
-        sys.modules[prefix] = stub
-        parent = prefix.rpartition(".")[0]
-        if parent:
-            setattr(sys.modules[parent], part, stub)
-
-
-def _install_real_persistent_data_class() -> type:
-    """Register a ``PersistentData`` stand-in at ChromaDB's real module path.
-
-    Registered under the leaf module's fully-qualified name so resolution
-    works regardless of whether the real ``chromadb`` package (or
-    ``conftest.py``'s stub of it) is present. The class shape matches
-    ``chromadb.segment.impl.vector.local_persistent_hnsw.PersistentData``
-    (see that file): five plain fields, no exotic types.
-    """
-    existing = sys.modules.get(_MODULE_NAME)
-    if existing is not None and isinstance(getattr(existing, _CLASS_NAME, None), type):
-        return getattr(existing, _CLASS_NAME)
-
-    class PersistentData:
-        def __init__(self, dimensionality, total_elements_added, id_to_label, label_to_id, id_to_seq_id):
-            self.dimensionality = dimensionality
-            self.total_elements_added = total_elements_added
-            self.id_to_label = id_to_label
-            self.label_to_id = label_to_id
-            self.id_to_seq_id = id_to_seq_id
-
-    PersistentData.__module__ = _MODULE_NAME
-    PersistentData.__qualname__ = _CLASS_NAME
-
-    _ensure_stub_module_chain(_MODULE_NAME)
-    sys.modules[_MODULE_NAME].PersistentData = PersistentData
-    return PersistentData
-
-
 sync_mod = _load_real_chromadb_client_module()
-PersistentData = _install_real_persistent_data_class()
+
+
+class PersistentData:
+    """Stand-in for ``chromadb...local_persistent_hnsw.PersistentData``.
+
+    A plain class, matching that class's shape (five fields, no exotic
+    types) -- NOT registered in ``sys.modules`` here. The
+    ``chromadb_hnsw_stub`` fixture below registers/deregisters it at the
+    real module path around each test that needs it, so the registration
+    can never outlive the test (see the module docstring).
+    """
+
+    def __init__(self, dimensionality, total_elements_added, id_to_label, label_to_id, id_to_seq_id):
+        self.dimensionality = dimensionality
+        self.total_elements_added = total_elements_added
+        self.id_to_label = id_to_label
+        self.label_to_id = label_to_id
+        self.id_to_seq_id = id_to_seq_id
+
+
+PersistentData.__module__ = _MODULE_NAME
+PersistentData.__qualname__ = _CLASS_NAME
+
+
+@pytest.fixture
+def chromadb_hnsw_stub():
+    """Register ``PersistentData`` at ChromaDB's real module path; deregister after.
+
+    Only the package levels genuinely absent from ``sys.modules`` beforehand
+    are installed, and ``finally`` removes exactly those same keys --
+    ``chromadb`` itself is always already present (``conftest.py`` owns that
+    key and it is on the leak-guard baseline) and is never touched here.
+    ``pickle``'s own ``save_global``/``find_class`` re-validate the full
+    parent chain via ``getattr``, which is stricter than a plain ``import``
+    statement (proven against CPython's pickle module, not assumed), so
+    every intermediate level needs a real entry, not just the leaf.
+    """
+    installed: list[str] = []
+    try:
+        prefix_parts: list[str] = []
+        for part in _MODULE_NAME.split("."):
+            prefix_parts.append(part)
+            prefix = ".".join(prefix_parts)
+            if prefix in sys.modules:
+                continue
+            stub = types.ModuleType(prefix)
+            if prefix != _MODULE_NAME:
+                stub.__path__ = []  # marks it as a package for the import system
+            sys.modules[prefix] = stub
+            parent, _, child = prefix.rpartition(".")
+            if parent:
+                setattr(sys.modules[parent], child, stub)
+            installed.append(prefix)
+        sys.modules[_MODULE_NAME].PersistentData = PersistentData
+        yield PersistentData
+    finally:
+        for key in installed:
+            sys.modules.pop(key, None)
 
 
 def _persistent_data_bytes() -> bytes:
@@ -156,7 +168,7 @@ def _disallowed_class_bytes() -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def test_restricted_unpickler_accepts_the_allowlisted_class():
+def test_restricted_unpickler_accepts_the_allowlisted_class(chromadb_hnsw_stub):
     """A legitimate PersistentData payload still round-trips."""
     loaded = sync_mod._RestrictedHnswUnpickler(io.BytesIO(_persistent_data_bytes())).load()
     assert isinstance(loaded, PersistentData)
@@ -182,7 +194,7 @@ def _collection_dir(tmp_path: Path) -> Path:
     return collection_dir
 
 
-def test_fix_hnsw_pickle_format_migrates_legacy_dict_without_data_loss(tmp_path):
+def test_fix_hnsw_pickle_format_migrates_legacy_dict_without_data_loss(tmp_path, chromadb_hnsw_stub):
     """The pre-0.5.x plain-dict shape is still readable and still migrated.
 
     Plain dict/int/str payloads never invoke ``find_class`` at all (only
@@ -212,7 +224,7 @@ def test_fix_hnsw_pickle_format_migrates_legacy_dict_without_data_loss(tmp_path)
     assert migrated.id_to_label == {"doc-a": 0}
 
 
-def test_fix_hnsw_pickle_format_skips_disallowed_pickle_without_raising(tmp_path, caplog):
+def test_fix_hnsw_pickle_format_skips_disallowed_pickle_without_raising(tmp_path, caplog, chromadb_hnsw_stub):
     """A file that isn't ChromaDB's own format is refused, not executed.
 
     Proves the security property at the call site this issue is about, not
