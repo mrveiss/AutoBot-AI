@@ -11,8 +11,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check_git_safe_directory import find_violations  # noqa: E402
+from check_git_safe_directory import (  # noqa: E402
+    PATTERN,
+    REPO_ROOT,
+    SAFE_FLAG,
+    _iter_scalar_nodes,
+    find_violations,
+)
 
 
 def _write(tmp: Path, name: str, body: str) -> Path:
@@ -22,7 +30,7 @@ def _write(tmp: Path, name: str, body: str) -> Path:
 
 
 def test_unguarded_blocked() -> None:
-    body = "      command: git -C {{ git_repo_root }} log -1 --format='%h %s'\n"
+    body = "- name: t\n  command: git -C {{ git_repo_root }} log -1 --format='%h %s'\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "bad.yml", body)
         violations = find_violations(f)
@@ -30,14 +38,14 @@ def test_unguarded_blocked() -> None:
 
 
 def test_guarded_passes() -> None:
-    body = "      command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1\n"
+    body = "- name: t\n  command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "ok.yml", body)
         assert find_violations(f) == []
 
 
 def test_unguarded_literal_path_blocked() -> None:
-    body = "      cmd: git -C /opt/autobot/code_source status --porcelain\n"
+    body = "- name: t\n  cmd: git -C /opt/autobot/code_source status --porcelain\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "bad.yml", body)
         violations = find_violations(f)
@@ -45,7 +53,7 @@ def test_unguarded_literal_path_blocked() -> None:
 
 
 def test_guarded_literal_path_passes() -> None:
-    body = "      cmd: git -c safe.directory=/opt/autobot/code_source -C /opt/autobot/code_source status\n"
+    body = "- name: t\n  cmd: git -c safe.directory=/opt/autobot/code_source -C /opt/autobot/code_source status\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "ok.yml", body)
         assert find_violations(f) == []
@@ -53,7 +61,7 @@ def test_guarded_literal_path_passes() -> None:
 
 def test_git_other_dir_unaffected() -> None:
     """git -C of an UNrelated dir doesn't trigger the check."""
-    body = "      cmd: git -C /tmp/some_repo log\n"
+    body = "- name: t\n  cmd: git -C /tmp/some_repo log\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "ok.yml", body)
         assert find_violations(f) == []
@@ -61,15 +69,13 @@ def test_git_other_dir_unaffected() -> None:
 
 def test_multiline_play_with_guard_passes() -> None:
     body = (
-        "      cmd: >-\n"
-        "        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }}\n"
-        "        log -1 --format='%h %s'\n"
+        "- name: t\n"
+        "  cmd: >-\n"
+        "    git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }}\n"
+        "    log -1 --format='%h %s'\n"
     )
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "ok.yml", body)
-        # Single-line-only check; multi-line >- folded form should be on one line by the time YAML parses it.
-        # Per-line check: the line containing `git -C` must have `-c safe.directory` on the SAME line.
-        # In the above sample, both are on the same line — should pass.
         assert find_violations(f) == []
 
 
@@ -94,7 +100,7 @@ def test_an_alternately_named_code_source_var_is_blocked() -> None:
     path passed the rule — which is precisely where a `dubious ownership`
     rc=128 aborts a deploy (#7150).
     """
-    body = "        cmd: \"git -C {{ _code_source_dest }} log -1 --format='%h %s'\"\n"
+    body = "- name: t\n  cmd: \"git -C {{ _code_source_dest }} log -1 --format='%h %s'\"\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "alt.yml", body)
         assert len(find_violations(f)) == 1
@@ -102,7 +108,7 @@ def test_an_alternately_named_code_source_var_is_blocked() -> None:
 
 def test_a_filtered_code_source_var_is_blocked() -> None:
     """A Jinja filter expression must not hide the target either."""
-    body = "          git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n"
+    body = "- name: t\n  cmd: git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "filtered.yml", body)
         assert len(find_violations(f)) == 1
@@ -115,9 +121,11 @@ def test_the_same_alternately_named_vars_pass_once_guarded() -> None:
     the blind one — it would block every site #7150 already fixed.
     """
     bodies = [
-        "        cmd: \"git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1\"\n",
-        "          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}\n"
-        "          -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n",
+        "- name: t\n  cmd: \"git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1\"\n",
+        "- name: t\n"
+        "  cmd: >-\n"
+        "    git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}\n"
+        "    -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD\n",
     ]
     with tempfile.TemporaryDirectory() as d:
         for index, body in enumerate(bodies):
@@ -127,49 +135,86 @@ def test_the_same_alternately_named_vars_pass_once_guarded() -> None:
 
 def test_an_unrelated_git_c_is_still_ignored() -> None:
     """The widening keys on the *name*, not on `-C` alone."""
-    body = "      command: git -C {{ some_other_dir }} status\n"
+    body = "- name: t\n  command: git -C {{ some_other_dir }} status\n"
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "unrelated.yml", body)
         assert find_violations(f) == []
 
 
-def test_a_command_split_across_lines_is_not_silently_invisible() -> None:
-    """A guard the checker cannot see is not a guard.
+# --- #14196: structural parsing sees the value, not the physical line ---------
 
-    Found on this PR: guarding two sites pushed `git ... -C ...` onto two
-    physical lines of a `>-` folded scalar. The command was correct, but both
-    patterns are line-based — `git` was on one line and `-C` on the next — so
-    the checker stopped matching them entirely. They read as fixed while being
-    unwatched, and a later edit removing `safe.directory` would not be caught.
 
-    This pins the shape rather than the instance: a `git` line with no `-C`
-    must not be treated as a passing guarded site, because it is not a site at
-    all. The real protection is that the fixed files keep their commands on one
-    line, which `test_the_repository_guarded_sites_stay_visible` asserts.
+def test_an_unguarded_command_split_across_lines_is_now_caught() -> None:
+    """The line-based version's actual, historical blind spot.
+
+    #14188 guarded two sites and the guarded command no longer fit on one
+    physical line of a `>-` folded scalar; `git` landed on one line and `-C`
+    on the next, so both patterns being line-based meant the checker stopped
+    matching them entirely — a regression removing `safe.directory` later
+    would not have been caught. Parsing the YAML and matching the *resolved*
+    scalar value (which PyYAML folds into one string regardless of how many
+    physical lines it spans) closes this: an UNGUARDED version of the same
+    split must now be blocked.
     """
-    body = (
-        "        cmd: >-\n"
-        "          git -c safe.directory={{ git_repo_root }}\n"
-        "          -C {{ git_repo_root }} rev-parse HEAD\n"
-    )
+    body = "- name: t\n  cmd: >-\n    git\n    -C {{ git_repo_root }} rev-parse HEAD\n"
     with tempfile.TemporaryDirectory() as d:
-        f = _write(Path(d), "split.yml", body)
-        # Neither line matches: no violation is reported, and that is precisely
-        # the blind spot — asserted so the behaviour is documented, not assumed.
+        f = _write(Path(d), "split_unguarded.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_a_guarded_command_split_across_lines_still_passes() -> None:
+    """The same split, but guarded — proves the fix isn't a blanket reject of
+    multi-line commands, only of the unguarded ones.
+    """
+    body = "- name: t\n  cmd: >-\n    git -c safe.directory={{ git_repo_root }}\n    -C {{ git_repo_root }} rev-parse HEAD\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "split_guarded.yml", body)
+        assert find_violations(f) == []
+
+
+def test_literal_block_scalar_command_is_caught() -> None:
+    body = "- name: t\n  shell: |\n    git -C /opt/autobot/code_source status\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "literal.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_an_unguarded_command_used_as_a_mapping_key_is_caught() -> None:
+    """A dynamically-keyed mapping is a contrived shape, but it proves the
+    same coverage as the ansible-facts checker's mapping-key fixture: the
+    node-walk must yield mapping KEYS as well as values. A walk that only
+    descended into `value_node` would silently drop this, even though the
+    pre-#14196 line-based scanner (which matched anywhere in a line) caught
+    it.
+    """
+    body = "- name: t\n  vars:\n    \"git -C {{ git_repo_root }} log -1\": marker\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "key_git.yml", body)
+        assert len(find_violations(f)) == 1
+
+
+def test_malformed_yaml_does_not_crash_the_hook() -> None:
+    """Broken YAML syntax is another hook's job (check-yaml)."""
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "broken.yml", "cmd: [unclosed\n")
         assert find_violations(f) == []
 
 
 def test_the_repository_guarded_sites_stay_visible() -> None:
-    """Every real `git -C <code_source>` in the tree is on one line and guarded.
+    """Every real `git -C <code_source>` in the tree is visible and guarded.
 
-    This is the assertion that would have caught the split introduced on this
-    PR. It runs against the actual repository rather than a fixture, so it
-    fails if any future edit folds a guarded command across lines and quietly
-    removes it from the checker's view.
+    This runs against the actual repository rather than a fixture, so it
+    fails if a future edit removes `safe.directory` from a real site, or if
+    the structural walk itself regresses and stops reaching a site.
+
+    Unlike the line-based era, the guarded commands are no longer required
+    to stay on one physical line (#14196 relaxes that constraint from
+    #14188) — `sync-code-source.yml`, `update-all-nodes.yml` and
+    `slm_manager/tasks/main.yml` now wrap their `git -c safe.directory=...
+    -C ...` invocation across several lines of a folded `>-` block, and the
+    structural walk still sees it.
     """
     import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
-
-    from check_git_safe_directory import PATTERN, REPO_ROOT, SAFE_FLAG
 
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "*.yml", "*.yaml"],
@@ -188,26 +233,29 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for line in text.splitlines():
-            if PATTERN.search(line):
+        try:
+            documents = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+        except yaml.YAMLError:
+            continue
+        for doc in documents:
+            if doc is None:
+                continue
+            for node in _iter_scalar_nodes(doc):
+                match = PATTERN.search(node.value)
+                if match is None:
+                    continue
                 visible += 1
-                assert SAFE_FLAG.search(line) or name.endswith(".pre-commit-config.yaml"), (
-                    f"{name}: an unguarded `git -C <code_source>` is visible to the checker:\n  {line.strip()[:120]}"
+                guarded = SAFE_FLAG.search(match.group("flags"))
+                assert guarded or name.endswith(".pre-commit-config.yaml"), (
+                    f"{name}: an unguarded `git -C <code_source>` is visible to the checker:\n"
+                    f"  {node.value.strip()[:160]}"
                 )
 
-    # Two weaker forms were tried and both let the mutation through, so they
-    # are recorded rather than repeated: a `visible >= 20` floor still passed
-    # when re-splitting one site dropped the count to 20, and "each file has at
-    # least one visible site" still passed because update-all-nodes.yml has ten
-    # other guarded sites. The assertion has to name the *specific* command
-    # each fix guards.
+    # Marker must be UNIQUE to the guarded site, and matched against the
+    # resolved scalar *value* (so it still matches after the command wraps
+    # across several physical lines, unlike a per-line marker search).
     must_be_visible = {
         "autobot-slm-backend/ansible/playbooks/sync-code-source.yml": "_code_source_dest",
-        # Marker must be UNIQUE to the guarded site. "rev-parse HEAD" is not:
-        # update-all-nodes.yml:150 contains "rev-parse HEAD~", which matches as a
-        # substring, so re-splitting line 274 still found a "matching" line and the
-        # mutation passed. "code_source_dir" appears only on the sites this fix
-        # guards; the other ten use git_repo_root.
         "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml": "code_source_dir",
         "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml": "code_source_dir",
     }
@@ -215,13 +263,117 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
         path = REPO_ROOT / name
         if not path.is_file():  # pragma: no cover - file moved
             continue
-        hits = [line for line in path.read_text(encoding="utf-8").splitlines() if PATTERN.search(line)]
-        matching = [line for line in hits if marker in line]
+        text = path.read_text(encoding="utf-8")
+        docs = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+        matching = []
+        for doc in docs:
+            if doc is None:
+                continue
+            for node in _iter_scalar_nodes(doc):
+                if PATTERN.search(node.value) and marker in node.value:
+                    matching.append(node.value)
         assert matching, (
-            f"{name}: the `{marker}` command is no longer visible to the checker. "
-            "A guarded command folded across physical lines drops out of view entirely — "
-            "the command stays correct while the guard stops watching it."
+            f"{name}: the `{marker}` command is no longer visible to the checker — "
+            "a guarded command folded across physical lines dropping out of view "
+            "entirely is exactly what #14196 fixed."
         )
-        assert all(SAFE_FLAG.search(line) for line in matching), f"{name}: `{marker}` lost its safe.directory guard"
+        for value in matching:
+            match = PATTERN.search(value)
+            assert match and SAFE_FLAG.search(match.group("flags")), f"{name}: `{marker}` lost its safe.directory guard"
 
     assert visible >= len(must_be_visible), f"expected at least {len(must_be_visible)} visible sites, found {visible}"
+
+
+# --- reach self-check: prove the walk actually descends into the tree ---------
+
+
+def _tracked_yaml_files() -> list:
+    import subprocess  # nosec B404
+
+    listing = subprocess.run(  # nosec B603 B607
+        ["git", "ls-files", "*.yml", "*.yaml"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    return listing.stdout.split()
+
+
+def _independent_pattern_match_count() -> int:
+    """Count `PATTERN` matches by walking `yaml.safe_load`'s plain dict/list
+    output — deliberately NOT the checker's `yaml.compose` node-walk — so a
+    regression in that walk cannot also hide from this count.
+    """
+
+    def strings(obj):
+        if isinstance(obj, str):
+            yield obj
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                yield from strings(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                yield from strings(item)
+
+    total = 0
+    for name in _tracked_yaml_files():
+        path = REPO_ROOT / name
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        try:
+            docs = list(yaml.safe_load_all(text))
+        except yaml.YAMLError:
+            continue
+        for doc in docs:
+            if doc is None:
+                continue
+            for value in strings(doc):
+                if PATTERN.search(value):
+                    total += 1
+    return total
+
+
+def _node_walk_pattern_match_count() -> int:
+    total = 0
+    for name in _tracked_yaml_files():
+        path = REPO_ROOT / name
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        try:
+            docs = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+        except yaml.YAMLError:
+            continue
+        for doc in docs:
+            if doc is None:
+                continue
+            for node in _iter_scalar_nodes(doc):
+                if PATTERN.search(node.value):
+                    total += 1
+    return total
+
+
+def test_the_node_walk_reaches_the_same_matches_as_an_independent_count() -> None:
+    """Same principle as the ansible-facts checker's reach test: two
+    independently-written traversals (compose-node-walk vs.
+    safe_load-dict-recursion) of the same tracked tree must agree on how
+    many `git -C <code_source>` sites exist. If the node-walk regressed to
+    matching nothing (or matching only some), this would diverge.
+
+    Scope: this proves TRAVERSAL completeness, not CLASSIFICATION
+    correctness. Both counters import the same `PATTERN` to decide what
+    counts as a match — narrow or widen `PATTERN` and both counters move
+    together and stay equal, because they agree on what to look for, not on
+    whether the walk actually visits everything reachable.
+    """
+    walked = _node_walk_pattern_match_count()
+    independent = _independent_pattern_match_count()
+    assert walked > 0, "the node-walk found zero matches — it never reached the tree"
+    assert independent > 0, "the independent count found zero — the ground truth itself is broken"
+    assert walked == independent, (
+        f"node-walk saw {walked} matches, the independently-counted dict/list "
+        f"recursion found {independent} — the two traversals disagree"
+    )
