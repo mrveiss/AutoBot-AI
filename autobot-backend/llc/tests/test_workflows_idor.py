@@ -202,3 +202,30 @@ class TestWorkflowsActorDerivation:
         assert resp.status_code == 204
         _, kwargs = WorkflowService.delete.call_args
         assert kwargs["actor"] == _FIXED_USER_ID
+
+
+class TestWorkflowsConflictHandling:
+    """#14271: a same-company duplicate that races past the pre-check must
+    surface as the route's documented 409, never an unhandled 500.
+
+    ``WorkflowService.create`` is mocked here to raise ``WorkflowConflictError``
+    directly — the shape it actually raises when the DB's
+    ``UNIQUE(company_id, workflow_id)`` constraint rejects a concurrent
+    duplicate the ``get()`` pre-check already passed (see
+    ``test_workflows_scoping.py::test_same_company_duplicate_workflow_id_raises_a_clean_conflict``
+    for that translation at the service layer)."""
+
+    def test_create_race_past_the_pre_check_returns_409_not_500(self):
+        from llc.api.workflows import WorkflowConflictError  # noqa: PLC0415
+
+        company_id = str(uuid.uuid4())
+        client = _make_client(company_id)
+        with (
+            patch("llc.api.workflows.WorkflowService.get", new=AsyncMock(return_value=None)),
+            patch(
+                "llc.api.workflows.WorkflowService.create",
+                new=AsyncMock(side_effect=WorkflowConflictError("workflow 'wf-1' already exists")),
+            ),
+        ):
+            resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
+        assert resp.status_code == 409
