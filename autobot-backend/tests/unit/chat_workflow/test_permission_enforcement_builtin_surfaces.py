@@ -202,7 +202,10 @@ class TestWebSearchDenial:
         handler._execute_web_search = AsyncMock(return_value="results")
 
         messages = [
-            msg async for msg in handler._handle_web_search_tool(self._tool_call(), [], session_id="sess-1", role="readonly")
+            msg
+            async for msg in handler._handle_web_search_tool(
+                self._tool_call(), [], session_id="sess-1", role="readonly"
+            )
         ]
 
         assert messages[-1].metadata.get("cancelled_by_hook") is True
