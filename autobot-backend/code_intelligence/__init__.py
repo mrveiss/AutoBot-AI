@@ -292,7 +292,7 @@ from .security import (
     get_vulnerability_types,
 )
 from .shell_analyzer import ShellAnalyzer, shell_analyzer
-from .test_pattern_analyzer import (
+from .testing_pattern_analyzer import (
     CoverageGap,
     TestAnalysisReport,
     TestAntiPatternResult,
