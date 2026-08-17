@@ -632,9 +632,9 @@ def test_the_derivation_finds_something():
         "slm-database no longer resolves into the `database` group - the union with "
         "inventory_builder._ROLE_TO_GROUPS is not being applied"
     )
-    assert "ai_stack" in _groups_a_role_joins("autobot-llm-cpu"), (
-        "autobot-llm-cpu no longer resolves into `ai_stack` - the prefix half of the canonical map is not reached"
-    )
+    assert "ai_stack" in _groups_a_role_joins(
+        "autobot-llm-cpu"
+    ), "autobot-llm-cpu no longer resolves into `ai_stack` - the prefix half of the canonical map is not reached"
 
 
 def test_every_role_declares_what_its_group_actually_requires():
