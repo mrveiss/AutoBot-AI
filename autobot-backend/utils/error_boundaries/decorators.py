@@ -440,12 +440,8 @@ def with_error_handling(
             ``decorator`` instead of a wrapped endpoint (#14191, and the bare
             usage #14186 had to fix by hand because nothing caught it).
     """
-    if callable(category) and not isinstance(category, ErrorCategory):
-        raise TypeError(
-            "with_error_handling() must be called with parentheses: "
-            "use @with_error_handling() or @with_error_handling(category=...), "
-            "not bare @with_error_handling."
-        )
+    # MUTATION-TEST-14191: guard temporarily disabled to prove the new bare-
+    # usage test fails without it. Reverted before merge.
 
     def decorator(func):
         """Inner decorator that wraps function with API error handling."""
@@ -458,9 +454,7 @@ def with_error_handling(
                 """Async wrapper that catches exceptions and converts to API errors."""
                 try:
                     return await func(*args, **kwargs)
-                except HTTPException:
-                    raise  # Preserve intentional HTTP status codes
-                except Exception as e:
+                except Exception as e:  # MUTATION-TEST-14191: HTTPException no longer preserved
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 

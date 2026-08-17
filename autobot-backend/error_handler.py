@@ -115,8 +115,7 @@ def with_default_on_error(
 
                 log_error(e, context or f"{func.__module__}.{func.__name__}")
 
-                if reraise:
-                    raise
+                # MUTATION-TEST-14191: reraise=True intentionally ignored here
                 return default_return
 
         @functools.wraps(func)
