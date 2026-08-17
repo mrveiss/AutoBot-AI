@@ -1005,6 +1005,26 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
     return nodes
 
 
+def _resolve_agent_budget(budget: "Optional[LLCAgentBudget]") -> "tuple[float, float]":
+    """Resolve one agent's ``(budget_spent, budget_total)`` from its budget
+    row, if any (#14184's split of ``_compose_agent_node`` — a second,
+    self-contained extraction to bring the composer under the 51-line
+    "must refactor before merge" threshold, CLAUDE_RULES.md rule 3).
+
+    Byte-identical to the block this replaces: expose token numbers for
+    token-mode agents when the field is populated, otherwise fall back to
+    dollar amounts. No source expression changed in the move.
+    """
+    b_mode = budget.budget_mode if budget else "dollars"
+    if b_mode == "tokens" and budget and budget.token_limit is not None:
+        b_spent = float(budget.tokens_spent)
+        b_total = float(budget.token_limit)
+    else:
+        b_spent = float(budget.budget_spent) if budget else 0.0
+        b_total = float(budget.budget_limit) if budget else 0.0
+    return b_spent, b_total
+
+
 def _compose_agent_node(
     row: "AgentOrgNode",
     budget: "Optional[LLCAgentBudget]",
@@ -1018,19 +1038,12 @@ def _compose_agent_node(
     the precedent being the already-extracted human branch,
     ``_compose_human_nodes``. No field's source expression changed: every
     right-hand side below is byte-for-byte the same expression that used to
-    sit inline in the loop, and the existing org-chart test suite
+    sit inline in the loop (budget resolution now lives in
+    ``_resolve_agent_budget``), and the existing org-chart test suite
     (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
     every one of them unchanged as the behaviour-preservation evidence.
     """
-    # Budget enrichment: expose token numbers for token-mode agents when
-    # the field is populated, otherwise fall back to dollar amounts.
-    b_mode = budget.budget_mode if budget else "dollars"
-    if b_mode == "tokens" and budget and budget.token_limit is not None:
-        b_spent = float(budget.tokens_spent)
-        b_total = float(budget.token_limit)
-    else:
-        b_spent = float(budget.budget_spent) if budget else 0.0
-        b_total = float(budget.budget_limit) if budget else 0.0
+    b_spent, b_total = _resolve_agent_budget(budget)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
