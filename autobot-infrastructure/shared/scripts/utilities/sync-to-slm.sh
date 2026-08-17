@@ -204,31 +204,43 @@ if [ "$CURRENT_COMMIT" != "unknown" ]; then
     # Note: sources /etc/autobot/db-credentials.env on the remote host for
     # postgres credentials.
     #
+    # `psql -c` does NOT process psql-specific syntax: psql(1) requires a
+    # -c argument to be "completely parsable by the server", so a :'var'
+    # reference inside -c is a syntax error on the server, not a
+    # client-side substitution (caught in review -- reproduced against a
+    # scratch Postgres, every -c call failed before it could report a row
+    # count). The SQL is instead sent over psql's STDIN, exactly like -f,
+    # where :'var' interpolation actually runs client-side; ssh forwards
+    # this command's stdin to the remote process since no pty is allocated.
+    #
     # SLM_NODE_ID and CURRENT_COMMIT reach the remote host through a single
     # ssh command string, parsed TWICE — once by this shell building the
     # string, once by the remote shell executing it. Two independent
     # defenses, since either value could otherwise break out at either
     # layer:
     #   1. Both values are passed as psql variables (-v) and referenced in
-    #      the SQL text with the quoting form :'var', never concatenated
-    #      into the SQL string, so neither can break out of the SQL literal.
-    #   2. The whole psql invocation is shell-escaped with `printf %q`
-    #      before it is embedded in the ssh command string, so the remote
-    #      shell sees exactly the intended tokens rather than a second round
-    #      of word-splitting. SLM_NODE_ID is additionally validated above
+    #      the SQL text (sent over stdin, below) with the quoting form
+    #      :'var', never concatenated into the SQL string, so neither can
+    #      break out of the SQL literal.
+    #   2. The psql invocation is shell-escaped with `printf %q` before it
+    #      is embedded in the ssh command string, so the remote shell sees
+    #      exactly the intended tokens rather than a second round of
+    #      word-splitting. SLM_NODE_ID is additionally validated above
     #      against a fixed character set.
     REMOTE_PSQL_CMD=(
         psql -h 127.0.0.1 -U slm_app -d slm
         -v "ON_ERROR_STOP=1"
         -v "node_id=${SLM_NODE_ID}"
         -v "commit=${CURRENT_COMMIT}"
-        -c "UPDATE nodes SET code_version = :'commit', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = :'node_id';"
     )
     REMOTE_PSQL_CMD_STR=$(printf '%q ' "${REMOTE_PSQL_CMD[@]}")
 
     set +e
     DB_UPDATE_OUTPUT=$(ssh ${SSH_KEY:+-i "$SSH_KEY"} $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" \
-        "source /etc/autobot/db-credentials.env 2>/dev/null && PGPASSWORD=\$SLM_DB_PASSWORD $REMOTE_PSQL_CMD_STR" 2>&1)
+        "source /etc/autobot/db-credentials.env 2>/dev/null && PGPASSWORD=\$SLM_DB_PASSWORD $REMOTE_PSQL_CMD_STR" <<'REMOTE_SQL' 2>&1
+UPDATE nodes SET code_version = :'commit', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = :'node_id';
+REMOTE_SQL
+)
     DB_UPDATE_EXIT=$?
     set -e
 
