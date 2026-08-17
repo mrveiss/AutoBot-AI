@@ -22,7 +22,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import WorkflowStatus
-from llc.services.workflow import WorkflowService
+from llc.services.workflow import WorkflowConflictError, WorkflowService
 
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect, safe to reuse
@@ -220,3 +220,76 @@ async def test_every_defined_status_is_accepted(session_factory):  # noqa: ANN00
             )
             assert created.status == member.value
             await session.commit()
+
+
+# #14271: workflow_id was a GLOBAL primary key while every route/service above
+# it treats the identity as company-scoped. The two tests below pin the fix —
+# the collision case (two companies sharing a workflow_id, previously
+# impossible at the DB layer) and the race case (a same-company duplicate,
+# which must still conflict, but cleanly).
+
+
+@pytest.mark.asyncio
+async def test_two_companies_can_create_the_same_workflow_id(session_factory):  # noqa: ANN001
+    """The collision case: dropping this pin regresses to a global-unique PK.
+
+    Before #14271, the second create here raised an unhandled
+    ``sqlite3.IntegrityError`` / Postgres ``UNIQUE constraint failed:
+    workflows.workflow_id`` — company B could never create this id at all,
+    and the failure mode (500, not the route's documented 409) was itself a
+    cross-tenant presence oracle. Both companies must succeed independently.
+    """
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    service = WorkflowService()
+
+    async with session_factory() as session:
+        created_a = await service.create(session, company_a, "prod-deploy", name="A's deploy")
+        await session.commit()
+
+    async with session_factory() as session:
+        created_b = await service.create(session, company_b, "prod-deploy", name="B's deploy")
+        await session.commit()
+
+    assert created_a.workflow_id == created_b.workflow_id == "prod-deploy"
+    assert created_a.company_id == company_a
+    assert created_b.company_id == company_b
+    # Distinct rows (distinct surrogate primary keys) sharing a workflow_id —
+    # exactly what the composite UNIQUE(company_id, workflow_id) allows and a
+    # global PK on workflow_id alone forbids.
+    assert created_a.id != created_b.id
+
+    async with session_factory() as session:
+        own_a = await service.get(session, company_a, "prod-deploy")
+        own_b = await service.get(session, company_b, "prod-deploy")
+
+    assert own_a is not None and own_a.name == "A's deploy"
+    assert own_b is not None and own_b.name == "B's deploy"
+
+
+@pytest.mark.asyncio
+async def test_same_company_duplicate_workflow_id_raises_a_clean_conflict(session_factory):  # noqa: ANN001
+    """The race case: a same-company duplicate must still conflict — cleanly.
+
+    This calls ``WorkflowService.create`` directly twice (bypassing the
+    route's pre-check) so it is the DB's ``UNIQUE(company_id, workflow_id)``
+    constraint doing the rejecting, not the ``get()``-then-``create()``
+    pre-check — the TOCTOU shape a concurrent request would hit. ``create``
+    must translate that into ``WorkflowConflictError``, not let an
+    ``IntegrityError`` escape unhandled.
+    """
+    company_id = uuid.uuid4()
+    service = WorkflowService()
+
+    async with session_factory() as session:
+        await service.create(session, company_id, "wf-dup")
+        await session.commit()
+
+    async with session_factory() as session:
+        with pytest.raises(WorkflowConflictError):
+            await service.create(session, company_id, "wf-dup")
+
+    # The failed create's rollback must not have poisoned the row created
+    # before it — no data loss on the conflicting attempt.
+    async with session_factory() as session:
+        still_there = await service.get(session, company_id, "wf-dup")
+    assert still_there is not None

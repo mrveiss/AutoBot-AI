@@ -19,14 +19,20 @@ The second one has a wrinkle worth stating: ``Workflow.company_id`` is
 role would give that company a workflow nobody has established it owns.
 
 The NULL case gets its own error rather than being folded into the ownership
-mismatch. To be precise about what that buys: comparing ``None != company_id``
-in Python is already ``True``, so an unattributed workflow would be refused
-either way — the branch does not close a bypass. What it closes is a
-*diagnostic* gap. Without it the caller is told the workflow "does not belong to
-company X", which reads as "it belongs to someone else" when the truth is "it
-belongs to nobody yet, and needs attributing". Those call for different fixes.
-A guard expressed as a SQL predicate instead of a Python comparison would be
-worse still, reporting the row as simply missing.
+mismatch, so the caller can tell "does not exist" apart from "exists but is
+unattributed, and needs reconciling" — those call for different fixes.
+
+#14271: ``_require_workflow`` used to run one *unscoped* ``SELECT ... WHERE
+workflow_id = :workflow_id`` — sound only while ``workflow_id`` was a global
+primary key, since exactly one row could ever match. Now that
+``UNIQUE (company_id, workflow_id)`` allows the same string in more than one
+company, that query could return an arbitrary row belonging to a company the
+caller has nothing to do with, and — worse — the resulting "does not belong
+to company X" message was a cross-tenant presence oracle for a client-supplied
+id, the exact defect class #14271 exists to close. The check is now two
+queries, each scoped to a company this caller is already allowed to see
+(their own, or the unattributed-legacy set), so it never reads — and never
+reports on — another company's row.
 """
 
 from __future__ import annotations
@@ -82,17 +88,33 @@ class RoleWorkflowService(LLCServiceBase):
 
         A NULL ``company_id`` is refused distinctly from a missing row: it means
         the workflow predates company attribution, not that it is absent.
-        """
-        result = await session.execute(select(Workflow.company_id).where(Workflow.workflow_id == workflow_id))
-        row = result.first()
-        if row is None:
-            raise ValueError(f"workflow {workflow_id!r} does not exist")
 
-        owner = row[0]
-        if owner is None:
+        #14271: each query below is scoped to a company this caller is
+        entitled to see (their own, or the unattributed-legacy rows) — never
+        to ``workflow_id`` alone. A workflow that exists, but belongs to a
+        *different* company, is therefore indistinguishable from one that
+        does not exist at all: reporting the two differently would be a
+        cross-tenant presence oracle for a client-supplied id.
+        """
+        own = await session.execute(
+            select(Workflow.workflow_id).where(
+                Workflow.workflow_id == workflow_id,
+                Workflow.company_id == company_id,
+            )
+        )
+        if own.scalar_one_or_none() is not None:
+            return
+
+        unattributed = await session.execute(
+            select(Workflow.workflow_id).where(
+                Workflow.workflow_id == workflow_id,
+                Workflow.company_id.is_(None),
+            )
+        )
+        if unattributed.scalar_one_or_none() is not None:
             raise ValueError(f"workflow {workflow_id!r} has no company attribution and cannot be " "attached to a role")
-        if owner != company_id:
-            raise ValueError(f"workflow {workflow_id!r} does not belong to company {company_id}")
+
+        raise ValueError(f"workflow {workflow_id!r} does not exist")
 
     async def attach(
         self,

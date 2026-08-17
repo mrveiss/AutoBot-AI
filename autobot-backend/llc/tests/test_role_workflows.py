@@ -10,11 +10,14 @@ The second one worth reading is
 is nullable for rows backfilled from Redis. Removing the dedicated NULL branch
 reddens that test — verified by mutation — but it is worth being precise about
 why: ``None != company_id`` is already ``True``, so the workflow stays refused.
-What the branch protects is the *reason* given. Without it the caller hears
-"does not belong to company X", which reads as "it belongs to someone else"
-when in fact it belongs to nobody yet. That is a different problem with a
-different fix, and conflating the two is how unattributed legacy rows stay
-unattributed.
+What the branch protects is the *reason* given: "no company attribution yet"
+versus a workflow that simply is not visible to this caller at all.
+
+``test_another_companys_workflow_cannot_be_attached`` pins the #14271 fix
+directly: attaching another company's workflow is refused with the *same*
+"does not exist" message a truly-missing workflow gets, not a distinct
+"belongs to company X" — the old distinct message was a cross-tenant
+presence oracle for a client-supplied id (#14271).
 """
 
 from __future__ import annotations
@@ -179,13 +182,20 @@ async def test_an_unattributed_legacy_workflow_cannot_be_attached(session_factor
 
 @pytest.mark.asyncio
 async def test_another_companys_workflow_cannot_be_attached(session_factory):  # noqa: ANN001
+    """#14271: refused with the *same* message a missing workflow gets.
+
+    A distinct "belongs to company X" message would tell a company-A admin
+    that a specific workflow_id exists somewhere in the installation, outside
+    their own company — a cross-tenant presence oracle for a client-supplied
+    id. The denial must be indistinguishable from "no such workflow".
+    """
     company_a, company_b = uuid.uuid4(), uuid.uuid4()
     role_a = await _seed_role(session_factory, company_a, "Head of Sales")
     theirs = await _seed_workflow(session_factory, "wf-theirs", company_b)
     service = RoleWorkflowService()
 
     async with session_factory() as session:
-        with pytest.raises(ValueError, match="does not belong to company"):
+        with pytest.raises(ValueError, match="does not exist"):
             await service.attach(
                 session, company_id=company_a, role_id=role_a, workflow_id=theirs, actor_user_id=_ADMIN_USER
             )

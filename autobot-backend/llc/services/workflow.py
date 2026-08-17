@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""LLC company-scoped workflow service (#14210).
+"""LLC company-scoped workflow service (#14210, #14271).
 
 Company-scoped CRUD for ``Workflow`` (``models/workflow.py``) — the
 foundation a future process node (#13963) will reference. Every method takes
@@ -16,6 +16,16 @@ through this service are always company-attributed, even though the
 underlying table column stays nullable to hold pre-existing rows backfilled
 from Redis by ``services/workflow_redis_backfill.py`` (see
 ``models/workflow.py`` docstring).
+
+#14271: the table's uniqueness is now ``UNIQUE (company_id, workflow_id)``,
+not a global primary key on ``workflow_id`` alone — so a same-company
+duplicate is the only case that can still conflict. ``create``'s route-level
+pre-check (``get()`` then ``create()``) is TOCTOU under concurrency, so a
+race between two same-company requests can still reach the DB constraint;
+``create`` catches that ``IntegrityError`` and raises
+``WorkflowConflictError`` so the route can translate it to a clean 409
+instead of an unhandled 500 (mirrors ``ReviewGatePolicyConflictError`` in
+``llc/services/review_gate.py``).
 """
 
 import uuid
@@ -23,6 +33,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.workflow import SOURCE_CREATED, Workflow
@@ -30,6 +41,10 @@ from models.workflow import SOURCE_CREATED, Workflow
 from ..models.activity import ActorType
 from ..models.enums import WorkflowStatus
 from .base import LLCServiceBase
+
+
+class WorkflowConflictError(Exception):
+    """Raised when a workflow_id already exists for this company (unique-constraint race)."""
 
 
 class WorkflowService(LLCServiceBase):
@@ -63,7 +78,13 @@ class WorkflowService(LLCServiceBase):
             created_by=actor,
         )
         session.add(workflow)
-        await session.flush()
+        try:
+            await session.flush()
+        except IntegrityError as exc:
+            await session.rollback()
+            raise WorkflowConflictError(
+                f"workflow {workflow_id!r} already exists for company {company_id}"
+            ) from exc
 
         if self.activity_log:
             await self.activity_log.record(
@@ -167,4 +188,4 @@ class WorkflowService(LLCServiceBase):
         return deleted
 
 
-__all__ = ["WorkflowService"]
+__all__ = ["WorkflowConflictError", "WorkflowService"]
