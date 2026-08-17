@@ -325,7 +325,7 @@ const nodeIcons: Record<CanvasNodeType, IconName> = {
   'vision-wait': 'clock',
   'org-person': 'user',
   'org-group': 'sitemap',
-  'org-process': 'diagram-project',
+  'org-process': 'project-diagram',
 };
 const nodeLabels = computed(() => ({
   'org-process': t('llc.orgChart.processNodeLabel'),

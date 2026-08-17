@@ -274,7 +274,12 @@ export function buildProcessCanvasNodes(
       role_name: process.role_name,
       workflow_id: process.workflow_id,
     },
-  })) as CanvasNode[]
+    // Required by CanvasNode (via WorkflowNode). Always empty: a process node
+    // draws no edges — it is an entry point, not a step in a graph. Declared so
+    // the type is satisfied structurally instead of cast past, which would have
+    // hidden the next missing field rather than naming it.
+    connections: [],
+  }))
 }
 
 /** The workflow a process node opens, or null if the id is not a process node. */
