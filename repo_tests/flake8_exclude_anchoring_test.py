@@ -42,8 +42,7 @@ is an assertion about nothing.
 
 from __future__ import annotations
 
-import configparser
-import re
+import importlib.util
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
@@ -51,88 +50,35 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
+_CHECKER = REPO_ROOT / "tools" / "lint" / "check_flake8_exclude_anchoring.py"
 
-#: Bare names that are allowed to match at any depth. Each names a build, VCS
-#: or runtime artifact directory that holds no tracked Python, so matching by
-#: name prunes artifacts and never source. This set only shrinks: a new name
-#: belongs here only if it can never contain checked-in code, and
-#: ``test_artifact_names_cover_no_tracked_python`` re-proves that on every run
-#: rather than trusting the claim.
-ARTIFACT_DIR_NAMES = frozenset(
-    {
-        ".git",
-        ".tox",
-        "__pycache__",
-        "node_modules",
-        "venv",
-        ".venv",
-        "build",
-        "dist",
-        "*.egg-info",
-        "temp",
-        "logs",
-        "reports",
-        "archive",
-        "archives",
-        "backups",
-    }
-)
+
+def _load_checker():
+    """Import the checker by path.
+
+    The decision lives in the script `code-quality` runs, not here. Restating
+    it would give the guard two definitions that could drift, and the copy CI
+    executes is the one that matters — a test agreeing with a second copy of
+    the rule proves nothing about the check that blocks the merge.
+    """
+    spec = importlib.util.spec_from_file_location("check_flake8_exclude_anchoring", _CHECKER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+checker = _load_checker()
+
+ARTIFACT_DIR_NAMES = checker.ARTIFACT_DIR_NAMES
+read_exclude_entries = checker.read_exclude_entries
+split_exclude_value = checker.split_exclude_value
+bare_entries = checker.bare_entries
+unanchored_source_entries = checker.unanchored_source_entries
+entries_covering_tracked_python = checker.entries_covering_tracked_python
 
 #: Floor for the tracked-Python enumeration. An enumeration that returns
 #: nothing must not read as "no source is covered by a bare name".
-_TRACKED_PY_FLOOR = 3000
-
-#: Mirror of ``flake8.utils.COMMA_SEPARATED_LIST_RE``. Reimplemented rather
-#: than imported so the guard runs even where flake8 is not installed — a guard
-#: that skips itself reports clean. ``test_split_matches_flake8s_own_parser``
-#: pins the mirror to the real thing wherever flake8 *is* importable.
-_SPLIT_RE = re.compile(r"[,\s]")
-
-
-def split_exclude_value(value: str) -> list[str]:
-    """Split an ``exclude`` option exactly as flake8 does."""
-    return [item for item in (piece.strip() for piece in _SPLIT_RE.split(value)) if item]
-
-
-def read_exclude_entries(config_text: str) -> list[str]:
-    """Parsed ``exclude`` entries of a flake8 config given as text.
-
-    ``RawConfigParser`` rather than ``ConfigParser`` because that is what
-    ``flake8.options.config.load_config`` uses; interpolation would change what
-    a ``%`` in the value means and the guard must read what flake8 reads.
-    """
-    parser = configparser.RawConfigParser()
-    parser.read_string(config_text)
-    return split_exclude_value(parser["flake8"]["exclude"])
-
-
-def bare_entries(entries: list[str]) -> list[str]:
-    """Entries flake8 will match against a basename, i.e. at any depth."""
-    return [entry for entry in entries if "/" not in entry and "\\" not in entry]
-
-
-def unanchored_source_entries(entries: list[str]) -> list[str]:
-    """Bare entries that are not a sanctioned artifact name.
-
-    This is the decision the guard turns on, kept as a function so a test can
-    put a synthetic list through it instead of asserting on the config's text.
-    """
-    return [entry for entry in bare_entries(entries) if entry not in ARTIFACT_DIR_NAMES]
-
-
-def entries_covering_tracked_python(entries: list[str], tracked: list[str]) -> dict[str, int]:
-    """Bare entries that prune tracked Python, mapped to how many files.
-
-    ``fnmatch`` is not needed: flake8 compares a bare entry to a directory's
-    basename, so a directory component equal to the entry is exactly a hit.
-    """
-    counts: dict[str, int] = {}
-    wanted = set(bare_entries(entries))
-    for path in tracked:
-        for component in path.split("/")[:-1]:
-            if component in wanted:
-                counts[component] = counts.get(component, 0) + 1
-    return counts
+_TRACKED_PY_FLOOR = checker.TRACKED_PY_FLOOR
 
 
 @pytest.fixture(scope="module")
@@ -310,3 +256,73 @@ def test_split_matches_flake8s_own_parser():
     flake8_utils = pytest.importorskip("flake8.utils")
     sample = "a,\n b/,\t*.egg-info\n # comment (word)\n c/d/\n"
     assert split_exclude_value(sample) == flake8_utils.parse_comma_separated_list(sample)
+
+
+# --------------------------------------------------------------------------
+# The audit entrypoint, and the check that actually runs it
+# --------------------------------------------------------------------------
+
+
+def test_audit_entrypoint_is_clean_on_the_current_config():
+    """Exercise the exact call `code-quality` makes, not a paraphrase of it."""
+    reached, problems = checker.audit_excludes()
+    assert problems == []
+    assert reached == len(checker.load_entries()), "the audit did not reach every entry"
+    assert reached >= 30, f"only {reached} entries reached — the parse silently collapsed"
+
+
+def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
+    """The audit must go red on the list this issue was filed against.
+
+    Run against a real config on disk rather than an in-memory list, because
+    that is the path CI takes and it is where a cwd- or root-resolution bug
+    would hide.
+    """
+    (tmp_path / ".flake8").write_text(PRE_FIX_EXCLUDE, encoding="utf-8")
+    subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "init", "-q"], cwd=tmp_path, capture_output=True, text=True, check=True
+    )
+    reached, problems = checker.audit_excludes(tmp_path)
+
+    assert reached > 0, "the audit reached no entries — it would pass having checked nothing"
+    joined = "\n".join(problems)
+    assert "unanchored exclude entries" in joined, f"the anchoring violation was not reported: {problems}"
+    for expected in ("monitoring", "tests", "tools", "resources"):
+        assert expected in joined, f"the audit did not name bare `{expected}`"
+
+
+def test_code_quality_runs_the_audit():
+    """A guard nothing invokes is documentation.
+
+    This is the whole reason the checker is a script: the required `code-quality`
+    job must call it. The failure direction makes it necessary — re-adding a
+    bare name lints FEWER files, so every lint step reports fewer violations and
+    goes greener. Without this invocation nothing that can block a merge would
+    notice (#14353 tracks the wider gap: the pytest suite is not a required
+    check).
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+
+    assert "check_flake8_exclude_anchoring.py --audit-excludes" in workflow, (
+        "code-quality.yml no longer runs the exclude-anchoring audit — the guard "
+        "would stop blocking merges while these tests kept passing (#14419)"
+    )
+    assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
+
+
+def test_the_checker_needs_no_third_party_import():
+    """It runs in a job that installs linters, not the application's dependencies.
+
+    An import of anything outside the stdlib would fail at runtime in
+    `code-quality`, which is the one place this must not break.
+    """
+    source = _CHECKER.read_text(encoding="utf-8")
+    third_party = [
+        line
+        for line in source.splitlines()
+        if line.startswith(("import ", "from "))
+        and not line.startswith("from __future__")
+        and line.split()[1].split(".")[0]
+        not in {"argparse", "configparser", "logging", "pathlib", "re", "subprocess", "sys"}
+    ]
+    assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
