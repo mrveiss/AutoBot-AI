@@ -16,45 +16,52 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
-import type { CanvasNode } from '../canvasNode'
+import { buildProcessCanvasNodes } from '@/composables/llc/orgCanvasGraph'
 
-const PROCESS_NODES: CanvasNode[] = [
-  {
-    id: 'org-process:wf-1',
-    type: 'org-process',
-    position: { x: 0, y: 0 },
-    data: { workflow_id: 'wf-1', role_name: 'Head of Ops' },
-    connections: [],
-  },
-]
+// Built by the real producer rather than hand-rolled. A hand-written node can
+// drift into a shape nothing actually emits — and then the test passes against
+// data the canvas never receives.
+const PROCESS_NODES = buildProcessCanvasNodes(
+  [{ role_id: 'role-1', role_name: 'Head of Ops', workflow_id: 'wf-1' }],
+  0,
+)
+
+// Read the sentence from the locale file rather than hardcoding it: deleting
+// the key makes this `undefined`, which cannot match the key path vue-i18n
+// falls back to rendering. A hardcoded English string would let the key be
+// deleted while this file still passed against a literal.
+const LOCALE = en as unknown as {
+  llc: { orgChart: { processOpensWorkflow?: string } }
+}
+const EXPECTED = LOCALE.llc.orgChart.processOpensWorkflow
 
 function mountCanvas() {
-  const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+  const i18n = createI18n({
+    legacy: false,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: { en },
+  })
   return mount(WorkflowCanvas, {
-    props: { modelValue: PROCESS_NODES, readOnly: true },
+    props: { nodes: PROCESS_NODES, selectedNodeId: null, readonly: true },
     global: { plugins: [i18n] },
   })
 }
 
 describe('org-process node accessible description', () => {
-  it('renders the description the locale file defines, not a bare key', () => {
-    // Read from the locale file rather than hardcoding the sentence: deleting
-    // the key makes this `undefined`, which cannot match the key path vue-i18n
-    // falls back to rendering. Hardcoding the English text would let the key
-    // be deleted while the assertion still passed against a literal.
-    const expected = (en as Record<string, any>).llc?.orgChart?.processOpensWorkflow
-    expect(expected).toBeTruthy()
+  it('defines the description in the locale file', () => {
+    expect(EXPECTED).toBeTruthy()
+  })
 
+  it('renders the description the locale file defines, not a bare key', () => {
     const title = mountCanvas().find('.org-title')
+
     expect(title.exists()).toBe(true)
-    expect(title.attributes('aria-label')).toBe(expected)
+    expect(title.attributes('aria-label')).toBe(EXPECTED)
   })
 
   it('exposes the same description on hover as to a screen reader', () => {
-    const expected = (en as Record<string, any>).llc?.orgChart?.processOpensWorkflow
-    const title = mountCanvas().find('.org-title')
-
-    expect(title.attributes('title')).toBe(expected)
+    expect(mountCanvas().find('.org-title').attributes('title')).toBe(EXPECTED)
   })
 
   it('still renders the workflow id as the visible label', () => {
