@@ -297,7 +297,14 @@ def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
     # task (Play 2, gated on `slm_node_id is defined`, which every node
     # carries) — every other Play 2 task stays gated on its own group, so
     # this adds nothing else for a node with no other role.
-    is_agent_only = is_slm and "slm_server" not in node_groups and node_groups <= {"slm", "slm_nodes"}
+    # `_UNIVERSAL_ALL` was already merged in above, so the subset test must
+    # allow for it — comparing against {"slm", "slm_nodes"} alone is never
+    # true here and the branch silently never fires.
+    is_agent_only = (
+        is_slm
+        and "slm_server" not in node_groups
+        and node_groups <= ({"slm", "slm_nodes"} | _UNIVERSAL_ALL)
+    )
     if not is_slm or has_app_roles or is_agent_only:
         node_groups |= _UNIVERSAL_NON_SLM
 
