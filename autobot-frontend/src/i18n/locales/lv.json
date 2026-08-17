@@ -8296,7 +8296,9 @@
         "handoffButton": "Nodot cilvēkam",
         "handoffEmpty": "Nav aktīvu vienumu, ko nodot.",
         "handoffNotApplicableHuman": "Nodošana attiecas tikai uz aģentiem."
-      }
+      },
+      "processNodeLabel": "Process",
+      "processOpensWorkflow": "Atver šīs lomas darbplūsmu"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",

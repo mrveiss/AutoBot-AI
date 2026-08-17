@@ -8296,7 +8296,9 @@
         "handoffButton": "An Mensch übergeben",
         "handoffEmpty": "Keine aktiven Elemente zur Übergabe.",
         "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
-      }
+      },
+      "processNodeLabel": "Prozess",
+      "processOpensWorkflow": "Öffnet den Workflow dieser Rolle"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",

@@ -8296,7 +8296,9 @@
         "handoffButton": "واگذاری به انسان",
         "handoffEmpty": "هیچ مورد فعالی برای واگذاری وجود ندارد.",
         "handoffNotApplicableHuman": "واگذاری فقط برای عامل‌ها اعمال می‌شود."
-      }
+      },
+      "processNodeLabel": "فرایند",
+      "processOpensWorkflow": "گردش‌کار این نقش را باز می‌کند"
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

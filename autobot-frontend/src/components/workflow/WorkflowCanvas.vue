@@ -179,6 +179,23 @@
                 <input v-model.number="(node.data as any).timeout_ms" type="number" placeholder="Timeout (ms)" @click.stop />
               </template>
             </template>
+            <!-- #13963: a workflow a role runs. Read-only, like the other org
+                 nodes — the canvas is a way in to the automation module, not a
+                 second place to edit a workflow. -->
+            <template v-else-if="node.type === 'org-process'">
+              <!-- The node is a way in to the automation module, and the only
+                   visible text is a workflow id and a role name — neither says
+                   that activating it goes anywhere. The description carries
+                   that, so it reaches a screen reader and a hover alike. -->
+              <p
+                class="org-title"
+                :title="$t('llc.orgChart.processOpensWorkflow')"
+                :aria-label="$t('llc.orgChart.processOpensWorkflow')"
+              >{{ nodeText(node, 'workflow_id') }}</p>
+              <div class="org-meta">
+                <span class="process-role">{{ nodeText(node, 'role_name') }}</span>
+              </div>
+            </template>
             <!-- GH#13939: Company OS org nodes are read-only descriptors -->
             <template v-else-if="node.type === 'org-person'">
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
@@ -316,8 +333,10 @@ const nodeIcons: Record<CanvasNodeType, IconName> = {
   'vision-wait': 'clock',
   'org-person': 'user',
   'org-group': 'sitemap',
+  'org-process': 'project-diagram',
 };
 const nodeLabels = computed(() => ({
+  'org-process': t('llc.orgChart.processNodeLabel'),
   step: t('workflow.canvas.stepLabel'),
   condition: t('workflow.canvas.conditionLabel'),
   switch: t('workflow.canvas.switchLabel'),
@@ -773,4 +792,9 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-secondary { padding: var(--spacing-2-5) var(--spacing-5); background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
 .btn-secondary:hover { background: var(--bg-hover); }
+.process-role {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono, monospace);
+}
 </style>
