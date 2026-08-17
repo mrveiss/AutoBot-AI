@@ -257,6 +257,60 @@ jobs:
             exit 1
           fi
 
+      - name: Verify audit_logs.updated_at and role_permissions timestamps actually exist (#14300)
+        # #14321's lesson: a migration recorded as applied while doing
+        # nothing is the exact defect class this repo keeps hitting.
+        # "Applied migration: add_role_permission_audit_log_timestamps" in
+        # the runner's own log, and its row in migrations_applied, are both
+        # the runner's self-report -- neither queries the database it
+        # claims to have changed. This step does, independently, against
+        # slm_users (not slm): the same real Postgres 16 instance, a fresh
+        # cursor, and a live information_schema.columns query -- proof the
+        # columns exist, not merely that migrate() returned without
+        # raising.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: slm_users
+          PGUSER: slmtest
+          PGPASSWORD: slmtest
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          import sys
+
+          import psycopg2
+
+          expected = {
+              ("role_permissions", "created_at"),
+              ("role_permissions", "updated_at"),
+              ("audit_logs", "updated_at"),
+          }
+
+          conn = psycopg2.connect()
+          try:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      """
+                      SELECT table_name, column_name
+                      FROM information_schema.columns
+                      WHERE table_schema = 'public'
+                        AND table_name IN ('role_permissions', 'audit_logs')
+                      """
+                  )
+                  present = {(row[0], row[1]) for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          missing = expected - present
+          print(f"Expected columns: {sorted(expected)}")
+          print(f"Present in slm_users: {sorted(present)}")
+
+          if missing:
+              print(f"::error::columns missing from slm_users despite the migration reporting applied: {sorted(missing)}")
+              sys.exit(1)
+          PY
+
       - name: Verify migrations_applied matches the full migration list
         # #14326: this used to be two psql SELECTs that printed rows and
         # compared nothing, so the step was green regardless of what the
