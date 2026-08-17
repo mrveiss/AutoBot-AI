@@ -537,7 +537,13 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
     "slm-backend": ["python314", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
-    "slm-database": ["postgresql"],
+    # #14460: NOT just postgresql. inventory_builder._ROLE_TO_GROUPS puts
+    # slm-database in {redis, database} -- the same groups `role_redis_active`
+    # gates on -- so a node carrying it runs the redis ansible role and its
+    # unconditional `python3.14 -m venv`. The SLM roles are separable (see the
+    # section header above), so a node can carry slm-database without
+    # slm-backend, which is the only other declarer of the interpreter here.
+    "slm-database": ["postgresql", "python314"],
     "slm-monitoring": [],
     # Service roles
     #
@@ -569,8 +575,14 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     "browser-service": ["nodejs"],
     "npu-worker": ["python314"],
     "tts-worker": ["python314"],
-    "autobot-llm-cpu": [],
-    "autobot-llm-gpu": [],
+    # #14460: NOT empty. The `autobot-llm-` prefix key in
+    # inventory_builder._ROLE_TO_GROUPS lands both roles in {ai_stack, aiml,
+    # ai, llm_nodes}; `role_ai_stack_active` gates on ai_stack/aiml, so
+    # provision-fleet-roles.yml applies the ai-stack ansible role, which
+    # creates a python3.14 venv. Same shape as slm-database above: the
+    # requirement comes from the group, not from the role's own name.
+    "autobot-llm-cpu": ["python314"],
+    "autobot-llm-gpu": ["python314"],
     # #14446: NOT empty. See the note on the service roles above -- vnc maps
     # into the backend group, so the backend ansible role runs on a vnc-only
     # node. Provisioning failed at the venv with "No such file or directory:
