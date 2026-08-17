@@ -290,8 +290,7 @@ async def test_traces_query_is_bounded_regardless_of_table_size(db, monkeypatch)
     text = await performance._get_prometheus_metrics_text(db, cache=performance._MetricsCache())
 
     assert 'autobot_trace_duration_ms_count{status="ok"} 3' in text, (
-        "expected the query to be capped at metrics_max_traces=3 even though 10 rows "
-        f"exist. Full text:\n{text}"
+        "expected the query to be capped at metrics_max_traces=3 even though 10 rows " f"exist. Full text:\n{text}"
     )
 
 
