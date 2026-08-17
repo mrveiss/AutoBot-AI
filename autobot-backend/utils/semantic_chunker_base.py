@@ -256,16 +256,25 @@ class SemanticChunkerBase(ABC):
 
     # ---- Single-sentence + metadata helpers ---------------------------
 
-    def _create_single_sentence_chunk(
-        self, text: str, sentences: List[str], metadata: Dict[str, Any] | None
-    ) -> SemanticChunk:
+    def _create_single_sentence_chunk(self, text: str, sentences: List[str]) -> SemanticChunk:
+        """Zero/one-sentence fallback chunk (Issue #14467).
+
+        Carries only the chunk-shape marker; subclass and pipeline metadata
+        (`optimization_version`, `chunk_index`, ...) is applied afterwards by
+        `_enrich_chunks_with_metadata()` in `chunk_text()` — the same call the
+        multi-sentence path uses — so both paths agree on one enrichment point.
+        """
+        chunk_metadata: Dict[str, Any] = {"single_sentence": True}
+        if not sentences:
+            chunk_metadata["empty_input"] = True
+
         return SemanticChunk(
             content=text,
             start_index=0,
             end_index=1,
             sentences=sentences,
             semantic_score=1.0,
-            metadata=metadata or {"single_sentence": True},
+            metadata=chunk_metadata,
         )
 
     def _build_chunk_metadata(
@@ -348,7 +357,9 @@ class SemanticChunkerBase(ABC):
 
             sentences = self._split_into_sentences(text)
             if len(sentences) <= 1:
-                return [self._create_single_sentence_chunk(text, sentences, metadata)]
+                chunks = [self._create_single_sentence_chunk(text, sentences)]
+                self._enrich_chunks_with_metadata(chunks, metadata)
+                return chunks
 
             logger.debug("Split text into %d sentences", len(sentences))
 
