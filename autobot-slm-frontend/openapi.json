@@ -28235,7 +28235,7 @@
     },
     "/api/performance/metrics/prometheus": {
       "get": {
-        "description": "Export metrics in Prometheus text format.",
+        "description": "Export metrics in Prometheus text format.\n\n#14362: query cost is bounded (LIMIT + short TTL cache) rather than\nscaling with table size or scrape frequency. #14361: no per-request\nlabel is emitted — see `_generate_prometheus_metrics`.",
         "operationId": "get_prometheus_metrics_api_performance_metrics_prometheus_get",
         "responses": {
           "200": {

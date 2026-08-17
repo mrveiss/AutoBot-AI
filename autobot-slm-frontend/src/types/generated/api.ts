@@ -4621,6 +4621,10 @@ export interface paths {
         /**
          * Get Prometheus Metrics
          * @description Export metrics in Prometheus text format.
+         *
+         *     #14362: query cost is bounded (LIMIT + short TTL cache) rather than
+         *     scaling with table size or scrape frequency. #14361: no per-request
+         *     label is emitted — see `_generate_prometheus_metrics`.
          */
         get: operations["get_prometheus_metrics_api_performance_metrics_prometheus_get"];
         put?: never;
