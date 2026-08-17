@@ -743,6 +743,6 @@ def test_the_data_layer_roles_reach_their_own_activation_fact():
     """
     consulted = _activation_sources()["redis"]["groups"]
     for role in ("redis", "postgres"):
-        assert ROLE_ANSIBLE_GROUPS[role] in consulted, (
-            f"{role} joins {ROLE_ANSIBLE_GROUPS[role]!r}; role_redis_active reads {sorted(consulted)}"
-        )
+        assert (
+            ROLE_ANSIBLE_GROUPS[role] in consulted
+        ), f"{role} joins {ROLE_ANSIBLE_GROUPS[role]!r}; role_redis_active reads {sorted(consulted)}"
