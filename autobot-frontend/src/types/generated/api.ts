@@ -1004,7 +1004,10 @@ export interface paths {
          * @description Reset the current chat session.
          *
          *     Issue #549: Created to match frontend POST /api/chat/reset
-         *     Issue #665: Refactored to use extracted helpers for message preservation.
+         *     Issue #665: Refactored to use an extracted helper for session clearing.
+         *     Issue #14359: dropped ``keep_system_prompt`` — nothing ever persisted a
+         *     system prompt into a session, so the flag could not change any observable
+         *     outcome. Reset now always clears unconditionally when ``clear_context``.
          */
         post: operations["reset_chat_api_chat_reset_post"];
         delete?: never;
