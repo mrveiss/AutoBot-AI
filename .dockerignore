@@ -46,6 +46,12 @@ docs
 # Tests
 **/tests
 **/*_test.py
+# #14127: pytest.ini's `python_files = test_*.py *_test.py` treats BOTH naming
+# conventions as tests (colocated, #734) -- this file only excluded the suffix
+# form. 58 prefix-form files (autobot-backend/agent_loop/test_loop_repetition.py
+# and 57 others) were shipping into every Docker image nothing referenced them
+# from outside a test.
+**/test_*.py
 **/*.test.ts
 **/*.spec.ts
 **/cypress
