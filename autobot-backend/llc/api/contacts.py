@@ -39,11 +39,14 @@ from llc.deps import assert_company_access
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
+from ..services.authz import NotAuthorisedError
 from ..services.contact import ContactService
+from ..services.contact_directory import ContactDirectoryService, ContactInUseError
 
 router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 
 _get_svc = lazy_singleton(ContactService)
+_get_directory = lazy_singleton(ContactDirectoryService)
 
 # Conservative allow-list — digits, leading +, spaces, and the punctuation a
 # phone number legitimately contains. Never free text: a contact's phone
@@ -111,6 +114,114 @@ class ContactResponse(BaseModel):
 
 
 # ------------------------------------------------------------------ Routes
+
+
+class ContactMergeRequest(BaseModel):
+    """Which duplicate folds into which survivor. Both named explicitly."""
+
+    keep_id: uuid.UUID
+    merge_id: uuid.UUID
+
+
+# NOTE ON ROUTE ORDER: every path below is declared BEFORE "/{company_id}".
+# That parameter is a `uuid.UUID`, so "directory" would be parsed as one and
+# rejected with a 422 rather than falling through — a literal segment placed
+# after a typed catch-all is unreachable, and the failure looks like a broken
+# endpoint rather than a routing mistake.
+
+
+@router.get("/directory", response_model=List[ContactResponse])
+async def list_directory(
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    _ctx: TenantContext = Depends(require_org_context),
+) -> List[ContactResponse]:
+    """The shared people directory (#13998).
+
+    Company OS companies are departments of one real company, and people belong
+    to the business rather than to a department — so this takes no company id.
+    Authentication is still required; a shared directory is not a public one.
+    """
+    contacts = await _get_directory().list_directory(session)
+    return [ContactResponse.model_validate(c) for c in contacts]
+
+
+@router.get("/directory/duplicates", response_model=List[List[uuid.UUID]])
+async def list_duplicate_candidates(
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    _ctx: TenantContext = Depends(require_org_context),
+) -> List[List[uuid.UUID]]:
+    """Groups of contacts sharing a mailbox — suggestions for a human to review.
+
+    Ids only, and nothing is changed: two people can legitimately share
+    ``info@supplier``, so merging is always an explicit act (see below).
+    """
+    return await _get_directory().find_duplicate_candidates(session)
+
+
+@router.post("/{company_id}/merge", response_model=ContactResponse)
+async def merge_contacts(
+    company_id: uuid.UUID,
+    body: ContactMergeRequest,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ContactResponse:
+    """Fold one contact into another, moving its role tenures.
+
+    Company-scoped because the *authority* to merge is a department admin's,
+    even though the directory itself is shared.
+    """
+    assert_company_access(ctx, company_id)
+    try:
+        survivor = await _get_directory().merge(
+            session,
+            company_id=company_id,
+            keep_id=body.keep_id,
+            merge_id=body.merge_id,
+            actor_user_id=_actor_id(current_user),
+        )
+    except NotAuthorisedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await session.commit()
+    return ContactResponse.model_validate(survivor)
+
+
+@router.delete("/{company_id}/directory/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_from_directory(
+    company_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Remove a person from the shared directory.
+
+    409, not 400, when they still hold a role: the request is valid and the
+    caller is authorised — the obstacle is state elsewhere, and the response
+    names which departments still depend on them.
+    """
+    assert_company_access(ctx, company_id)
+    try:
+        deleted = await _get_directory().delete(
+            session,
+            company_id=company_id,
+            contact_id=contact_id,
+            actor_user_id=_actor_id(current_user),
+        )
+    except ContactInUseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": str(exc), "company_ids": [str(c) for c in exc.company_ids]},
+        ) from exc
+    except NotAuthorisedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+    await session.commit()
 
 
 @router.get("/{company_id}", response_model=List[ContactResponse])

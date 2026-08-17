@@ -281,3 +281,27 @@ async def test_a_member_cannot_delete_or_merge(session_factory):  # noqa: ANN001
             await service.delete(session, company_id=company, contact_id=contact_id, actor_user_id=member)
 
     assert await _exists(session_factory, contact_id)
+
+
+def test_the_directory_routes_are_reachable_before_the_catch_all() -> None:
+    """`/directory` must be declared before `/{company_id}` or it is unreachable.
+
+    `company_id` is a `uuid.UUID`, so a request to `/contacts/directory` reaching
+    the catch-all first is rejected as a malformed UUID — a 422 that reads like a
+    broken endpoint rather than a routing mistake. Asserting the *order* catches
+    it at review time instead.
+
+    Uses the router's own declaration order, not a live request, so the check
+    holds without standing up the app.
+    """
+    from llc.api.contacts import router
+
+    # Paths carry the router's own "/contacts" prefix.
+    paths = [getattr(r, "path", "") for r in router.routes]
+    assert "/contacts/directory" in paths, f"directory route missing; got {paths}"
+
+    catch_all = paths.index("/contacts/{company_id}")
+    for literal in ("/contacts/directory", "/contacts/directory/duplicates"):
+        assert (
+            paths.index(literal) < catch_all
+        ), f"{literal} is declared after /{{company_id}} and is therefore unreachable"
