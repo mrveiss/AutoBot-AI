@@ -40,8 +40,13 @@ _LAZY_ATTRS = {
     "decode_jwt_no_verify_exp": "autobot_shared.auth.jwt_core",
     "decode_jwt_or_none": "autobot_shared.auth.jwt_core",
     "encode_jwt": "autobot_shared.auth.jwt_core",
-    "hash_password": "autobot_shared.auth.jwt_core",
-    "verify_password": "autobot_shared.auth.jwt_core",
+    # nosec B105 on both: bandit's hardcoded_password_string rule fires on a
+    # string literal assigned under a *_password key. The value here is a
+    # dotted MODULE PATH, not a secret -- it is the import target these two
+    # helpers resolve from. Annotated rather than renamed: the keys must match
+    # the public symbol names callers already import.
+    "hash_password": "autobot_shared.auth.jwt_core",  # nosec B105  # module path, not a secret
+    "verify_password": "autobot_shared.auth.jwt_core",  # nosec B105  # module path, not a secret
     "Permission": "autobot_shared.auth.permissions",
     "Role": "autobot_shared.auth.permissions",
     "ROLE_PERMISSIONS": "autobot_shared.auth.permissions",

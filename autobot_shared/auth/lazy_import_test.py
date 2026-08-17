@@ -23,7 +23,7 @@ this environment.
 from __future__ import annotations
 
 import os
-import subprocess  # nosec B404  # fixed argv, shell=False; see _run_in_subprocess
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
