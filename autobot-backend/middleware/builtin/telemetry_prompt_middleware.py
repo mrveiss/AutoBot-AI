@@ -38,6 +38,20 @@ Environment variables:
     PROMETHEUS_URL     — Base URL of the Prometheus instance, e.g.
                          "http://192.168.1.10:9090".
     TELEMETRY_CPU_THRESHOLD — Override threshold without touching plugin config.
+
+Issue #14280 (review): the Prometheus query used to open a raw
+``aiohttp.ClientSession(...)`` per call. That was invisible to
+``tests/test_raw_client_session_ceiling_12992.py`` while this file lived
+under ``plugins/core-plugins/`` (outside the walked tree) — moving it into
+``autobot-backend/`` revealed the offense, it did not create it. Converted to
+the shared pooled client (``autobot_shared.http_client.get_http_client()``,
+issue #12979) so it participates in the pool's sizing/utilisation accounting
+instead of opening its own connector. ``prometheus_url`` is operator-supplied
+stored config (env var or plugin config, #14280/Rule 8), so the request opts
+into ``guard_egress=True`` — loopback/link-local/cloud-metadata/reserved
+addresses are refused even when an operator has enabled
+``AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS`` for the RFC-1918 Prometheus
+instance most self-hosted deployments actually use.
 """
 
 import os
@@ -45,6 +59,7 @@ from typing import Dict, Optional
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from middleware.base import Extension, HookContext
 
@@ -103,16 +118,29 @@ class TelemetryPromptMiddleware(Extension):
         return f"{prompt}\n\n{_HIGH_LOAD_HINT}"
 
     async def _fetch_cpu_percent(self) -> Optional[float]:
-        """Query Prometheus for the current cluster-wide CPU usage percentage."""
+        """Query Prometheus for the current cluster-wide CPU usage percentage.
+
+        Uses the shared pooled client (#12979/#14280) rather than a raw
+        ``aiohttp.ClientSession`` — the connector is shared, sized, and
+        accounted for by the pool instead of opened fresh per call.
+        ``prometheus_url`` is stored config, so the request is egress-guarded
+        (Rule 8, #13625): loopback/link-local/cloud-metadata/reserved
+        addresses are refused even when private-network egress is enabled.
+        """
         if not self._prometheus_url:
             return None
         url = f"{self._prometheus_url}/api/v1/query"
         try:
-            async with aiohttp.ClientSession(timeout=_QUERY_TIMEOUT) as session:
-                async with session.get(url, params={"query": _CPU_PROMQL}) as resp:
-                    if resp.status != 200:
-                        return None
-                    payload = await resp.json()
+            async with get_http_client().tracked_request(
+                "GET",
+                url,
+                params={"query": _CPU_PROMQL},
+                timeout=_QUERY_TIMEOUT,
+                guard_egress=True,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                payload = await resp.json()
             results = payload.get("data", {}).get("result", [])
             if not results:
                 return None
