@@ -18,8 +18,12 @@ from pathlib import Path
 
 from autobot_shared.ssot_constants import CategoryDefaults
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent.parent
+# Add autobot-backend to Python path so the `utils.*` imports below resolve
+# regardless of the caller's working directory. The previous
+# `Path(__file__).parent.parent.parent` landed on
+# autobot-infrastructure/shared/, which has no `utils` package — this lands
+# on autobot-backend/, which does (#14129).
+project_root = Path(__file__).resolve().parents[4] / "autobot-backend"
 sys.path.insert(0, str(project_root))
 
 from utils.gpu_acceleration_optimizer import (
@@ -30,14 +34,17 @@ from utils.gpu_acceleration_optimizer import (
     optimize_gpu_for_multimodal,
 )
 
-# Import Phase 9 monitoring components
+# Import hardware monitoring components. `start_phase9_monitoring` /
+# `stop_phase9_monitoring` were renamed to `start_hardware_monitoring` /
+# `stop_hardware_monitoring` in #10666/#10733 (B6 phase-era-prefix cleanup);
+# this script was never updated to follow (#14129).
 from utils.hardware_metrics import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
     hardware_monitor,
-    start_phase9_monitoring,
-    stop_phase9_monitoring,
+    start_hardware_monitoring as start_phase9_monitoring,
+    stop_hardware_monitoring as stop_phase9_monitoring,
 )
 
 # Configure logging

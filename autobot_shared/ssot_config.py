@@ -1329,8 +1329,14 @@ class PathConfig(RedactedSettings):
     code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
 
     # VNC password file — absolute path, not relative to base_dir.
-    # Override via AUTOBOT_VNC_PASSWD_FILE env var.
-    vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
+    # Override via AUTOBOT_VNC_PASSWD_FILE env var (always set explicitly by
+    # roles/backend/templates/backend.env.j2 on a real deployment — this
+    # default only governs the unset case, e.g. local dev/tests).
+    #
+    # #14319: VNC runs under its own dedicated service account
+    # (roles/vnc/defaults/main.yml vnc_user), not the shared 'autobot'
+    # operational identity — this default follows that account.
+    vnc_passwd_file: str = Field(default="/home/autobot-vnc/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
     # noVNC web root — absolute path, not relative to base_dir.
     #

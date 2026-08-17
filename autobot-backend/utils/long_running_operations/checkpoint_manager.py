@@ -7,10 +7,22 @@ Checkpoint Manager for Long-Running Operations
 
 Issue #381: Extracted from long_running_operations_framework.py god class refactoring.
 Handles checkpoint save/load/resume functionality.
+
+Issue #14187: the Redis-cached copy of a checkpoint used to be pickle.dumps()'d
+alongside the JSON file that is the primary, on-disk copy of the same dict --
+so the Redis cache is now JSON too, removing the pickle.loads() sink outright
+rather than narrowing it. Trust boundary: whoever can write the
+``checkpoint:{operation_id}:{checkpoint_id}`` Redis hash key, which is this
+process (and any other principal that can reach this Redis instance -- a wider
+set than "our own file on our own disk", per #14124). A key written by the
+pre-#14187 code is not migrated in place: entries older than TTL_7_DAYS expire
+on their own, and any not-yet-expired legacy entry fails json.loads() (it is
+not valid JSON), is dropped from the cache, and is served from the JSON file
+store instead -- which is written first, on every save, and is therefore
+never behind the cache. See load_checkpoint()/_list_checkpoints_from_redis().
 """
 
 import json
-import pickle  # nosec B403  # pickle used for internal checkpoint serialization only
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -99,7 +111,7 @@ class OperationCheckpointManager:
             await self.redis_client.hset(
                 redis_key,
                 mapping={
-                    "data": pickle.dumps(checkpoint_data),
+                    "data": json.dumps(checkpoint_data),
                     "progress": str(progress_percent),
                     "timestamp": checkpoint_time.isoformat(),
                 },
@@ -180,15 +192,20 @@ class OperationCheckpointManager:
                     redis_key = keys[0]
                     data = await self.redis_client.hget(redis_key, "data")
                     if data:
-                        checkpoint_data = pickle.loads(data)  # nosec B301
-                        return OperationCheckpoint(
-                            checkpoint_id=checkpoint_data["checkpoint_id"],
-                            operation_id=checkpoint_data["operation_id"],
-                            checkpoint_time=parse_utc_iso(checkpoint_data["checkpoint_time"]),
-                            progress_percent=checkpoint_data["progress_percent"],
-                            state_data=checkpoint_data["state_data"],
-                            metadata=checkpoint_data.get("metadata", {}),
-                        )
+                        try:
+                            checkpoint_data = json.loads(data)
+                        except (json.JSONDecodeError, UnicodeDecodeError):
+                            # Issue #14187: a pre-migration entry cached the
+                            # payload with pickle. Never deserialize it --
+                            # drop the stale key and fall through to the file
+                            # store below, which holds the same checkpoint.
+                            logger.info(
+                                "Discarding pre-#14187 checkpoint cache entry %s (recovered from file store)",
+                                redis_key,
+                            )
+                            await self.redis_client.delete(redis_key)
+                        else:
+                            return self._parse_checkpoint_data(checkpoint_data)
             except Exception as e:
                 logger.warning("Failed to load checkpoint from Redis: %s", e)
 
@@ -197,14 +214,7 @@ class OperationCheckpointManager:
         if checkpoint_file.exists():
             async with aiofiles.open(checkpoint_file, "r", encoding="utf-8") as f:
                 checkpoint_data = json.loads(await f.read())
-                return OperationCheckpoint(
-                    checkpoint_id=checkpoint_data["checkpoint_id"],
-                    operation_id=checkpoint_data["operation_id"],
-                    checkpoint_time=parse_utc_iso(checkpoint_data["checkpoint_time"]),
-                    progress_percent=checkpoint_data["progress_percent"],
-                    state_data=checkpoint_data["state_data"],
-                    metadata=checkpoint_data.get("metadata", {}),
-                )
+                return self._parse_checkpoint_data(checkpoint_data)
 
         return None
 
@@ -245,21 +255,44 @@ class OperationCheckpointManager:
         if not self.redis_client:
             return checkpoints
 
+        # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
         try:
             keys = await self.redis_client.keys(f"checkpoint:{operation_id}:*")
-            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
-            if keys:
-                pipe = self.redis_client.pipeline()
-                for key in keys:
-                    pipe.hget(key, "data")
-                results = await pipe.execute()
-
-                for data in results:
-                    if data:
-                        checkpoint_data = pickle.loads(data)  # nosec B301
-                        checkpoints.append(self._parse_checkpoint_data(checkpoint_data))
+            if not keys:
+                return checkpoints
+            pipe = self.redis_client.pipeline()
+            for key in keys:
+                pipe.hget(key, "data")
+            results = await pipe.execute()
         except Exception as e:
             logger.warning("Failed to list checkpoints from Redis: %s", e)
+            return checkpoints
+
+        # Issue #14187: one pre-migration (pickle) entry -- or any other
+        # single malformed entry -- no longer aborts the whole batch (the
+        # original loop lived entirely inside one try/except, so the first
+        # bad entry lost every later one it hadn't reached yet). Each entry
+        # is now handled individually and always recovered via the
+        # file-store merge in list_checkpoints() regardless of how it fails.
+        for key, data in zip(keys, results):
+            if not data:
+                continue
+            try:
+                checkpoint_data = json.loads(data)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                logger.info(
+                    "Discarding pre-#14187 checkpoint cache entry %s (recovered from file store)",
+                    key,
+                )
+                try:
+                    await self.redis_client.delete(key)
+                except Exception as e:
+                    logger.warning("Failed to delete stale checkpoint cache entry %s: %s", key, e)
+                continue
+            try:
+                checkpoints.append(self._parse_checkpoint_data(checkpoint_data))
+            except Exception as e:
+                logger.warning("Failed to parse cached checkpoint %s: %s", key, e)
 
         return checkpoints
 

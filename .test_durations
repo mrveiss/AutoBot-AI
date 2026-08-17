@@ -20324,7 +20324,6 @@
     "autobot-backend/utils/redis_consolidation_test.py::TestPhase4AdvancedFeatures::test_pipeline_context_manager_exists": 0.002729925999972238,
     "autobot-backend/utils/redis_consolidation_test.py::test_documentation_completeness": 0.0032823050000274634,
     "autobot-backend/utils/redis_consolidation_test.py::test_module_imports": 0.0036010280001050887,
-    "autobot-backend/utils/redis_immediate_test.py::test_redis_connection_immediate": 0.004071015999954852,
     "autobot-backend/utils/redis_thread_safety_test.py::TestIdleCleanupThreadSafety::test_cleanup_doesnt_affect_active_connections": 0.003880088999949294,
     "autobot-backend/utils/redis_thread_safety_test.py::TestIdleCleanupThreadSafety::test_cleanup_handles_concurrent_pool_modifications": 0.004578429999924083,
     "autobot-backend/utils/redis_thread_safety_test.py::TestIdleCleanupThreadSafety::test_cleanup_idle_connections_builds_removal_list_first": 0.004098126000030788,

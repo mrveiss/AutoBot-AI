@@ -3,8 +3,14 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Redis Immediate Connection Test - No Timeouts
-Replaces timeout-based Redis connection with immediate success/failure patterns
+Redis Immediate Connection Checks - No Timeouts
+Replaces timeout-based Redis connection with immediate success/failure patterns.
+
+Named ``redis_immediate_test.py`` until #14127: production code, but the name
+matched `.dockerignore`'s `**/*_test.py`, so it was stripped from every Docker
+image while `utils/async_cancellation.py` still imported `redis_circuit_breaker`
+from it inside a bare `except Exception` -- leaving `redis_available` silently
+pinned to False in every container. See `repo_tests/test_dockerignore_test_file_coverage_14127.py`.
 """
 
 import asyncio
@@ -272,12 +278,15 @@ async def get_redis_with_immediate_test(
     return await create_redis_with_fallback(config, fallback_configs)
 
 
-async def test_redis_connection_immediate(
+async def check_redis_connection_immediate(
     database: str = "main",
 ) -> redis.Redis | None:
     """
     Test Redis connection immediately and return canonical client if successful.
-    Used by backend startup to quickly test Redis availability.
+
+    Named ``test_redis_connection_immediate`` until #14127, which made pytest
+    collect it from the then `*_test.py`-named module as a test that could only
+    ever pass (no assertions, and `get_redis_client()` returns None in CI).
 
     USES CANONICAL get_redis_client() PATTERN:
     - Circuit breaker protection

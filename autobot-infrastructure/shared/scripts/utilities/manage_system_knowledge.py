@@ -14,7 +14,20 @@ import logging
 import sys
 from pathlib import Path
 
-from autobot_shared.ssot_constants import CategoryDefaults
+# Add autobot-backend to sys.path so the first-party `knowledge`/`agents`
+# imports below resolve regardless of the caller's working directory (#14129).
+# This script is a standalone operator entry point, not part of an installed
+# package, so it needs the same explicit path setup other scripts under
+# autobot-infrastructure/shared/scripts/ use.
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
+import yaml  # noqa: E402 - must follow the sys.path setup above
+
+from agents.system_knowledge_manager import SystemKnowledgeManager  # noqa: E402
+from autobot_shared.ssot_constants import CategoryDefaults  # noqa: E402
+from knowledge import KnowledgeBase  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
