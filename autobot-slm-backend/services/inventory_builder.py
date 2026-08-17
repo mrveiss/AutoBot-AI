@@ -285,7 +285,20 @@ def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
     has_app_roles = any(
         (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
     )
-    if not is_slm or has_app_roles:
+    # #14336: every node keeps `slm-agent` forever (api/nodes.py never removes it, see
+    # "Remove roles no longer assigned"), so a node whose functional roles are all unassigned
+    # legitimately reduces to nothing but the agent. That node is neither the
+    # manager (no `slm_server`) nor carrying any component `_ROLE_TO_GROUPS`
+    # recognises, so it fell through `has_app_roles` above (deliberately
+    # false for every `slm-`-prefixed token, #11453) AND the `slm_server`
+    # gate `update-all-nodes.yml` Play 1 checks (deliberately excluded,
+    # #14330). Net effect before this fix: zero tasks from either play.
+    # `infrastructure` is the only remaining group with an agent-redeploy
+    # task (Play 2, gated on `slm_node_id is defined`, which every node
+    # carries) — every other Play 2 task stays gated on its own group, so
+    # this adds nothing else for a node with no other role.
+    is_agent_only = is_slm and "slm_server" not in node_groups and node_groups <= {"slm", "slm_nodes"}
+    if not is_slm or has_app_roles or is_agent_only:
         node_groups |= _UNIVERSAL_NON_SLM
 
     return node_groups
