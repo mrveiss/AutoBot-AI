@@ -106,10 +106,19 @@ def test_a_pull_request_workflow_cancels_superseded_runs(path):
     assert concurrency.get("group"), f"{path.name}: concurrency group is empty"
 
 
-# Workflows that also run on push and cancel unconditionally, so a merge to the
-# base branch cancels the previous merge's verification (#13432). Measured on
-# Dev_new_gui at d68c09c88 while fixing #14434. This is a RATCHET: the number may
-# only ever go DOWN. Fixing one means deleting its line.
+# Workflows that trigger on pull_request AND push, and cancel unconditionally, so
+# a merge to the base branch cancels the previous merge's verification (#13432).
+# Measured on Dev_new_gui at d68c09c88 while fixing #14434. This is a RATCHET: the
+# number may only ever go DOWN. Fixing one means deleting its line.
+#
+# SCOPED BY DESIGN, and the scope is narrower than the defect. Everything here
+# filters through `_pull_request_workflows()` first, so a workflow with the same
+# collision shape but NO pull_request trigger is structurally invisible to this
+# ratchet - `coverage.yml` (push + schedule) is exactly that, and its own comment
+# claims the figure "tracks what actually landed" while two merges inside its ~35
+# minute window cancel each other. Stating the scope because a guard narrower than
+# its subject otherwise reads as coverage of the whole subject. Those cases are
+# recorded on #14450 rather than silently absent.
 #
 # It is not a style nit. Seven of the ten required contexts are produced by
 # workflows on this list - api-wiring, code-quality, smoke-test (docker-smoke-test),
