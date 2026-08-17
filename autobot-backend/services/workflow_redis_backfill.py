@@ -147,7 +147,20 @@ async def backfill(*, dry_run: bool = False, session: AsyncSession | None = None
                 report.unparseable.append(workflow_id)
                 continue
 
-            existing = await session.execute(select(Workflow).where(Workflow.workflow_id == workflow_id))
+            # #14271: workflow_id is no longer a global primary key, so a bare
+            # `WHERE workflow_id = :id` can now match more than one row (one
+            # per company that happens to share the string) and
+            # scalar_one_or_none() would raise MultipleResultsFound. Scope to
+            # company_id IS NULL — every row this script itself writes — so
+            # this asks the only question that matters here: "has this exact
+            # Redis-origin key already been imported", not "does any company
+            # happen to use this string".
+            existing = await session.execute(
+                select(Workflow.workflow_id).where(
+                    Workflow.workflow_id == workflow_id,
+                    Workflow.company_id.is_(None),
+                )
+            )
             if existing.scalar_one_or_none() is not None:
                 report.already_present.append(workflow_id)
                 continue

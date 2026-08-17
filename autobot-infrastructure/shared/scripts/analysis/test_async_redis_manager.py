@@ -35,6 +35,7 @@ from autobot_shared.redis_client import (
     redis_get,
     redis_set,
 )
+from autobot_shared.ssot_constants import TTL_1_MINUTE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ async def test_basic_operations():
     test_key = f"test_key_{int(time.time())}"
     test_value = "test_value_12345"
 
-    set_result = await client.set(test_key, test_value, ex=60)
+    set_result = await client.set(test_key, test_value, ex=TTL_1_MINUTE)
     assert set_result, "SET operation failed"
     logger.info("SET operation successful")
 
@@ -196,13 +197,13 @@ async def test_performance():
 
     start_time = time.time()
     for i in range(num_operations):
-        await client.set(f"perf_test_{i}", f"value_{i}", ex=60)
+        await client.set(f"perf_test_{i}", f"value_{i}", ex=TTL_1_MINUTE)
     sequential_time = time.time() - start_time
 
     start_time = time.time()
     async with client.pipeline() as pipe:
         for i in range(num_operations):
-            pipe.set(f"perf_test_pipe_{i}", f"value_{i}", ex=60)
+            pipe.set(f"perf_test_pipe_{i}", f"value_{i}", ex=TTL_1_MINUTE)
         await pipe.execute()
     pipeline_time = time.time() - start_time
 
@@ -237,7 +238,7 @@ async def test_convenience_functions():
 
     async with redis_context("cache") as ctx_client:
         ctx_key = f"context_test_{int(time.time())}"
-        await ctx_client.set(ctx_key, "context_value", ex=60)
+        await ctx_client.set(ctx_key, "context_value", ex=TTL_1_MINUTE)
         ctx_value = await ctx_client.get(ctx_key)
         assert ctx_value == "context_value", "Context manager operation failed"
         await ctx_client.delete(ctx_key)
