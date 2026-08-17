@@ -8987,6 +8987,8 @@ export interface components {
             nodes_online: number;
             /** Nodes Total */
             nodes_total: number;
+            /** Redis */
+            redis: string;
             /** Status */
             status: string;
             /** Uptime Seconds */
