@@ -180,19 +180,40 @@ somewhere materially different and wrong — this lands as a single change, not 
 The one real-value divergence (`AUTOBOT_BROWSER_SERVICE_PORT`) is a correction the
 scripts have needed since #4052 renumbered the port away from Grafana's.
 
-## Follow-up (filed separately, not blocking this PR)
+## Follow-up (filed separately, not blocking this PR) -- RESOLVED by #14173
 
 - `AUTOBOT_SSH_KEY` (script convention) vs `AUTOBOT_SSH_KEY_PATH`/`SLM_SSH_KEY` (SSOT,
   #12429) is a naming split across the same concept — deciding whether to alias or
   rename is a scope call for the owner, not something to invent silently here.
+  **Resolved (#14173):** confirmed deliberately different, not aliased.
+  `utilities/setup-ssh-keys.sh` generates and deploys `AUTOBOT_SSH_KEY` under the
+  *operator's* own `$HOME` for management scripts a human runs from their own
+  workstation; `ssh_key_path`/`AUTOBOT_SSH_KEY_PATH` is the *service account's* key,
+  deployed by Ansible to `/etc/autobot/ssh` for automated fleet orchestration. Both
+  are now real, separate fields (`PathConfig.management_ssh_key_path` and
+  `PathConfig.ssh_key_path`) with a guard test
+  (`autobot-slm-backend/tests/test_canonical_ssh_key.py`) asserting the SLM backend
+  runtime never references the management-plane one.
 - `AUTOBOT_SSH_USER` and `AUTOBOT_SLM_NODE_ID` have no SSOT entry anywhere (Python,
   `.env.example`, or Ansible `group_vars`) — either they should be added to
   `autobot_shared/ssot_config.py`, or the scripts should stop presenting them as
-  SSOT-backed.
+  SSOT-backed. **Resolved (#14173):** added as `PathConfig.ssh_user` (default
+  `autobot`, matching `ansible.cfg remote_user`) and `MiscConfig.slm_node_id`
+  (default `00-SLM-Manager`, matching the `slm-nodes.yml` inventory default).
 - The four `AUTOBOT_VNC_*` names have no field under their exact names, but two closer
   candidates already exist and are just as unused by these scripts:
   `AUTOBOT_VNC_PORT` (`PortConfig`, 6080) and `AUTOBOT_VNC_HOST`
   (`ssot_config.py:1853`, `MiscConfig`, default `""`). Behaviour is unchanged either way
   (the library still exports neither the four script-side names nor rewires them to the
   two SSOT names), but this narrows the follow-up to "consolidate four names down to
-  two that already exist" rather than "invent new SSOT fields".
+  two that already exist" rather than "invent new SSOT fields". **Resolved (#14173):**
+  `AUTOBOT_VNC_WEB_HOST`/`AUTOBOT_VNC_WEB_PORT` (noVNC/websockify) now derive from
+  `AUTOBOT_BACKEND_HOST`/`AUTOBOT_VNC_PORT` — not `AUTOBOT_VNC_HOST`, which turned out
+  to be a bind-address override (`vnc_url` never reads it) rather than a
+  connect-to host. `AUTOBOT_VNC_SERVER_HOST`/`AUTOBOT_VNC_SERVER_PORT` (the raw VNC
+  protocol port, a genuinely separate concept) get a new field,
+  `PortConfig.vnc_server`, default `5901` — a correction of the script's stale `5902`
+  literal, derived from `vnc_display` (default `1`) in
+  `autobot-slm-backend/ansible/roles/vnc/defaults/main.yml` and independently
+  confirmed by `vm-management/status-all-vms.sh`'s own hardcoded
+  `"VNC Client: localhost:5901"` line.

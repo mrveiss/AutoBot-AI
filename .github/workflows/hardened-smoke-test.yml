@@ -214,40 +214,124 @@ jobs:
           echo ""
           curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
-      - name: Dump autobot-slm diagnostics on failure
-        # #11516: the hardened overlay fails with "container autobot-slm is
-        # unhealthy", but the crash cause lives in the SLM container's own
-        # logs + healthcheck probe output — print them INLINE (not just the
-        # uploaded artifact) so the failure is diagnosable from the run page.
+      - name: Dump diagnostics for unhealthy containers on failure
+        # #14417: #11516 hardcoded this step to autobot-slm, which was the
+        # failing container back then. When the failing container was
+        # anything else (e.g. autobot-backend on PR #14413), this step
+        # printed a healthy SLM and named nothing — the traceback that
+        # explained the failure appeared nowhere in the inline job output.
+        #
+        # Derive the failing container(s) from compose state instead of
+        # assuming one: a service is "unhealthy" here if its container was
+        # never created, isn't running, or reports a failing healthcheck.
+        # Dump full diagnostics (state + healthcheck probe log + tail of
+        # logs) for each one found, INLINE (not just the uploaded artifact
+        # from the next step). If none look unhealthy — the failure happened
+        # somewhere else in the job, e.g. a curl assertion — fall back to
+        # dumping every service so this step is never silent.
         if: failure()
+        shell: bash
         run: |
-          echo "=== autobot-slm container state ==="
-          docker inspect autobot-slm \
-            --format 'Status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-            2>&1 || echo "(autobot-slm container not found)"
-          echo ""
-          echo "=== autobot-slm healthcheck probe log (each attempt: ExitCode + Output) ==="
-          docker inspect autobot-slm --format '{{json .State.Health}}' 2>/dev/null \
-            | python3 -m json.tool 2>/dev/null \
-            || echo "(no healthcheck state on autobot-slm)"
-          echo ""
-          echo "=== autobot-slm logs (last 300 lines) ==="
-          docker compose \
+          # Default GitHub Actions bash flags are `-eo pipefail`; a docker
+          # inspect/logs call on a container that never started exits
+          # non-zero and must not abort this step before later containers
+          # are dumped, so turn both off for the whole post-mortem.
+          set +e +o pipefail
+
+          services=$(docker compose \
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            logs --no-color --tail 300 autobot-slm 2>&1 \
-            || docker logs --tail 300 autobot-slm 2>&1 \
-            || echo "(no autobot-slm logs available)"
+            config --services 2>/dev/null)
+          services=$(echo "$services" | xargs)
+
+          if [ -z "$services" ]; then
+            echo "(could not enumerate compose services from the compose config)"
+          fi
+
+          unhealthy=""
+          for svc in $services; do
+            status=$(docker inspect "$svc" --format '{{.State.Status}}' 2>/dev/null)
+            if [ -z "$status" ]; then
+              echo "-> ${svc}: container not found (never created)"
+              unhealthy="$unhealthy $svc"
+              continue
+            fi
+            health=$(docker inspect "$svc" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null)
+            echo "-> ${svc}: status=${status} health=${health:-none}"
+            if [ "$health" = "unhealthy" ] || [ "$status" != "running" ]; then
+              unhealthy="$unhealthy $svc"
+            fi
+          done
+          unhealthy=$(echo "$unhealthy" | xargs)
+
+          if [ -z "$unhealthy" ]; then
+            echo ""
+            echo "No container looked unhealthy from compose state -- the failure happened elsewhere in the job. Dumping every service so this step is never silent."
+            unhealthy="$services"
+          fi
+
+          echo ""
+          echo "=== Containers identified as failing: ${unhealthy:-<none enumerable>} ==="
+
+          for svc in $unhealthy; do
+            echo ""
+            echo "::group::${svc} diagnostics"
+
+            echo "=== ${svc} container state ==="
+            if ! docker inspect "$svc" \
+              --format 'Status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+              2>&1; then
+              echo "(${svc} container not found)"
+            fi
+
+            echo ""
+            echo "=== ${svc} healthcheck probe log (each attempt: ExitCode + Output) ==="
+            probe=$(docker inspect "$svc" --format '{{json .State.Health}}' 2>/dev/null)
+            if [ -n "$probe" ] && [ "$probe" != "null" ]; then
+              if ! echo "$probe" | python3 -m json.tool 2>/dev/null; then
+                echo "$probe"
+              fi
+            else
+              echo "(no healthcheck state on ${svc})"
+            fi
+
+            echo ""
+            echo "=== ${svc} logs (last 300 lines) ==="
+            if ! docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.hardened.yml \
+              --env-file docker/.env.docker \
+              logs --no-color --tail 300 "$svc" 2>&1; then
+              if ! docker logs --tail 300 "$svc" 2>&1; then
+                echo "(no ${svc} logs available)"
+              fi
+            fi
+
+            echo "::endgroup::"
+          done
 
       - name: Collect logs on failure
         if: failure()
         run: |
+          # Backstop for the per-container diagnostics above: full compose
+          # logs, printed inline (not just the uploaded artifact) AND kept
+          # as an artifact, matching docker-smoke-test.yml. (#14417)
+          #
+          # Same trap as the post-mortem step above: default Actions bash is
+          # `-eo pipefail`, so `docker compose logs` failing (compose already
+          # torn down, daemon hiccup) would abort the pipe before the
+          # `::endgroup::` below runs, leaving an unclosed fold in the job
+          # log. Turn both off so the fold always closes, whatever `docker
+          # compose logs` did.
+          set +e +o pipefail
+          echo "::group::docker compose logs (all services)"
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            logs > failure-logs.txt
+            logs --no-color | tee failure-logs.txt
+          echo "::endgroup::"
 
       - name: Upload failure logs
         if: failure()

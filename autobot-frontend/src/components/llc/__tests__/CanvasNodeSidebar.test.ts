@@ -167,15 +167,16 @@ describe('checklist (Notes tab + rail): failed fetch is never rendered as empty 
     expect(content).not.toContain(en.llc.orgChart.sidebar.itemsUnavailable)
   })
 
-  it('a human node never calls the API and renders the structural "not applicable" state', async () => {
+  it('a human node fetches through the assignee_user_id keyspace and renders its items (#14192)', async () => {
+    get.mockResolvedValueOnce([
+      { id: 'wi-9', identifier: 'TASK-9', title: "Alan's task", status: 'in_progress', type: 'task' },
+    ])
     const wrapper = mountSidebar(HUMAN_NODE)
     await wrapper.get('[data-testid="sidebar-notes-tab-checklist"]').trigger('click')
     await flushPromises()
 
-    expect(get).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="sidebar-notes-content"]').text()).toContain(
-      en.llc.orgChart.sidebar.itemsNotApplicableHuman,
-    )
+    expect(get).toHaveBeenCalledWith('/api/llc/work-items?company_id=c1&assignee_user_id=user-uuid-1')
+    expect(wrapper.get('[data-testid="sidebar-notes-content"]').text()).toContain("Alan's task")
   })
 
   it('puts finished items under Output, not Checklist, from the same fetch (no second request)', async () => {
@@ -385,6 +386,30 @@ describe('rail switching drives the notes tab and the handoff slot (#13940)', ()
     expect(wrapper.get('[data-testid="sidebar-panel-handoff"]').text()).toContain(
       en.llc.orgChart.sidebar.handoffNotApplicableHuman,
     )
+  })
+
+  // #14192: checklist and handoff now share a fetch that DOES succeed for a
+  // human node, so the handoff panel's "not applicable" verdict must be
+  // independent of that shared state — never derived merely from whether a
+  // fetch happened, or a human's items would leak into the handoff list
+  // with "Hand Off" buttons that always fail server-side (HandoffNotAllowed).
+  it('still refuses the handoff action for a person whose items were already fetched via checklist', async () => {
+    get.mockResolvedValueOnce([
+      { id: 'wi-9', identifier: 'TASK-9', title: "Alan's task", status: 'in_progress', type: 'task' },
+    ])
+    const wrapper = mountSidebar(HUMAN_NODE)
+    await wrapper.get('[data-testid="sidebar-rail-checklist"]').trigger('click')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(1)
+
+    await wrapper.get('[data-testid="sidebar-rail-handoff"]').trigger('click')
+    await flushPromises()
+
+    // No second fetch, no leaked "Hand Off" button for the human's item.
+    expect(get).toHaveBeenCalledTimes(1)
+    const panel = wrapper.get('[data-testid="sidebar-panel-handoff"]')
+    expect(panel.text()).toContain(en.llc.orgChart.sidebar.handoffNotApplicableHuman)
+    expect(panel.text()).not.toContain("Alan's task")
   })
 })
 

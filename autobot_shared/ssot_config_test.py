@@ -681,6 +681,93 @@ class TestAuditLogFileLazyDefault:
         assert cfg.audit_log_file == "/opt/autobot/logs/audit.log"
 
 
+class TestShellVarFamiliesWithNoPriorSsot14173:
+    """#14173: four AUTOBOT_ shell var families that ~24-56 scripts under
+    autobot-infrastructure/ read but nothing defined anywhere (not
+    ssot_config.py, not .env.example, not Ansible group_vars) now have real
+    SSOT fields -- one per family, matching
+    autobot-infrastructure/shared/scripts/lib/ssot-config.sh's shell-side
+    defaults so both languages agree.
+    """
+
+    def test_ssh_user_default(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_SSH_USER", raising=False)
+        cfg = PathConfig(_env_file=None)
+        assert cfg.ssh_user == "autobot"
+
+    def test_ssh_user_honors_env(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_SSH_USER", "custom-user")
+        cfg = PathConfig(_env_file=None)
+        assert cfg.ssh_user == "custom-user"
+
+    def test_management_ssh_key_path_resolves_under_home_when_unset(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_SSH_KEY", raising=False)
+        cfg = PathConfig(_env_file=None)
+        assert cfg.management_ssh_key_path == str(Path.home() / ".ssh" / "autobot_key")
+
+    def test_management_ssh_key_path_distinct_from_ssh_key_path(self, monkeypatch) -> None:
+        """NOT an alias of ssh_key_path (#12429) -- the two are provably
+        different files with different owners and different consumers (see
+        the field comment in ssot_config.py). A regression that collapses
+        them onto one field/value would silently break whichever flow lost.
+        """
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.delenv("AUTOBOT_SSH_KEY", raising=False)
+        monkeypatch.delenv("AUTOBOT_SSH_KEY_PATH", raising=False)
+        monkeypatch.delenv("SLM_SSH_KEY", raising=False)
+        cfg = PathConfig(_env_file=None)
+        assert cfg.management_ssh_key_path != cfg.ssh_key_path
+        assert cfg.ssh_key_path == "/etc/autobot/ssh/autobot_key"
+
+    def test_management_ssh_key_path_honors_env(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PathConfig
+
+        monkeypatch.setenv("AUTOBOT_SSH_KEY", "/tmp/custom-key-14173")
+        monkeypatch.delenv("AUTOBOT_SSH_KEY_PATH", raising=False)
+        monkeypatch.delenv("SLM_SSH_KEY", raising=False)
+        cfg = PathConfig(_env_file=None)
+        assert cfg.management_ssh_key_path == "/tmp/custom-key-14173"
+        # Setting AUTOBOT_SSH_KEY must never move the unrelated service-account key.
+        assert cfg.ssh_key_path == "/etc/autobot/ssh/autobot_key"
+
+    def test_slm_node_id_default(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.delenv("AUTOBOT_SLM_NODE_ID", raising=False)
+        cfg = MiscConfig(_env_file=None)
+        assert cfg.slm_node_id == "00-SLM-Manager"
+
+    def test_slm_node_id_honors_env(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import MiscConfig
+
+        monkeypatch.setenv("AUTOBOT_SLM_NODE_ID", "99-Custom-Manager")
+        cfg = MiscConfig(_env_file=None)
+        assert cfg.slm_node_id == "99-Custom-Manager"
+
+    def test_vnc_server_port_default(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PortConfig
+
+        monkeypatch.delenv("AUTOBOT_VNC_SERVER_PORT", raising=False)
+        cfg = PortConfig(_env_file=None)
+        assert cfg.vnc_server == 5901
+        # Distinct from the noVNC web port -- same VM, different protocol/port.
+        assert cfg.vnc_server != cfg.vnc
+
+    def test_vnc_server_port_honors_env(self, monkeypatch) -> None:
+        from autobot_shared.ssot_config import PortConfig
+
+        monkeypatch.setenv("AUTOBOT_VNC_SERVER_PORT", "5999")
+        cfg = PortConfig(_env_file=None)
+        assert cfg.vnc_server == 5999
+
+
 class TestNoHardcodedLiveInstallLiterals:
     """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default literal may
     return to this file. A regex over the source, not an import-time check,
