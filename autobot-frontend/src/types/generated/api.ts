@@ -61635,8 +61635,6 @@ export interface components {
             reset: boolean;
             /** Clear Context */
             clear_context: boolean;
-            /** Keep System Prompt */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -61656,12 +61654,6 @@ export interface components {
              * @default true
              */
             clear_context: boolean;
-            /**
-             * Keep System Prompt
-             * @description Keep system prompt after reset
-             * @default true
-             */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
