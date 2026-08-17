@@ -332,8 +332,7 @@ async def test_count_and_sum_reflect_the_full_window_not_a_sample(db):
     text = await performance._get_prometheus_metrics_text(db, cache=performance._MetricsCache())
 
     assert f'autobot_trace_duration_ms_count{{status="ok"}} {n}' in text, (
-        f"_count must equal the true row count for the window ({n}), not a capped "
-        f"sample. Full text:\n{text}"
+        f"_count must equal the true row count for the window ({n}), not a capped " f"sample. Full text:\n{text}"
     )
     assert f'autobot_trace_duration_ms_sum{{status="ok"}} {total_duration_ms}' in text, (
         f"_sum must equal the true total duration for the window ({total_duration_ms}), "
@@ -377,9 +376,9 @@ async def test_repeated_calls_within_the_ttl_do_not_requery(db, monkeypatch):
 
     cache = performance._MetricsCache()
     first = await performance._get_prometheus_metrics_text(db, cache=cache)
-    assert calls["n"] == 2, (
-        f"expected exactly 2 queries (trace-duration aggregate + SLOs) on the first call, got {calls['n']}"
-    )
+    assert (
+        calls["n"] == 2
+    ), f"expected exactly 2 queries (trace-duration aggregate + SLOs) on the first call, got {calls['n']}"
 
     second = await performance._get_prometheus_metrics_text(db, cache=cache)
     assert first == second
