@@ -29,10 +29,15 @@ extend-ignore = E203,W503,E704,E402
 # no entry was written for — among them three production packages named
 # `monitoring` (`autobot_shared/`, `autobot-backend/`, `autobot-slm-backend/`),
 # the `autobot-backend/tools/` tool-registry subsystem, and the SDK's
-# `autobot_sdk/resources/`. Several bare entries (`code_analysis`, `analysis`,
-# `monitoring`, `resources`, `tests`) never named a repo-root directory at all:
-# they only ever "worked" through the depth bug, so the intended exclusion and
-# the accidental one were the same entry.
+# `autobot_sdk/resources/`. Eleven entries were dropped because anchoring them
+# would have excluded no Python: ten (`tests`, `monitoring`, `analysis`,
+# `resources`, `code_analysis`, `mcp-tools`, `code-analysis-suite`,
+# `slm-server`, `slm-admin`, `infrastructure`) name no tracked repo-root
+# directory at all, and `docker` names a real one holding 19 tracked files but
+# no `.py`. Those ten only ever "worked" through the depth bug, so the intended
+# exclusion and the accidental one were the same entry. Counted against the git
+# index, not the filesystem — an untracked directory of the same name can exist
+# locally, which is why the guard measures with `git ls-files`.
 #
 # The rule this list now follows, enforced by
 # repo_tests/flake8_exclude_anchoring_test.py:
@@ -45,9 +50,14 @@ extend-ignore = E203,W503,E704,E402
 #
 # Cross-tool agreement (#14419 AC5): pre-commit's flake8 hook adds
 # `^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)`, all three
-# of which are also excluded here. black and isort take explicit directory
-# arguments and define no `exclude`/`skip` of their own beyond isort's
-# `^autobot-infrastructure/`, so they lint a strict superset — deliberate: a
+# of which are also excluded here. black and isort each carry `exclude:
+# ^autobot-infrastructure/` on their own pre-commit hook, and declare nothing
+# further — `[tool.black]` and `[tool.isort]` in pyproject.toml define no
+# exclusion, and in CI both take explicit directory arguments with none either.
+# So the two formatters lint a strict superset of what flake8 lints, agreeing
+# with it only on `autobot-infrastructure/`. That is deliberate, and it is what
+# kept the pruned trees safe: black alone caught a syntax error under
+# `autobot_shared/monitoring/` for as long as this list hid it from flake8. A
 # formatter disagreeing loudly is the cheaper failure. No ruff config exists.
 #
 # COMMENTS BELOW MUST BE ON THEIR OWN LINE. configparser strips a full-line
