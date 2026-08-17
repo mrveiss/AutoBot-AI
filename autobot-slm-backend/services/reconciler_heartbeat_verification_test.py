@@ -97,6 +97,20 @@ class _FakeSessions:
 _MISSING = object()
 
 
+class _FakeQuery:
+    """Stands in for the SQLAlchemy select() the polling loop builds.
+
+    Deliberately NOT a MagicMock and NOT a catch-all `__getattr__`: only the
+    clauses the code under test actually chains are answered, so a query that
+    grows a clause fails here loudly instead of being silently absorbed. The
+    object itself is inert — `_FakeSessions._execute` ignores it entirely — and
+    the assertions in this file are about the loop, not the query.
+    """
+
+    def where(self, *_args, **_kwargs) -> _FakeQuery:
+        return self
+
+
 @contextmanager
 def _patched(sessions, wait_s, poll_s):
     """Install the fake session factory and shrink the timings.
@@ -125,8 +139,12 @@ def _patched(sessions, wait_s, poll_s):
     # which of sqlalchemy/models.database the conftest happens to stub, a real
     # `select()` over a mock model would error before the loop under test ever
     # runs. Stubbed so these tests turn on the polling logic and nothing else.
+    #
+    # It must still answer the builder calls the code under test makes on it:
+    # the first version returned a bare `object()` and every test died on
+    # `select(Node).where(...)` -> AttributeError, before reaching the loop.
     prev_select = reconciler.select
-    reconciler.select = lambda *_a, **_k: object()
+    reconciler.select = lambda *_a, **_k: _FakeQuery()
     try:
         yield
     finally:
