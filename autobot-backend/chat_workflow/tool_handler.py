@@ -20,6 +20,8 @@ import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.auth.mcp_tool_permissions import required_permission
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
@@ -2076,11 +2078,16 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list,
         additional_response_parts: list,
+        role: str = "user",
     ):
         """Process a single execute_command tool call. Issue #620.
 
         Issue #655: Wraps common errors as RepairableException for retry.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        Issue #14469: forwards the caller's RBAC role and the tool's declared
+        `Permission.SHELL_EXECUTE` requirement so PermissionEnforcementExtension
+        (#14420) has something to deny against — this call site previously
+        omitted both, so every role reached the shell unconditionally.
 
         Yields:
             WorkflowMessage items
@@ -2088,9 +2095,16 @@ class ToolHandlerMixin:
         command, host, description = self._extract_command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
-        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for execute_command
+        # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for execute_command,
+        # declaring the shell-execution permission it requires.
         params = {"command": command, "host": host}
-        should_execute = await _emit_before_tool_execute("execute_command", params, session_id)
+        should_execute = await _emit_before_tool_execute(
+            "execute_command",
+            params,
+            session_id,
+            tool_permission=Permission.SHELL_EXECUTE.value,
+            user_role=role,
+        )
         if not should_execute:
             logger.info(
                 "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
@@ -2100,7 +2114,12 @@ class ToolHandlerMixin:
             yield WorkflowMessage(
                 type="error",
                 content=f"Command execution cancelled: {command}",
-                metadata={"command": command, "host": host, "cancelled_by_hook": True},
+                metadata={
+                    "command": command,
+                    "host": host,
+                    "cancelled_by_hook": True,
+                    "reason": "permission_denied",
+                },
             )
             return
 
@@ -2394,12 +2413,18 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
         Routes navigate/click/screenshot/etc. to the Browser VM through
         the existing browser_mcp.send_to_browser_vm() function.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        Issue #14469: declares this call's required permission via the same
+        ``required_permission()`` table the ``browser_mcp`` MCP bridge uses —
+        this is the non-registry path for the identical tool names, so it
+        reuses that classification (read baseline, MCP_BROWSER_CONTROL for
+        anything that drives the page) instead of a second, disconnected one.
 
         Yields:
             WorkflowMessage for browser tool execution stages
@@ -2431,17 +2456,28 @@ class ToolHandlerMixin:
                 )
                 return
 
-            # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for browser tools
-            should_execute = await _emit_before_tool_execute(tool_name, params, session_id)
+            # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for browser tools,
+            # declaring the permission this specific action requires.
+            tool_permission = required_permission(tool_name, bridge_name="browser_mcp")
+            should_execute = await _emit_before_tool_execute(
+                tool_name,
+                params,
+                session_id,
+                tool_permission=tool_permission.value if tool_permission else None,
+                user_role=role,
+            )
             if not should_execute:
                 logger.info(
                     "[Issue #4261] Browser tool execution cancelled by hook: %s",
                     tool_name,
                 )
+                cancellation_metadata = {"tool": tool_name, "cancelled_by_hook": True}
+                if tool_permission is not None:
+                    cancellation_metadata["reason"] = "permission_denied"
                 yield WorkflowMessage(
                     type="error",
                     content=f"Browser tool execution cancelled: {tool_name}",
-                    metadata={"tool": tool_name, "cancelled_by_hook": True},
+                    metadata=cancellation_metadata,
                 )
                 return
 
@@ -2630,12 +2666,17 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Execute a web search via browser VM. Issue #2306.
 
         Abstracts the multi-step browser flow (navigate → fill → click → get_text)
         into a single tool call so small models don't need to orchestrate it.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        Issue #14469: declares the same ``MCP_BROWSER_READ`` baseline the
+        ``browser_mcp`` bridge grants an undeclared tool — this abstracts
+        read-only browser navigation (search + read results), never drives
+        arbitrary page state, so it does not need ``MCP_BROWSER_CONTROL``.
 
         Yields:
             WorkflowMessage for search execution stages
@@ -2664,14 +2705,21 @@ class ToolHandlerMixin:
             metadata={"tool": "web_search", "query": query},
         )
 
-        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for web_search
-        should_execute = await _emit_before_tool_execute("web_search", params, session_id)
+        # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for web_search,
+        # declaring the browser-read permission it requires.
+        should_execute = await _emit_before_tool_execute(
+            "web_search",
+            params,
+            session_id,
+            tool_permission=Permission.MCP_BROWSER_READ.value,
+            user_role=role,
+        )
         if not should_execute:
             logger.info("[Issue #4261] Web search cancelled by hook")
             yield WorkflowMessage(
                 type="error",
                 content="Web search execution cancelled",
-                metadata={"tool": "web_search", "cancelled_by_hook": True},
+                metadata={"tool": "web_search", "cancelled_by_hook": True, "reason": "permission_denied"},
             )
             return
 
@@ -3485,6 +3533,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                role=role,
             ):
                 yield msg
             return
@@ -3502,17 +3551,23 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
+        role: str = "user",
     ) -> AsyncIterator[Any]:
         """Return the handler async-generator for a uniform builtin tool (GH#11489).
 
         Membership SSOT is ``_UNIFORM_BUILTIN_TOOLS``; the caller has already run
         the shared gate. Adding a builtin that follows the standard gate takes a
         schema entry plus one row here — no new branch at the dispatch seam.
+
+        Issue #14469: ``role`` is forwarded only to the three handlers that now
+        declare a ``tool_permission`` (browser, web_search, execute_command) —
+        web research/live-page-extract/read_spilled_output remain undeclared,
+        tracked separately.
         """
         if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
-            return self._handle_browser_tool(tool_call, execution_results, session_id)
+            return self._handle_browser_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "web_search":  # Issue #2306: multi-step browser flow
-            return self._handle_web_search_tool(tool_call, execution_results, session_id)
+            return self._handle_web_search_tool(tool_call, execution_results, session_id, role=role)
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
@@ -3528,6 +3583,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                role=role,
             )
         # A member of _UNIFORM_BUILTIN_TOOLS without a route row is a wiring bug —
         # fail loudly rather than falling through to a high-blast-radius handler.
@@ -3566,10 +3622,12 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
+        role: str = "user",
     ):
         """Delegate execute_command tool call to _process_single_command. Issue #2735.
 
         Extracted from _dispatch_tool_call to keep parent under 65 lines.
+        Issue #14469: forwards `role` — see _process_single_command.
         """
         async for msg in self._process_single_command(
             tool_call,
@@ -3579,6 +3637,7 @@ class ToolHandlerMixin:
             selected_model,
             execution_results,
             additional_response_parts,
+            role=role,
         ):
             yield msg
 
