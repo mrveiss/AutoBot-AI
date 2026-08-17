@@ -231,14 +231,20 @@ class AgentExecutor:
         Called after every agent response (Issue #951).  Non-fatal on error.
 
         #14406: this used to name ``autonomous-skill-development`` directly, so
-        the ``agent_capability_gap`` / ``explicit_gap_signal`` triggers that
-        skill declares were never actually the thing that fired.  It now emits
-        the declared event and lets ``skills/trigger_dispatcher`` resolve it, so
-        the manifest describes what really happens and the invocation is metered
-        through ``SkillManager`` like every other one.
+        the ``explicit_gap_signal`` trigger that skill declares was never
+        actually the thing that fired.  It now emits the declared event and lets
+        ``skills/trigger_dispatcher`` resolve it, so the manifest describes what
+        really happens and the invocation is metered through ``SkillManager``
+        like every other one.
+
+        The event is ``explicit_gap_signal`` unconditionally because
+        ``analyze_agent_output`` returns ``GapTrigger.EXPLICIT`` by construction
+        — it matches only patterns in which the agent states outright that it
+        lacks a tool.  ``trigger_dispatcher_test.py`` asserts that invariant, so
+        a detector change that broke it fails rather than silently mislabelling.
         """
         try:
-            from skills.gap_detector import GapTrigger, SkillGapDetector
+            from skills.gap_detector import SkillGapDetector
             from skills.registry import get_skill_registry
             from skills.trigger_dispatcher import emit_skill_trigger
 
@@ -248,10 +254,9 @@ class AgentExecutor:
             if gap is None:
                 return
 
-            event = "explicit_gap_signal" if gap.trigger is GapTrigger.EXPLICIT else "agent_capability_gap"
-            logger.info("Capability gap detected: %s — emitting '%s'", gap.capability, event)
+            logger.info("Explicit capability gap signalled: %s", gap.capability)
             await emit_skill_trigger(
-                event,
+                "explicit_gap_signal",
                 {
                     "capability": gap.capability,
                     "requested_by": "autobot-self",

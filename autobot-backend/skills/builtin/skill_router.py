@@ -270,7 +270,7 @@ class SkillRouterSkill(BaseSkill):
         # Step 3: Build the skill, enriching the capability with research context.
         result = await self._delegate_gap_build(task, research)
         if result is None:
-            return {"success": False, "error": "no skill is dispatchable on explicit_gap_signal"}
+            return {"success": False, "error": "no skill is dispatchable on agent_capability_gap"}
         return {
             "success": result.get("success", False),
             "enabled_skill": None,
@@ -283,17 +283,19 @@ class SkillRouterSkill(BaseSkill):
 
     @staticmethod
     async def _delegate_gap_build(task: str, research: Dict[str, Any]) -> Dict[str, Any] | None:
-        """Emit ``explicit_gap_signal`` and return the first skill result (#14406).
+        """Emit ``agent_capability_gap`` and return the first skill result (#14406).
 
         This used to call ``autonomous-skill-development`` by name.  Emitting the
         declared trigger instead means the manifest and the routing path describe
-        the same mechanism — a user task no skill covers *is* the explicit gap
-        signal.  Returns ``None`` when no enabled skill is dispatchable on it.
+        the same mechanism.  The event is ``agent_capability_gap`` rather than
+        ``explicit_gap_signal`` because the router *derived* the gap — no skill
+        scored above zero — instead of the agent stating outright that it lacks
+        a tool.  Returns ``None`` when no enabled skill is dispatchable on it.
         """
         from skills.trigger_dispatcher import emit_skill_trigger
 
         results = await emit_skill_trigger(
-            "explicit_gap_signal",
+            "agent_capability_gap",
             {
                 "capability": _enrich_capability(task, research),
                 "requested_by": "skill-router",
