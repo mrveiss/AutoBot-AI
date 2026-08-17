@@ -82,9 +82,7 @@ class WorkflowService(LLCServiceBase):
             await session.flush()
         except IntegrityError as exc:
             await session.rollback()
-            raise WorkflowConflictError(
-                f"workflow {workflow_id!r} already exists for company {company_id}"
-            ) from exc
+            raise WorkflowConflictError(f"workflow {workflow_id!r} already exists for company {company_id}") from exc
 
         if self.activity_log:
             await self.activity_log.record(

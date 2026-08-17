@@ -52,9 +52,7 @@ async def test_existing_rows_survive_including_null_company(fresh_db_url):
     try:
         async with engine.begin() as conn:
             await _seed_pre_migration_row(conn, workflow_id="wf-owned", company_id=company_a, name="Owned")
-            await _seed_pre_migration_row(
-                conn, workflow_id="wf-legacy", company_id=None, name="Recovered from Redis"
-            )
+            await _seed_pre_migration_row(conn, workflow_id="wf-legacy", company_id=None, name="Recovered from Redis")
     finally:
         await engine.dispose()
 
@@ -65,9 +63,7 @@ async def test_existing_rows_survive_including_null_company(fresh_db_url):
     try:
         async with engine.connect() as conn:
             rows = (
-                await conn.execute(
-                    text("SELECT id, workflow_id, company_id, name FROM workflows ORDER BY workflow_id")
-                )
+                await conn.execute(text("SELECT id, workflow_id, company_id, name FROM workflows ORDER BY workflow_id"))
             ).all()
     finally:
         await engine.dispose()
