@@ -2,13 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for GH#8583 — CoWorkerSetRequest.caller_role privilege escalation fix.
+"""Tests for GH#8583/#14168 — CoworkerRequest privilege-escalation fixes.
+
+GH#8583's ``CoWorkerSetRequest`` and the duplicate, unauthenticated
+``set_or_clear_coworker`` route's ``CoworkerRequest`` were consolidated into
+one canonical, tenant-scoped ``CoworkerRequest`` model + ``set_coworker``
+handler (#14168) — see llc/api/work_items.py.
 
 Verifies:
-1. CoWorkerSetRequest no longer accepts caller_role (schema-level guard).
-2. resolve_actor_role looks up human membership and returns the correct role.
-3. resolve_actor_role falls back to AgentOrgNode org_role for agent actors.
-4. resolve_actor_role defaults to "member" when the actor is unknown.
+1. CoworkerRequest no longer accepts caller_role (schema-level guard, GH#8583).
+2. CoworkerRequest no longer accepts company_id (schema-level guard, #14168 —
+   it was used unvalidated to resolve the caller's role in an
+   attacker-chosen company rather than the work item's actual company).
+3. resolve_actor_role looks up human membership and returns the correct role.
+4. resolve_actor_role falls back to AgentOrgNode org_role for agent actors.
+5. resolve_actor_role defaults to "member" when the actor is unknown.
 """
 
 import uuid
@@ -65,8 +73,8 @@ def _make_session(*results):
 # ---------------------------------------------------------------------------
 
 
-def test_coworker_set_request_has_no_caller_role_field():
-    """GH#8583: caller_role must not appear in the CoWorkerSetRequest class definition."""
+def test_coworker_request_has_no_caller_role_field():
+    """GH#8583: caller_role must not appear in the CoworkerRequest class definition."""
     import ast
     import pathlib
 
@@ -74,16 +82,42 @@ def test_coworker_set_request_has_no_caller_role_field():
     tree = ast.parse(src)
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "CoWorkerSetRequest":
+        if isinstance(node, ast.ClassDef) and node.name == "CoworkerRequest":
             field_names = [
                 t.target.id for t in node.body if isinstance(t, ast.AnnAssign) and isinstance(t.target, ast.Name)
             ]
             assert (
                 "caller_role" not in field_names
-            ), "CoWorkerSetRequest still defines caller_role — GH#8583 fix not applied"
+            ), "CoworkerRequest still defines caller_role — GH#8583 fix not applied"
             return  # class found and checked
 
-    raise AssertionError("CoWorkerSetRequest class not found in work_items.py")
+    raise AssertionError("CoworkerRequest class not found in work_items.py")
+
+
+def test_coworker_request_has_no_company_id_field():
+    """#14168: company_id must not appear in the CoworkerRequest class definition.
+
+    A client-supplied company_id was used unvalidated to resolve the
+    caller's role (resolve_actor_role) and to load/mutate the work item's
+    co-worker fields, independent of which company actually owns the item —
+    a cross-tenant write. The company scope must come from the authenticated
+    TenantContext (ctx.org_id) instead.
+    """
+    import ast
+    import pathlib
+
+    src = (pathlib.Path(__file__).parent.parent / "api" / "work_items.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "CoworkerRequest":
+            field_names = [
+                t.target.id for t in node.body if isinstance(t, ast.AnnAssign) and isinstance(t.target, ast.Name)
+            ]
+            assert "company_id" not in field_names, "CoworkerRequest still defines company_id — #14168 fix not applied"
+            return  # class found and checked
+
+    raise AssertionError("CoworkerRequest class not found in work_items.py")
 
 
 # ---------------------------------------------------------------------------

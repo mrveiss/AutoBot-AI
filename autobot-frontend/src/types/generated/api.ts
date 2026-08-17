@@ -50948,14 +50948,24 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Set Or Clear Coworker
-         * @description Set or clear co-worker on a work item (GH#8230, GH#8516).
+         * Set Coworker
+         * @description Set or clear co-worker fields for a work item (GH#8230, GH#8517, GH#8583, #14168).
          *
-         *     Omit or null co_worker_type to clear the co-worker.
-         *     caller_role is resolved server-side; it is no longer accepted from the
-         *     client (GH#8516: removed to prevent privilege escalation).
+         *     Omit ``co_worker_type`` (or send null) to clear the co-worker.
+         *
+         *     Returns 404 when the work item is not found or belongs to a different
+         *     org (#14168 IDOR guard — checked against the caller's authenticated org,
+         *     never client input), 403 when the caller lacks permission, and 422 for
+         *     invalid co-worker identity values.
+         *
+         *     This used to be two separate routes registered on the same path/method
+         *     (the second, unauthenticated one — ``set_or_clear_coworker`` — was
+         *     unreachable dead code shadowed by this one, but a live landmine: it
+         *     hard-coded ``caller_role="owner"`` and trusted a client-supplied
+         *     ``company_id`` with zero tenant check). Consolidated into one canonical,
+         *     authenticated, tenant-scoped handler (#14168).
          */
-        post: operations["set_or_clear_coworker_api_llc_work_items__work_item_id__coworker_post"];
+        post: operations["set_coworker_api_llc_work_items__work_item_id__coworker_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -62209,27 +62219,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * CoWorkerSetRequest
-         * @description Set co-worker on a work item (GH#8230).
-         *
-         *     caller_role is resolved server-side from auth context — not supplied
-         *     by the client (GH#8583: removed client-supplied caller_role to prevent privilege escalation).
-         */
-        CoWorkerSetRequest: {
-            /** Co Worker Type */
-            co_worker_type: string;
-            /** Company Id */
-            company_id: string;
-            /** Co Worker Agent Id */
-            co_worker_agent_id?: string | null;
-            /** Co Worker User Id */
-            co_worker_user_id?: string | null;
-            /** Actor Id */
-            actor_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * CodeAction
          * @description LSP-compatible code action.
          */
@@ -65188,24 +65177,26 @@ export interface components {
         };
         /**
          * CoworkerRequest
-         * @description Set or clear a co-worker on a work item (GH#8230).
-         *     To clear the co-worker, omit co_worker_type (or send null).
-         *     The caller's role is resolved server-side from the auth context — not supplied
-         *     by the client (GH#8516: removed client-supplied caller_role to prevent privilege escalation).
+         * @description Set or clear a co-worker on a work item (GH#8230, GH#8516, GH#8583, #14168).
+         *
+         *     To clear the co-worker, omit co_worker_type (or send null). Both the
+         *     caller's role and the company scope are resolved server-side from the
+         *     authenticated org context — never supplied by the client. GH#8516/
+         *     GH#8583 removed client-supplied ``caller_role`` to prevent privilege
+         *     escalation; #14168 removed client-supplied ``company_id`` for the same
+         *     reason — it was used unvalidated to resolve the caller's role, letting a
+         *     caller impersonate a role held in a company other than the one owning
+         *     the work item. ``actor_agent_id``/``actor_user_id`` were likewise
+         *     removed — the acting identity comes from the authenticated session, not
+         *     the request body, so the audit trail cannot be spoofed.
          */
         CoworkerRequest: {
-            /** Company Id */
-            company_id: string;
             /** Co Worker Type */
             co_worker_type?: string | null;
             /** Co Worker Agent Id */
             co_worker_agent_id?: string | null;
             /** Co Worker User Id */
             co_worker_user_id?: string | null;
-            /** Actor Agent Id */
-            actor_agent_id?: string | null;
-            /** Actor User Id */
-            actor_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -171512,7 +171503,7 @@ export interface operations {
             };
         };
     };
-    set_or_clear_coworker_api_llc_work_items__work_item_id__coworker_post: {
+    set_coworker_api_llc_work_items__work_item_id__coworker_post: {
         parameters: {
             query?: never;
             header?: never;
