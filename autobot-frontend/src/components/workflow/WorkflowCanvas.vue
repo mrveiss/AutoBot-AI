@@ -183,7 +183,15 @@
                  nodes — the canvas is a way in to the automation module, not a
                  second place to edit a workflow. -->
             <template v-else-if="node.type === 'org-process'">
-              <p class="org-title">{{ nodeText(node, 'workflow_id') }}</p>
+              <!-- The node is a way in to the automation module, and the only
+                   visible text is a workflow id and a role name — neither says
+                   that activating it goes anywhere. The description carries
+                   that, so it reaches a screen reader and a hover alike. -->
+              <p
+                class="org-title"
+                :title="$t('llc.orgChart.processOpensWorkflow')"
+                :aria-label="$t('llc.orgChart.processOpensWorkflow')"
+              >{{ nodeText(node, 'workflow_id') }}</p>
               <div class="org-meta">
                 <span class="process-role">{{ nodeText(node, 'role_name') }}</span>
               </div>
