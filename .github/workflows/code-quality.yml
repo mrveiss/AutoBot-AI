@@ -418,6 +418,15 @@ jobs:
         # exemption naming a moved file exempts nothing and hides that it does.
         python3 tools/lint/check_extension_import_boundaries.py --audit-baseline
 
+    - name: Audit the python-file-size ceilings for drift (#14236)
+      run: |
+        # The pre-commit hook only sees staged files, so a grandfathered entry
+        # whose file shrank, moved, or was deleted would sit there exempting
+        # nothing until somebody happened to touch it. This applies the ratchet
+        # to every entry: over its ceiling, under it, or already compliant all
+        # fail, and the run reports how many entries it reached.
+        python3 scripts/check_python_file_size.py --audit-ceilings
+
     - name: Code quality summary
       if: always()
       run: |

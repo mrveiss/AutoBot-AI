@@ -521,11 +521,22 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     "slm-database": ["postgresql"],
     "slm-monitoring": [],
     # Service roles
+    #
+    # #14446: celery, scheduler and vnc all map into the *backend* inventory
+    # group (ROLE_ANSIBLE_GROUPS below), so provisioning applies the backend
+    # ansible role to them -- and that role builds a python3.14 venv AND starts
+    # nginx with no `when:` guard on either. A node carrying only one of these
+    # roles must therefore declare both, exactly as "backend" does. Declaring
+    # less does not skip the work; it just means Phase 0 never installs what
+    # Phase 4a is about to require.
     "backend": ["python314", "nginx"],
-    "celery": ["python314"],
-    "scheduler": ["python314"],
+    "celery": ["python314", "nginx"],
+    "scheduler": ["python314", "nginx"],
     "frontend": ["nodejs", "nginx"],
-    "redis": [],
+    # #14446: the redis role unconditionally `import_tasks: chromadb.yml`,
+    # which runs `python3.14 -m venv`. A redis-only node needs the interpreter
+    # even though nothing about "redis" suggests it.
+    "redis": ["python314"],
     "postgres": ["postgresql"],
     "ai-stack": ["python314"],
     "chromadb": ["python314"],
@@ -534,7 +545,11 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     "tts-worker": ["python314"],
     "autobot-llm-cpu": [],
     "autobot-llm-gpu": [],
-    "vnc": [],
+    # #14446: NOT empty. See the note on the service roles above -- vnc maps
+    # into the backend group, so the backend ansible role runs on a vnc-only
+    # node. Provisioning failed at the venv with "No such file or directory:
+    # b'python3.14'", an error naming the venv rather than the dependency.
+    "vnc": ["python314", "nginx"],
     "slm-agent": [],
 }
 

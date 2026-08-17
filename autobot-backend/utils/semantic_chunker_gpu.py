@@ -100,6 +100,13 @@ class GPUSemanticChunker(SemanticChunkerBase):
     # ------------------------------------------------------------------
 
     def _extra_chunk_metadata(self) -> Dict[str, Any]:
+        """#14215: every chunk produced through the public ``chunk_text()``
+        entry point already carries ``optimization_version`` — the one
+        capability the unreachable ``OptimizedSemanticChunker`` subclass
+        existed to add. That subclass is removed; this is the covering
+        implementation, exercised via `get_gpu_semantic_chunker()` by
+        `knowledge_sync_incremental.py` and `advanced_rag_optimizer.py`.
+        """
         return {
             "chunking_method": "gpu_optimized_semantic",
             "gpu_batch_size": self.gpu_batch_size,
