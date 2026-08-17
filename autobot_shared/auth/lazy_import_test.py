@@ -31,8 +31,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[2]
 _ENV = dict(os.environ, PYTHONPATH=str(_ROOT))
 
-_BLOCK_BCRYPT_JWT = textwrap.dedent(
-    """
+_BLOCK_BCRYPT_JWT = textwrap.dedent("""
     import sys
 
     _BLOCKED = {"bcrypt", "jwt"}
@@ -45,8 +44,7 @@ _BLOCK_BCRYPT_JWT = textwrap.dedent(
             return None
 
     sys.meta_path.insert(0, _BlockFinder())
-    """
-)
+    """)
 
 
 def _run_in_subprocess(body: str) -> subprocess.CompletedProcess:
@@ -63,8 +61,7 @@ def _run_in_subprocess(body: str) -> subprocess.CompletedProcess:
 
 def test_importing_permissions_alone_does_not_pull_jwt_core():
     """The #14397 regression: this import must succeed with bcrypt/jwt blocked."""
-    result = _run_in_subprocess(
-        """
+    result = _run_in_subprocess("""
         from autobot_shared.auth.permissions import SYSTEM_PERMISSIONS, SYSTEM_ROLES
 
         assert SYSTEM_PERMISSIONS, "SYSTEM_PERMISSIONS must be non-empty"
@@ -76,24 +73,21 @@ def test_importing_permissions_alone_does_not_pull_jwt_core():
         assert "bcrypt" not in sys.modules
         assert "jwt" not in sys.modules
         print("OK")
-        """
-    )
+        """)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
 
 
 def test_importing_connector_auth_alone_does_not_pull_jwt_core():
     """connector_auth.py also has no bcrypt/JWT dependency of its own."""
-    result = _run_in_subprocess(
-        """
+    result = _run_in_subprocess("""
         from autobot_shared.auth.connector_auth import BearerAuth
 
         assert BearerAuth is not None
         assert "autobot_shared.auth.jwt_core" not in sys.modules
         assert "bcrypt" not in sys.modules
         print("OK")
-        """
-    )
+        """)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
 
@@ -104,8 +98,7 @@ def test_package_level_reexports_still_work_for_every_public_name():
     jwt_core-backed names are still expected to pull bcrypt/jwt — they are not
     blocked here — this only proves the lazy re-export resolves correctly.
     """
-    result = _run_in_subprocess(
-        """
+    result = _run_in_subprocess("""
         from autobot_shared.auth import (
             ApiKeyAuth,
             BasicAuth,
@@ -128,8 +121,7 @@ def test_package_level_reexports_still_work_for_every_public_name():
         ):
             assert value is not None
         print("OK")
-        """
-    )
+        """)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
 
@@ -144,8 +136,7 @@ def test_package_level_jwt_reexport_still_works_when_jwt_core_is_allowed():
         [
             sys.executable,
             "-c",
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
                 from autobot_shared.auth import decode_jwt, encode_jwt, hash_password, verify_password
 
                 for value in (decode_jwt, encode_jwt, hash_password, verify_password):
@@ -154,8 +145,7 @@ def test_package_level_jwt_reexport_still_works_when_jwt_core_is_allowed():
                 import sys
                 assert "autobot_shared.auth.jwt_core" in sys.modules
                 print("OK")
-                """
-            ),
+                """),
         ],
         capture_output=True,
         text=True,
