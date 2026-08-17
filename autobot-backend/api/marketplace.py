@@ -146,21 +146,15 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
         "rating": 4.3,
         "source_url": _plugin_source_url("mcp-wrapper-plugin"),
     },
-    {
-        "name": "telemetry-prompt-middleware",
-        "version": "1.0.0",
-        "display_name": "Telemetry Prompt Middleware",
-        "description": "Injects telemetry context into prompts and tracks token usage across sessions.",
-        "author": "mrveiss",
-        "category": "observability",
-        "tags": ["telemetry", "prompts", "token-tracking"],
-        "entry_point": "plugins.core_plugins.telemetry_prompt_middleware.main",
-        "dependencies": [],
-        "hooks": ["on_prompt_build", "on_completion"],
-        "downloads": 119,
-        "rating": 4.1,
-        "source_url": _plugin_source_url("telemetry-prompt-middleware"),
-    },
+    # #14280: telemetry-prompt-middleware is NOT listed here. It is built-in
+    # middleware (autobot-backend/middleware/builtin/telemetry_prompt_middleware.py),
+    # unconditionally registered by initialization.lifespan._init_builtin_extensions
+    # — like LoggingExtension, SecretMaskingExtension, and
+    # PermissionEnforcementExtension, none of which appear in this catalog
+    # either. Listing it as an installable "plugin" would let a user toggle
+    # `marketplace:installed` for it with zero actual effect: this catalog
+    # only tracks install-state metadata, it does not gate what
+    # `_init_builtin_extensions` registers.
 ]
 
 

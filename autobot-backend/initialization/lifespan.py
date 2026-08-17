@@ -441,12 +441,28 @@ async def _init_skills(app: FastAPI) -> None:
 
 
 async def _init_builtin_extensions(app: FastAPI) -> None:
-    """Register built-in extensions (logging, secret masking, permission enforcement).
+    """Register built-in extensions (logging, secret masking, permission enforcement, telemetry).
 
     Issue #658: Registers LoggingExtension and SecretMaskingExtension.
     Issue #3009: Wires PermissionEnforcementExtension into the extension
     manager so all tool executions are subject to role-based permission checks.
     Issue #4183: Registers SecretMaskingExtension as a builtin extension.
+    Issue #14280: Registers TelemetryPromptMiddleware (moved from a plugin.json
+    that could never load) and registers against the process-wide extension
+    manager singleton rather than a throwaway instance.
+
+    #14280: every hook call site in the codebase (chat_workflow.llm_handler,
+    chat_workflow.session_handler) invokes extensions through
+    `middleware.manager.get_extension_manager()`, the module-level singleton —
+    none of them read `app.state.extension_manager`. This function used to
+    build a brand-new `ExtensionManager()` and store it ONLY on `app.state`,
+    so every extension registered here — including PermissionEnforcement and
+    SecretMasking — was registered onto a manager no hook invocation ever
+    reads and therefore never actually ran. Registering against
+    `get_extension_manager()` (and keeping `app.state.extension_manager` as an
+    alias to the same singleton, for any caller that reads it that way) is
+    what makes registration here actually wire into the live request path.
+
     Non-critical: a failure logs a warning but does not block startup.
     """
     try:
@@ -454,18 +470,21 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
             LoggingExtension,
             PermissionEnforcementExtension,
             SecretMaskingExtension,
+            TelemetryPromptMiddleware,
         )
-        from middleware.manager import ExtensionManager
+        from middleware.manager import get_extension_manager
 
-        manager = getattr(app.state, "extension_manager", None)
-        if manager is None:
-            manager = ExtensionManager()
-            app.state.extension_manager = manager
+        manager = get_extension_manager()
+        app.state.extension_manager = manager
 
         manager.register(LoggingExtension())
         manager.register(SecretMaskingExtension())
         manager.register(PermissionEnforcementExtension())
-        logger.info("Built-in extensions registered (logging, secret_masking, permission_enforcement)")
+        manager.register(TelemetryPromptMiddleware())
+        logger.info(
+            "Built-in extensions registered (logging, secret_masking, "
+            "permission_enforcement, telemetry_prompt_middleware)"
+        )
     except Exception as ext_error:
         logger.warning("Built-in extension registration failed (non-critical): %s", ext_error)
 

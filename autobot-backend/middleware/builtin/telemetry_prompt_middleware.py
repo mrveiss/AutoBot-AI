@@ -3,12 +3,30 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Telemetry Prompt Middleware Plugin — Issue #3405.
+Telemetry Prompt Middleware Extension — Issue #3405, relocated by #14280.
 
 Registers ON_FULL_PROMPT_READY to inspect live CPU load from Prometheus.
 When average CPU usage across all nodes exceeds the configured threshold,
 a one-sentence hint is appended to the prompt asking the model to keep its
 response concise to reduce wall-clock processing time on a loaded host.
+
+Issue #14280: this component was shipped as `plugins/core-plugins/telemetry-
+prompt-middleware/plugin.py`, complete with a `plugin.json` manifest — but the
+class subclassed `middleware.base.Extension`, not
+`autobot_shared.plugin_sdk.base.BasePlugin`, and `ON_FULL_PROMPT_READY` is an
+Extension-only hook point: it is dispatched exclusively by
+`middleware.manager.ExtensionManager` (via `chat_workflow.llm_handler.
+_emit_full_prompt_ready`), never by the plugin system's `HookRegistry`. The
+`PluginLoader` therefore discovered the manifest, failed to find a
+`BasePlugin` subclass in the module, and logged "No plugin class found" on
+every startup — this middleware never ran in production. Moving the class to
+`middleware/builtin/`, alongside the other built-in extensions, and
+registering it through `initialization.lifespan._init_builtin_extensions`
+(the mechanism the Extension system actually uses — there is no manifest-
+driven discovery for extensions) is the fix. `plugins/core-plugins/telemetry-
+prompt-middleware/plugin.json` remains, marked `"kind": "extension"`, purely
+as a capability/config-schema description; `PluginLoader.discover_plugins`
+now skips any manifest whose `kind` is not `"plugin"`.
 
 Configuration (via plugin config or environment variables):
     cpu_threshold_pct  — float, default 80.  Percent CPU above which the
@@ -22,15 +40,15 @@ Environment variables:
     TELEMETRY_CPU_THRESHOLD — Override threshold without touching plugin config.
 """
 
-import logging
 import os
 from typing import Dict, Optional
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from middleware.base import Extension, HookContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CPU_PROMQL = "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[2m])) * 100)"
 _HIGH_LOAD_HINT = (
@@ -44,6 +62,8 @@ class TelemetryPromptMiddleware(Extension):
     """Prompt middleware that injects a load-aware hint via ON_FULL_PROMPT_READY."""
 
     name = "telemetry_prompt_middleware"
+    version = "1.0.0"
+    description = "Appends a concise-response hint to the LLM prompt when CPU load is above a configurable threshold"
     priority = 200
 
     def __init__(self, config: Optional[Dict] = None) -> None:
@@ -64,11 +84,11 @@ class TelemetryPromptMiddleware(Extension):
 
         cpu_pct = await self._fetch_cpu_percent()
         if cpu_pct is None:
-            logger.debug("[#3405] Telemetry plugin: Prometheus unavailable, skipping")
+            logger.debug("[#3405] Telemetry extension: Prometheus unavailable, skipping")
             return None
 
         logger.debug(
-            "[#3405] Telemetry plugin: current CPU %.1f%% (threshold %.1f%%)",
+            "[#3405] Telemetry extension: current CPU %.1f%% (threshold %.1f%%)",
             cpu_pct,
             self._threshold,
         )
@@ -76,7 +96,7 @@ class TelemetryPromptMiddleware(Extension):
             return None
 
         logger.info(
-            "[#3405] Telemetry plugin: CPU %.1f%% > threshold %.1f%% — injecting hint",
+            "[#3405] Telemetry extension: CPU %.1f%% > threshold %.1f%% — injecting hint",
             cpu_pct,
             self._threshold,
         )
@@ -98,5 +118,5 @@ class TelemetryPromptMiddleware(Extension):
                 return None
             return float(results[0]["value"][1])
         except Exception as exc:
-            logger.debug("[#3405] Telemetry plugin: Prometheus query failed: %s", exc)
+            logger.debug("[#3405] Telemetry extension: Prometheus query failed: %s", exc)
             return None

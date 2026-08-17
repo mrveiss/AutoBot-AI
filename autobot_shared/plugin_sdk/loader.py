@@ -242,6 +242,30 @@ class PluginLoader:
                         data = json.load(f)
 
                     manifest = PluginManifest(**data)
+
+                    # #14280: a `plugin.json` describes a Plugin (`kind="plugin"`,
+                    # the field's default) OR documents a component that lives in
+                    # a DIFFERENT subsystem (`kind="extension"`, `kind="skill"`) —
+                    # see ManifestContract. Only "plugin" kind belongs to this
+                    # loader. Before this check, `telemetry-prompt-middleware`
+                    # shipped a manifest for a class that subclassed `Extension`,
+                    # not `BasePlugin`: this loader discovered it, `load_plugin`
+                    # inevitably logged "No plugin class found in module", and the
+                    # #13677 health tally counted a component that was never a
+                    # plugin as a load FAILURE. Skipping here — rather than
+                    # letting `load_plugin` fail later — keeps discovery counts
+                    # honest and stops every non-plugin manifest from being
+                    # imported as though it might satisfy `BasePlugin`.
+                    if manifest.kind != "plugin":
+                        logger.debug(
+                            "Skipping non-plugin manifest %s (kind=%r) at %s — "
+                            "not this loader's territory",
+                            manifest.name,
+                            manifest.kind,
+                            manifest_file,
+                        )
+                        continue
+
                     here = manifest_file.parent.resolve()
                     already = kept_dirs.get(manifest.name)
                     if already is not None:
