@@ -4,8 +4,8 @@
 # Author: mrveiss
 """No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453).
 
-Six sites in the repo pin or install `openvino` independently of
-`autobot-npu-worker/requirements.txt` (the SSOT), and this guard reaches all six:
+Seven sites in the repo pin or install `openvino` independently of
+`autobot-npu-worker/requirements.txt` (the SSOT), and this guard reaches all seven:
 
 1. The `npu-worker` ansible role's inline package list (#14447).
 2. `deploy-native-services.yml`'s inline package list (#14452).
@@ -20,22 +20,36 @@ Six sites in the repo pin or install `openvino` independently of
    the moment something does read it.
 6. `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` -- a live build
    path per its `BUILDING.md`.
+7. `autobot-backend/code_analysis/` -- a standalone tool with its own `setup.py`
+   (documented as such in `pyproject.toml`'s mypy exclusion, GH#7105), not part of the
+   ansible-orchestrated fleet deploy. Its `src/` modules are imported live by the running
+   backend via `PYTHONPATH` (`api/anti_pattern.py`, `code_intelligence/*`, etc.), but that
+   import path never touches `setup.py`. `setup.py`'s `extras_require["npu"]` and
+   `install.sh`'s `--npu` pip line are still real, documented, human/CI-runnable install
+   paths in their own right -- this guard reads both. `README.md`'s matching instruction
+   was fixed the same way but is prose, not a parseable spec, so it is outside this guard
+   (the same treatment given the other docs fixed in #14452/#14453/#14476).
 
 Most of these drifted the same way: `openvino-dev` -- a deprecated meta-package frozen
 at 2024.6.0 with no release compatible with openvino 2026.x -- installed alongside a
-floor below the SSOT's, or (site 4) no floor at all. pip backtracks through old
+floor below the SSOT's, or (sites 4, 7) no floor at all. pip backtracks through old
 `openvino-dev` versions pinning numpy lower until it reaches a numpy with no cp314
 wheel, and the sdist build dies on `setuptools.build_meta` -- an error naming the build
-backend and nothing about which requirement caused it.
+backend and nothing about which requirement caused it. Site 7 never paired with
+`openvino-dev`, so it does not reproduce that exact crash, but it did contradict the
+SSOT floor -- the invariant this guard exists to hold everywhere `openvino` is pinned.
 
 The floor is read out of the SSOT rather than repeated here. A test that hardcoded
 `2026.3.0` would go stale in exactly the way each site did. Every site factory reads
 its source file with an uncaught `Path.read_text()` -- a renamed or moved file raises
 `FileNotFoundError` and errors the test rather than silently guarding nothing.
+`setup.py` is parsed with `ast.parse` (never executed) rather than a text regex, so a
+reformatted-but-equivalent file still resolves correctly.
 """
 
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +67,8 @@ _AGENT_CONFIG_TASKS = (
 )
 _AIML_GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" / "group_vars" / "aiml.yml"
 _WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
+_CODE_ANALYSIS_SETUP = _REPO_ROOT / "autobot-backend" / "code_analysis" / "setup.py"
+_CODE_ANALYSIS_INSTALL_SH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "install.sh"
 _SSOT_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
 
 _ROLE_TASK_NAME = "Install OpenVINO and dependencies"
@@ -154,6 +170,63 @@ def _aiml_site() -> _Site:
     return _Site(label=f"aiml group_vars, dormant ({_AIML_GROUP_VARS.name})", packages=list(packages))
 
 
+def _setup_py_npu_extras() -> list:
+    """`extras_require["npu"]` from code_analysis/setup.py, parsed with `ast` -- never executed."""
+    tree = ast.parse(_CODE_ANALYSIS_SETUP.read_text(encoding="utf-8"), filename=str(_CODE_ANALYSIS_SETUP))
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "setup"):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "extras_require" or not isinstance(kw.value, ast.Dict):
+                continue
+            for key_node, value_node in zip(kw.value.keys, kw.value.values):
+                if (
+                    isinstance(key_node, ast.Constant)
+                    and key_node.value == "npu"
+                    and isinstance(value_node, ast.List)
+                ):
+                    return [elt.value for elt in value_node.elts if isinstance(elt, ast.Constant)]
+    raise AssertionError(
+        f"no extras_require['npu'] list found in {_CODE_ANALYSIS_SETUP.name} "
+        "— this guard is pinned to the wrong shape"
+    )
+
+
+def _install_sh_npu_pip_line() -> str:
+    """The `pip install ... openvino ...` line inside install.sh's `--npu` branch."""
+    for line in _CODE_ANALYSIS_INSTALL_SH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("pip install") and "openvino" in stripped:
+            return stripped
+    raise AssertionError(
+        f"no `pip install ... openvino ...` line found in {_CODE_ANALYSIS_INSTALL_SH.name} "
+        "— this guard is pinned to the wrong line"
+    )
+
+
+def _install_sh_npu_packages() -> list:
+    line = _install_sh_npu_pip_line()
+    tokens = line.split()[2:]  # drop "pip install"
+    packages = []
+    skip_next = False
+    for tok in tokens:
+        if skip_next:
+            skip_next = False
+            continue
+        if tok == "-c":
+            skip_next = True
+            continue
+        if tok.startswith("-"):
+            continue
+        packages.append(tok.strip("\"'"))
+    return packages
+
+
+def _code_analysis_site() -> _Site:
+    packages = _setup_py_npu_extras() + _install_sh_npu_packages()
+    return _Site(label="code_analysis (setup.py extras_require['npu'] + install.sh --npu)", packages=packages)
+
+
 _SITES: dict = {
     "role": _role_site,
     "playbook": _playbook_site,
@@ -161,14 +234,19 @@ _SITES: dict = {
     "agent_config": _agent_config_site,
     "aiml (dormant)": _aiml_site,
     "windows-npu-worker": _windows_requirements_site,
+    "code_analysis": _code_analysis_site,
 }
 
 # Sites where a constraints file can even be applied -- i.e. an actual pip
-# invocation (a `pip:` task's `extra_args`, or a requirements file's own `-c`
-# line). `aiml.yml` is a bare version-string list with no pip task and no `-c`
-# convention for *any* package in that file, openvino included -- there is
-# nowhere in the file to put a constraints reference. If it is ever wired up,
-# the constraints flag belongs at the call site that reads it, not here.
+# invocation (a `pip:` task's `extra_args`, a requirements file's own `-c`
+# line, or install.sh's pip line). `aiml.yml` is a bare version-string list
+# with no pip task and no `-c` convention for *any* package in that file,
+# openvino included -- there is nowhere in the file to put a constraints
+# reference. If it is ever wired up, the constraints flag belongs at the call
+# site that reads it, not here. `code_analysis`'s `setup.py` half has the same
+# limitation (`extras_require` is a dependency list, not a pip invocation, so
+# it cannot itself carry `-c`) -- but `install.sh`'s pip line can and does, so
+# the site as a whole is not exempt.
 _CONSTRAINTS_EXEMPT = {"aiml (dormant)"}
 assert _CONSTRAINTS_EXEMPT <= _SITES.keys(), "an exemption names a site that no longer exists"
 
@@ -177,11 +255,15 @@ _PIP_TASK_SITES: dict = {
     "playbook": (_PLAYBOOK, _PLAYBOOK_TASK_NAME, "pip"),
     "agent_config": (_AGENT_CONFIG_TASKS, _AGENT_CONFIG_TASK_NAME, "pip"),
 }
+_REQUIREMENTS_FILE_SITES: dict = {
+    "requirements-npu.txt": _DOCKER_REQUIREMENTS,
+    "windows-npu-worker": _WINDOWS_REQUIREMENTS,
+}
 
 
 def _extra_args_for(site_name: str) -> str:
-    """Constraints-bearing text for a site: a pip task's `extra_args`, or a requirements
-    file's `-c` line(s)."""
+    """Constraints-bearing text for a site: a pip task's `extra_args`, a requirements
+    file's `-c` line(s), or (for `code_analysis`) install.sh's pip line."""
     if site_name in _PIP_TASK_SITES:
         path, task_name, module_key = _PIP_TASK_SITES[site_name]
         if path is _PLAYBOOK:
@@ -196,12 +278,14 @@ def _extra_args_for(site_name: str) -> str:
         tasks = yaml.safe_load(path.read_text(encoding="utf-8"))
         return _extra_args_of(_pip_task_from_task_list(tasks, task_name, module_key))
 
-    requirements_path = {
-        "requirements-npu.txt": _DOCKER_REQUIREMENTS,
-        "windows-npu-worker": _WINDOWS_REQUIREMENTS,
-    }[site_name]
-    lines = [line.strip() for line in requirements_path.read_text(encoding="utf-8").splitlines()]
-    return " ".join(line for line in lines if line.startswith("-c"))
+    if site_name in _REQUIREMENTS_FILE_SITES:
+        lines = [line.strip() for line in _REQUIREMENTS_FILE_SITES[site_name].read_text(encoding="utf-8").splitlines()]
+        return " ".join(line for line in lines if line.startswith("-c"))
+
+    if site_name == "code_analysis":
+        return _install_sh_npu_pip_line()
+
+    raise AssertionError(f"{site_name!r} has no known way to derive extra_args — this guard is pinned to the wrong site")
 
 
 def _ssot_openvino_floor() -> str:
@@ -245,7 +329,8 @@ def test_the_floor_is_not_below_the_ssot(site_name: str):
 
     This is what made the openvino-dev conflict fatal rather than merely
     unsatisfiable: with a floor below the SSOT's (or no floor at all, as in the
-    agent_config site before its fix) there was an older openvino to retreat to.
+    agent_config and code_analysis/install.sh sites before their fix) there was
+    an older openvino to retreat to.
     """
     site = _SITES[site_name]()
     specs = [name for name in site.packages if _bare_name(name) == "openvino"]
