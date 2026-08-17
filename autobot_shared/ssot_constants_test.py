@@ -45,17 +45,17 @@ def test_ttl_constants_equal_the_literals_they_replaced() -> None:
     asserted rather than assumed.
     """
     from autobot_shared.ssot_constants import (
-        TTL_10_MINUTES,
-        TTL_10_SECONDS,
         TTL_1_HOUR,
         TTL_1_MINUTE,
-        TTL_24_HOURS,
         TTL_2_HOURS,
-        TTL_30_DAYS,
-        TTL_365_DAYS,
         TTL_5_MINUTES,
         TTL_7_DAYS,
+        TTL_10_MINUTES,
+        TTL_10_SECONDS,
+        TTL_24_HOURS,
+        TTL_30_DAYS,
         TTL_90_DAYS,
+        TTL_365_DAYS,
     )
 
     assert TTL_10_SECONDS == 10

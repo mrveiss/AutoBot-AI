@@ -102,9 +102,7 @@ def test_no_new_model_declares_company_id_as_a_string() -> None:
     so a second class regressing independently of the first still trips this.
     """
     declared = _declared_types()
-    string_typed = {
-        name for name, types in declared.items() if any("String" in t or "Text" in t for t in types)
-    }
+    string_typed = {name for name, types in declared.items() if any("String" in t or "Text" in t for t in types)}
 
     unexpected = string_typed - _KNOWN_STRING_TYPED
     assert not unexpected, (
