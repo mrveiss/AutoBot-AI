@@ -35,6 +35,7 @@ from code_intelligence.pattern_analysis import (
 )
 from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -47,7 +48,7 @@ from utils.file_categorization import (
     FILE_CATEGORY_LOGS,
     FILE_CATEGORY_TEST,
 )
-from utils.io_executor import run_in_analytics_executor
+from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import (  # noqa: F401
@@ -1725,11 +1726,26 @@ async def _get_api_endpoint_analysis(
 
     Returns:
         APIEndpointAnalysis or None if analysis fails
+
+    Issue #14256/#14244: run_full_analysis() used to be submitted to the
+    analytics executor with nothing to stop it -- the reported hang, and the
+    one call in this fan-out with no cancellation of any kind. A cancel token
+    is now created here and registered in bounded()'s active scope (via
+    run_cancellable), so a route deadline -- this call's own outer
+    ``asyncio.wait_for`` in ``_run_parallel_analyses``, or ``/report``'s
+    ``bounded()`` itself if that fires first -- stops the scan instead of
+    just the wait.
     """
+    cancel_token = new_cancel_token()
     try:
-        checker = APIEndpointChecker(project_root=project_root)
+        checker = APIEndpointChecker(project_root=project_root, cancel_token=cancel_token)
         # Issue #1233: Use dedicated analytics executor
-        analysis = await run_in_analytics_executor(checker.run_full_analysis)
+        analysis = await run_cancellable(
+            get_analytics_executor(),
+            checker.run_full_analysis,
+            operation="api_endpoint_analysis",
+            cancel_token=cancel_token,
+        )
         logger.info(
             "API endpoint analysis: %d endpoints, %d calls, %.1f%% coverage",
             analysis.backend_endpoints,
@@ -1737,6 +1753,8 @@ async def _get_api_endpoint_analysis(
             analysis.coverage_percentage,
         )
         return analysis
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error("API endpoint analysis failed: %s", e, exc_info=True)
         return None

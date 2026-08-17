@@ -105,6 +105,8 @@ class PrometheusMetricsManager:
         self._init_circuit_breaker_metrics()
         self._init_request_metrics()
         self._init_error_metrics()
+        # Issue #14244: pooled-work cancellation visibility
+        self._init_executor_cancel_metrics()
 
         # Issue #394: Initialize domain-specific recorders
         self._workflow = WorkflowMetricsRecorder(self.registry)
@@ -250,9 +252,30 @@ class PrometheusMetricsManager:
             registry=self.registry,
         )
 
+    def _init_executor_cancel_metrics(self) -> None:
+        """Initialize pooled-work cancellation metrics (#14244).
+
+        ``asyncio.wait_for`` cancels the AWAIT, not work already running in a
+        ``ThreadPoolExecutor`` -- so a timed-out request can leave a thread
+        running with nothing externally visible; the client already has its
+        504. This counts every time a cancel token is signalled so the gap
+        between "the client got a response" and "the work actually stopped"
+        is measured instead of inferred from a hang.
+        """
+        self.executor_cancel_signalled_total = Counter(
+            "autobot_executor_cancel_signalled_total",
+            "Cancel tokens signalled for pooled analytics work that outlived its deadline",
+            ["operation"],
+            registry=self.registry,
+        )
+
     # =========================================================================
     # Core Infrastructure Metric Recording Methods
     # =========================================================================
+
+    def record_executor_cancel_signalled(self, operation: str) -> None:
+        """Record that pooled work was signalled to stop cooperatively (#14244)."""
+        self.executor_cancel_signalled_total.labels(operation=operation).inc()
 
     def record_timeout(self, operation_type: str, database: str, timed_out: bool) -> None:
         """Record a timeout event."""
