@@ -1,0 +1,74 @@
+# Python required-context publisher — #14353
+#
+# `python-suite` is intended to be a REQUIRED status check on the integration
+# branch. Exactly one of two mutually exclusive jobs publishes it:
+#
+#   python paths changed   -> `python-suite` in ci.yml, the twelve-shard suite
+#                             on ubuntu-latest. That is the real gate and it
+#                             stays there (this workflow reports nothing then).
+#   python paths untouched -> `python-suite` below, which reports the context
+#                             green because the suite does not apply.
+#
+# WITHOUT THIS SHIM the check cannot be made required at all: ci.yml's
+# `python-suite` is guarded by `needs.changes.outputs.python == 'true'`, so on a
+# docs-only or frontend-only pull request it never runs, never reports, and the
+# pull request would sit blocked forever on a context nobody can produce.
+#
+# WHY ITS OWN FILE — the same reason frontend-required-context.yml is its own
+# file (#13405). ci.yml declares a WORKFLOW-level concurrency group with
+# `cancel-in-progress` on pull requests. A shim living inside ci.yml shares that
+# group, so a superseded run takes the shim down with it and the required context
+# goes missing exactly when a rapid push sequence needs it most.
+#
+# NO `concurrency:` BLOCK — DELIBERATE, for that same reason. This job finishes
+# in seconds on a GitHub-hosted runner, so there is nothing to save by cancelling
+# it and a great deal to lose.
+#
+# THE FILTER IS SHARED, NOT COPIED — .github/filters/python-paths.yml. The two
+# `if:` conditions are exact complements, and the failure direction is silent: a
+# shim that thinks nothing Python changed while ci.yml thinks otherwise would
+# publish green for a suite that never ran.
+
+name: python-required-context
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths (python required context)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters/python-paths.yml
+
+  python-suite:
+    # IDENTICAL to the aggregator job name in ci.yml on purpose: the required
+    # status context is the JOB name, so this reports the same context when the
+    # real suite legitimately does not run.
+    name: python-suite
+    needs: changes
+    # Exact complement of ci.yml's `needs.changes.outputs.python == 'true'`.
+    #
+    # Fail-closed: if `changes` errors, `needs` skips this job rather than
+    # reporting green, so a broken detector can never fake a pass. It leaves the
+    # context unreported, which blocks the pull request — the safe direction.
+    if: needs.changes.outputs.python != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No Python changes — reporting required context as success
+        run: |
+          echo "No Python paths changed in this pull request."
+          echo "The twelve-shard python-suite in ci.yml does not apply, so the"
+          echo "required 'python-suite' context is reported green from here."
+          echo "Path set: .github/filters/python-paths.yml (#14353)."
