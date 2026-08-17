@@ -1366,6 +1366,77 @@ class CompanyTeamsResponse(BaseModel):
     teams: List[CompanyTeam]
 
 
+# ------------------------------------------------------------------
+# Process nodes (#13963) — where the absorbed automation module is entered
+# ------------------------------------------------------------------
+
+
+class ProcessNode(BaseModel):
+    """One workflow a role runs, as an org-chart-adjacent node.
+
+    Owner decision on #13963, option 3: automation is entered from inside
+    Company OS **contextually**, through the org chart, rather than by a
+    sidebar entry. A process node is the link between the two surfaces — the
+    role that owns the work, and the workflow that performs it.
+
+    Derived read-only from ``llc_role_workflows`` (#14221 step 5). No new
+    table and no new vocabulary: the attachment binding a role to a workflow
+    already exists, so a process node is a projection of it rather than a
+    second place to record the same fact.
+
+    ``role_id`` is included so the canvas can draw the node against the role it
+    belongs to; ``workflow_id`` is what the automation route opens.
+    """
+
+    role_id: str
+    role_name: str
+    workflow_id: str
+
+
+class ProcessNodesResponse(BaseModel):
+    nodes: List[ProcessNode]
+
+
+@router.get("/{company_id}/process-nodes", response_model=ProcessNodesResponse)
+async def get_process_nodes(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProcessNodesResponse:
+    """Return the workflows this company's roles run (#13963).
+
+    Company-scoped through the same shared :func:`assert_company_access` guard
+    the rest of this router uses, and pinned again in the query itself — the
+    role must belong to this company *and* the attachment must, so losing
+    either predicate cannot widen the result.
+
+    Read-only: this composes existing rows and creates nothing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from llc.models.role_workflow import LLCRoleWorkflow  # noqa: PLC0415
+    from user_management.models.role import Role  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    result = await session.execute(
+        select(Role.id, Role.name, LLCRoleWorkflow.workflow_id)
+        .join(LLCRoleWorkflow, LLCRoleWorkflow.role_id == Role.id)
+        .where(
+            Role.org_id == company_id,
+            LLCRoleWorkflow.company_id == company_id,
+        )
+        .order_by(Role.name, LLCRoleWorkflow.workflow_id)
+    )
+    return ProcessNodesResponse(
+        nodes=[
+            ProcessNode(role_id=str(role_id), role_name=name, workflow_id=workflow_id)
+            for role_id, name, workflow_id in result.all()
+        ]
+    )
+
+
 @router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
 async def get_company_teams(
     company_id: uuid.UUID,

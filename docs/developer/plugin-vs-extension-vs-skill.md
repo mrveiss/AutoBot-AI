@@ -47,6 +47,8 @@ class LoggingMiddleware(Extension):
 
 **Invocation:** Central `ExtensionManager` (misnomer — will be renamed to `MiddlewareManager` in v2).
 
+**Examples:** `LoggingExtension`, `SecretMaskingExtension`, `PermissionEnforcementExtension`, `TelemetryPromptMiddleware` (`autobot-backend/middleware/builtin/`)
+
 ---
 
 ### Skill
@@ -88,9 +90,9 @@ class WebFetchSkill:
 }
 ```
 
-**Invocation:** `autobot_shared/plugin_sdk/loader.py` loads at startup.
+**Invocation:** `autobot_shared/plugin_sdk/loader.py` loads at startup. Only manifests with `kind: "plugin"` (the field's default) are discovered here — `kind: "extension"` or `kind: "skill"` manifests are skipped (#14280).
 
-**Examples:** `hello-plugin`, `logger-plugin`, `telemetry-prompt-middleware`
+**Examples:** `hello-plugin`, `logger-plugin`, `kb-event-plugin`, `mcp-wrapper-plugin`, `image-generation-plugin`, `video-generation-plugin`
 
 ---
 

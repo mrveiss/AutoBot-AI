@@ -8296,7 +8296,9 @@
         "handoffButton": "העבר לאדם",
         "handoffEmpty": "אין פריטים פעילים להעברה.",
         "handoffNotApplicableHuman": "ההעברה חלה על סוכנים בלבד."
-      }
+      },
+      "processNodeLabel": "תהליך",
+      "processOpensWorkflow": "פותח את התהליך שתפקיד זה מריץ"
     },
     "executorRollup": {
       "title": "סיכום מבצעים",

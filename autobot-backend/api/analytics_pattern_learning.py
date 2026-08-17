@@ -47,6 +47,7 @@ from api.schemas_analytics import (
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_90_DAYS
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
@@ -480,7 +481,7 @@ class PatternLearningEngine:
                 "timestamp": record.timestamp.isoformat(),
                 "weight": record.weight,
             }
-            await self.redis_client.set(key, json.dumps(data), ex=60 * 60 * 24 * 90)  # 90 day TTL
+            await self.redis_client.set(key, json.dumps(data), ex=TTL_90_DAYS)  # 90 day TTL
         except Exception as e:
             logger.warning("Failed to store feedback in Redis: %s", e)
 

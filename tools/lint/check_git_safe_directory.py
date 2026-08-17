@@ -36,6 +36,8 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # `git -C <repo>` where <repo> is git_repo_root or /opt/autobot/code_source.
@@ -52,6 +54,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # tracked tree: 22 matches, 19 of them already carrying `-c safe.directory`
 # (the sites #7150's migration fixed), which is what says the widening targets
 # the right shape rather than merely matching more.
+#
+# #14196: this used to run per physical line, which is blind to a command
+# folded across a YAML `>-`/`|` block scalar — a real (fixed) instance dropped
+# a guarded `git ... -C ...` invocation out of the checker's view entirely
+# when it wrapped to a second line. `.yml`/`.yaml` are now parsed with PyYAML
+# and every scalar's resolved *value* is matched instead of raw text, so a
+# folded/literal command reads exactly as Ansible will evaluate it: one
+# string, regardless of how many physical lines it was written across.
 PATTERN = re.compile(
     r"\bgit\s+(?P<flags>[^\n]*?)-C\s+"
     r"(?:\{\{\s*[\w]*(?:code_source|git_repo_root)[\w]*\s*(?:\|[^}]*)?\}\}"
@@ -84,6 +94,61 @@ def iter_ansible_files(root: Path) -> Iterable[Path]:
         yield path
 
 
+def _iter_scalar_nodes(node: "yaml.Node") -> Iterable["yaml.ScalarNode"]:
+    """Walk a composed YAML node tree, yielding every scalar node.
+
+    Unlike the ansible-facts checker, no key context is needed here: a
+    `git -C ...` invocation can live under `cmd:`, `command:`, a raw
+    `- git ...` shell line, etc. — it is the string *content* that matters,
+    not which key holds it.
+
+    Mapping KEYS are scalars too and are yielded here alongside values --
+    a walk that only descended into `value_node` would silently drop a
+    dynamically-named key, the same coverage the line-based scanner had.
+
+    PyYAML's `Composer` has no separate node type for an alias (`*anchor`):
+    resolving one returns the *same* node object as its anchor definition
+    (`yaml.AliasNode` does not exist), so a node reachable through more than
+    one anchor/alias/merge-key site is revisited once per reachable path.
+    That is a duplicate report for one physical scalar, not a missed one --
+    harmless here, and there are currently zero YAML anchors in the tracked
+    ansible tree.
+    """
+    if isinstance(node, yaml.ScalarNode):
+        yield node
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            yield from _iter_scalar_nodes(item)
+    elif isinstance(node, yaml.MappingNode):
+        for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                yield key_node
+            yield from _iter_scalar_nodes(value_node)
+
+
+def _yaml_violations(text: str) -> List[Tuple[int, str]]:
+    try:
+        documents = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+    except yaml.YAMLError:
+        # Malformed YAML is another hook's job (check-yaml); do not crash
+        # pre-commit over a file this hook cannot parse.
+        return []
+
+    lines = text.splitlines()
+    violations: List[Tuple[int, str]] = []
+    for doc in documents:
+        if doc is None:
+            continue
+        for node in _iter_scalar_nodes(doc):
+            value = node.value
+            match = PATTERN.search(value)
+            if match and not SAFE_FLAG.search(match.group("flags")):
+                lineno0 = node.start_mark.line
+                snippet = lines[lineno0].strip()[:140] if 0 <= lineno0 < len(lines) else value.strip()[:140]
+                violations.append((lineno0 + 1, snippet))
+    return violations
+
+
 def find_violations(path: Path) -> List[Tuple[int, str]]:
     try:
         rel = path.resolve().relative_to(REPO_ROOT).as_posix()
@@ -95,12 +160,7 @@ def find_violations(path: Path) -> List[Tuple[int, str]]:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    violations: List[Tuple[int, str]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        match = PATTERN.search(line)
-        if match and not SAFE_FLAG.search(match.group("flags")):
-            violations.append((lineno, line.strip()[:140]))
-    return violations
+    return _yaml_violations(text)
 
 
 def main(paths: List[str]) -> int:
