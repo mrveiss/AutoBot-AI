@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
+from utils.cancel_tokens import begin_cancel_scope, end_cancel_scope, signal_cancel_scope
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
@@ -344,6 +345,15 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
         ValueError: at decoration time (import time) for a non-positive
             deadline, so the mistake surfaces at startup rather than on the
             first request.
+
+    Issue #14256: opens a cancel scope for the duration of the call. Any
+    pooled work the handler dispatches via
+    ``utils.cancel_tokens.submit_cancellable``/``run_cancellable`` registers
+    its cancel token here; on expiry (or on this call being cancelled from
+    outside, e.g. graceful shutdown) every registered token is signalled
+    before the 504/CancelledError propagates. The route deadline and the
+    cancellation of the work it dispatched are therefore the same event
+    rather than two facts that can drift (#14244).
     """
     if seconds <= 0:
         raise ValueError(f"bounded() needs a positive deadline, got {seconds!r}")
@@ -353,6 +363,7 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
+            scope = begin_cancel_scope()
             try:
                 return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
             except asyncio.TimeoutError:
@@ -364,6 +375,11 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
                     name,
                     seconds,
                 )
+                # #14256: the deadline stopping the CALLER is only half the fix --
+                # signal every cancel token this call dispatched so pooled work
+                # stops cooperatively instead of running to completion for a
+                # result nobody reads (#14244).
+                signal_cancel_scope(f"route deadline for {name} exceeded {seconds:.1f}s")
                 raise HTTPException(
                     status_code=504,
                     detail={
@@ -377,6 +393,14 @@ def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str |
                         ),
                     },
                 ) from None
+            except asyncio.CancelledError:
+                # Reachable via graceful shutdown or an outer deadline tighter
+                # than this one -- same treatment as a timeout (#14256): signal,
+                # then re-raise. Never swallowed.
+                signal_cancel_scope(f"{name} was cancelled before its {seconds:.1f}s deadline")
+                raise
+            finally:
+                end_cancel_scope(scope)
 
         wrapper.__route_deadline_seconds__ = seconds
         return wrapper
