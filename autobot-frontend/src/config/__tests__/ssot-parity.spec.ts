@@ -158,8 +158,19 @@ function pythonStringFieldDefaults(source: string, className: string): Record<st
  * directly. TS-only: a frontend-to-frontend link with no Python analog.
  * Anything appearing on one side that is *not* listed here is unmirrored
  * drift and fails below.
+ *
+ * Each entry carries its reason inline (#14173 review) — a bare list rots:
+ * an entry naming a field that was later removed from PortConfig exempts
+ * nothing while still looking authoritative, because the "still genuinely
+ * one-sided" check below only proves the Python side still HAS the field,
+ * never why keeping it one-sided is still correct.
  */
-const PYTHON_ONLY_PORTS = ['chromadb', 'tts', 'chrome_cdp'] as const
+const PYTHON_ONLY_PORTS = [
+  'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes (#3094)
+  'tts', // TTS worker — backend-to-worker only, no frontend consumer (#928)
+  'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only (#3829)
+  'vnc_server', // raw VNC protocol port (x11vnc), consumed by the node's own systemd service + the Ansible vnc role. The frontend's desktop viewer only ever talks to the noVNC WEB port ('vnc' above, already mirrored) — verified no frontend file reads AUTOBOT_VNC_SERVER_PORT or hardcodes 5901; the 5901 literals in *.test.ts are unrelated per-session `vnc_port` API-response mocks (AdvancedControlApiClient), a dynamic runtime value with no static SSOT default on either side (#14173)
+] as const
 const TS_ONLY_PORTS = ['slmAdmin'] as const
 
 describe('Python source parser (self-check)', () => {
