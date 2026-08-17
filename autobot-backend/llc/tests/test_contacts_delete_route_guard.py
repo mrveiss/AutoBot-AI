@@ -100,7 +100,9 @@ async def _hold_role(session_factory, company_id: uuid.UUID, contact_id: uuid.UU
         await session.commit()
 
 
-async def _add_membership(session_factory, company_id: uuid.UUID, user_id: uuid.UUID, role: str) -> None:  # noqa: ANN001
+async def _add_membership(
+    session_factory, company_id: uuid.UUID, user_id: uuid.UUID, role: str
+) -> None:  # noqa: ANN001
     async with session_factory() as session:
         session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=company_id, user_id=user_id, role=role))
         await session.commit()
