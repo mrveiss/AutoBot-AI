@@ -197,4 +197,47 @@ describe('OrgChart process nodes (#13963)', () => {
 
     expect(push).not.toHaveBeenCalled()
   })
+
+  it('keeps the people graph when the process fetch fails', async () => {
+    // The org chart is still correct without the process nodes, so a failed
+    // secondary fetch must not blank it or surface as a page error — #14104's
+    // `peopleUnavailable` precedent. An absent source rendering as "no org
+    // chart" is the failure this guards.
+    get.mockImplementation((url: string) => {
+      if (url.includes('/process-nodes')) return Promise.reject(new Error('HTTP 500: boom'))
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    const nodes = wrapper.findComponent(WorkflowCanvas).props('nodes') as { type: string }[]
+    expect(nodes.some((n) => n.type === 'org-person')).toBe(true)
+    expect(nodes.filter((n) => n.type === 'org-process')).toHaveLength(0)
+  })
+
+  it('retries the fetch on a later canvas visit after a failure', async () => {
+    // The once-only guard is set on success, not on attempt: a transient
+    // failure must not permanently hide this company's processes.
+    let attempt = 0
+    get.mockImplementation((url: string) => {
+      if (url.includes('/process-nodes')) {
+        attempt += 1
+        return attempt === 1
+          ? Promise.reject(new Error('HTTP 503: try again'))
+          : Promise.resolve({ nodes: PROCESSES })
+      }
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    await wrapper.find('[data-testid="org-view-tree"]').trigger('click')
+    await flushPromises()
+    await openCanvas(wrapper)
+
+    const nodes = wrapper.findComponent(WorkflowCanvas).props('nodes') as { type: string }[]
+    expect(nodes.filter((n) => n.type === 'org-process')).toHaveLength(1)
+  })
 })

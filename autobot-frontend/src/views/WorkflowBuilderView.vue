@@ -689,6 +689,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
@@ -1185,9 +1186,8 @@ async function handleSkipStep(workflowId: string, stepId: string): Promise<void>
  * link and the in-app click cannot diverge in what "open a workflow" means.
  */
 async function openWorkflowFromQuery(): Promise<void> {
-  const requested = route.query.workflow;
-  const workflowId = Array.isArray(requested) ? requested[0] : requested;
-  if (typeof workflowId !== 'string' || workflowId.length === 0) return;
+  const workflowId = workflowIdFromQuery(route.query);
+  if (!workflowId) return;
   await handleViewWorkflow(workflowId);
 }
 

@@ -25,6 +25,7 @@ import {
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
 import type { ProcessNodeSource } from '@/composables/llc/orgCanvasGraph'
+import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
@@ -257,7 +258,7 @@ function onCanvasNodeSelected(nodeId: string | null) {
     void router.push({
       name: 'automation-section',
       params: { companyId: companyId.value, section: 'runner' },
-      query: { workflow: workflowId },
+      query: { [WORKFLOW_QUERY_KEY]: workflowId },
     })
     return
   }
