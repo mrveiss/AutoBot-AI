@@ -8296,7 +8296,9 @@
         "handoffButton": "Transferir para humano",
         "handoffEmpty": "Nenhum item ativo para transferir.",
         "handoffNotApplicableHuman": "A transferência se aplica apenas a agentes."
-      }
+      },
+      "processNodeLabel": "Processo",
+      "processOpensWorkflow": "Abre o fluxo que esta função executa"
     },
     "executorRollup": {
       "title": "Resumo de executores",

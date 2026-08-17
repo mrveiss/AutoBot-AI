@@ -8296,7 +8296,9 @@
         "handoffButton": "التسليم إلى إنسان",
         "handoffEmpty": "لا توجد عناصر نشطة للتسليم.",
         "handoffNotApplicableHuman": "يُطبَّق التسليم على الوكلاء فقط."
-      }
+      },
+      "processNodeLabel": "عملية",
+      "processOpensWorkflow": "يفتح سير العمل الذي يشغّله هذا الدور"
     },
     "executorRollup": {
       "title": "ملخص المنفذين",

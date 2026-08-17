@@ -234,3 +234,62 @@ export function flattenOrgNodes(roots: OrgNode[]): Map<string, OrgNode> {
   }
   return byId
 }
+
+
+/** A workflow a role runs, as returned by ``GET .../process-nodes`` (#13963). */
+export interface ProcessNodeSource {
+  role_id: string
+  role_name: string
+  workflow_id: string
+}
+
+/** Prefix that marks a canvas node as a process, so a click can be routed. */
+export const PROCESS_NODE_PREFIX = 'process:'
+
+/**
+ * Lay out process nodes below the people graph (#13963).
+ *
+ * They pack across before stacking down, like ungrouped individuals: a company
+ * with a dozen processes should read as a grid, not a column the reader has to
+ * pan through.
+ *
+ * Placed *below* `topOffset` rather than interleaved with the hierarchy on
+ * purpose — a process is not a person and does not report to anyone, so giving
+ * it a position in the reporting tree would assert a relationship that does not
+ * exist.
+ */
+export function buildProcessCanvasNodes(
+  processes: ProcessNodeSource[],
+  topOffset: number,
+): CanvasNode[] {
+  return processes.map((process, index) => ({
+    id: `${PROCESS_NODE_PREFIX}${process.role_id}:${process.workflow_id}`,
+    type: 'org-process',
+    position: {
+      x: (index % UNGROUPED_COLUMNS) * (CANVAS_NODE_WIDTH + COLUMN_GAP),
+      y: topOffset + Math.floor(index / UNGROUPED_COLUMNS) * ROW_HEIGHT,
+    },
+    data: {
+      role_id: process.role_id,
+      role_name: process.role_name,
+      workflow_id: process.workflow_id,
+    },
+  })) as CanvasNode[]
+}
+
+/** The workflow a process node opens, or null if the id is not a process node. */
+export function workflowIdFromProcessNode(nodeId: string): string | null {
+  if (!nodeId.startsWith(PROCESS_NODE_PREFIX)) return null
+  // id = process:<role_id>:<workflow_id>; a workflow id may itself contain ':'
+  // so split off exactly the prefix and the role id, and keep the rest whole.
+  const rest = nodeId.slice(PROCESS_NODE_PREFIX.length)
+  const separator = rest.indexOf(':')
+  if (separator < 0) return null
+  const workflowId = rest.slice(separator + 1)
+  return workflowId.length > 0 ? workflowId : null
+}
+
+/** Lowest edge of a laid-out graph, so later sections start below it. */
+export function canvasBottom(nodes: CanvasNode[]): number {
+  return nodes.reduce((lowest, node) => Math.max(lowest, node.position.y + ROW_HEIGHT), 0)
+}

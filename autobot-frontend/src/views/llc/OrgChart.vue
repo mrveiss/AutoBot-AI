@@ -11,15 +11,20 @@ import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
+import { useRouter } from 'vue-router'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
   buildOrgCanvasGraph,
+  buildProcessCanvasNodes,
+  canvasBottom,
   flattenOrgNodes,
   orgLayoutKey,
   orgUnitRoots,
+  workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
+import type { ProcessNodeSource } from '@/composables/llc/orgCanvasGraph'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
@@ -36,6 +41,7 @@ import { availableLensRoles, applyRoleLens, roleLensCounts } from '@/composables
 const logger = createLogger('OrgChart')
 const api = useApiClient()
 const { t, locale } = useI18n()
+const router = useRouter()
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -106,6 +112,10 @@ const visibleRoots = computed<OrgNode[]>(() =>
 // `node-moved` and `onCanvasNodeMoved` writes the new position here, where it
 // must survive until the drawn forest itself changes.
 const canvasNodes = ref<CanvasNode[]>([])
+// #13963: workflows the company's roles run. Kept in its own ref so a failed
+// process fetch cannot blank the people graph — an absent source must never
+// render as "this company has no org chart".
+const processNodes = ref<ProcessNodeSource[]>([])
 
 /**
  * Explicit, shallow layout source (#13996): ids, nesting and labels — never
@@ -113,14 +123,26 @@ const canvasNodes = ref<CanvasNode[]>([])
  * the previous `watchEffect` subscribed to it, so pause/resume — the primary
  * canvas-mode action — rebuilt the graph and threw away every dragged position.
  */
-const layoutKey = computed(() => `${locale.value}\n${orgLayoutKey(visibleRoots.value)}`)
+const layoutKey = computed(
+  () =>
+    `${locale.value}\n${orgLayoutKey(visibleRoots.value)}\n` +
+    // Processes arrive from their own request, after the tree. Without them in
+    // the key the graph is built once and the nodes never appear.
+    processNodes.value.map((p) => `${p.role_id}:${p.workflow_id}`).join(','),
+)
 
 watch(
   layoutKey,
   () => {
-    canvasNodes.value = buildOrgCanvasGraph(visibleRoots.value, (name) =>
+    const people = buildOrgCanvasGraph(visibleRoots.value, (name) =>
       t('llc.orgChart.canvasUnit', { name }),
     )
+    // Processes sit below the people graph — see buildProcessCanvasNodes for
+    // why they are not placed inside the reporting hierarchy.
+    canvasNodes.value = [
+      ...people,
+      ...buildProcessCanvasNodes(processNodes.value, canvasBottom(people)),
+    ]
   },
   { immediate: true },
 )
@@ -218,6 +240,17 @@ function onPersonSelected(orgNodeId: string) {
 /** Canvas selection opens the same drawer the tree opens. */
 function onCanvasNodeSelected(nodeId: string | null) {
   if (!nodeId) return closeDrawer()
+  // #13963: a process node is the contextual entrance to the absorbed
+  // automation module — it opens the workflow it names rather than a drawer.
+  const workflowId = workflowIdFromProcessNode(nodeId)
+  if (workflowId) {
+    void router.push({
+      name: 'automation-section',
+      params: { companyId: companyId.value, section: 'runner' },
+      query: { workflow: workflowId },
+    })
+    return
+  }
   const node = flattenOrgNodes(tree.value).get(nodeId)
   if (node) openDrawer(node)
 }
@@ -245,6 +278,31 @@ function resolveCompanyIdOnce(): Promise<string | null> {
     })
   }
   return pendingCompanyId
+}
+
+/**
+ * Load the workflows this company's roles run (#13963).
+ *
+ * Failures are logged and left as an empty list rather than surfaced as a page
+ * error: the org chart is still correct without the process nodes, and blocking
+ * the whole view on a secondary panel is the #14104 `peopleUnavailable`
+ * precedent in reverse.
+ */
+async function fetchProcessNodes() {
+  try {
+    const cid = await resolveCompanyIdOnce()
+    if (!cid) {
+      processNodes.value = []
+      return
+    }
+    const resp = await api.get<{ nodes: ProcessNodeSource[] }>(
+      `/api/llc/companies/${cid}/process-nodes`,
+    )
+    processNodes.value = resp?.nodes ?? []
+  } catch (err: unknown) {
+    logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
+    processNodes.value = []
+  }
 }
 
 async function fetchTree() {
@@ -359,6 +417,9 @@ onMounted(() => {
   void fetchTree()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
+  // #13963: its own request, so a slow or failed process fetch never delays or
+  // blanks the people graph.
+  void fetchProcessNodes()
 })
 </script>
 

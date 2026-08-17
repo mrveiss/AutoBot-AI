@@ -1173,6 +1173,24 @@ async function handleSkipStep(workflowId: string, stepId: string): Promise<void>
   }
 }
 
+/**
+ * Open a workflow named in the URL (#13963).
+ *
+ * A process node on the Company OS org canvas links here with
+ * `?workflow=<id>`. Without this the link would land on the module and ignore
+ * which workflow was clicked — a link that looks specific and is not, which is
+ * worse than no link at all.
+ *
+ * Reuses `handleViewWorkflow` rather than re-implementing the load, so the deep
+ * link and the in-app click cannot diverge in what "open a workflow" means.
+ */
+async function openWorkflowFromQuery(): Promise<void> {
+  const requested = route.query.workflow;
+  const workflowId = Array.isArray(requested) ? requested[0] : requested;
+  if (typeof workflowId !== 'string' || workflowId.length === 0) return;
+  await handleViewWorkflow(workflowId);
+}
+
 async function handleViewWorkflow(workflowId: string): Promise<void> {
   // Issue #1367: Load the selected workflow before switching to runner
   navigateTo('runner');
@@ -1227,10 +1245,13 @@ function handleNotificationConfigSaved(workflowId: string): void {
 }
 
 // Lifecycle
-onMounted(() => {
-  refreshAll();
+onMounted(async () => {
+  await refreshAll();
   loadAgentCapabilities();
   connectWebSocket(sessionId.value);
+  // After refreshAll, so activeWorkflows is populated and the requested
+  // workflow can be resolved locally instead of always re-fetching it.
+  await openWorkflowFromQuery();
 });
 
 onUnmounted(() => {
