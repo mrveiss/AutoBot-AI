@@ -174,9 +174,7 @@ class TestTheShippedTelemetryManifestNoLongerClaimsToBeAPlugin:
     def test_the_shipped_manifest_declares_kind_extension(self):
         import json
 
-        manifest_path = (
-            self._plugins_root() / "core-plugins" / "telemetry-prompt-middleware" / "plugin.json"
-        )
+        manifest_path = self._plugins_root() / "core-plugins" / "telemetry-prompt-middleware" / "plugin.json"
         if not manifest_path.is_file():
             pytest.skip("telemetry-prompt-middleware manifest not present")
         data = json.loads(manifest_path.read_text(encoding="utf-8"))

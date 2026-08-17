@@ -258,8 +258,7 @@ class PluginLoader:
                     # imported as though it might satisfy `BasePlugin`.
                     if manifest.kind != "plugin":
                         logger.debug(
-                            "Skipping non-plugin manifest %s (kind=%r) at %s — "
-                            "not this loader's territory",
+                            "Skipping non-plugin manifest %s (kind=%r) at %s — " "not this loader's territory",
                             manifest.name,
                             manifest.kind,
                             manifest_file,
