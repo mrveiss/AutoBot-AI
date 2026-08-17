@@ -46,6 +46,18 @@ docs
 # Tests
 **/tests
 **/*_test.py
+# #14127: pytest.ini's `python_files = test_*.py *_test.py` treats BOTH naming
+# conventions as tests (colocated, #734) -- this file only excluded the suffix
+# form. 58 prefix-form files (autobot-backend/agent_loop/test_loop_repetition.py
+# and 57 others) were shipping into every Docker image.
+#
+# Both rules are deliberately broad: a production module must not be named like a
+# test, so there is no allowlist here to go stale. Two modules were, and were
+# renamed rather than exempted -- code_intelligence/test_pattern_analyzer.py ->
+# testing_pattern_analyzer.py and utils/redis_immediate_test.py ->
+# redis_immediate_connection.py. `repo_tests/test_dockerignore_test_file_coverage_14127.py`
+# fails on any new one, so a rule this broad stays safe.
+**/test_*.py
 **/*.test.ts
 **/*.spec.ts
 **/cypress

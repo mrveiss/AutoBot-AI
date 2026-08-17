@@ -294,7 +294,12 @@ jobs:
         # appear as absolute paths in playbooks, units and container images.
         # Templated homes (/home/{{ ansible_user }}, /home/$USER) never match
         # the username character class and need no exemption.
-        ALLOWED_HOMES='autobot|kali|user|ubuntu|runner|vagrant|sandbox|node'
+        # autobot-vnc (#14319): VNC's own dedicated service account (real
+        # home directory, unlike the other nologin/no-home per-service
+        # accounts) — its default password-file path is a genuine SSOT
+        # default, the same category as autobot below, not a developer
+        # machine path.
+        ALLOWED_HOMES='autobot|autobot-vnc|kali|user|ubuntu|runner|vagrant|sandbox|node'
         # ALLOWED_FILES — synthetic fixtures only. The generated third-party
         # config that used to sit here was untracked instead (#13429), which is
         # the right fix: exemptions for real files become permanent.

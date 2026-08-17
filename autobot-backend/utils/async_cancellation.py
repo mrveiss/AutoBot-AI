@@ -113,7 +113,7 @@ class ResourceMonitor:
 
         # Quick Redis check
         try:
-            from utils.redis_immediate_test import redis_circuit_breaker
+            from utils.redis_immediate_connection import redis_circuit_breaker
 
             self.redis_available = not redis_circuit_breaker.is_circuit_open
         except Exception:

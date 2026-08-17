@@ -1074,17 +1074,17 @@ _real_load_and_bind(
 # new colocated test file is added for a stubbed submodule — otherwise that test
 # silently asserts against MagicMock attributes instead of real behaviour.
 #
-# NOTE: "code_intelligence.test_pattern_analyzer" is intentionally NOT in this
-# list (#12437). Stubbing it here would poison sys.modules before pytest ever
-# collects code_intelligence/test_pattern_analyzer.py itself: with
-# --import-mode=importlib, pytest's import_path() returns whatever is already
-# in sys.modules[module_name] rather than re-importing, so the real test file
-# would never execute — pytest would instead try to treat the MagicMock-backed
-# stub module as the test module, and accessing its (mocked) `pytestmark`
-# attribute raises TypeError during collection. Nothing else in the codebase
-# imports this submodule (code_intelligence/__init__.py does, but that package
-# is itself fully stubbed above and never executes its real __init__), so
-# leaving it unstubbed is safe.
+# NOTE: "code_intelligence.testing_pattern_analyzer" is intentionally NOT in this
+# list (#12437, #14127). It was named test_pattern_analyzer.py until #14127, which
+# made pytest collect the production module itself; stubbing it here would then
+# poison sys.modules before that collection (with --import-mode=importlib,
+# pytest's import_path() returns whatever is already in sys.modules[module_name]
+# rather than re-importing, and accessing the MagicMock stub's `pytestmark`
+# raises TypeError during collection). The rename ends the collection, but the
+# entry still does not belong here: nothing else in the codebase imports this
+# submodule (code_intelligence/__init__.py does, but that package is itself fully
+# stubbed above and never executes its real __init__), so leaving it unstubbed
+# keeps the stub list to modules that actually need one.
 for _ci_sub in [
     "code_intelligence.performance_analyzer",
     "code_intelligence.redis_optimizer",
