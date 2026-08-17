@@ -19,9 +19,6 @@ import re as _re
 import subprocess as _subprocess
 import sys
 
-import pytest
-import yaml as _yaml
-
 # ---------------------------------------------------------------------------
 # Bootstrap: bypass the MagicMock stubs from conftest and load the real
 # role_registry module.  Approach:
@@ -35,6 +32,9 @@ import yaml as _yaml
 import types as _types
 from pathlib import Path as _Path
 from unittest.mock import MagicMock as _MagicMock
+
+import pytest
+import yaml as _yaml
 
 _SERVICES_DIR = str(_Path(__file__).parent.parent.parent / "services")
 
