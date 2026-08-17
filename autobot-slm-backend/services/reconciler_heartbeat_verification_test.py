@@ -13,35 +13,67 @@ Review of this PR made the gap concrete: `_heartbeat_returned` rewritten as
 every node marching to `exhausted` — satisfies every structural rule, because
 both constants still appear as returns. So does a reversed comparison.
 
-These drive the real function with a stateful fake session instead. The module's
-sqlalchemy and model names are MagicMocks under the package conftest, which is
-harmless: `select(Node)` is only handed to the fake, and what is under test is
-the loop, the comparison and the timeout.
+These drive the real function with a stateful fake session instead. The module
+is loaded from disk rather than imported, because the package conftest stubs the
+`services` tree and `import services.reconciler` yields a MagicMock — which
+satisfies every structural check while being nothing at all. Its own dependencies
+stay stubbed; what is under test is the loop, the comparison and the timeout.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import inspect
 import sys
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock
 
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
-# Imported outright rather than via importorskip: a skip would take the guard
-# below with it, and "these tests never ran" would read exactly like "these
-# tests passed" — which is the failure mode this PR exists to fix, one layer up.
-import services.reconciler as reconciler  # noqa: E402
+
+def _load_real_reconciler():
+    """Load services/reconciler.py from disk, past the package conftest's stub.
+
+    `import services.reconciler` returns a MagicMock here: the conftest stubs the
+    `services` tree so `api/*` can be imported without the backend. A MagicMock
+    satisfies `hasattr`, `callable` and every attribute lookup, so the first
+    version of this file imported nothing real and only failed later, on
+    `asyncio.run(<MagicMock>)`.
+
+    The module's own dependencies (sqlalchemy, models.database, config) may stay
+    stubbed — `select(Node)` is handed straight to the fake session. What must be
+    real is this module's code.
+    """
+    name = "reconciler_under_test"
+    spec = importlib.util.spec_from_file_location(name, _SLM_ROOT / "services" / "reconciler.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def test_the_module_and_method_are_really_here():
-    """Pin what the rules below are actually bound to."""
-    assert hasattr(reconciler, "ReconcilerService")
-    assert callable(getattr(reconciler.ReconcilerService, "_heartbeat_returned", None))
+reconciler = _load_real_reconciler()
+
+
+def test_the_real_module_was_loaded_not_a_stub():
+    """Guard the guard.
+
+    `hasattr`/`callable` are true of any MagicMock, so they cannot tell a loaded
+    module from a stub — that is precisely how the earlier version passed its own
+    import check while holding a mock. A coroutine function is something a
+    MagicMock is not.
+    """
+    assert not isinstance(reconciler.ReconcilerService, MagicMock), "ReconcilerService is a stub, not the real class"
+    assert inspect.iscoroutinefunction(
+        reconciler.ReconcilerService._heartbeat_returned
+    ), "_heartbeat_returned is not a coroutine function — the module under test is not the real one"
+    assert isinstance(reconciler.REMEDIATION_HEARTBEAT_WAIT_S, int), "the module constants did not evaluate"
 
 
 class _FakeSessions:
@@ -87,9 +119,18 @@ def _patched(sessions, wait_s, poll_s):
     prev_poll = reconciler.REMEDIATION_HEARTBEAT_POLL_S
     reconciler.REMEDIATION_HEARTBEAT_WAIT_S = wait_s
     reconciler.REMEDIATION_HEARTBEAT_POLL_S = poll_s
+
+    # The query object is handed straight to the fake session, so what `select`
+    # builds is irrelevant here -- but whether it RAISES is not. Depending on
+    # which of sqlalchemy/models.database the conftest happens to stub, a real
+    # `select()` over a mock model would error before the loop under test ever
+    # runs. Stubbed so these tests turn on the polling logic and nothing else.
+    prev_select = reconciler.select
+    reconciler.select = lambda *_a, **_k: object()
     try:
         yield
     finally:
+        reconciler.select = prev_select
         reconciler.REMEDIATION_HEARTBEAT_WAIT_S = prev_wait
         reconciler.REMEDIATION_HEARTBEAT_POLL_S = prev_poll
         if created:
