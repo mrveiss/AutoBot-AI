@@ -301,9 +301,7 @@ def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
     # allow for it — comparing against {"slm", "slm_nodes"} alone is never
     # true here and the branch silently never fires.
     is_agent_only = (
-        is_slm
-        and "slm_server" not in node_groups
-        and node_groups <= ({"slm", "slm_nodes"} | _UNIVERSAL_ALL)
+        is_slm and "slm_server" not in node_groups and node_groups <= ({"slm", "slm_nodes"} | _UNIVERSAL_ALL)
     )
     if not is_slm or has_app_roles or is_agent_only:
         node_groups |= _UNIVERSAL_NON_SLM
