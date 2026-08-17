@@ -113,9 +113,7 @@ def test_a_flapping_node_still_reaches_max_attempts():
         now = datetime.now(timezone.utc)
         attempt_at = now - timedelta(seconds=_HEARTBEAT_TIMEOUT_S + 120)
         # one beat, after the attempt but already stale by the time we look
-        node = SimpleNamespace(
-            node_id=node_id, last_heartbeat=now - timedelta(seconds=_HEARTBEAT_TIMEOUT_S + 30)
-        )
+        node = SimpleNamespace(node_id=node_id, last_heartbeat=now - timedelta(seconds=_HEARTBEAT_TIMEOUT_S + 30))
         previous = tracker.get(node_id, {"count": 0})
         tracker[node_id] = {"count": previous["count"], "last_attempt": attempt_at}
 
