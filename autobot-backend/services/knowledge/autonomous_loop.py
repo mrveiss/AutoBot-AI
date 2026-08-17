@@ -39,6 +39,7 @@ from typing import Any, Deque, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_7_DAYS
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Module-level imports for patchability in tests.
@@ -342,7 +343,7 @@ class AutonomousLoopRunner:
             if redis is None:
                 return
             params_with_ts = {**params, "staged_at": now_utc().isoformat()}
-            await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params_with_ts), ex=7 * 24 * 3600)
+            await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params_with_ts), ex=TTL_7_DAYS)
         except Exception:
             logger.debug("AutonomousLoop: could not persist pending_approval to Redis (non-fatal)")
 

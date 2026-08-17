@@ -14,6 +14,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.ssot_constants import TTL_90_DAYS
 from skills.registry import get_skill_registry
 
 from .skill_metrics import SkillMetrics
@@ -159,7 +160,7 @@ class SkillHealthScheduler:
             if result.get("success"):
                 # Persist to Redis
                 redis = get_redis_client(RedisDatabase.MAIN)
-                redis.set(f"skills:enabled:{skill_id}", "false", ex=90 * 86400)
+                redis.set(f"skills:enabled:{skill_id}", "false", ex=TTL_90_DAYS)
                 return True
             return False
         except Exception as e:

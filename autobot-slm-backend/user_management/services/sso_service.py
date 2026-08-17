@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import or_, select
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_10_MINUTES
 from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
@@ -494,7 +495,7 @@ class SSOService(BaseService):
         relay_state = secrets.token_urlsafe(32)
         redis = await get_async_redis_client()
         if redis:
-            await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
+            await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=TTL_10_MINUTES)
         request_id, info = client.prepare_for_authenticate()
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
