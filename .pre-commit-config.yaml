@@ -213,20 +213,22 @@ repos:
   # AutoBot custom: regression-prevention for #6743 (chat-session TTL drift).
   # The root cause was a literal `3600` in setex() with no env-var knob.
   # This hook blocks any new literal integer/float in the TTL position of
-  # Redis calls (setex, expire, pexpire) and Cache.set(ttl=N).
+  # Redis calls (setex, psetex, expire, pexpire, expireat, pexpireat) and
+  # Cache.set(ttl=N) / redis-py's native set(ex=)/set(px=)/set(exat=)/
+  # set(pxat=)/getex(...) keyword forms.
   # Use named constants from autobot_shared.ssot_constants (TTL_1_HOUR, etc.).
   # Allowlist: autobot-backend/constants/ttl_constants.py and
   # autobot_shared/ssot_constants.py (where the constants live).
   - repo: local
     hooks:
       - id: no-literal-ttl-seconds
-        name: Ban literal TTL seconds in Redis calls (#6743 / #7080)
+        name: Ban literal TTL seconds in Redis calls (#6743 / #7080 / #14206)
         entry: pipeline-scripts/check_no_literal_ttl_seconds.py
         language: python
         files: \.py$
         exclude: ^(autobot-backend/constants/ttl_constants\.py|autobot_shared/ssot_constants.*\.py)$
         stages: [pre-commit]
-        description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/expire/pexpire/Cache.set(ttl=)"
+        description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/psetex/expire/pexpire/expireat/pexpireat/Cache.set(ttl=)/set(ex=|px=|exat=|pxat=)/getex(...)"
 
   # AutoBot custom: regression-prevention for the CLAUDE.md encoding rule (#3391
   # / #13151). Text-mode open() without encoding= falls back to the platform
@@ -333,6 +335,8 @@ repos:
         name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
         entry: tools/lint/check_git_safe_directory.py
         language: python
+        # #14196: parses the YAML instead of scanning lines, so it needs PyYAML.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml)$
         stages: [pre-commit]
         description: "Pass -c safe.directory={{ git_repo_root }} to every git -C invocation against code_source"
@@ -351,6 +355,9 @@ repos:
         name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
         entry: tools/lint/check_no_deprecated_ansible_facts.py
         language: python
+        # #14196: .yml/.yaml are parsed with PyYAML instead of scanned line by
+        # line; .j2 templates (not YAML) still use the line-based path.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml|j2)$
         stages: [pre-commit]
         description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"

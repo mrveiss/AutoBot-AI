@@ -60,11 +60,16 @@ ALLOWLIST: frozenset[str] = frozenset(
         # files and compares them. "Fixing" the OR-chains here would break that
         # check against the two files already allowlisted above.
         #
-        # NOT byte-identical, despite what this file's own header claims: the
-        # three are 411 / 101 / 100 lines with different hashes. Only the
-        # extracted fact fragment is compared. It is a real file rather than a
-        # symlink because `core.symlinks=false` materializes symlinks as plain
-        # text (#14149) -- that part of the header is correct.
+        # #14201: this file's own header used to claim it was kept
+        # byte-identical to a sibling copy -- it never was (three different
+        # files with different line counts and hashes; only the extracted
+        # fact fragment above is compared, by
+        # tests/check_role_facts_synced.py, which now also fails CI if any
+        # of the three headers makes that claim again). The header has
+        # since been corrected to describe what is actually kept in sync.
+        # It is a real file rather than a symlink because
+        # `core.symlinks=false` materializes symlinks as plain text
+        # (#14149) -- that part of the header is correct.
         #
         # `tests/check_test_inventory_group_vars.py` is NOT the enforcer: it only
         # runs `ansible-inventory --list` and asserts one key resolves. Naming it

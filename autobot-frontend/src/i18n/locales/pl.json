@@ -8296,7 +8296,9 @@
         "handoffButton": "Przekaż osobie",
         "handoffEmpty": "Brak aktywnych elementów do przekazania.",
         "handoffNotApplicableHuman": "Przekazanie dotyczy tylko agentów."
-      }
+      },
+      "processNodeLabel": "Proces",
+      "processOpensWorkflow": "Otwiera przepływ tej roli"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",

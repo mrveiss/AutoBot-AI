@@ -234,7 +234,9 @@
 - name: "SLM | Record deployed commit marker (#12202)"
   ansible.builtin.shell:
     cmd: >-
-      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }} -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
+      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+      rev-parse HEAD
       > {{ slm_backend_dir }}/.deployed_commit
   changed_when: false
   tags: ['slm', 'backend', 'deploy']

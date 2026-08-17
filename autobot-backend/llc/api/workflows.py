@@ -23,6 +23,13 @@ Every read/write in this router goes through the table — no Redis or
 in-memory fallback (#13916's consolidation rule: two implementations of one
 thing become one reused core; this router is the first of the two, not a
 third).
+
+#14271: ``workflow_id`` is unique per-company, not globally, so create's
+pre-check (``get()`` then ``create()``) is a UX nicety for the common case,
+not the enforcement — a concurrent same-company duplicate still reaches the
+DB's ``UNIQUE (company_id, workflow_id)`` constraint, which ``create()``
+translates into ``WorkflowConflictError`` (caught here as 409) rather than
+letting it surface as an unhandled 500.
 """
 
 import uuid
@@ -39,7 +46,7 @@ from llc.deps import assert_company_access
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..services.workflow import WorkflowService
+from ..services.workflow import WorkflowConflictError, WorkflowService
 
 router = APIRouter(prefix="/workflows", tags=["llc-workflows"])
 
@@ -112,15 +119,22 @@ async def create_workflow(
     existing = await _svc().get(session, company_id, body.workflow_id)
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
-    workflow = await _svc().create(
-        session,
-        company_id,
-        body.workflow_id,
-        name=body.name,
-        status=body.status,
-        definition=body.definition,
-        actor=_actor_id(_current_user),
-    )
+    try:
+        workflow = await _svc().create(
+            session,
+            company_id,
+            body.workflow_id,
+            name=body.name,
+            status=body.status,
+            definition=body.definition,
+            actor=_actor_id(_current_user),
+        )
+    except WorkflowConflictError:
+        # The pre-check above is TOCTOU under concurrency (#14271): a
+        # same-company duplicate that raced past it still hits the DB's
+        # UNIQUE(company_id, workflow_id) constraint, closing the race
+        # rather than merely narrowing it.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
     await session.commit()
     return WorkflowResponse.model_validate(workflow)
 

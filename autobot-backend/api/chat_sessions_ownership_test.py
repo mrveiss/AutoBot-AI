@@ -112,7 +112,7 @@ class TestResetRequiresOwnership:
     @pytest.mark.asyncio
     async def test_a_non_owner_cannot_reset_someone_elses_session(self):
         request = MagicMock()
-        reset = MagicMock(session_id="someone-elses-chat", clear_context=True, keep_system_prompt=True)
+        reset = MagicMock(session_id="someone-elses-chat", clear_context=True)
 
         with patch.object(chat_sessions, "validate_session_ownership", side_effect=_forbidden):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock()):
@@ -128,7 +128,7 @@ class TestResetRequiresOwnership:
         manager.save_session = AsyncMock()
         manager.clear_session = AsyncMock()
         request = MagicMock()
-        reset = MagicMock(session_id="someone-elses-chat", clear_context=True, keep_system_prompt=True)
+        reset = MagicMock(session_id="someone-elses-chat", clear_context=True)
 
         with patch.object(chat_sessions, "validate_session_ownership", side_effect=_forbidden):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=manager)):
@@ -148,7 +148,7 @@ class TestResetRequiresOwnership:
             raise HTTPException(status_code=403, detail="stop here")
 
         request = MagicMock()
-        reset = MagicMock(session_id="chat-from-the-body", clear_context=True, keep_system_prompt=True)
+        reset = MagicMock(session_id="chat-from-the-body", clear_context=True)
 
         with patch.object(chat_sessions, "validate_session_ownership", _record):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock()):
@@ -166,7 +166,7 @@ class TestResetRequiresOwnership:
         """
         checked = MagicMock(side_effect=AssertionError("must not gate a session-less reset"))
         request = MagicMock()
-        reset = MagicMock(session_id=None, clear_context=True, keep_system_prompt=True)
+        reset = MagicMock(session_id=None, clear_context=True)
 
         with patch.object(chat_sessions, "validate_session_ownership", checked):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=None)):

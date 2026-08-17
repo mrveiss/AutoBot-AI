@@ -16,13 +16,15 @@ from __future__ import annotations
 
 import uuid
 from typing import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import WorkflowStatus
-from llc.services.workflow import WorkflowService
+from llc.services.workflow import WorkflowConflictError, WorkflowService, _is_workflow_unique_conflict
 
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect, safe to reuse
@@ -220,3 +222,120 @@ async def test_every_defined_status_is_accepted(session_factory):  # noqa: ANN00
             )
             assert created.status == member.value
             await session.commit()
+
+
+# #14271: workflow_id was a GLOBAL primary key while every route/service above
+# it treats the identity as company-scoped. The two tests below pin the fix —
+# the collision case (two companies sharing a workflow_id, previously
+# impossible at the DB layer) and the race case (a same-company duplicate,
+# which must still conflict, but cleanly).
+
+
+@pytest.mark.asyncio
+async def test_two_companies_can_create_the_same_workflow_id(session_factory):  # noqa: ANN001
+    """The collision case: dropping this pin regresses to a global-unique PK.
+
+    Before #14271, the second create here raised an unhandled
+    ``sqlite3.IntegrityError`` / Postgres ``UNIQUE constraint failed:
+    workflows.workflow_id`` — company B could never create this id at all,
+    and the failure mode (500, not the route's documented 409) was itself a
+    cross-tenant presence oracle. Both companies must succeed independently.
+    """
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    service = WorkflowService()
+
+    async with session_factory() as session:
+        created_a = await service.create(session, company_a, "prod-deploy", name="A's deploy")
+        await session.commit()
+
+    async with session_factory() as session:
+        created_b = await service.create(session, company_b, "prod-deploy", name="B's deploy")
+        await session.commit()
+
+    assert created_a.workflow_id == created_b.workflow_id == "prod-deploy"
+    assert created_a.company_id == company_a
+    assert created_b.company_id == company_b
+    # Distinct rows (distinct surrogate primary keys) sharing a workflow_id —
+    # exactly what the composite UNIQUE(company_id, workflow_id) allows and a
+    # global PK on workflow_id alone forbids.
+    assert created_a.id != created_b.id
+
+    async with session_factory() as session:
+        own_a = await service.get(session, company_a, "prod-deploy")
+        own_b = await service.get(session, company_b, "prod-deploy")
+
+    assert own_a is not None and own_a.name == "A's deploy"
+    assert own_b is not None and own_b.name == "B's deploy"
+
+
+@pytest.mark.asyncio
+async def test_same_company_duplicate_workflow_id_raises_a_clean_conflict(session_factory):  # noqa: ANN001
+    """The race case: a same-company duplicate must still conflict — cleanly.
+
+    This calls ``WorkflowService.create`` directly twice (bypassing the
+    route's pre-check) so it is the DB's ``UNIQUE(company_id, workflow_id)``
+    constraint doing the rejecting, not the ``get()``-then-``create()``
+    pre-check — the TOCTOU shape a concurrent request would hit. ``create``
+    must translate that into ``WorkflowConflictError``, not let an
+    ``IntegrityError`` escape unhandled.
+    """
+    company_id = uuid.uuid4()
+    service = WorkflowService()
+
+    async with session_factory() as session:
+        await service.create(session, company_id, "wf-dup")
+        await session.commit()
+
+    async with session_factory() as session:
+        with pytest.raises(WorkflowConflictError):
+            await service.create(session, company_id, "wf-dup")
+
+    # The failed create's rollback must not have poisoned the row created
+    # before it — no data loss on the conflicting attempt.
+    async with session_factory() as session:
+        still_there = await service.get(session, company_id, "wf-dup")
+    assert still_there is not None
+
+
+# #14271 review: the IntegrityError catch in create() must be narrow — only
+# this table's own UNIQUE(company_id, workflow_id) becomes WorkflowConflictError.
+# A different constraint (a future FK/check on this table) must propagate
+# unchanged, not be relabelled as a misleading "already exists".
+
+
+class _FakeAsyncpgUniqueViolation(Exception):
+    """Stands in for asyncpg's structured exception shape (has .constraint_name)."""
+
+    def __init__(self, constraint_name: str) -> None:
+        super().__init__("duplicate key value violates unique constraint")
+        self.constraint_name = constraint_name
+
+
+def test_is_workflow_unique_conflict_matches_only_its_own_constraint():
+    own = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("uq_workflows_company_workflow"))
+    other = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("some_other_fk_constraint"))
+    assert _is_workflow_unique_conflict(own) is True
+    assert _is_workflow_unique_conflict(other) is False
+
+
+def test_is_workflow_unique_conflict_falls_back_to_sqlite_message_shape():
+    """No structured constraint_name (sqlite, used under this test suite)."""
+    sqlite_message = "UNIQUE constraint failed: workflows.company_id, workflows.workflow_id"
+    own = IntegrityError("INSERT", {}, Exception(sqlite_message))
+    other = IntegrityError("INSERT", {}, Exception("NOT NULL constraint failed: workflows.workflow_id"))
+    assert _is_workflow_unique_conflict(own) is True
+    assert _is_workflow_unique_conflict(other) is False
+
+
+@pytest.mark.asyncio
+async def test_create_reraises_a_non_uniqueness_integrity_error(session_factory):  # noqa: ANN001
+    """A constraint violation that is NOT this table's own uq_workflows_company_workflow
+    must propagate as-is — never become a misleading WorkflowConflictError."""
+    service = WorkflowService()
+    company_id = uuid.uuid4()
+    other_constraint_error = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("some_other_constraint"))
+
+    async with session_factory() as session:
+        with patch.object(session, "flush", side_effect=other_constraint_error):
+            with pytest.raises(IntegrityError):
+                await service.create(session, company_id, "wf-other-constraint")

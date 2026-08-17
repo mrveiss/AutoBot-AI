@@ -212,18 +212,32 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
 
+# #14447: the deprecated meta-package is gone and the floor matches the SSOT.
+#
+# It was frozen at 2024.6.0 and no release of it is compatible with openvino
+# 2026.x, so pip backtracked through every version of it down to 2022.3.2, each
+# pinning numpy lower, until it reached numpy==1.25.2 -- which has no cp314
+# wheel. Building that sdist under Python 3.14 died with "Cannot import
+# 'setuptools.build_meta'", an error naming the build backend and saying
+# nothing about the package that caused it.
+#
+# The loose `>=2024.0` floor is what let the resolver walk backwards at all;
+# autobot-npu-worker/requirements.txt has said `>=2026.3.0` the whole time.
+# The shared constraints are applied here too, so numpy cannot be dragged below
+# its pinned floor by any future dependency.
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
     name:
-      - openvino>=2024.0
-      - openvino-dev
+      - openvino>=2026.3.0
       - numpy
       - pillow
       - transformers
       - optimum[openvino]
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 120"
+    extra_args: >-
+      --timeout 120
+      -c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt
   become_user: "{{ npu_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

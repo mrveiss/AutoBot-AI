@@ -1,6 +1,6 @@
 # Implement a custom middleware in AutoBot to intercept and modify LLM prompts based on real-time infrastructure telemetry
 
-AutoBot's extension system exposes two hook points in the chat pipeline where a plugin can intercept the assembled prompt and inject dynamic content — for example, a concise-response hint when CPU load is high.  No core code changes are needed; write a plugin class, register it, and it fires on every chat request.
+AutoBot's extension system exposes two hook points in the chat pipeline where a **middleware** (an `Extension` subclass — see [`plugin-vs-extension-vs-skill.md`](../developer/plugin-vs-extension-vs-skill.md)) can intercept the assembled prompt and inject dynamic content — for example, a concise-response hint when CPU load is high.  No core code changes are needed; write an `Extension` subclass and register it explicitly with `ExtensionManager` — **there is no manifest-driven loader for middleware**. `HookPoint.FULL_PROMPT_READY` and `HookPoint.SYSTEM_PROMPT_READY` are dispatched exclusively by `middleware.manager.ExtensionManager`; they are not in the plugin system's `HOOK_REGISTRY`, so a `plugins/**/plugin.json` manifest can never make one of these fire (#14280).
 
 ## Hook points
 
@@ -18,8 +18,9 @@ Return a `str` from the hook method to replace the prompt; return `None` to leav
 Custom LLM prompt middleware that intercepts prompts and appends a
 concise-response hint when CPU load exceeds a configurable threshold.
 
-Place this file in plugins/my-telemetry-middleware/ and register it via
-the plugin manager.
+Place this file in autobot-backend/middleware/builtin/ and register it
+explicitly with ExtensionManager (see "Registering the middleware" below) —
+middleware has no manifest-driven discovery.
 """
 import asyncio
 import logging
@@ -44,7 +45,7 @@ class TelemetryPromptMiddleware(Extension):
     output — reducing token usage during high-load periods.
     """
 
-    name = "telemetry-prompt-middleware"
+    name = "telemetry_prompt_middleware"
     priority = 50  # run before default (100) extensions
 
     async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
@@ -122,32 +123,45 @@ class TelemetryPromptMiddleware(Extension):
         return None
 ```
 
-## Registering the plugin
+## Registering the middleware
 
-### Via `plugin.json` (recommended)
+Middleware has no manifest-driven loader — a `plugins/**/plugin.json` file is
+the **Plugin** system's contract (`autobot_shared/plugin_sdk/loader.py`,
+`kind: "plugin"`), and that loader is never consulted when
+`HookPoint.FULL_PROMPT_READY` fires. Shipping a `plugin.json` next to an
+`Extension` subclass is exactly the #14280 bug: the manifest gets discovered,
+`PluginLoader` finds no `BasePlugin` subclass in the module, logs "No plugin
+class found in module", and the middleware never runs.
 
-Create `plugins/my-telemetry-middleware/plugin.json`:
+Register the class explicitly, alongside the other built-in middleware in
+`autobot-backend/middleware/builtin/__init__.py` and
+`initialization/lifespan.py`'s `_init_builtin_extensions` (the actual
+registration point every hook call site reads from, via
+`middleware.manager.get_extension_manager()`):
 
-```json
-{
-  "name": "telemetry-prompt-middleware",
-  "version": "1.0.0",
-  "description": "Intercept LLM prompts and modify them based on real-time CPU/memory telemetry",
-  "entry_point": "plugin.TelemetryPromptMiddleware",
-  "hooks": ["on_full_prompt_ready", "on_system_prompt_ready"],
-  "enabled": true,
-  "config": {
-    "prometheus_url": "",
-    "cpu_threshold_pct": 80
-  }
-}
+```python
+# autobot-backend/middleware/builtin/__init__.py
+from middleware.builtin.telemetry_prompt_middleware import TelemetryPromptMiddleware
+
+__all__ = [..., "TelemetryPromptMiddleware"]
 ```
 
-### Via Python at startup
+```python
+# autobot-backend/initialization/lifespan.py, inside _init_builtin_extensions
+from middleware.builtin import TelemetryPromptMiddleware
+from middleware.manager import get_extension_manager
+
+manager = get_extension_manager()
+manager.register(TelemetryPromptMiddleware())
+```
+
+A one-off or third-party middleware that cannot be added to the built-in
+list can still be registered the same way from any code that runs during
+startup:
 
 ```python
 from middleware.manager import get_extension_manager
-from plugins.my_telemetry_middleware.plugin import TelemetryPromptMiddleware
+from my_module import TelemetryPromptMiddleware
 
 get_extension_manager().register(TelemetryPromptMiddleware())
 ```
@@ -195,7 +209,7 @@ def reset():
 
 @pytest.mark.asyncio
 async def test_hint_injected_when_cpu_high():
-    from plugins.my_telemetry_middleware.plugin import TelemetryPromptMiddleware
+    from middleware.builtin.telemetry_prompt_middleware import TelemetryPromptMiddleware
 
     mw = TelemetryPromptMiddleware()
     with patch.object(mw, "_fetch_cpu_percent", AsyncMock(return_value=95.0)):
@@ -207,7 +221,7 @@ async def test_hint_injected_when_cpu_high():
 
 @pytest.mark.asyncio
 async def test_no_modification_when_cpu_low():
-    from plugins.my_telemetry_middleware.plugin import TelemetryPromptMiddleware
+    from middleware.builtin.telemetry_prompt_middleware import TelemetryPromptMiddleware
 
     mw = TelemetryPromptMiddleware()
     with patch.object(mw, "_fetch_cpu_percent", AsyncMock(return_value=40.0)):
@@ -223,5 +237,5 @@ async def test_no_modification_when_cpu_low():
 - **Hook definitions** — `autobot-backend/middleware/hooks.py` (`HookPoint.SYSTEM_PROMPT_READY`, `HookPoint.FULL_PROMPT_READY`)
 - **Extension base class** — `autobot-backend/middleware/base.py`
 - **Hook call sites** — `autobot-backend/chat_workflow/llm_handler.py`
-- **Reference plugin** — `plugins/core-plugins/telemetry-prompt-middleware/plugin.py`
+- **Reference middleware** — `autobot-backend/middleware/builtin/telemetry_prompt_middleware.py` (moved from `plugins/core-plugins/telemetry-prompt-middleware/plugin.py` by #14280; that directory now holds only a `kind: "extension"` manifest for capability/config-schema documentation, excluded from `PluginLoader.discover_plugins`)
 - **Full developer guide** — `docs/developer/PROMPT_MIDDLEWARE_GUIDE.md`

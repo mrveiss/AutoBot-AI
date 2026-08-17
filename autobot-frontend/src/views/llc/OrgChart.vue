@@ -11,15 +11,21 @@ import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
+import { useRouter } from 'vue-router'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
   buildOrgCanvasGraph,
+  buildProcessCanvasNodes,
+  canvasBottom,
   flattenOrgNodes,
   orgLayoutKey,
   orgUnitRoots,
+  workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
+import type { ProcessNodeSource } from '@/composables/llc/orgCanvasGraph'
+import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
@@ -36,6 +42,7 @@ import { availableLensRoles, applyRoleLens, roleLensCounts } from '@/composables
 const logger = createLogger('OrgChart')
 const api = useApiClient()
 const { t, locale } = useI18n()
+const router = useRouter()
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -106,6 +113,11 @@ const visibleRoots = computed<OrgNode[]>(() =>
 // `node-moved` and `onCanvasNodeMoved` writes the new position here, where it
 // must survive until the drawn forest itself changes.
 const canvasNodes = ref<CanvasNode[]>([])
+// #13963: workflows the company's roles run. Kept in its own ref so a failed
+// process fetch cannot blank the people graph — an absent source must never
+// render as "this company has no org chart".
+const processNodes = ref<ProcessNodeSource[]>([])
+const processNodesLoaded = ref(false)
 
 /**
  * Explicit, shallow layout source (#13996): ids, nesting and labels — never
@@ -113,7 +125,8 @@ const canvasNodes = ref<CanvasNode[]>([])
  * the previous `watchEffect` subscribed to it, so pause/resume — the primary
  * canvas-mode action — rebuilt the graph and threw away every dragged position.
  */
-const layoutKey = computed(() => `${locale.value}\n${orgLayoutKey(visibleRoots.value)}`)
+const layoutKey = computed(() => `${locale.value}
+${orgLayoutKey(visibleRoots.value)}`)
 
 watch(
   layoutKey,
@@ -150,9 +163,25 @@ watch(statusById, (statuses) => {
 // reports zero matches instead (see `roleLens.value && lensCounts...` below).
 const roleLens = ref<string>('')
 const availableRoles = computed<string[]>(() => availableLensRoles(tree.value))
-const lensedCanvasNodes = computed<CanvasNode[]>(() =>
-  applyRoleLens(canvasNodes.value, roleLens.value || null),
+/**
+ * Process nodes, derived rather than stored in `canvasNodes` (#13963).
+ *
+ * `canvasNodes` holds dragged positions and must only change when the drawn
+ * forest changes (#13996). Merging processes into it — or adding them to
+ * `layoutKey` — rebuilt the graph when they arrived and threw away every
+ * position the user had dragged.
+ */
+const processCanvasNodes = computed<CanvasNode[]>(() =>
+  buildProcessCanvasNodes(processNodes.value, canvasBottom(canvasNodes.value)),
 )
+
+const lensedCanvasNodes = computed<CanvasNode[]>(() => [
+  ...applyRoleLens(canvasNodes.value, roleLens.value || null),
+  // Not lensed: the role lens filters *people* by role, and a process is not a
+  // person. Hiding processes when a lens is active would remove them for a
+  // reason that does not apply to them.
+  ...processCanvasNodes.value,
+])
 const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
 
 /** Everyone in the company, of all three kinds, in one list (#13938). */
@@ -207,6 +236,10 @@ async function loadPeopleSources(): Promise<void> {
 function setViewMode(mode: OrgViewMode) {
   viewMode.value = mode
   if (mode === 'people') void loadPeopleSources()
+  // #13963: process nodes only render on the canvas, so they are fetched when
+  // the canvas is opened — same principle the People list already encodes. A
+  // reader who stays in tree mode should not pay for a request they never see.
+  if (mode === 'canvas') void fetchProcessNodes()
 }
 
 /** A People-list selection opens the same drawer the tree and canvas open. */
@@ -218,6 +251,17 @@ function onPersonSelected(orgNodeId: string) {
 /** Canvas selection opens the same drawer the tree opens. */
 function onCanvasNodeSelected(nodeId: string | null) {
   if (!nodeId) return closeDrawer()
+  // #13963: a process node is the contextual entrance to the absorbed
+  // automation module — it opens the workflow it names rather than a drawer.
+  const workflowId = workflowIdFromProcessNode(nodeId)
+  if (workflowId) {
+    void router.push({
+      name: 'automation-section',
+      params: { companyId: companyId.value, section: 'runner' },
+      query: { [WORKFLOW_QUERY_KEY]: workflowId },
+    })
+    return
+  }
   const node = flattenOrgNodes(tree.value).get(nodeId)
   if (node) openDrawer(node)
 }
@@ -245,6 +289,43 @@ function resolveCompanyIdOnce(): Promise<string | null> {
     })
   }
   return pendingCompanyId
+}
+
+/**
+ * Load the workflows this company's roles run (#13963).
+ *
+ * Failures are logged and left as an empty list rather than surfaced as a page
+ * error: the org chart is still correct without the process nodes, and blocking
+ * the whole view on a secondary panel is the #14104 `peopleUnavailable`
+ * precedent in reverse.
+ */
+async function fetchProcessNodes() {
+  if (processNodesLoaded.value) return
+  try {
+    const cid = await resolveCompanyIdOnce()
+    if (!cid) {
+      processNodes.value = []
+      return
+    }
+    const resp = await api.get<{ nodes: ProcessNodeSource[] }>(
+      `/api/llc/companies/${cid}/process-nodes`,
+    )
+    // Accept only rows that actually carry the three strings a process node is
+    // made of. A response of another shape — a misrouted mock, a changed
+    // contract — would otherwise be rendered as nonsense nodes on the canvas
+    // rather than as nothing.
+    const rows = Array.isArray(resp?.nodes) ? resp.nodes : []
+    processNodes.value = rows.filter(
+      (row): row is ProcessNodeSource =>
+        typeof row?.role_id === 'string' &&
+        typeof row?.role_name === 'string' &&
+        typeof row?.workflow_id === 'string',
+    )
+    processNodesLoaded.value = true
+  } catch (err: unknown) {
+    logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
+    processNodes.value = []
+  }
 }
 
 async function fetchTree() {
