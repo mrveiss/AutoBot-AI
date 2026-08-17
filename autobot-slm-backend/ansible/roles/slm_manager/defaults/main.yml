@@ -27,6 +27,14 @@ slm_backend_service: autobot-slm-backend
 slm_backend_host: 127.0.0.1
 slm_backend_port: 8000
 
+# #14299: every OTHER component role sets its own <component>_redis_host
+# default from the global `redis_host` var (roles/backend, npu-worker,
+# slm_agent, ai-stack, tts-worker) — the SLM backend's own unit never did,
+# so REDIS_HOST/AUTOBOT_REDIS_HOST were simply never set on that process and
+# the 'main' database resolved to an empty host continuously. Same pattern,
+# same default, for consistency with the rest of the fleet.
+slm_manager_redis_host: "{{ redis_host | default('127.0.0.1') }}"
+
 # ==========================================================
 # TLS Configuration
 # ==========================================================
