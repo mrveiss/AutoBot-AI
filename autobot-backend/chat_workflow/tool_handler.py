@@ -1074,7 +1074,17 @@ async def _try_mcp_dispatch(
             )
 
     # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
-    should_execute = await _emit_before_tool_execute(tool_name, arguments, session_id)
+    # Issue #14420: forward the tool's declared permission requirement
+    # (#13228 stage 1, resolved onto the registry entry as
+    # `required_permission`) and the caller's RBAC role so
+    # PermissionEnforcementExtension has something real to decide against.
+    should_execute = await _emit_before_tool_execute(
+        tool_name,
+        arguments,
+        session_id,
+        tool_permission=tool.get("required_permission"),
+        user_role=role,
+    )
     if not should_execute:
         logger.info(
             "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",

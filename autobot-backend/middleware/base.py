@@ -150,6 +150,12 @@ class Extension:
     description: str = ""
     priority: int = 100
     enabled: bool = True
+    # Issue #14420: when True, an *unexpected* error raised while this
+    # extension's hook method runs is treated as a denial (`False`), never
+    # swallowed to `None` (which callers read as "allow"). Extensions whose
+    # job is to decide permission must fail closed; everything else keeps
+    # the default swallow-and-continue behaviour below.
+    fail_closed: bool = False
 
     @property
     def manifest(self) -> "ExtensionManifest":
@@ -188,6 +194,21 @@ class Extension:
         if method and callable(method):
             try:
                 return await method(context)
+            except PermissionError as e:
+                # Issue #14420: a deliberate denial, raised by an extension
+                # deciding whether an operation may proceed (e.g.
+                # PermissionEnforcementExtension). This must reach the caller
+                # as an explicit `False`, never be flattened to `None` -
+                # `None` reads as "no opinion", which callers such as
+                # `not any(result is False for result in results)` treat as
+                # allow.
+                logger.warning(
+                    "[Issue #658] Extension %s denied %s: %s",
+                    self.name,
+                    hook.name,
+                    str(e),
+                )
+                return False
             except Exception as e:
                 logger.error(
                     "[Issue #658] Extension %s error on %s: %s",
@@ -195,6 +216,12 @@ class Extension:
                     hook.name,
                     str(e),
                 )
+                if self.fail_closed:
+                    # Issue #14420: an extension that fails closed must not
+                    # have an *unexpected* error read as allow either - that
+                    # is the same permissive outcome PermissionError avoids
+                    # above, reached a different way.
+                    return False
                 # Don't re-raise - extension errors shouldn't crash the system
                 return None
 
