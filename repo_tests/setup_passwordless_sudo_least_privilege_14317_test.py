@@ -18,6 +18,16 @@ it reaches the sudoers content -- `visudo -c` checks grammar only, so a
 multi-line value would otherwise inject a second, unrelated rule and still
 pass validation.
 
+Round 3: the wrapper's subcommand NAMES were fixed ("backend", "frontend",
+...), but the PORT NUMBER each name resolved to still came from the calling
+account's own environment (AUTOBOT_BACKEND_PORT). `AUTOBOT_BACKEND_PORT=22
+sudo autobot-cleanup-port kill-port backend` would have killed whatever
+listens on 22 -- finding 1 by another route, gated only by sudo's
+(unstated, if correct) env_reset default. Ports are now hardcoded literals
+in the wrapper, and the sudoers file states env_reset/secure_path
+explicitly for this exact command instead of relying on the inherited
+system default.
+
 Static only: the script itself calls `sudo install`/`sudo visudo`, so it is
 never executed here (or anywhere in this suite) -- it modifies real sudoers
 state and installs a root-owned binary. These tests parse its source text
@@ -93,6 +103,48 @@ def _wrapper_accepted_invocations() -> set[str]:
     accepted |= {f"diagnose-port {p}" for p in port_names}
     accepted.add("kill-uvicorn")
     return accepted
+
+
+def _port_mapping() -> dict[str, str]:
+    """Parse port_for()'s case arms into {port_name: resolved_value}."""
+    text = _wrapper_text()
+    match = re.search(r"port_for\(\) \{\n(.*?)\n\}\n", text, re.DOTALL)
+    assert match, "port_for() function not found in the wrapper"
+    body = match.group(1)
+    return dict(re.findall(r'(backend|frontend|backend-tls)\)\s+echo "([^"]+)"', body))
+
+
+def test_ports_are_compile_time_literals_not_environment_reads():
+    """PR #14412 review round 3: a fixed subcommand NAME is not enough if the
+    VALUE it resolves to still comes from the caller's environment. Every
+    resolved value must be a bare digit literal -- no `$`, no expansion, no
+    reference to anything a caller could set before invoking sudo."""
+    mapping = _port_mapping()
+    assert mapping == {"backend": "8001", "frontend": "5173", "backend-tls": "8443"}
+    for name, value in mapping.items():
+        assert value.isdigit(), f"port_for({name!r}) must resolve to a literal, not an expression: {value!r}"
+
+
+def test_wrapper_never_reads_port_environment_variables():
+    """The regression this guards: reintroducing an env-var read for any of
+    these names silently reopens finding 1 by another route."""
+    text = _wrapper_text()
+    for env_var in ("AUTOBOT_BACKEND_PORT", "AUTOBOT_FRONTEND_PORT", "AUTOBOT_BACKEND_TLS_PORT"):
+        assert env_var not in text, (
+            f"{env_var} must not appear in the wrapper -- the calling account's "
+            "environment must never influence which port root acts on"
+        )
+
+
+def test_sudoers_states_env_reset_and_secure_path_for_the_wrapper():
+    """Belt and braces (#14412 review round 3): even with round 3's fix, the
+    file that grants the privilege should say so explicitly rather than
+    depend on an unwritten system default. The heredoc is unquoted, so the
+    SOURCE literally spells ${WRAPPER_DEST} -- the same placeholder shape
+    _RULE_RE matches elsewhere in this file -- not the expanded path."""
+    content = _sudoers_content()
+    assert "Defaults!${WRAPPER_DEST} env_reset" in content
+    assert re.search(r'Defaults!\$\{WRAPPER_DEST\} secure_path="[^"]+"', content)
 
 
 def test_grants_exactly_the_wrapper_allowlist():

@@ -18,23 +18,39 @@
 # is refused with a non-zero exit.
 #
 # Deployed to /opt/autobot/bin/autobot-cleanup-port (root:root 0755) by
-# setup_passwordless_sudo.sh.
+# setup_passwordless_sudo.sh, which also writes an `env_reset`/`secure_path`
+# Defaults line scoped to this exact path (PR #14412 review round 3) --
+# belt and braces alongside the two fixes below, so a future change that
+# adds an env-read here still lands on a safe default.
 
 set -euo pipefail
 
-# Ports this wrapper will touch. Overridable via env var, matching the rest
-# of the platform's shell tooling (e.g. scripts/service-auth/
-# validate-service-auth.sh) and the SSOT defaults in .env.example
-# (AUTOBOT_BACKEND_PORT, AUTOBOT_FRONTEND_PORT, AUTOBOT_BACKEND_TLS_PORT) --
-# NOT because this script trusts a caller-supplied port number: only the
-# three fixed names below (backend/frontend/backend-tls) are ever accepted
-# as a subcommand argument, never a raw port from argv.
-AUTOBOT_BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
-AUTOBOT_FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
-AUTOBOT_BACKEND_TLS_PORT="${AUTOBOT_BACKEND_TLS_PORT:-8443}"
+# PR #14412 review round 3: this used to resolve each port from a same-
+# shaped environment variable ("only the three fixed NAMES are ever
+# accepted as a subcommand argument" -- true, but incomplete: the VALUE
+# each name resolved to was still whatever the calling (unprivileged)
+# account's own environment said before it ran `sudo`). Setting that
+# variable ahead of the call would have killed whatever listened on an
+# attacker-chosen port instead -- finding 1 by another route. There is no
+# root-owned SSOT env file guaranteed to exist at the point either caller
+# (run_agent.sh, a local dev-machine script never deployed by Ansible;
+# deploy_hybrid.sh, a hybrid local-deployment script) invokes this wrapper
+# -- roles/backend's own deployed .env (backend.env.j2) is owned by
+# backend_user, which defaults to the SAME 'autobot' account this wrapper
+# does not trust, so reading THAT would not close the hole either. Each
+# port below is now a bare digit literal, matching the SSOT defaults in
+# autobot_shared/network_constants.py (BACKEND_PORT, FRONTEND_PORT) and
+# autobot_shared/ssot_config.py (backend_tls_port) -- nothing the calling
+# account sets in its own environment can change which port root acts on.
 
 # The one process pattern run_agent.sh's pkill call ever used.
 readonly UVICORN_PATTERN="uvicorn main:app"
+
+# Absolute paths, not bareword lookups via $PATH -- belt and braces on top
+# of the `secure_path` Defaults line setup_passwordless_sudo.sh writes for
+# this command; bash's own `kill` builtin never consults $PATH at all.
+readonly LSOF=/usr/bin/lsof
+readonly PKILL=/usr/bin/pkill
 
 usage() {
     echo "Usage: $0 kill-port {backend|frontend|backend-tls}" >&2
@@ -55,9 +71,9 @@ require_valid_port_name() {
 
 port_for() {
     case "$1" in
-        backend)     echo "${AUTOBOT_BACKEND_PORT}" ;;
-        frontend)    echo "${AUTOBOT_FRONTEND_PORT}" ;;
-        backend-tls) echo "${AUTOBOT_BACKEND_TLS_PORT}" ;;
+        backend)     echo "8001" ;;
+        frontend)    echo "5173" ;;
+        backend-tls) echo "8443" ;;
     esac
 }
 
@@ -70,7 +86,7 @@ case "$1" in
         port="$(port_for "$2")"
         # Scoped to the single resolved port, LISTEN sockets only -- never a
         # bare `lsof` enumerating every process's FDs on the host.
-        pids="$(lsof -t -i ":${port}" -sTCP:LISTEN 2>/dev/null || true)"
+        pids="$("${LSOF}" -t -i ":${port}" -sTCP:LISTEN 2>/dev/null || true)"
         if [ -n "${pids}" ]; then
             # shellcheck disable=SC2086  # $pids is a whitespace-separated PID list
             kill -9 ${pids}
@@ -81,11 +97,11 @@ case "$1" in
         require_valid_port_name "$2"
         port="$(port_for "$2")"
         # Read-only; matches ansible/fix-backend-deadlock.sh's SYN_SENT check.
-        lsof -i ":${port}" -n 2>/dev/null || true
+        "${LSOF}" -i ":${port}" -n 2>/dev/null || true
         ;;
     kill-uvicorn)
         [ "$#" -eq 1 ] || usage
-        pkill -f "${UVICORN_PATTERN}" 2>/dev/null || true
+        "${PKILL}" -f "${UVICORN_PATTERN}" 2>/dev/null || true
         ;;
     *)
         usage
