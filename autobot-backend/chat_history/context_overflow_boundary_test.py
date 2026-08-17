@@ -9,9 +9,14 @@ Three properties, each of which used to be absent:
 1. The cut lands on a turn boundary. ``len(messages) // 2`` is a raw index and
    can fall between an assistant message carrying ``tool_calls`` and its
    ``role="tool"`` responses, orphaning them in the kept half.
-2. User messages cross the boundary **verbatim**. They used to survive only if
-   the summarizing model chose to include them, and a long session re-summarizes
-   the same content repeatedly — each pass another chance to drop it.
+2. User messages cross the boundary **verbatim**, within the round that
+   summarizes them. They used to survive only if the summarizing model chose to
+   include them. Scope, corrected by #14322: this does NOT compound across
+   repeated compactions — once an earlier round's own composed summary is
+   itself swept into a *later* summarization window, its embedded verbatim
+   block is prose to that call, not a re-protected structure. Re-parsing a
+   prior summary's markdown to recover it would reintroduce the exact
+   "prose, not guarantee" failure this deterministic path exists to avoid.
 3. A deterministic state block crosses alongside the model's summary, so a bad
    summarization turn cannot take the file paths and exit statuses with it.
 """
@@ -20,6 +25,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import chat_history.context_overflow as context_overflow_module
 from chat_history.context_overflow import (
     _TOOL_RESULT_CLIP_CHARS,
     ContextOverflowProtection,
@@ -280,7 +286,26 @@ class TestTheComposedSummaryCarriesAllThree:
         assert "never touch the prod database" in composed
 
     @pytest.mark.asyncio
-    async def test_two_successive_compactions_do_not_erode_the_instruction(self):
+    async def test_a_prior_rounds_summary_is_not_silently_re_protected_as_a_user_turn(self):
+        """#14322: the multi-round guarantee is scoped to raw user turns, not to
+        a previously-injected summary artifact re-entering a later window.
+
+        The original version of this test fed round 1's composed summary back
+        as ``{"role": "user", "content": first}`` — a shape production never
+        writes. Under that fake role, ``_preserved_user_messages`` mistook the
+        entire round-1 summary blob for a user instruction and re-protected it
+        wholesale, passing for the wrong reason.
+
+        Production injects a round's summary via
+        ``overflow_integration.create_summary_message``, as ``{"sender":
+        "system", "messageType": "context_summary", "text": ...}``. ``_role_of``
+        reads ``role or sender``, so that artifact's role is ``"system"`` —
+        excluded from ``_preserved_user_messages``, which rescues only
+        ``role == "user"``. This test drives the real shape and pins the
+        CURRENT, documented scope: verbatim protection holds for the round that
+        summarizes a user turn directly; it does not compound when that turn is
+        only reachable through an earlier round's own summary.
+        """
         history = [
             {"role": "user", "content": "never touch the prod database"},
             {"role": "assistant", "content": "understood"},
@@ -288,10 +313,23 @@ class TestTheComposedSummaryCarriesAllThree:
             {"role": "assistant", "content": "added"},
         ]
         first = await self._compact(history)
-        # The composed summary becomes a message in the next round's history.
-        second_round = [{"role": "user", "content": first}] + history
+        assert "never touch the prod database" in first, "single-round guarantee must still hold"
+
+        # The shape overflow_integration.create_summary_message actually
+        # writes — not a bare chat turn.
+        injected_summary = {
+            "sender": "system",
+            "text": first,
+            "messageType": "context_summary",
+        }
+        second_round = [injected_summary] + history
         second = await self._compact(second_round)
-        assert "never touch the prod database" in second
+
+        assert "never touch the prod database" not in second, (
+            "a prior summary's verbatim block was re-protected without a real "
+            "cross-round mechanism — update this test if #14322's follow-up "
+            "adds one, don't just relax the assertion"
+        )
 
     @pytest.mark.asyncio
     async def test_an_empty_history_still_returns_empty(self):
@@ -341,6 +379,57 @@ class TestTheComposedSummaryCarriesAllThree:
                 assert in_batch, f"compaction left an orphaned tool message in the kept half: {kept!r}"
                 continue
             in_batch = msg["role"] == "assistant" and bool(msg.get("tool_calls"))
+
+
+class TestCompositionRunsBeforeTheReset:
+    """#14322: the composed summary must be built from the pre-reset state.
+
+    ``_create_summary`` computes ``retained_tokens`` before ``reset_session``
+    with a comment citing #14065: the tracker must not reset while the history
+    it claims to have compressed is still uncompressed. ``_compose_summary``
+    reads that same pre-reset ``messages_to_summarize`` list, so it belongs on
+    the same side of the reset — the fix moves it there.
+
+    ``_compose_summary`` cannot raise today: every helper behind it
+    (``_extract_state``, ``_render_state_block``, ``_preserved_user_messages``)
+    is isinstance-guarded and falls back on an unexpected shape. So an ordering
+    regression would NOT show up as a different composed string under the
+    mocked summarizer used elsewhere in this file — it has to be caught by
+    observing the actual call order through the real ``_create_summary`` path,
+    which is what this test does. It does not call ``_compose_summary``
+    directly with an invented shape.
+    """
+
+    @pytest.mark.asyncio
+    async def test_compose_summary_is_called_before_reset_session(self, monkeypatch):
+        call_order: list = []
+
+        protection = ContextOverflowProtection()
+        protection.summarizer.summarize_messages = AsyncMock(return_value="S")
+        protection.tracker.reset_session = AsyncMock(side_effect=lambda session_id: call_order.append("reset"))
+        protection.tracker.add_message_tokens = AsyncMock()
+
+        real_compose_summary = context_overflow_module._compose_summary
+
+        def recording_compose_summary(summary, summarized):
+            call_order.append("compose")
+            return real_compose_summary(summary, summarized)
+
+        monkeypatch.setattr(context_overflow_module, "_compose_summary", recording_compose_summary)
+
+        history = [
+            {"role": "user", "content": "never touch the prod database"},
+            {"role": "assistant", "content": "understood"},
+            {"role": "user", "content": "add the endpoint"},
+            {"role": "assistant", "content": "added"},
+        ]
+        summary_text = await protection._create_summary("session-1", history, "gpt-4")
+
+        assert call_order == ["compose", "reset"], f"expected compose before reset, got {call_order}"
+        # The returned summary must be the one composed pre-reset, not a stale
+        # or empty value picked up after — this is the observable outcome an
+        # operator actually sees.
+        assert "never touch the prod database" in summary_text
 
 
 class TestCompactedViewIsSmallerThanWhatItReplaced:
