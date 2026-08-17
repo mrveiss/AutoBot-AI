@@ -47,9 +47,18 @@ _BLOCK_BCRYPT_JWT = textwrap.dedent("""
     """)
 
 
-def _run_in_subprocess(body: str) -> subprocess.CompletedProcess:
-    """Execute ``body`` in a fresh interpreter with bcrypt/jwt import-blocked."""
-    script = _BLOCK_BCRYPT_JWT + "\n" + textwrap.dedent(body)
+def _run_in_subprocess(body: str, *, block_bcrypt_jwt: bool = True) -> subprocess.CompletedProcess:
+    """Execute ``body`` in a fresh interpreter.
+
+    ``block_bcrypt_jwt`` installs the import-blocking finder. It must be
+    **False** for any body that touches a jwt_core-backed re-export: those
+    names legitimately need bcrypt, so blocking it there asserts the opposite
+    of the guarantee — that the lazy path fails — and the test fails against
+    correct code. Only the imports that must stay independent of jwt_core are
+    run with the block on.
+    """
+    prelude = _BLOCK_BCRYPT_JWT + "\n" if block_bcrypt_jwt else "import sys\n"
+    script = prelude + textwrap.dedent(body)
     return subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
@@ -121,7 +130,7 @@ def test_package_level_reexports_still_work_for_every_public_name():
         ):
             assert value is not None
         print("OK")
-        """)
+        """, block_bcrypt_jwt=False)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
 
@@ -132,25 +141,14 @@ def test_package_level_jwt_reexport_still_works_when_jwt_core_is_allowed():
     Unlike the tests above, this one does NOT block bcrypt/jwt — a caller that
     actually wants a jwt_core symbol must still get it lazily.
     """
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            textwrap.dedent("""
-                from autobot_shared.auth import decode_jwt, encode_jwt, hash_password, verify_password
+    result = _run_in_subprocess("""
+        from autobot_shared.auth import decode_jwt, encode_jwt, hash_password, verify_password
 
-                for value in (decode_jwt, encode_jwt, hash_password, verify_password):
-                    assert callable(value)
+        for value in (decode_jwt, encode_jwt, hash_password, verify_password):
+            assert callable(value)
 
-                import sys
-                assert "autobot_shared.auth.jwt_core" in sys.modules
-                print("OK")
-                """),
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(_ROOT),
-        env=_ENV,
-    )
+        assert "autobot_shared.auth.jwt_core" in sys.modules
+        print("OK")
+        """, block_bcrypt_jwt=False)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip() == "OK"
