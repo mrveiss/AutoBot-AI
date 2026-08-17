@@ -407,6 +407,12 @@ jobs:
              -name "*.py" -print0 \
           | xargs -0 python3 tools/lint/check_extension_import_boundaries.py
 
+    - name: Audit the extension-import baseline for drift (#14329)
+      run: |
+        # Fails on grandfathered entries whose import no longer exists. A dormant
+        # exemption naming a moved file exempts nothing and hides that it does.
+        python3 tools/lint/check_extension_import_boundaries.py --audit-baseline
+
     - name: Code quality summary
       if: always()
       run: |
