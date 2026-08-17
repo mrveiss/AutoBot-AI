@@ -20,6 +20,7 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
 from config import settings
@@ -60,6 +61,18 @@ MANIFEST_HEALTH_INTERVAL = 60
 CERT_EXPIRY_CHECK_INTERVAL = 86_400
 # Cooldown between remediation attempts (seconds)
 REMEDIATION_COOLDOWN = 300  # 5 minutes
+
+# #14344: how long to wait for a heartbeat after restarting the agent before
+# calling the remediation a failure. Remediation exists to restore the
+# heartbeat, so the heartbeat is what "success" has to mean — the restart
+# exiting 0 only says the command ran. Env-backed rather than hardcoded: the
+# right window depends on the agent's own heartbeat interval on that fleet.
+# min_v=1, not 0: a 0 window makes the poll body unreachable, so every
+# remediation would report failure and march healthy nodes to `exhausted`.
+REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S", 90, min_v=1)
+# Clamped, not bare: env_int accepts 0 and negatives, and a 0 here turns the
+# verification poll into a tight open/close-session loop for the whole window.
+REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 # Service remediation cooldown (shorter than node remediation)
@@ -365,10 +378,18 @@ class ReconcilerService:
         db.add(event)
         await db.commit()
 
-    async def _record_remediation_result(self, db: AsyncSession, node: Node, success: bool, tracker: dict) -> None:
+    async def _record_remediation_result(
+        self, db: AsyncSession, node: Node, success: bool, tracker: dict, restarted: bool = True
+    ) -> None:
         """Create completion event and broadcast for remediation result.
 
         Helper for _remediate_node (Issue #665).
+
+        #14344: failure now has two distinct causes and they call for different
+        responses. ``restarted=False`` is an unreachable or broken node. A
+        successful restart with no heartbeat is an agent that runs but is
+        rejected -- the #14350 signature -- and telling an operator the restart
+        "failed" would send them to look at the wrong layer entirely.
         """
         node_id = node.node_id
 
@@ -378,35 +399,45 @@ class ReconcilerService:
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
-                message=f"Restart command executed for SLM agent on {node.hostname}; awaiting heartbeat",
-                details={"action": "restart_agent", "success": True},
+                message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
+                details={"action": "restart_agent", "success": True, "verified_by": "heartbeat"},
             )
-            logger.info("Remediation restart executed for node %s; awaiting heartbeat", node_id)
+            logger.info("Remediation verified for node %s - heartbeat resumed", node_id)
             await self._broadcast_remediation_event(
                 node_id,
                 "completed",
                 success=True,
-                message=f"Restart command executed for SLM agent on {node.hostname}; awaiting heartbeat",
+                message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
             )
         else:
+            # One message for the event, the log and the UI. Built once so the
+            # three cannot drift: the broadcast previously kept saying "failed
+            # to restart" after the event learned to distinguish the stages.
+            stage = "restart" if not restarted else "heartbeat"
+            failure_message = (
+                f"Failed to restart SLM agent on {node.hostname}"
+                if not restarted
+                else f"SLM agent on {node.hostname} restarted but did not resume heartbeating"
+            )
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
-                message=f"Failed to restart SLM agent on {node.hostname}",
+                message=failure_message,
                 details={
                     "action": "restart_agent",
                     "success": False,
+                    "failed_at": stage,
                     "attempts_remaining": MAX_REMEDIATION_ATTEMPTS - tracker["count"] - 1,
                 },
             )
-            logger.warning("Remediation failed for node %s", node_id)
+            logger.warning("Remediation failed for node %s at the %s stage", node_id, stage)
             await self._broadcast_remediation_event(
                 node_id,
                 "completed",
                 success=False,
-                message=f"Failed to restart SLM agent on {node.hostname}",
+                message=failure_message,
             )
 
         db.add(event)
@@ -419,6 +450,19 @@ class ReconcilerService:
         """
         node_id = node.node_id
         now = datetime.now(timezone.utc)
+
+        # #14344 review: verification makes `exhausted` reachable for the first
+        # time -- before this change a restart's exit code always reset the
+        # counter, so a node effectively never ran out of attempts. That turns a
+        # dormant gap into a live trap: nothing clears the tracker when a node
+        # recovers outside remediation (an operator fixes the auth problem and
+        # the agent starts heartbeating again), so an exhausted node would be
+        # refused remediation for the life of the process on every future
+        # degradation, until someone called the manual reset endpoint.
+        #
+        # A heartbeat newer than our last attempt IS the recovery signal, and it
+        # is already on the row we were handed.
+        self._clear_tracker_if_recovered(node)
 
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
@@ -459,10 +503,18 @@ class ReconcilerService:
 
         # Try to restart the SLM agent via Ansible (#1814: prefer ansible_name)
         ansible_target = node.ansible_target
-        success = await self._restart_service_via_ansible(
+        restarted = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
         )
+
+        # #14344: the restart exiting 0 is not remediation. A node whose agent
+        # starts cleanly but cannot authenticate (#14350) restarts forever,
+        # reports success every time, and — because success RESETS the attempt
+        # counter below — never reaches MAX_REMEDIATION_ATTEMPTS and never
+        # escalates. Observed live: ten consecutive "Remediation successful"
+        # over fifty minutes, with the node never heartbeating once.
+        success = restarted and await self._heartbeat_returned(node, now)
 
         # Update tracker (reset on success, increment on failure)
         self._remediation_tracker[node_id] = {
@@ -471,8 +523,42 @@ class ReconcilerService:
         }
 
         # Record result and broadcast
-        await self._record_remediation_result(db, node, success, tracker)
+        await self._record_remediation_result(db, node, success, tracker, restarted=restarted)
         return True
+
+    async def _heartbeat_returned(self, node: Node, restarted_at: datetime) -> bool:
+        """Did a heartbeat arrive after the restart, within the wait window?
+
+        This is what remediation is for, so this is what its success means
+        (#14344). Polls the node row rather than trusting the restart's exit
+        code, because an agent can start perfectly and still be rejected.
+
+        Returns False on timeout, which lets the attempt counter advance toward
+        escalation instead of resetting.
+        """
+        from services.database import db_service
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + REMEDIATION_HEARTBEAT_WAIT_S
+        while True:
+            # Check first, sleep second: an agent that comes back immediately
+            # should not cost a full poll interval of reconciler time.
+            async with db_service.session() as check_db:
+                result = await check_db.execute(select(Node).where(Node.node_id == node.node_id))
+                fresh = result.scalar_one_or_none()
+            beat = getattr(fresh, "last_heartbeat", None)
+            if beat is not None and beat > restarted_at:
+                return True
+            if loop.time() >= deadline:
+                break
+            await asyncio.sleep(REMEDIATION_HEARTBEAT_POLL_S)
+        logger.warning(
+            "Remediation: agent on %s restarted but sent no heartbeat within %ss — "
+            "not counting this as success (#14344)",
+            node.node_id,
+            REMEDIATION_HEARTBEAT_WAIT_S,
+        )
+        return False
 
     async def _restart_service_via_ansible(
         self,
@@ -512,6 +598,27 @@ class ReconcilerService:
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
             return False
+
+    def _clear_tracker_if_recovered(self, node: Node) -> None:
+        """Forget past attempts once the node has heartbeated since the last one.
+
+        Guards against a node being permanently locked out of remediation after
+        recovering by some route the reconciler never observes (#14344 review).
+        """
+        tracker = self._remediation_tracker.get(node.node_id)
+        if not tracker:
+            return
+
+        last_attempt = tracker.get("last_attempt")
+        beat = node.last_heartbeat
+        if last_attempt is None or beat is None or beat <= last_attempt:
+            return
+
+        del self._remediation_tracker[node.node_id]
+        logger.info(
+            "Node %s heartbeated after its last remediation attempt - clearing attempt history",
+            node.node_id,
+        )
 
     def reset_remediation_tracker(self, node_id: str) -> None:
         """Reset remediation tracker for a node (e.g., after manual intervention)."""

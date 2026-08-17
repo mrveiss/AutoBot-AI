@@ -621,11 +621,23 @@ app.add_middleware(ApiRequestCounterMiddleware)
 #   performance_metrics_router — prometheus scrape surface; a scraper cannot
 #       authenticate, so the gate returned 401 on every scrape (#14339)
 #
+# Two routes below are declared here rather than moved into a router, because
+# the idiom itself — not the auth outcome — is what has to be visible:
+#   root (@app.get("/")) — service banner; no credentials exist yet to check,
+#       and it discloses only a static name/version string
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
+#       scrape target (#10851); a scraper cannot authenticate, same reasoning
+#       as performance_metrics_router above
+#
 # This list is enforced, not decorative: tests/api/
 # test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
 # mounted without the gate and is not named here. It had already gone stale
 # once, which is how a public surface stops being visible in the one place the
-# file keeps that inventory.
+# file keeps that inventory. The same check now also covers routes added
+# directly with `@app.<verb>(...)` or `app.add_api_route(...)` instead of a
+# router (#14363), and resolves a simple module-level alias of `app` before
+# deciding what a mount's receiver is (#14366) — both used to slip past
+# entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
 # Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
