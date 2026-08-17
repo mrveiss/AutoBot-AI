@@ -333,6 +333,8 @@ repos:
         name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
         entry: tools/lint/check_git_safe_directory.py
         language: python
+        # #14196: parses the YAML instead of scanning lines, so it needs PyYAML.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml)$
         stages: [pre-commit]
         description: "Pass -c safe.directory={{ git_repo_root }} to every git -C invocation against code_source"
@@ -351,6 +353,9 @@ repos:
         name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
         entry: tools/lint/check_no_deprecated_ansible_facts.py
         language: python
+        # #14196: .yml/.yaml are parsed with PyYAML instead of scanned line by
+        # line; .j2 templates (not YAML) still use the line-based path.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml|j2)$
         stages: [pre-commit]
         description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"
