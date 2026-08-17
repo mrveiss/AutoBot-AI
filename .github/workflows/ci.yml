@@ -68,21 +68,23 @@ jobs:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      python: ${{ steps.filter.outputs.python }}
+      python: ${{ steps.filter-python.outputs.python }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v7
+      # #14353: the Python set moved to a shared file so the shim in
+      # python-required-context.yml evaluates the identical patterns. The two
+      # `if:` conditions are exact complements; a second inline copy here could
+      # drift, and the direction that matters is silent — the shim reporting the
+      # required context green while the real suite never ran.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter-python
+        with:
+          filters: .github/filters/python-paths.yml
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
-            python:
-              - '**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'pyproject.toml'
-              - 'autobot_shared/pyproject.toml'
-              - '.github/workflows/ci.yml'
             frontend:
               - 'autobot-frontend/**'
               - '.github/workflows/ci.yml'
