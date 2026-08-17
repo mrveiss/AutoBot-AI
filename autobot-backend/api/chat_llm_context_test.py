@@ -19,11 +19,15 @@ function rather than exercise its mapping. So these tests build their records
 with the **real writer** and call the **real function**.
 """
 
+import asyncio
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.chat import _build_llm_context, _generate_ai_stack_chat_response, _to_persisted_message
+from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES, _create_broadcast_event_handler
+from chat_history.messages import MessagesMixin
 
 
 def _persisted(role: str, content: str) -> dict:
@@ -185,3 +189,108 @@ class TestTheIncomingTurnAndLimit:
         context = _build_llm_context(history, _incoming(), _manager(), None)
 
         assert {"role": "user", "content": "real"} in context
+
+
+class _RecordingHistory(MessagesMixin):
+    """Real add_message/get_session_messages pair over an in-memory store —
+    used here to produce a *real* #14342-routed record, not a hand-built dict
+    already shaped like the check below."""
+
+    def __init__(self) -> None:
+        self.history: List[Dict[str, Any]] = []
+        self.sessions: Dict[str, List[Dict[str, Any]]] = {}
+
+    async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
+        return list(self.sessions.get(session_id, []))
+
+    async def save_session(self, session_id: str, messages: List[Dict[str, Any]], **_: Any) -> bool:
+        self.sessions[session_id] = list(messages)
+        return True
+
+
+class _FakeWebSocket:
+    async def send_json(self, data: dict) -> None:
+        pass
+
+
+class TestWebsocketTelemetryPinnedDecision:
+    """#14342 review follow-up: #14342 fixed *where* websocket-broadcast UI
+    telemetry is stored (its own session, not a bucket no reader touched).
+    That alone would have made it newly reachable from `_build_llm_context`
+    as a conversational turn. The decision, pinned here: it does not enter
+    `llm_context` — it is UI telemetry, not something the user or the
+    assistant said.
+
+    Built through the real #14342 producer (`broadcast_event`, the callback
+    `events/bus.py` invokes) into a real session store, not a hand-fed dict
+    already carrying the key the filter checks — the same trap that let
+    #14340/#14341 hide.
+    """
+
+    def test_a_real_tool_output_event_does_not_enter_llm_context(self):
+        manager = _RecordingHistory()
+
+        async def seed_and_read() -> list:
+            broadcast_event = await _create_broadcast_event_handler(_FakeWebSocket(), manager)
+            await broadcast_event(
+                {"type": "tool_output", "payload": {"output": "rm -rf leftover", "session_id": "s-1"}}
+            )
+            await manager.add_message(sender="user", text="clean up the workspace", session_id="s-1")
+            return await manager.get_session_messages("s-1", limit=500)
+
+        chat_context = asyncio.run(seed_and_read())
+        assert len(chat_context) == 2, "precondition: both records really did land in the session"
+
+        context = _build_llm_context(chat_context, _incoming("what did you just do?"), _manager(), None)
+
+        assert not any("rm -rf leftover" in m["content"] for m in context)
+        assert any(m["content"] == "clean up the workspace" for m in context)
+
+    def test_the_full_dispatch_table_is_covered_minus_the_two_real_turns(self):
+        """Precondition on the constant itself: guards against the allowlist
+        silently shrinking to nothing (or growing to swallow real turns) as
+        MESSAGE_TYPE_FORMATTERS changes."""
+        from api.websockets import MESSAGE_TYPE_FORMATTERS
+
+        assert NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES == set(MESSAGE_TYPE_FORMATTERS) - {
+            "user_message",
+            "llm_response",
+        }
+        assert "tool_output" in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+        assert "workflow_failed" in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+        assert "user_message" not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+
+    def test_telemetry_does_not_evict_real_dialogue_from_the_window(self):
+        """Window-displacement case: a burst of telemetry between two real
+        turns must not push the earlier real turn out of a count-bounded
+        window — filtering has to happen before the slice, not after."""
+        history = (
+            [_persisted("user", "turn 0")]
+            + [{"sender": "workflow", "text": f"step {i}", "messageType": "workflow_step_started"} for i in range(5)]
+            + [_persisted("assistant", "turn 1")]
+        )
+
+        context = _build_llm_context(history, _incoming("turn 2"), _manager(limit=2), None)
+
+        # limit=2 conversational turns from history + the incoming turn, none
+        # of them telemetry — the 5-record telemetry burst must not have
+        # consumed the 2-slot budget the slice is meant to give real turns.
+        assert [m["content"] for m in context] == ["turn 0", "turn 1", "turn 2"]
+
+    @pytest.mark.asyncio
+    async def test_a_real_tool_output_event_does_not_enter_the_ai_stack_history(self):
+        manager = _RecordingHistory()
+        broadcast_event = await _create_broadcast_event_handler(_FakeWebSocket(), manager)
+        await broadcast_event({"type": "tool_output", "payload": {"output": "secret command", "session_id": "s-2"}})
+        await manager.add_message(sender="user", text="deploy it", session_id="s-2")
+        chat_context = await manager.get_session_messages("s-2", limit=500)
+
+        client = MagicMock()
+        client.chat_message = AsyncMock(return_value={"response": "ok"})
+
+        with patch("api.chat.get_ai_stack_client", AsyncMock(return_value=client)):
+            await _generate_ai_stack_chat_response(_incoming(), chat_context, None, _manager(), None)
+
+        sent = client.chat_message.call_args.kwargs["chat_history"]
+        assert not any("secret command" in m["content"] for m in sent)
+        assert any(m["content"] == "deploy it" for m in sent)

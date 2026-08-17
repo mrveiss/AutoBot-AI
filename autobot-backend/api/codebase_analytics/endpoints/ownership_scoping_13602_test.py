@@ -178,31 +178,63 @@ class TestOwnershipAnalyzerIsBounded:
     @pytest.mark.asyncio
     async def test_blame_does_not_run_on_the_event_loop(self, monkeypatch, tmp_path):
         """A sync subprocess inside `async def` blocks every other request for
-        its full duration — up to 30s, once per file."""
+        its full duration — up to 30s, once per file.
+
+        Asserted on **loop responsiveness**, not on a thread hop (#14390).
+
+        The original version patched `subprocess.run` and checked it executed on
+        a non-loop thread. That proved `asyncio.to_thread` was in use, which was
+        the #13602 fix — but it pinned the *mechanism*, so replacing that
+        mechanism broke the test even though the guarantee got stronger.
+        `asyncio.create_subprocess_exec` cannot block the loop by construction.
+
+        This version asserts the property itself: while a blame is in flight,
+        other coroutines still get scheduled. That holds for a thread hop, for a
+        native asyncio subprocess, and for whatever replaces them next.
+        """
         import asyncio
 
         import code_analysis.src.ownership_analyzer as oa
 
-        ran_in_thread: dict[str, bool] = {}
-        loop_thread = __import__("threading").current_thread().ident
+        blame_started = asyncio.Event()
+        release_blame = asyncio.Event()
 
-        def _fake_run(*_args, **_kwargs):
-            ran_in_thread["off_loop"] = __import__("threading").current_thread().ident != loop_thread
+        class _StalledProc:
+            returncode = 1
 
-            class _R:
-                returncode = 1
-                stdout = ""
+            async def communicate(self):
+                blame_started.set()
+                await release_blame.wait()
+                return (b"", b"")
 
-            return _R()
+            def kill(self):  # pragma: no cover - not reached in this test
+                self.returncode = -9
 
-        monkeypatch.setattr(oa.subprocess, "run", _fake_run)
+            async def wait(self):  # pragma: no cover - not reached in this test
+                return self.returncode
+
+        async def _fake_exec(*_args, **_kwargs):
+            return _StalledProc()
+
+        monkeypatch.setattr(oa.asyncio, "create_subprocess_exec", _fake_exec)
         analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
         target = tmp_path / "a.py"
         target.write_text("x = 1\n", encoding="utf-8")
 
-        await asyncio.wait_for(analyzer._get_file_ownership(target, tmp_path), timeout=10)
+        blame = asyncio.ensure_future(analyzer._get_file_ownership(target, tmp_path))
+        await asyncio.wait_for(blame_started.wait(), timeout=5)
 
-        assert ran_in_thread.get("off_loop"), "git blame must not run on the event loop"
+        # The loop must still be servicing other work while the blame is open.
+        ticks = 0
+        for _ in range(5):
+            await asyncio.sleep(0)
+            ticks += 1
+
+        assert ticks == 5, "the event loop stopped scheduling while a blame was in flight"
+        assert not blame.done(), "the blame should still be open — otherwise this proves nothing"
+
+        release_blame.set()
+        await asyncio.wait_for(blame, timeout=10)
 
     @pytest.mark.asyncio
     async def test_the_file_cap_actually_stops_the_walk(self, monkeypatch, tmp_path):

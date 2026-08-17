@@ -137,6 +137,7 @@ class LLMResponse:
     tool_calls: List["ToolCall"] | None = None
     lightweight_mode_used: bool = False  # MVA-1993: Set when trivial tier is used
     reasoning_content: Optional[str] = None  # #10582: captured reasoning/thinking text
+    time_to_first_token_seconds: float | None = None  # #14211: streaming TTFT, for Prometheus
 
 
 @dataclass
