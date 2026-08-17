@@ -95,6 +95,19 @@ class RoleWorkflowService(LLCServiceBase):
         *different* company, is therefore indistinguishable from one that
         does not exist at all: reporting the two differently would be a
         cross-tenant presence oracle for a client-supplied id.
+
+        The ``company_id == company_id`` query below may use
+        ``scalar_one_or_none()`` safely: ``UNIQUE(company_id, workflow_id)``
+        guarantees at most one row for any concrete (non-NULL) company_id.
+        The ``company_id IS NULL`` query cannot make that assumption — SQL
+        unique-constraint semantics treat every NULL as distinct from every
+        other NULL, so two legacy rows (e.g. from two backfill runs) can
+        legally share a ``workflow_id`` with ``company_id`` both NULL. This
+        branch only needs to know whether *any* such row exists — every
+        matching row produces the identical "no company attribution" refusal
+        regardless of which one is read — so ``.first()`` is the correct,
+        deliberate choice here, not merely a way to avoid
+        ``MultipleResultsFound``.
         """
         own = await session.execute(
             select(Workflow.workflow_id).where(
@@ -111,7 +124,7 @@ class RoleWorkflowService(LLCServiceBase):
                 Workflow.company_id.is_(None),
             )
         )
-        if unattributed.scalar_one_or_none() is not None:
+        if unattributed.first() is not None:
             raise ValueError(f"workflow {workflow_id!r} has no company attribution and cannot be " "attached to a role")
 
         raise ValueError(f"workflow {workflow_id!r} does not exist")

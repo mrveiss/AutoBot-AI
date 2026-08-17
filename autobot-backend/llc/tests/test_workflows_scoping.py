@@ -16,13 +16,15 @@ from __future__ import annotations
 
 import uuid
 from typing import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import WorkflowStatus
-from llc.services.workflow import WorkflowConflictError, WorkflowService
+from llc.services.workflow import WorkflowConflictError, WorkflowService, _is_workflow_unique_conflict
 
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect, safe to reuse
@@ -293,3 +295,47 @@ async def test_same_company_duplicate_workflow_id_raises_a_clean_conflict(sessio
     async with session_factory() as session:
         still_there = await service.get(session, company_id, "wf-dup")
     assert still_there is not None
+
+
+# #14271 review: the IntegrityError catch in create() must be narrow — only
+# this table's own UNIQUE(company_id, workflow_id) becomes WorkflowConflictError.
+# A different constraint (a future FK/check on this table) must propagate
+# unchanged, not be relabelled as a misleading "already exists".
+
+
+class _FakeAsyncpgUniqueViolation(Exception):
+    """Stands in for asyncpg's structured exception shape (has .constraint_name)."""
+
+    def __init__(self, constraint_name: str) -> None:
+        super().__init__("duplicate key value violates unique constraint")
+        self.constraint_name = constraint_name
+
+
+def test_is_workflow_unique_conflict_matches_only_its_own_constraint():
+    own = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("uq_workflows_company_workflow"))
+    other = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("some_other_fk_constraint"))
+    assert _is_workflow_unique_conflict(own) is True
+    assert _is_workflow_unique_conflict(other) is False
+
+
+def test_is_workflow_unique_conflict_falls_back_to_sqlite_message_shape():
+    """No structured constraint_name (sqlite, used under this test suite)."""
+    sqlite_message = "UNIQUE constraint failed: workflows.company_id, workflows.workflow_id"
+    own = IntegrityError("INSERT", {}, Exception(sqlite_message))
+    other = IntegrityError("INSERT", {}, Exception("NOT NULL constraint failed: workflows.workflow_id"))
+    assert _is_workflow_unique_conflict(own) is True
+    assert _is_workflow_unique_conflict(other) is False
+
+
+@pytest.mark.asyncio
+async def test_create_reraises_a_non_uniqueness_integrity_error(session_factory):  # noqa: ANN001
+    """A constraint violation that is NOT this table's own uq_workflows_company_workflow
+    must propagate as-is — never become a misleading WorkflowConflictError."""
+    service = WorkflowService()
+    company_id = uuid.uuid4()
+    other_constraint_error = IntegrityError("INSERT", {}, _FakeAsyncpgUniqueViolation("some_other_constraint"))
+
+    async with session_factory() as session:
+        with patch.object(session, "flush", side_effect=other_constraint_error):
+            with pytest.raises(IntegrityError):
+                await service.create(session, company_id, "wf-other-constraint")

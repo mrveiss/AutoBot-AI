@@ -181,6 +181,35 @@ async def test_an_unattributed_legacy_workflow_cannot_be_attached(session_factor
 
 
 @pytest.mark.asyncio
+async def test_two_ambiguous_unattributed_rows_are_refused_cleanly_not_500(session_factory):  # noqa: ANN001
+    """#14271 review: UNIQUE(company_id, workflow_id) treats every NULL as
+    distinct, so two legacy rows CAN legally share a workflow_id with
+    company_id both NULL (e.g. a race between two backfill runs). Before this
+    test, the unattributed-lookup branch used ``scalar_one_or_none()``, which
+    raises ``MultipleResultsFound`` — an unhandled 500 — the moment a second
+    such row exists. Both rows refuse identically ("no company attribution"),
+    so this must still be a clean refusal, not a crash.
+    """
+    company = uuid.uuid4()
+    role_id = await _seed_role(session_factory, company, "Head of Sales")
+    await _seed_workflow(session_factory, "wf-ambiguous", None)
+    await _seed_workflow(session_factory, "wf-ambiguous", None)  # a second NULL-company row, same workflow_id
+    service = RoleWorkflowService()
+
+    async with session_factory() as session:
+        rows = await session.execute(
+            sa.select(sa.func.count()).select_from(Workflow).where(Workflow.workflow_id == "wf-ambiguous")
+        )
+        assert rows.scalar_one() == 2, "fixture must actually create two ambiguous rows"
+
+    async with session_factory() as session:
+        with pytest.raises(ValueError, match="no company attribution"):
+            await service.attach(
+                session, company_id=company, role_id=role_id, workflow_id="wf-ambiguous", actor_user_id=_ADMIN_USER
+            )
+
+
+@pytest.mark.asyncio
 async def test_another_companys_workflow_cannot_be_attached(session_factory):  # noqa: ANN001
     """#14271: refused with the *same* message a missing workflow gets.
 

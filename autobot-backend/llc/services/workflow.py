@@ -26,6 +26,14 @@ race between two same-company requests can still reach the DB constraint;
 ``WorkflowConflictError`` so the route can translate it to a clean 409
 instead of an unhandled 500 (mirrors ``ReviewGatePolicyConflictError`` in
 ``llc/services/review_gate.py``).
+
+Review of #14443: the ``IntegrityError`` catch is narrowed to this table's
+own ``uq_workflows_company_workflow`` constraint (see
+``_is_workflow_unique_conflict``) rather than swallowing every
+``IntegrityError`` unconditionally — no other constraint on this table can
+fire today, but a broad catch would silently relabel a future FK/check
+violation as a misleading "workflow already exists" 409 instead of letting
+the real error surface.
 """
 
 import uuid
@@ -42,9 +50,32 @@ from ..models.activity import ActorType
 from ..models.enums import WorkflowStatus
 from .base import LLCServiceBase
 
+#: Name of the constraint create() is entitled to translate into a 409.
+#: Must match models/workflow.py's UniqueConstraint name exactly.
+_UNIQUE_CONSTRAINT_NAME = "uq_workflows_company_workflow"
+
 
 class WorkflowConflictError(Exception):
     """Raised when a workflow_id already exists for this company (unique-constraint race)."""
+
+
+def _is_workflow_unique_conflict(exc: IntegrityError) -> bool:
+    """True only when *exc* is this table's own UNIQUE(company_id, workflow_id).
+
+    Walks to the DBAPI exception (``exc.orig``), which carries a structured
+    ``constraint_name`` under asyncpg (the async Postgres driver this service
+    runs against — see ``user_management/database.py``'s own ``.orig`` walk
+    for the established idiom). SQLite's ``sqlite3.IntegrityError`` (used
+    under the test suite) has no such attribute; its message instead names
+    the columns, e.g. ``"UNIQUE constraint failed: workflows.company_id,
+    workflows.workflow_id"``, so that shape is matched as a fallback.
+    """
+    orig = exc.orig
+    constraint_name = getattr(orig, "constraint_name", None)
+    if constraint_name is not None:
+        return constraint_name == _UNIQUE_CONSTRAINT_NAME
+    message = str(orig)
+    return "workflows.company_id" in message and "workflows.workflow_id" in message
 
 
 class WorkflowService(LLCServiceBase):
@@ -82,6 +113,11 @@ class WorkflowService(LLCServiceBase):
             await session.flush()
         except IntegrityError as exc:
             await session.rollback()
+            if not _is_workflow_unique_conflict(exc):
+                # A different constraint fired (e.g. a future FK/check on
+                # this table) — that is a real bug, not a duplicate, and
+                # must not be relabelled as a plausible-looking 409.
+                raise
             raise WorkflowConflictError(f"workflow {workflow_id!r} already exists for company {company_id}") from exc
 
         if self.activity_log:
