@@ -23,7 +23,7 @@ this environment.
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404  # fixed argv, shell=False; see _run_in_subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -59,7 +59,7 @@ def _run_in_subprocess(body: str, *, block_bcrypt_jwt: bool = True) -> subproces
     """
     prelude = _BLOCK_BCRYPT_JWT + "\n" if block_bcrypt_jwt else "import sys\n"
     script = prelude + textwrap.dedent(body)
-    return subprocess.run(
+    return subprocess.run(  # nosec B603  # fixed interpreter argv, no shell
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
