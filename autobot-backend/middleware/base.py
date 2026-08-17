@@ -150,6 +150,12 @@ class Extension:
     description: str = ""
     priority: int = 100
     enabled: bool = True
+    # Issue #14420: when True, an *unexpected* error raised while this
+    # extension's hook method runs is treated as a denial (`False`), never
+    # swallowed to `None` (which callers read as "allow"). Extensions whose
+    # job is to decide permission must fail closed; everything else keeps
+    # the default swallow-and-continue behaviour below.
+    fail_closed: bool = False
 
     @property
     def manifest(self) -> "ExtensionManifest":
@@ -189,6 +195,40 @@ class Extension:
             try:
                 return await method(context)
             except Exception as e:
+                # Issue #14420 (review): a raised `PermissionError` is only
+                # treated as a deliberate denial (`False`) for extensions
+                # that opt into `fail_closed` - their entire purpose is a
+                # permission decision. `PermissionError` is a bare built-in
+                # this codebase already raises for unrelated reasons
+                # elsewhere (secrets storage, credential stores,
+                # container/process backends, skills); matching it
+                # unconditionally at all 25 hook points would let one of
+                # those unrelated raises, reached transitively from inside
+                # *any* extension's hook body, silently cancel an unrelated
+                # legitimate operation. A non-`fail_closed` extension keeps
+                # the pre-#14420 swallow-and-continue behaviour for a
+                # `PermissionError` it did not ask to mean "cancel this
+                # operation" - same as any other exception it raises.
+                if self.fail_closed:
+                    if isinstance(e, PermissionError):
+                        logger.warning(
+                            "[Issue #658] Extension %s denied %s: %s",
+                            self.name,
+                            hook.name,
+                            str(e),
+                        )
+                    else:
+                        logger.error(
+                            "[Issue #658] Extension %s error on %s: %s",
+                            self.name,
+                            hook.name,
+                            str(e),
+                        )
+                    # An extension that fails closed must not have a denial
+                    # OR an unexpected error read as allow - `None` reads as
+                    # "no opinion" to callers like
+                    # `not any(result is False for result in results)`.
+                    return False
                 logger.error(
                     "[Issue #658] Extension %s error on %s: %s",
                     self.name,

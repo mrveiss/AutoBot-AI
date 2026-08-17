@@ -335,6 +335,41 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
 
 
 # ---------------------------------------------------------------------------
+# Role -> permission lookup (#14420)
+# ---------------------------------------------------------------------------
+
+# role -> the dot-style permission *values* it holds, built once so a caller
+# checking many tools does not rebuild a set per call.
+_ROLE_PERMISSION_VALUES: Dict[Role, frozenset] = {
+    role: frozenset(p.value for p in perms) for role, perms in ROLE_PERMISSIONS.items()
+}
+
+
+def role_has_permission(role: str | None, permission: str) -> bool:
+    """Return True when *role* holds *permission* (a dot-style Permission value).
+
+    This is the canonical role/permission check other lookups (e.g.
+    ``services.mcp_dispatch._would_deny``) already hand-roll against
+    ``ROLE_PERMISSIONS`` — added here so a second consumer (#14420's
+    ``PermissionEnforcementExtension``) does not need its own copy.
+
+    Administrative roles (see ``is_admin_role``) hold every permission. An
+    absent, unrecognised, or non-administrative role that does not carry
+    *permission* is denied — this fails closed rather than defaulting to
+    permissive for a role string this module cannot resolve.
+    """
+    if is_admin_role(role):
+        return True
+    if not role:
+        return False
+    try:
+        role_enum = Role(str(role).lower())
+    except ValueError:
+        return False
+    return permission in _ROLE_PERMISSION_VALUES[role_enum]
+
+
+# ---------------------------------------------------------------------------
 # DB seeding helpers — generated from canonical sources above so a single edit
 # to Permission / ROLE_PERMISSIONS propagates automatically to both.
 # ---------------------------------------------------------------------------
