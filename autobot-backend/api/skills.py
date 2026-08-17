@@ -51,7 +51,6 @@ from skills.registry import get_skill_registry
 
 logger = get_logger(__name__)
 
-logger = get_logger(__name__)
 router = APIRouter()
 
 
