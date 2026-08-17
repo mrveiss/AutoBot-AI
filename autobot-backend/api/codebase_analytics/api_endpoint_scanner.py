@@ -49,19 +49,12 @@ _ROUTER_DECORATOR_RE = re.compile(
     re.IGNORECASE,
 )
 
-# ``include_router(name, ..., prefix="/x")`` — the prefix given at MOUNT time,
-# as opposed to the one declared on the router itself by ``APIRouter(prefix=)``.
-#
-# #13582: this was dead for so long that the question became whether to delete
-# it. It turned out to be missing wiring rather than surplus: a package that
-# mounts a submodule with a prefix has that prefix applied to every route in the
-# submodule, and nothing here was reading it. Renamed from _ROUTER_INCLUDE_RE,
-# which sat one transposition away from _INCLUDE_ROUTER_RE below and meant
-# something different.
-_include_router_prefixes = _routing.include_router_prefixes
-
-# Pattern for router prefix in APIRouter() initialization
-_apirouter_prefix = _routing.apirouter_prefix
+# The router prefix declared by ``APIRouter(prefix=...)``, trailing slash
+# normalised away (#14355). This module used to read it verbatim via
+# ``apirouter_prefix`` while the api-wiring gate stripped the slash, so the two
+# disagreed on any prefix written ``"/x/"`` — the report showing ``/x//y`` for a
+# path nothing serves. See ``file_router_prefix`` for why stripping wins.
+_file_router_prefix = _routing.file_router_prefix
 
 # Frontend patterns for API calls
 _API_CALL_PATTERNS = [
@@ -127,12 +120,6 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
     re.MULTILINE,
 )
 # Issue #552: Dynamic router loading pattern
-# #12956: names actually passed to include_router(), and the relative imports
-# that bind them to a submodule -- `from .costs import router as costs_router`.
-_INCLUDE_ROUTER_NAME_RE = _routing.INCLUDE_ROUTER_NAME_RE
-_RELATIVE_ROUTER_IMPORT_RE = _routing.RELATIVE_ROUTER_IMPORT_RE
-
-
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
     r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],' r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
     re.MULTILINE,
@@ -776,66 +763,12 @@ class BackendEndpointScanner:
             if module_file.is_file():
                 files[module_file] = prefix
             elif (target / "__init__.py").is_file():
-                files.update(self._package_router_files(target, prefix))
-        return files
-
-    def _package_router_files(self, package: Path, registry_prefix: str) -> Dict[Path, str]:
-        """Map a registry-mounted package's submodules to their served prefix.
-
-        The package's own ``APIRouter(prefix=...)`` sits between the registry
-        prefix and each submodule's router prefix, and ``_scan_file`` applies
-        the submodule's own prefix separately -- so only the package-level part
-        belongs here.
-
-        A submodule is included only when the package imports its router under
-        an alias AND mounts that exact alias via ``include_router``. #12956: the
-        previous check only confirmed the package mounted *something*, then
-        included every router-declaring module -- so a declared-but-unmounted
-        router still contributed routes, which the docstring already claimed it
-        would not.
-
-        Nested router subpackages recurse, so their modules resolve under their
-        own prefix rather than the parent's.
-        """
-        init_file = package / "__init__.py"
-        init_content = init_file.read_text(encoding="utf-8", errors="ignore")
-        package_prefix = self._get_file_router_prefix(init_content) or ""
-
-        served_prefix = f"{registry_prefix}{package_prefix}"
-        mounted = set(_INCLUDE_ROUTER_NAME_RE.findall(init_content))
-        if not mounted:
-            return {}
-
-        # #13582: a narrower `_INCLUDE_ROUTER_RE.search()` guard used to stand
-        # ahead of this check. It matched only `router.include_router(name)`
-        # with the call closing immediately after the name, so a package
-        # mounting with `prefix=`, `tags=`, or through `app.` failed it and
-        # returned {} — dropping every route in that package, silently. The
-        # `mounted` check below is the same question asked at the right width,
-        # and it was already here; the guard only ever subtracted from it.
-        #
-        # Prefixes given at mount time apply to every route in the mounted
-        # module, and are separate from the one the router declares for itself.
-        mount_prefixes = dict(_include_router_prefixes(init_content))
-
-        files: Dict[Path, str] = {}
-        # #12956: walk one level and recurse, rather than rglob'ing the tree.
-        # rglob descended into nested router subpackages while the "__" filter
-        # removed the very __init__.py carrying their own prefix, so their
-        # modules were emitted under the PARENT's prefix -- inventing endpoints,
-        # the failure this whole change set exists to avoid.
-        for module_name, alias in _RELATIVE_ROUTER_IMPORT_RE.findall(init_content):
-            if alias not in mounted:
-                # Declared but never mounted: it serves nothing.
-                continue
-            mounted_prefix = f"{served_prefix}{mount_prefixes.get(alias, '')}"
-            module_file = (package / module_name).with_suffix(".py")
-            if module_file.is_file():
-                files[module_file] = mounted_prefix
-                continue
-            subpackage = package / module_name
-            if (subpackage / "__init__.py").is_file():
-                files.update(self._package_router_files(subpackage, mounted_prefix))
+                # #14355: called through the module rather than a hoisted alias,
+                # so there is exactly one place this resolution can come from.
+                # This scanner carried its own copy of the algorithm until then;
+                # the gate and this report each owned one, and a divergence
+                # between them left no way to tell which described the real API.
+                files.update(_routing.package_router_files(target, prefix))
         return files
 
     def _get_module_prefix(self, file_path: Path) -> str:
@@ -1002,9 +935,18 @@ class BackendEndpointScanner:
 
         return endpoints
 
-    def _get_file_router_prefix(self, content: str) -> str | None:
-        """Extract router prefix from file content."""
-        return _apirouter_prefix(content)
+    def _get_file_router_prefix(self, content: str) -> str:
+        """The router prefix a file declares, or ``""`` when it declares none.
+
+        #14355: returns the normalised form. It used to return the raw prefix
+        (and ``None`` for absent), which differed from the api-wiring gate for a
+        prefix written ``"/x/"``: concatenation then produced ``/x//y``, an
+        endpoint reported at a path nothing answers on. Callers only ever asked
+        "is there a prefix, and what is it", so absent and empty were never
+        distinguished here — ``apirouter_prefix`` still keeps them apart for
+        anything that needs to.
+        """
+        return _file_router_prefix(content)
 
 
 # =============================================================================

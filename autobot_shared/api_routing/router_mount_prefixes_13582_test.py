@@ -9,7 +9,7 @@ reference, its own definition, and the question was whether to use it or remove
 it. It was missing wiring, not surplus — and finding that out turned up a second
 defect standing in front of it.
 
-`_package_router_files` guarded itself with a regex matching only
+`package_router_files` guarded itself with a regex matching only
 `router.include_router(name)` with the call closing immediately after the name.
 Any package mounting with `prefix=`, `tags=`, or through `app.` failed that
 guard and returned `{}` — every route in the package dropped, with no error.
@@ -22,22 +22,23 @@ mounted module, and nothing was reading it. Reporting those routes without it
 would invent endpoints that do not exist — the failure the surrounding code
 says in its own comments that it exists to prevent.
 
-These tests build real package trees on disk and assert on the paths the scanner
-returns, because both defects are about which prefix a file is served under —
-something no assertion on source text can see.
+These tests build real package trees on disk and assert on the paths the
+resolver returns, because both defects are about which prefix a file is served
+under — something no assertion on source text can see.
+
+#14355 moved them here with the code. They were written against the analytics
+scanner's private copy of this algorithm; that copy is gone and both consumers
+now call `package_router_files`, so the tests live beside the implementation
+they always described. Dropping the `fastapi` importorskip they used to need is
+part of the same move: this module is stdlib-only, so the coverage now runs
+everywhere instead of only where the backend's dependencies are installed.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-pytest.importorskip("fastapi")
-
-from api.codebase_analytics.api_endpoint_scanner import (  # noqa: E402
-    BackendEndpointScanner,
-)
+from autobot_shared.api_routing.router_prefixes import package_router_files
 
 
 def _package(root: Path, name: str, init_body: str, modules: dict[str, str] | None = None) -> Path:
@@ -48,16 +49,6 @@ def _package(root: Path, name: str, init_body: str, modules: dict[str, str] | No
     for module, body in (modules or {}).items():
         (pkg / f"{module}.py").write_text(body, encoding="utf-8")
     return pkg
-
-
-def _scanner(tmp_path: Path) -> BackendEndpointScanner:
-    """A scanner rooted at a throwaway tree.
-
-    `_package_router_files` reads only the tree it is handed, so the constructor's
-    project-root discovery is irrelevant to what is under test here.
-    """
-    (tmp_path / "api").mkdir(parents=True, exist_ok=True)
-    return BackendEndpointScanner(project_root=tmp_path)
 
 
 _ROUTER_MODULE = "router = APIRouter()\n\n\n@router.get('/items')\nasync def items():\n    return []\n"
@@ -79,7 +70,7 @@ def test_a_package_mounting_with_a_prefix_is_not_dropped(tmp_path):
         "router.include_router(costs_router, prefix='/costs')\n",
         {"costs": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/billing")
+    files = package_router_files(pkg, "/api/billing")
     assert pkg / "costs.py" in files, "a package mounting with a prefix was dropped entirely"
 
 
@@ -99,7 +90,7 @@ def test_the_mount_prefix_reaches_the_module_it_mounts(tmp_path):
         "router.include_router(costs_router, prefix='/costs')\n",
         {"costs": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/billing")
+    files = package_router_files(pkg, "/api/billing")
     assert files[pkg / "costs.py"] == "/api/billing/costs"
 
 
@@ -114,7 +105,7 @@ def test_a_mount_without_a_prefix_is_unchanged(tmp_path):
         "router.include_router(history_router)\n",
         {"history": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/chat")
+    files = package_router_files(pkg, "/api/chat")
     assert files[pkg / "history.py"] == "/api/chat"
 
 
@@ -135,7 +126,7 @@ def test_each_mount_gets_its_own_prefix(tmp_path):
         "router.include_router(audit_router, prefix='/audit')\n",
         {"users": _ROUTER_MODULE, "audit": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/admin")
+    files = package_router_files(pkg, "/api/admin")
     assert files[pkg / "users.py"] == "/api/admin/users"
     assert files[pkg / "audit.py"] == "/api/admin/audit"
 
@@ -152,7 +143,7 @@ def test_a_mount_with_tags_but_no_prefix_is_not_dropped(tmp_path):
         "router.include_router(tts_router, tags=['voice'])\n",
         {"tts": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/voice")
+    files = package_router_files(pkg, "/api/voice")
     assert files[pkg / "tts.py"] == "/api/voice"
 
 
@@ -173,7 +164,7 @@ def test_a_declared_but_unmounted_module_still_serves_nothing(tmp_path):
         "router.include_router(live_router, prefix='/live')\n",
         {"draft": _ROUTER_MODULE, "live": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(pkg, "/api/reports")
+    files = package_router_files(pkg, "/api/reports")
     assert pkg / "live.py" in files
     assert pkg / "draft.py" not in files, "an imported-but-never-mounted module serves no routes"
 
@@ -185,13 +176,13 @@ def test_a_package_mounting_nothing_still_returns_nothing(tmp_path):
         "empty",
         "from fastapi import APIRouter\n\nrouter = APIRouter()\n",
     )
-    assert _scanner(tmp_path)._package_router_files(pkg, "/api/empty") == {}
+    assert package_router_files(pkg, "/api/empty") == {}
 
 
 def test_nested_subpackages_inherit_the_mount_prefix(tmp_path):
     """The recursion carries the mount prefix down.
 
-    `_package_router_files` recurses for subpackages, so a mount prefix applied
+    `package_router_files` recurses for subpackages, so a mount prefix applied
     at the wrong level compounds — the nested module lands under a path with a
     missing or duplicated segment.
     """
@@ -212,5 +203,5 @@ def test_nested_subpackages_inherit_the_mount_prefix(tmp_path):
         "router.include_router(cpu_router, prefix='/cpu')\n",
         {"cpu": _ROUTER_MODULE},
     )
-    files = _scanner(tmp_path)._package_router_files(parent, "/api/platform")
+    files = package_router_files(parent, "/api/platform")
     assert files[parent / "metrics" / "cpu.py"] == "/api/platform/metrics/cpu"
