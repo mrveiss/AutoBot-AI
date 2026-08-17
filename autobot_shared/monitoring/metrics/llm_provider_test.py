@@ -145,9 +145,7 @@ class TestDashboardSeriesMatchRecorder:
         # suffixes to compare against the base histogram name too.
         emittable_bases = {re.sub(r"_(bucket|sum|count)$", "", n) for n in emittable}
 
-        missing = sorted(
-            name for name in dashboard_names if name not in emittable and name not in emittable_bases
-        )
+        missing = sorted(name for name in dashboard_names if name not in emittable and name not in emittable_bases)
         assert not missing, (
             f"Dashboard queries series the recorder cannot emit: {missing}. "
             "This is exactly the #14211 failure class — a panel that reads as "
