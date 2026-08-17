@@ -80,13 +80,20 @@ def _agent_orchestration_type_values() -> set[str]:
         raise ImportError(f"Could not load {_AGENT_TYPES_FILE}")
     module = importlib.util.module_from_spec(spec)
 
-    # Registered in sys.modules BEFORE exec_module, then removed. `enum`
-    # resolves a member's defining module through `sys.modules[cls.__module__]`
-    # while building the class; with the module absent that lookup returns None
-    # and class creation dies on `'NoneType' object has no attribute '__dict__'`.
-    # Executing a module out-of-band is only safe for modules that define no
-    # enums -- `types.py` defines several. Same register-then-pop shape as
-    # `migrations/runner_deferral_test.py` and `migrations/seed_agents_test.py`.
+    # Registered in sys.modules BEFORE exec_module, then removed.
+    #
+    # `types.py:169` declares a `@dataclass`, and `dataclasses._is_type` does
+    # `sys.modules.get(cls.__module__).__dict__` (CPython 3.14
+    # dataclasses.py:814) while scanning for a `KW_ONLY` sentinel. A module
+    # executed out-of-band is not in `sys.modules`, so that `.get()` returns
+    # None and class creation dies on
+    # `'NoneType' object has no attribute '__dict__'`.
+    #
+    # So `spec_from_file_location` + `exec_module` alone is only safe for a
+    # module that declares no dataclass. Same register-then-pop shape as
+    # `migrations/runner_deferral_test.py` and `migrations/seed_agents_test.py`,
+    # and the `finally` matters: leaving the name behind would shadow a real
+    # import for the rest of the session.
     sys.modules[name] = module
     try:
         spec.loader.exec_module(module)
