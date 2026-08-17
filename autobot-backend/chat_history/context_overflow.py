@@ -300,9 +300,21 @@ def _pick_boundary(messages: List[Dict], target: int) -> int:
 def _preserved_user_messages(messages: List[Dict], cap: int) -> List[str]:
     """The most recent *cap* user messages, verbatim (#14066).
 
-    Never summarized. A long session re-summarizes the same region repeatedly
-    and each pass is another chance for the model to drop a constraint the user
-    stated once; the cap is what keeps doing this unconditionally bounded.
+    Never summarized within the round that summarizes them, so a constraint the
+    user stated once cannot be dropped by that pass; the cap is what keeps this
+    unconditionally bounded.
+
+    Scoped to raw user-role turns (``CategoryDefaults.ROLE_USER``), not to a
+    *prior* compaction's own
+    composed summary (#14322). That artifact is injected with ``sender ==
+    "system"`` (``overflow_integration.create_summary_message``), so it is
+    never picked up here — and it should not be: its "### User messages
+    (verbatim)" block is prose to a later summarization call, not a
+    deterministic structure this function can re-extract without re-parsing
+    the model's own markdown, which is the "prose, not guarantee" failure mode
+    #14066 introduced this deterministic path to avoid. A user turn already
+    protected once and later swept — inside its parent summary — into a
+    further compaction window is not re-protected by a second pass.
     """
     if cap <= 0:
         return []
@@ -808,15 +820,23 @@ class ContextOverflowProtection:
         # response supplies an authoritative count, so they use the shared path.
         retained_tokens = [estimate_fast(_message_text(msg)) for msg in messages[split_point:]]
 
+        # #14322: composed BEFORE the reset below, same reason as
+        # retained_tokens above — every helper behind _compose_summary reads
+        # `messages_to_summarize`, the pre-reset history, so it belongs on the
+        # same side of the #14065 invariant. Composing after the reset does not
+        # raise today (each helper is isinstance-guarded and falls back on an
+        # unexpected shape), but it silently violates that invariant one call
+        # deeper: a future edit to _extract_state, _render_state_block or
+        # _preserved_user_messages that starts reading tracker-derived state
+        # would reintroduce #14065 past the caller's `except SummarizationFailed`.
+        summary_text = _compose_summary(summary, messages_to_summarize)
+
         # Reset token tracker (conversation now starts from summary)
         await self.tracker.reset_session(session_id)
         for tokens in retained_tokens:
             await self.tracker.add_message_tokens(session_id, prompt_tokens=tokens)
 
-        # #14066: the model's summary is only one of three things that cross the
-        # boundary. The extracted state and the verbatim user turns are the two
-        # that survive a bad summarization turn.
-        return _compose_summary(summary, messages_to_summarize)
+        return summary_text
 
 
 __all__ = [
