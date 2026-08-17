@@ -230,13 +230,13 @@ def _audit_baseline() -> int:
 
     stale = sorted(_GRANDFATHERED - _GRANDFATHER_USED)
     if not stale:
-        print(f"extension-import baseline: {len(_GRANDFATHERED)} entries, all live.")
+        print(f"extension-import baseline: {len(_GRANDFATHERED)} entries, all live.")  # noqa: print
         return 0
 
-    print("Stale entries in repo_tests/extension_import_baseline.txt — the import")
-    print("they exempt no longer exists. Delete these lines (the list only shrinks):")
+    print("Stale entries in repo_tests/extension_import_baseline.txt — the import")  # noqa: print
+    print("they exempt no longer exists. Delete these lines (the list only shrinks):")  # noqa: print
     for rel_path, top in stale:
-        print(f"  {rel_path}\t{top}")
+        print(f"  {rel_path}\t{top}")  # noqa: print
     return 1
 
 
