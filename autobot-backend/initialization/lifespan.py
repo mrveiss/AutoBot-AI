@@ -463,6 +463,16 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
     alias to the same singleton, for any caller that reads it that way) is
     what makes registration here actually wire into the live request path.
 
+    #14280 (review): registrations used to share ONE `try/except` around the
+    whole function. `TelemetryPromptMiddleware.__init__` does
+    `float(os.getenv("TELEMETRY_CPU_THRESHOLD", ...))`, which raises on a
+    malformed value — harmless only by accident of registering last. A
+    reordering, or any other builtin's constructor raising, would have
+    silently dropped every registration after it — including
+    PermissionEnforcement and SecretMasking — behind a single
+    `logger.warning`. Each registration below gets its own try/except so one
+    builtin failing can never take the others down with it.
+
     Non-critical: a failure logs a warning but does not block startup.
     """
     try:
@@ -473,20 +483,31 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
             TelemetryPromptMiddleware,
         )
         from middleware.manager import get_extension_manager
+    except Exception as import_error:
+        logger.warning("Built-in extension import failed (non-critical): %s", import_error)
+        return
 
-        manager = get_extension_manager()
-        app.state.extension_manager = manager
+    manager = get_extension_manager()
+    app.state.extension_manager = manager
 
-        manager.register(LoggingExtension())
-        manager.register(SecretMaskingExtension())
-        manager.register(PermissionEnforcementExtension())
-        manager.register(TelemetryPromptMiddleware())
-        logger.info(
-            "Built-in extensions registered (logging, secret_masking, "
-            "permission_enforcement, telemetry_prompt_middleware)"
-        )
-    except Exception as ext_error:
-        logger.warning("Built-in extension registration failed (non-critical): %s", ext_error)
+    registered: list[str] = []
+    for ext_name, ext_factory in (
+        ("logging", LoggingExtension),
+        ("secret_masking", SecretMaskingExtension),
+        ("permission_enforcement", PermissionEnforcementExtension),
+        ("telemetry_prompt_middleware", TelemetryPromptMiddleware),
+    ):
+        try:
+            manager.register(ext_factory())
+            registered.append(ext_name)
+        except Exception as ext_error:
+            logger.warning(
+                "Built-in extension '%s' registration failed (non-critical): %s",
+                ext_name,
+                ext_error,
+            )
+
+    logger.info("Built-in extensions registered (%s)", ", ".join(registered) or "none")
 
 
 async def _init_transcriber_db(app: FastAPI) -> None:
