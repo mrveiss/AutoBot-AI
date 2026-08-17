@@ -1,0 +1,35 @@
+# Canonical path set for "does this change require the Python test suite?"
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy back into either workflow.
+#
+# Two workflows load this file with dorny/paths-filter, and between them they
+# publish exactly one conclusion for the `python-suite` status context:
+#
+#   .github/workflows/ci.yml
+#       jobs `python-shard` / `python-suite`, ubuntu-latest, run when
+#       `python == 'true'` (the real gate)
+#
+#   .github/workflows/python-required-context.yml
+#       job `python-suite`, ubuntu-latest, runs when `python != 'true'`
+#       (reports the context green when the suite does not apply)
+#
+# The two `if:` conditions are exact complements, so the split is only correct
+# while both workflows compute the SAME value for `python`. If they ever
+# disagreed in one particular direction — the shim seeing "no Python change"
+# while ci.yml sees one — a pull request would take the shim's green while the
+# real suite never ran. That is a silent gate bypass, not a flake. Keeping the
+# patterns in one file that both jobs read from the same checkout of the same
+# commit removes that divergence by construction (#14353, same reasoning as
+# #13405 for the frontend set).
+python:
+  - '**/*.py'
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - 'pyproject.toml'
+  - 'autobot_shared/pyproject.toml'
+  - '.github/workflows/ci.yml'
+  # The shim gates a required context, so editing it must run the real suite for
+  # the same reason editing ci.yml does.
+  - '.github/workflows/python-required-context.yml'
+  # A change here changes what "python" means for both workflows.
+  - '.github/filters/python-paths.yml'
