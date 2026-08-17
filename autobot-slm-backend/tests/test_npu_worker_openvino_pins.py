@@ -47,9 +47,7 @@ yaml = pytest.importorskip("yaml")
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _ROLE_TASKS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "npu-worker" / "tasks" / "main.yml"
 _PLAYBOOK = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "deploy-native-services.yml"
-_DOCKER_REQUIREMENTS = (
-    _REPO_ROOT / "autobot-infrastructure" / "autobot-npu-worker" / "docker" / "requirements-npu.txt"
-)
+_DOCKER_REQUIREMENTS = _REPO_ROOT / "autobot-infrastructure" / "autobot-npu-worker" / "docker" / "requirements-npu.txt"
 _AGENT_CONFIG_TASKS = (
     _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "agent_config" / "tasks" / "openvino.yml"
 )
@@ -278,4 +276,6 @@ def test_the_shared_constraints_are_applied(site_name: str):
         f"{site.label} does not apply constraints/shared.txt, so a transitive dependency can "
         "drag numpy below its floor and force an unbuildable sdist (#14447, #14452, #14453)"
     )
-    assert "-c" in extra_args, f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
+    assert (
+        "-c" in extra_args
+    ), f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
