@@ -358,19 +358,20 @@ class SemanticChunkerBase(ABC):
             sentences = self._split_into_sentences(text)
             if len(sentences) <= 1:
                 chunks = [self._create_single_sentence_chunk(text, sentences)]
-                self._enrich_chunks_with_metadata(chunks, metadata)
-                return chunks
+            else:
+                logger.debug("Split text into %d sentences", len(sentences))
 
-            logger.debug("Split text into %d sentences", len(sentences))
+                await self._initialize_model()
+                embeddings = await self._compute_embeddings(sentences)
+                distances = self._compute_semantic_distances(embeddings)
+                boundaries = self._find_chunk_boundaries(distances)
 
-            await self._initialize_model()
-            embeddings = await self._compute_embeddings(sentences)
-            distances = self._compute_semantic_distances(embeddings)
-            boundaries = self._find_chunk_boundaries(distances)
+                logger.debug("Found %d semantic boundaries", len(boundaries))
 
-            logger.debug("Found %d semantic boundaries", len(boundaries))
+                chunks = self._create_chunks_with_boundaries(sentences, boundaries, distances)
 
-            chunks = self._create_chunks_with_boundaries(sentences, boundaries, distances)
+            # Issue #14467: a single trailing call so neither branch above — nor a
+            # future one — can reintroduce the defect by forgetting to enrich.
             self._enrich_chunks_with_metadata(chunks, metadata)
 
             if chunks:
