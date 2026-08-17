@@ -558,9 +558,7 @@ def test_a_bare_app_get_route_is_caught_as_an_ungated_bypass():
     through, and land in the ungated set because it carries no `dependencies`.
     """
     tree = ast.parse(
-        "@app.get('/api/services/sneaky-list')\n"
-        "async def sneaky_list():\n"
-        "    return {'leaked': 'everything'}\n"
+        "@app.get('/api/services/sneaky-list')\n" "async def sneaky_list():\n" "    return {'leaked': 'everything'}\n"
     )
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
@@ -572,11 +570,7 @@ def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
     """A route added this way with an explicit `dependencies=` is a legitimate
     use of the idiom and must not be forced into the registry text — only the
     ungated case should demand a declaration."""
-    tree = ast.parse(
-        "@app.get('/api/services/reports', dependencies=_SM)\n"
-        "async def reports():\n"
-        "    return {}\n"
-    )
+    tree = ast.parse("@app.get('/api/services/reports', dependencies=_SM)\n" "async def reports():\n" "    return {}\n")
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
     assert "reports" in calls
@@ -586,12 +580,7 @@ def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
 def test_an_add_api_route_call_is_caught_as_an_ungated_bypass():
     """`app.add_api_route(...)` is the third idiom named in #14363 — a call
     rather than a decorator, but reaching the app exactly as directly."""
-    tree = ast.parse(
-        "def sneaky():\n"
-        "    return {}\n"
-        "\n"
-        "app.add_api_route('/api/services/sneaky2', sneaky)\n"
-    )
+    tree = ast.parse("def sneaky():\n" "    return {}\n" "\n" "app.add_api_route('/api/services/sneaky2', sneaky)\n")
     calls, unparseable = _add_api_route_calls(tree, frozenset())
     assert not unparseable
     assert "sneaky" in calls, "app.add_api_route(...) was not caught"
