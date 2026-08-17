@@ -24,9 +24,10 @@
 # default is, so the validation outlives any future change of default.
 #
 # The one place this account cannot copy the per-service pattern: the other
-# service accounts are `nologin` with no home; VNC starts a desktop session
-# and its xstartup is an executable script, so this account needs a real home
-# and a usable shell (see tasks/main.yml, and
+# service accounts have no home directory (`create_home: false`); VNC needs a
+# real home for its `~/.vnc` state. It IS still `nologin`, like every other
+# per-service account -- systemd's `User=` never consults the shell field,
+# and xstartup.j2 carries its own shebang (see tasks/main.yml, and
 # docs/developer/ARCHITECTURE_EXCEPTIONS.md).
 vnc_user: "{{ lookup('env', 'VNC_USER') or lookup('env', 'AUTOBOT_VNC_USER') | default('autobot-vnc', true) }}"
 vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot-vnc', true) }}"

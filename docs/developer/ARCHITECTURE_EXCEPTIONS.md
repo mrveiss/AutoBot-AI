@@ -146,26 +146,34 @@ class FlashAttentionV2:  # canonical: ignore py-duplicate-concept — published 
 
 ---
 
-## VNC Service Account — Real Home and Shell (not `nologin`)
+## VNC Service Account — Real Home Directory (not `nologin`'s no-home)
 
 **File:** `autobot-slm-backend/ansible/roles/vnc/tasks/main.yml`,
 `autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`
-**Issue:** #14319
+**Issue:** #14319 (shell corrected in PR #14412 review round 2)
 
 **Pattern bypassed:** Every other per-service account on the platform
 (`autobot-backend`, `autobot-ai`, `autobot-npu`, `autobot-browser`,
 `autobot-tts`) is `system: true` with `shell: /usr/sbin/nologin` and no home
 directory — the account exists only to own files and run one systemd unit.
 
-**Reason:** VNC starts an interactive desktop session, and its `xstartup`
-(`templates/xstartup.j2`) is an executable script invoked by the VNC server
-process itself, not by systemd — it needs a real home directory
-(`~/.vnc/xstartup`, `~/.vnc/passwd`, `~/.vnc/config`) and a usable shell to
-run under. A `nologin` account with no home cannot host this. `autobot-vnc`
+**Reason — home directory only, NOT the shell:** VNC starts an interactive
+desktop session and needs a real home directory (`~/.vnc/passwd`,
+`~/.vnc/xstartup`, `~/.vnc/config`) to hold its state; a `nologin` account
+with `create_home: false` has nowhere to put it. That is the ONLY dimension
+this account deviates on. The shell field does not need to change:
+`vnc-server.service.j2` starts `vncserver` through systemd's `User=`
+directive, which execs the unit's `ExecStart` directly and never consults
+`/etc/passwd`'s shell field, and `templates/xstartup.j2` carries its own
+`#!/bin/bash` shebang, so the kernel resolves the interpreter from the
+script itself when `vncserver` execs it — nothing in the VNC path needs the
+account's login shell to be anything other than `nologin`. `autobot-vnc`
 (the account's default name — see `vnc_user` in `defaults/main.yml`) is
-therefore `system: true` (no login, no password) but with `shell: /bin/bash`
-and `create_home: true`, same as every other per-service account for
-everything *except* that one dimension.
+therefore `system: true`, `shell: /usr/sbin/nologin`, `create_home: true` —
+identical to every other per-service account except `create_home`. A
+standing interactive login shell on a service account is an unnecessary
+persistence foothold; `su -s /bin/bash - autobot-vnc` still works as root
+for interactive debugging if that is ever needed.
 
 **What it explicitly does NOT get:** sudo access of any kind, and the
 account is validated to never be `autobot_admin` (the emergency admin

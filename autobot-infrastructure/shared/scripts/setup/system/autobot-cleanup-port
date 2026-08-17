@@ -1,0 +1,93 @@
+#!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Root-owned wrapper for AutoBot's dev/deploy process cleanup (PR #14412
+# review, findings 1-2). This is the ONLY thing named in the NOPASSWD
+# sudoers grant setup_passwordless_sudo.sh writes -- bare `kill`/`pkill`/
+# `lsof` grants cover every PID and every process on the host, not just
+# AutoBot's own, so a compromised dependency in a process this account
+# already runs (`npm run dev`, `python3 main.py`) could `sudo pkill -f
+# sshd` or `sudo kill -9 $(pgrep auditd)` with no password.
+#
+# This wrapper hardcodes the exact ports and process pattern the platform's
+# own tooling already used before this fix (run_agent.sh,
+# deployment/deploy_hybrid.sh, ansible/fix-backend-deadlock.sh) and takes no
+# attacker-influenced argument that reaches lsof/kill/pkill as free text --
+# every subcommand is a fixed literal, validated before use; anything else
+# is refused with a non-zero exit.
+#
+# Deployed to /opt/autobot/bin/autobot-cleanup-port (root:root 0755) by
+# setup_passwordless_sudo.sh.
+
+set -euo pipefail
+
+# Ports this wrapper will touch. Overridable via env var, matching the rest
+# of the platform's shell tooling (e.g. scripts/service-auth/
+# validate-service-auth.sh) and the SSOT defaults in .env.example
+# (AUTOBOT_BACKEND_PORT, AUTOBOT_FRONTEND_PORT, AUTOBOT_BACKEND_TLS_PORT) --
+# NOT because this script trusts a caller-supplied port number: only the
+# three fixed names below (backend/frontend/backend-tls) are ever accepted
+# as a subcommand argument, never a raw port from argv.
+AUTOBOT_BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+AUTOBOT_FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
+AUTOBOT_BACKEND_TLS_PORT="${AUTOBOT_BACKEND_TLS_PORT:-8443}"
+
+# The one process pattern run_agent.sh's pkill call ever used.
+readonly UVICORN_PATTERN="uvicorn main:app"
+
+usage() {
+    echo "Usage: $0 kill-port {backend|frontend|backend-tls}" >&2
+    echo "       $0 diagnose-port backend-tls" >&2
+    echo "       $0 kill-uvicorn" >&2
+    exit 2
+}
+
+# Validates BEFORE any port is resolved -- run in the main shell, never
+# inside a command substitution, so an invalid name hard-exits the script
+# rather than silently resolving to nothing.
+require_valid_port_name() {
+    case "$1" in
+        backend|frontend|backend-tls) return 0 ;;
+        *) usage ;;
+    esac
+}
+
+port_for() {
+    case "$1" in
+        backend)     echo "${AUTOBOT_BACKEND_PORT}" ;;
+        frontend)    echo "${AUTOBOT_FRONTEND_PORT}" ;;
+        backend-tls) echo "${AUTOBOT_BACKEND_TLS_PORT}" ;;
+    esac
+}
+
+[ "$#" -ge 1 ] || usage
+
+case "$1" in
+    kill-port)
+        [ "$#" -eq 2 ] || usage
+        require_valid_port_name "$2"
+        port="$(port_for "$2")"
+        # Scoped to the single resolved port, LISTEN sockets only -- never a
+        # bare `lsof` enumerating every process's FDs on the host.
+        pids="$(lsof -t -i ":${port}" -sTCP:LISTEN 2>/dev/null || true)"
+        if [ -n "${pids}" ]; then
+            # shellcheck disable=SC2086  # $pids is a whitespace-separated PID list
+            kill -9 ${pids}
+        fi
+        ;;
+    diagnose-port)
+        [ "$#" -eq 2 ] || usage
+        require_valid_port_name "$2"
+        port="$(port_for "$2")"
+        # Read-only; matches ansible/fix-backend-deadlock.sh's SYN_SENT check.
+        lsof -i ":${port}" -n 2>/dev/null || true
+        ;;
+    kill-uvicorn)
+        [ "$#" -eq 1 ] || usage
+        pkill -f "${UVICORN_PATTERN}" 2>/dev/null || true
+        ;;
+    *)
+        usage
+        ;;
+esac

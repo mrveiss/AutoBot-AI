@@ -73,20 +73,17 @@ cleanup() {
         kill -9 "$FRONTEND_PID" 2>/dev/null
     fi
 
-    # Ensure all processes listening on our ports are killed
+    # Ensure all processes listening on our ports are killed. Routed through
+    # the fixed root-owned wrapper (#14412 review) -- sudoers names only its
+    # exact subcommands, never bare lsof/kill, which would cover every PID
+    # and every process on the host.
     echo "Ensuring all processes on ports 8001 and 5173 are terminated..."
-    for port in 8001 5173; do
-        # Use sudo with lsof for more comprehensive process identification
-        PIDS=$(sudo lsof -t -i :$port 2>/dev/null)
-        if [ -n "$PIDS" ]; then
-            echo "Killing processes on port $port: $PIDS"
-            sudo kill -9 $PIDS 2>/dev/null
-        fi
-    done
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port backend 2>/dev/null
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port frontend 2>/dev/null
 
     # Kill any remaining uvicorn processes
     echo "Killing any remaining uvicorn processes..."
-    sudo pkill -f "uvicorn main:app" 2>/dev/null
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-uvicorn 2>/dev/null
 
     # Kill any remaining child processes of this script
     echo "Killing any remaining child processes of this script..."
@@ -101,36 +98,22 @@ cleanup() {
 # Trap multiple signals for robust cleanup
 trap cleanup SIGINT SIGTERM SIGQUIT
 
-# Enhanced port cleanup function
+# Enhanced port cleanup function. Routed through the fixed root-owned wrapper
+# (#14412 review) -- port_name is one of the wrapper's own fixed subcommand
+# tokens (backend/frontend), never a raw port number reaching lsof/kill.
 cleanup_port() {
     local port=$1
     local service_name=$2
+    local port_name=$3
 
     echo "Stopping any existing $service_name processes on port $port..."
-    # Use sudo with lsof for more comprehensive process identification
-    if sudo lsof -i :$port -t > /dev/null 2>&1; then
-        # Attempt to kill processes associated with uvicorn specifically
-        PIDS=$(sudo lsof -t -i :$port -sTCP:LISTEN 2>/dev/null | xargs -r ps -o pid,command | grep -E 'uvicorn main:app|python3 main.py' | awk '{print $1}')
-        if [ -n "$PIDS" ]; then
-            echo "Killing processes on port $port: $PIDS"
-            sudo kill -9 $PIDS 2>/dev/null
-        else
-            # Fallback to killing any process on the port if not a uvicorn/python3 main.py process
-            PIDS=$(sudo lsof -t -i :$port 2>/dev/null)
-            if [ -n "$PIDS" ]; then
-                echo "Killing non-uvicorn processes on port $port: $PIDS"
-                sudo kill -9 $PIDS 2>/dev/null
-            fi
-        fi
-        echo "$service_name processes on port $port terminated."
-    else
-        echo "No $service_name process found on port $port."
-    fi
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port "$port_name" 2>/dev/null
+    echo "$service_name processes on port $port terminated."
 }
 
 # Clean up ports before starting
-cleanup_port 8001 "backend"
-cleanup_port 5173 "frontend"
+cleanup_port 8001 "backend" backend
+cleanup_port 5173 "frontend" frontend
 
 
 # Ensure user is in docker group and docker command is accessible

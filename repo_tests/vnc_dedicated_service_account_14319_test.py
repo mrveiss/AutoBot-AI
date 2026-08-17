@@ -84,14 +84,34 @@ def test_reject_task_runs_before_the_account_is_created():
     assert reject_idx < create_idx, "the account must never be created before the rejection check runs"
 
 
-def test_account_is_the_documented_exception_not_the_nologin_pattern():
+def test_account_is_the_documented_exception_of_home_only_not_shell():
+    """PR #14412 review round 2, finding 3: systemd's User= never consults
+    /etc/passwd's shell field, and xstartup.j2 carries its own #!/bin/bash
+    shebang -- so nologin is safe, and create_home is the only real
+    deviation from the other per-service accounts (roles/npu-worker,
+    roles/tts-worker)."""
     tasks = _load_tasks()
     create_task = _find_task(tasks, "Create VNC user if not exists")
     user_module = create_task["ansible.builtin.user"]
     assert user_module["system"] is True
     assert user_module["create_home"] is True
-    assert user_module["shell"] == "/bin/bash"
-    assert user_module["shell"] != "/usr/sbin/nologin"
+    assert user_module["shell"] == "/usr/sbin/nologin"
+    assert user_module["shell"] != "/bin/bash"
+    assert user_module["group"] == "{{ vnc_group }}"
+
+
+def test_group_is_created_explicitly_not_left_to_the_distro_default():
+    """PR #14412 review round 2: an explicit group task, not implicit
+    same-named-group creation, which depends on the host's USERGROUPS_ENAB
+    default that the later ownership tasks (chown-equivalent `file` tasks)
+    silently rely on."""
+    tasks = _load_tasks()
+    names = [t.get("name", "") for t in tasks]
+    group_idx = next(i for i, n in enumerate(names) if "Create autobot-vnc system group" in n)
+    create_idx = next(i for i, n in enumerate(names) if n == "Create VNC user if not exists")
+    assert group_idx < create_idx, "the group must exist before the user references it"
+    group_task = _find_task(tasks, "Create autobot-vnc system group")
+    assert group_task["ansible.builtin.group"]["name"] == "{{ vnc_group }}"
 
 
 def test_migration_moves_state_before_it_would_be_recreated_empty():
@@ -105,7 +125,15 @@ def test_migration_moves_state_before_it_would_be_recreated_empty():
         "task would unconditionally (re)create an empty target directory"
     )
     migrate_task = _find_task(tasks, "Migrate legacy VNC state")
-    assert "vnc_legacy_user" in migrate_task["ansible.builtin.command"]["cmd"]
+    # #14412 review round 2, finding 5: a substring check on "vnc_legacy_user"
+    # stays green even if source and destination are swapped -- the actual
+    # data-loss bug (mv the NEW account's state onto the OLD one). Pin the
+    # full command, and pin which path comes first.
+    cmd = migrate_task["ansible.builtin.command"]["cmd"]
+    assert cmd == "mv /home/{{ vnc_legacy_user }}/.vnc /home/{{ vnc_user }}/.vnc"
+    src_pos = cmd.index("vnc_legacy_user")
+    dest_pos = cmd.index("vnc_user }}")
+    assert src_pos < dest_pos, "vnc_legacy_user must be the mv SOURCE, vnc_user the DESTINATION"
 
 
 def test_fix_vnc_scripts_reject_the_emergency_admin_account():

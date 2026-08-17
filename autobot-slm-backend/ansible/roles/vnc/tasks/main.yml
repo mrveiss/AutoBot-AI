@@ -85,17 +85,37 @@
       (autobot-vnc).
     success_msg: "VNC will run as '{{ vnc_user }}'"
 
-# #14319: VNC is a deliberate exception to the nologin per-service-account
-# pattern (roles/backend, roles/npu-worker, roles/tts-worker, roles/browser)
-# — it starts an interactive desktop session and its xstartup
-# (templates/xstartup.j2) is an executable script, so it needs a real home
-# and a usable shell. See docs/developer/ARCHITECTURE_EXCEPTIONS.md.
+# #14319: VNC needs a real HOME directory (~/.vnc/passwd, xstartup, config)
+# that the other per-service accounts (roles/backend, roles/npu-worker,
+# roles/tts-worker, roles/browser) do not — that is the one dimension it
+# deviates from their pattern on. It does NOT need a login shell:
+# vnc-server.service.j2 starts vncserver via systemd's User=, which execs
+# the process directly and never consults /etc/passwd's shell field, and
+# templates/xstartup.j2 carries its own #!/bin/bash shebang, so the kernel
+# resolves its interpreter from the script itself when vncserver execs it.
+# nologin, same as every other per-service account, closes off a standing
+# interactive-login foothold on a compromised account; `su -s /bin/bash -
+# {{ vnc_user }}` still works for interactive debugging as root. See
+# docs/developer/ARCHITECTURE_EXCEPTIONS.md.
+#
+# The group is created explicitly (matching roles/npu-worker,
+# roles/tts-worker) rather than left to the user module's implicit
+# same-named-group behaviour, which depends on the host's
+# USERGROUPS_ENAB default -- the file/TLS-key ownership tasks below depend
+# on vnc_group existing regardless of that default.
+- name: "VNC | Create autobot-vnc system group (#14319)"
+  ansible.builtin.group:
+    name: "{{ vnc_group }}"
+    system: true
+    state: present
+
 - name: Create VNC user if not exists
   ansible.builtin.user:
     name: "{{ vnc_user }}"
     system: true
-    shell: /bin/bash
+    shell: /usr/sbin/nologin
     create_home: true
+    group: "{{ vnc_group }}"
     comment: "AutoBot VNC service account"
     state: present
   become: true
