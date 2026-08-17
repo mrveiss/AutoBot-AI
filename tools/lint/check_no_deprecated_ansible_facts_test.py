@@ -298,6 +298,25 @@ def test_nested_block_resets_key_context_per_task() -> None:
         assert violations[0][1] == "hostname"
 
 
+def test_a_deprecated_fact_used_as_a_mapping_key_is_caught() -> None:
+    """A dynamically-named var: `'{{ ansible_hostname }}_status': ok`.
+
+    `_iter_scalar_nodes` walks each mapping pair's `value_node` but, in an
+    earlier version of this rewrite, never yielded the `key_node` itself --
+    so a deprecated fact used as a YAML *key* (as opposed to a value) was
+    silently invisible, even though the pre-#14196 line-based scanner (which
+    matched anywhere in a line) caught it. That is a coverage regression a
+    structural rewrite must not introduce while fixing five other blind
+    spots; this fixture pins the key position as covered.
+    """
+    body = "- name: t\n  vars:\n    '{{ ansible_hostname }}_status': ok\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "key_fact.yml", body)
+        violations = find_violations(f)
+        assert len(violations) == 1
+        assert violations[0][1] == "hostname"
+
+
 def test_malformed_yaml_does_not_crash_the_hook() -> None:
     """Broken YAML syntax is another hook's job (check-yaml); this hook must
     not raise and block the whole pre-commit run over it.
@@ -381,6 +400,14 @@ def test_the_node_walk_reaches_every_bare_expr_key_scalar_in_the_tree() -> None:
     that exact gap was found in another lint this week. Counting reach a
     second, independent way closes it: if the node-walk's count diverges
     from the plain-dict-recursion count, the walk regressed.
+
+    Scope: this proves TRAVERSAL completeness, not CLASSIFICATION
+    correctness. Both counters import the same `_BARE_EXPR_KEYS` constant to
+    decide what counts as "reachable" — narrow that set (e.g. drop `"until"`)
+    and both counters shrink together and stay equal, because they agree on
+    what to look for, not on whether the walk actually visits everything.
+    This test cannot catch a classification gap; only that the walk reaches
+    everything the shared definition currently designates.
     """
     ansible_root = REPO_ROOT / "autobot-slm-backend" / "ansible"
     walked = _node_walk_bare_key_scalar_count(ansible_root)

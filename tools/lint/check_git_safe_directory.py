@@ -101,6 +101,18 @@ def _iter_scalar_nodes(node: "yaml.Node") -> Iterable["yaml.ScalarNode"]:
     `git -C ...` invocation can live under `cmd:`, `command:`, a raw
     `- git ...` shell line, etc. — it is the string *content* that matters,
     not which key holds it.
+
+    Mapping KEYS are scalars too and are yielded here alongside values --
+    a walk that only descended into `value_node` would silently drop a
+    dynamically-named key, the same coverage the line-based scanner had.
+
+    PyYAML's `Composer` has no separate node type for an alias (`*anchor`):
+    resolving one returns the *same* node object as its anchor definition
+    (`yaml.AliasNode` does not exist), so a node reachable through more than
+    one anchor/alias/merge-key site is revisited once per reachable path.
+    That is a duplicate report for one physical scalar, not a missed one --
+    harmless here, and there are currently zero YAML anchors in the tracked
+    ansible tree.
     """
     if isinstance(node, yaml.ScalarNode):
         yield node
@@ -108,9 +120,10 @@ def _iter_scalar_nodes(node: "yaml.Node") -> Iterable["yaml.ScalarNode"]:
         for item in node.value:
             yield from _iter_scalar_nodes(item)
     elif isinstance(node, yaml.MappingNode):
-        for _key_node, value_node in node.value:
+        for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                yield key_node
             yield from _iter_scalar_nodes(value_node)
-    # AliasNode (YAML anchors/aliases): nothing new to walk, skip silently.
 
 
 def _yaml_violations(text: str) -> List[Tuple[int, str]]:

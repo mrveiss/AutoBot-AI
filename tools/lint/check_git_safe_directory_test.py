@@ -179,6 +179,20 @@ def test_literal_block_scalar_command_is_caught() -> None:
         assert len(find_violations(f)) == 1
 
 
+def test_an_unguarded_command_used_as_a_mapping_key_is_caught() -> None:
+    """A dynamically-keyed mapping is a contrived shape, but it proves the
+    same coverage as the ansible-facts checker's mapping-key fixture: the
+    node-walk must yield mapping KEYS as well as values. A walk that only
+    descended into `value_node` would silently drop this, even though the
+    pre-#14196 line-based scanner (which matched anywhere in a line) caught
+    it.
+    """
+    body = "- name: t\n  vars:\n    \"git -C {{ git_repo_root }} log -1\": marker\n"
+    with tempfile.TemporaryDirectory() as d:
+        f = _write(Path(d), "key_git.yml", body)
+        assert len(find_violations(f)) == 1
+
+
 def test_malformed_yaml_does_not_crash_the_hook() -> None:
     """Broken YAML syntax is another hook's job (check-yaml)."""
     with tempfile.TemporaryDirectory() as d:
@@ -348,6 +362,12 @@ def test_the_node_walk_reaches_the_same_matches_as_an_independent_count() -> Non
     safe_load-dict-recursion) of the same tracked tree must agree on how
     many `git -C <code_source>` sites exist. If the node-walk regressed to
     matching nothing (or matching only some), this would diverge.
+
+    Scope: this proves TRAVERSAL completeness, not CLASSIFICATION
+    correctness. Both counters import the same `PATTERN` to decide what
+    counts as a match — narrow or widen `PATTERN` and both counters move
+    together and stay equal, because they agree on what to look for, not on
+    whether the walk actually visits everything reachable.
     """
     walked = _node_walk_pattern_match_count()
     independent = _independent_pattern_match_count()

@@ -173,6 +173,27 @@ def _iter_scalar_nodes(
     propagated through sequences (a list-style `when:` condition list is
     still "under" `when`) but reset to the new key on every nested mapping —
     a task nested inside a `block:` gets its own `when:`/`vars:`/etc.
+
+    Mapping KEYS are scalars too (`{{ ansible_hostname }}_status: ok` is a
+    dynamically-named var) and are yielded here as well -- a walk that only
+    descended into `value_node` would silently drop them, which is exactly
+    the coverage the line-based scanner had and this rewrite must not lose.
+    A key is never itself a bare-expr value (Ansible templates a mapping key
+    the same `{{ }}`-wrapped way as any other string, never bare), so it is
+    always yielded with `key_context=None`, regardless of what key the
+    enclosing mapping is nested under.
+
+    PyYAML's `Composer` has no separate node type for an alias (`*anchor`):
+    resolving one returns the *same* node object as its anchor definition
+    (`yaml.AliasNode` does not exist), so a node reachable through more than
+    one anchor/alias/merge-key site is revisited once per reachable path and
+    yielded once per visit. That is a duplicate report for one physical
+    scalar, not a missed one -- harmless for `.pre-commit` output, and there
+    are currently zero YAML anchors in the tracked ansible tree. Not
+    de-duplicated on purpose: a shared node can sit under different keys at
+    different reachable paths (e.g. one alias site under `when:`, another
+    not), and de-duplicating on node identity would silently drop whichever
+    context-dependent check ran second.
     """
     if isinstance(node, yaml.ScalarNode):
         yield key_context, node
@@ -181,9 +202,10 @@ def _iter_scalar_nodes(
             yield from _iter_scalar_nodes(item, key_context)
     elif isinstance(node, yaml.MappingNode):
         for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                yield None, key_node
             new_key = key_node.value if isinstance(key_node, yaml.ScalarNode) else None
             yield from _iter_scalar_nodes(value_node, new_key)
-    # AliasNode (YAML anchors/aliases): nothing new to walk, skip silently.
 
 
 def _snippet(lines: List[str], node: "yaml.ScalarNode") -> str:
