@@ -36,8 +36,16 @@ campaign. This hook only stops them growing while it happens.
 
 from __future__ import annotations
 
+import logging
 import pathlib
 import sys
+
+# Plain stdlib logging, deliberately (#1082). This is a pre-commit hook: it runs
+# as a bare script on every commit, and `autobot_shared.logging_manager` would
+# drag config loading into that path. The same trade is taken in
+# `autobot_shared/user_management/password_epoch.py`, and it is what CLAUDE.md's
+# pattern table allows for exactly this case.
+logger = logging.getLogger(__name__)
 
 MAX_LINES = 600
 
@@ -137,6 +145,22 @@ def audit_ceilings() -> tuple[int, list[str]]:
     return reached, problems
 
 
+def configure_logging() -> None:
+    """Attach a stderr handler so findings actually reach the developer.
+
+    Run as a bare script the module logger has no handler, and logging's
+    ``lastResort`` fallback emits WARNING and above only — the informational
+    "all live" line would vanish silently. Findings themselves are logged at
+    ERROR precisely so they survive even when this was never called.
+    """
+    logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(handler)
+
+
 def run_audit() -> int:
     """``--audit-ceilings``: repo-wide drift check over KNOWN_LARGE."""
     reached, problems = audit_ceilings()
@@ -147,13 +171,14 @@ def run_audit() -> int:
             "scan did not reach every entry, so its verdict covers nothing."
         )
     if problems:
-        print("\n".join(problems))
+        logger.error("%s", "\n".join(problems))
         return 1
-    print(f"python-file-size ceilings: {expected} entries, all live and at size.")
+    logger.info("python-file-size ceilings: %d entries, all live and at size.", expected)
     return 0
 
 
 def main(argv: list[str]) -> int:
+    configure_logging()
     if "--audit-ceilings" in argv:
         return run_audit()
 
@@ -167,7 +192,7 @@ def main(argv: list[str]) -> int:
             violations.append(message)
 
     if violations:
-        print("\n".join(violations))
+        logger.error("%s", "\n".join(violations))
         return 1
     return 0
 

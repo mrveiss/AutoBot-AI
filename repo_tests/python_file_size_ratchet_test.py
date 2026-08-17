@@ -26,7 +26,9 @@ agreeing with a counter that shares its blind spot.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
+import logging
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
@@ -203,6 +205,84 @@ def test_unlisted_files_keep_the_plain_limit(hook):
 def test_windows_separators_still_match_an_entry(hook):
     for rel, ceiling in hook.KNOWN_LARGE.items():
         assert hook.verdict(rel.replace("/", "\\"), ceiling + 1) is not None
+
+
+# --------------------------------------------------------------------------
+# The findings have to reach a human (#1082)
+#
+# Writing findings to stdout is banned repo-wide (this comment says so without
+# quoting the call, which would put the banned pattern in a file whose job is to
+# forbid it). The hook emits through stdlib logging instead. A
+# silent conversion is worse than the print it replaced: findings routed to
+# logger.debug on a default configuration vanish, and the guard then passes and
+# reports nothing while looking like it ran. These pin the output path.
+# --------------------------------------------------------------------------
+
+
+def _oversize(tmp_path: Path, lines: int) -> Path:
+    target = tmp_path / "too_big.py"
+    target.write_text("x\n" * lines, encoding="utf-8")
+    return target
+
+
+def test_a_violation_is_reported_to_the_developer(hook, tmp_path, caplog):
+    """The whole point of the hook: run it on a bad file, see the finding."""
+    target = _oversize(tmp_path, hook.MAX_LINES + 7)
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        assert hook.main([str(target)]) == 1
+    emitted = "\n".join(record.getMessage() for record in caplog.records)
+    assert str(target) in emitted
+    assert f"{hook.MAX_LINES + 7} lines (max {hook.MAX_LINES})" in emitted
+
+
+def test_findings_are_emitted_above_the_lastresort_threshold(hook, tmp_path, caplog):
+    """Visible even if nothing ever configured logging.
+
+    ``logging.lastResort`` prints WARNING and above when no handler is found.
+    A finding below that level would be swallowed by a bare invocation.
+    """
+    target = _oversize(tmp_path, hook.MAX_LINES + 1)
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        hook.main([str(target)])
+    levels = [record.levelno for record in caplog.records]
+    assert levels and min(levels) >= logging.WARNING
+
+
+def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog, monkeypatch):
+    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, ["ceiling drifted"]))
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        assert hook.run_audit() == 1
+    emitted = "\n".join(record.getMessage() for record in caplog.records)
+    assert "ceiling drifted" in emitted
+    assert min(record.levelno for record in caplog.records) >= logging.WARNING
+
+
+def test_configure_logging_makes_the_clean_run_visible(hook):
+    """The 'all live' line is INFO, so it needs a handler to exist at all."""
+    hook.configure_logging()
+    assert hook.logger.handlers, "no handler — INFO output would be discarded"
+    assert hook.logger.isEnabledFor(logging.INFO)
+
+
+def test_the_hook_has_no_stdout_calls_left(hook):
+    """#1082 — every finding leaves through the logger, none through stdout.
+
+    Structural, not textual: the banned name is assembled by implicit string
+    concatenation so this fixture cannot trip the very lint it is checking, and
+    the self-guard below fails if that assembly is ever fat-fingered into a
+    needle that matches nothing.
+    """
+    banned = "pri" "nt"
+    assert len(banned) == 5 and banned.endswith("nt"), "needle assembly broke"
+    tree = ast.parse(_SCRIPT.read_text(encoding="utf-8"))
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == banned
+    ]
+    assert calls == [], f"stdout calls remain at lines {calls}"
 
 
 # --------------------------------------------------------------------------
