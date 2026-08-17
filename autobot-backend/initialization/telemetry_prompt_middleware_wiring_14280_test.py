@@ -26,6 +26,19 @@ These tests exercise the REAL registration function
 (`chat_workflow.llm_handler._emit_full_prompt_ready`, which fires on
 `HookPoint.FULL_PROMPT_READY`) end to end — no hand-built extension manager
 stub.
+
+PR #14414 review: fixing the sink means `SecretMaskingExtension` and
+`LoggingExtension` — previously registered onto the same orphaned manager —
+now ALSO actually fire for the first time. `SecretMaskingExtension` has no
+raise-based path (unlike `PermissionEnforcementExtension`, see #14420) —
+`invoke_with_transform` applies its return value directly — so this is
+genuinely new, user-visible behaviour: any LLM response or tool result
+matching one of its ~12 regexes gets rewritten with `****`.
+`test_after_llm_response_sink_masks_a_secret_through_the_real_dispatch_path`
+below is the regression test for that, driven through the real
+`get_extension_manager()` and `_emit_after_llm_response` — not by calling
+`SecretMaskingExtension.mask_secrets()` directly, since the bug this PR fixes
+was entirely in dispatch, not in the extension.
 """
 
 from __future__ import annotations
@@ -122,3 +135,41 @@ async def test_full_prompt_ready_sink_is_a_no_op_under_low_cpu(app, monkeypatch)
     result = await _emit_full_prompt_ready(prompt, llm_params={}, context={"session_id": "s1"})
 
     assert result == prompt
+
+
+@pytest.mark.asyncio
+async def test_after_llm_response_sink_masks_a_secret_through_the_real_dispatch_path(app):
+    """SecretMaskingExtension now actually fires (PR #14414 review finding).
+
+    Driven end to end through the real registration function and the real
+    `AFTER_LLM_RESPONSE` sink (`chat_workflow.llm_handler._emit_after_llm_response`
+    -> `get_extension_manager().invoke_with_transform`) — never by calling
+    `SecretMaskingExtension.mask_secrets()` directly. The bug #14414 fixes was
+    entirely in dispatch (registration onto a manager nothing read), so the
+    regression test has to exercise dispatch, not the extension in isolation.
+    """
+    from chat_workflow.llm_handler import _emit_after_llm_response
+    from initialization.lifespan import _init_builtin_extensions
+
+    await _init_builtin_extensions(app)
+
+    response = "Sure — your token: abcdefghij1234567890 should work for that request."
+    result = await _emit_after_llm_response(response, llm_params={}, session_id="s1")
+
+    assert result != response
+    assert "abcdefghij1234567890" not in result
+    assert "****" in result
+
+
+@pytest.mark.asyncio
+async def test_after_llm_response_sink_is_a_no_op_without_a_secret(app):
+    """Guards against a masking regression that rewrites everything, not just secrets."""
+    from chat_workflow.llm_handler import _emit_after_llm_response
+    from initialization.lifespan import _init_builtin_extensions
+
+    await _init_builtin_extensions(app)
+
+    response = "The deployment finished successfully with no errors."
+    result = await _emit_after_llm_response(response, llm_params={}, session_id="s1")
+
+    assert result == response
