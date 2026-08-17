@@ -317,6 +317,14 @@ jobs:
           # Backstop for the per-container diagnostics above: full compose
           # logs, printed inline (not just the uploaded artifact) AND kept
           # as an artifact, matching docker-smoke-test.yml. (#14417)
+          #
+          # Same trap as the post-mortem step above: default Actions bash is
+          # `-eo pipefail`, so `docker compose logs` failing (compose already
+          # torn down, daemon hiccup) would abort the pipe before the
+          # `::endgroup::` below runs, leaving an unclosed fold in the job
+          # log. Turn both off so the fold always closes, whatever `docker
+          # compose logs` did.
+          set +e +o pipefail
           echo "::group::docker compose logs (all services)"
           docker compose \
             -f docker-compose.yml \

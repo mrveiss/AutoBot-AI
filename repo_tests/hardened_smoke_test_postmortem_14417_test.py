@@ -180,7 +180,13 @@ def test_names_the_actual_failing_container_not_slm(bash, postmortem_script, moc
     assert "::group::autobot-backend diagnostics" in out
     assert "FAKE LOG lines for autobot-backend" in out
     # The historical bug: this step always dumped SLM regardless of which
-    # container actually failed.
+    # container actually failed. `not in out` alone passes vacuously against
+    # the pre-fix script too (it never emitted `::group::` markers at all),
+    # so pin the exact count: exactly one group, for autobot-backend only.
+    assert out.count("::group::") == 1, (
+        f"expected exactly one diagnostics group (autobot-backend), got "
+        f"{out.count('::group::')}:\n{out}"
+    )
     assert "::group::autobot-slm diagnostics" not in out, (
         "post-mortem dumped the healthy autobot-slm instead of (or as well as) "
         "the actually-failing autobot-backend -- the hardcoding regressed"
@@ -208,6 +214,12 @@ def test_names_every_unhealthy_container_when_several_fail(bash, postmortem_scri
     assert "::group::autobot-backend diagnostics" in out
     assert "::group::autobot-frontend diagnostics" in out
     assert "autobot-frontend: container not found (never created)" in out
+    # Exactly the two unhealthy ones -- not the healthy autobot-slm, and not
+    # a count that would also match a "dump everything" fallback.
+    assert out.count("::group::") == 2, (
+        f"expected exactly two diagnostics groups (backend, frontend), got "
+        f"{out.count('::group::')}:\n{out}"
+    )
     assert "::group::autobot-slm diagnostics" not in out
 
 
@@ -231,10 +243,17 @@ def test_falls_back_to_every_service_when_none_look_unhealthy(bash, postmortem_s
     )
     out = result.stdout
 
-    assert out.strip(), "post-mortem step printed nothing at all"
     assert "No container looked unhealthy" in out
+    # `out.strip()` alone would pass vacuously against the pre-fix script too
+    # (it always printed the hardcoded SLM block regardless of health) -- the
+    # discriminating claim is that EVERY service got named and dumped, not
+    # merely that something was printed.
     for svc in SERVICES.split():
         assert f"::group::{svc} diagnostics" in out
+    assert out.count("::group::") == len(SERVICES.split()), (
+        f"expected a diagnostics group for every one of {SERVICES.split()}, "
+        f"got {out.count('::group::')} groups:\n{out}"
+    )
 
 
 def test_step_never_aborts_before_printing_anything(bash, postmortem_script, mock_docker_dir):
@@ -255,3 +274,8 @@ def test_step_never_aborts_before_printing_anything(bash, postmortem_script, moc
     for svc in SERVICES.split():
         assert f"{svc}: container not found (never created)" in result.stdout
         assert f"::group::{svc} diagnostics" in result.stdout
+    assert result.stdout.count("::group::") == len(SERVICES.split()), (
+        f"the loop stopped early instead of reporting every never-created "
+        f"container -- got {result.stdout.count('::group::')} of "
+        f"{len(SERVICES.split())} groups:\n{result.stdout}"
+    )
