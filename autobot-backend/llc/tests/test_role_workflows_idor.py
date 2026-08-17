@@ -77,9 +77,7 @@ class TestAttachWorkflowIdorIndistinguishability:
         cross_company_response = self._attach(
             company_id, "theirs", service_raises=ValueError("workflow 'theirs' does not exist")
         )
-        missing_response = self._attach(
-            company_id, "nope", service_raises=ValueError("workflow 'nope' does not exist")
-        )
+        missing_response = self._attach(company_id, "nope", service_raises=ValueError("workflow 'nope' does not exist"))
 
         assert cross_company_response.status_code == missing_response.status_code == 400
         # Body text differs only in the workflow_id it echoes back (client-
