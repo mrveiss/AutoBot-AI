@@ -32,6 +32,7 @@ import {
   NOTE_TABS,
   emptySlotState,
   canFetchAssignedItems,
+  canHandoffAssignedItems,
   assignedItemsUrl,
   partitionAssignedItems,
   costUrl,
@@ -95,11 +96,13 @@ const partitioned = computed(() => partitionAssignedItems(assignedItems.value.it
 const agentCost = computed(() => findAgentCost(costRows.value.items, props.node))
 
 /**
- * Checklist, output and handoff all read this one fetch (#13940's module
- * docstring). A human node never reaches the network — `canFetchAssignedItems`
- * is a structural check, not a failure — so `notApplicable` is set with no
- * request in flight and stays distinct from `unavailable` (#14064/#14104's
- * precedent: absence of data and absence of an answer are different claims).
+ * Checklist and output both read this one fetch, and so does the handoff
+ * panel's item list (#13940's module docstring). Since #14192 this also
+ * succeeds for a human node — `canFetchAssignedItems` no longer excludes
+ * `is_human` — so only a node missing `node_id` (a structural gap, not a
+ * failure) sets `notApplicable` with no request in flight, staying distinct
+ * from `unavailable` (#14064/#14104's precedent: absence of data and
+ * absence of an answer are different claims).
  */
 async function ensureAssignedItems(): Promise<void> {
   if (assignedItems.value.status !== 'idle') return
@@ -162,7 +165,12 @@ function selectRail(icon: SidebarRailIcon): void {
     void ensureAssignedItems()
   } else if (icon === 'cost') void ensureCost()
   else if (icon === 'activity') void ensureActivity()
-  else if (icon === 'handoff') void ensureAssignedItems()
+  else if (icon === 'handoff') {
+    // Never fetch just to show a panel that will report notApplicable — the
+    // action itself is agent-only (see `canHandoffAssignedItems`), so a
+    // human node's handoff rail must behave like cost/activity: no request.
+    if (canHandoffAssignedItems(props.node)) void ensureAssignedItems()
+  }
 }
 
 function openHandoff(item: WorkItem): void {
@@ -263,7 +271,7 @@ function formatTime(ts: string | null): string {
 
             <template v-else-if="noteTab === 'checklist'">
               <p v-if="assignedItems.status === 'notApplicable'" class="text-sm text-autobot-text-muted italic">
-                {{ t('llc.orgChart.sidebar.itemsNotApplicableHuman') }}
+                {{ t('llc.orgChart.sidebar.itemsNotApplicable') }}
               </p>
               <p v-else-if="assignedItems.status === 'loading'" class="text-sm text-autobot-text-muted">
                 {{ t('llc.orgChart.loading') }}
@@ -291,7 +299,7 @@ function formatTime(ts: string | null): string {
 
             <template v-else>
               <p v-if="assignedItems.status === 'notApplicable'" class="text-sm text-autobot-text-muted italic">
-                {{ t('llc.orgChart.sidebar.itemsNotApplicableHuman') }}
+                {{ t('llc.orgChart.sidebar.itemsNotApplicable') }}
               </p>
               <p v-else-if="assignedItems.status === 'loading'" class="text-sm text-autobot-text-muted">
                 {{ t('llc.orgChart.loading') }}
@@ -424,7 +432,12 @@ function formatTime(ts: string | null): string {
           <h3 class="text-xs font-semibold uppercase tracking-wide text-autobot-text-muted mb-2">
             {{ t('llc.orgChart.sidebar.railHandoff') }}
           </h3>
-          <p v-if="assignedItems.status === 'notApplicable'" class="text-sm text-autobot-text-muted italic">
+          <!-- #14192: gated on the ACTION's own predicate, not just the fetch
+               — canFetchAssignedItems is now true for a human node, but the
+               handoff verb stays agent-only, so this check must run first and
+               independently of `assignedItems.status` (see
+               `canHandoffAssignedItems`'s docstring). -->
+          <p v-if="!canHandoffAssignedItems(node)" class="text-sm text-autobot-text-muted italic">
             {{ t('llc.orgChart.sidebar.handoffNotApplicableHuman') }}
           </p>
           <p v-else-if="assignedItems.status === 'loading'" class="text-sm text-autobot-text-muted">

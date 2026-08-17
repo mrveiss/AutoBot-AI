@@ -8283,7 +8283,7 @@
         "railHandoff": "Traspaso",
         "itemsUnavailable": "No se pudieron cargar los elementos. Es un problema de carga, no una lista vacía.",
         "itemsEmpty": "Sin elementos activos.",
-        "itemsNotApplicableHuman": "Las listas de elementos por persona aún no están disponibles — solo los agentes se pueden filtrar por asignación.",
+        "itemsNotApplicable": "Las listas de elementos requieren un id de asignación que este nodo no tiene.",
         "outputEmpty": "Aún no hay elementos completados.",
         "costTotalTokens": "Tokens totales",
         "costUsd": "Costo (USD)",

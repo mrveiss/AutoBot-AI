@@ -8283,7 +8283,7 @@
         "railHandoff": "Przekazanie",
         "itemsUnavailable": "Nie udało się wczytać elementów. To problem z wczytywaniem, a nie pusta lista.",
         "itemsEmpty": "Brak aktywnych elementów.",
-        "itemsNotApplicableHuman": "Listy elementów dla osób nie są jeszcze dostępne — tylko agentów można filtrować według przypisania.",
+        "itemsNotApplicable": "Listy elementów wymagają identyfikatora przypisania, którego ten węzeł nie posiada.",
         "outputEmpty": "Brak jeszcze ukończonych elementów.",
         "costTotalTokens": "Łączna liczba tokenów",
         "costUsd": "Koszt (USD)",
