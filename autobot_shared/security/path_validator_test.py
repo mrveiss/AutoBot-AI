@@ -9,12 +9,14 @@ functions used across 16+ backend files for path injection prevention.
 """
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from autobot_shared.security.path_validator import (
     _DEFAULT_ALLOWED_ROOTS,
     SandboxPathError,
+    require_path_string,
     resolve_within_sandbox,
     validate_path,
     validate_relative_path,
@@ -364,3 +366,57 @@ class TestResolveWithinSandbox:
     def test_error_is_valueerror_subclass(self) -> None:
         """SandboxPathError remains a ValueError for compatibility."""
         assert issubclass(SandboxPathError, ValueError)
+
+
+# =============================================================================
+# require_path_string — boundary check against non-path values (#14217)
+# =============================================================================
+
+
+class TestRequirePathString:
+    """A sanitizer that stringifies whatever it is given turns junk into a
+    real, creatable directory tree (an object repr, or a MagicMock whose
+    default __fspath__ embeds "/" separators). This is the boundary check
+    that rejects it before it ever reaches Path()/os.makedirs.
+    """
+
+    def test_str_value_accepted_unchanged(self) -> None:
+        assert require_path_string("data/chats", context="test") == "data/chats"
+
+    def test_path_value_accepted_and_stringified(self, tmp_path) -> None:
+        result = require_path_string(tmp_path, context="test")
+        assert result == str(tmp_path)
+        assert isinstance(result, str)
+
+    def test_magicmock_rejected_with_typeerror(self) -> None:
+        """The real reproduction: an object, not a crafted string.
+
+        Path(MagicMock()) never raises — its default __fspath__ embeds "/"
+        separators and silently becomes a multi-component path. This must
+        raise instead.
+        """
+        mock = MagicMock(name="mock.unified_config_manager.get().get().get()")
+
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(mock, context="paths.data.file_manager_root")
+
+    def test_arbitrary_object_rejected_with_typeerror(self) -> None:
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(object(), context="test")
+
+    def test_int_rejected_with_typeerror(self) -> None:
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(123, context="test")
+
+    def test_empty_string_rejected(self) -> None:
+        with pytest.raises(ValueError, match="empty or contains a null byte"):
+            require_path_string("", context="test")
+
+    def test_null_byte_rejected(self) -> None:
+        with pytest.raises(ValueError, match="empty or contains a null byte"):
+            require_path_string("data/file\x00.txt", context="test")
+
+    def test_error_message_includes_context(self) -> None:
+        """The context string points at the misconfigured setting."""
+        with pytest.raises(TypeError, match="settings.backup_dir"):
+            require_path_string(MagicMock(), context="settings.backup_dir")

@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from api.files import ALLOWED_EXTENSIONS, get_file_info
 from api.schemas_code import (
@@ -33,13 +33,27 @@ from autobot_shared.security.path_validator import SandboxPathError, resolve_wit
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
-from utils.paths_manager import get_data_path
+from utils.paths_manager import ensure_data_directory, get_data_path
 
-router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Computing the Path is side-effect-free; only directory creation is
+# deferred off import time (#14217) — see api.files.ensure_sandbox_root.
 SANDBOX_FILES_ROOT = get_data_path("sandbox_files_root").resolve()
-SANDBOX_FILES_ROOT.mkdir(parents=True, exist_ok=True)
+
+_sandbox_root_ready = False
+
+
+def ensure_sandbox_root() -> None:
+    """Create the sandbox root directory on first use, not on import (#14217)."""
+    global _sandbox_root_ready
+    if not _sandbox_root_ready:
+        ensure_data_directory()
+        SANDBOX_FILES_ROOT.mkdir(parents=True, exist_ok=True)
+        _sandbox_root_ready = True
+
+
+router = APIRouter(dependencies=[Depends(ensure_sandbox_root)])
 
 
 def _check_permission(request: Request, permission: str) -> dict:
