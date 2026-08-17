@@ -171196,6 +171196,7 @@ export interface operations {
                 type?: components["schemas"]["WorkItemType"] | null;
                 status?: components["schemas"]["WorkItemStatus"] | null;
                 assignee?: string | null;
+                assignee_user_id?: string | null;
                 reviewer?: string | null;
                 sprint_id?: string | null;
                 parent_id?: string | null;

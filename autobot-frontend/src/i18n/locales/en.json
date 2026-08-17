@@ -8271,7 +8271,7 @@
         "railHandoff": "Handoff",
         "itemsUnavailable": "Items could not be loaded. This is a loading problem, not an empty list.",
         "itemsEmpty": "No active items.",
-        "itemsNotApplicableHuman": "Per-person item lists are not available yet — only agents can be filtered by assignee.",
+        "itemsNotApplicable": "Item lists require an assignment id, which this node does not have.",
         "outputEmpty": "No completed items yet.",
         "costTotalTokens": "Total tokens",
         "costUsd": "Cost (USD)",
