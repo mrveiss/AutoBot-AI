@@ -114,9 +114,7 @@ def test_coworker_request_has_no_company_id_field():
             field_names = [
                 t.target.id for t in node.body if isinstance(t, ast.AnnAssign) and isinstance(t.target, ast.Name)
             ]
-            assert (
-                "company_id" not in field_names
-            ), "CoworkerRequest still defines company_id — #14168 fix not applied"
+            assert "company_id" not in field_names, "CoworkerRequest still defines company_id — #14168 fix not applied"
             return  # class found and checked
 
     raise AssertionError("CoworkerRequest class not found in work_items.py")
