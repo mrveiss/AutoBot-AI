@@ -94,10 +94,11 @@ async def emit_skill_trigger(event: str, params: Dict[str, Any]) -> List[Dict[st
     """Dispatch *event* to every skill declaring it, returning each result.
 
     Returns an empty list when no enabled skill declares *event* — a trigger
-    with no listener is a normal steady state, not an error.  Individual skill
-    failures are returned as the usual ``{"success": False, ...}`` result dicts
-    by :meth:`SkillManager.execute_skill`; this function never raises, so an
-    emitter can await it inline without guarding its own primary work.
+    with no listener is a normal steady state, not an error.  A failing skill
+    comes back as the usual ``{"success": False, ...}`` result dict, because
+    :meth:`SkillManager.execute_skill` converts its exceptions; an emitter still
+    guards its own call, since that conversion is the callee's promise, not this
+    function's.
     """
     targets = resolve_trigger_targets(event)
     if not targets:
