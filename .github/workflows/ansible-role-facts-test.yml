@@ -109,7 +109,7 @@ jobs:
         run: |
           ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
 
-      - name: "Diff guard: ensure all fact-file copies stay byte-equal (#7095, #14149)"
+      - name: "Diff guard: role_*_active facts stay in sync across all three copies (#7095, #14149, #14201)"
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_role_facts_synced.py

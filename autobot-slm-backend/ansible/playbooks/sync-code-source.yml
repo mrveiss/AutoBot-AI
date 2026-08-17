@@ -69,7 +69,10 @@
 
     - name: "code_source sync | Show pushed commit"
       ansible.builtin.command:
-        cmd: "git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1 --format='%h %s'"
+        cmd: >-
+          git -c safe.directory={{ _code_source_dest }}
+          -C {{ _code_source_dest }}
+          log -1 --format='%h %s'
       register: _pushed_commit
       changed_when: false
       when: controller_repo_root is defined
