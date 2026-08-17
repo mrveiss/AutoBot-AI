@@ -61,6 +61,54 @@ _VALID_SORT = {s.value for s in CatalogSort}
 # ---------------------------------------------------------------------------
 
 
+def _first_catalog_entry() -> dict:
+    """A live entry read from ``_BUILTIN_CATALOG`` at test time.
+
+    #14280 review: ``test_full_text_search_by_description`` hardcoded
+    "telemetry" as its search term, coupling an unrelated test to the
+    continued existence of one specific catalog entry
+    (``telemetry-prompt-middleware``). Removing that entry — correctly, since
+    it advertised an installable plugin that could never load — silently
+    broke the test. Deriving the search term from the catalog itself instead
+    means these tests exercise full-text search rather than the presence of
+    any particular entry, and cannot rot the same way again.
+    """
+    assert _BUILTIN_CATALOG, "builtin catalog must be non-empty for these tests to mean anything"
+    return _BUILTIN_CATALOG[0]
+
+
+def _distinctive_word(text: str) -> str:
+    """First word in *text* that is specific enough to be a meaningful search term.
+
+    At least 5 characters and not ``plugin``/``plugins`` — the one word every
+    catalog entry's name or description contains, which would make the
+    "search actually filters" assertion trivially true regardless of which
+    entry it matched.
+    """
+    boilerplate = {"plugin", "plugins"}
+    for word in text.lower().replace(",", " ").replace(".", " ").split():
+        if len(word) >= 5 and word not in boilerplate:
+            return word
+    raise AssertionError(f"no distinctive word (>=5 chars, non-boilerplate) found in {text!r}")
+
+
+def _entry_and_tag_absent_elsewhere() -> tuple[dict, str]:
+    """An entry plus one of its own tags that appears in neither its name nor
+    its description.
+
+    So the tag-search test actually exercises the ``tags`` branch of the
+    search predicate in ``list_catalog`` rather than incidentally passing
+    because the chosen term also happens to appear in the name or
+    description.
+    """
+    for entry in _BUILTIN_CATALOG:
+        haystack = f"{entry['name']} {entry['description']}".lower()
+        for tag in entry.get("tags", []):
+            if tag.lower() not in haystack:
+                return entry, tag
+    raise AssertionError("no catalog entry has a tag absent from its own name and description")
+
+
 async def _async_iter(items):
     """Async generator used to mock Redis scan_iter."""
     for item in items:
@@ -269,40 +317,66 @@ class TestListCatalog:
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_name(self):
+        """Search term is derived from a real catalog entry's own name at
+        test time (#14280 review) — see ``_first_catalog_entry``."""
+        entry = _first_catalog_entry()
+        term = _distinctive_word(entry["name"].replace("-", " "))
+
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(
                 category=CatalogCategory.ALL,
-                search="logger",
+                search=term,
                 sort_by=CatalogSort.NAME,
                 source_id="builtin",
             )
-        assert resp.total >= 1
-        assert any("logger" in e.name.lower() for e in resp.entries)
+        assert any(e.name == entry["name"] for e in resp.entries), (
+            f"name search for {term!r} (derived from {entry['name']!r}) did not find it"
+        )
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_description(self):
+        """Search term is derived from a real catalog entry's own description
+        at test time, not hardcoded (#14280 review) — see
+        ``_first_catalog_entry``. This is the test that broke when
+        ``telemetry-prompt-middleware`` was correctly removed from the
+        catalog for advertising a plugin that could never load."""
+        entry = _first_catalog_entry()
+        term = _distinctive_word(entry["description"])
+
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(
                 category=CatalogCategory.ALL,
-                search="telemetry",
+                search=term,
                 sort_by=CatalogSort.DOWNLOADS,
                 source_id="builtin",
             )
-        assert resp.total >= 1
+        assert any(e.name == entry["name"] for e in resp.entries), (
+            f"description search for {term!r} (derived from {entry['name']!r}'s own "
+            f"description) did not find it"
+        )
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_tag(self):
+        """Search term is one of a real catalog entry's own tags, chosen so it
+        doesn't also appear in that entry's name/description (#14280 review)
+        — see ``_entry_and_tag_absent_elsewhere``, which isolates the
+        ``tags`` branch of the search predicate rather than passing
+        incidentally via name/description overlap."""
+        entry, term = _entry_and_tag_absent_elsewhere()
+
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(
                 category=CatalogCategory.ALL,
-                search="mcp",
+                search=term,
                 sort_by=CatalogSort.NAME,
                 source_id="builtin",
             )
-        assert resp.total >= 1
+        assert any(e.name == entry["name"] for e in resp.entries), (
+            f"tag search for {term!r} (derived from {entry['name']!r}'s own tags) did not find it"
+        )
 
     @pytest.mark.asyncio
     async def test_search_no_match_returns_empty(self):
