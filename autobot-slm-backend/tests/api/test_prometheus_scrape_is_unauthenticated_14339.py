@@ -448,6 +448,22 @@ def test_every_ungated_router_is_named_in_the_registry():
     )
 
 
+def _code_lines(block: str) -> str:
+    """*block* with comment-only lines removed, leaving only executable code.
+
+    A comment line is allowed to *name* `include_router` in prose — the
+    explanatory text in this very block does exactly that, describing what
+    the check used to miss — without tripping the "has this block swallowed
+    real code" guard below. Only a line that is not a comment can contain an
+    actual mount call, so stripping comments first measures code, not prose.
+    The registry block is legitimately all comments, so on the real file this
+    reduces to the empty string; an over-run block would still carry real
+    `app.include_router(...)` statements, which are not comment lines and
+    survive the strip.
+    """
+    return "\n".join(line for line in block.splitlines() if not line.strip().startswith("#"))
+
+
 def test_the_registry_block_is_bounded_at_both_ends():
     """The block must not run past its closing marker.
 
@@ -455,6 +471,12 @@ def test_the_registry_block_is_bounded_at_both_ends():
     block became the rest of the file, every router matched its own mount line,
     and an undeclared ungated router passed unnoticed. Sized rather than merely
     non-empty, because "the rest of the file" is also non-empty.
+
+    The substring check below is deliberately run against comment-stripped
+    text, not the raw block. A prior version matched the raw block, which
+    means an explanatory comment that *names* `include_router` while
+    describing what it guards against would trip the guard it is standing
+    next to — reworded here after review demonstrated exactly that (#14363).
     """
     block = _registry_block()
     source = _main_source()
@@ -463,7 +485,7 @@ def test_the_registry_block_is_bounded_at_both_ends():
         f"the registry block is {len(block)} chars of a {len(source)}-char file — "
         "it has run past its closing marker and would declare everything (#14339)"
     )
-    assert "include_router" not in block, (
+    assert "include_router" not in _code_lines(block), (
         "the registry block contains mount calls, so it has swallowed code rather "
         "than stopping at the comment that ends it"
     )
