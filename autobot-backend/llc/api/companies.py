@@ -28,7 +28,7 @@ the authenticated session's organization context.
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -830,6 +830,14 @@ async def reorder_backlog(
 # Org chart (GH#9861) — read-only composition of existing models
 # ------------------------------------------------------------------
 
+if TYPE_CHECKING:
+    # Only for `_compose_agent_node`'s type hints (#14184) — `get_org_chart`
+    # imports these lazily at call time for the actual query code, and this
+    # block costs nothing at runtime, so that import-lazing is unaffected.
+    from llc.models.budget import LLCAgentBudget
+    from llc.models.heartbeat_run import LLCHeartbeatRun
+    from models.agent_org import AgentOrgNode
+
 
 class OrgChartNode(BaseModel):
     """One agent node in the company org chart.
@@ -997,6 +1005,62 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
     return nodes
 
 
+def _compose_agent_node(
+    row: "AgentOrgNode",
+    budget: "Optional[LLCAgentBudget]",
+    run: "Optional[LLCHeartbeatRun]",
+    assigned_item_count: int,
+) -> OrgChartNode:
+    """Compose one agent's ``OrgChartNode`` from its hierarchy row, its budget
+    row (if any), and its latest heartbeat run (if any) (#14184).
+
+    Extracted verbatim out of ``get_org_chart``'s per-row loop — a pure move,
+    the precedent being the already-extracted human branch,
+    ``_compose_human_nodes``. No field's source expression changed: every
+    right-hand side below is byte-for-byte the same expression that used to
+    sit inline in the loop, and the existing org-chart test suite
+    (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
+    every one of them unchanged as the behaviour-preservation evidence.
+    """
+    # Budget enrichment: expose token numbers for token-mode agents when
+    # the field is populated, otherwise fall back to dollar amounts.
+    b_mode = budget.budget_mode if budget else "dollars"
+    if b_mode == "tokens" and budget and budget.token_limit is not None:
+        b_spent = float(budget.tokens_spent)
+        b_total = float(budget.token_limit)
+    else:
+        b_spent = float(budget.budget_spent) if budget else 0.0
+        b_total = float(budget.budget_limit) if budget else 0.0
+    return OrgChartNode(
+        id=row.agent_id,
+        node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
+        name=row.name,
+        title=row.title or row.org_role,
+        # #14108: an explicit pause/terminate must win over a derived
+        # heartbeat status — see `_resolve_org_status` for the precedence
+        # rule and why every other lifecycle value falls through to it.
+        status=_resolve_org_status(row.status, run.status if run else None),
+        # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
+        # back to "" (not the role) when NULL: the hire flow
+        # (agent_hires.py) always sets a concrete adapter — "claude_code"
+        # by default — so a NULL here means a legacy/manually-seeded row
+        # with genuinely no configured adapter, and reusing ``org_role``
+        # is exactly the dishonest substitution this fix removes.
+        adapter_type=row.adapter_type or "",
+        is_human=False,
+        # Liveness: latest run is picked by created_at; a just-queued run
+        # may have no started_at, so fall back to created_at.
+        last_heartbeat=(
+            (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
+        ),
+        budget_spent=b_spent,
+        budget_total=b_total,
+        assigned_item_count=assigned_item_count,
+        parent_id=row.reports_to,
+        children=[],
+    )
+
+
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
 async def get_org_chart(
     company_id: uuid.UUID,
@@ -1084,48 +1148,17 @@ async def get_org_chart(
     )
     assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
 
-    # Compose flat nodes.
-    flat: Dict[str, OrgChartNode] = {}
-    for row in org_rows:
-        budget = budgets.get(row.agent_id)
-        run = runs.get(row.agent_id)
-        # Budget enrichment: expose token numbers for token-mode agents when
-        # the field is populated, otherwise fall back to dollar amounts.
-        b_mode = budget.budget_mode if budget else "dollars"
-        if b_mode == "tokens" and budget and budget.token_limit is not None:
-            b_spent = float(budget.tokens_spent)
-            b_total = float(budget.token_limit)
-        else:
-            b_spent = float(budget.budget_spent) if budget else 0.0
-            b_total = float(budget.budget_limit) if budget else 0.0
-        flat[row.agent_id] = OrgChartNode(
-            id=row.agent_id,
-            node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
-            name=row.name,
-            title=row.title or row.org_role,
-            # #14108: an explicit pause/terminate must win over a derived
-            # heartbeat status — see `_resolve_org_status` for the precedence
-            # rule and why every other lifecycle value falls through to it.
-            status=_resolve_org_status(row.status, run.status if run else None),
-            # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
-            # back to "" (not the role) when NULL: the hire flow
-            # (agent_hires.py) always sets a concrete adapter — "claude_code"
-            # by default — so a NULL here means a legacy/manually-seeded row
-            # with genuinely no configured adapter, and reusing ``org_role``
-            # is exactly the dishonest substitution this fix removes.
-            adapter_type=row.adapter_type or "",
-            is_human=False,
-            # Liveness: latest run is picked by created_at; a just-queued run
-            # may have no started_at, so fall back to created_at.
-            last_heartbeat=(
-                (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
-            ),
-            budget_spent=b_spent,
-            budget_total=b_total,
-            assigned_item_count=assigned_counts.get(row.agent_id, 0),
-            parent_id=row.reports_to,
-            children=[],
+    # Compose flat nodes — per-row composition lives in `_compose_agent_node`
+    # (#14184's extraction), mirroring the human branch's `_compose_human_nodes`.
+    flat: Dict[str, OrgChartNode] = {
+        row.agent_id: _compose_agent_node(
+            row,
+            budgets.get(row.agent_id),
+            runs.get(row.agent_id),
+            assigned_counts.get(row.agent_id, 0),
         )
+        for row in org_rows
+    }
 
     def _chain_resolves_to_root(agent_id: str) -> bool:
         """True if following reports_to from ``agent_id`` ends at a node with no
