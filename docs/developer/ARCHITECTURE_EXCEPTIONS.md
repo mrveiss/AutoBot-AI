@@ -143,3 +143,32 @@ class FlashAttentionV2:  # canonical: ignore py-duplicate-concept — published 
 ```
 
 **Grep check:** `git grep -n "FlashAttentionV2"` should return only flash-attention implementation and test files.
+
+---
+
+## VNC Service Account — Real Home and Shell (not `nologin`)
+
+**File:** `autobot-slm-backend/ansible/roles/vnc/tasks/main.yml`,
+`autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`
+**Issue:** #14319
+
+**Pattern bypassed:** Every other per-service account on the platform
+(`autobot-backend`, `autobot-ai`, `autobot-npu`, `autobot-browser`,
+`autobot-tts`) is `system: true` with `shell: /usr/sbin/nologin` and no home
+directory — the account exists only to own files and run one systemd unit.
+
+**Reason:** VNC starts an interactive desktop session, and its `xstartup`
+(`templates/xstartup.j2`) is an executable script invoked by the VNC server
+process itself, not by systemd — it needs a real home directory
+(`~/.vnc/xstartup`, `~/.vnc/passwd`, `~/.vnc/config`) and a usable shell to
+run under. A `nologin` account with no home cannot host this. `autobot-vnc`
+(the account's default name — see `vnc_user` in `defaults/main.yml`) is
+therefore `system: true` (no login, no password) but with `shell: /bin/bash`
+and `create_home: true`, same as every other per-service account for
+everything *except* that one dimension.
+
+**What it explicitly does NOT get:** sudo access of any kind, and the
+account is validated to never be `autobot_admin` (the emergency admin
+safety-net account) — see the `assert` task at the top of `tasks/main.yml`.
+
+**Grep check:** `grep -n "vnc_user\|vnc_forbidden_user" autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`

@@ -11,8 +11,36 @@
 # fix-vnc-wsl.sh resolve the same variable). AUTOBOT_VNC_USER remains a
 # deprecated alias for one release, since an existing host may already have
 # only it set; VNC_USER always wins when both are present.
-vnc_user: "{{ lookup('env', 'VNC_USER') or lookup('env', 'AUTOBOT_VNC_USER') | default('autobot', true) }}"
-vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot', true) }}"
+#
+# #14319: VNC gets its own dedicated service account rather than sharing
+# `autobot` (the SSH/ansible operational identity) or `autobot_admin` (the
+# emergency safety-net account — rotate-ssh-keys.yml deliberately never
+# touches its authorized_keys, so it is the way back in when key rotation
+# breaks `autobot`; a long-running desktop session, a websockify listener and
+# a VNC password file have no business inside that account's home). Default
+# changed from 'autobot' to 'autobot-vnc', following the per-service pattern
+# used by roles/backend, roles/npu-worker, roles/tts-worker and roles/browser.
+# `autobot_admin` is rejected outright below (tasks/main.yml), whatever this
+# default is, so the validation outlives any future change of default.
+#
+# The one place this account cannot copy the per-service pattern: the other
+# service accounts are `nologin` with no home; VNC starts a desktop session
+# and its xstartup is an executable script, so this account needs a real home
+# and a usable shell (see tasks/main.yml, and
+# docs/developer/ARCHITECTURE_EXCEPTIONS.md).
+vnc_user: "{{ lookup('env', 'VNC_USER') or lookup('env', 'AUTOBOT_VNC_USER') | default('autobot-vnc', true) }}"
+vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot-vnc', true) }}"
+
+# #14319: the account VNC ran under before this change (the platform-wide
+# default before this issue). Used once, by the migration task in
+# tasks/main.yml, to relocate an existing host's VNC state to the new
+# dedicated account rather than leaving a working install pointing at a
+# directory the service can no longer read.
+vnc_legacy_user: autobot
+
+# #14319: explicitly rejected as vnc_user, in both this role and the
+# fix-vnc-*.sh scripts — see the comment above vnc_user for why.
+vnc_forbidden_user: autobot_admin
 vnc_display: "{{ lookup('env', 'VNC_DISPLAY') | default('1', true) }}"
 vnc_geometry: "{{ lookup('env', 'VNC_GEOMETRY') | default('1920x1080', true) }}"
 vnc_depth: "{{ lookup('env', 'VNC_DEPTH') | default('24', true) }}"
