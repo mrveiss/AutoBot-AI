@@ -264,7 +264,8 @@ class TestExtension:
 
     @pytest.mark.asyncio
     async def test_permission_error_is_not_swallowed_to_none(self):
-        """A PermissionError denial reaches the caller as `False`, not `None`.
+        """A `fail_closed` extension's PermissionError denial reaches the
+        caller as `False`, not `None`.
 
         `None` reads as "no opinion" to callers like
         `not any(result is False for result in results)` - flattening a
@@ -273,6 +274,7 @@ class TestExtension:
 
         class DenyingExtension(Extension):
             name = "denying"
+            fail_closed = True
 
             async def on_before_tool_execute(self, ctx: HookContext):
                 raise PermissionError("caller lacks the required permission")
@@ -283,6 +285,30 @@ class TestExtension:
         result = await ext.on_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
 
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_an_unrelated_permission_error_does_not_cancel_a_non_fail_closed_extension(self):
+        """Review of #14420: `PermissionError` is a bare built-in this
+        codebase already raises for unrelated reasons (secrets storage,
+        credential stores, container backends, skills). An extension that
+        does NOT opt into `fail_closed` must not have one of those, reached
+        transitively from inside its hook body, silently read as a deny."""
+
+        class UnrelatedFileExtension(Extension):
+            name = "unrelated_file_access"
+            # fail_closed defaults to False - this extension is not a
+            # permission decision, it just happens to touch a path that
+            # raises the same built-in exception type for a different reason.
+
+            async def on_before_llm_call(self, ctx: HookContext):
+                raise PermissionError("os.chmod: operation not permitted")
+
+        ext = UnrelatedFileExtension()
+        ctx = HookContext()
+
+        result = await ext.on_hook(HookPoint.BEFORE_LLM_CALL, ctx)
+
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_fail_closed_extension_unexpected_error_denies(self):
@@ -478,6 +504,7 @@ class TestExtensionManager:
 
         class DenyingExtension(Extension):
             name = "denying"
+            fail_closed = True
 
             async def on_before_tool_execute(self, ctx: HookContext):
                 raise PermissionError("denied")

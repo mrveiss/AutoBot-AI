@@ -344,6 +344,7 @@ class TestBeforeToolExecute:
 
         class DenyingExtension(Extension):
             name = "denying_permission"
+            fail_closed = True
 
             async def on_before_tool_execute(self, ctx: HookContext):
                 raise PermissionError("caller lacks the required permission")

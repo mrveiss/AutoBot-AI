@@ -1090,10 +1090,18 @@ async def _try_mcp_dispatch(
             "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
             tool_name,
         )
+        cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
+        # Issue #14420 (review): the agent loop cannot otherwise tell a
+        # permission denial from any other hook veto and may retry the same
+        # call forever. A declared permission requirement is the only signal
+        # available at this call site without deeper hook introspection - the
+        # PermissionError detail itself correctly stays server-side.
+        if tool.get("required_permission") is not None:
+            cancellation_metadata["reason"] = "permission_denied"
         return WorkflowMessage(
             type="error",
             content=f"Tool execution cancelled: {tool_name}",
-            metadata={"tool_name": tool_name, "cancelled_by_hook": True},
+            metadata=cancellation_metadata,
         )
 
     try:

@@ -92,6 +92,9 @@ class TestDenialReachesTheRealCallSite:
 
         assert result.type == "error"
         assert result.metadata.get("cancelled_by_hook") is True
+        # #14420 (review): the agent loop must be able to tell this apart
+        # from an arbitrary hook veto, or it may retry forever.
+        assert result.metadata.get("reason") == "permission_denied"
         stub.dispatch.assert_not_called()
 
     @pytest.mark.asyncio
@@ -109,4 +112,5 @@ class TestDenialReachesTheRealCallSite:
 
         assert result.type == "error"
         assert result.metadata.get("cancelled_by_hook") is True
+        assert result.metadata.get("reason") == "permission_denied"
         stub.dispatch.assert_not_called()
