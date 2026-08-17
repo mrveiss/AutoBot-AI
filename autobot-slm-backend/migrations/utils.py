@@ -158,8 +158,19 @@ def create_index_if_not_exists(
     later create-all converges the schema without a Postgres ERROR (#9785).
     """
     if not table_exists(cursor, table_name):
-        logger.debug(
-            "Skipping index %s: table %s does not exist yet",
+        # #14327: the same shape #14300 fixed for columns. The #9785 skip is
+        # right, but on its own the runner then marks the migration applied,
+        # permanently — so the index is never created once the table appears,
+        # or when the table lives in a different database than the one the
+        # runner connects to. Recording the deferral lets the runner decline to
+        # mark it applied, so it is retried on the next boot.
+        #
+        # WARNING rather than DEBUG for the same reason as the column helper: a
+        # skipped schema change that looks like a completed one is exactly the
+        # thing nobody goes looking for, and DEBUG is not on in production.
+        _DEFERRED.append(f"{table_name}.{index_name}")
+        logger.warning(
+            "Deferring index %s on %s: table does not exist in this database yet (#14327)",
             index_name,
             table_name,
         )
