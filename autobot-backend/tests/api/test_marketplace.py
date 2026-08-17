@@ -330,9 +330,9 @@ class TestListCatalog:
                 sort_by=CatalogSort.NAME,
                 source_id="builtin",
             )
-        assert any(e.name == entry["name"] for e in resp.entries), (
-            f"name search for {term!r} (derived from {entry['name']!r}) did not find it"
-        )
+        assert any(
+            e.name == entry["name"] for e in resp.entries
+        ), f"name search for {term!r} (derived from {entry['name']!r}) did not find it"
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_description(self):
@@ -353,8 +353,7 @@ class TestListCatalog:
                 source_id="builtin",
             )
         assert any(e.name == entry["name"] for e in resp.entries), (
-            f"description search for {term!r} (derived from {entry['name']!r}'s own "
-            f"description) did not find it"
+            f"description search for {term!r} (derived from {entry['name']!r}'s own " f"description) did not find it"
         )
 
     @pytest.mark.asyncio
@@ -374,9 +373,9 @@ class TestListCatalog:
                 sort_by=CatalogSort.NAME,
                 source_id="builtin",
             )
-        assert any(e.name == entry["name"] for e in resp.entries), (
-            f"tag search for {term!r} (derived from {entry['name']!r}'s own tags) did not find it"
-        )
+        assert any(
+            e.name == entry["name"] for e in resp.entries
+        ), f"tag search for {term!r} (derived from {entry['name']!r}'s own tags) did not find it"
 
     @pytest.mark.asyncio
     async def test_search_no_match_returns_empty(self):
