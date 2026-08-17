@@ -6,6 +6,17 @@
 # environment the gate uses and commits it back to the PR branch — self-healing
 # the recurring drift (#10817). Runs on GitHub-hosted runners so it never
 # competes with the self-hosted runner.
+#
+# #14368: autobot-slm-frontend carries the identical drift risk (verified by
+# `verify-generated-types-slm`, the SLM sibling of the required gate above)
+# but had no auto-fix, so an SLM schema change simply reddened and the author
+# had to regenerate by hand — which needs a locally-running SLM app, something
+# contributors and agents cannot do in this repo. The steps below reuse the
+# EXACT recipe `verify-generated-types-slm` runs (scripts/audit_api_wiring.py
+# --dump-slm-openapi against autobot-slm-backend/main.py's `app`), so the two
+# cannot drift apart. They stay in this one job, not a second parallel one:
+# one push, one commit, one `approve-parked-runs` follow-up, matching the
+# backend shape exactly instead of forking a second push/approve pair.
 
 name: Auto-fix Generated Types
 
@@ -16,6 +27,14 @@ on:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-frontend/src/types/generated/api.ts'
+      # #14368: SLM backend changes can alter the OpenAPI schema
+      # autobot-slm-frontend's openapi.json + api.ts are generated from.
+      # openapi.json (unlike the backend's, which is an ephemeral CI temp
+      # file never committed) IS a checked-in artifact here, so it is watched
+      # too — a hand-edit or bad merge of it must also trigger the fix-back.
+      - 'autobot-slm-backend/**/*.py'
+      - 'autobot-slm-frontend/openapi.json'
+      - 'autobot-slm-frontend/src/types/generated/api.ts'
       - '.github/workflows/auto-fix-generated-types.yml'
 
 concurrency:
@@ -57,6 +76,7 @@ jobs:
           cache-dependency-path: |
             requirements*.txt
             autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements.txt
 
       - name: Install backend dependencies
         run: |
@@ -81,7 +101,9 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: autobot-frontend/package-lock.json
+          cache-dependency-path: |
+            autobot-frontend/package-lock.json
+            autobot-slm-frontend/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: autobot-frontend
@@ -96,30 +118,89 @@ jobs:
         working-directory: autobot-frontend
         run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
 
+      - name: Set up isolated venv for SLM backend dependencies
+        # #14368: autobot-slm-backend/requirements.txt pins its own
+        # fastapi/pydantic/starlette range plus packages the backend never
+        # imports (croniter, authlib, ldap3, pysaml2, pyotp, bcrypt,
+        # PyJWT[crypto], ...) — the same reason `verify-generated-types-slm`
+        # runs as a separate job from `verify-types-run` rather than sharing
+        # its environment. A venv gets the same isolation here without a
+        # second job, so this stays the one push/approve pair the backend
+        # already has.
+        run: python -m venv .venv-slm
+
+      - name: Install SLM backend dependencies
+        run: |
+          .venv-slm/bin/python -m pip install --upgrade pip setuptools wheel
+          .venv-slm/bin/python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary
+
+      - name: Dump authoritative SLM OpenAPI schema
+        run: |
+          set -o pipefail
+          mkdir -p data logs static config autobot-slm-backend/data
+          export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
+          if ! .venv-slm/bin/python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.raw.json; then
+            echo "::error::SLM backend app.openapi() build failed — cannot regenerate types (see startup-import-smoke)."
+            exit 1
+          fi
+          # Same recipe as verify-generated-types-slm: strip the audit-only
+          # x-websocket-paths extension and write with the exact formatting
+          # (indent=2, sort_keys, trailing newline) `npm run gen:types:openapi`
+          # produces locally, so the two can never disagree on the diff.
+          .venv-slm/bin/python -c "
+          import json
+          s = json.load(open('slm_openapi.raw.json'))
+          s.pop('x-websocket-paths', None)
+          with open('autobot-slm-frontend/openapi.json', 'w', encoding='utf-8') as f:
+              json.dump(s, f, indent=2, sort_keys=True, ensure_ascii=False)
+              f.write('\n')
+          "
+
+      - name: Install SLM frontend dependencies
+        working-directory: autobot-slm-frontend
+        run: npm ci
+
+      - name: Regenerate SLM api.ts from authoritative schema
+        working-directory: autobot-slm-frontend
+        run: npx --no-install openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
+
       - name: Commit regenerated types if drifted
         run: |
-          rm -f openapi.raw.json openapi.json
+          rm -f openapi.raw.json openapi.json slm_openapi.raw.json
+          rm -rf .venv-slm
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add autobot-frontend/src/types/generated/api.ts
+          git add autobot-frontend/src/types/generated/api.ts \
+            autobot-slm-frontend/openapi.json \
+            autobot-slm-frontend/src/types/generated/api.ts
           if git diff --staged --quiet; then
             echo "Generated types already fresh — nothing to commit."
           else
             git commit -m "$(cat <<'EOF'
-          chore(types): regenerate api.ts from backend OpenAPI schema
+          chore(types): regenerate generated API types from OpenAPI schema(s)
 
-          Auto-regenerated (py3.14) to match the backend schema so the required
-          verify-generated-types gate passes. Triggered by auto-fix-generated-types.yml.
+          Auto-regenerated (py3.14) to match the backend and/or SLM backend
+          schema so the required verify-generated-types gate(s) pass.
+          Triggered by auto-fix-generated-types.yml.
           EOF
           )"
             git push
-            echo "✅ api.ts regenerated and pushed to the PR branch."
+            # This push only touches api.ts / openapi.json, the exact paths
+            # this workflow's own `on.pull_request.paths` filter watches, so
+            # it DOES retrigger a new run on the branch. That rerun repeats
+            # the same regeneration, finds the tree already fresh (the diff
+            # below is empty), and takes the "nothing to commit" branch above
+            # instead of pushing again — the loop terminates in two runs, the
+            # same self-limiting shape the backend-only version already had.
+            echo "✅ Generated types regenerated and pushed to the PR branch."
           fi
 
   # #14311: identical parking defect as auto-fix-formatting.yml — see the
   # comment on that workflow's `approve-parked-runs` job for the full
   # explanation. This job repairs it here too, since `autofix-types` pushes
-  # with the same bot identity and fork-safety constraints.
+  # with the same bot identity and fork-safety constraints. #14368 added
+  # SLM steps into `autofix-types` itself rather than a second job, so this
+  # approval job's `needs`/guard are unchanged — one push, one approval.
   approve-parked-runs:
     needs: autofix-types
     if: github.event.pull_request.head.repo.full_name == github.repository
