@@ -261,6 +261,53 @@
 # slm-secrets.env → autobot-backend.env (both already carry the key, #10263/
 # #10492). Remote agent-only nodes without either file get an empty key and the
 # agent logs the #11450 401 hint until the key is provisioned.
+# #14350: read the SLM's OWN key first, from the control node.
+#
+# The agent authenticates its heartbeat AGAINST the SLM backend, which loads
+# /etc/autobot/slm-secrets.env. That file is therefore the only source of truth
+# for what the agent's key must be. It is read from the SLM manager as resolved
+# from inventory group membership, not from whatever host happens to be driving
+# the play.
+#
+# The two values this replaces as the primary source were each wrong in a
+# different direction, and the repo has an issue for both:
+#
+#   * the `autobot_internal_api_key` var carries the MANAGED BACKEND's key,
+#     which drifted from the SLM's on some installs — #11507 / #11450.
+#   * the NODE's own copy is a cache of whatever was current at enrollment. When
+#     it goes stale, every redeploy faithfully rewrites the stale value and the
+#     manager cannot correct it — the agent 401s forever (#14350). The repair
+#     mechanism was reading its input from the thing that needed repairing.
+#
+# Failure here is not fatal: an empty result falls through to the previous
+# order, so a control node without the file behaves exactly as before.
+- name: "SLM Agent | Read the SLM's own AUTOBOT_INTERNAL_API_KEY (authoritative) (#14350)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    f=/etc/autobot/slm-secrets.env;
+    if [ -r "$f" ]; then
+      grep -m1 '^AUTOBOT_INTERNAL_API_KEY=' "$f" | cut -d= -f2-;
+    fi
+  args:
+    executable: /bin/bash
+  # Review of #14350: NOT `localhost`. That would read whichever machine
+  # invoked ansible-playbook, which is the SLM only by convention -- the
+  # repo's own runbooks disagree on whether a fleet update may be driven from
+  # a dev box, and any host carrying the slm_manager role has its own
+  # slm-secrets.env. Reading the wrong one here would OUTRANK the node's
+  # correct key, which is worse than the bug being fixed.
+  #
+  # `slm_manager_inventory_host` resolves the SLM from group membership
+  # (group_vars/all.yml, #9956) and is already used this way by
+  # playbooks/setup-internal-ca.yml.
+  delegate_to: "{{ slm_manager_inventory_host }}"
+  become: true
+  register: _slm_own_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['slm_agent', 'systemd', 'secrets']
+
 - name: "SLM Agent | Read AUTOBOT_INTERNAL_API_KEY from node secrets (fallback when var unset) (#11480)"
   ansible.builtin.shell: >-
     set -o pipefail;
@@ -281,15 +328,19 @@
 
 - name: "SLM Agent | Resolve effective internal API key (SLM slm-secrets.env wins) (#11450 #11507)"
   ansible.builtin.set_fact:
-    # The agent authenticates to the SLM backend, which loads slm-secrets.env —
-    # so the node file (read slm-secrets.env FIRST) is authoritative. The
-    # autobot_internal_api_key deploy var reflects the MANAGED backend's key,
-    # which has drifted from the SLM's on some installs (#11507) → using it gave
-    # the agent the wrong key and every heartbeat 401'd (#11450). Prefer the
-    # node file; fall back to the var only when no node secrets file exists
-    # (e.g. a remote agent-only node — tracked by the #11507 reconciliation).
+    # Order, most authoritative first (#14350):
+    #   1. the SLM's OWN slm-secrets.env, read from the control node. The agent
+    #      authenticates against the SLM, so this is what the key must equal.
+    #   2. the node's own secrets file — the previous primary. Kept as a
+    #      fallback for a control node that cannot read its own key, but it is
+    #      no longer allowed to WIN: a stale copy there is unfixable by any
+    #      redeploy, which is the #14350 failure.
+    #   3. the autobot_internal_api_key var, which reflects the managed
+    #      backend's key and has drifted from the SLM's on some installs
+    #      (#11507) — last, for the same reason it was demoted originally.
     _agent_internal_api_key: >-
-      {{ (_agent_key_from_node.stdout | default('') | trim)
+      {{ (_slm_own_key.stdout | default('') | trim)
+         or (_agent_key_from_node.stdout | default('') | trim)
          or (autobot_internal_api_key | default('') | trim) }}
   no_log: true
   tags: ['slm_agent', 'systemd', 'secrets']
