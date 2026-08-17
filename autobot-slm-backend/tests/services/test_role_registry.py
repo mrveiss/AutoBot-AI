@@ -184,7 +184,20 @@ def test_scheduler_in_backend_ansible_group():
 
 
 def test_scheduler_dependencies():
-    assert ROLE_DEPENDENCIES["scheduler"] == ["python314"]
+    """#14446: derived from the group it shares, not restated as a literal.
+
+    This used to read `== ["python314"]`, sitting directly beneath
+    `test_scheduler_in_backend_ansible_group`. Between them the two tests state
+    the bug outright -- scheduler runs the backend ansible role but declares
+    less than backend does -- and neither noticed, because each only restated
+    one map. A scheduler-only node reached `nginx -t` with no nginx installed.
+
+    Anchored to backend's own dependencies so the two cannot drift apart again.
+    """
+    assert set(ROLE_DEPENDENCIES["scheduler"]) >= set(ROLE_DEPENDENCIES["backend"]), (
+        "scheduler runs the backend ansible role (ROLE_ANSIBLE_GROUPS) but declares fewer "
+        "dependencies than backend, so Phase 0 skips what Phase 4a requires"
+    )
 
 
 # ---------------------------------------------------------------------------
