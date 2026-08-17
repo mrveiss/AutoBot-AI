@@ -4622,9 +4622,11 @@ export interface paths {
          * Get Prometheus Metrics
          * @description Export metrics in Prometheus text format.
          *
-         *     #14362: query cost is bounded (LIMIT + short TTL cache) rather than
-         *     scaling with table size or scrape frequency. #14361: no per-request
-         *     label is emitted — see `_generate_prometheus_metrics`.
+         *     #14362: the trace-duration histogram is a SQL-side aggregate over the
+         *     full window (no row LIMIT — `_count`/`_sum` are exact totals, not a
+         *     sample), plus a short TTL cache so a scrape inside the TTL skips both
+         *     queries entirely. #14361: no per-request label is emitted — see
+         *     `_generate_prometheus_metrics`.
          */
         get: operations["get_prometheus_metrics_api_performance_metrics_prometheus_get"];
         put?: never;

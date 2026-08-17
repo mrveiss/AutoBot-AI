@@ -28235,7 +28235,7 @@
     },
     "/api/performance/metrics/prometheus": {
       "get": {
-        "description": "Export metrics in Prometheus text format.\n\n#14362: query cost is bounded (LIMIT + short TTL cache) rather than\nscaling with table size or scrape frequency. #14361: no per-request\nlabel is emitted — see `_generate_prometheus_metrics`.",
+        "description": "Export metrics in Prometheus text format.\n\n#14362: the trace-duration histogram is a SQL-side aggregate over the\nfull window (no row LIMIT — `_count`/`_sum` are exact totals, not a\nsample), plus a short TTL cache so a scrape inside the TTL skips both\nqueries entirely. #14361: no per-request label is emitted — see\n`_generate_prometheus_metrics`.",
         "operationId": "get_prometheus_metrics_api_performance_metrics_prometheus_get",
         "responses": {
           "200": {
