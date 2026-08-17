@@ -106,6 +106,62 @@ def get_db_url() -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
+def get_user_management_db_url() -> str:
+    """URL for the separate user_management database (#14300).
+
+    ``role_permissions`` and ``audit_logs`` are user_management tables,
+    which live in a database of their own — distinct from the primary SLM
+    database ``get_db_url()`` returns for ``DATABASE_URL``. Production opens
+    that second database the same way the SLM backend itself already does
+    at startup (``main.py``'s ``_init_user_management_tables`` via
+    ``user_management.database.get_slm_engine``): through
+    ``user_management.config.get_slm_db_config``, which reads
+    ``SLM_USERS_DATABASE_URL`` (falling back to discrete
+    ``SLM_POSTGRES_*`` env vars). No connection string is hardcoded here —
+    this function is a thin sync-URL adapter over that existing config
+    source, not a second source of truth for it.
+    """
+    from user_management.config import get_slm_db_config
+
+    return get_slm_db_config().sync_url
+
+
+# A migration module may declare which database it targets by setting a
+# module-level ``TARGET_DB`` constant to one of these. Migrations that don't
+# declare one default to TARGET_DB_SLM (DATABASE_URL) -- every migration
+# written before #14300 is unaffected.
+TARGET_DB_SLM = "slm"
+TARGET_DB_USER_MANAGEMENT = "user_management"
+
+
+def _resolve_migration_db_url(module, default_db_url: str) -> str:
+    """Pick the connection URL a migration module should run against (#14300).
+
+    Reading ``TARGET_DB`` off the module, rather than always handing every
+    migration ``DATABASE_URL``, is what makes a cross-database migration
+    like ``add_role_permission_audit_log_timestamps`` reachable at all: it
+    alters ``role_permissions``/``audit_logs``, which live in the
+    user_management database, never in ``DATABASE_URL``'s database — no
+    connection to the latter can ever see those tables, by construction.
+
+    An unrecognized ``TARGET_DB`` value is a configuration mistake in the
+    migration itself, not something to quietly defer around: it raises here,
+    at the moment the migration is loaded, so the mismatch is a loud,
+    diagnosable failure instead of a deferral that looks identical to the
+    ordinary "table not created yet" case and retries forever without
+    anyone noticing the target database was wrong in the first place.
+    """
+    target = getattr(module, "TARGET_DB", TARGET_DB_SLM)
+    if target == TARGET_DB_SLM:
+        return default_db_url
+    if target == TARGET_DB_USER_MANAGEMENT:
+        return get_user_management_db_url()
+    raise ValueError(
+        f"{module.__name__} declares unknown TARGET_DB={target!r}; "
+        f"expected {TARGET_DB_SLM!r} or {TARGET_DB_USER_MANAGEMENT!r}"
+    )
+
+
 def _parse_db_url(url: str) -> dict:
     """Parse PostgreSQL URL into connection parameters (#786)."""
     # postgresql://user:pass@host:port/database
@@ -226,12 +282,17 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
         # Import the migration module
         module = importlib.import_module(f"migrations.{name}")
 
+        # Resolve which database this migration actually targets (#14300) --
+        # defaults to db_url (DATABASE_URL) unchanged for every migration
+        # that doesn't declare TARGET_DB.
+        target_db_url = _resolve_migration_db_url(module, db_url)
+
         # Check if it has a migrate() function (passes db_url)
         if hasattr(module, "migrate"):
-            module.migrate(db_url)
+            module.migrate(target_db_url)
             return True, f"Applied migration: {name}"
         elif hasattr(module, "run"):
-            module.run(db_url)
+            module.run(target_db_url)
             return True, f"Applied migration: {name}"
         else:
             # A module with no entry point did NOT run, so it must not report

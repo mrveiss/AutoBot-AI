@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Tuple
@@ -21,10 +22,35 @@ from typing import Dict, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.security.path_validator import require_path_string
 from config import settings
 from models.database import Backup, BackupStatus, Node
 
 logger = logging.getLogger(__name__)
+
+# Last-resort value if settings.backup_dir turns out to be unusable
+# (#14217). Kept textually identical to config.py's Settings.backup_dir
+# default — not a second, independent literal — so the drift between two
+# defaults that #13307 fixed can't reappear. Never applies during normal
+# operation: Settings (pydantic BaseSettings) always coerces backup_dir to
+# a real Path.
+_FALLBACK_BACKUP_DIR = Path(os.getenv("SLM_BACKUP_DIR", "/var/lib/slm/backups"))
+
+
+def _resolve_backup_storage_dir() -> Path:
+    """Validate settings.backup_dir before it becomes a directory (#14217).
+
+    ``Path()`` never raises for a non-path value: a ``MagicMock``'s default
+    ``__fspath__`` embeds ``/`` separators and silently becomes a real,
+    multi-component path the moment something ``mkdir()``s it. Reject here,
+    before that happens, instead of handing it straight to ``Path()``.
+    """
+    try:
+        return Path(require_path_string(settings.backup_dir, context="settings.backup_dir"))
+    except (TypeError, ValueError) as exc:
+        logger.error("settings.backup_dir is not a usable path (%s); using the configured default.", exc)
+        return _FALLBACK_BACKUP_DIR
+
 
 # Backup storage directory.
 #
@@ -33,7 +59,7 @@ logger = logging.getLogger(__name__)
 # real destination was config.py's `~/slm-backups`. Two files naming different
 # defaults, with the unreachable one being the correct answer. `settings` is now
 # the single source and already resolves to /var/lib/slm/backups.
-BACKUP_STORAGE_DIR = Path(settings.backup_dir)
+BACKUP_STORAGE_DIR = _resolve_backup_storage_dir()
 
 
 class BackupService:

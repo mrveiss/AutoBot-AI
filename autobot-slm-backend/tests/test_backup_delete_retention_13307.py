@@ -142,17 +142,29 @@ def test_service_and_config_agree_on_one_destination(backup_module):
         "the dead hasattr fallback is back — it named a different default that "
         "could never apply, which is how the two files disagreed"
     )
-    assert "BACKUP_STORAGE_DIR = Path(settings.backup_dir)" in backup_src, (
-        "services/backup.py must take the destination from settings alone; a "
-        "second literal here is exactly how the two files came to disagree"
+    assert "require_path_string(settings.backup_dir" in backup_src, (
+        "services/backup.py must take the destination from settings.backup_dir "
+        "alone, validated at the boundary (#14217) — a second literal here is "
+        "exactly how the two files came to disagree"
     )
 
-    # The runtime value is deliberately NOT asserted here. `config` is a
-    # MagicMock in this harness even for a module loaded from its own path, so
-    # `Path(settings.backup_dir)` resolves to a mock repr — an assertion on it
-    # would measure the stub, not the code. config.py's literal default is
-    # pinned by test_storage_dir_is_not_a_home_directory; together the two
-    # establish the single-source property without asserting against a mock.
+
+def test_storage_dir_is_a_real_path_even_when_settings_is_mocked(backup_module):
+    """#14217: settings is a MagicMock in this harness — BACKUP_STORAGE_DIR must
+    still be a real, safe Path, not a directory tree grown from a mock's repr.
+
+    Before the fix, `Path(settings.backup_dir)` never raised for the mocked
+    attribute (a MagicMock's default `__fspath__` embeds "/" separators), so
+    it silently became a multi-component path built from the mock's own
+    name/id — exactly the `MagicMock/mock.settings.backup_dir/<id>/` tree
+    reported in #14217. It must now fall back to a real, hardcoded location
+    instead of that mock-derived path.
+    """
+    resolved = backup_module.BACKUP_STORAGE_DIR
+
+    assert isinstance(resolved, Path)
+    assert "MagicMock" not in str(resolved), f"BACKUP_STORAGE_DIR still carries the mock's repr: {resolved}"
+    assert resolved == backup_module._FALLBACK_BACKUP_DIR
 
 
 def test_import_survives_an_unwritable_destination(backup_module):
