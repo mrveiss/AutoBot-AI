@@ -17,7 +17,6 @@ from .company import (
     CompanyUpdate,
 )
 from .contact import LLCContact
-from .contact_company_link import LLCContactCompanyLink
 from .enums import (
     ActivityEventType,
     ApprovalStatus,
@@ -70,7 +69,6 @@ __all__ = [
     "CoWorkerType",
     "CompanyAncestor",
     "LLCContact",
-    "LLCContactCompanyLink",
     "FindingProposalStatus",
     "LLCFindingProposal",
     "CompanyCreate",
