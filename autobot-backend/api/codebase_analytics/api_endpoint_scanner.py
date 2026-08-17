@@ -11,6 +11,7 @@ frontend TypeScript/Vue files for API calls.
 
 import ast
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
@@ -28,6 +29,14 @@ from .models import (
 )
 
 logger = get_logger(__name__)
+
+# #14256: how often the per-file scan loops consult the cancel token, matching
+# duplicate_detector.py's CANCEL_CHECK_INTERVAL precedent. run_full_analysis()
+# used to be a single call submitted to the analytics executor with no way to
+# stop once running -- exactly the #12779 shape, just for API-endpoint
+# scanning instead of duplicate detection: a route timeout cancelled the
+# AWAIT, not the thread walking every backend/frontend file to completion.
+CANCEL_CHECK_INTERVAL = 200
 
 
 # =============================================================================
@@ -194,7 +203,11 @@ class BackendEndpointScanner:
     # Global API prefix applied to all routers in app_factory.py
     API_PREFIX = "/api"
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
@@ -212,6 +225,14 @@ class BackendEndpointScanner:
         self._module_prefix_map: Dict[str, str] = {}
         # #12945: resolved file -> prefix for registry-mounted routers outside api/
         self._external_router_prefixes: Dict[Path, str] = {}
+        # #14256: set by the caller when it stops waiting -- the run_full_analysis()
+        # call this scan is part of used to run to completion in its executor
+        # thread regardless, matching #12779's original duplicate-scan shape.
+        self._cancel_token = cancel_token
+
+    def _cancelled(self) -> bool:
+        """True once the caller has stopped waiting for this scan (#14256)."""
+        return self._cancel_token is not None and self._cancel_token.is_set()
 
     def scan_all_endpoints(self) -> List[APIEndpointItem]:
         """
@@ -235,7 +256,17 @@ class BackendEndpointScanner:
 
         # Second pass: scan all Python files
         scan_targets = list(self.backend_path.rglob("*.py")) + list(self._external_router_prefixes)
-        for py_file in scan_targets:
+        for index, py_file in enumerate(scan_targets):
+            # #14256: checked every CANCEL_CHECK_INTERVAL files, not every file --
+            # matches duplicate_detector.py's own cadence: cheap enough that the
+            # check itself never dominates, while bounding the abandonment window.
+            if index % CANCEL_CHECK_INTERVAL == 0 and self._cancelled():
+                logger.info(
+                    "Backend endpoint scan cancelled after %d/%d files",
+                    index,
+                    len(scan_targets),
+                )
+                break
             if py_file.name.startswith("__"):
                 continue
             if "archive" in str(py_file).lower():
@@ -984,13 +1015,23 @@ class BackendEndpointScanner:
 class FrontendAPICallScanner:
     """Scans frontend TypeScript/Vue files for API calls."""
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         self.project_root = project_root or Path(resolve_project_root())
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
+        # #14256: see BackendEndpointScanner._cancel_token.
+        self._cancel_token = cancel_token
+
+    def _cancelled(self) -> bool:
+        """True once the caller has stopped waiting for this scan (#14256)."""
+        return self._cancel_token is not None and self._cancel_token.is_set()
 
     def scan_all_calls(self) -> List[FrontendAPICallItem]:
         """
@@ -1006,8 +1047,17 @@ class FrontendAPICallScanner:
             return calls
 
         # Scan TypeScript and Vue files
+        index = 0
         for pattern in ("*.ts", "*.vue", "*.tsx", "*.js"):
             for file in self.frontend_path.rglob(pattern):
+                # #14256: same cadence as BackendEndpointScanner -- a route
+                # timeout used to cancel only the AWAIT, leaving this loop
+                # running to completion in its executor thread.
+                if index % CANCEL_CHECK_INTERVAL == 0 and self._cancelled():
+                    logger.info("Frontend API call scan cancelled after %d calls found", len(calls))
+                    return calls
+                index += 1
+
                 if "node_modules" in str(file):
                     continue
                 if file.name.endswith(".d.ts"):
@@ -1399,14 +1449,22 @@ class APIEndpointChecker:
         analysis = checker.run_full_analysis()
     """
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         self.project_root = project_root or Path(resolve_project_root())
-        self.backend_scanner = BackendEndpointScanner(self.project_root)
-        self.frontend_scanner = FrontendAPICallScanner(self.project_root)
+        # #14256: run_full_analysis() dispatches straight to the analytics
+        # executor with nothing checking whether the caller is still waiting --
+        # the exact #12779 shape. Threaded into both scanners so cancellation
+        # reaches whichever one is running when the deadline fires.
+        self.backend_scanner = BackendEndpointScanner(self.project_root, cancel_token=cancel_token)
+        self.frontend_scanner = FrontendAPICallScanner(self.project_root, cancel_token=cancel_token)
 
     def run_full_analysis(self) -> APIEndpointAnalysis:
         """
