@@ -41,7 +41,6 @@ from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from chat_history.message_schema import message_role, message_text
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
@@ -71,10 +70,6 @@ from utils.response_helpers import create_success_response
 # ====================================================================
 # Router Configuration
 # ====================================================================
-
-# The speaker an API-shape system record carries. Not sourced from the stored
-# schema on purpose — see `_preserve_system_messages` (#14306, #14359).
-_API_SYSTEM_ROLE = "system"
 
 router = APIRouter(tags=["chat-sessions"])
 logger = get_logger(__name__)
@@ -1482,90 +1477,23 @@ async def export_session(
 # =============================================================================
 
 
-async def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
+async def _clear_session_messages(chat_manager, session_id: str) -> None:
     """
-    Extract system messages from session for preservation.
+    Clear all messages from a session.
 
-    Issue #665: Extracted helper for system message preservation during reset.
+    Issue #665: Extracted helper for session clearing.
+    Issue #7025: previously called ``add_message(session_id, dict)`` to
+    restore preserved messages — the same wrong-signature pattern #6744 fixed
+    in api/chat.py. Python silently accepted UUID as ``sender`` and dict as
+    ``text``, leaving ``session_id=None`` so messages landed in the default
+    in-memory bucket instead of disk.
 
-    #14306: this filtered on the API-shape role key against records the session
-    store keeps under `sender`, so the comparison was never true. That looked
-    like the defect. It is not.
-
-    **Nothing persists a system prompt into a session.** `_get_system_prompt()`
-    composes one per turn and sends it straight to the provider; it is never
-    written to storage. The only production writers using this speaker are
-    operational notices (command approval, cancellation) and overflow summaries.
-
-    So resolving the schema mismatch would have made the default reset preserve
-    "Command approved" notices as though they were the prompt — worse than
-    preserving nothing, which is what the broken comparison did by accident.
-
-    The filter therefore stays as-is, deliberately, and the flag is vestigial:
-    there is no state here for a reset to destroy. Deprecating it is #14359.
-    Do not "fix" this comparison without reading that issue first.
-
-    What was genuinely broken on this path, and is fixed, is that the reset
-    never ran at all — see the call below and `_clear_and_restore_session`.
-    """
-    try:
-        existing_data = await chat_manager.get_session(session_id)
-        if existing_data and "messages" in existing_data:
-            # Intentionally the API-shape key: see the docstring. Matching the
-            # stored key here would preserve operational notices, not a prompt.
-            return [m for m in existing_data["messages"] if isinstance(m, dict) and m.get("role") == _API_SYSTEM_ROLE]
-    except Exception as e:
-        logger.warning("Could not preserve system prompt: %s", e)
-    return []
-
-
-def _to_persisted_system_message(msg: Dict) -> Dict:
-    """Translate api-shape (role/content) to disk-shape (sender/content/type).
-
-    #7025: ``_preserve_system_messages`` returns messages with ``role`` keys
-    (filtered by ``role == "system"``). The disk schema (used by
-    ``add_messages_batch`` and the JSON files in ``data/chats/``) expects
-    ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
-    ``api/chat.py:_to_persisted_message`` for the system-message subset.
-
-    #14306: the body is read through the normaliser, so a record whose body sits
-    under the stored key is not written back with an empty one. #7025's claim
-    that its source "returns messages with role keys" was never true, and the
-    two functions agreed with each other about a shape no writer produces.
-    """
-    return {
-        "id": msg.get("id", ""),
-        "sender": message_role(msg, default=_API_SYSTEM_ROLE),
-        "content": message_text(msg),
-        "timestamp": msg.get("timestamp"),
-        "type": msg.get("type", "message"),
-        "metadata": msg.get("metadata") or {},
-        "sources": msg.get("sources", []),
-    }
-
-
-async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_restore: List[Dict]) -> int:
-    """
-    Clear session and restore specified messages.
-
-    Issue #665: Extracted helper for session clearing with message restoration.
-    Issue #7025: previously called ``add_message(session_id, dict)`` — the
-    same wrong-signature pattern that #6744 fixed in api/chat.py. Python
-    silently accepted UUID as ``sender`` and dict as ``text``, leaving
-    ``session_id=None`` so messages landed in the default in-memory
-    bucket — restored messages were never written to disk. Now uses
-    ``add_messages_batch(session_id, [...])`` (correct signature) with
-    disk-shape conversion.
-
-    Returns number of messages restored.
+    #14359: the restore path this used to support (``keep_system_prompt`` /
+    ``_preserve_system_messages`` / ``_to_persisted_system_message``) is
+    removed — nothing ever persists a system prompt into a session, so there
+    was never anything for it to restore. See the issue for the full audit.
     """
     await chat_manager.update_session(session_id, {"messages": []})
-    if not messages_to_restore:
-        return 0
-    if hasattr(chat_manager, "add_messages_batch"):
-        persisted = [_to_persisted_system_message(m) for m in messages_to_restore]
-        await chat_manager.add_messages_batch(session_id, persisted)
-    return len(messages_to_restore)
 
 
 @router.post("/chat/reset", response_model=DataResponse[ChatResetData])
@@ -1579,7 +1507,10 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
     Reset the current chat session.
 
     Issue #549: Created to match frontend POST /api/chat/reset
-    Issue #665: Refactored to use extracted helpers for message preservation.
+    Issue #665: Refactored to use an extracted helper for session clearing.
+    Issue #14359: dropped ``keep_system_prompt`` — nothing ever persisted a
+    system prompt into a session, so the flag could not change any observable
+    outcome. Reset now always clears unconditionally when ``clear_context``.
     """
     request_id = generate_request_id()
     chat_history_manager = get_chat_history_manager(request)
@@ -1589,7 +1520,6 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
 
     session_id = reset_request.session_id
     clear_context = reset_request.clear_context
-    keep_system_prompt = reset_request.keep_system_prompt
 
     if not session_id:
         session_id = generate_chat_session_id()
@@ -1604,11 +1534,8 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
 
         if clear_context:
-            messages_to_keep = (
-                await _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
-            )
-            restored = await _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
-            logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
+            await _clear_session_messages(chat_history_manager, session_id)
+            logger.info("Reset chat session: %s", session_id)
 
     log_chat_event(
         "session_reset",
@@ -1616,7 +1543,6 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         {
             "request_id": request_id,
             "clear_context": clear_context,
-            "keep_system_prompt": keep_system_prompt,
         },
     )
 
@@ -1625,7 +1551,6 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
             "session_id": session_id,
             "reset": True,
             "clear_context": clear_context,
-            "keep_system_prompt": keep_system_prompt,
         },
         message="Chat session reset successfully",
         request_id=request_id,

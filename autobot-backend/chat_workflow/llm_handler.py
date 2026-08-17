@@ -259,23 +259,44 @@ async def _emit_before_tool_parse(llm_response: str, session_id: str, context: D
     return result if isinstance(result, str) else llm_response
 
 
-async def _emit_before_tool_execute(tool_name: str, tool_params: Dict[str, Any], session_id: str) -> bool:
+async def _emit_before_tool_execute(
+    tool_name: str,
+    tool_params: Dict[str, Any],
+    session_id: str,
+    tool_permission: str | None = None,
+    user_role: str | None = None,
+) -> bool:
     """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
 
     Issue #4181: Fires before executing a tool so extensions can reject
     or validate the execution.
 
+    Issue #14420: ``tool_permission``/``user_role`` feed
+    ``PermissionEnforcementExtension``. Callers that know the tool's
+    declared permission requirement (e.g. from the MCP registry) and the
+    caller's RBAC role should pass both; callers that do not are unchanged
+    - the extension treats a missing ``tool_permission`` as an undeclared,
+    legacy tool and allows it through.
+
     Args:
         tool_name: Name of tool to execute
         tool_params: Tool parameters
         session_id: Session identifier
+        tool_permission: The dot-style Permission value the tool requires,
+            or None if undeclared/unknown at this call site.
+        user_role: The caller's RBAC role, or None if unauthenticated.
 
     Returns:
         False to cancel tool execution, True otherwise
     """
     ctx = HookContext(
         session_id=session_id,
-        data={"tool_name": tool_name, "tool_params": tool_params},
+        data={
+            "tool_name": tool_name,
+            "tool_params": tool_params,
+            "tool_permission": tool_permission,
+            "user_role": user_role,
+        },
     )
     results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
     return not any(result is False for result in results)
