@@ -280,9 +280,11 @@ def test_both_tools_use_the_shared_grammar_and_keep_no_private_copy():
 def test_apirouter_prefix_distinguishes_absent_from_empty():
     """`file_router_prefix` normalises; the raw form must not.
 
-    `api_endpoint_scanner._get_file_router_prefix` returns the prefix verbatim
-    and `None` when none is declared, so collapsing both onto `""` would change
-    what the scanner reports.
+    Both consumers now take the normalised form (#14355) — the scanner used to
+    read the prefix verbatim, which is precisely how it and the gate came to
+    disagree about `"/x/"`. The raw reader stays, because "no prefix declared"
+    and "an empty prefix declared" are different facts and only it can tell them
+    apart; collapsing them here would leave nothing that could.
     """
     assert routing.apirouter_prefix('APIRouter(prefix="/llc/")') == "/llc/"
     assert routing.apirouter_prefix("x = 1") is None

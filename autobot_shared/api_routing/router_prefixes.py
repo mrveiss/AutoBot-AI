@@ -48,6 +48,7 @@ __all__ = [
     "ROUTER_CONFIG_ENTRY_RE",
     "ROUTER_IMPORT_ALIAS_RE",
     "file_router_prefix",
+    "package_router_files",
     "registry_entries",
     "resolve_registry_targets",
 ]
@@ -211,7 +212,17 @@ def apirouter_prefix(source: str) -> str | None:
 
 
 def file_router_prefix(source: str) -> str:
-    """The ``APIRouter(prefix=...)`` a file declares, trailing slash removed, or ``""``."""
+    """The ``APIRouter(prefix=...)`` a file declares, trailing slash removed, or ``""``.
+
+    #14355 settled the normalisation both consumers now share. The analytics
+    scanner used to read this prefix verbatim while the audit gate stripped the
+    trailing slash, so the two disagreed for any prefix written ``"/x/"``.
+    Stripping is the correct half: prefixes are concatenated, so the verbatim
+    form yields ``/x//y`` — a path nothing serves, reported as if it did.
+    FastAPI refuses such a prefix outright ("A path prefix must not end with
+    '/', as the routes will start with '/'"), so a trailing slash in source can
+    only ever be a mistake, never a served path either tool should reproduce.
+    """
     prefix = apirouter_prefix(source)
     return prefix.rstrip("/") if prefix is not None else ""
 
@@ -260,12 +271,21 @@ def resolve_registry_targets(backend_dir: Path, entries: Iterable[Tuple[str, str
         if module_file.is_file():
             targets[module_file] = prefix
         elif (target / "__init__.py").is_file():
-            targets.update(_package_router_files(target, prefix))
+            targets.update(package_router_files(target, prefix))
     return targets
 
 
-def _package_router_files(package: Path, registry_prefix: str) -> Dict[Path, str]:
+def package_router_files(package: Path, registry_prefix: str) -> Dict[Path, str]:
     """Submodules a registry-mounted package actually serves, and their prefix.
+
+    The single implementation, called by both source-reading consumers: the
+    blocking ``api-wiring`` gate through ``resolve_registry_targets`` above, and
+    the analytics endpoint inventory through
+    ``api_endpoint_scanner._registry_router_files``. It was public-by-copy until
+    #14355 — the scanner owned a second, separately maintained version, so the
+    gate that decides whether a PR may merge and the report a human reads to
+    judge that gate could describe different APIs with nothing saying which was
+    right. Consumers call this; nobody reimplements it.
 
     A submodule counts only when the package imports its router under an alias
     **and** mounts that exact alias (#12956). Checking merely that the package
@@ -284,12 +304,7 @@ def _package_router_files(package: Path, registry_prefix: str) -> Dict[Path, str
 
     served_prefix = f"{registry_prefix}{file_router_prefix(init_content)}"
     # #13582: a prefix given on the mount call applies to every route in the
-    # mounted module and is invisible to APIRouter(prefix=) parsing. The
-    # analytics scanner grew this at the same time; the two implementations of
-    # this function must stay in step, which
-    # tests/api_routing/package_router_files_parity_13582_test.py enforces —
-    # this one backs the blocking api-wiring gate, so a divergence means the
-    # gate and the analytics report disagree about what the API serves.
+    # mounted module and is invisible to APIRouter(prefix=) parsing.
     mount_prefixes = dict(include_router_prefixes(init_content))
 
     files: Dict[Path, str] = {}
@@ -303,5 +318,5 @@ def _package_router_files(package: Path, registry_prefix: str) -> Dict[Path, str
             continue
         subpackage = package / module_name
         if (subpackage / "__init__.py").is_file():
-            files.update(_package_router_files(subpackage, mounted_prefix))
+            files.update(package_router_files(subpackage, mounted_prefix))
     return files

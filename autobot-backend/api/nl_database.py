@@ -15,6 +15,7 @@ Endpoints:
 - GET  /nl-database/history       - Retrieve query history
 """
 
+import asyncio
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -63,10 +64,14 @@ async def _resolve_db_url(db_secret_id: str | None, request: Request) -> str | N
         return None
 
     try:
-        from api.secrets import get_secrets_manager
+        from api.secrets import secrets_manager
 
-        manager = get_secrets_manager()
-        secret = await manager.get_secret(db_secret_id, user_id=None)
+        # api.secrets exposes the SecretsManager *singleton* (`secrets_manager`),
+        # not a `get_secrets_manager()` factory (#14127). `get_secret` is a
+        # blocking (file-I/O) call, so it goes through asyncio.to_thread rather
+        # than being awaited directly, matching every other call site in the
+        # backend (see api/secrets.py's own `_get_secret_dual_read`).
+        secret = await asyncio.to_thread(secrets_manager.get_secret, db_secret_id, chat_id=None)
         if secret is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

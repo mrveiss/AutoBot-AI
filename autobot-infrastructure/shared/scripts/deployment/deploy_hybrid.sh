@@ -254,17 +254,16 @@ cleanup() {
     fi
 }
 
+# Routed through the fixed root-owned wrapper (#14412 review) -- port_name is
+# one of the wrapper's own fixed subcommand tokens (backend/frontend), never
+# a raw port number reaching lsof/kill.
 cleanup_port() {
     local port=$1
     local service_name=$2
+    local port_name=$3
 
     log_info "Stopping any existing $service_name on port $port..."
-    if sudo lsof -i :"$port" -t > /dev/null 2>&1; then
-        PIDS=$(sudo lsof -t -i :"$port" 2>/dev/null)
-        if [ -n "$PIDS" ]; then
-            sudo kill -9 $PIDS 2>/dev/null
-        fi
-    fi
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port "$port_name" 2>/dev/null
 }
 
 run_all_signal_cleanup() {
@@ -274,18 +273,16 @@ run_all_signal_cleanup() {
     sleep 1
     [ -n "$BACKEND_PID" ] && kill -9 "$BACKEND_PID" 2>/dev/null
     [ -n "$FRONTEND_PID" ] && kill -9 "$FRONTEND_PID" 2>/dev/null
-    for port in 8001 5173; do
-        PIDS=$(sudo lsof -t -i :"$port" 2>/dev/null)
-        [ -n "$PIDS" ] && sudo kill -9 $PIDS 2>/dev/null
-    done
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port backend 2>/dev/null
+    sudo /opt/autobot/bin/autobot-cleanup-port kill-port frontend 2>/dev/null
     exit 0
 }
 
 # Combined run: start containers + local backend + frontend (merged from run_hybrid.sh)
 run_all() {
     trap run_all_signal_cleanup SIGINT SIGTERM SIGQUIT
-    cleanup_port 8001 "backend"
-    cleanup_port 5173 "frontend"
+    cleanup_port 8001 "backend" backend
+    cleanup_port 5173 "frontend" frontend
 
     start_containers
     log_info "Waiting for containers..."

@@ -21,7 +21,7 @@ async variants to prevent event loop blocking. See Issue #369.
 from __future__ import annotations
 
 import json
-import pickle  # nosec B403  # reading ChromaDB internal pickle files only
+import pickle  # nosec B403  # restricted Unpickler below; see _RestrictedHnswUnpickler
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Tuple
@@ -271,6 +271,49 @@ def _infer_hnsw_dimensionality(segment_dir: Path) -> int:
     return 0
 
 
+# Issue #14187: index_metadata.pickle is ChromaDB's own on-disk format for
+# PersistentLocalHnswSegment (chromadb/segment/impl/vector/local_persistent_hnsw.py)
+# -- the library writes it with plain pickle.dump() and reads it back with plain
+# pickle.load() itself, downstream of this function, so the file cannot move to a
+# non-pickle format without forking the dependency. What this module controls is
+# only its OWN read, performed solely to patch legacy metadata shapes before
+# ChromaDB's loader runs (#1390).
+#
+# Trust boundary: the file lives under the local ChromaDB persist directory,
+# which resolves under the SSOT/legacy data roots excluded from the filesystem
+# MCP bridge (api/filesystem_mcp.py _EXCLUDED_DIR_PATHS, #14081/#14124). The only
+# writers are ChromaDB's own segment code and this function, both running inside
+# the backend process -- there is no known external write path today. Because
+# "no known path today" is not proof for tomorrow (#14124's own history), the
+# read here is restricted rather than trusted outright: find_class allows
+# exactly ChromaDB's PersistentData class and nothing else, so a file written
+# by anything other than ChromaDB's own persistence code fails closed instead
+# of executing arbitrary code during deserialization.
+_ALLOWED_HNSW_PICKLE_CLASSES = frozenset(
+    {
+        ("chromadb.segment.impl.vector.local_persistent_hnsw", "PersistentData"),
+    }
+)
+
+
+class _RestrictedHnswUnpickler(pickle.Unpickler):
+    """Unpickler for ``index_metadata.pickle`` restricted to ChromaDB's own class.
+
+    Subclassing ``pickle.Unpickler`` (rather than calling ``pickle.load``/
+    ``pickle.loads`` directly) keeps every GLOBAL/REDUCE opcode gated by
+    ``find_class``: only ``PersistentData`` may be constructed, and builtin
+    containers (dict/list/str/int/None) used by its fields never go through
+    ``find_class`` at all, so legitimate files are unaffected.
+    """
+
+    def find_class(self, module: str, name: str) -> Any:
+        if (module, name) not in _ALLOWED_HNSW_PICKLE_CLASSES:
+            raise pickle.UnpicklingError(
+                f"Refusing to unpickle disallowed class {module}.{name} from index_metadata.pickle"
+            )
+        return super().find_class(module, name)
+
+
 def _fix_hnsw_pickle_format(chroma_path: Path) -> None:
     """Fix HNSW index_metadata.pickle for ChromaDB 0.5.x (#1390).
 
@@ -287,7 +330,7 @@ def _fix_hnsw_pickle_format(chroma_path: Path) -> None:
     for pkl_file in chroma_path.glob("*/index_metadata.pickle"):
         try:
             with open(pkl_file, "rb") as f:
-                data = pickle.load(f)  # nosec B301
+                data = _RestrictedHnswUnpickler(f).load()
             needs_fix = isinstance(data, dict)
             if isinstance(data, dict):
                 dim = data.get("dimensionality")

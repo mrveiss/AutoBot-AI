@@ -13,6 +13,13 @@ Analyzes test patterns to identify:
 
 Part of Issue #236 - Test-Driven Pattern Discovery
 Parent Epic: #217 - Advanced Code Intelligence
+
+Named ``test_pattern_analyzer.py`` until #14127: production code (re-exported by
+``code_intelligence/__init__.py``), but the name matched pytest's own
+`python_files = test_*.py`, so `.dockerignore` stripped it from every Docker image
+and the backend died at import with `ModuleNotFoundError`. The colocated-test
+convention in this package is the ``<module>_test.py`` suffix; this module is not a
+test. See `repo_tests/test_dockerignore_test_file_coverage_14127.py`.
 """
 
 import ast
