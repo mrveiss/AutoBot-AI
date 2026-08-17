@@ -86,6 +86,61 @@ def compare(label_a: str, a: dict, label_b: str, b: dict) -> bool:
     return diverged
 
 
+#: #14201: `tests/inventory/group_vars/all.yml`'s header once said it was kept
+#: "byte-identical" to a sibling copy. It never was — three different files,
+#: three different hashes — and the only thing this script actually enforces
+#: is the role_*_active fragment (+ chromadb_service_owner) compared above. A
+#: header claim with no check behind it is exactly how that happened, so any
+#: of these three files' headers claiming whole-file byte-identity again is
+#: itself a failure here, independent of whether the fragments still match.
+#: Deliberately whole-file (not per-fragment): a fragment-level claim like
+#: "these definitions are kept identical" is accurate and must NOT trip this.
+_BYTE_IDENTITY_CLAIM = re.compile(r"byte[- ]identical", re.IGNORECASE)
+
+_ROLE_FACTS_FILES = {
+    "inventory/group_vars/all.yml": GROUP_VARS,
+    "playbooks/vars/role_active_facts.yml": PLAYBOOK_VARS,
+    "tests/inventory/group_vars/all.yml": TEST_GROUP_VARS,
+}
+
+
+def _leading_comment_block(path: Path) -> str:
+    """Return the leading `#`/blank-line header of a YAML file, stopping at
+    the first substantive line (the `---` document marker or real content).
+    """
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("#"):
+            lines.append(line)
+            continue
+        break
+    return "\n".join(lines)
+
+
+def check_no_false_byte_identity_claims() -> bool:
+    """Return True (and print) if a header claims whole-file byte-identity
+    the actual file contents do not back.
+    """
+    contents = {label: path.read_bytes() for label, path in _ROLE_FACTS_FILES.items()}
+    found_false_claim = False
+    for label, path in _ROLE_FACTS_FILES.items():
+        header = _leading_comment_block(path)
+        if not _BYTE_IDENTITY_CLAIM.search(header):
+            continue
+        matches_a_sibling = any(contents[label] == contents[other] for other in _ROLE_FACTS_FILES if other != label)
+        if not matches_a_sibling:
+            print(
+                f"HEADER CLAIM ERROR: {label}'s header claims byte-identity to a sibling, "
+                "but no two of the three role-facts files are a whole-file byte match. "
+                "Only the role_*_active fragment (+ chromadb_service_owner) is kept in "
+                "sync, by this script — correct the header instead of restoring the "
+                "claim (#14201)."
+            )
+            found_false_claim = True
+    return found_false_claim
+
+
 def main() -> int:
     canonical = extract_facts(GROUP_VARS)
     playbook = extract_facts(PLAYBOOK_VARS)
@@ -94,6 +149,7 @@ def main() -> int:
     diverged = False
     diverged |= compare("inventory/group_vars", canonical, "playbooks/vars", playbook)
     diverged |= compare("inventory/group_vars", canonical, "tests/inventory/group_vars", test_inventory)
+    diverged |= check_no_false_byte_identity_claims()
 
     if diverged:
         return 1
