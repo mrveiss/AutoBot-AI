@@ -166,10 +166,25 @@ function pythonStringFieldDefaults(source: string, className: string): Record<st
  * never why keeping it one-sided is still correct.
  */
 const PYTHON_ONLY_PORTS = [
-  'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes (#3094)
-  'tts', // TTS worker — backend-to-worker only, no frontend consumer (#928)
-  'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only (#3829)
-  'vnc_server', // raw VNC protocol port (x11vnc), consumed by the node's own systemd service + the Ansible vnc role. The frontend's desktop viewer only ever talks to the noVNC WEB port ('vnc' above, already mirrored) — verified no frontend file reads AUTOBOT_VNC_SERVER_PORT or hardcodes 5901; the 5901 literals in *.test.ts are unrelated per-session `vnc_port` API-response mocks (AdvancedControlApiClient), a dynamic runtime value with no static SSOT default on either side (#14173)
+  // #3094/#3829/#928 (originally cited here) are the ssot_config.py field
+  // comments' OWN issue refs for why that port NUMBER was chosen — not for
+  // the frontend/backend boundary claim below. Wrong-but-plausible citations
+  // are worse than none (#14173 review), so the architectural reason is
+  // stated plainly instead of re-attaching an unrelated issue number.
+  'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes
+  'tts', // TTS worker — backend-to-worker only, no frontend consumer
+  'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only
+  // raw VNC protocol port (x11vnc), consumed by the node's own systemd
+  // service + the Ansible vnc role. The frontend's desktop viewer only ever
+  // talks to the noVNC WEB port ('vnc' above, already mirrored) — no
+  // frontend file reads AUTOBOT_VNC_SERVER_PORT. One hardcoded `5901`
+  // exists (SecretsManager.vue's `placeholder="5901"` on a per-host VNC
+  // port form field), but it is a UI example on user-entered data for an
+  // arbitrary external host, not a functional default sourced from any
+  // SSOT; the `5901` literals in *.test.ts are a separate, unrelated
+  // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
+  // dynamic runtime value with no static SSOT default on either side (#14173)
+  'vnc_server',
 ] as const
 const TS_ONLY_PORTS = ['slmAdmin'] as const
 
