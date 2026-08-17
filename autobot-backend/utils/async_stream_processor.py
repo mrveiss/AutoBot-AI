@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared import streaming
 
 logger = get_logger(__name__)
 
@@ -269,12 +270,19 @@ async def _process_stream_loop(
     processor: StreamProcessor,
     max_chunks: int,
     max_buffer_size: int = 10 * 1024 * 1024,
-) -> Tuple[List[str], int, StreamCompletionSignal | None]:
-    """Process stream chunks until completion or limit (Issue #281, #551, #665)."""
+    stream_start: float | None = None,
+) -> Tuple[List[str], int, StreamCompletionSignal | None, float | None]:
+    """Process stream chunks until completion or limit (Issue #281, #551, #665).
+
+    Issue #14211: when ``stream_start`` (a ``streaming.mark_stream_start()``
+    reference) is provided, the elapsed time to the first non-empty content
+    chunk is captured and returned as time-to-first-token.
+    """
     content_parts: List[str] = []
     chunk_count = 0
     completion_signal: StreamCompletionSignal | None = None
     current_buffer_size = 0
+    ttft_seconds: float | None = None
 
     async for chunk_bytes in response.content:
         chunk_count += 1
@@ -300,6 +308,8 @@ async def _process_stream_loop(
         # Process chunk and check completion
         is_complete, content_to_add = await processor.process_chunk(chunk_data)
         if content_to_add:
+            if ttft_seconds is None and stream_start is not None:
+                ttft_seconds = streaming.time_to_first_token(stream_start)
             content_parts.append(content_to_add)
         if is_complete:
             completion_signal = _determine_completion_signal(processor, chunk_data, content_parts, chunk_count)
@@ -309,7 +319,7 @@ async def _process_stream_loop(
         if chunk_count % 10 == 0:
             await asyncio.sleep(0)
 
-    return content_parts, chunk_count, completion_signal
+    return content_parts, chunk_count, completion_signal, ttft_seconds
 
 
 class StreamProcessorFactory:
@@ -371,11 +381,12 @@ async def process_llm_stream(
     provider: str = "ollama",
     max_chunks: int = 1000,
     max_buffer_size: int = 10 * 1024 * 1024,  # 10MB default
-) -> Tuple[str, bool]:
+) -> Tuple[str, bool, float | None]:
     """
     Process LLM streaming response using completion signals instead of timeouts.
 
     Issue #551: Added max_buffer_size parameter to prevent memory exhaustion.
+    Issue #14211: also captures time-to-first-token via ``llm_shared.streaming``.
 
     Args:
         response: HTTP response object with streaming content
@@ -384,10 +395,11 @@ async def process_llm_stream(
         max_buffer_size: Maximum buffer size in bytes (default 10MB)
 
     Returns:
-        Tuple of (accumulated_content, completed_successfully)
+        Tuple of (accumulated_content, completed_successfully, time_to_first_token_seconds)
     """
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_running_loop().time()
+    stream_start = streaming.mark_stream_start()
 
     logger.info(
         "Starting %s stream processing (max_chunks: %s, max_buffer: %d MB)",
@@ -396,9 +408,10 @@ async def process_llm_stream(
         max_buffer_size // (1024 * 1024),
     )
 
+    ttft_seconds: float | None = None
     try:
-        content_parts, chunk_count, completion_signal = await _process_stream_loop(
-            response, processor, max_chunks, max_buffer_size
+        content_parts, chunk_count, completion_signal, ttft_seconds = await _process_stream_loop(
+            response, processor, max_chunks, max_buffer_size, stream_start
         )
     except Exception as e:
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
@@ -417,7 +430,7 @@ async def process_llm_stream(
         completion_signal,
         processing_time,
     )
-    return accumulated_content, completed_successfully
+    return accumulated_content, completed_successfully, ttft_seconds
 
 
 async def process_stream_with_cancellation(
@@ -436,7 +449,7 @@ async def process_stream_with_cancellation(
             cancellation_token.raise_if_cancelled()
 
         # Process stream
-        content, success = await process_llm_stream(response, provider, max_chunks)
+        content, success, ttft_seconds = await process_llm_stream(response, provider, max_chunks)
 
         # Check cancellation after completion
         if hasattr(cancellation_token, "raise_if_cancelled"):
@@ -452,7 +465,9 @@ async def process_stream_with_cancellation(
             ),
             total_chunks=0,  # Will be filled by processor
             processing_time=processing_time,
-            metadata={"provider": provider, "max_chunks": max_chunks},
+            # Issue #14211: carried through so a future caller can record TTFT
+            # without re-deriving it from raw chunk timing.
+            metadata={"provider": provider, "max_chunks": max_chunks, "time_to_first_token_seconds": ttft_seconds},
         )
 
     except Exception as e:

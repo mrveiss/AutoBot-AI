@@ -468,33 +468,41 @@ Track LLM API requests, token usage, costs, and errors.
 #### Available Metrics
 
 - `autobot_llm_requests_total` - Total LLM requests (labels: provider, model, request_type)
+- `autobot_llm_requests_in_flight` - Current in-flight requests (labels: provider)
+- `autobot_llm_time_to_first_token_seconds` - Streaming TTFT histogram (labels: provider, model)
 - `autobot_llm_tokens_total` - Token usage (labels: provider, model, token_type)
 - `autobot_llm_cost_dollars_total` - Estimated cost (labels: provider, model, cost_type)
 - `autobot_llm_request_latency_seconds` - Request latency histogram (labels: provider, model)
-- `autobot_llm_errors_total` - Error count (labels: provider, error_type)
-- `autobot_llm_rate_limit_remaining` - Rate limit remaining (labels: provider)
-- `autobot_llm_provider_availability` - Provider status 0/1 (labels: provider)
+- `autobot_llm_errors_total` - Error count (labels: provider, model, error_type)
+- `autobot_llm_rate_limit_remaining` - Rate limit remaining (labels: provider, limit_type)
+- `autobot_llm_provider_available` - Provider status 0/1 (labels: provider)
+
+Production wiring (#14211): ``BaseProvider.chat_completion`` (`llm_shared/base_provider.py`)
+notifies `llm_shared.observability.registry` on every request; `PrometheusObserver`
+(`llm_shared/observability/prometheus_observer.py`) is the registered observer that turns
+those notifications into the calls below. Call the manager directly only outside that
+request path (e.g. rate-limit-header parsing, provider health checks).
 
 #### Usage Example
 
 ```python
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 import time
 
 metrics = get_metrics_manager()
 
 # Record LLM request
+metrics.record_llm_request_start(provider="openai")
 start_time = time.time()
 try:
     response = await llm_client.complete(prompt)
     duration = time.time() - start_time
 
-    metrics.record_llm_request(
+    metrics.record_llm_request_complete(
         provider="openai",
         model="gpt-4",
-        request_type="completion",
-        status="success",
-        latency=duration
+        request_type="chat",
+        latency_seconds=duration,
     )
 
     metrics.record_llm_tokens(
@@ -504,27 +512,31 @@ try:
         output_tokens=response.usage.completion_tokens
     )
 
-    # Record estimated cost
+    # Record cost, split into input/output legs
     metrics.record_llm_cost(
         provider="openai",
         model="gpt-4",
-        cost_dollars=0.03
+        input_cost=0.01,
+        output_cost=0.02,
     )
 
 except RateLimitError:
     metrics.record_llm_error(
         provider="openai",
-        error_type="rate_limit"
+        model="gpt-4",
+        error_type="rate_limit",
     )
 
 # Update rate limit status
-metrics.set_llm_rate_limit(
+metrics.update_llm_rate_limits(
     provider="openai",
-    remaining=450
+    requests_remaining=450,
+    tokens_remaining=90000,
+    reset_seconds=60.0,
 )
 
 # Update provider availability
-metrics.set_llm_provider_availability(
+metrics.set_llm_provider_available(
     provider="openai",
     available=True
 )

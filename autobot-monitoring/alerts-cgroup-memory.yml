@@ -19,6 +19,17 @@
 # Usage cannot distinguish throttled from healthy — a throttled cgroup is
 # *supposed* to sit at its watermark. The reclaim counter is the only signal
 # that separates them, so these alert on its RATE, never on a usage threshold.
+#
+# COVERAGE (#14212): these rules key only on the `unit` label — no job or host
+# restriction — so they already fire for any unit the moment its series
+# exists (proven for a non-backend/slm unit in cgroup-memory.promtool-test.yml).
+# What is NOT fleet-wide is the SCRAPE: autobot_cgroup_memory_* is only
+# produced by the two in-process collectors registered inside autobot-backend
+# and slm-backend (autobot_shared/monitoring/metrics/cgroup_memory.py). A
+# service on any other node — chroma on the ai/ML or database node, NPU
+# workers, anything on a fleet node — is invisible to every alert below until
+# that gap is closed. Treat "no alert" as "not observed", not "healthy", for
+# any unit outside those two hosts.
 ---
 
 groups:
