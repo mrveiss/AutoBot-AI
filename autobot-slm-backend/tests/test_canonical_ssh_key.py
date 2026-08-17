@@ -101,8 +101,7 @@ def test_management_ssh_key_never_used_for_inter_node_ssh():
     assert not offenders, (
         "Inter-node SSH orchestration must use config.path.ssh_key_path/.ssh_key "
         "(#12429), never config.path.management_ssh_key_path/.management_ssh_key "
-        "(#14173, a different key for a different consumer). Found:\n"
-        + "\n".join(offenders)
+        "(#14173, a different key for a different consumer). Found:\n" + "\n".join(offenders)
     )
 
 
