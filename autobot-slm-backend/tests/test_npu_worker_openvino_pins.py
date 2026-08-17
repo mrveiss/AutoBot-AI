@@ -180,11 +180,7 @@ def _setup_py_npu_extras() -> list:
             if kw.arg != "extras_require" or not isinstance(kw.value, ast.Dict):
                 continue
             for key_node, value_node in zip(kw.value.keys, kw.value.values):
-                if (
-                    isinstance(key_node, ast.Constant)
-                    and key_node.value == "npu"
-                    and isinstance(value_node, ast.List)
-                ):
+                if isinstance(key_node, ast.Constant) and key_node.value == "npu" and isinstance(value_node, ast.List):
                     return [elt.value for elt in value_node.elts if isinstance(elt, ast.Constant)]
     raise AssertionError(
         f"no extras_require['npu'] list found in {_CODE_ANALYSIS_SETUP.name} "
@@ -285,7 +281,9 @@ def _extra_args_for(site_name: str) -> str:
     if site_name == "code_analysis":
         return _install_sh_npu_pip_line()
 
-    raise AssertionError(f"{site_name!r} has no known way to derive extra_args — this guard is pinned to the wrong site")
+    raise AssertionError(
+        f"{site_name!r} has no known way to derive extra_args — this guard is pinned to the wrong site"
+    )
 
 
 def _ssot_openvino_floor() -> str:
