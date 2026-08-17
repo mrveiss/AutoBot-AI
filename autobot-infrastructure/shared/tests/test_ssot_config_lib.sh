@@ -282,6 +282,131 @@ else
     fail=$((fail + 1))
 fi
 
+# --- #14173: the four var families #14041 deliberately left unexported now
+#     have real SSOT fields (autobot_shared/ssot_config.py) and the library
+#     exports them. ------------------------------------------------------
+
+out=$(bash -c "
+export HOME='/nonexistent-home-for-ssot-test'
+unset AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_PORT
+source '$LIB'
+echo \"\$AUTOBOT_SSH_KEY|\$AUTOBOT_SSH_USER|\$AUTOBOT_SLM_NODE_ID|\$AUTOBOT_VNC_WEB_PORT|\$AUTOBOT_VNC_SERVER_PORT\"
+")
+check "14173: SSH/SLM/VNC families get SSOT defaults" "$out" \
+    "/nonexistent-home-for-ssot-test/.ssh/autobot_key|autobot|00-SLM-Manager|6080|5901"
+
+# --- VNC WEB/SERVER host derive from AUTOBOT_BACKEND_HOST, not a separate
+#     hardcoded literal -- proves the four-name fork actually consolidated
+#     onto an existing canonical field instead of gaining its own literal. --
+out=$(bash -c "
+export AUTOBOT_BACKEND_HOST='10.9.8.7'
+unset AUTOBOT_VNC_WEB_HOST AUTOBOT_VNC_SERVER_HOST
+source '$LIB'
+echo \"\$AUTOBOT_VNC_WEB_HOST|\$AUTOBOT_VNC_SERVER_HOST\"
+")
+check "14173: VNC_WEB_HOST/VNC_SERVER_HOST derive from AUTOBOT_BACKEND_HOST" "$out" "10.9.8.7|10.9.8.7"
+
+# --- .env override still wins for the four new families too ---------------
+tmp_root3="$(mktemp -d)"
+cat > "$tmp_root3/.env" <<'ENVEOF'
+AUTOBOT_SSH_USER=custom-user
+AUTOBOT_SLM_NODE_ID=99-Custom-Manager
+ENVEOF
+out=$(bash -c "
+export PROJECT_ROOT='$tmp_root3'
+unset AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID
+source '$LIB'
+echo \"\$AUTOBOT_SSH_USER:\$AUTOBOT_SLM_NODE_ID\"
+")
+rm -rf "$tmp_root3"
+check "14173: .env override wins for AUTOBOT_SSH_USER/AUTOBOT_SLM_NODE_ID" "$out" "custom-user:99-Custom-Manager"
+
+# --- DENIAL / reproduction: status-all-vms.sh's own "SSH key not found"
+#     guard used to fire even when a real key existed at the conventional
+#     $HOME/.ssh/autobot_key path, because the library never set
+#     AUTOBOT_SSH_KEY (#14173) -- SSH_KEY="$AUTOBOT_SSH_KEY"
+#     (vm-management/status-all-vms.sh, NO `:-` fallback at all) always
+#     resolved to the empty string. Reproduces the exact guard line read out
+#     of the live script rather than re-describing it by hand, so a future
+#     edit that changes the guard shape trips this test instead of silently
+#     drifting from what actually ships (same idiom as the bootstrap-slm.sh
+#     capture-before-source guard test above).
+_status_script="${REPO_ROOT}/autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh"
+_key_line=$(grep -m1 '^SSH_KEY=' "$_status_script")
+if [ -z "$_key_line" ]; then
+    echo "FAIL: status-all-vms.sh no longer has the SSH_KEY=\$AUTOBOT_SSH_KEY line this test expects"
+    fail=$((fail + 1))
+else
+    tmp_home="$(mktemp -d)"
+    mkdir -p "$tmp_home/.ssh"
+    printf 'not a real key, just needs to exist\n' > "$tmp_home/.ssh/autobot_key"
+
+    # BEFORE (reproduction of the pre-#14173 bug): the library never exported
+    # AUTOBOT_SSH_KEY, so the guard fires even though a real key file exists
+    # at the conventional path -- a silent lie, not a loud failure.
+    before_out=$(bash -c "
+        export HOME='$tmp_home'
+        unset AUTOBOT_SSH_KEY
+        $_key_line
+        if [ ! -f \"\$SSH_KEY\" ]; then echo NO_KEY_FOUND; else echo KEY_FOUND; fi
+    ")
+    check "DENIAL repro: pre-#14173 state reports NO_KEY_FOUND despite a real key on disk" "$before_out" "NO_KEY_FOUND"
+
+    # AFTER (fixed): sourcing the library resolves AUTOBOT_SSH_KEY to the same
+    # conventional path, so the guard now finds the real key instead of lying.
+    after_out=$(bash -c "
+        export HOME='$tmp_home'
+        unset AUTOBOT_SSH_KEY
+        source '$LIB'
+        $_key_line
+        if [ ! -f \"\$SSH_KEY\" ]; then echo NO_KEY_FOUND; else echo KEY_FOUND; fi
+    ")
+    check "14173 fix: library-resolved AUTOBOT_SSH_KEY finds the real key" "$after_out" "KEY_FOUND"
+
+    rm -rf "$tmp_home"
+fi
+
+# --- Reach self-check: must NOT share the "autobot-infrastructure/ only"
+#     blind spot that undercounted shape-D above (Step 3 note) -- scoped on
+#     `git ls-files -- '*.sh'` (full tracked tree, same anchor as the
+#     offenders guard above), never a subdirectory grep. Two independent
+#     assertions: the file-count floor catches a probe that silently stops
+#     matching anything (an empty/near-empty result reads as "clean" unless
+#     presence is checked, not absence of failure); the var-count floor
+#     catches a regex that stops matching a variable shape. -----------------
+_all_sh_files="$(cd "$REPO_ROOT" && git ls-files -- '*.sh')"
+_sh_count=$(echo "$_all_sh_files" | grep -c . || true)
+if [ "$_sh_count" -lt 100 ]; then
+    echo "FAIL: reach self-check scanned too few shell scripts ($_sh_count) -- probe is too narrow"
+    fail=$((fail + 1))
+else
+    echo "PASS: reach self-check scanned $_sh_count tracked shell scripts"
+    pass=$((pass + 1))
+fi
+
+_distinct_vars=$(cd "$REPO_ROOT" && git ls-files -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
+_distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
+if [ "$_distinct_count" -lt 61 ]; then
+    echo "FAIL: reach self-check found only $_distinct_count distinct AUTOBOT_ names -- expected >= 61 (#14173 baseline)"
+    fail=$((fail + 1))
+else
+    echo "PASS: reach self-check found $_distinct_count distinct AUTOBOT_ names (>= 61 baseline)"
+    pass=$((pass + 1))
+fi
+
+# The counter's own scan must independently rediscover the four #14173
+# families -- not just confirm a hardcoded list matches itself.
+for _fam_var in AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \
+    AUTOBOT_VNC_WEB_HOST AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_HOST AUTOBOT_VNC_SERVER_PORT; do
+    if echo "$_distinct_vars" | grep -qx "$_fam_var"; then
+        echo "PASS: reach self-check's scan independently found $_fam_var"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: reach self-check's scan did not find $_fam_var -- matcher regressed"
+        fail=$((fail + 1))
+    fi
+done
+
 echo
 echo "=== $pass passed, $fail failed ==="
 [ "$fail" -eq 0 ]

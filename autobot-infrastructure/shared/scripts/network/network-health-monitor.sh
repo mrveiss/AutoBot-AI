@@ -124,11 +124,15 @@ echo "🛡️ Security Status:"
 echo "-------------------"
 
 # VNC Security Check
+# Port from network-config.sh's VNC_SERVER_PORT (#14173 review) -- was a
+# hardcoded :5902 literal with no variable, so the port-fallback guard
+# (tools/lint/check_port_fallbacks_match_ssot.py) could never see it; the
+# real raw-VNC listener has always been 5901 (ssot_config.py PortConfig.vnc_server).
 echo -n "🔒 VNC Server Binding: "
-if netstat -tuln | grep ":5902" | grep -q "127.0.0.1\|::1"; then
+if netstat -tuln | grep ":${VNC_SERVER_PORT}" | grep -q "127.0.0.1\|::1"; then
     echo "✅ SECURE (localhost only)"
 else
-    if netstat -tuln | grep -q ":5902"; then
+    if netstat -tuln | grep -q ":${VNC_SERVER_PORT}"; then
         echo "⚠️  EXPOSED (not localhost-bound)"
     else
         echo "❌ NOT RUNNING"
