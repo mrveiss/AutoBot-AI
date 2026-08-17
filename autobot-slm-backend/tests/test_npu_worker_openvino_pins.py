@@ -2,23 +2,36 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""No site that installs OpenVINO may contradict the SSOT (#14447, #14452, #14453).
+"""No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453).
 
-Three sites install `openvino` independently of `autobot-npu-worker/requirements.txt`
-(the SSOT): the `npu-worker` ansible role's inline package list, the
-`deploy-native-services.yml` playbook's inline package list, and the standalone
-`requirements-npu.txt` consumed by dependabot. All three drifted the same way: a
-floor below the SSOT's, plus `openvino-dev` -- a deprecated meta-package frozen at
-2024.6.0 with no release compatible with openvino 2026.x.
+Six sites in the repo pin or install `openvino` independently of
+`autobot-npu-worker/requirements.txt` (the SSOT), and this guard reaches all six:
 
-pip therefore backtracked through every openvino-dev version down to 2022.3.2, each
-pinning numpy lower, until it reached numpy==1.25.2, which has no cp314 wheel. The
-sdist build failed with `Cannot import 'setuptools.build_meta'` -- an error that
-names the build backend and nothing else. Provisioning was dead with no indication
-of which requirement caused it.
+1. The `npu-worker` ansible role's inline package list (#14447).
+2. `deploy-native-services.yml`'s inline package list (#14452).
+3. `autobot-infrastructure/.../docker/requirements-npu.txt`, tracked by dependabot (#14453).
+4. `agent_config/tasks/openvino.yml`'s inline `pip:` task -- live via
+   `deploy-agent-config.yml` against `slm_nodes`, `install_openvino: true` by default.
+5. `inventory/group_vars/aiml.yml`'s `packages.python` list -- confirmed **dormant**:
+   `deploy-aiml.yml` reads neither `packages` nor `openvino` from this file, so it is
+   also excluded from the constraints-applied check below (there is no pip task or
+   `-c` convention in this file for any package, openvino or otherwise). Left in place
+   per the never-delete-code rule rather than removed; fixed so it reproduces nothing
+   the moment something does read it.
+6. `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` -- a live build
+   path per its `BUILDING.md`.
+
+Most of these drifted the same way: `openvino-dev` -- a deprecated meta-package frozen
+at 2024.6.0 with no release compatible with openvino 2026.x -- installed alongside a
+floor below the SSOT's, or (site 4) no floor at all. pip backtracks through old
+`openvino-dev` versions pinning numpy lower until it reaches a numpy with no cp314
+wheel, and the sdist build dies on `setuptools.build_meta` -- an error naming the build
+backend and nothing about which requirement caused it.
 
 The floor is read out of the SSOT rather than repeated here. A test that hardcoded
-`2026.3.0` would go stale in exactly the way each site did.
+`2026.3.0` would go stale in exactly the way each site did. Every site factory reads
+its source file with an uncaught `Path.read_text()` -- a renamed or moved file raises
+`FileNotFoundError` and errors the test rather than silently guarding nothing.
 """
 
 from __future__ import annotations
@@ -34,20 +47,34 @@ yaml = pytest.importorskip("yaml")
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _ROLE_TASKS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "npu-worker" / "tasks" / "main.yml"
 _PLAYBOOK = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "deploy-native-services.yml"
-_DOCKER_REQUIREMENTS = _REPO_ROOT / "autobot-infrastructure" / "autobot-npu-worker" / "docker" / "requirements-npu.txt"
+_DOCKER_REQUIREMENTS = (
+    _REPO_ROOT / "autobot-infrastructure" / "autobot-npu-worker" / "docker" / "requirements-npu.txt"
+)
+_AGENT_CONFIG_TASKS = (
+    _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "agent_config" / "tasks" / "openvino.yml"
+)
+_AIML_GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" / "group_vars" / "aiml.yml"
+_WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
 _SSOT_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
 
 _ROLE_TASK_NAME = "Install OpenVINO and dependencies"
 _PLAYBOOK_TASK_NAME = "Install OpenVINO runtime for NPU Worker"
+_AGENT_CONFIG_TASK_NAME = "Set up OpenVINO environment in venv"
 
 
 @dataclass(frozen=True)
 class _Site:
-    """One place in the repo that installs OpenVINO independently of the SSOT."""
+    """One place in the repo that installs or pins OpenVINO independently of the SSOT."""
 
     label: str
     packages: list
-    extra_args: str
+
+
+def _normalize_names(value) -> list:
+    """Ansible's `pip: name:` accepts a scalar string or a list -- always return a list."""
+    if isinstance(value, str):
+        return [value]
+    return list(value)
 
 
 def _bare_name(spec: str) -> str:
@@ -66,11 +93,14 @@ def _pip_task_from_task_list(tasks: list, task_name: str, module_key: str) -> di
     raise AssertionError(f"no task named {task_name!r} — this guard is pinned to the wrong name")
 
 
+def _extra_args_of(task: dict) -> str:
+    return " ".join(str(task.get("extra_args", "")).split())
+
+
 def _role_site() -> _Site:
     tasks = yaml.safe_load(_ROLE_TASKS.read_text(encoding="utf-8"))
     task = _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
-    extra_args = " ".join(str(task.get("extra_args", "")).split())
-    return _Site(label=f"npu-worker role ({_ROLE_TASKS.name})", packages=list(task["name"]), extra_args=extra_args)
+    return _Site(label=f"npu-worker role ({_ROLE_TASKS.name})", packages=_normalize_names(task["name"]))
 
 
 def _playbook_site() -> _Site:
@@ -85,32 +115,95 @@ def _playbook_site() -> _Site:
     assert (
         task is not None
     ), f"no task named {_PLAYBOOK_TASK_NAME!r} in any play — this guard is pinned to the wrong name"
-    extra_args = " ".join(str(task.get("extra_args", "")).split())
-    return _Site(
-        label=f"deploy-native-services.yml ({_PLAYBOOK.name})", packages=list(task["name"]), extra_args=extra_args
-    )
+    return _Site(label=f"deploy-native-services.yml ({_PLAYBOOK.name})", packages=_normalize_names(task["name"]))
 
 
-def _requirements_file_site() -> _Site:
-    lines = [line.strip() for line in _DOCKER_REQUIREMENTS.read_text(encoding="utf-8").splitlines()]
-    constraint_lines = [line for line in lines if line.startswith("-c")]
+def _agent_config_site() -> _Site:
+    tasks = yaml.safe_load(_AGENT_CONFIG_TASKS.read_text(encoding="utf-8"))
+    task = _pip_task_from_task_list(tasks, _AGENT_CONFIG_TASK_NAME, "pip")
+    return _Site(label=f"agent_config role ({_AGENT_CONFIG_TASKS.name})", packages=_normalize_names(task["name"]))
+
+
+def _parse_requirements_file(path: Path) -> list:
+    """Package spec lines from a pip requirements file, comments and `-c`/`-e` stripped."""
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
     package_lines = [
         line.split("#", 1)[0].strip()
         for line in lines
         if line and not line.startswith("#") and not line.startswith("-c") and not line.startswith("-e")
     ]
+    return [line for line in package_lines if line]
+
+
+def _docker_requirements_site() -> _Site:
     return _Site(
         label=f"requirements-npu.txt ({_DOCKER_REQUIREMENTS.name})",
-        packages=[line for line in package_lines if line],
-        extra_args=" ".join(constraint_lines),
+        packages=_parse_requirements_file(_DOCKER_REQUIREMENTS),
     )
 
 
-_SITES = {
+def _windows_requirements_site() -> _Site:
+    return _Site(
+        label=f"windows-npu-worker requirements.txt ({_WINDOWS_REQUIREMENTS.name})",
+        packages=_parse_requirements_file(_WINDOWS_REQUIREMENTS),
+    )
+
+
+def _aiml_site() -> _Site:
+    """Dormant: `deploy-aiml.yml` reads neither `packages` nor `openvino` from this file."""
+    data = yaml.safe_load(_AIML_GROUP_VARS.read_text(encoding="utf-8"))
+    packages = data["packages"]["python"]
+    return _Site(label=f"aiml group_vars, dormant ({_AIML_GROUP_VARS.name})", packages=list(packages))
+
+
+_SITES: dict = {
     "role": _role_site,
     "playbook": _playbook_site,
-    "requirements-npu.txt": _requirements_file_site,
+    "requirements-npu.txt": _docker_requirements_site,
+    "agent_config": _agent_config_site,
+    "aiml (dormant)": _aiml_site,
+    "windows-npu-worker": _windows_requirements_site,
 }
+
+# Sites where a constraints file can even be applied -- i.e. an actual pip
+# invocation (a `pip:` task's `extra_args`, or a requirements file's own `-c`
+# line). `aiml.yml` is a bare version-string list with no pip task and no `-c`
+# convention for *any* package in that file, openvino included -- there is
+# nowhere in the file to put a constraints reference. If it is ever wired up,
+# the constraints flag belongs at the call site that reads it, not here.
+_CONSTRAINTS_EXEMPT = {"aiml (dormant)"}
+assert _CONSTRAINTS_EXEMPT <= _SITES.keys(), "an exemption names a site that no longer exists"
+
+_PIP_TASK_SITES: dict = {
+    "role": (_ROLE_TASKS, _ROLE_TASK_NAME, "ansible.builtin.pip"),
+    "playbook": (_PLAYBOOK, _PLAYBOOK_TASK_NAME, "pip"),
+    "agent_config": (_AGENT_CONFIG_TASKS, _AGENT_CONFIG_TASK_NAME, "pip"),
+}
+
+
+def _extra_args_for(site_name: str) -> str:
+    """Constraints-bearing text for a site: a pip task's `extra_args`, or a requirements
+    file's `-c` line(s)."""
+    if site_name in _PIP_TASK_SITES:
+        path, task_name, module_key = _PIP_TASK_SITES[site_name]
+        if path is _PLAYBOOK:
+            plays = yaml.safe_load(path.read_text(encoding="utf-8"))
+            for play in plays or []:
+                try:
+                    task = _pip_task_from_task_list((play or {}).get("tasks", []), task_name, module_key)
+                    return _extra_args_of(task)
+                except AssertionError:
+                    continue
+            raise AssertionError(f"no task named {task_name!r} in any play")
+        tasks = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return _extra_args_of(_pip_task_from_task_list(tasks, task_name, module_key))
+
+    requirements_path = {
+        "requirements-npu.txt": _DOCKER_REQUIREMENTS,
+        "windows-npu-worker": _WINDOWS_REQUIREMENTS,
+    }[site_name]
+    lines = [line.strip() for line in requirements_path.read_text(encoding="utf-8").splitlines()]
+    return " ".join(line for line in lines if line.startswith("-c"))
 
 
 def _ssot_openvino_floor() -> str:
@@ -123,7 +216,7 @@ def _ssot_openvino_floor() -> str:
 
 
 def test_the_sources_this_guard_reads_are_present():
-    """Every half must parse, or every rule below is vacuous."""
+    """Every site must parse and install something, or every rule below is vacuous."""
     for site_name, site_factory in _SITES.items():
         site = site_factory()
         assert site.packages, f"{site_name}: installs nothing"
@@ -150,11 +243,11 @@ def test_the_deprecated_meta_package_is_not_installed(site_name: str):
 
 @pytest.mark.parametrize("site_name", list(_SITES))
 def test_the_floor_is_not_below_the_ssot(site_name: str):
-    """A lower floor lets the resolver walk backwards into pre-cp314 releases.
+    """A lower (or absent) floor lets the resolver walk backwards into pre-cp314 releases.
 
     This is what made the openvino-dev conflict fatal rather than merely
-    unsatisfiable: with a floor below the SSOT's there was an older openvino to
-    retreat to.
+    unsatisfiable: with a floor below the SSOT's (or no floor at all, as in the
+    agent_config site before its fix) there was an older openvino to retreat to.
     """
     site = _SITES[site_name]()
     specs = [name for name in site.packages if _bare_name(name) == "openvino"]
@@ -170,19 +263,19 @@ def test_the_floor_is_not_below_the_ssot(site_name: str):
         )
 
 
-@pytest.mark.parametrize("site_name", list(_SITES))
+@pytest.mark.parametrize("site_name", [name for name in _SITES if name not in _CONSTRAINTS_EXEMPT])
 def test_the_shared_constraints_are_applied(site_name: str):
     """Without them, any dependency can drag numpy below its pinned floor.
 
     `constraints/shared.txt` is what keeps numpy on 2.x; bypassing it entirely
-    is why a transitive pin could reach 1.25.2.
+    is why a transitive pin could reach 1.25.2. `aiml (dormant)` is exempt — see
+    `_CONSTRAINTS_EXEMPT`.
     """
     site = _SITES[site_name]()
+    extra_args = _extra_args_for(site_name)
 
-    assert "constraints/shared.txt" in site.extra_args, (
+    assert "constraints/shared.txt" in extra_args, (
         f"{site.label} does not apply constraints/shared.txt, so a transitive dependency can "
         "drag numpy below its floor and force an unbuildable sdist (#14447, #14452, #14453)"
     )
-    assert (
-        "-c" in site.extra_args
-    ), f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
+    assert "-c" in extra_args, f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
