@@ -8284,7 +8284,9 @@
         "handoffButton": "Hand off to human",
         "handoffEmpty": "No active items to hand off.",
         "handoffNotApplicableHuman": "Handoff applies to agents only."
-      }
+      },
+      "processNodeLabel": "Process",
+      "processOpensWorkflow": "Opens the workflow this role runs"
     },
     "executorRollup": {
       "title": "Executor Rollup",

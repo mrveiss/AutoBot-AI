@@ -8296,7 +8296,9 @@
         "handoffButton": "Traspasar a humano",
         "handoffEmpty": "Sin elementos activos para traspasar.",
         "handoffNotApplicableHuman": "El traspaso se aplica solo a agentes."
-      }
+      },
+      "processNodeLabel": "Proceso",
+      "processOpensWorkflow": "Abre el flujo que ejecuta este rol"
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
