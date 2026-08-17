@@ -279,10 +279,9 @@ jobs:
             echo "::group::${svc} diagnostics"
 
             echo "=== ${svc} container state ==="
-            docker inspect "$svc" \
+            if ! docker inspect "$svc" \
               --format 'Status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-              2>&1
-            if [ "$?" -ne 0 ]; then
+              2>&1; then
               echo "(${svc} container not found)"
             fi
 
@@ -290,8 +289,7 @@ jobs:
             echo "=== ${svc} healthcheck probe log (each attempt: ExitCode + Output) ==="
             probe=$(docker inspect "$svc" --format '{{json .State.Health}}' 2>/dev/null)
             if [ -n "$probe" ] && [ "$probe" != "null" ]; then
-              echo "$probe" | python3 -m json.tool 2>/dev/null
-              if [ "$?" -ne 0 ]; then
+              if ! echo "$probe" | python3 -m json.tool 2>/dev/null; then
                 echo "$probe"
               fi
             else
@@ -300,14 +298,12 @@ jobs:
 
             echo ""
             echo "=== ${svc} logs (last 300 lines) ==="
-            docker compose \
+            if ! docker compose \
               -f docker-compose.yml \
               -f docker-compose.hardened.yml \
               --env-file docker/.env.docker \
-              logs --no-color --tail 300 "$svc" 2>&1
-            if [ "$?" -ne 0 ]; then
-              docker logs --tail 300 "$svc" 2>&1
-              if [ "$?" -ne 0 ]; then
+              logs --no-color --tail 300 "$svc" 2>&1; then
+              if ! docker logs --tail 300 "$svc" 2>&1; then
                 echo "(no ${svc} logs available)"
               fi
             fi
