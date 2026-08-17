@@ -15,6 +15,13 @@ A contact is a human in a process (supplier, customer) with no account and
 no login path — see ``llc/models/contact.py`` module docstring. These routes
 never touch ``users``, sessions, or auth.
 
+DELETE /{contact_id} delegates to ``ContactDirectoryService.delete`` (#14464
+review), the same guard the shared-directory route ``/{company_id}/directory/
+{contact_id}`` uses. The directory is installation-wide, so a delete here is
+global — it must refuse while the contact still holds a role in *any*
+company, not only this one, or a plain member of this company could
+hard-delete someone another company still depends on.
+
 Scoping: the {company_id} path parameter is checked against the caller's
 ``TenantContext.org_id`` via ``assert_company_access`` (#12238), the same
 shared guard every other LLC router uses (companies.py, goals.py,
@@ -190,21 +197,20 @@ async def merge_contacts(
     return ContactResponse.model_validate(survivor)
 
 
-@router.delete("/{company_id}/directory/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_from_directory(
+async def _delete_via_directory(
+    *,
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
+    session: AsyncSession,
+    current_user: dict,
 ) -> None:
-    """Remove a person from the shared directory.
+    """Shared body for both delete routes (#14464 review — one guard, two doors).
 
-    409, not 400, when they still hold a role: the request is valid and the
-    caller is authorised — the obstacle is state elsewhere, and the response
-    names which departments still depend on them.
+    ``ContactDirectoryService.delete`` is the only path that consults
+    ``companies_for_contact`` and refuses while a role is held anywhere — so
+    every route that deletes a contact must call it rather than
+    ``ContactService.delete``, which only ever knew about one company.
     """
-    assert_company_access(ctx, company_id)
     try:
         deleted = await _get_directory().delete(
             session,
@@ -222,6 +228,29 @@ async def delete_from_directory(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()
+
+
+@router.delete("/{company_id}/directory/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_from_directory(
+    company_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Remove a person from the shared directory.
+
+    409, not 400, when they still hold a role: the request is valid and the
+    caller is authorised — the obstacle is state elsewhere, and the response
+    names which departments still depend on them.
+    """
+    assert_company_access(ctx, company_id)
+    await _delete_via_directory(
+        company_id=company_id,
+        contact_id=contact_id,
+        session=session,
+        current_user=current_user,
+    )
 
 
 @router.get("/{company_id}", response_model=List[ContactResponse])
@@ -297,12 +326,22 @@ async def delete_contact(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    """Permanently delete the contact — its PII no longer exists at rest afterward."""
+    """Permanently delete the contact — its PII no longer exists at rest afterward.
+
+    Delegates to :meth:`ContactDirectoryService.delete` (#14464 review) rather
+    than ``ContactService.delete``. The directory is shared across companies, so
+    a delete here is global — routing it through the same guard as
+    ``/{company_id}/directory/{contact_id}`` is what stops a plain member of the
+    contact's legacy company from hard-deleting someone who still holds a role
+    (and therefore permissions) in a company they were never a member of.
+    """
     assert_company_access(ctx, company_id)
-    deleted = await _svc().delete(session, company_id, contact_id, actor=_actor_id(_current_user))
-    if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
-    await session.commit()
+    await _delete_via_directory(
+        company_id=company_id,
+        contact_id=contact_id,
+        session=session,
+        current_user=current_user,
+    )
