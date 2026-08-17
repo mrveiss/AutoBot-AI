@@ -129,11 +129,20 @@ def test_a_flapping_node_still_reaches_max_attempts():
 
 
 def test_a_current_heartbeat_does_clear_the_counter():
-    """The case the clearing exists for must keep working.
+    """The clearing branch itself must keep working.
 
-    A node heartbeating right now has genuinely recovered; refusing to clear
-    would leave it exhausted and unrepairable, which is the #14344-review bug
-    this method was added to prevent.
+    Do NOT read this as "a recovered node clears its counter" -- that shape is
+    not reachable from `_attempt_remediation`, which only selects DEGRADED
+    nodes, and a genuinely recovered node flips to ONLINE in
+    `update_node_heartbeat` and stops matching the query entirely. This asserts
+    the branch at the level of the function, not a production path.
+
+    The one shape that DOES reach here with a current beat is a node degraded
+    for a non-staleness reason (resource pressure, or a crash-looping service)
+    while heartbeating on schedule -- and for that node "current beat" does not
+    mean recovered, so clearing its counter is wrong. That gap is #14465, and
+    it is deliberately not addressed here: it predates this fix, which narrows
+    the clearing to current beats without changing which nodes arrive.
     """
     tracker = _clear(beat_offset_s=1, last_attempt_offset_s=300, count=3)
 

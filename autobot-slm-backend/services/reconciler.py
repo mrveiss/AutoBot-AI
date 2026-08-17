@@ -620,6 +620,15 @@ class ReconcilerService:
 
         So recovery now requires the beat to still be CURRENT, and the reset
         keeps `last_attempt` so the cooldown continues to apply.
+
+        KNOWN GAP (#14465), not closed here: a node degraded for a reason other
+        than staleness -- resource pressure, or a crash-looping service --
+        heartbeats on schedule while staying DEGRADED, so it reaches this
+        function with a current beat every pass and has its count cleared every
+        pass. For that node a current beat does not mean recovery, and it never
+        escalates. That shape predates this fix and is unchanged by it; closing
+        it means clearing on the ONLINE transition rather than inside the
+        DEGRADED remediation path.
         """
         tracker = self._remediation_tracker.get(node.node_id)
         if not tracker:
