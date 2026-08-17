@@ -15,6 +15,7 @@ implementation, so it removes the stub from sys.modules before importing.
 """
 
 import importlib
+import re as _re
 import subprocess as _subprocess
 import sys
 
@@ -31,6 +32,9 @@ import sys
 import types as _types
 from pathlib import Path as _Path
 from unittest.mock import MagicMock as _MagicMock
+
+import pytest
+import yaml as _yaml
 
 _SERVICES_DIR = str(_Path(__file__).parent.parent.parent / "services")
 
@@ -180,7 +184,20 @@ def test_scheduler_in_backend_ansible_group():
 
 
 def test_scheduler_dependencies():
-    assert ROLE_DEPENDENCIES["scheduler"] == ["python314"]
+    """#14446: derived from the group it shares, not restated as a literal.
+
+    This used to read `== ["python314"]`, sitting directly beneath
+    `test_scheduler_in_backend_ansible_group`. Between them the two tests state
+    the bug outright -- scheduler runs the backend ansible role but declares
+    less than backend does -- and neither noticed, because each only restated
+    one map. A scheduler-only node reached `nginx -t` with no nginx installed.
+
+    Anchored to backend's own dependencies so the two cannot drift apart again.
+    """
+    assert set(ROLE_DEPENDENCIES["scheduler"]) >= set(ROLE_DEPENDENCIES["backend"]), (
+        "scheduler runs the backend ansible role (ROLE_ANSIBLE_GROUPS) but declares fewer "
+        "dependencies than backend, so Phase 0 skips what Phase 4a requires"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -392,3 +409,211 @@ def test_all_role_ansible_playbooks_resolve():
         if not (_ANSIBLE_DIR / pb).is_file():
             missing.append(f"{role['name']} -> {pb}")
     assert not missing, f"role ansible_playbook(s) missing under {_ANSIBLE_DIR}: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# #14446: the two registry maps must agree about what a node actually runs
+# ---------------------------------------------------------------------------
+#
+# ROLE_ANSIBLE_GROUPS decides which inventory GROUP a role joins.
+# ROLE_DEPENDENCIES decides what Phase 0 installs on the node.
+#
+# They are independent, and they disagreed: "vnc" joins the *backend* group,
+# so Phase 4a applied the backend ansible role and created a python3.14 venv,
+# while "vnc": [] told Phase 0 to install no interpreter. Provisioning failed
+# with "No such file or directory: b'python3.14'" -- an error naming the venv
+# rather than the dependency, on a node whose declared roles never mentioned
+# the backend at all.
+#
+# The requirement is DERIVED here rather than listed. A test that restated
+# either map would have passed: each map is self-consistent on its own, and
+# the defect lives in the relationship between them.
+
+
+def _activation_sources() -> dict:
+    """ansible role -> what switches it on: inventory groups AND node roles.
+
+    Read out of `role_active_facts.yml`, which is what the provisioning
+    playbook actually gates each `include_role` on. Both clauses matter: a
+    role activates either because the node landed in a group or because the
+    node declares the role by name, and covering only the group half leaves
+    the node-roles half unguarded -- which is how the `redis` gap survived
+    the first version of this rule.
+    """
+    facts_file = _ANSIBLE_DIR / "playbooks" / "vars" / "role_active_facts.yml"
+    text = facts_file.read_text(encoding="utf-8")
+
+    activating: dict = {}
+    current = None
+    for line in text.splitlines():
+        match = _re.match(r"^role_([a-z0-9_]+)_active:", line)
+        if match:
+            current = match.group(1).replace("_", "-")
+            activating.setdefault(current, {"groups": set(), "roles": set()})
+            continue
+        if current:
+            for group in _re.findall(r"groups\.get\('([a-z0-9_]+)'", line):
+                activating[current]["groups"].add(group)
+            for role in _re.findall(r"'([a-z0-9_-]+)' in \(node_roles", line):
+                activating[current]["roles"].add(role)
+    return activating
+
+
+def _groups_activating_ansible_role() -> dict:
+    """The group half, kept as its own view for the derivation self-check."""
+    return {role: sources["groups"] for role, sources in _activation_sources().items()}
+
+
+def _role_tasks(role_name: str):
+    """Every task in an ansible role, including those nested in block/rescue/always."""
+
+    def walk(tasks):
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            yield task
+            for key in ("block", "rescue", "always"):
+                if isinstance(task.get(key), list):
+                    yield from walk(task[key])
+
+    for candidate in (role_name, role_name.replace("-", "_")):
+        tasks_dir = _ANSIBLE_DIR / "roles" / candidate / "tasks"
+        if not tasks_dir.is_dir():
+            continue
+        for task_file in sorted(tasks_dir.rglob("*.yml")):
+            try:
+                parsed = _yaml.safe_load(task_file.read_text(encoding="utf-8"))
+            except _yaml.YAMLError:
+                continue
+            if isinstance(parsed, list):
+                yield from walk(parsed)
+
+
+def _ansible_role_needs_python(role_name: str) -> bool:
+    """Does this ansible role build a Python venv?
+
+    Matched structurally, on any command that runs `-m venv`. An earlier
+    version looked for two hand-picked literals ("virtual environment via
+    deadsnakes" / "python_interpreter_version") and silently missed ai-stack,
+    whose task is named "Create Python virtual environment (#3534)" and runs
+    `python3.14 -m venv` directly -- so that whole group went unguarded while
+    the rule still reported success.
+    """
+    for task in _role_tasks(role_name):
+        for module in ("ansible.builtin.command", "ansible.builtin.shell", "command", "shell"):
+            spec = task.get(module)
+            body = spec if isinstance(spec, str) else (spec or {}).get("cmd", "") if isinstance(spec, dict) else ""
+            if "-m venv" in str(body):
+                return True
+        if "python_interpreter_version" in str(task):
+            return True
+    return False
+
+
+def _ansible_role_needs_nginx(role_name: str) -> bool:
+    """Does this ansible role start nginx unconditionally?
+
+    `when`-gated starts do not count: those roles run fine on a node where the
+    condition is false. An UNgated `systemd: name=nginx state=started` means
+    the package has to be there, whatever the node's declared roles say.
+    """
+    for task in _role_tasks(role_name):
+        if "when" in task:
+            continue
+        for module in ("ansible.builtin.systemd", "ansible.builtin.service", "systemd", "service"):
+            spec = task.get(module)
+            if isinstance(spec, dict) and spec.get("name") == "nginx" and spec.get("state") == "started":
+                return True
+    return False
+
+
+# What each shared dependency is detected by, so the rule below covers every
+# dependency the ansible roles actually impose rather than just the one that
+# happened to fail first.
+_DEPENDENCY_PROBES = {
+    "python314": _ansible_role_needs_python,
+    "nginx": _ansible_role_needs_nginx,
+}
+
+
+def test_the_derivation_finds_something():
+    """An empty derivation would make the rule below vacuous.
+
+    Both probes are pinned against a role known to trip them, so a rename or a
+    restructure fails loudly instead of quietly detecting nothing and reporting
+    a clean run. `ai-stack` is named explicitly because the first version of the
+    python probe missed it.
+    """
+    activating = _groups_activating_ansible_role()
+
+    assert activating, "no role_*_active facts parsed - the guard is pinned to the wrong file"
+    assert any(activating.values()), "no group references parsed out of the active facts"
+    assert _ansible_role_needs_python("backend"), "the backend venv signal has moved"
+    assert _ansible_role_needs_python("ai-stack"), (
+        "ai-stack is no longer detected as building a venv - it names its task differently "
+        "from backend, which is exactly the blind spot this probe was widened to close"
+    )
+    assert _ansible_role_needs_nginx("backend"), "the backend role's ungated nginx start is no longer detected"
+
+
+def test_every_role_declares_what_its_group_actually_requires():
+    """The #14446 invariant, over every shared dependency -- not just the first to fail.
+
+    Joining a group switches on an ansible role. Whatever that role requires
+    unconditionally, the node needs, regardless of what the node's own declared
+    roles are called. Fixing only the interpreter would have left the identical
+    hole one task later, at `nginx -t`.
+    """
+    sources = _activation_sources()
+
+    # group -> {dependency: ansible role imposing it}, and the same by node role
+    group_requires: dict = {}
+    role_requires: dict = {}
+    for ansible_role, activated_by in sources.items():
+        for dependency, probe in _DEPENDENCY_PROBES.items():
+            if not probe(ansible_role):
+                continue
+            for group in activated_by["groups"]:
+                group_requires.setdefault(group, {})[dependency] = ansible_role
+            for node_role in activated_by["roles"]:
+                role_requires.setdefault(node_role, {})[dependency] = ansible_role
+
+    offenders = []
+    for role, group in ROLE_ANSIBLE_GROUPS.items():
+        declared = ROLE_DEPENDENCIES.get(role, [])
+        for dependency, via in group_requires.get(group, {}).items():
+            if dependency not in declared:
+                offenders.append(f"{role!r} joins group {group!r} (runs {via!r}) but does not declare {dependency!r}")
+
+    # The node-roles half: a role that activates itself by name, with no group
+    # involved at all.
+    for role, required in role_requires.items():
+        if role not in ROLE_DEPENDENCIES:
+            continue
+        declared = ROLE_DEPENDENCIES[role]
+        for dependency, via in required.items():
+            if dependency not in declared:
+                offenders.append(f"{role!r} activates {via!r} by name but does not declare {dependency!r}")
+
+    assert not offenders, (
+        "role(s) mapped into a group whose ansible role requires a dependency they do not declare - "
+        "Phase 0 skips it and provisioning fails once Phase 4a needs it (#14446): " + "; ".join(offenders)
+    )
+
+
+@pytest.mark.parametrize("role", ["vnc", "celery", "scheduler"])
+@pytest.mark.parametrize("dependency", ["python314", "nginx"])
+def test_the_backend_group_roles_declare_both(role, dependency):
+    """The observed regression and its two silent siblings, pinned by name.
+
+    `vnc` is what failed in the field. `celery` and `scheduler` share the same
+    group and carried the identical undeclared gap -- never exercised only
+    because such nodes are normally co-located with a real backend node.
+
+    The derived rule above would keep passing if the derivation broke in a way
+    that found nothing; this names the cases.
+    """
+    assert dependency in ROLE_DEPENDENCIES[role], (
+        f"{role} does not declare {dependency}, but joins the backend group and runs the backend "
+        f"ansible role, which requires it unconditionally (#14446)"
+    )

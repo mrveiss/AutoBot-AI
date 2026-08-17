@@ -17,6 +17,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# #14459: pure classify_db_update_result() -- no ssh/psql/rsync in this file.
+source "${SCRIPT_DIR}/../lib/db-update-classify.sh"
 
 # Configuration (from SSOT)
 REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
@@ -24,6 +26,15 @@ REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 # #9956: SLM manager DB node_id is overridable — deployments may rename the
 # node. Defaults to the inventory default (slm_server host in slm-nodes.yml).
 SLM_NODE_ID="${AUTOBOT_SLM_NODE_ID:-00-SLM-Manager}"
+# #14459: this value ends up embedded in a remote SSH command string that is
+# parsed twice (once here, once by the remote shell). Constrain it to what a
+# `nodes.node_id` value actually looks like (see models/database.py,
+# VARCHAR(64)) before it ever reaches that string — same approach #14173 used
+# for AUTOBOT_USER ahead of a sudoers heredoc.
+if ! [[ "${SLM_NODE_ID}" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Invalid AUTOBOT_SLM_NODE_ID: '${SLM_NODE_ID}' is not a valid node id" >&2
+    exit 1
+fi
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 
@@ -173,23 +184,86 @@ echo ""
 log_step "Updating SLM node version in database..."
 CURRENT_COMMIT=$(git -C "$PROJECT_ROOT" log --oneline -1 --format='%h' 2>/dev/null || echo "unknown")
 
+# #14459: code_version/code_status are the only view an operator has of what
+# is running on a node without logging into it, so a failed or no-op UPDATE
+# here must never look like success. Three outcomes are distinguished below
+# (row updated / no row matched / command failed); the last two are always
+# logged with log_error, naming the node id, because "the row is now wrong"
+# is true in both cases.
+#
+# Deliberately NOT fatal: by this point rsync has already copied the code,
+# and (on --deploy) Ansible still needs to run. Aborting the whole deploy
+# over a status-table write would block a deploy that otherwise succeeded.
+# Instead the failure is loud at the point it happens, repeated in the final
+# summary, and the script's own exit code reflects it — so both an operator
+# watching the output and anything scripting around this tool can tell the
+# row is stale.
+DB_UPDATE_FAILED=0
+
 if [ "$CURRENT_COMMIT" != "unknown" ]; then
-    # Update database with current commit hash
-    # Note: Sources /etc/autobot/db-credentials.env on remote for postgres credentials
-    UPDATE_SQL="UPDATE nodes SET code_version = '$CURRENT_COMMIT', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = '$SLM_NODE_ID';"
+    # Note: sources /etc/autobot/db-credentials.env on the remote host for
+    # postgres credentials.
+    #
+    # `psql -c` does NOT process psql-specific syntax: psql(1) requires a
+    # -c argument to be "completely parsable by the server", so a :'var'
+    # reference inside -c is a syntax error on the server, not a
+    # client-side substitution (caught in review -- reproduced against a
+    # scratch Postgres, every -c call failed before it could report a row
+    # count). The SQL is instead sent over psql's STDIN, exactly like -f,
+    # where :'var' interpolation actually runs client-side; ssh forwards
+    # this command's stdin to the remote process since no pty is allocated.
+    #
+    # SLM_NODE_ID and CURRENT_COMMIT reach the remote host through a single
+    # ssh command string, parsed TWICE — once by this shell building the
+    # string, once by the remote shell executing it. Two independent
+    # defenses, since either value could otherwise break out at either
+    # layer:
+    #   1. Both values are passed as psql variables (-v) and referenced in
+    #      the SQL text (sent over stdin, below) with the quoting form
+    #      :'var', never concatenated into the SQL string, so neither can
+    #      break out of the SQL literal.
+    #   2. The psql invocation is shell-escaped with `printf %q` before it
+    #      is embedded in the ssh command string, so the remote shell sees
+    #      exactly the intended tokens rather than a second round of
+    #      word-splitting. SLM_NODE_ID is additionally validated above
+    #      against a fixed character set.
+    REMOTE_PSQL_CMD=(
+        psql -h 127.0.0.1 -U slm_app -d slm
+        -v "ON_ERROR_STOP=1"
+        -v "node_id=${SLM_NODE_ID}"
+        -v "commit=${CURRENT_COMMIT}"
+    )
+    REMOTE_PSQL_CMD_STR=$(printf '%q ' "${REMOTE_PSQL_CMD[@]}")
 
-    ssh ${SSH_KEY:+-i "$SSH_KEY"} $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" \
-        "source /etc/autobot/db-credentials.env 2>/dev/null && \
-         PGPASSWORD=\$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm -c \"$UPDATE_SQL\"" \
-        > /dev/null 2>&1
+    set +e
+    DB_UPDATE_OUTPUT=$(ssh ${SSH_KEY:+-i "$SSH_KEY"} $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" \
+        "source /etc/autobot/db-credentials.env 2>/dev/null && PGPASSWORD=\$SLM_DB_PASSWORD $REMOTE_PSQL_CMD_STR" <<'REMOTE_SQL' 2>&1
+UPDATE nodes SET code_version = :'commit', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = :'node_id';
+REMOTE_SQL
+)
+    DB_UPDATE_EXIT=$?
+    set -e
 
-    if [ $? -eq 0 ]; then
-        log_info "Database updated: $SLM_NODE_ID → $CURRENT_COMMIT"
-    else
-        log_warn "Could not update database (non-critical, code is deployed)"
-    fi
+    DB_UPDATE_RESULT=$(classify_db_update_result "$DB_UPDATE_EXIT" "$DB_UPDATE_OUTPUT")
+    case "$DB_UPDATE_RESULT" in
+        failed)
+            log_error "Database update FAILED for node '$SLM_NODE_ID' (ssh/psql exit $DB_UPDATE_EXIT):"
+            log_error "$DB_UPDATE_OUTPUT"
+            log_error "code_version/code_status for '$SLM_NODE_ID' is now STALE — code is deployed but the row was not updated."
+            DB_UPDATE_FAILED=1
+            ;;
+        no_match)
+            log_error "Database update matched NO ROW for node_id '$SLM_NODE_ID' — the row is now STALE."
+            log_error "Likely cause: the node was renamed (#9956) and AUTOBOT_SLM_NODE_ID no longer matches any row in 'nodes'."
+            DB_UPDATE_FAILED=1
+            ;;
+        updated)
+            log_info "Database updated: $SLM_NODE_ID → $CURRENT_COMMIT"
+            ;;
+    esac
 else
-    log_warn "Could not determine current commit (non-critical, code is deployed)"
+    log_error "Could not determine current commit — code_version/code_status for '$SLM_NODE_ID' was NOT updated and is now STALE."
+    DB_UPDATE_FAILED=1
 fi
 
 # ===== Phase 2: Run Ansible =====
@@ -273,3 +347,9 @@ else
     echo "    ssh $REMOTE_USER@$REMOTE_HOST 'tail -f /opt/autobot/logs/nginx-error.log'"
 fi
 echo ""
+
+if [ "$DB_UPDATE_FAILED" -eq 1 ]; then
+    log_error "Code was synced, but the SLM database status row for node '$SLM_NODE_ID' is STALE."
+    log_error "code_version/code_status will not reflect this deploy until that row is corrected."
+    exit 1
+fi

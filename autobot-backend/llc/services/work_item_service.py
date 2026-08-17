@@ -406,6 +406,7 @@ class WorkItemService(LLCServiceBase):
         type: Optional[WorkItemType] = None,
         status: Optional[WorkItemStatus] = None,
         assignee_agent_id: Optional[str] = None,
+        assignee_user_id: Optional[str] = None,
         reviewer_user_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         parent_id: Optional[str] = None,
@@ -425,6 +426,15 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.status == status)
         if assignee_agent_id:
             q = q.where(LLCWorkItem.assignee_agent_id == uuid.UUID(assignee_agent_id))
+        if assignee_user_id:
+            # #14192: the human half of the assignee keyspace. Previously
+            # absent entirely, so a human org-chart node's assigned items
+            # (LLCWorkItem.assignee_user_id, populated since #10532) could
+            # never be fetched through this endpoint even though the data
+            # exists — see llc/api/companies.py's `_compose_human_nodes`,
+            # which already reads the same column for the org-chart's own
+            # per-person item count.
+            q = q.where(LLCWorkItem.assignee_user_id == uuid.UUID(assignee_user_id))
         if reviewer_user_id:
             # Review inbox (#10533): items routed to a specific human reviewer.
             q = q.where(LLCWorkItem.reviewer_user_id == uuid.UUID(reviewer_user_id))

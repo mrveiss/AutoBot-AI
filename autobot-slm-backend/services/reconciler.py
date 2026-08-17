@@ -600,10 +600,35 @@ class ReconcilerService:
             return False
 
     def _clear_tracker_if_recovered(self, node: Node) -> None:
-        """Forget past attempts once the node has heartbeated since the last one.
+        """Forget past attempts once the node is heartbeating again for real.
 
         Guards against a node being permanently locked out of remediation after
         recovering by some route the reconciler never observes (#14344 review).
+
+        #14454: "newer than the last attempt" was too weak a test, and the
+        reason is structural. `_attempt_remediation` only reaches nodes that are
+        currently DEGRADED, and any heartbeat flips a node out of DEGRADED --
+        so a node that genuinely recovers never arrives here at all, it simply
+        stops matching the query. The only node that DOES arrive here with a
+        newer beat is one that flapped: a single heartbeat landed, then it went
+        stale again and was re-degraded.
+
+        That is exactly the shape of a #14350 auth-rejected agent -- restart,
+        one heartbeat, rejected, silence, repeat. Clearing on that reset the
+        counter every cycle, so MAX_REMEDIATION_ATTEMPTS was never reached and
+        escalation never fired: the #14344 defect rebuilt inside its own fix.
+
+        So recovery now requires the beat to still be CURRENT, and the reset
+        keeps `last_attempt` so the cooldown continues to apply.
+
+        KNOWN GAP (#14465), not closed here: a node degraded for a reason other
+        than staleness -- resource pressure, or a crash-looping service --
+        heartbeats on schedule while staying DEGRADED, so it reaches this
+        function with a current beat every pass and has its count cleared every
+        pass. For that node a current beat does not mean recovery, and it never
+        escalates. That shape predates this fix and is unchanged by it; closing
+        it means clearing on the ONLINE transition rather than inside the
+        DEGRADED remediation path.
         """
         tracker = self._remediation_tracker.get(node.node_id)
         if not tracker:
@@ -614,9 +639,15 @@ class ReconcilerService:
         if last_attempt is None or beat is None or beat <= last_attempt:
             return
 
-        del self._remediation_tracker[node.node_id]
+        # A beat older than the staleness cutoff is not a recovery -- it is the
+        # flap that put this node back in the degraded set to begin with.
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._heartbeat_timeout)
+        if beat < cutoff:
+            return
+
+        self._remediation_tracker[node.node_id] = {"count": 0, "last_attempt": last_attempt}
         logger.info(
-            "Node %s heartbeated after its last remediation attempt - clearing attempt history",
+            "Node %s is heartbeating again - clearing attempt history (cooldown preserved)",
             node.node_id,
         )
 

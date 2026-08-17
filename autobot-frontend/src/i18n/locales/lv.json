@@ -8283,7 +8283,7 @@
         "railHandoff": "Nodošana",
         "itemsUnavailable": "Vienumus neizdevās ielādēt. Tā ir ielādes problēma, nevis tukšs saraksts.",
         "itemsEmpty": "Nav aktīvu vienumu.",
-        "itemsNotApplicableHuman": "Vienumu saraksti pa personām vēl nav pieejami — pēc atbildīgā var filtrēt tikai aģentus.",
+        "itemsNotApplicable": "Vienumu sarakstiem nepieciešams piešķiršanas ID, kura šim mezglam nav.",
         "outputEmpty": "Vēl nav pabeigtu vienumu.",
         "costTotalTokens": "Kopējie žetoni",
         "costUsd": "Izmaksas (USD)",

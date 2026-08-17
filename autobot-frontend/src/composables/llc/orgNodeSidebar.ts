@@ -3,40 +3,61 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * Canvas node sidebar — data model (#13940).
+ * Canvas node sidebar — data model (#13940, #14192).
  *
  * The sidebar `OrgChart.vue` opens on a node selection (tree, canvas or the
  * People list — all three call the same `openDrawer`) gets a fixed slot
  * order: owner -> tools -> notes (overview/checklist/output) -> attributes,
  * plus a right icon rail. This module holds the parts that are not markup:
  * what each rail slot binds to, and — per #13940's mandate to audit first and
- * never build a slot with no data — why five of the promised six rail icons
- * bind to something real and one does not exist at all.
+ * never build a slot with no data — why some of the promised six rail icons
+ * bind to something real, why one is agent-only for a structural reason
+ * (#14192), and why one does not exist at all.
  *
  * ## Per-slot audit
  *
  * | rail slot | binds to | agent node | human node |
  * |---|---|---|---|
  * | info | fields already on `OrgChartNode` (org-chart response) | yes | yes |
- * | checklist | `GET /work-items?company_id&assignee=<node_id>` | yes | **no** |
+ * | checklist | `GET /work-items?company_id&assignee=<node_id>` (agent) or `&assignee_user_id=<node_id>` (human, #14192) | yes | yes |
  * | cost | `GET /companies/{id}/costs/by-agent-model`, row matched on `agent_id === node.id` | yes | **no** |
  * | activity | `GET /companies/{id}/activity?entity_type=agent&entity_id=<node.id>` | yes | **no** |
- * | handoff | the same checklist fetch — each row opens the existing `HandoffModal` (`direction: 'to_human'`), not a new endpoint | yes | **no** |
+ * | handoff | the same checklist fetch feeds the row list; each row opens `HandoffModal` (`direction: 'to_human'`), which POSTs the *agent*-only `/handoff/to-human` endpoint | yes | **no** |
  * | comments | **no endpoint exists anywhere** — omitted from the rail entirely, see below | — | — |
  *
- * The three human "no"s share one root cause, not three:
- * `WorkItemService.list_by_project` (`autobot-backend/llc/services/
- * work_item_service.py`) accepts `assignee_agent_id` but has **no
- * `assignee_user_id` parameter at all** — confirmed by reading its signature,
- * not inferred — so a human node's assigned items can never be fetched
- * through the existing `/work-items` endpoint. `cost` and `activity` fail the
- * identical structural test for a different reason: `llc_agent_budgets` and
- * the activity log's `entity_type="agent"` writer (`controls_service.py`)
- * are agent-only by construction — there is no per-user budget row and no
- * activity entry is ever logged against a membership's user id. `checklist`,
- * `handoff` and `output` (a Notes sub-tab, not a rail icon) all key off the
- * same missing filter, so a human node reports one honest
- * `notApplicable` state rather than three unrelated-looking gaps.
+ * `checklist` (and the `output`/`checklist` Notes sub-tabs, which read the
+ * same fetch) used to be human-"no" for one root cause: `WorkItemService.
+ * list_by_project` (`autobot-backend/llc/services/work_item_service.py`)
+ * accepted `assignee_agent_id` but had **no `assignee_user_id` parameter at
+ * all** — confirmed by reading its signature, not inferred — so a human
+ * node's assigned items could never be fetched through the existing
+ * `/work-items` endpoint even though the data was always there
+ * (`LLCWorkItem.assignee_user_id`, populated since #10532, and already read
+ * by `llc/api/companies.py`'s `_compose_human_nodes` for the org-chart's own
+ * per-person item count). #14192 closed that gap: `list_by_project` and
+ * `GET /work-items` both gained an `assignee_user_id` filter, so
+ * `canFetchAssignedItems` below no longer excludes a human node.
+ *
+ * `handoff` stays human-"no" for a *different*, deeper reason that the
+ * missing filter alone does not fix: `HandoffService.agent_to_human`
+ * (`autobot-backend/llc/services/handoff.py`) rejects any work item whose
+ * `assignee_agent_id` does not match the caller's `agent_id` — and a
+ * human-assigned item's `assignee_agent_id` is always `NULL`, so the call
+ * would always raise `HandoffNotAllowed`. There is no `human_to_human`
+ * handoff verb in Company OS today. Fetching the list is now possible for a
+ * human node (`canFetchAssignedItems`), but offering the "Hand Off" *action*
+ * on that list is not (`canHandoffAssignedItems`) — the two are
+ * deliberately different predicates so the checklist/output tabs can show
+ * real data while the handoff panel still reports an honest
+ * `notApplicable` rather than a button that always 400s.
+ *
+ * `cost` and `activity` are unrelated gaps, both product decisions rather
+ * than "add a filter" fixes: `llc_agent_budgets` and the activity log's
+ * `entity_type="agent"` writer (`controls_service.py`) are agent-only by
+ * construction — there is no per-user budget row and no activity entry is
+ * ever logged against a membership's user id. Left as `notApplicable`
+ * pending an owner decision on whether a company member should be
+ * metered/audited the way a hired agent is (#14192's Gap 2).
  *
  * `comments` is not in `SIDEBAR_RAIL_ICONS` at all: the only comment thread
  * in Company OS is `/work-items/{id}/comments`, scoped to one work item.
@@ -98,18 +119,38 @@ export function emptySlotState<T>(): SlotState<T> {
 }
 
 /**
- * True only when the node's assigned items are reachable through the
- * existing `GET /work-items?assignee=` filter — agents only, and only once
- * the org-chart response's `node_id` (the assignment-keyspace UUID, #10032)
- * is present. A human node, or a fixture written before #13940 that omits
- * `node_id`, is a structural "not applicable", never a fetch attempt.
+ * True once the node's assigned items are reachable through `GET
+ * /work-items` — either the `assignee` (agent) or `assignee_user_id`
+ * (human, #14192) filter — and the org-chart response's `node_id` (the
+ * assignment-keyspace id, #10032) is present. Only a fixture written before
+ * #13940 that omits `node_id` is a structural "not applicable" now; node
+ * kind alone no longer excludes a fetch attempt.
  */
 export function canFetchAssignedItems(node: SidebarNode): boolean {
-  return !node.is_human && !!node.node_id
+  return !!node.node_id
+}
+
+/**
+ * True only when the node's assigned items may also be offered the "Hand
+ * Off" *action* — narrower than `canFetchAssignedItems` on purpose. The
+ * list is fetchable for a human node since #14192, but `HandoffService.
+ * agent_to_human` (`autobot-backend/llc/services/handoff.py`) requires the
+ * item's `assignee_agent_id` to match the caller, which is never true for a
+ * human-assigned item (`assignee_agent_id` is always `NULL` there). There is
+ * no `human_to_human` handoff verb, so the action stays agent-only even
+ * though the underlying list is not — see the module docstring.
+ */
+export function canHandoffAssignedItems(node: SidebarNode): boolean {
+  return !node.is_human && canFetchAssignedItems(node)
 }
 
 export function assignedItemsUrl(companyId: string, node: SidebarNode): string {
-  return `/api/llc/work-items?company_id=${encodeURIComponent(companyId)}&assignee=${encodeURIComponent(node.node_id ?? '')}`
+  // #14192: a human node's `node_id` is a user id, never an agent id — it
+  // must be sent through the `assignee_user_id` keyspace-specific param, not
+  // the agent-only `assignee` one, or the filter would silently match zero
+  // rows (LLCWorkItem.assignee_agent_id is never a user id).
+  const param = node.is_human ? 'assignee_user_id' : 'assignee'
+  return `/api/llc/work-items?company_id=${encodeURIComponent(companyId)}&${param}=${encodeURIComponent(node.node_id ?? '')}`
 }
 
 const DONE_STATUS: WorkItem['status'] = 'done'
