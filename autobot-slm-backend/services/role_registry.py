@@ -534,7 +534,15 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     "tts-worker": ["python314"],
     "autobot-llm-cpu": [],
     "autobot-llm-gpu": [],
-    "vnc": [],
+    # #14446: NOT empty. ROLE_ANSIBLE_GROUPS maps "vnc" into the *backend*
+    # group, so role_backend_active is true on a vnc-only node and Phase 4a
+    # applies the backend ansible role -- which creates a python3.14 venv.
+    # Declaring no dependencies meant Phase 0 skipped the interpreter and
+    # provisioning failed at the venv with "No such file or directory:
+    # b'python3.14'", naming the venv rather than the missing dependency.
+    # `celery` and `scheduler`, the other two roles sharing that group,
+    # already declare it.
+    "vnc": ["python314"],
     "slm-agent": [],
 }
 

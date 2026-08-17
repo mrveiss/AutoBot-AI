@@ -15,6 +15,7 @@ implementation, so it removes the stub from sys.modules before importing.
 """
 
 import importlib
+import re as _re
 import subprocess as _subprocess
 import sys
 
@@ -392,3 +393,120 @@ def test_all_role_ansible_playbooks_resolve():
         if not (_ANSIBLE_DIR / pb).is_file():
             missing.append(f"{role['name']} -> {pb}")
     assert not missing, f"role ansible_playbook(s) missing under {_ANSIBLE_DIR}: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# #14446: the two registry maps must agree about what a node actually runs
+# ---------------------------------------------------------------------------
+#
+# ROLE_ANSIBLE_GROUPS decides which inventory GROUP a role joins.
+# ROLE_DEPENDENCIES decides what Phase 0 installs on the node.
+#
+# They are independent, and they disagreed: "vnc" joins the *backend* group,
+# so Phase 4a applied the backend ansible role and created a python3.14 venv,
+# while "vnc": [] told Phase 0 to install no interpreter. Provisioning failed
+# with "No such file or directory: b'python3.14'" -- an error naming the venv
+# rather than the dependency, on a node whose declared roles never mentioned
+# the backend at all.
+#
+# The requirement is DERIVED here rather than listed. A test that restated
+# either map would have passed: each map is self-consistent on its own, and
+# the defect lives in the relationship between them.
+
+
+def _groups_activating_ansible_role() -> dict:
+    """ansible role name -> inventory groups that switch it on.
+
+    Read out of `role_active_facts.yml`, which is what the provisioning
+    playbook actually gates each `include_role` on.
+    """
+    facts_file = _ANSIBLE_DIR / "playbooks" / "vars" / "role_active_facts.yml"
+    text = facts_file.read_text(encoding="utf-8")
+
+    activating: dict = {}
+    current = None
+    for line in text.splitlines():
+        match = _re.match(r"^role_([a-z0-9_]+)_active:", line)
+        if match:
+            current = match.group(1).replace("_", "-")
+            activating.setdefault(current, set())
+            continue
+        if current:
+            for group in _re.findall(r"groups\.get\('([a-z0-9_]+)'", line):
+                activating[current].add(group)
+    return activating
+
+
+def _ansible_role_needs_python(role_name: str) -> bool:
+    """Does this ansible role build a deadsnakes venv?
+
+    Both spellings are checked because the interpreter is referenced either
+    through the shared `python_interpreter_version` var or by the literal task
+    name that failed in the field.
+    """
+    for candidate in (role_name, role_name.replace("-", "_")):
+        tasks_dir = _ANSIBLE_DIR / "roles" / candidate / "tasks"
+        if not tasks_dir.is_dir():
+            continue
+        for task_file in tasks_dir.rglob("*.yml"):
+            body = task_file.read_text(encoding="utf-8")
+            if "virtual environment via deadsnakes" in body or "python_interpreter_version" in body:
+                return True
+    return False
+
+
+def test_the_derivation_finds_something():
+    """An empty derivation would make the rule below vacuous.
+
+    If `role_active_facts.yml` is renamed or its expressions restructured, this
+    fails loudly rather than silently checking zero roles.
+    """
+    activating = _groups_activating_ansible_role()
+
+    assert activating, "no role_*_active facts parsed - the guard is pinned to the wrong file"
+    assert any(activating.values()), "no group references parsed out of the active facts"
+    assert _ansible_role_needs_python("backend"), (
+        "the backend ansible role no longer looks like it builds a venv - "
+        "the interpreter signal this rule derives from has moved"
+    )
+
+
+def test_every_role_declares_the_interpreter_its_group_actually_needs():
+    """The #14446 invariant.
+
+    If joining a group switches on an ansible role that builds a Python venv,
+    the node needs an interpreter -- whatever the role happens to be called.
+    """
+    activating = _groups_activating_ansible_role()
+
+    # group -> True when some ansible role it activates builds a venv
+    group_needs_python = {}
+    for ansible_role, groups in activating.items():
+        if not _ansible_role_needs_python(ansible_role):
+            continue
+        for group in groups:
+            group_needs_python[group] = ansible_role
+
+    offenders = []
+    for role, group in ROLE_ANSIBLE_GROUPS.items():
+        via = group_needs_python.get(group)
+        if via and "python314" not in ROLE_DEPENDENCIES.get(role, []):
+            offenders.append(f"{role!r} joins group {group!r}, which runs the {via!r} ansible role (builds a venv)")
+
+    assert not offenders, (
+        "role(s) mapped into a Python-venv group without declaring python314 - "
+        "Phase 0 will skip the interpreter and provisioning fails at venv creation (#14446): " + "; ".join(offenders)
+    )
+
+
+def test_vnc_specifically_declares_the_interpreter():
+    """The observed regression, pinned by name.
+
+    The rule above is derived and would keep holding if the derivation broke in
+    a way that found nothing; this names the case that actually failed in the
+    field.
+    """
+    assert "python314" in ROLE_DEPENDENCIES["vnc"], (
+        "vnc declares no interpreter again - a vnc-only node runs the backend "
+        "ansible role and will fail at 'Create Python 3.14 virtual environment' (#14446)"
+    )
