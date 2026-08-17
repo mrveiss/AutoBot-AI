@@ -271,21 +271,30 @@ class Settings(RedactedReprMixin, BaseSettings):
 
     # #14362: bound the Prometheus scrape handler's DB work.
     #
-    # `metrics_max_traces` caps how many PerformanceTrace rows the
-    # /performance/metrics/prometheus handler fetches for the last hour —
-    # previously it fetched every row unconditionally and only sliced the
-    # *output* to 100, so the query cost still scaled with table size.
-    #
-    # `metrics_cache_ttl_seconds` bounds how often that query (and the
-    # SLODefinition query) can run at all: the rendered text is cached for
-    # this many seconds. Deliberately shorter than a real scrape interval —
-    # the ansible monitoring role default is 15s
+    # `metrics_cache_ttl_seconds` bounds how often the handler's two queries
+    # can run at all: the rendered text is cached for this many seconds.
+    # Deliberately shorter than a real scrape interval — the ansible
+    # monitoring role default is 15s
     # (ansible/roles/monitoring/defaults/main.yml:prometheus_scrape_interval)
     # — so a genuine scrape always observes fresh data; only overlapping
     # calls inside the same interval (duplicate scrape configs, retries,
     # manual checks) reuse the cached result instead of re-querying.
-    metrics_max_traces: int = int(os.getenv("SLM_METRICS_MAX_TRACES", "100"))
+    #
+    # The trace-duration histogram itself needs no row cap: it is a SQL-side
+    # aggregate (COUNT/SUM/bucketed SUM(CASE...)) over the full cutoff-
+    # filtered set, computed in `_fetch_trace_duration_histograms`
+    # (autobot-slm-backend/api/performance.py) — a `LIMIT` there would make
+    # `_count`/`_sum` describe a sample while presenting themselves as the
+    # window total (review finding on #14362's original PR).
     metrics_cache_ttl_seconds: float = float(os.getenv("SLM_METRICS_CACHE_TTL_SECONDS", "5"))
+
+    # #14362 (review): `_fetch_top_slow_traces` (autobot-slm-backend/api/
+    # performance.py) is a genuine bounded top-N — the slowest traces shown
+    # on the authenticated /performance/overview panel — where a cap is the
+    # right semantics, unlike the histogram above. Was a bare `10` at the
+    # call site; default kept at 10 to preserve existing behaviour while
+    # making it configurable instead of hardcoded.
+    top_slow_traces_limit: int = int(os.getenv("SLM_TOP_SLOW_TRACES_LIMIT", "10"))
 
     def _keys_file_path(self) -> Path:
         """Return the path to the persisted-keys file inside data_dir.

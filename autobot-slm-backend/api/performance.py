@@ -16,11 +16,11 @@ import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -375,7 +375,65 @@ _TRACE_DURATION_BUCKETS_MS: tuple[float, ...] = (
 )
 
 
-def _generate_prometheus_metrics(traces: List[PerformanceTrace], slos: List[SLODefinition]) -> str:
+class _StatusHistogram(NamedTuple):
+    """One status's worth of the trace-duration histogram, pre-aggregated in SQL.
+
+    `count`/`duration_sum_ms`/`bucket_counts` are computed by
+    `_fetch_trace_duration_histograms` as SQL aggregates over the FULL
+    cutoff-filtered row set — never over a materialized, capped sample. A
+    histogram's `_count`/`_sum` fields carry an authoritative-total contract
+    (Prometheus review, #14362); populating them from a `LIMIT`-ed fetch would
+    make them describe a sample while presenting themselves as the total for
+    the window, and nothing in the emitted text would signal the truncation.
+    """
+
+    status: str
+    count: int
+    duration_sum_ms: float
+    bucket_counts: tuple[int, ...]  # cumulative count per _TRACE_DURATION_BUCKETS_MS entry
+
+
+async def _fetch_trace_duration_histograms(db: AsyncSession, cutoff: datetime) -> List[_StatusHistogram]:
+    """Aggregate trace durations into per-status histograms, entirely in SQL.
+
+    #14362 (review): no `PerformanceTrace` row is ever materialized into
+    Python — `COUNT`/`SUM`/the per-bucket `SUM(CASE ...)` all run against the
+    full cutoff-filtered set in the database, so `_count`/`_sum` are exact
+    totals for the window regardless of how many rows exist, and this is
+    cheaper than the row-fetching version it replaces (nothing to transfer or
+    iterate beyond one row per status).
+    """
+    bucket_columns = [
+        func.sum(case((PerformanceTrace.duration_ms <= bucket, 1), else_=0)).label(f"le_{i}")
+        for i, bucket in enumerate(_TRACE_DURATION_BUCKETS_MS)
+    ]
+    query = (
+        select(
+            PerformanceTrace.status,
+            func.count(PerformanceTrace.id).label("trace_count"),
+            func.coalesce(func.sum(PerformanceTrace.duration_ms), 0.0).label("duration_sum_ms"),
+            *bucket_columns,
+        )
+        .where(PerformanceTrace.created_at >= cutoff)
+        .group_by(PerformanceTrace.status)
+    )
+    result = await db.execute(query)
+
+    histograms = []
+    for row in result.all():
+        bucket_counts = tuple(int(getattr(row, f"le_{i}") or 0) for i in range(len(_TRACE_DURATION_BUCKETS_MS)))
+        histograms.append(
+            _StatusHistogram(
+                status=row.status,
+                count=int(row.trace_count),
+                duration_sum_ms=float(row.duration_sum_ms or 0.0),
+                bucket_counts=bucket_counts,
+            )
+        )
+    return histograms
+
+
+def _generate_prometheus_metrics(histograms: List[_StatusHistogram], slos: List[SLODefinition]) -> str:
     """Generate Prometheus text format. Helper for performance.py (Issue #752).
 
     #14361: `trace_id` used to be a label on this metric, so every request
@@ -383,40 +441,25 @@ def _generate_prometheus_metrics(traces: List[PerformanceTrace], slos: List[SLOD
     unbounded cardinality. Replaced with a real histogram bucketed by
     duration_ms and labeled only by `status`, a small, bounded set.
 
-    Per-request correlation is preserved as a structured log field
-    (trace_id/status/duration_ms) instead of a label, and remains fully
-    queryable through the authenticated GET /performance/traces and
+    Per-request correlation to a `trace_id` is not carried by this endpoint
+    at all any more — `_fetch_trace_duration_histograms` aggregates in SQL
+    and never fetches individual trace rows here — but remains fully
+    available through the authenticated GET /performance/traces and
     GET /performance/traces/{trace_id} routes below.
     """
     lines = []
     lines.append("# HELP autobot_trace_duration_ms Trace duration in milliseconds")
     lines.append("# TYPE autobot_trace_duration_ms histogram")
 
-    durations_by_status: Dict[str, List[float]] = {}
-    for trace in traces:
-        # Correlation capability preserved via structured logs rather than a
-        # per-request Prometheus label (#14361).
-        logger.debug(
-            "Trace duration observed for Prometheus histogram",
-            extra={
-                "trace_id": trace.trace_id,
-                "status": trace.status,
-                "duration_ms": trace.duration_ms,
-            },
-        )
-        durations_by_status.setdefault(trace.status, []).append(trace.duration_ms)
-
-    for trace_status in sorted(durations_by_status):
-        durations = durations_by_status[trace_status]
-        for bucket in _TRACE_DURATION_BUCKETS_MS:
-            cumulative = sum(1 for d in durations if d <= bucket)
-            labels = f'{{status="{trace_status}",le="{bucket}"}}'
+    for histogram in sorted(histograms, key=lambda h: h.status):
+        for bucket, cumulative in zip(_TRACE_DURATION_BUCKETS_MS, histogram.bucket_counts):
+            labels = f'{{status="{histogram.status}",le="{bucket}"}}'
             lines.append(f"autobot_trace_duration_ms_bucket{labels} {cumulative}")
-        labels_inf = f'{{status="{trace_status}",le="+Inf"}}'
-        lines.append(f"autobot_trace_duration_ms_bucket{labels_inf} {len(durations)}")
-        status_labels = f'{{status="{trace_status}"}}'
-        lines.append(f"autobot_trace_duration_ms_sum{status_labels} {sum(durations)}")
-        lines.append(f"autobot_trace_duration_ms_count{status_labels} {len(durations)}")
+        labels_inf = f'{{status="{histogram.status}",le="+Inf"}}'
+        lines.append(f"autobot_trace_duration_ms_bucket{labels_inf} {histogram.count}")
+        status_labels = f'{{status="{histogram.status}"}}'
+        lines.append(f"autobot_trace_duration_ms_sum{status_labels} {histogram.duration_sum_ms}")
+        lines.append(f"autobot_trace_duration_ms_count{status_labels} {histogram.count}")
 
     lines.append("# HELP autobot_slo_compliance_percent SLO compliance percentage")
     lines.append("# TYPE autobot_slo_compliance_percent gauge")
@@ -433,6 +476,19 @@ class _MetricsCache:
 
     A dedicated instance (not raw module globals) so tests can construct
     their own cache and assert on it without touching process-wide state.
+
+    Single-worker assumption, written down rather than left implicit: this is
+    process-local state guarded by an `asyncio.Lock`, which only dedupes
+    concurrent scrapes *within one process*. That is correct today because
+    the SLM unit starts uvicorn with no `--workers` flag
+    (ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2) — one
+    process, one cache. The sibling autobot-backend unit DOES pass
+    `--workers` (ansible/roles/backend/templates/autobot-backend.service.j2),
+    so copying this cache onto a multi-worker service would silently divide
+    its benefit by the worker count and let concurrent scrapes observe
+    different snapshots, with nothing here to catch it. Move this to Redis
+    (or an equivalent shared store) before reusing the pattern on a
+    multi-worker unit.
     """
 
     __slots__ = ("text", "expires_at", "lock")
@@ -447,15 +503,19 @@ _metrics_cache = _MetricsCache()
 
 
 async def _get_prometheus_metrics_text(db: AsyncSession, cache: "_MetricsCache" = _metrics_cache) -> str:
-    """Return rendered Prometheus text, querying the DB at most once per TTL.
+    """Return rendered Prometheus text, running the two aggregate queries at
+    most once per TTL.
 
     #14362: this route is intentionally unauthenticated (Prometheus cannot
     authenticate, #14339), so nothing app-level rate-limits it and the nginx
     `limit_req` zone does not apply — Prometheus scrapes this port directly.
-    Both queries are now bounded (LIMIT on traces, `enabled` filter pushed
-    into SQL for SLOs) and the assembled text is cached for
-    `settings.metrics_cache_ttl_seconds`, so work per scrape stays bounded
-    regardless of table size or how often the endpoint is hit.
+    The trace-duration query is a SQL-side aggregate over the full
+    cutoff-filtered set (`_fetch_trace_duration_histograms` — no row is ever
+    materialized), the SLO query pushes its `enabled` filter into SQL, and
+    the assembled text is cached for `settings.metrics_cache_ttl_seconds` so
+    a scrape inside the TTL skips both queries entirely. A DB *session* is
+    still checked out on every call via `Depends(get_db)` even on a cache
+    hit — the TTL avoids re-querying, not the session checkout itself.
     """
     now = time.monotonic()
     async with cache.lock:
@@ -463,18 +523,12 @@ async def _get_prometheus_metrics_text(db: AsyncSession, cache: "_MetricsCache" 
             return cache.text
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-        traces_result = await db.execute(
-            select(PerformanceTrace)
-            .where(PerformanceTrace.created_at >= cutoff)
-            .order_by(desc(PerformanceTrace.created_at))
-            .limit(settings.metrics_max_traces)
-        )
-        traces = traces_result.scalars().all()
+        histograms = await _fetch_trace_duration_histograms(db, cutoff)
 
         slos_result = await db.execute(select(SLODefinition).where(SLODefinition.enabled.is_(True)))
         slos = slos_result.scalars().all()
 
-        text = _generate_prometheus_metrics(traces, slos)
+        text = _generate_prometheus_metrics(histograms, slos)
         cache.text = text
         cache.expires_at = now + settings.metrics_cache_ttl_seconds
         return text
@@ -537,7 +591,7 @@ async def get_performance_overview(
     time_span_minutes = (datetime.now(timezone.utc) - cutoff).total_seconds() / 60
 
     active_slos = await _fetch_active_slos_count(db)
-    top_slow_traces = await _fetch_top_slow_traces(db, cutoff, 10)
+    top_slow_traces = await _fetch_top_slow_traces(db, cutoff, settings.top_slow_traces_limit)
 
     return PerformanceOverviewResponse(
         avg_latency_ms=sum(durations) / len(durations),
@@ -830,9 +884,11 @@ async def get_prometheus_metrics(
 ) -> Response:
     """Export metrics in Prometheus text format.
 
-    #14362: query cost is bounded (LIMIT + short TTL cache) rather than
-    scaling with table size or scrape frequency. #14361: no per-request
-    label is emitted — see `_generate_prometheus_metrics`.
+    #14362: the trace-duration histogram is a SQL-side aggregate over the
+    full window (no row LIMIT — `_count`/`_sum` are exact totals, not a
+    sample), plus a short TTL cache so a scrape inside the TTL skips both
+    queries entirely. #14361: no per-request label is emitted — see
+    `_generate_prometheus_metrics`.
     """
     metrics_text = await _get_prometheus_metrics_text(db)
     return Response(content=metrics_text, media_type="text/plain")
