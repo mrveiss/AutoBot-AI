@@ -11,30 +11,31 @@ on:
     # regressions were only discovered once already on the shared branch
     # (#10691). main kept for promotion PRs.
     branches: [ main, Dev_new_gui ]
-    # #13388: SAFE because this workflow publishes NO required status context.
-    # Branch protection on Dev_new_gui requires exactly ten contexts and none of
-    # them is produced here (`python-suite` is explicitly not one of them —
-    # #13162), so a run that is never created cannot leave a pull request waiting
-    # on a context that never reports. Any workflow here that DOES publish one of
-    # the ten deliberately has no `pull_request.paths` filter.
     #
-    # This list is the exact UNION of the `python` and `frontend` filters in the
-    # `changes` job below, which together gate every job that does real work
-    # (`python-shard`, `python-suite`, `frontend-tests`; `deployment-check` is
-    # branch-gated to push and `notify` only summarises). So a pull request whose
-    # files match none of these already ran nothing but `changes` and `notify` —
-    # this filter removes the empty run itself, not any test coverage.
+    # NO `pull_request.paths` FILTER — REMOVED BY #14353, DELIBERATE.
     #
-    # Keep in sync with the `changes` job filters below: a pattern added there
-    # must be added here too, or the run that would evaluate it never starts.
-    paths:
-      - '**/*.py'
-      - '**/requirements*.txt'
-      - 'requirements-ci/**'
-      - 'pyproject.toml'
-      - 'autobot_shared/pyproject.toml'
-      - 'autobot-frontend/**'
-      - '.github/workflows/ci.yml'
+    # #13388 added one, and its safety argument was explicit: "SAFE because this
+    # workflow publishes NO required status context ... Any workflow here that
+    # DOES publish one of the ten deliberately has no `pull_request.paths`
+    # filter." That premise is exactly what this change retires — `python-suite`
+    # is produced by this workflow and is being promoted to a required context,
+    # so #13388's own rule now mandates removing the filter.
+    #
+    # The failure it prevents is a deadlock, not a missed test. The filter and
+    # `.github/filters/python-paths.yml` were not identical: a pull request
+    # touching only the filter file or the shim workflow matched the filter but
+    # not this trigger, so ci.yml never started, while the shim read the filter,
+    # computed `python == 'true'` and skipped. NEITHER workflow reported
+    # `python-suite` and the pull request waited forever on a context nobody
+    # could produce.
+    #
+    # Keeping the two lists as a maintained superset was the alternative and is
+    # the weaker option: it re-arms the same trap on every future edit to the
+    # path set. `frontend-test.yml` and `code-quality.yml` both already dropped
+    # their pull_request.paths for this precise reason, and both say so inline.
+    #
+    # Cost is one `changes` job on pull requests that touch no gated path; every
+    # job doing real work stays gated on `changes` below and self-skips.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

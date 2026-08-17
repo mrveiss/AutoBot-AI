@@ -95,3 +95,83 @@ def test_the_shim_fails_closed_on_a_broken_detector():
     """If `changes` errors, the shim must skip rather than report green."""
     shim_job = _jobs(SHIM)[REQUIRED_CONTEXT]
     assert shim_job["needs"] == "changes", "without `needs`, a failed detector would not gate the shim"
+
+
+# The ten contexts branch protection requires on Dev_new_gui today, plus
+# `python-suite`, which #14353 exists to make the eleventh. Branch protection
+# lives in the GitHub API and cannot be read offline, so this list is declared
+# rather than derived — the test below is what keeps the workflows honest to it.
+REQUIRED_CONTEXTS = frozenset(
+    {
+        "smoke-test",
+        "code-quality",
+        "startup-import-smoke",
+        "Unit & Integration Tests",
+        "No open blocks-merge issues reference this PR",
+        "No commit trailers",
+        "verify-generated-types",
+        "migration-matrix",
+        "verify-precommit-config",
+        "api-wiring",
+        REQUIRED_CONTEXT,
+    }
+)
+
+WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+
+
+def _triggers(doc: dict) -> dict:
+    """Return the workflow's `on:` block.
+
+    YAML 1.1 resolves the bare key ``on`` to the boolean ``True``, so
+    ``doc["on"]`` raises and ``doc.get("on", {})`` silently returns nothing —
+    which would make every assertion below vacuous while the test still passed.
+    """
+    return doc.get(True) or doc.get("on") or {}
+
+
+def _published_context_names(doc: dict) -> set:
+    jobs = doc.get("jobs") or {}
+    return {(spec or {}).get("name", job_id) for job_id, spec in jobs.items()}
+
+
+def _workflows_publishing_a_required_context():
+    for path in sorted(WORKFLOW_DIR.glob("*.yml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if _published_context_names(doc) & REQUIRED_CONTEXTS:
+            yield path, doc
+
+
+def test_the_scan_actually_finds_workflows():
+    """A glob that matched nothing would make the guard below assert nothing."""
+    found = list(_workflows_publishing_a_required_context())
+    assert len(found) >= 3, (
+        f"only {len(found)} workflow(s) matched a required context - the scan is "
+        "no longer bound to the workflows it is meant to guard"
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [pytest.param(p, id=p.name) for p, _ in _workflows_publishing_a_required_context()],
+)
+def test_a_workflow_publishing_a_required_context_has_no_pull_request_paths(path):
+    """A path-filtered required check deadlocks the pull request it gates.
+
+    If the trigger does not match, the workflow never starts, so the context is
+    never reported and the pull request waits on "Expected" forever. The
+    complement shim cannot rescue it: the shim reads the *filter*, sees the path
+    as Python, and skips - so neither side publishes.
+
+    #13388 stated this rule for ci.yml and #14353 had to apply it; frontend-test.yml
+    and code-quality.yml each removed their own filter for the same reason.
+    """
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    pull_request = _triggers(doc).get("pull_request") or {}
+
+    assert "paths" not in pull_request, (
+        f"{path.name} publishes a required status context but filters "
+        f"pull_request on paths {pull_request['paths']!r}. A pull request that "
+        "misses this filter never starts the run, so the context never reports "
+        "and the merge box blocks forever."
+    )
