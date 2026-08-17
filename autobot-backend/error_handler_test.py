@@ -20,8 +20,10 @@ decorator's source text.
 import logging
 
 import pytest
+from fastapi import HTTPException
 
 from error_handler import with_default_on_error
+from utils.error_boundaries.decorators import with_error_handling
 
 
 class _Boom(Exception):
@@ -54,6 +56,52 @@ def test_success_path_is_untouched():
         return "real result"
 
     assert _ok() == "real result"
+
+
+def test_http_exception_is_swallowed_not_preserved():
+    """The property #14191 exists to protect.
+
+    ``with_default_on_error`` and the survivor
+    (``utils.error_boundaries.decorators.with_error_handling``) must keep
+    OPPOSITE behaviour on ``HTTPException``, or the two silently reconverge
+    into the exact same-name-different-behaviour confusion the rename was
+    meant to end. This one catches ``HTTPException`` like any other
+    exception and returns ``default_return`` — a deliberate 404 becomes
+    ``None`` (or whatever the caller configured).
+    """
+
+    @with_default_on_error(default_return="fallback")
+    def _fails():
+        raise HTTPException(status_code=404, detail="Widget 7 not found")
+
+    assert _fails() == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_http_exception_is_swallowed_not_preserved_async():
+    @with_default_on_error(default_return="fallback")
+    async def _fails():
+        raise HTTPException(status_code=404, detail="Widget 7 not found")
+
+    assert await _fails() == "fallback"
+
+
+def test_contrast_the_survivor_preserves_the_same_http_exception():
+    """Same exception, same call shape, the other decorator: opposite
+    outcome. Pinned in this file (not just decorators_disclosure_test.py) so
+    the contrast that motivates #14191 can't drift out of sight of the
+    decorator whose behaviour it defines against.
+    """
+
+    @with_error_handling()
+    def _fails():
+        raise HTTPException(status_code=404, detail="Widget 7 not found")
+
+    with pytest.raises(HTTPException) as caught:
+        _fails()
+
+    assert caught.value.status_code == 404
+    assert caught.value.detail == "Widget 7 not found"
 
 
 def test_the_failure_is_logged_with_traceback(caplog):
