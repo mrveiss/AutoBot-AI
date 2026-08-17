@@ -15,6 +15,7 @@ the event (``api.files.upload_file``, ``AgentExecutor._maybe_trigger_gap_develop
 so they prove the whole chain and not just the dispatcher's own input handling.
 """
 
+import inspect
 import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -256,19 +257,73 @@ def test_analyze_agent_output_only_ever_reports_an_explicit_gap():
 
 
 # ---------------------------------------------------------------------------
-# Guards — a manifest must not declare a trigger nothing can produce
+# Guards — every skill must honour the execute contract, and no manifest may
+# declare a trigger nothing can produce
 # ---------------------------------------------------------------------------
 
 
-def _event_skills():
-    """Every registered non-declarative skill, from a real builtin discovery."""
+def _discovered_skills():
+    """Every registered skill, from a real builtin discovery.
+
+    Raises rather than returning empty: a guard that iterates nothing and
+    reports clean is worse than no guard, because it reads as coverage.
+    """
     reg = SkillRegistry()
-    reg.discover_builtin_skills()
-    return reg, [
-        (info["name"], reg.get(info["name"]))
-        for info in reg.list_skills()
-        if not isinstance(reg.get(info["name"]), DeclarativeSkill)
-    ]
+    count = reg.discover_builtin_skills()
+    assert count > 0, "discover_builtin_skills() found nothing — the guards below would iterate zero skills"
+    pairs = [(info["name"], reg.get(info["name"])) for info in reg.list_skills()]
+    assert pairs, "the registry is empty after a successful discovery"
+    return reg, pairs
+
+
+def _event_skills():
+    """Every registered non-declarative skill, from a real builtin discovery.
+
+    Declarative (SKILL.md) skills are excluded: their ``triggers`` are routing
+    phrases, not event names.  Asserts the filtered set is non-empty so a
+    discovery that silently imported no Python skill fails instead of passing.
+    """
+    reg, pairs = _discovered_skills()
+    concrete = [(name, skill) for name, skill in pairs if not isinstance(skill, DeclarativeSkill)]
+    assert concrete, "discovery produced no Python skills — every trigger guard below would be vacuous"
+    return reg, concrete
+
+
+def test_every_skills_execute_matches_the_base_contract():
+    """``execute`` must be ``async def execute(self, action, params)`` on every skill.
+
+    The durable half of the bug this PR fixed by hand.
+    ``AutonomousSkillDevelopmentSkill.execute`` took ``(params)`` only, so
+    ``SkillManager.execute_skill`` — and therefore ``POST /api/skills/{name}/execute``
+    and the trigger dispatcher — raised ``TypeError`` against it.  It stayed
+    invisible because the only callers that worked were two hand-written direct
+    ones.  A regression test on that single skill would not catch the next skill
+    with the wrong arity, so this checks every discovered subclass.
+
+    Declarative skills are included on purpose: ``DeclarativeSkill.execute`` is
+    the entry point the registry hands to bundle and routing callers, so it is
+    bound by the same contract.
+    """
+    _, skills = _discovered_skills()
+
+    wrong_arity, not_async = [], []
+    for name, skill in skills:
+        func = type(skill).execute
+        if not inspect.iscoroutinefunction(func):
+            not_async.append(name)
+        positional = [
+            p.name
+            for p in inspect.signature(func).parameters.values()
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        ]
+        if positional != ["self", "action", "params"]:
+            wrong_arity.append(f"{name}: execute{tuple(positional)}")
+
+    assert not not_async, f"execute must be async — SkillManager awaits it: {not_async}"
+    assert not wrong_arity, (
+        "execute must accept (self, action, params) — SkillManager.execute_skill "
+        f"calls it positionally and would raise TypeError: {wrong_arity}"
+    )
 
 
 def test_every_declared_trigger_is_either_emitted_or_recorded_as_pending(monkeypatch):
