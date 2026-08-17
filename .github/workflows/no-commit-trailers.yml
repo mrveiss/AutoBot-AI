@@ -10,6 +10,21 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
