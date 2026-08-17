@@ -46,6 +46,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
+from chat_history.message_schema import message_role, message_text
 from models.chat_shared_link import ChatSharedLink
 from security.session_ownership import SessionOwnershipValidator
 from user_management.services.user_service import UserService
@@ -398,14 +399,18 @@ async def _load_session_data(link: ChatSharedLink, request: Request) -> Dict[str
 
     if chat_history_manager:
         raw = await chat_history_manager.get_session_messages(link.session_id, limit=500)
+        # #14340: get_session_messages returns the stored shape ("sender"/
+        # "text"/"timestamp"), which this filter and mapping never carried —
+        # resolve through message_schema (added for exactly this mismatch,
+        # #14259) instead of reading keys the producer never writes.
         messages = [
             SharedMessageItem(
-                role=m.get("role", "user"),
-                content=m.get("content", ""),
-                created_at=m.get("created_at"),
+                role=message_role(m, default="user"),
+                content=message_text(m),
+                created_at=m.get("created_at") or m.get("timestamp"),
             )
             for m in (raw or [])
-            if m.get("role") in {"user", "assistant"}
+            if isinstance(m, dict) and message_role(m) in {"user", "assistant"}
         ]
 
     return create_success_response(

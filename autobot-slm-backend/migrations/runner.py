@@ -141,7 +141,7 @@ def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions
 
 
 def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
-    """Create migrations tracking table if it doesn't exist (#786, #5515)."""
+    """Create migrations tracking table if it doesn't exist (#786, #5515, #14321)."""
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS migrations_applied (
@@ -164,6 +164,29 @@ def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
                     ALTER TABLE migrations_applied
                         ALTER COLUMN applied_at TYPE TIMESTAMPTZ
                         USING applied_at AT TIME ZONE 'UTC';
+                END IF;
+            END
+            $$;
+        """)
+        # #14321: seed_agents was recorded applied by the "no migrate()
+        # function == success" default in run_migration below, without ever
+        # seeding a row (see migrations/seed_agents.py). Clear that stale
+        # entry once, on hosts where the roster genuinely never got seeded,
+        # so the next run picks it up as pending and applies the real
+        # migrate() this issue added. Guarded on the 'agents' table and a
+        # known roster member so it never re-fires once seeding has run,
+        # and never errors on a fresh DB where 'agents' doesn't exist yet.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM migrations_applied WHERE name = 'seed_agents'
+                )
+                AND to_regclass('public.agents') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM agents WHERE agent_id = 'chat'
+                ) THEN
+                    DELETE FROM migrations_applied WHERE name = 'seed_agents';
                 END IF;
             END
             $$;
@@ -211,8 +234,26 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
             module.run(db_url)
             return True, f"Applied migration: {name}"
         else:
-            # Some migrations might just be seed scripts
-            return True, f"Loaded migration: {name} (no migrate function)"
+            # A module with no entry point did NOT run, so it must not report
+            # success (#14321). This branch is what hid the defect this change
+            # fixes: `seed_agents` exposed only a standalone async function, so
+            # the runner never called anything, returned success here, and
+            # recorded the migration in `migrations_applied` — a migration that
+            # is permanently "applied" while its table stays unseeded, and no
+            # bookkeeping check can ever see it because the bookkeeping is what
+            # lied. Marking a migration applied when it did nothing is strictly
+            # worse than failing: a failure is retried, a false success is not.
+            #
+            # Verified reachable-by-nobody at the time of the change: all 27
+            # entries in MIGRATIONS expose `migrate()` or `run()`, so nothing
+            # depends on the old permissive behaviour. Any migration that hits
+            # this branch in future is malformed, and saying so loudly is the
+            # only way the next one does not repeat #14321.
+            return False, (
+                f"{name} exposes no migrate(db_url) or run(db_url) entry point — "
+                "nothing was executed. A migration module must expose one, or be "
+                "removed from MIGRATIONS if it is not a migration."
+            )
 
     except Exception as e:
         return False, f"Failed to apply {name}: {e}"
