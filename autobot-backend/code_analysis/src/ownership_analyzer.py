@@ -14,7 +14,6 @@ Analyzes codebase for:
 
 import asyncio
 import json
-import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -394,6 +393,60 @@ class OwnershipAnalyzer:
         contributors.sort(key=lambda x: x.lines_count, reverse=True)
         return contributors
 
+    @staticmethod
+    async def _run_blame(file_path: Path, root: Path) -> str | None:
+        """``git blame`` for one file, killed if this coroutine is cancelled (#14390).
+
+        Returns the porcelain stdout, or ``None`` when the blame failed or timed
+        out — the two outcomes the caller already treats as "no ownership data".
+
+        Both non-normal exits terminate the child explicitly:
+
+        * **timeout** — the per-file ceiling that keeps one slow file from eating
+          the whole phase budget (``_MAX_BLAME_SECONDS``);
+        * **cancellation** — the route deadline firing, or an outer
+          ``task.cancel()``. ``CancelledError`` is re-raised after the kill:
+          swallowing it would report the request as completed while the work was
+          abandoned, and every caller above would lose the signal.
+
+        ``proc.wait()`` after ``kill()`` is not optional — it reaps the child.
+        Without it the process becomes a zombie held by this event loop, which
+        is the leak in a slower disguise.
+        """
+        proc = await asyncio.create_subprocess_exec(  # nosec B603 B607  # fixed git argv, no shell
+            "git",
+            "blame",
+            "--line-porcelain",
+            str(file_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd=str(root),
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_BLAME_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            await OwnershipAnalyzer._terminate(proc)
+            logger.warning("Git blame timed out for %s", file_path)
+            return None
+        except asyncio.CancelledError:
+            await OwnershipAnalyzer._terminate(proc)
+            raise
+
+        if proc.returncode != 0:
+            return None
+        return stdout.decode("utf-8", errors="replace")
+
+    @staticmethod
+    async def _terminate(proc: "asyncio.subprocess.Process") -> None:
+        """Kill a blame child and reap it, tolerating one that already exited."""
+        if proc.returncode is not None:
+            return
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            return
+        await proc.wait()
+
     async def _get_file_ownership(self, file_path: Path, root: Path) -> FileOwnership | None:
         """Get ownership data for a single file using git blame"""
         try:
@@ -403,21 +456,24 @@ class OwnershipAnalyzer:
             # blame blocked the event loop for its full duration — up to the 30s
             # timeout, once per file. That is what made unrelated endpoints
             # return 000 while an analytics panel was loading.
-            result = await asyncio.to_thread(
-                lambda: subprocess.run(  # nosec B603 B607  # fixed git argv; file_path is a Path object, no shell
-                    ["git", "blame", "--line-porcelain", str(file_path)],
-                    capture_output=True,
-                    text=True,
-                    cwd=str(root),
-                    timeout=_BLAME_TIMEOUT_SECONDS,
-                )
-            )
-
-            if result.returncode != 0:
+            #
+            # #14390: and then it was `asyncio.to_thread(subprocess.run(...))`,
+            # which unblocks the loop but is still not cancellable. Cancelling
+            # that await abandons the worker thread; the `git blame` child keeps
+            # running until it exits on its own, because nothing holds a handle
+            # to signal. #14256's cooperative token cannot help — it polls a
+            # Python loop, and there is no loop here, only a blocked syscall.
+            #
+            # A native asyncio subprocess is the mechanism that fits: it gives
+            # up the thread hop AND a real handle to kill. See the two
+            # terminating handlers below — without them the child outlives the
+            # request either way.
+            stdout_text = await self._run_blame(file_path, root)
+            if stdout_text is None:
                 return None
 
             # Issue #1183: Delegate parsing and contributor building to helpers
-            total_lines, author_lines = self._parse_blame_output(result.stdout)
+            total_lines, author_lines = self._parse_blame_output(stdout_text)
 
             if total_lines == 0:
                 return None
@@ -449,9 +505,15 @@ class OwnershipAnalyzer:
                 last_modified=last_modified,
             )
 
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Git blame timed out for {file_path}")
-            return None
+        # #14390: the `subprocess.TimeoutExpired` handler that sat here is gone
+        # with the blocking call that raised it — `_run_blame` owns the timeout
+        # now and logs the same message before returning None. A handler for an
+        # exception the body can no longer raise reads as live coverage.
+        #
+        # `CancelledError` is deliberately NOT caught here: it derives from
+        # BaseException, so `except Exception` never saw it, and `_run_blame`
+        # re-raises it after killing the child. Catching it would turn an
+        # abandoned request into a silently empty result.
         except Exception as e:
             logger.warning(f"Failed to analyze {file_path}: {e}")
             return None
