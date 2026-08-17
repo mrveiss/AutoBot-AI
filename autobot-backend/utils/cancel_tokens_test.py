@@ -199,10 +199,21 @@ class TestRunCancellable:
         active = {"n": 0}
         lock = threading.Lock()
 
+        entered = threading.Event()
+        may_observe = threading.Event()
+
         def _work(token: threading.Event):
             with lock:
                 active["n"] += 1
             try:
+                # Park before the first token check so the "still occupied"
+                # assertion below is deterministic rather than a race. The
+                # worker polls every 10ms against a 50ms timeout, so without
+                # this gate it can notice the token and exit before the test
+                # gets to look -- the assertion would then fail precisely
+                # BECAUSE cancellation worked, which is the wrong signal.
+                entered.set()
+                may_observe.wait(timeout=5.0)
                 for _ in range(400):  # bounded: ~4s worst case, checked every 10ms
                     if token.is_set():
                         return "cancelled"
@@ -229,16 +240,19 @@ class TestRunCancellable:
 
             token = asyncio.run(_drive())
 
-            # Immediately after the asyncio-level timeout, the OS thread is
-            # still running -- this is the bug #14256/#14244 describe: the
-            # caller already has its error, the pool slot is not yet free.
+            # The worker is parked at `may_observe`, so this is a fact about
+            # the pool, not a race: the caller already has its TimeoutError
+            # while the OS thread still holds the only slot. That is exactly
+            # the bug #14256/#14244 describe.
+            assert entered.is_set(), "the work never started -- the test proves nothing"
             with lock:
                 assert active["n"] == 1, "the worker must still be occupied right after the caller's timeout"
             assert token.is_set()
 
-            # Once the thread next checks the (now-signalled) token it must
-            # exit -- prove the slot returns to baseline, not just that the
-            # token was set.
+            # Release the worker; once it checks the (now-signalled) token it
+            # must exit -- prove the slot returns to baseline, not merely that
+            # the token was set.
+            may_observe.set()
             deadline = time.monotonic() + 3.0
             while time.monotonic() < deadline:
                 with lock:
