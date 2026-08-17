@@ -86,6 +86,16 @@ jobs:
         # longer load-bearing — kept because inventory_builder is the one
         # listed module a migration test could plausibly want real, and one
         # line is cheaper than discovering it is absent.
+        # bcrypt / PyJWT[crypto]: NOT a migration dependency either, but the
+        # user_management schema-bootstrap step (#14300) imports
+        # user_management.models to register every table on Base.metadata,
+        # and one of those (role.py) imports
+        # autobot_shared.user_management.models.role ->
+        # autobot_shared.auth.permissions. Importing any submodule of
+        # autobot_shared.auth runs autobot_shared/auth/__init__.py, which
+        # eagerly imports jwt_core (bcrypt + PyJWT) regardless of which
+        # submodule was actually requested. Same versions as
+        # autobot-slm-backend/requirements.txt.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
@@ -93,6 +103,7 @@ jobs:
             "sqlalchemy>=2.0.51" \
             pydantic pydantic-settings \
             pyyaml \
+            "bcrypt>=5.0.0" "PyJWT[crypto]>=2.13.0" \
             pytest "pytest-asyncio>=0.24"
 
       - name: Create slm and slm_users databases
