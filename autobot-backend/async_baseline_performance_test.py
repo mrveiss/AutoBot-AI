@@ -40,6 +40,7 @@ from autobot_shared.paths import project_root
 
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_1_MINUTE
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
@@ -222,7 +223,7 @@ class AsyncBaselineTest:
                 start = time.perf_counter()
 
                 # Write operation
-                await redis_client.set(key, value, ex=60)  # 60s TTL
+                await redis_client.set(key, value, ex=TTL_1_MINUTE)
 
                 # Read operation
                 retrieved = await redis_client.get(key)
@@ -314,7 +315,7 @@ class AsyncBaselineTest:
 
                 # Redis cache operation
                 cache_key = f"baseline_cache_{op_id}"
-                await redis_client.set(cache_key, json.dumps(test_data), ex=60)
+                await redis_client.set(cache_key, json.dumps(test_data), ex=TTL_1_MINUTE)
 
                 # Verify both operations
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:

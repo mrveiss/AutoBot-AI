@@ -15,7 +15,13 @@
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder'
 
 /** Node types the canvas can render — superset of the workflow authoring types. */
-export type CanvasNodeType = WorkflowNode['type'] | 'org-person' | 'org-group'
+export type CanvasNodeType =
+  | WorkflowNode['type']
+  | 'org-person'
+  | 'org-group'
+  // #13963: a workflow a role runs, drawn on the org canvas as the
+  // contextual entrance to the absorbed automation module.
+  | 'org-process'
 
 /** A node as the canvas sees it. `WorkflowNode` is assignable to this. */
 export interface CanvasNode extends Omit<WorkflowNode, 'type'> {

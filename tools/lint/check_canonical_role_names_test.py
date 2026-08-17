@@ -108,10 +108,11 @@ def test_a_negated_membership_check_is_also_blocked() -> None:
 def test_the_test_inventory_is_allowlisted() -> None:
     """The test inventory carries the same OR-chains on purpose (#14149).
 
-    Not byte-identical to either sibling — the three files are 411 / 101 / 100
-    lines. What `check_role_facts_synced.py` compares is the extracted
-    `role_*_active:` fragment, and editing it here would break that comparison
-    against the two files already allowlisted.
+    Not a whole-file match for either sibling (#14201) — the three files
+    differ in length and hash. What `check_role_facts_synced.py` compares is
+    the extracted `role_*_active:` fragment (+ chromadb_service_owner), and
+    editing it here would break that comparison against the two files
+    already allowlisted.
     """
     assert "autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml" in ALLOWLIST
     assert "autobot-slm-backend/ansible/inventory/group_vars/all.yml" in ALLOWLIST

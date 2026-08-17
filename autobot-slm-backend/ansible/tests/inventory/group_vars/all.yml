@@ -1,8 +1,18 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-# #7050/#7051/#7053/#14149 shared role-active facts — DUPLICATE of
-# inventory/group_vars/all.yml (and byte-identical to
-# playbooks/vars/role_active_facts.yml).
+# #7050/#7051/#7053/#14149 shared role-active facts — a THIRD copy of the
+# role_*_active OR-chains (plus chromadb_service_owner) that also live in
+# inventory/group_vars/all.yml and playbooks/vars/role_active_facts.yml.
+#
+# #14201: this file's full content is NOT a match for either sibling — it
+# additionally carries the CANONICAL ROLE NAMES header comment and the
+# #14149 explanation below, so the three files differ well beyond the parts
+# that matter. What IS kept in sync is narrower and enforced: tests/check_role_facts_synced.py
+# extracts the role_*_active fragments (+ chromadb_service_owner) from all
+# three files and fails CI on drift (#14149 extended it to all three).
+# tests/check_test_inventory_group_vars.py is a separate, weaker check — it
+# only asserts the test inventory resolves ONE key via `ansible-inventory
+# --list`; it does not compare file contents.
 #
 # WHY A REAL FILE, NOT A SYMLINK (#14149):
 # This used to be a symlink to ../../../inventory/group_vars/all.yml. This
@@ -16,13 +26,6 @@
 # scalar with the existing `all` group vars — see #14149 for the captured
 # failure). Same failure mechanism that broke the tracked `venv` symlink
 # in #14137/#14138.
-#
-# Ansible's group_vars auto-loading has no cross-directory include
-# mechanism, so — following the same DRY trade-off already accepted for
-# playbooks/vars/role_active_facts.yml below — this is a THIRD real copy
-# of the role_*_active block, kept byte-identical to the other two by
-# tests/check_role_facts_synced.py (extended in #14149 to compare all
-# three files, not just two).
 #
 # CANONICAL ROLE NAMES (#7053):
 # The short-form names in the OR-chains below (e.g. 'backend', 'frontend')

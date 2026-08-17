@@ -42,7 +42,7 @@ from api.knowledge_grounding_models import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from autobot_shared.ssot_constants import TTL_90_DAYS
+from autobot_shared.ssot_constants import TTL_30_DAYS, TTL_90_DAYS
 
 logger = get_logger(__name__)
 
@@ -414,7 +414,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             # Store as JSON for retrieval
             import json
 
-            await redis.set(ticket_key, json.dumps(ticket_data), ex=86400 * 30)
+            await redis.set(ticket_key, json.dumps(ticket_data), ex=TTL_30_DAYS)
 
             # Add to review queue for priority-based processing
             queue_key = f"review_queue:{priority.value}"
@@ -476,7 +476,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             ticket_data["notes"] = notes
 
             # Persist updated ticket
-            await redis.set(ticket_key, json.dumps(ticket_data), ex=86400 * 30)
+            await redis.set(ticket_key, json.dumps(ticket_data), ex=TTL_30_DAYS)
 
             logger.info(f"Review ticket {ticket_id} resolved")
 
@@ -522,7 +522,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             ticket_data["dismissed_at"] = time.time()
             ticket_data["notes"] = notes
 
-            await redis.set(ticket_key, json.dumps(ticket_data), ex=86400 * 30)
+            await redis.set(ticket_key, json.dumps(ticket_data), ex=TTL_30_DAYS)
 
             logger.info(f"Review ticket {ticket_id} dismissed")
             return None

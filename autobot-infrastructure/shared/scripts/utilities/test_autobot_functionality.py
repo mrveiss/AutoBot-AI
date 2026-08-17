@@ -20,6 +20,7 @@ import requests
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from constants.network_constants import NetworkConstants, ServiceURLs
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_10_SECONDS
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -153,7 +154,7 @@ class AutoBotFunctionalityTest:
 
                 # Test basic operations
                 await redis_client.ping()
-                await redis_client.set("autobot_test_key", "test_value", ex=10)
+                await redis_client.set("autobot_test_key", "test_value", ex=TTL_10_SECONDS)
                 value = await redis_client.get("autobot_test_key")
                 await redis_client.delete("autobot_test_key")
 

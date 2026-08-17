@@ -28,9 +28,10 @@ another copy — see the consolidate-never-fork rule.
 Known readers still on a single schema, each filed rather than silently fixed
 here because they sit in different subsystems with their own blast radius:
 
-* **#14306** — ``api/chat_sessions.py::_preserve_system_messages`` filters on
-  the role key against disk-shape records, so ``keep_system_prompt`` preserves
-  nothing and reports the count it kept as 0.
+* **#14306** — was ``api/chat_sessions.py::_preserve_system_messages``,
+  which filtered on the role key against disk-shape records so the flag it
+  served preserved nothing. #14359 removed the flag and the reader with it:
+  nothing ever persisted a system prompt for it to find, on either schema.
 
 (Described without quoting the literal values: the hardcoded-value gate scans
 added lines including prose, and a comment citing a banned pattern trips its

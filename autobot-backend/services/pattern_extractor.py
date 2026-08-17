@@ -17,6 +17,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_constants import TTL_24_HOURS
 from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
@@ -341,7 +342,7 @@ class PatternExtractor:
             self.redis_client.set(
                 redis_key,
                 json.dumps(sorted_patterns),
-                ex=86400,  # 24 hour TTL
+                ex=TTL_24_HOURS,
             )
 
         logger.info(f"Cached top {top_n} patterns for {len(self.patterns)} types")

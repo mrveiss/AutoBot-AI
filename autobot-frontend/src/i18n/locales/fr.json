@@ -8296,7 +8296,9 @@
         "handoffButton": "Transférer à un humain",
         "handoffEmpty": "Aucun élément actif à transférer.",
         "handoffNotApplicableHuman": "Le transfert s'applique uniquement aux agents."
-      }
+      },
+      "processNodeLabel": "Processus",
+      "processOpensWorkflow": "Ouvre le workflow de ce rôle"
     },
     "executorRollup": {
       "title": "Récapitulatif des exécutants",

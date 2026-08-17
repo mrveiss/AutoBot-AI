@@ -1004,7 +1004,10 @@ export interface paths {
          * @description Reset the current chat session.
          *
          *     Issue #549: Created to match frontend POST /api/chat/reset
-         *     Issue #665: Refactored to use extracted helpers for message preservation.
+         *     Issue #665: Refactored to use an extracted helper for session clearing.
+         *     Issue #14359: dropped ``keep_system_prompt`` — nothing ever persisted a
+         *     system prompt into a session, so the flag could not change any observable
+         *     outcome. Reset now always clears unconditionally when ``clear_context``.
          */
         post: operations["reset_chat_api_chat_reset_post"];
         delete?: never;
@@ -49631,6 +49634,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/process-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Process Nodes
+         * @description Return the workflows this company's roles run (#13963).
+         *
+         *     Company-scoped through the same shared :func:`assert_company_access` guard
+         *     the rest of this router uses, and pinned again in the query itself — the
+         *     role must belong to this company *and* the attachment must, so losing
+         *     either predicate cannot widen the result.
+         *
+         *     Read-only: this composes existing rows and creates nothing.
+         */
+        get: operations["get_process_nodes_api_llc_companies__company_id__process_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/teams": {
         parameters: {
             query?: never;
@@ -61635,8 +61665,6 @@ export interface components {
             reset: boolean;
             /** Clear Context */
             clear_context: boolean;
-            /** Keep System Prompt */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -61656,12 +61684,6 @@ export interface components {
              * @default true
              */
             clear_context: boolean;
-            /**
-             * Keep System Prompt
-             * @description Keep system prompt after reset
-             * @default true
-             */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -87294,6 +87316,40 @@ export interface components {
              * @default 0
              */
             cache_write_per_1m: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProcessNode
+         * @description One workflow a role runs, as an org-chart-adjacent node.
+         *
+         *     Owner decision on #13963, option 3: automation is entered from inside
+         *     Company OS **contextually**, through the org chart, rather than by a
+         *     sidebar entry. A process node is the link between the two surfaces — the
+         *     role that owns the work, and the workflow that performs it.
+         *
+         *     Derived read-only from ``llc_role_workflows`` (#14221 step 5). No new
+         *     table and no new vocabulary: the attachment binding a role to a workflow
+         *     already exists, so a process node is a projection of it rather than a
+         *     second place to record the same fact.
+         *
+         *     ``role_id`` is included so the canvas can draw the node against the role it
+         *     belongs to; ``workflow_id`` is what the automation route opens.
+         */
+        ProcessNode: {
+            /** Role Id */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
+            /** Workflow Id */
+            workflow_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProcessNodesResponse */
+        ProcessNodesResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["ProcessNode"][];
         } & {
             [key: string]: unknown;
         };
@@ -168366,6 +168422,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutorRollupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_process_nodes_api_llc_companies__company_id__process_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessNodesResponse"];
                 };
             };
             /** @description Validation Error */

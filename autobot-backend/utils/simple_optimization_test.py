@@ -17,10 +17,17 @@ from autobot_shared.ssot_config import config
 sys.path.insert(0, config.project_root)
 
 # #13284: this module is a GPU throughput probe, not a unit test — it loads the
-# real embedding model behind `get_optimized_semantic_chunker()`, chunks a
-# sample text and prints sentences/sec. Model load is the 133.00s the durations
+# real embedding model behind `get_gpu_semantic_chunker()`, chunks a sample
+# text and prints sentences/sec. Model load is the 133.00s the durations
 # report attributes to `test_direct_optimization` (3% of the suite), and the
 # number it produces is meaningless on a CI runner with no RTX 4070.
+#
+# #14215: previously targeted `get_optimized_semantic_chunker()`, a subclass
+# nothing in production ever constructed. `GPUSemanticChunker` already stamps
+# `optimization_version` on every chunk via `_extra_chunk_metadata()` — the
+# only capability the subclass added — so this probe now exercises the class
+# production callers (`knowledge_sync_incremental.py`,
+# `advanced_rag_optimizer.py`) actually use.
 #
 # Nothing is asserted: every path is wrapped in `try/except` that prints and
 # returns False, so the check cannot fail today and the PR gate loses no
@@ -31,15 +38,15 @@ pytestmark = pytest.mark.performance
 
 
 async def test_direct_optimization():
-    """Test GPU-optimized semantic chunker directly."""
+    """Test the GPU semantic chunker directly."""
     print("🚀 Testing GPU-Optimized Semantic Chunker")  # noqa: print
     print("=" * 50)  # noqa: print
 
     try:
-        from utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
+        from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
-        chunker = get_optimized_semantic_chunker()
-        print(f"✅ Optimized chunker imported: {type(chunker).__name__}")  # noqa: print
+        chunker = get_gpu_semantic_chunker()
+        print(f"✅ GPU chunker imported: {type(chunker).__name__}")  # noqa: print
         print(f"📍 Module: {chunker.__class__.__module__}")  # noqa: print
 
         # Test text
@@ -52,11 +59,11 @@ async def test_direct_optimization():
         Real-time system monitoring ensures optimal performance across all hardware components.
         """
 
-        print("\n⚡ Testing optimized chunking...")  # noqa: print
+        print("\n⚡ Testing chunking...")  # noqa: print
         print(f"Text length: {len(test_text)} characters")  # noqa: print
 
         start_time = time.time()
-        chunks = await chunker.chunk_text_optimized(test_text)
+        chunks = await chunker.chunk_text(test_text)
         processing_time = time.time() - start_time
 
         print("\n📊 Results:")  # noqa: print
@@ -92,9 +99,9 @@ async def test_performance_stats():
     print("\n📊 Testing Performance Statistics...")  # noqa: print
 
     try:
-        from utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
+        from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
-        chunker = get_optimized_semantic_chunker()
+        chunker = get_gpu_semantic_chunker()
 
         # Check if performance stats are available
         if hasattr(chunker, "get_performance_stats"):
