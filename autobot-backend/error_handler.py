@@ -52,21 +52,54 @@ def log_error(error: Exception, context: str | None = None, include_traceback: b
         logger.critical("Unexpected %s", log_msg, exc_info=True)
 
 
-def with_error_handling(
+def with_default_on_error(
     default_return: Any = None,
     context: str | None = None,
     reraise: bool = False,
     error_types: tuple | None = None,
 ):
     """
-    Decorator for consistent error handling.
+    Decorator that logs an error and returns a caller-supplied default value.
+
+    Renamed from ``with_error_handling`` (#14191): this module's decorator and
+    ``utils.error_boundaries.decorators.with_error_handling`` shared that name
+    with disjoint signatures and opposite behaviour on ``HTTPException`` — the
+    other re-raises it to preserve intentional status codes, this one caught
+    it like any other exception and returned ``default_return``. The name
+    collision produced a materially wrong analysis in PR #14186 that had to
+    be corrected after the fact.
+
+    This decorator has **no importers anywhere in the tracked tree** (#14191
+    audit: 257 ``with_error_handling`` imports, all resolving to the API
+    decorator via ``autobot_shared.error_boundaries``). It is kept rather than
+    deleted — per the no-deletion policy, unwired code is unfinished work, not
+    debris — because it offers behaviour the API decorator does not: a plain
+    "log and return this value" contract for non-endpoint code that has no
+    HTTP response to shape, plus an ``error_types`` filter and an optional
+    ``reraise`` escape hatch. Pick this one when a failure should degrade to a
+    known-good value rather than become a structured API error; pick
+    ``with_error_handling`` for anything that sits behind a FastAPI route.
 
     Args:
         default_return: Value to return on error
         context: Context string for logging
         reraise: Whether to re-raise the exception after handling
         error_types: Tuple of specific exception types to handle
+
+    Raises:
+        TypeError: if used bare (``@with_default_on_error`` with no
+            parentheses), which would otherwise pass the decorated function as
+            ``default_return`` and hand back the inner ``decorator`` instead of
+            a wrapped function — the same defect #14186 found in the sibling
+            decorator's only bare call site.
     """
+    if callable(default_return):
+        raise TypeError(
+            "with_default_on_error() must be called with parentheses: "
+            "use @with_default_on_error() or @with_default_on_error(default_return=...), "
+            "not bare @with_default_on_error. A callable default_return is not "
+            "supported; wrap it, e.g. default_return=(lambda: my_callable)()."
+        )
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         """Inner decorator that wraps function with error handling."""
@@ -438,7 +471,7 @@ def format_traceback(exc: Exception, limit: int = 10) -> str:
 # Example usage patterns
 """
 # Using the error handling decorator
-@with_error_handling(default_return=[], context="user data fetch")
+@with_default_on_error(default_return=[], context="user data fetch")
 def get_user_data(user_id: str) -> list:
     # This will log errors and return [] on failure
     return fetch_from_database(user_id)
