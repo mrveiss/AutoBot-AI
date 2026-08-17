@@ -86,9 +86,9 @@ class TestStatFailureIsVisible:
         # fixed affix), so a looser "id in message" check would still pass
         # against the pre-fix message ("Error reading file stats for
         # <filename>: ...") and catch nothing.
-        assert any(f"session {bad_id} " in r.getMessage() for r in error_records), (
-            "log record does not name the failing session id in a 'session <id>' position"
-        )
+        assert any(
+            f"session {bad_id} " in r.getMessage() for r in error_records
+        ), "log record does not name the failing session id in a 'session <id>' position"
 
     @pytest.mark.asyncio
     async def test_unreadable_session_wording_differs_from_not_found(self, manager, tmp_path, monkeypatch, caplog):
