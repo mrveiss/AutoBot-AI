@@ -147,13 +147,9 @@ def test_ensure_sandbox_root_is_idempotent(tmp_path, monkeypatch):
     assert mod.SANDBOXED_ROOT.is_dir()
 
 
-@pytest.mark.parametrize(
-    "evil",
-    ["../../etc/passwd", "/etc/passwd", "../etc/shadow"],
-)
-def test_traversal_and_absolute_paths_rejected_and_create_nothing_outside_root(tmp_path, monkeypatch, evil):
-    """Both a relative traversal and an absolute path are rejected, and
-    neither creates anything outside SANDBOXED_ROOT."""
+@pytest.mark.parametrize("evil", ["../../etc/passwd", "../etc/shadow"])
+def test_relative_traversal_is_rejected_and_creates_nothing_outside_root(tmp_path, monkeypatch, evil):
+    """A `..` reference is refused outright — this sandbox forbids any of them."""
     from fastapi import HTTPException
 
     data_dir = tmp_path / "data"
@@ -164,6 +160,33 @@ def test_traversal_and_absolute_paths_rejected_and_create_nothing_outside_root(t
     with pytest.raises(HTTPException) as exc:
         mod.validate_and_resolve_path(evil)
     assert exc.value.status_code == 400
+
+    created = {p for p in tmp_path.rglob("*") if p.is_dir()}
+    assert created <= {data_dir, mod.SANDBOXED_ROOT}, f"escaped the intended root: {created}"
+
+
+def test_an_absolute_path_is_contained_not_escaped(tmp_path, monkeypatch):
+    """`/etc/passwd` addresses the SANDBOX root, not the filesystem root.
+
+    The property that matters is **containment**, not rejection. Asserting
+    that this raises would pin a mechanism the resolver deliberately does not
+    use: `resolve_within_sandbox` strips the leading `/` (#11823, so `/` can
+    address the sandbox root at all), which makes this sandbox-relative
+    `etc/passwd` and resolves it *inside* the root.
+
+    That is safe — nothing outside the root is reachable, and the real
+    `/etc/passwd` is never touched. An earlier version of this test asserted
+    `pytest.raises` here and failed against correct code.
+    """
+    data_dir = tmp_path / "data"
+    _point_paths_manager_at(monkeypatch, data_dir)
+    mod = _load_module("_files_lazy_init_absolute_test", "api/files.py")
+    mod.ensure_sandbox_root()
+
+    resolved = mod.validate_and_resolve_path("/etc/passwd")
+
+    assert mod.SANDBOXED_ROOT in resolved.parents, f"escaped the sandbox: {resolved}"
+    assert resolved != Path("/etc/passwd")
 
     created = {p for p in tmp_path.rglob("*") if p.is_dir()}
     assert created <= {data_dir, mod.SANDBOXED_ROOT}, f"escaped the intended root: {created}"
