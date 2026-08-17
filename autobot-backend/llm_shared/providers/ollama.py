@@ -23,7 +23,6 @@ from autobot_shared.ssot_config import get_ollama_url
 from constants.api_constants import PATH_OLLAMA_CHAT
 
 from ..models import LLMRequest, LLMResponse, LLMSettings, ToolCall
-from ..observability import registry as obs_registry
 from ..streaming import StreamingManager
 
 logger = get_logger(__name__)
@@ -215,6 +214,9 @@ class OllamaProvider:
             usage=response.get("usage", {}),
             fallback_used=fallback_used,
             tool_calls=tool_calls,
+            # Issue #14211: populated by _process_stream_response for streamed
+            # replies so the TTFT Prometheus histogram receives real samples.
+            time_to_first_token_seconds=response.get("time_to_first_token_seconds"),
         )
 
     def build_error_response(self, model: str, error: Exception) -> dict:
@@ -362,7 +364,7 @@ class OllamaProvider:
         """
         from utils.async_stream_processor import process_llm_stream
 
-        accumulated_content, completed_successfully = await process_llm_stream(
+        accumulated_content, completed_successfully, ttft_seconds = await process_llm_stream(
             response,
             provider="ollama",
             max_chunks=self.settings.max_chunks,
@@ -381,6 +383,8 @@ class OllamaProvider:
             "message": {"role": "assistant", "content": accumulated_content},
             "done": True,
             "completed_successfully": completed_successfully,
+            # Issue #14211: feeds the autobot_llm_time_to_first_token_seconds histogram.
+            "time_to_first_token_seconds": ttft_seconds,
         }
 
     async def stream_response(
@@ -486,6 +490,12 @@ class OllamaProvider:
     # GH#11488: the "ollama_service" breaker decorator moved to the
     # BaseProvider._guarded_completion seam (sole production caller is
     # ollama_provider.py) — decorating here too double-counted every failure.
+    #
+    # Issue #14211: observer notification (notify_response/notify_error) also
+    # moved out of this delegate for the same reason — BaseProvider.chat_completion
+    # (the sole production caller, via ollama_provider.py) already notifies once
+    # per attempt. Notifying again here double-counted every LLM provider metric
+    # (requests_total, tokens_total, in-flight gauge, ...) for every Ollama call.
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
         Enhanced Ollama chat completion with improved streaming.
@@ -513,22 +523,11 @@ class OllamaProvider:
             processing_time = time.time() - start_time
             content = self.extract_content(response)
             tool_calls = self.extract_tool_calls(response)
-            llm_response = self.build_response(
+            return self.build_response(
                 content, response, model, processing_time, request.request_id, tool_calls=tool_calls
             )
-            try:
-                asyncio.get_running_loop().create_task(
-                    obs_registry.notify_response(llm_response, processing_time * 1000, 0.0)
-                )
-            except RuntimeError:
-                pass
-            return llm_response
 
         except Exception as e:
-            try:
-                asyncio.get_running_loop().create_task(obs_registry.notify_error(e, request))
-            except RuntimeError:
-                pass
             if use_streaming:
                 return self._handle_streaming_error(None, model, start_time, request.request_id, e)
             raise e

@@ -32,22 +32,45 @@ class AgentTier(Enum):
     TIER_4_ORCHESTRATOR = "tier4_orchestrator"  # 50-70% cache hit
 
 
-# Agent type to tier mapping
+# Agent type to tier mapping (#14194)
+#
+# Two independent rosters feed this map, and neither can see the other:
+#
+#   1. Claude Code dev subagents -- one name per .claude/agents/*.md file
+#      (frontend-engineer, senior-backend-engineer, code-reviewer, ...).
+#   2. AutoBot's own internal task-agent taxonomy -- AgentType in
+#      agents/agent_orchestration/types.py, dispatched at runtime by
+#      BaseModalityAgent subclasses (agents/*_agent.py) and the
+#      orchestrator/workflow templates via
+#      LLMService.chat_optimized(agent_type=...). AgentType values use
+#      underscores ("audio_processing"); get_agent_tier() normalizes '_' to
+#      '-' before lookup, so they are stored here in dash form.
+#
+# agent_tier_classifier_test.py asserts every member of BOTH rosters has an
+# entry here (in both directions) so a name can no longer drift silently --
+# see that file's module docstring for why it reads each roster without
+# importing agent_tier_classifier or the agents package.
 AGENT_TIER_MAP: Dict[str, AgentTier] = {
     # Tier 1: Default Implementation Agents (Highest Cache Hit Rate)
     "frontend-engineer": AgentTier.TIER_1_DEFAULT,
-    "backend-engineer": AgentTier.TIER_1_DEFAULT,
     "senior-backend-engineer": AgentTier.TIER_1_DEFAULT,
     "database-engineer": AgentTier.TIER_1_DEFAULT,
     "documentation-engineer": AgentTier.TIER_1_DEFAULT,
     "testing-engineer": AgentTier.TIER_1_DEFAULT,
     "devops-engineer": AgentTier.TIER_1_DEFAULT,
     "project-manager": AgentTier.TIER_1_DEFAULT,
+    # AgentType.CHAT (#14194): the default conversational flow, shares the
+    # most prefix of any task agent.
+    "chat": AgentTier.TIER_1_DEFAULT,
     # Tier 2: Analysis Agents (High Cache Hit Rate)
     "code-reviewer": AgentTier.TIER_2_ANALYSIS,
     "performance-engineer": AgentTier.TIER_2_ANALYSIS,
     "security-auditor": AgentTier.TIER_2_ANALYSIS,
     "code-refactorer": AgentTier.TIER_2_ANALYSIS,
+    # AgentType.RAG / AgentType.KNOWLEDGE_RETRIEVAL (#14194): retrieval +
+    # synthesis, same cache profile as the other analysis agents.
+    "rag": AgentTier.TIER_2_ANALYSIS,
+    "knowledge-retrieval": AgentTier.TIER_2_ANALYSIS,
     # Tier 3: Specialized Agents (Moderate Cache Hit Rate)
     "code-skeptic": AgentTier.TIER_3_SPECIALIZED,
     "systems-architect": AgentTier.TIER_3_SPECIALIZED,
@@ -58,6 +81,12 @@ AGENT_TIER_MAP: Dict[str, AgentTier] = {
     "content-writer": AgentTier.TIER_3_SPECIALIZED,
     "memory-monitor": AgentTier.TIER_3_SPECIALIZED,
     "project-task-planner": AgentTier.TIER_3_SPECIALIZED,
+    # #14194: added when .claude/agents/*.md gained these three definitions
+    # (#14135, #14139) without a matching entry here. Narrow, non-default
+    # tasks like the existing specialized agents above.
+    "conversation-compacter": AgentTier.TIER_3_SPECIALIZED,
+    "memory-curator": AgentTier.TIER_3_SPECIALIZED,
+    "repo-sweeper": AgentTier.TIER_3_SPECIALIZED,
     # Issue #3389: task agents that call chat_completion_optimized
     "summarization": AgentTier.TIER_3_SPECIALIZED,
     "translation": AgentTier.TIER_3_SPECIALIZED,
@@ -66,6 +95,10 @@ AGENT_TIER_MAP: Dict[str, AgentTier] = {
     "audio-processing": AgentTier.TIER_3_SPECIALIZED,
     "image-analysis": AgentTier.TIER_3_SPECIALIZED,
     "data-analysis": AgentTier.TIER_3_SPECIALIZED,
+    # AgentType.SYSTEM_COMMANDS / AgentType.RESEARCH (#14194): per-task tool
+    # context (shell state, search results) keeps their shared prefix low.
+    "system-commands": AgentTier.TIER_3_SPECIALIZED,
+    "research": AgentTier.TIER_3_SPECIALIZED,
     # Tier 4: Orchestrator (Session-Specific)
     "orchestrator": AgentTier.TIER_4_ORCHESTRATOR,
 }

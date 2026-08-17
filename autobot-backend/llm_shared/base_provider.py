@@ -122,6 +122,12 @@ class BaseProvider(ABC):
         perform fallback — implementations must not raise.
         """
         provider_key = self.provider_name or "default"
+        # Issue #14211: the request may reach chat_completion without going
+        # through ProviderRegistry.get_provider_for_request (which sets this
+        # too) — e.g. direct provider usage in structured_ops/tests. Setting
+        # it here guarantees notify_error (which only receives `request`, no
+        # metadata) can always resolve the real provider.
+        request.metadata["selected_provider"] = provider_key
         handler = get_backoff_handler()
 
         async def _attempt() -> LLMResponse:
@@ -133,24 +139,23 @@ class BaseProvider(ABC):
             # _guarded_completion transitions the breaker to HALF_OPEN to recover.
             if self._completion_circuit_breaker().is_rejecting:
                 return self._breaker_error_response(request, f"{provider_key} circuit breaker open", start)
+            # Issue #14211: only reached once the breaker guarantees a matching
+            # notify_response/notify_error below, so the recorder's in-flight
+            # gauge stays balanced.
+            self._notify_request_started(request, provider_key)
             # Issue #8170: acquire a rate-limit token shared across all uvicorn
             # workers via Redis.  Falls back to allow-all when Redis unavailable.
             async with get_llm_rate_limiter().acquire(provider_key):
                 try:
                     response = await self._guarded_completion(request)
                     latency_ms = (time.monotonic() - start) * 1000
-                    try:
-                        asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
-                    except RuntimeError:
-                        pass
+                    response.metadata.setdefault("request_type", self._request_type_label(request))
+                    self._notify_response(response, latency_ms)
                     # GH#8502: raise so the backoff handler can retry.
                     raise_if_rate_limited(response)
                     return response
                 except Exception as exc:
-                    try:
-                        asyncio.get_running_loop().create_task(obs_registry.notify_error(exc, request))
-                    except RuntimeError:
-                        pass
+                    self._notify_error(exc, request)
                     raise
 
         try:
@@ -159,6 +164,43 @@ class BaseProvider(ABC):
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
             raise
+
+    @staticmethod
+    def _request_type_label(request: LLMRequest) -> str:
+        """Return ``request.llm_type`` as a plain Prometheus label value.
+
+        Issue #14211: ``LLMType`` subclasses ``str`` for equality/dict-lookup
+        interop (#11019), but ``Enum.__str__`` still wins over the ``str``
+        mixin — ``str(LLMType.GENERAL) == "LLMType.GENERAL"``, not
+        ``"general"``. ``.value`` (or the raw string, when a caller already
+        passed one) is what a Prometheus label wants.
+        """
+        llm_type = request.llm_type
+        return llm_type.value if hasattr(llm_type, "value") else str(llm_type)
+
+    @staticmethod
+    def _notify_request_started(request: LLMRequest, provider_key: str) -> None:
+        """Fire-and-forget notify_request (GH#6593, #14211)."""
+        try:
+            asyncio.get_running_loop().create_task(obs_registry.notify_request(request, {"provider": provider_key}))
+        except RuntimeError:
+            pass
+
+    @staticmethod
+    def _notify_response(response: LLMResponse, latency_ms: float) -> None:
+        """Fire-and-forget notify_response (GH#6593)."""
+        try:
+            asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
+        except RuntimeError:
+            pass
+
+    @staticmethod
+    def _notify_error(exc: Exception, request: LLMRequest) -> None:
+        """Fire-and-forget notify_error (GH#6593)."""
+        try:
+            asyncio.get_running_loop().create_task(obs_registry.notify_error(exc, request))
+        except RuntimeError:
+            pass
 
     def _completion_circuit_breaker(self) -> "CircuitBreaker":
         """Return this provider's completion circuit breaker (GH#11488).

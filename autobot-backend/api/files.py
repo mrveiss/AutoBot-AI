@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 
@@ -57,7 +57,6 @@ from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
 
-router = APIRouter()
 logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
 
@@ -81,15 +80,33 @@ _DANGEROUS_CONTENT_PATTERNS = (
     "shell_exec(",
 )
 
-# Configure sandboxed directory for file operations using centralized paths
-
-# Ensure data directory exists
-ensure_data_directory()
-
-# Get sandboxed root using centralized path management
-# CRITICAL: Resolve to absolute path to prevent issues when CWD changes
+# Configure sandboxed directory for file operations using centralized paths.
+# CRITICAL: Resolve to absolute path to prevent issues when CWD changes.
+# Computing the Path is side-effect-free (Path.resolve() with strict=False
+# never touches disk); only the directory *creation* is deferred (#14217).
 SANDBOXED_ROOT = get_data_path("file_manager_root").resolve()
-SANDBOXED_ROOT.mkdir(parents=True, exist_ok=True)
+
+_sandbox_root_ready = False
+
+
+def ensure_sandbox_root() -> None:
+    """Create the sandbox root directory on first use, not on import (#14217).
+
+    Importing this router for routing/type purposes must never touch the
+    filesystem: an import-time ``mkdir(parents=True)`` creates directories
+    wherever the process CWD happened to be, and — worse — if the resolved
+    path ever came from bad config, it would do so with no error boundary
+    in place. Registered as a router dependency so every request explicitly
+    ensures the directory (once) before using it.
+    """
+    global _sandbox_root_ready
+    if not _sandbox_root_ready:
+        ensure_data_directory()
+        SANDBOXED_ROOT.mkdir(parents=True, exist_ok=True)
+        _sandbox_root_ready = True
+
+
+router = APIRouter(dependencies=[Depends(ensure_sandbox_root)])
 
 # Maximum file size (50MB)
 MAX_FILE_SIZE = 50 * 1024 * 1024

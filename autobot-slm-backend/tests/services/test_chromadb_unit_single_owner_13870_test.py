@@ -267,9 +267,21 @@ def test_the_database_stack_owns_the_database():
             f"{rel} does not hand a combined host to the db stack — the ai-stack venv " "has no chromadb installed"
         )
 
-    deploy = (_ANSIBLE / "deploy.yml").read_text(encoding="utf-8")
-    owner_line = next(ln for ln in deploy.splitlines() if "chromadb_service_owner:" in ln)
-    assert "'redis' if" in owner_line, "deploy.yml still prefers ai-stack when both are requested"
+    # #14289: deploy.yml no longer re-derives the owner itself -- a play `vars:`
+    # override outranks the correct facts and was the bug. It must instead load
+    # the shared derivation via vars_files, which is asserted identical to the
+    # other two copies above.
+    deploy = yaml.safe_load((_ANSIBLE / "deploy.yml").read_text(encoding="utf-8"))[0]
+    assert "chromadb_service_owner" not in (deploy.get("vars") or {}), (
+        "deploy.yml re-derives chromadb_service_owner in its own vars: block again -- "
+        "that always outranks the host-derived facts loaded below (#14289)"
+    )
+    vars_files = [str(v) for v in deploy.get("vars_files") or []]
+    assert any(v.endswith("role_active_facts.yml") for v in vars_files), (
+        "deploy.yml does not load the shared role_*_active facts -- a caller with no "
+        "group_vars sibling (services/deployment.py's bare `-i host,` invocation) would "
+        "see chromadb_service_owner resolve to nothing or to the wrong value"
+    )
 
 
 def test_the_persist_directory_moves_with_the_service():

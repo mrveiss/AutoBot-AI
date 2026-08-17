@@ -42,7 +42,15 @@ scrape_configs:
     metrics_path: /metrics
     scheme: http
 
-  # Node exporters on all managed fleet nodes (auto-populated from inventory)
+  # Node exporters on all managed fleet nodes (auto-populated from inventory).
+  #
+  # #14212: this is standard node_exporter (CPU/mem/disk/network) — it does NOT
+  # carry autobot_cgroup_memory_* (autobot_shared/monitoring/metrics/
+  # cgroup_memory.py registers only into the autobot-backend and slm-backend
+  # jobs below). So ServiceMemoryThrottled/ServiceMemoryHeadroomLow
+  # (autobot-monitoring/alerts-cgroup-memory.yml) can only ever fire for units
+  # on THOSE two hosts, never for a service that runs only on one of these
+  # fleet nodes.
   - job_name: "node"
     static_configs:
       - targets:

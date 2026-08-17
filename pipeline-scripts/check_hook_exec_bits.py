@@ -55,11 +55,17 @@ _CONFIG_PATHS = (
 _REQUIRED_MODE = "100755"
 
 # Hooks that are dormant today and cannot be woken by flipping a mode bit alone,
-# because each has real violations behind it (#14181 measures them: 201
-# blocking-I/O calls, ~1370 local schemas, 71 unregistered env vars, and so on).
-# Turning them on together would block every local commit, so they are recorded
-# here instead of silently passing: every run prints them as KNOWN, with the
-# issue that owns the backlog.
+# because each has real violations behind it. #14181 tracks the backlog; as of
+# this change the two remaining are 201 blocking-I/O calls (tools/lint/
+# check_no_blocking_io_in_async.py, epic #7442) and ~1370 local Pydantic
+# schemas (tools/lint/check_no_local_schemas.py) -- eight other hooks that
+# started on this list (decorator-order, git-safe-directory-required,
+# no-deprecated-ansible-facts, canonical-role-names, no-kb-aioredis-access,
+# no-literal-ttl-seconds, no-utcnow-isoformat, env-vars-documented) have
+# already had their backlogs triaged and come off it. Turning the remaining
+# two on before their backlogs are fixed would block every local commit, so
+# they stay recorded here instead of silently passing: every run prints them
+# as KNOWN, with the issue that owns the backlog.
 #
 # This list only ever shrinks. A hook comes off it in the same change that fixes
 # its violations and flips its exec bit. Adding a new entry is not a way to make

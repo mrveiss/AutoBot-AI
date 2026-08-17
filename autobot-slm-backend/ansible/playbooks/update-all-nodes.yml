@@ -211,6 +211,14 @@
 # =============================================================================
 # PLAY 1: Update SLM Server First
 # =============================================================================
+# #14336: `hosts: slm_server` deliberately EXCLUDES a node whose only role is
+# slm-agent (#14330 — that node has no /opt/autobot/code_source or
+# autobot-slm-backend checkout, so this play's manager-only tasks fail on it).
+# Such a node still needs its agent redeployed; `services/inventory_builder.py`
+# (`groups_for_role_tokens`, the `is_agent_only` branch) routes it into
+# `infrastructure` instead, so Play 2 below reaches it via the
+# `slm_node_id is defined` agent-redeploy task. Do not "fix" this by adding
+# agent-only nodes here — that reintroduces #14330.
 - name: "Play 1 - Update SLM Server First"
   hosts: slm_server
   gather_facts: false
@@ -518,6 +526,12 @@
 # carries app roles, so pure SLM servers still skip this play while co-located
 # backend/frontend/worker components finally receive updates. Ordering is
 # preserved: Play 1 updates the SLM components first.
+# #14336: an agent-only node (roles reduce to nothing but slm-agent — see
+# Play 1's note above) also joins `infrastructure` here, purely to reach the
+# "SLM Agent | Redeploy agent" task below (`when: slm_node_id is defined`,
+# true for every node). Every other task in this play stays gated on its own
+# `group_names` check, so an agent-only node runs that one task and nothing
+# else.
 - name: "Play 2 - Update Other Infrastructure Nodes"
   hosts: infrastructure
   gather_facts: false

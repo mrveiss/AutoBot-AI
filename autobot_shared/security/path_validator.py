@@ -190,6 +190,54 @@ def validate_relative_path(
     return resolved
 
 
+def require_path_string(value: object, *, context: str) -> str:
+    """Reject anything that is not a real path — str or Path (#14217).
+
+    A sanitizer that stringifies whatever it is handed — an object's
+    ``repr()``, or (in tests) a ``MagicMock`` whose default ``__fspath__``
+    embeds ``/`` separators — turns junk into a real, creatable directory
+    tree the moment it reaches ``Path()`` / ``os.makedirs``. ``Path()``
+    itself never raises for such a value; it happily calls
+    ``os.fspath()`` and returns a multi-component path. Call this at the
+    boundary, *before* the value is used as a path, so a malformed or
+    unmocked config value is rejected loudly instead of silently promoted
+    into a nested directory on disk.
+
+    ``str`` and ``Path`` are both accepted — pydantic ``BaseSettings``
+    fields typed ``Path`` (e.g. ``settings.backup_dir``) already coerce a
+    genuine config value to ``Path`` before this ever runs, and that is a
+    legitimate path, not junk. Anything else (a ``MagicMock``, an int, an
+    arbitrary object) is rejected.
+
+    Parameters
+    ----------
+    value:
+        The candidate path value, straight from config or a caller.
+    context:
+        Human-readable origin of *value*, included in the raised error so
+        it points at the misconfigured setting or call site.
+
+    Returns
+    -------
+    str
+        *value* as a ``str``, once validated.
+
+    Raises
+    ------
+    TypeError
+        If *value* is neither a ``str`` nor a ``Path``.
+    ValueError
+        If *value* is empty or contains a null byte.
+    """
+    if isinstance(value, Path):
+        value = str(value)
+    if not isinstance(value, str):
+        raise TypeError(f"{context}: expected a str or Path, got {type(value).__name__} instead")
+    if not value or "\x00" in value:
+        raise ValueError(f"{context}: path is empty or contains a null byte")
+    return value
+
+
 def resolve_within_sandbox(path: str, root: Path) -> Path:
     """Strip, reject traversal, and resolve *path* under *root* (#11844).
 

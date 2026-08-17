@@ -11,7 +11,7 @@ Run with:
 
 import pytest
 
-from tool_sdk.base import (
+from autobot_shared.tool_sdk.base import (
     BaseTool,
     ToolInputError,
     ToolMetadata,
@@ -19,7 +19,7 @@ from tool_sdk.base import (
     ToolResult,
     _validate_against_schema,
 )
-from tool_sdk.registry import (
+from autobot_shared.tool_sdk.registry import (
     PermissionDeniedError,
     ToolNotFoundError,
     ToolSDKRegistry,

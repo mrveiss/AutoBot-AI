@@ -78,7 +78,24 @@ def _load_module(mod_name: str, rel_path: str):
         api_pkg.schemas_system = schemas_stub  # type: ignore[attr-defined]
 
         for n in stub_names:
-            sys.modules.setdefault(n, MagicMock())
+            if n == "config":
+                # #14217: utils.paths_manager.get_data_path() now rejects any
+                # config value that is not a real str — Path() itself never
+                # raises for a MagicMock (its default __fspath__ embeds "/"
+                # separators), so a blanket MagicMock() here made
+                # unified_config_manager.get("paths", {}).get("data", {})
+                # .get("directory", "data") return three more mocks instead
+                # of the "data" fallback, tripping the new rejection (and,
+                # before the fix, silently creating a MagicMock/... directory
+                # tree at whatever the test process's CWD was). A real,
+                # empty-dict-returning stub keeps get_data_path() on its
+                # ordinary "data/file_manager_root" fallback path.
+                config_stub = types.ModuleType("config")
+                config_stub.unified_config_manager = MagicMock()
+                config_stub.unified_config_manager.get.return_value = {}
+                sys.modules.setdefault(n, config_stub)
+            else:
+                sys.modules.setdefault(n, MagicMock())
         spec = importlib.util.spec_from_file_location(mod_name, _BACKEND_ROOT / rel_path)
         mod = importlib.util.module_from_spec(spec)
         sys.modules[mod_name] = mod

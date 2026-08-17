@@ -33,6 +33,24 @@ Two rules this module follows, both learned from the incident it exists for:
 Sampled at scrape time via a custom collector: there is no event to hook, the
 kernel updates these files continuously, and a polling task would only add a
 staleness window.
+
+Coverage today (#14212 — read this before trusting an absence of alerts):
+this collector runs *in-process*, inside whichever app registers it into
+``PrometheusMetricsManager`` — currently only ``autobot-backend`` and
+``slm-backend`` (see ``autobot-slm-backend/ansible/roles/monitoring/
+templates/prometheus.yml.j2``, jobs ``autobot-backend`` and ``slm-backend``).
+It reads only its OWN host's ``/sys/fs/cgroup`` tree, so
+``autobot_cgroup_memory_*`` exists exclusively for units running on those two
+hosts. The alert rules in ``autobot-monitoring/alerts-cgroup-memory.yml``
+carry no host/job restriction — they already fire for a unit on any host the
+moment its series exists (proven for a non-backend/slm unit in
+``autobot-monitoring/cgroup-memory.promtool-test.yml``) — but on the
+documented multi-node topology, every service running on a different node
+(chroma on the ai/ML or database node, NPU workers, anything on a fleet node)
+is structurally absent from these series. `ServiceMemoryThrottled` /
+`ServiceMemoryHeadroomLow` cannot fire for it no matter what limits its unit
+declares. Do not read "no alert for this service" as "this service is fine"
+until it is.
 """
 
 from __future__ import annotations

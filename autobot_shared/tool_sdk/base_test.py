@@ -10,7 +10,7 @@ using the canonical API (ToolMetadata + JSON Schema input_schema).
 
 import pytest
 
-from tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
+from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 
 class _EchoTool(BaseTool):
@@ -78,7 +78,7 @@ class TestBaseTool:
         assert tool.input_schema["properties"]["message"]["type"] == "string"
 
     def test_input_validation_rejects_missing_field(self) -> None:
-        from tool_sdk.base import ToolInputError
+        from autobot_shared.tool_sdk.base import ToolInputError  # noqa: PLC0415
 
         tool = _EchoTool()
         with pytest.raises(ToolInputError):

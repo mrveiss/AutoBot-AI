@@ -15,7 +15,18 @@ set -e
 #
 # $USER is not usable here either: this script is run with sudo, so $USER is
 # root and the paths resolved to /home/root.
-VNC_USER="${AUTOBOT_VNC_USER:-autobot}"
+#
+# #14314: VNC_USER is canonical — the ansible vnc role
+# (autobot-slm-backend/ansible/roles/vnc/defaults/main.yml) resolves the same
+# name. AUTOBOT_VNC_USER remains a deprecated alias for one release, since an
+# existing host may already have only it set; VNC_USER wins when both are set.
+if [ -n "${VNC_USER:-}" ]; then
+    : # already set by the caller — keep it
+elif [ -n "${AUTOBOT_VNC_USER:-}" ]; then
+    VNC_USER="$AUTOBOT_VNC_USER"
+else
+    VNC_USER="autobot"
+fi
 VNC_HOME="/home/${VNC_USER}"
 
 echo "Setting up VNC with XFCE desktop..."

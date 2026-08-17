@@ -85,6 +85,19 @@ def message_role(message: Dict[str, Any], default: str = _UNKNOWN_ROLE) -> str:
     return str(message.get("role") or message.get("sender") or default)
 
 
+def message_type(message: Dict[str, Any], default: str = "default") -> str:
+    """The stored message-kind label, from either schema.
+
+    Stored/display records carry it under ``messageType``
+    (``MessagesMixin._build_message_dict``); ``_to_persisted_message`` in
+    ``api/chat.py`` writes it under ``type``. Both keys are read elsewhere in
+    ``api/chat.py`` by hand (``msg.get("messageType", msg.get("type", ...))``,
+    duplicated at two call sites); this is that expression promoted to the
+    shared reader so a third caller does not re-fork it.
+    """
+    return str(message.get("messageType") or message.get("type") or default)
+
+
 def message_text(message: Dict[str, Any]) -> str:
     """The body, from either schema.
 

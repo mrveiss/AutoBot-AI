@@ -171,7 +171,7 @@ class TestEndpointCoverageCacheScoping:
         analysis_a = MagicMock(name="analysis_A")
         analysis_b = MagicMock(name="analysis_B")
 
-        def fake_checker(project_root=None):
+        def fake_checker(project_root=None, cancel_token=None):
             checker = MagicMock()
             checker.run_full_analysis = MagicMock(return_value=analysis_a if project_root == root_a else analysis_b)
             return checker
