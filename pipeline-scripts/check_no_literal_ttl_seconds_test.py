@@ -10,6 +10,14 @@ this tree. Passing on that shape is exactly the failure mode this file
 guards against: a test that only shows the checker passes on clean input
 would reproduce the bug, not catch it.
 
+Review on the original #14206 PR found the widened checker still missed `ex`
+passed *positionally* (``set(name, value, ex, ...)`` / ``getex(name, ex,
+...)``) because both ``check_file`` and the reach counter walked
+``node.keywords`` only. `set(key, value, 3600)` is semantically identical to
+`ex=3600` and was caught by nothing — the exact drift shape this checker
+exists to prevent, reopened through a spelling the PR's own framing claimed
+to have closed. The ``*-ex-positional-*`` fixtures below cover that.
+
 Fixture sources are assembled from string fragments rather than written as
 literal ``.set(..., ex=100)`` calls in this file's own source, so this test
 file does not trip the very lint it exercises.
@@ -57,6 +65,12 @@ FLAGGED = [
     pytest.param(_call("redis_client", "psetex", '"k"', "3600000", '"v"'), id="psetex-literal"),
     pytest.param(_call("redis_client", "expireat", '"k"', "1999999999"), id="expireat-literal"),
     pytest.param(_call("redis_client", "pexpireat", '"k"', "1999999999000"), id="pexpireat-literal"),
+    # redis-py accepts `ex` positionally too — set(name, value, ex, ...) /
+    # getex(name, ex, ...). A keyword-only check missed this shape entirely
+    # (review finding on the original #14206 PR): `set(key, value, 3600)` is
+    # semantically identical to `ex=3600` and was caught by nothing.
+    pytest.param(_call("redis_client", "set", '"k"', '"v"', "3600"), id="set-ex-positional-literal"),
+    pytest.param(_call("redis_client", "getex", '"k"', "3600"), id="getex-ex-positional-literal"),
     # The methods the checker already covered before #14206 stay covered.
     pytest.param(_call("redis_client", "setex", '"k"', "3600", '"v"'), id="setex-literal-preexisting"),
     pytest.param(_call("redis_client", "expire", '"k"', "3600"), id="expire-literal-preexisting"),
@@ -88,6 +102,15 @@ CLEAN = [
     ),
     pytest.param(_call("redis_client", "getex", '"k"', ex="dynamic_ttl"), id="getex-ex-named-variable"),
     pytest.param(_call("redis_client", "get", '"k"'), id="unrelated-get-call"),
+    # Same false-positive trap, for `ex` passed positionally.
+    pytest.param(
+        _call("redis_client", "set", '"k"', '"v"', "self.retention_days * 86400"),
+        id="set-ex-positional-computed-attr-expr",
+    ),
+    pytest.param(
+        _call("redis_client", "set", '"k"', '"v"', "TTL_1_HOUR"), id="set-ex-positional-named-constant"
+    ),
+    pytest.param(_call("redis_client", "getex", '"k"', "dynamic_ttl"), id="getex-ex-positional-named-variable"),
 ]
 
 
