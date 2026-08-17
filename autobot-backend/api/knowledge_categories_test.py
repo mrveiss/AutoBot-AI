@@ -300,9 +300,7 @@ class TestCacheBehavior:
             assert len(result["categories"]) == 4
 
             # Cache the result
-            await mock_redis_client.set(
-                cache_key, json.dumps(result).encode("utf-8"), ex=TTL_5_MINUTES
-            )
+            await mock_redis_client.set(cache_key, json.dumps(result).encode("utf-8"), ex=TTL_5_MINUTES)
 
         mock_redis_client.set.assert_called_once()
 
