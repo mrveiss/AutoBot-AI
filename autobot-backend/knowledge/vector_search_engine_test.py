@@ -38,12 +38,13 @@ import pytest
 # time — see the block below for why a fixture is too late.
 # ---------------------------------------------------------------------------
 
-# Snapshot before any stub is installed, so the finally block below can restore
-# sys.modules exactly as it was found. Stronger than deleting only the keys this
-# file inserts: importing the engine under the stubs also pulls in *other*
-# modules that bind to them, and those would otherwise stay cached holding stub
-# references for whoever imports them next.
-_SYS_MODULES_BEFORE = frozenset(sys.modules)
+# Snapshot the module *objects*, not just the names. Restoring on names alone
+# misses the case that actually leaked: this file deletes
+# ``knowledge.vector_search_engine`` and re-imports it under the stubs, so the
+# name was present both before and after while the object behind it changed.
+# A name-only diff sees nothing to clean up and leaves the contaminated module
+# cached for the next importer — which is exactly what the guard caught.
+_SYS_MODULES_BEFORE = dict(sys.modules)
 
 
 def _install_stub(name: str, module: types.ModuleType) -> None:
@@ -114,8 +115,15 @@ try:
 
     import knowledge.vector_search_engine as vse  # noqa: E402
 finally:
-    for _name in sorted(set(sys.modules) - _SYS_MODULES_BEFORE, key=len, reverse=True):
+    # Drop anything added, and anything whose object was swapped. Swapped entries
+    # are dropped rather than restored: the pre-existing object may itself have
+    # been mid-import, and a fresh import is always correct where a stale object
+    # may not be.
+    for _name in sorted(set(sys.modules) - set(_SYS_MODULES_BEFORE), key=len, reverse=True):
         sys.modules.pop(_name, None)
+    for _name, _before in _SYS_MODULES_BEFORE.items():
+        if sys.modules.get(_name) is not _before:
+            sys.modules.pop(_name, None)
 
 
 # ---------------------------------------------------------------------------
