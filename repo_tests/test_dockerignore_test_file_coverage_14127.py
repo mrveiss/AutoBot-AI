@@ -262,6 +262,29 @@ def test_the_import_scan_reaches_the_backend_trees():
     assert sum(1 for f in shipped if f.startswith("autobot-backend/")) > 100
 
 
+_TEST_FILE_RULES = ["**/test_*.py", "**/*_test.py"]
+
+# A miniature tree carrying both shapes that actually broke: `pkg/__init__.py`
+# relative-importing a prefix-named sibling (the ModuleNotFoundError that killed
+# every backend container) and `utils/caller.py` absolute-importing a suffix-named
+# module from inside a function (the silent one).
+_BROKEN_TREE = {
+    "backend/pkg/__init__.py": "from .test_analyzer import Analyzer\n",
+    "backend/pkg/test_analyzer.py": "",
+    "backend/utils/caller.py": "def check():\n    from utils.circuit_test import breaker\n",
+    "backend/utils/circuit_test.py": "",
+}
+
+# The same tree with the fix that was applied: both modules renamed out of the
+# test conventions, no `.dockerignore` exemption anywhere.
+_FIXED_TREE = {
+    "backend/pkg/__init__.py": "from .testing_analyzer import Analyzer\n",
+    "backend/pkg/testing_analyzer.py": "",
+    "backend/utils/caller.py": "def check():\n    from utils.circuit_connection import breaker\n",
+    "backend/utils/circuit_connection.py": "",
+}
+
+
 def test_the_detector_catches_the_regression_it_was_written_for():
     """The reproduction, as a direct assertion on the detector (#14127).
 
@@ -269,31 +292,19 @@ def test_the_detector_catches_the_regression_it_was_written_for():
     (the ModuleNotFoundError that killed every backend container) and an absolute
     import of a suffix-named module (the silent one).
     """
-    rules = ["**/test_*.py", "**/*_test.py"]
-    sources = {
-        "backend/pkg/__init__.py": "from .test_analyzer import Analyzer\n",
-        "backend/pkg/test_analyzer.py": "",
-        "backend/utils/caller.py": "def check():\n    from utils.circuit_test import breaker\n",
-        "backend/utils/circuit_test.py": "",
-    }
-
-    findings = _imports_of_excluded_files(list(sources), rules, sources.__getitem__)
+    findings = _imports_of_excluded_files(list(_BROKEN_TREE), _TEST_FILE_RULES, _BROKEN_TREE.__getitem__)
 
     assert findings == [
         ("backend/pkg/__init__.py", 1, "backend/pkg/test_analyzer.py"),
         ("backend/utils/caller.py", 2, "backend/utils/circuit_test.py"),
     ]
 
-    # ... and stays quiet once the modules are renamed out of the test conventions,
-    # which is the fix that was applied rather than an allowlist entry.
-    renamed = {
-        "backend/pkg/__init__.py": "from .testing_analyzer import Analyzer\n",
-        "backend/pkg/testing_analyzer.py": "",
-        "backend/utils/caller.py": "def check():\n    from utils.circuit_connection import breaker\n",
-        "backend/utils/circuit_connection.py": "",
-    }
 
-    assert _imports_of_excluded_files(list(renamed), rules, renamed.__getitem__) == []
+def test_the_detector_goes_quiet_once_the_modules_are_renamed():
+    """The other half of the mutation: the fix that was applied (a rename out of
+    both test conventions) clears the finding, so the assertion above is pinned to
+    the defect and not to the detector simply reporting everything."""
+    assert _imports_of_excluded_files(list(_FIXED_TREE), _TEST_FILE_RULES, _FIXED_TREE.__getitem__) == []
 
 
 def test_no_negation_line_re_includes_a_python_file():
