@@ -8283,7 +8283,7 @@
         "railHandoff": "Transfert",
         "itemsUnavailable": "Les éléments n'ont pas pu être chargés. C'est un problème de chargement, pas une liste vide.",
         "itemsEmpty": "Aucun élément actif.",
-        "itemsNotApplicableHuman": "Les listes d'éléments par personne ne sont pas encore disponibles — seuls les agents peuvent être filtrés par attribution.",
+        "itemsNotApplicable": "Les listes d'éléments nécessitent un identifiant d'attribution que ce nœud n'a pas.",
         "outputEmpty": "Aucun élément terminé pour le moment.",
         "costTotalTokens": "Jetons totaux",
         "costUsd": "Coût (USD)",

@@ -457,6 +457,12 @@ async def list_work_items(
     type: Optional[WorkItemType] = Query(None),
     status: Optional[WorkItemStatus] = Query(None),
     assignee: Optional[str] = Query(None),
+    # #14192: distinct from `assignee` (which maps to assignee_agent_id only,
+    # see below) rather than overloading one param for two different id
+    # spaces — a human org-chart node's `node_id` is a user id, never an
+    # agent id, so a caller building this URL must be able to say which
+    # keyspace it belongs to.
+    assignee_user_id: Optional[str] = Query(None),
     reviewer: Optional[str] = Query(None),
     sprint_id: Optional[str] = Query(None),
     parent_id: Optional[str] = Query(None),
@@ -484,6 +490,7 @@ async def list_work_items(
         type=type,
         status=status,
         assignee_agent_id=assignee,
+        assignee_user_id=assignee_user_id,
         reviewer_user_id=reviewer,
         sprint_id=sprint_id,
         parent_id=parent_id,

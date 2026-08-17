@@ -10,6 +10,7 @@ import {
   SIDEBAR_RAIL_ICONS,
   NOTE_TABS,
   canFetchAssignedItems,
+  canHandoffAssignedItems,
   assignedItemsUrl,
   partitionAssignedItems,
   costUrl,
@@ -59,19 +60,42 @@ describe('canFetchAssignedItems', () => {
     expect(canFetchAssignedItems({ id: 'agent-1', node_id: 'pk-1', is_human: false })).toBe(true)
   })
 
-  it('is false for a human node — list_by_project has no assignee_user_id filter', () => {
-    expect(canFetchAssignedItems({ id: 'user:1', node_id: 'user-uuid-1', is_human: true })).toBe(false)
+  it('is true for a human node with a node_id — list_by_project gained an assignee_user_id filter (#14192)', () => {
+    expect(canFetchAssignedItems({ id: 'user:1', node_id: 'user-uuid-1', is_human: true })).toBe(true)
   })
 
   it('is false for an agent node missing node_id (a pre-#13940 fixture)', () => {
     expect(canFetchAssignedItems({ id: 'agent-1', is_human: false })).toBe(false)
   })
+
+  it('is false for a human node missing node_id', () => {
+    expect(canFetchAssignedItems({ id: 'user:1', is_human: true })).toBe(false)
+  })
+})
+
+describe('canHandoffAssignedItems (#14192)', () => {
+  it('is true for an agent node with a node_id — the existing agent_to_human verb applies', () => {
+    expect(canHandoffAssignedItems({ id: 'agent-1', node_id: 'pk-1', is_human: false })).toBe(true)
+  })
+
+  it('is false for a human node even with a node_id — no human_to_human handoff verb exists', () => {
+    expect(canHandoffAssignedItems({ id: 'user:1', node_id: 'user-uuid-1', is_human: true })).toBe(false)
+  })
+
+  it('is false for an agent node missing node_id', () => {
+    expect(canHandoffAssignedItems({ id: 'agent-1', is_human: false })).toBe(false)
+  })
 })
 
 describe('assignedItemsUrl', () => {
-  it('filters by the node_id (the assignment-keyspace UUID), not the slug id', () => {
+  it('filters an agent by the node_id (the assignment-keyspace UUID) through `assignee`', () => {
     const url = assignedItemsUrl('c1', { id: 'agent-slug', node_id: 'pk-uuid-1', is_human: false })
     expect(url).toBe('/api/llc/work-items?company_id=c1&assignee=pk-uuid-1')
+  })
+
+  it('filters a human node by node_id through `assignee_user_id`, not `assignee` (#14192)', () => {
+    const url = assignedItemsUrl('c1', { id: 'user:1', node_id: 'user-uuid-1', is_human: true })
+    expect(url).toBe('/api/llc/work-items?company_id=c1&assignee_user_id=user-uuid-1')
   })
 })
 

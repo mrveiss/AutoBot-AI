@@ -222,6 +222,47 @@ class TestListWorkItemsAuthz:
         assert list_mock.await_args.kwargs["company_id"] == org
         assert len(resp.json()) == 1
 
+    def test_cross_tenant_assignee_user_id_enumeration_is_rejected(self):
+        """#14192: the new assignee_user_id filter must not open a second path
+        around the existing company_id tenant guard — a caller in org A
+        supplying org B's company_id is rejected before the filter (or any
+        other query param) ever reaches the service layer, exactly like the
+        pre-existing assignee (agent) filter above."""
+        list_mock = patch(
+            "llc.services.work_item_service.WorkItemService.list_by_project",
+            new=AsyncMock(return_value=[_mock_item("should-not-be-returned")]),
+        ).start()
+        caller_org = str(uuid.uuid4())
+        other_org = str(uuid.uuid4())
+        some_user_id = str(uuid.uuid4())
+        app = _make_app(org_id=caller_org)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(
+            "/work-items",
+            params={"company_id": other_org, "assignee_user_id": some_user_id},
+        )
+        assert resp.status_code == 404
+        list_mock.assert_not_called()
+        assert "should-not-be-returned" not in resp.text
+
+    def test_own_company_assignee_user_id_filter_reaches_the_service(self):
+        """The happy path: an authenticated caller's own company_id plus
+        assignee_user_id is passed through to the service unchanged."""
+        org = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        item = _mock_item(org)
+        list_mock = patch(
+            "llc.services.work_item_service.WorkItemService.list_by_project",
+            new=AsyncMock(return_value=[item]),
+        ).start()
+        patch("llc.api.work_items._relations_to_list", new=AsyncMock(return_value=[])).start()
+        app = _make_app(org_id=org)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/work-items", params={"company_id": org, "assignee_user_id": user_id})
+        assert resp.status_code == 200, resp.text
+        list_mock.assert_awaited_once()
+        assert list_mock.await_args.kwargs["assignee_user_id"] == user_id
+
 
 # ---------------------------------------------------------------------------
 # POST /work-items/{id}/coworker — set_coworker (consolidated, #14168)

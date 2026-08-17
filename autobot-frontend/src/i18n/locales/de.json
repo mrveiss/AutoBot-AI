@@ -8283,7 +8283,7 @@
         "railHandoff": "Übergabe",
         "itemsUnavailable": "Elemente konnten nicht geladen werden. Das ist ein Ladeproblem, keine leere Liste.",
         "itemsEmpty": "Keine aktiven Elemente.",
-        "itemsNotApplicableHuman": "Personenbezogene Listen sind noch nicht verfügbar — nur Agenten können nach Zuständigkeit gefiltert werden.",
+        "itemsNotApplicable": "Elementlisten benötigen eine Zuordnungs-ID, die dieser Knoten nicht hat.",
         "outputEmpty": "Noch keine abgeschlossenen Elemente.",
         "costTotalTokens": "Tokens gesamt",
         "costUsd": "Kosten (USD)",
