@@ -153,12 +153,33 @@ def test_postgres_role_present():
     assert role["target_path"] == "/var/lib/postgresql"
 
 
-def test_postgres_in_databases_ansible_group():
-    assert ROLE_ANSIBLE_GROUPS["postgres"] == "databases"
+def test_postgres_joins_a_group_the_data_layer_fact_gates_on():
+    """#14460: the group postgres joins must be one `role_redis_active` reads.
+
+    This used to read `== "databases"` -- a literal restatement of the map,
+    which is why it passed for as long as the map named a group no fact, play
+    or group_vars file ever consulted. Anchored to the fact expression, so the
+    two can only agree by actually agreeing.
+    """
+    consulted = _activation_sources()["redis"]["groups"]
+    assert ROLE_ANSIBLE_GROUPS["postgres"] in consulted, (
+        f"postgres joins group {ROLE_ANSIBLE_GROUPS['postgres']!r}, which role_redis_active "
+        f"does not consult ({sorted(consulted)}) - group membership activates nothing"
+    )
 
 
 def test_postgres_dependencies():
-    assert ROLE_DEPENDENCIES["postgres"] == ["postgresql"]
+    """#14460: derived from the group it shares with redis, not restated.
+
+    A postgres node lands in `database`, `role_redis_active` gates on that
+    group, so Phase 3 runs the redis ansible role -- venv included. Whatever
+    redis declares, postgres needs too.
+    """
+    assert "postgresql" in ROLE_DEPENDENCIES["postgres"]
+    assert set(ROLE_DEPENDENCIES["postgres"]) >= set(ROLE_DEPENDENCIES["redis"]), (
+        "postgres shares the `database` inventory group with redis (ROLE_ANSIBLE_GROUPS), so the "
+        "redis ansible role runs on it, but it declares fewer dependencies than redis"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -617,3 +638,111 @@ def test_the_backend_group_roles_declare_both(role, dependency):
         f"{role} does not declare {dependency}, but joins the backend group and runs the backend "
         f"ansible role, which requires it unconditionally (#14446)"
     )
+
+
+# ---------------------------------------------------------------------------
+# #14460: a group name nothing consults cannot activate anything
+# ---------------------------------------------------------------------------
+#
+# ROLE_ANSIBLE_GROUPS is a *producer*: the inventory builder creates whatever
+# group it names. Creating a group only matters if the ansible layer reads it
+# back. Two values were read back nowhere -- "databases" (plural) while every
+# fact, play, static-inventory group and group_vars file says `database`, and
+# "browser_automation" while they all say `browser`/`browser_worker`.
+#
+# Nothing broke visibly because activation has a second path: the inventory
+# stamps `node_roles` per host, and `'redis' in node_roles` still matched. So
+# the group half was dead while reading as live -- adding a node to the group
+# and expecting the role to fire got silence, and the host also inherited no
+# group_vars.
+#
+# The rule below is derived from what the ansible tree actually consults, not
+# from a list of blessed names, so a new value is checked the same way.
+
+
+def _groups_gated_by_active_facts() -> dict:
+    """Group name -> the `role_*_active` facts that OR on it."""
+    consulted: dict = {}
+    for ansible_role, sources in _activation_sources().items():
+        for group in sources["groups"]:
+            consulted.setdefault(group, set()).add(f"role_{ansible_role.replace('-', '_')}_active")
+    return consulted
+
+
+_GROUPS_LOOKUP = _re.compile(r"groups\[['\"]([a-zA-Z0-9_-]+)['\"]\]|groups\.get\(['\"]([a-zA-Z0-9_-]+)['\"]")
+
+
+def _groups_referenced_in_playbooks() -> dict:
+    """Group name -> ansible files selecting it via `hosts:` or `groups[...]`.
+
+    A group with no `role_*_active` fact can still be live: plays select
+    groups directly. Both forms count, so the rule stays no narrower than its
+    own subject.
+    """
+    consulted: dict = {}
+    for path in _ANSIBLE_DIR.rglob("*.yml"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in _GROUPS_LOOKUP.finditer(text):
+            consulted.setdefault(match.group(1) or match.group(2), set()).add(path.name)
+        for line in text.splitlines():
+            hosts = _re.match(r"\s*hosts:\s*([^#]+)", line)
+            if not hosts:
+                continue
+            for token in _re.split(r"[,:]", hosts.group(1)):
+                token = token.strip().strip("\"'")
+                if token and not token.startswith("{{"):
+                    consulted.setdefault(token, set()).add(f"{path.name} (hosts:)")
+    return consulted
+
+
+def _groups_consulted_by_ansible() -> dict:
+    """Every group name the ansible layer reads back, with where it reads it."""
+    consulted = _groups_gated_by_active_facts()
+    for group, sites in _groups_referenced_in_playbooks().items():
+        consulted.setdefault(group, set()).update(sites)
+    return consulted
+
+
+def test_the_consulted_group_scan_sees_the_live_vocabulary():
+    """An empty or broken scan would make the rule below vacuously green.
+
+    Each name here is consulted by a different mechanism -- `backend` and
+    `database` by active facts, `slm_server` by both, `main` by plays alone --
+    so losing any one mechanism fails loudly instead of reporting a clean run.
+    """
+    consulted = _groups_consulted_by_ansible()
+    assert consulted, f"no group references parsed out of {_ANSIBLE_DIR} - the scan is broken"
+    for live in ("backend", "database", "redis", "browser", "slm_server", "main", "frontend"):
+        assert live in consulted, f"{live!r} is consulted by the ansible tree but the scan missed it"
+
+
+def test_every_ansible_group_is_consulted_by_ansible():
+    """Every group the inventory builder names must be read back somewhere.
+
+    Fails on a producer/consumer mismatch: the builder emits the group, and
+    no fact, play or `groups[...]` lookup mentions it. Such a group cannot
+    activate anything, and the failure is silent -- provisioning reports
+    success having skipped the role.
+    """
+    consulted = _groups_consulted_by_ansible()
+    inert = sorted(
+        f"{role!r} -> group {group!r}" for role, group in ROLE_ANSIBLE_GROUPS.items() if group not in consulted
+    )
+    assert not inert, (
+        "ROLE_ANSIBLE_GROUPS names group(s) the ansible layer never consults, so joining them "
+        "activates nothing and inherits no group_vars (#14460): " + "; ".join(inert)
+    )
+
+
+def test_the_data_layer_roles_reach_their_own_activation_fact():
+    """The instance the rule was written for, named.
+
+    `redis` and `postgres` share one group. `role_redis_active` is what
+    Phase 3 gates the redis ansible role on, so the group they join has to be
+    one of the names that fact reads.
+    """
+    consulted = _activation_sources()["redis"]["groups"]
+    for role in ("redis", "postgres"):
+        assert ROLE_ANSIBLE_GROUPS[role] in consulted, (
+            f"{role} joins {ROLE_ANSIBLE_GROUPS[role]!r}; role_redis_active reads {sorted(consulted)}"
+        )

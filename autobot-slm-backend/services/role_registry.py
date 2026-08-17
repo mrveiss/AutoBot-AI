@@ -485,6 +485,21 @@ DEFAULT_ROLES = (
 # Maps each role name to the inventory group(s) expected by
 # provision-fleet-roles.yml.  Used by _generate_dynamic_inventory()
 # in setup_wizard.py to build role-based host groups.
+#
+# #14460: a value here is only useful if the ansible layer CONSULTS that
+# group -- a `groups.get(...)` clause in playbooks/vars/role_active_facts.yml,
+# a play's `hosts:`, or a `groups[...]` lookup. Two values were consulted
+# nowhere: "databases" (plural) and "browser_automation". The inventory
+# builder created those groups and no play, fact or group_vars file ever
+# read them, so joining one activated nothing and inherited no group_vars.
+# Those roles only ever came up through the `node_roles` clause, which the
+# inventory stamps per host independently of group membership -- so the
+# breakage was invisible until someone relied on the group.
+# The consulted spellings are the ones services/inventory_builder.py already
+# emits (_ROLE_TO_GROUPS), the static inventory defines, and group_vars/ has
+# files for: `database` (+`redis`) and `browser` (+`browser_worker`).
+# test_role_registry.py::test_every_ansible_group_is_consulted_by_ansible
+# fails if any value drifts out of that vocabulary again.
 # ---------------------------------------------------------------------------
 ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "backend": "backend",
@@ -494,10 +509,14 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "frontend": "frontend",
     "ai-stack": "ai_stack",
     "chromadb": "ai_stack",
-    "redis": "databases",
-    "postgres": "databases",
+    # #14460: was "databases". `role_redis_active` gates on `redis`/`database`.
+    "redis": "database",
+    "postgres": "database",
     "npu-worker": "npu_worker",
-    "browser-service": "browser_automation",
+    # #14460: was "browser_automation". `role_browser_active` gates on
+    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the
+    # old spelling.
+    "browser-service": "browser",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
     # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
@@ -537,7 +556,14 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # which runs `python3.14 -m venv`. A redis-only node needs the interpreter
     # even though nothing about "redis" suggests it.
     "redis": ["python314"],
-    "postgres": ["postgresql"],
+    # #14460: NOT just postgresql. A postgres node joins the `database` group,
+    # and `role_redis_active` gates on that group -- so Phase 3 applies the
+    # *redis* ansible role, whose main.yml unconditionally
+    # `import_tasks: chromadb.yml` and runs `python3.14 -m venv`. The
+    # interpreter is imposed by the shared group, not by postgres itself.
+    # #14446's guard could not see this: its group path looked up "databases",
+    # a name no fact mentions, so it found nothing to require.
+    "postgres": ["postgresql", "python314"],
     "ai-stack": ["python314"],
     "chromadb": ["python314"],
     "browser-service": ["nodejs"],
