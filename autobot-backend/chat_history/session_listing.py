@@ -206,7 +206,19 @@ class SessionListingMixin:
                 "fast_mode": True,
             }
         except Exception as e:
-            logger.error("Error reading file stats for %s: %s", filename, str(e))
+            # #14248: loud and excluded, matching the malformed-timestamp precedent
+            # in skill_distillation_scheduler.py — the session id is named
+            # explicitly (not just the filename) so this is grep-able, and the
+            # wording deliberately differs from "Chat session %s not found" (used
+            # when no file exists at all) so an operator can tell "unreadable"
+            # from "never existed" at a glance.
+            logger.error(
+                "Chat session %s exists (%s) but its file stats could not be read — "
+                "excluded from this listing pass: %s",
+                chat_id,
+                filename,
+                e,
+            )
             return None
 
     async def list_sessions_fast(self) -> List[Dict[str, Any]]:

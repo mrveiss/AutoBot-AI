@@ -24,59 +24,107 @@ import pytest
 
 # ---------------------------------------------------------------------------
 # Stub heavy dependencies before importing the engine
+#
+# #14240: these used to be bare ``sys.modules.setdefault`` calls that were never
+# undone. They install *empty* module objects for real top-level packages
+# (``services``, ``utils``, ``knowledge``, ``autobot_shared``), so once this file
+# had been collected, any later test doing ``from services.x import y`` resolved
+# against a shell with no ``__path__`` and failed. Because ``setdefault`` is a
+# no-op when the real package is already imported, whether that happened at all
+# depended on collection order — which is why the same suite produced different
+# failures run to run.
+#
+# The stubs are now installed and removed in the same try/finally, at import
+# time — see the block below for why a fixture is too late.
 # ---------------------------------------------------------------------------
 
-# autobot_shared.ssot_config
-_ssot = types.ModuleType("autobot_shared.ssot_config")
-_feature = MagicMock()
-_feature.npu_enabled = True
-_autobot_cfg = MagicMock()
-_autobot_cfg.feature = _feature
-_ssot.config = _autobot_cfg
-sys.modules.setdefault("autobot_shared", types.ModuleType("autobot_shared"))
-sys.modules.setdefault("autobot_shared.ssot_config", _ssot)
+# Snapshot the module *objects*, not just the names. Restoring on names alone
+# misses the case that actually leaked: this file deletes
+# ``knowledge.vector_search_engine`` and re-imports it under the stubs, so the
+# name was present both before and after while the object behind it changed.
+# A name-only diff sees nothing to clean up and leaves the contaminated module
+# cached for the next importer — which is exactly what the guard caught.
+_SYS_MODULES_BEFORE = dict(sys.modules)
 
-# knowledge (for CPUBackend)
-_knowledge_mod = types.ModuleType("knowledge")
-sys.modules.setdefault("knowledge", _knowledge_mod)
 
-# npu_semantic_search (for NPUBackend)
-_npu_mod = types.ModuleType("npu_semantic_search")
-sys.modules.setdefault("npu_semantic_search", _npu_mod)
+def _install_stub(name: str, module: types.ModuleType) -> None:
+    """Install *module* under *name* only if nothing real is there yet."""
+    if name not in sys.modules:
+        sys.modules[name] = module
 
-# utils.gpu_vector_search (for GPUBackend and _check_faiss_flags)
-_gpu_mod = types.ModuleType("utils.gpu_vector_search")
-_gpu_mod.FAISS_AVAILABLE = False
-_gpu_mod.FAISS_GPU_AVAILABLE = False
-_gpu_mod.VectorSearchConfig = MagicMock()
-_gpu_mod.get_hybrid_vector_search = AsyncMock()
-sys.modules.setdefault("utils", types.ModuleType("utils"))
-sys.modules.setdefault("utils.gpu_vector_search", _gpu_mod)
 
-# knowledge.facts (legacy stub — no longer used by GPUBackend after #5105
-# but retained because other test paths may import the module name)
-_facts_mod = types.ModuleType("knowledge.facts")
-_facts_mod._generate_embedding_with_npu_fallback = AsyncMock(return_value=[0.1, 0.2, 0.3])
-sys.modules.setdefault("knowledge.facts", _facts_mod)
+# The stubs exist only for the duration of the import below. ``vse`` binds its
+# dependencies at import time and holds them directly afterwards, so nothing it
+# needs lives in sys.modules once this block completes — and the tests import
+# nothing lazily.
+#
+# #14240: this must be a try/finally at *import* time, not a fixture. A
+# module-scoped fixture tears down after this file's tests have run, but other
+# files are imported during collection long before that, and it is those imports
+# that were picking up the stubs. That is why the first attempt still leaked.
+try:
+    # autobot_shared.ssot_config
+    _ssot = types.ModuleType("autobot_shared.ssot_config")
+    _feature = MagicMock()
+    _feature.npu_enabled = True
+    _autobot_cfg = MagicMock()
+    _autobot_cfg.feature = _feature
+    _ssot.config = _autobot_cfg
+    _install_stub("autobot_shared", types.ModuleType("autobot_shared"))
+    _install_stub("autobot_shared.ssot_config", _ssot)
 
-# services.npu_client (canonical NPU-fallback helper used by GPUBackend
-# after #5105 consolidation)
-_services_mod = types.ModuleType("services")
-_npu_client_mod = types.ModuleType("services.npu_client")
-_npu_client_mod.generate_embedding_with_fallback = AsyncMock(return_value=[0.1, 0.2, 0.3])
-sys.modules.setdefault("services", _services_mod)
-sys.modules.setdefault("services.npu_client", _npu_client_mod)
+    # knowledge (for CPUBackend)
+    _knowledge_mod = types.ModuleType("knowledge")
+    _install_stub("knowledge", _knowledge_mod)
 
-# ---------------------------------------------------------------------------
-# Import after stubs are in place
-# ---------------------------------------------------------------------------
+    # npu_semantic_search (for NPUBackend)
+    _npu_mod = types.ModuleType("npu_semantic_search")
+    _install_stub("npu_semantic_search", _npu_mod)
 
-# Reset module-level singleton and FAISS flags before import
+    # utils.gpu_vector_search (for GPUBackend and _check_faiss_flags)
+    _gpu_mod = types.ModuleType("utils.gpu_vector_search")
+    _gpu_mod.FAISS_AVAILABLE = False
+    _gpu_mod.FAISS_GPU_AVAILABLE = False
+    _gpu_mod.VectorSearchConfig = MagicMock()
+    _gpu_mod.get_hybrid_vector_search = AsyncMock()
+    _install_stub("utils", types.ModuleType("utils"))
+    _install_stub("utils.gpu_vector_search", _gpu_mod)
 
-if "knowledge.vector_search_engine" in sys.modules:
-    del sys.modules["knowledge.vector_search_engine"]
+    # knowledge.facts (legacy stub — no longer used by GPUBackend after #5105
+    # but retained because other test paths may import the module name)
+    _facts_mod = types.ModuleType("knowledge.facts")
+    _facts_mod._generate_embedding_with_npu_fallback = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    _install_stub("knowledge.facts", _facts_mod)
 
-import knowledge.vector_search_engine as vse  # noqa: E402
+    # services.npu_client (canonical NPU-fallback helper used by GPUBackend
+    # after #5105 consolidation)
+    _services_mod = types.ModuleType("services")
+    _npu_client_mod = types.ModuleType("services.npu_client")
+    _npu_client_mod.generate_embedding_with_fallback = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    _install_stub("services", _services_mod)
+    _install_stub("services.npu_client", _npu_client_mod)
+
+    # ---------------------------------------------------------------------------
+    # Import after stubs are in place
+    # ---------------------------------------------------------------------------
+
+    # Reset module-level singleton and FAISS flags before import
+
+    if "knowledge.vector_search_engine" in sys.modules:
+        del sys.modules["knowledge.vector_search_engine"]
+
+    import knowledge.vector_search_engine as vse  # noqa: E402
+finally:
+    # Drop anything added, and anything whose object was swapped. Swapped entries
+    # are dropped rather than restored: the pre-existing object may itself have
+    # been mid-import, and a fresh import is always correct where a stale object
+    # may not be.
+    for _name in sorted(set(sys.modules) - set(_SYS_MODULES_BEFORE), key=len, reverse=True):
+        sys.modules.pop(_name, None)
+    for _name, _before in _SYS_MODULES_BEFORE.items():
+        if sys.modules.get(_name) is not _before:
+            sys.modules.pop(_name, None)
+
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -160,6 +160,66 @@ tests:
                 `active`, so the counter is the record.
 
   # ---------------------------------------------------------------------------
+  # #14212: the alert RULES carry no job/instance/host restriction — only
+  # `unit`. Today the collector is only scraped on the backend/slm hosts, so
+  # `autobot_cgroup_memory_*{unit="autobot-chromadb.service"}` (chroma runs on
+  # the ai/ML node and the database node, neither of which is scraped) never
+  # actually exists in Prometheus. But *if* that series arrived — from any
+  # scrape target, on any host — these same rules already fire for it,
+  # unmodified. This proves the evaluation logic is not the blocker; the
+  # scrape topology is (tracked separately in #14212 — deploying the collector,
+  # or an equivalent, to every fleet node is a host-verified follow-up this
+  # promtool run cannot itself provide).
+  #
+  # Values are the exact incident/headroom fixtures above, unit swapped —
+  # deliberately not re-derived, so a mistake here can't hide behind different
+  # numbers than the block already proven correct.
+  # ---------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_events{unit="autobot-chromadb.service",event="high"}'
+        values: "0+50x60"
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-chromadb.service"}'
+        values: "8588886016x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-chromadb.service"}'
+        values: "8589934592x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryThrottled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              unit: autobot-chromadb.service
+            exp_annotations:
+              summary: "autobot-chromadb.service is being memory-throttled"
+              description: >-
+                memory.events high has been rising for 10 minutes, so the kernel is applying reclaim
+                pressure to autobot-chromadb.service. The unit will report `active`, its memory usage
+                will look steady at the watermark, and its health endpoint may still answer — none of
+                those distinguish this state from healthy. In #13765 this ran for hours with the
+                process in STAT=D and /health timing out, and needed an explicit restart.
+
+  - interval: 1m
+    input_series:
+      - series: 'autobot_cgroup_memory_current_bytes{unit="autobot-chromadb.service"}'
+        values: "8504076697x60"
+      - series: 'autobot_cgroup_memory_high_bytes{unit="autobot-chromadb.service"}'
+        values: "8589934592x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ServiceMemoryHeadroomLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              unit: autobot-chromadb.service
+            exp_annotations:
+              summary: "autobot-chromadb.service is within 15% of its throttling watermark"
+              description: >-
+                autobot-chromadb.service is approaching MemoryHigh. This fires BEFORE throttling
+                starts; once it starts, the service stops making progress while continuing to report
+                healthy.
+
+  # ---------------------------------------------------------------------------
   # Hard-cap reclaim, and the out-of-band drop-in. Added because the coverage
   # guard in cgroup_memory_test.py refused a rules file with untested alerts —
   # an alert nobody exercises is how the dead headroom rule shipped.

@@ -50,8 +50,10 @@ def tool(monkeypatch):
 
     base.BaseTool = _BaseTool
 
-    monkeypatch.setitem(sys.modules, "tool_sdk", MagicMock())
-    monkeypatch.setitem(sys.modules, "tool_sdk.base", base)
+    # Fully-qualified module names (#14373) — generate_video.py imports
+    # `autobot_shared.tool_sdk.base`, not the bare `tool_sdk` path.
+    monkeypatch.setitem(sys.modules, "autobot_shared.tool_sdk", MagicMock())
+    monkeypatch.setitem(sys.modules, "autobot_shared.tool_sdk.base", base)
 
     # Build a real package module so `from .providers import ...` resolves.
     import types

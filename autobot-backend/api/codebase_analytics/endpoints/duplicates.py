@@ -27,6 +27,7 @@ from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_h
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
+from utils.cancel_tokens import new_cancel_token, signal_cancel_token, submit_cancellable
 from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 from utils.io_executor import get_analytics_executor
@@ -102,6 +103,15 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
 
     Returns:
         Analysis result or None if timed out
+
+    Issue #14256: the submit-and-register step now goes through
+    ``utils.cancel_tokens.submit_cancellable`` -- the same shape this function
+    hand-rolled for #12779/#13602, hoisted so ``bounded()`` can also signal
+    this token (e.g. if the route's own deadline is tighter than
+    ``DUPLICATE_DETECTION_TIMEOUT``), not only this function's own timeout
+    handler. The single-flight lock stays call-site-specific: releasing it
+    only once the orphaned thread actually exits is this endpoint's own
+    bookkeeping, not part of the general cancellation mechanism.
     """
     global _duplicate_scan_cancel
 
@@ -110,19 +120,26 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
         logger.info("Duplicate detection already in flight — not queuing another scan")
         return None
 
-    cancel_token = threading.Event()
-    _duplicate_scan_cancel = cancel_token
     released = False
+    cancel_token = new_cancel_token()
     # Issue #1233: Use dedicated analytics executor to prevent
     # default thread pool starvation
-    future = asyncio.get_running_loop().run_in_executor(
+    #
+    # submit_cancellable() registers `cancel_token` in bounded()'s active scope
+    # and hands back the SAME token object (since one is passed in here) --
+    # the lambda below closes over it directly, so signalling either the
+    # returned token or this one stops the same detector.
+    future, _ = submit_cancellable(
         get_analytics_executor(),
         lambda: DuplicateCodeDetector(
             project_root=project_root,
             min_similarity=min_similarity,
             cancel_token=cancel_token,
         ).run_analysis(),
+        operation="duplicate_detection",
+        cancel_token=cancel_token,
     )
+    _duplicate_scan_cancel = cancel_token
     try:
         analysis = await asyncio.wait_for(asyncio.shield(future), timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
         _duplicate_scan_lock.release()
@@ -131,7 +148,11 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     except asyncio.TimeoutError:
         # The executor thread survives this cancellation — signal it to stop, or
         # it keeps scanning for a result that is already discarded (#12779).
-        cancel_token.set()
+        signal_cancel_token(
+            "duplicate_detection",
+            cancel_token,
+            f"exceeded its {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s deadline",
+        )
         # #13602: hold the lock until that thread actually exits. Releasing it
         # here let the next poll queue a second full scan while the first was
         # still running, so abandoned scans stacked up — the accumulation #12779
@@ -152,7 +173,7 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
         # thread. That is the accumulation both #12779 and this change exist to
         # close, reachable via uvicorn graceful shutdown and via any outer
         # deadline tighter than this one. Same treatment as a timeout.
-        cancel_token.set()
+        signal_cancel_token("duplicate_detection", cancel_token, "cancelled before its own deadline")
         future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
         released = True
         logger.warning("Duplicate detection cancelled — signalled the orphaned scan to stop")

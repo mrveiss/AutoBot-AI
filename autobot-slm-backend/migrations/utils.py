@@ -98,6 +98,14 @@ def deferrals() -> list:
     return list(_DEFERRED)
 
 
+def defer(item: str) -> None:
+    """Record a skipped operation for migrations that don't go through
+    add_column_if_not_exists / create_index_if_not_exists (which already
+    record their own deferrals internally) — e.g. a seed migration whose
+    target table is absent. See #14300."""
+    _DEFERRED.append(item)
+
+
 def add_column_if_not_exists(
     cursor,
     table_name: str,

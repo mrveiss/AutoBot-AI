@@ -10,6 +10,7 @@ Ensures all log/data writes use consistent, configurable paths.
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import require_path_string
 from config import unified_config_manager
 from type_defs.common import Metadata
 
@@ -75,30 +76,42 @@ class PathsManager:
 
     @staticmethod
     def get_log_path(log_name: str) -> Path:
-        """Get path for a specific log file"""
+        """Get path for a specific log file.
+
+        Issue #14217: a config value that resolves to a non-string (a
+        malformed setting, or an unconfigured mock in tests) is rejected
+        loudly here rather than handed to ``Path()``, which never raises
+        and would silently turn it into a real, creatable directory tree.
+        """
         paths = PathsManager.get_paths()
         logs_config = paths.get("logs", {})
 
         # Check if specific log path is configured
         if log_name in logs_config:
-            return Path(logs_config[log_name])
+            configured = require_path_string(logs_config[log_name], context=f"paths.logs.{log_name}")
+            return Path(configured)
 
         # Fall back to logs directory + filename
-        logs_dir = logs_config.get("directory", "logs")
+        logs_dir = require_path_string(logs_config.get("directory", "logs"), context="paths.logs.directory")
         return Path(logs_dir) / f"{log_name}.log"
 
     @staticmethod
     def get_data_path(data_name: str) -> Path:
-        """Get path for a specific data file"""
+        """Get path for a specific data file.
+
+        Issue #14217: same boundary check as :meth:`get_log_path` — reject
+        a non-string config value instead of normalising it into a path.
+        """
         paths = PathsManager.get_paths()
         data_config = paths.get("data", {})
 
         # Check if specific data path is configured
         if data_name in data_config:
-            return Path(data_config[data_name])
+            configured = require_path_string(data_config[data_name], context=f"paths.data.{data_name}")
+            return Path(configured)
 
         # Fall back to data directory + filename
-        data_dir = data_config.get("directory", "data")
+        data_dir = require_path_string(data_config.get("directory", "data"), context="paths.data.directory")
         return Path(data_dir) / data_name
 
     @staticmethod
@@ -106,7 +119,7 @@ class PathsManager:
         """Get the main logs directory"""
         paths = PathsManager.get_paths()
         logs_config = paths.get("logs", {})
-        logs_dir = logs_config.get("directory", "logs")
+        logs_dir = require_path_string(logs_config.get("directory", "logs"), context="paths.logs.directory")
         return Path(logs_dir)
 
     @staticmethod
@@ -114,7 +127,7 @@ class PathsManager:
         """Get the main data directory"""
         paths = PathsManager.get_paths()
         data_config = paths.get("data", {})
-        data_dir = data_config.get("directory", "data")
+        data_dir = require_path_string(data_config.get("directory", "data"), context="paths.data.directory")
         return Path(data_dir)
 
     @staticmethod
@@ -122,7 +135,7 @@ class PathsManager:
         """Get the static files directory"""
         paths = PathsManager.get_paths()
         static_config = paths.get("static", {})
-        static_dir = static_config.get("directory", "static")
+        static_dir = require_path_string(static_config.get("directory", "static"), context="paths.static.directory")
         return Path(static_dir)
 
     @staticmethod
@@ -130,7 +143,7 @@ class PathsManager:
         """Get the configuration directory"""
         paths = PathsManager.get_paths()
         config_config = paths.get("config", {})
-        config_dir = config_config.get("directory", "config")
+        config_dir = require_path_string(config_config.get("directory", "config"), context="paths.config.directory")
         return Path(config_dir)
 
     @staticmethod
@@ -152,7 +165,7 @@ class PathsManager:
             audit_log_file = backend_config.get("audit_log_file")
 
             if audit_log_file:
-                return Path(audit_log_file)
+                return Path(require_path_string(audit_log_file, context="backend.audit_log_file"))
 
             # Fall back to paths configuration
             return PathsManager.get_log_path("audit")
@@ -170,7 +183,7 @@ class PathsManager:
             chat_data_dir = backend_config.get("chat_data_dir")
 
             if chat_data_dir:
-                return Path(chat_data_dir)
+                return Path(require_path_string(chat_data_dir, context="backend.chat_data_dir"))
 
             # Fall back to paths configuration
             return PathsManager.get_data_path("chats")
@@ -188,7 +201,7 @@ class PathsManager:
             chat_history_file = backend_config.get("chat_history_file")
 
             if chat_history_file:
-                return Path(chat_history_file)
+                return Path(require_path_string(chat_history_file, context="backend.chat_history_file"))
 
             # Fall back to paths configuration
             return PathsManager.get_data_path("chat_history.json")
@@ -206,7 +219,7 @@ class PathsManager:
             knowledge_base_db = backend_config.get("knowledge_base_db")
 
             if knowledge_base_db:
-                return Path(knowledge_base_db)
+                return Path(require_path_string(knowledge_base_db, context="backend.knowledge_base_db"))
 
             # Fall back to paths configuration
             return PathsManager.get_data_path("knowledge_base.db")
@@ -224,7 +237,7 @@ class PathsManager:
             reliability_stats_file = backend_config.get("reliability_stats_file")
 
             if reliability_stats_file:
-                return Path(reliability_stats_file)
+                return Path(require_path_string(reliability_stats_file, context="backend.reliability_stats_file"))
 
             # Fall back to paths configuration
             return PathsManager.get_data_path("reliability_stats.json")
@@ -243,7 +256,7 @@ class PathsManager:
             chromadb_path = chromadb_config.get("path")
 
             if chromadb_path:
-                return Path(chromadb_path)
+                return Path(require_path_string(chromadb_path, context="memory.chromadb.path"))
 
             # Fall back to paths configuration
             return PathsManager.get_data_path("chromadb")

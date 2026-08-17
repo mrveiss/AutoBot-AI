@@ -6,7 +6,12 @@
 # VNC Role - Default variables (override via env vars or playbook)
 ---
 # VNC server settings - all from environment or playbook variables
-vnc_user: "{{ lookup('env', 'VNC_USER') | default('autobot', true) }}"
+# #14314: VNC_USER is canonical — this is the canonical vnc implementation
+# (autobot-infrastructure/shared/scripts/utilities/fix-vnc-desktop.sh and
+# fix-vnc-wsl.sh resolve the same variable). AUTOBOT_VNC_USER remains a
+# deprecated alias for one release, since an existing host may already have
+# only it set; VNC_USER always wins when both are present.
+vnc_user: "{{ lookup('env', 'VNC_USER') or lookup('env', 'AUTOBOT_VNC_USER') | default('autobot', true) }}"
 vnc_group: "{{ lookup('env', 'VNC_GROUP') | default('autobot', true) }}"
 vnc_display: "{{ lookup('env', 'VNC_DISPLAY') | default('1', true) }}"
 vnc_geometry: "{{ lookup('env', 'VNC_GEOMETRY') | default('1920x1080', true) }}"
