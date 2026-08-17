@@ -10,8 +10,10 @@ alert rules, and Prometheus-compatible metrics export.
 Issue #752 - Comprehensive Performance Monitoring.
 """
 
+import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -22,6 +24,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from config import settings
 from models.database import AlertRule, Node, PerformanceTrace, SLODefinition, TraceSpan
 from services.auth import get_current_user
 from services.database import get_db
@@ -353,25 +356,128 @@ async def _calculate_slo_compliance(db: AsyncSession, slo: SLODefinition) -> flo
     return (compliant / len(traces)) * 100
 
 
+# #14361: fixed, bounded histogram buckets (milliseconds) for
+# autobot_trace_duration_ms. Series count is a function of this tuple times
+# the (small, bounded) set of trace statuses — never of how many traces
+# exist. Matches the fixed-bucket convention used for
+# autobot_operation_duration_seconds (autobot_shared/monitoring/prometheus_metrics.py).
+_TRACE_DURATION_BUCKETS_MS: tuple[float, ...] = (
+    10.0,
+    50.0,
+    100.0,
+    250.0,
+    500.0,
+    1000.0,
+    2500.0,
+    5000.0,
+    10000.0,
+    30000.0,
+)
+
+
 def _generate_prometheus_metrics(traces: List[PerformanceTrace], slos: List[SLODefinition]) -> str:
-    """Generate Prometheus text format. Helper for performance.py (Issue #752)."""
+    """Generate Prometheus text format. Helper for performance.py (Issue #752).
+
+    #14361: `trace_id` used to be a label on this metric, so every request
+    produced a brand-new time series that Prometheus retained forever —
+    unbounded cardinality. Replaced with a real histogram bucketed by
+    duration_ms and labeled only by `status`, a small, bounded set.
+
+    Per-request correlation is preserved as a structured log field
+    (trace_id/status/duration_ms) instead of a label, and remains fully
+    queryable through the authenticated GET /performance/traces and
+    GET /performance/traces/{trace_id} routes below.
+    """
     lines = []
     lines.append("# HELP autobot_trace_duration_ms Trace duration in milliseconds")
     lines.append("# TYPE autobot_trace_duration_ms histogram")
 
-    for trace in traces[:100]:
-        labels = f'{{trace_id="{trace.trace_id}",status="{trace.status}"}}'
-        lines.append(f"autobot_trace_duration_ms{labels} {trace.duration_ms}")
+    durations_by_status: Dict[str, List[float]] = {}
+    for trace in traces:
+        # Correlation capability preserved via structured logs rather than a
+        # per-request Prometheus label (#14361).
+        logger.debug(
+            "Trace duration observed for Prometheus histogram",
+            extra={
+                "trace_id": trace.trace_id,
+                "status": trace.status,
+                "duration_ms": trace.duration_ms,
+            },
+        )
+        durations_by_status.setdefault(trace.status, []).append(trace.duration_ms)
+
+    for trace_status in sorted(durations_by_status):
+        durations = durations_by_status[trace_status]
+        for bucket in _TRACE_DURATION_BUCKETS_MS:
+            cumulative = sum(1 for d in durations if d <= bucket)
+            labels = f'{{status="{trace_status}",le="{bucket}"}}'
+            lines.append(f"autobot_trace_duration_ms_bucket{labels} {cumulative}")
+        labels_inf = f'{{status="{trace_status}",le="+Inf"}}'
+        lines.append(f"autobot_trace_duration_ms_bucket{labels_inf} {len(durations)}")
+        status_labels = f'{{status="{trace_status}"}}'
+        lines.append(f"autobot_trace_duration_ms_sum{status_labels} {sum(durations)}")
+        lines.append(f"autobot_trace_duration_ms_count{status_labels} {len(durations)}")
 
     lines.append("# HELP autobot_slo_compliance_percent SLO compliance percentage")
     lines.append("# TYPE autobot_slo_compliance_percent gauge")
 
     for slo in slos:
-        if slo.enabled:
-            labels = f'{{slo_id="{slo.slo_id}",name="{slo.name}"}}'
-            lines.append(f"autobot_slo_compliance_percent{labels} 0")
+        labels = f'{{slo_id="{slo.slo_id}",name="{slo.name}"}}'
+        lines.append(f"autobot_slo_compliance_percent{labels} 0")
 
     return "\n".join(lines)
+
+
+class _MetricsCache:
+    """Tiny single-entry TTL cache for the rendered Prometheus text (#14362).
+
+    A dedicated instance (not raw module globals) so tests can construct
+    their own cache and assert on it without touching process-wide state.
+    """
+
+    __slots__ = ("text", "expires_at", "lock")
+
+    def __init__(self) -> None:
+        self.text: str | None = None
+        self.expires_at: float = 0.0
+        self.lock = asyncio.Lock()
+
+
+_metrics_cache = _MetricsCache()
+
+
+async def _get_prometheus_metrics_text(db: AsyncSession, cache: "_MetricsCache" = _metrics_cache) -> str:
+    """Return rendered Prometheus text, querying the DB at most once per TTL.
+
+    #14362: this route is intentionally unauthenticated (Prometheus cannot
+    authenticate, #14339), so nothing app-level rate-limits it and the nginx
+    `limit_req` zone does not apply — Prometheus scrapes this port directly.
+    Both queries are now bounded (LIMIT on traces, `enabled` filter pushed
+    into SQL for SLOs) and the assembled text is cached for
+    `settings.metrics_cache_ttl_seconds`, so work per scrape stays bounded
+    regardless of table size or how often the endpoint is hit.
+    """
+    now = time.monotonic()
+    async with cache.lock:
+        if cache.text is not None and now < cache.expires_at:
+            return cache.text
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        traces_result = await db.execute(
+            select(PerformanceTrace)
+            .where(PerformanceTrace.created_at >= cutoff)
+            .order_by(desc(PerformanceTrace.created_at))
+            .limit(settings.metrics_max_traces)
+        )
+        traces = traces_result.scalars().all()
+
+        slos_result = await db.execute(select(SLODefinition).where(SLODefinition.enabled.is_(True)))
+        slos = slos_result.scalars().all()
+
+        text = _generate_prometheus_metrics(traces, slos)
+        cache.text = text
+        cache.expires_at = now + settings.metrics_cache_ttl_seconds
+        return text
 
 
 def _build_empty_overview() -> PerformanceOverviewResponse:
@@ -722,13 +828,11 @@ async def get_node_metrics(
 async def get_prometheus_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    """Export metrics in Prometheus text format."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-    traces_result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff))
-    traces = traces_result.scalars().all()
+    """Export metrics in Prometheus text format.
 
-    slos_result = await db.execute(select(SLODefinition))
-    slos = slos_result.scalars().all()
-
-    metrics_text = _generate_prometheus_metrics(traces, slos)
+    #14362: query cost is bounded (LIMIT + short TTL cache) rather than
+    scaling with table size or scrape frequency. #14361: no per-request
+    label is emitted — see `_generate_prometheus_metrics`.
+    """
+    metrics_text = await _get_prometheus_metrics_text(db)
     return Response(content=metrics_text, media_type="text/plain")

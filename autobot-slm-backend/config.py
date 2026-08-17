@@ -269,6 +269,24 @@ class Settings(RedactedReprMixin, BaseSettings):
     # When absent the RBAC middleware falls back to an in-process dict cache.
     redis_url: Optional[str] = os.getenv("SLM_REDIS_URL")
 
+    # #14362: bound the Prometheus scrape handler's DB work.
+    #
+    # `metrics_max_traces` caps how many PerformanceTrace rows the
+    # /performance/metrics/prometheus handler fetches for the last hour —
+    # previously it fetched every row unconditionally and only sliced the
+    # *output* to 100, so the query cost still scaled with table size.
+    #
+    # `metrics_cache_ttl_seconds` bounds how often that query (and the
+    # SLODefinition query) can run at all: the rendered text is cached for
+    # this many seconds. Deliberately shorter than a real scrape interval —
+    # the ansible monitoring role default is 15s
+    # (ansible/roles/monitoring/defaults/main.yml:prometheus_scrape_interval)
+    # — so a genuine scrape always observes fresh data; only overlapping
+    # calls inside the same interval (duplicate scrape configs, retries,
+    # manual checks) reuse the cached result instead of re-querying.
+    metrics_max_traces: int = int(os.getenv("SLM_METRICS_MAX_TRACES", "100"))
+    metrics_cache_ttl_seconds: float = float(os.getenv("SLM_METRICS_CACHE_TTL_SECONDS", "5"))
+
     def _keys_file_path(self) -> Path:
         """Return the path to the persisted-keys file inside data_dir.
 
