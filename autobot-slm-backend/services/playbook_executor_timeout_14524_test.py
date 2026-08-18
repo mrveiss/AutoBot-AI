@@ -141,7 +141,7 @@ def test_run_subprocess_without_timeout_is_unaffected():
     assert "hello-14524" in result["output"]
 
 
-def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failure():
+def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failure(monkeypatch, tmp_path):
     """The core fix, exercised behaviourally (#14524). Case A of three (see
     `_kill_process_group`'s two siblings below for Case B and C -- review,
     round 2, found and fixed fail-open shapes in those, not this one).
@@ -160,13 +160,10 @@ def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failur
     # Short grace period so a SIGTERM-ignoring child escalates to SIGKILL
     # quickly -- this test must not itself take anywhere near the real
     # AUTOBOT_PLAYBOOK_KILL_GRACE_S default (5s) times two signal rounds.
-    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
-    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+    monkeypatch.setattr(playbook_executor, "PLAYBOOK_KILL_GRACE_S", 0.3)
 
-    pid_dir = Path(f"/tmp/playbook_executor_14524_test_{os.getpid()}")
-    pid_dir.mkdir(exist_ok=True)
-    parent_pid_file = pid_dir / "parent.pid"
-    child_pid_file = pid_dir / "child.pid"
+    parent_pid_file = tmp_path / "parent.pid"
+    child_pid_file = tmp_path / "child.pid"
 
     script = (
         "trap '' TERM\n"
@@ -185,36 +182,30 @@ def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failur
             timeout_s=0.5,
         )
 
-    try:
-        started = time.monotonic()
-        result = asyncio.run(_go())
-        elapsed = time.monotonic() - started
+    started = time.monotonic()
+    result = asyncio.run(_go())
+    elapsed = time.monotonic() - started
 
-        assert result["timed_out"] is True
-        assert result["returncode"] != 0
-        # Bounded: timeout (0.5s) + at most two kill-grace windows (0.3s each),
-        # with headroom for scheduling jitter -- never anywhere near the 30s
-        # the hung sleep asked for.
-        assert elapsed < 5, f"a timed-out run must return promptly, took {elapsed:.1f}s"
+    assert result["timed_out"] is True
+    assert result["returncode"] != 0
+    # Bounded: timeout (0.5s) + at most two kill-grace windows (0.3s each),
+    # with headroom for scheduling jitter -- never anywhere near the 30s
+    # the hung sleep asked for.
+    assert elapsed < 5, f"a timed-out run must return promptly, took {elapsed:.1f}s"
 
-        for _ in range(100):
-            if parent_pid_file.exists() and child_pid_file.exists():
-                break
-            time.sleep(0.02)
-        parent_pid = int(parent_pid_file.read_text().strip())
-        child_pid = int(child_pid_file.read_text().strip())
+    for _ in range(100):
+        if parent_pid_file.exists() and child_pid_file.exists():
+            break
+        time.sleep(0.02)
+    parent_pid = int(parent_pid_file.read_text().strip())
+    child_pid = int(child_pid_file.read_text().strip())
 
-        assert _wait_until_dead(
-            parent_pid, timeout_s=3
-        ), "the direct child (ansible-playbook stand-in) survived the timeout"
-        assert _wait_until_dead(
-            child_pid, timeout_s=3
-        ), "the grandchild (ssh-session stand-in) survived the timeout -- exactly the orphan this fix exists to prevent"
-    finally:
-        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
-        for f in (parent_pid_file, child_pid_file):
-            f.unlink(missing_ok=True)
-        pid_dir.rmdir()
+    assert _wait_until_dead(
+        parent_pid, timeout_s=3
+    ), "the direct child (ansible-playbook stand-in) survived the timeout"
+    assert _wait_until_dead(
+        child_pid, timeout_s=3
+    ), "the grandchild (ssh-session stand-in) survived the timeout -- exactly the orphan this fix exists to prevent"
 
 
 def test_kill_process_group_is_a_noop_on_an_already_exited_process():
@@ -236,16 +227,15 @@ def test_kill_process_group_is_a_noop_on_an_already_exited_process():
 
 
 def _spawn_group(executor, script: str, pid_dir: Path):
-    """Spawn *script* via `_run_subprocess`'s own spawn path and return (process, pid_dir).
+    """Spawn *script* via `_run_subprocess`'s own spawn path and return the process.
 
     Shared by the Case B/C tests below. Uses `asyncio.create_subprocess_exec`
     directly with `start_new_session=True` -- the same flag `_run_subprocess`
     passes -- so `_kill_process_group` is exercised exactly as it runs in
     production, without also going through the timeout/streaming machinery
-    Case A already covers.
+    Case A already covers. `pid_dir` is always a fresh `tmp_path`, so unlike
+    an earlier version of this helper there is no stale-file cleanup to do.
     """
-    for stale in ("leader.pid", "sibling.pid"):
-        (pid_dir / stale).unlink(missing_ok=True)
     return asyncio.create_subprocess_exec(
         "/bin/bash",
         "-c",
@@ -266,7 +256,7 @@ async def _read_group_pids(pid_dir: Path) -> tuple[int, int]:
     return leader_pid, sibling_pid
 
 
-def test_kill_process_group_handles_a_leader_already_reaped_before_a_sibling_dies():
+def test_kill_process_group_handles_a_leader_already_reaped_before_a_sibling_dies(monkeypatch, tmp_path):
     """Case B (#14524 review, round 2): the direct pid is ALREADY GONE when
     `_kill_process_group` is called, while a SIBLING in the same group is
     still alive -- the only way an ATTACHED run wedges after ansible itself
@@ -284,41 +274,32 @@ def test_kill_process_group_handles_a_leader_already_reaped_before_a_sibling_die
     leader itself still exists.
     """
     executor = playbook_executor.PlaybookExecutor()
-    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
-    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+    monkeypatch.setattr(playbook_executor, "PLAYBOOK_KILL_GRACE_S", 0.3)
 
-    pid_dir = Path(f"/tmp/playbook_executor_14524_caseb_{os.getpid()}")
-    pid_dir.mkdir(exist_ok=True)
     # Leader backgrounds a TERM-ignoring subshell, then exits immediately --
     # reaped almost instantly, well before any signal is ever sent to it.
     script = (
-        f"echo $$ > {pid_dir}/leader.pid\n"
-        f"(trap '' TERM; echo $BASHPID > {pid_dir}/sibling.pid; sleep 30) &\n"
+        f"echo $$ > {tmp_path}/leader.pid\n"
+        f"(trap '' TERM; echo $BASHPID > {tmp_path}/sibling.pid; sleep 30) &\n"
         "disown\n"
         "exit 0\n"
     )
 
     async def _go():
-        process = await _spawn_group(executor, script, pid_dir)
-        leader_pid, sibling_pid = await _read_group_pids(pid_dir)
+        process = await _spawn_group(executor, script, tmp_path)
+        leader_pid, sibling_pid = await _read_group_pids(tmp_path)
         await process.wait()  # force-reap the leader BEFORE the kill call
         await executor._kill_process_group(process)
         return leader_pid, sibling_pid
 
-    try:
-        leader_pid, sibling_pid = asyncio.run(_go())
-        assert _wait_until_dead(leader_pid, timeout_s=2), "leader was expected to already be reaped"
-        assert _wait_until_dead(
-            sibling_pid, timeout_s=3
-        ), "Case B: a sibling surviving the leader's own exit must still be killed"
-    finally:
-        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
-        for f in ("leader.pid", "sibling.pid"):
-            (pid_dir / f).unlink(missing_ok=True)
-        pid_dir.rmdir()
+    leader_pid, sibling_pid = asyncio.run(_go())
+    assert _wait_until_dead(leader_pid, timeout_s=2), "leader was expected to already be reaped"
+    assert _wait_until_dead(
+        sibling_pid, timeout_s=3
+    ), "Case B: a sibling surviving the leader's own exit must still be killed"
 
 
-def test_kill_process_group_handles_a_leader_dying_on_sigterm_before_a_sibling_does():
+def test_kill_process_group_handles_a_leader_dying_on_sigterm_before_a_sibling_does(monkeypatch, tmp_path):
     """Case C (#14524 review, round 2): the direct child dies on the FIRST
     SIGTERM (it does not trap it) while a sibling in the same group ignores
     that same signal and keeps running.
@@ -331,39 +312,30 @@ def test_kill_process_group_handles_a_leader_dying_on_sigterm_before_a_sibling_d
     reaping the leader, not the one pid `asyncio` tracks.
     """
     executor = playbook_executor.PlaybookExecutor()
-    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
-    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+    monkeypatch.setattr(playbook_executor, "PLAYBOOK_KILL_GRACE_S", 0.3)
 
-    pid_dir = Path(f"/tmp/playbook_executor_14524_casec_{os.getpid()}")
-    pid_dir.mkdir(exist_ok=True)
     # Leader does NOT trap TERM (dies on the first signal); its backgrounded
     # subshell DOES, and keeps running until SIGKILL reaches the group.
     script = (
-        f"echo $$ > {pid_dir}/leader.pid\n"
-        f"(trap '' TERM; echo $BASHPID > {pid_dir}/sibling.pid; sleep 30) &\n"
+        f"echo $$ > {tmp_path}/leader.pid\n"
+        f"(trap '' TERM; echo $BASHPID > {tmp_path}/sibling.pid; sleep 30) &\n"
         "wait\n"
     )
 
     async def _go():
-        process = await _spawn_group(executor, script, pid_dir)
-        leader_pid, sibling_pid = await _read_group_pids(pid_dir)
+        process = await _spawn_group(executor, script, tmp_path)
+        leader_pid, sibling_pid = await _read_group_pids(tmp_path)
         await executor._kill_process_group(process)
         return leader_pid, sibling_pid
 
-    try:
-        leader_pid, sibling_pid = asyncio.run(_go())
-        assert _wait_until_dead(leader_pid, timeout_s=2)
-        assert _wait_until_dead(
-            sibling_pid, timeout_s=3
-        ), "Case C: a sibling outliving the leader's own SIGTERM death must still get SIGKILL"
-    finally:
-        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
-        for f in ("leader.pid", "sibling.pid"):
-            (pid_dir / f).unlink(missing_ok=True)
-        pid_dir.rmdir()
+    leader_pid, sibling_pid = asyncio.run(_go())
+    assert _wait_until_dead(leader_pid, timeout_s=2)
+    assert _wait_until_dead(
+        sibling_pid, timeout_s=3
+    ), "Case C: a sibling outliving the leader's own SIGTERM death must still get SIGKILL"
 
 
-def test_run_git_kills_a_hung_git_via_the_process_group(tmp_path):
+def test_run_git_kills_a_hung_git_via_the_process_group(monkeypatch, tmp_path):
     """`_update_code_source`'s own git subcommands, hardened the same way (#14524 round 2).
 
     A lone `proc.kill()` (the pre-fix shape) reaches only git's own pid; a
@@ -380,10 +352,8 @@ def test_run_git_kills_a_hung_git_via_the_process_group(tmp_path):
     would survive. Post-fix both die and `_run_git` returns -1 promptly.
     """
     executor = playbook_executor.PlaybookExecutor()
-    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
-    original_git_timeout = playbook_executor.GIT_COMMAND_TIMEOUT_S
-    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
-    playbook_executor.GIT_COMMAND_TIMEOUT_S = 0.3
+    monkeypatch.setattr(playbook_executor, "PLAYBOOK_KILL_GRACE_S", 0.3)
+    monkeypatch.setattr(playbook_executor, "GIT_COMMAND_TIMEOUT_S", 0.3)
 
     fake_bin_dir = tmp_path / "fakebin"
     fake_bin_dir.mkdir()
@@ -400,31 +370,154 @@ def test_run_git_kills_a_hung_git_via_the_process_group(tmp_path):
     )
     fake_git.chmod(0o755)
 
-    original_path = os.environ.get("PATH", "")
-    os.environ["PATH"] = f"{fake_bin_dir}:{original_path}"
+    monkeypatch.setenv("PATH", f"{fake_bin_dir}:{os.environ.get('PATH', '')}")
 
     async def _go():
         return await executor._run_git(tmp_path, "fetch", "origin")
 
+    started = time.monotonic()
+    returncode = asyncio.run(_go())
+    elapsed = time.monotonic() - started
+
+    assert returncode == -1, "a killed git command must report a non-zero, non-crash returncode"
+    assert elapsed < 5, f"a timed-out git command must return promptly, took {elapsed:.1f}s"
+
+    for _ in range(100):
+        if leader_pid_file.exists() and sibling_pid_file.exists():
+            break
+        time.sleep(0.02)
+    leader_pid = int(leader_pid_file.read_text().strip())
+    sibling_pid = int(sibling_pid_file.read_text().strip())
+    assert _wait_until_dead(leader_pid, timeout_s=2), "the fake git process itself survived its own timeout"
+    assert _wait_until_dead(
+        sibling_pid, timeout_s=3
+    ), "a surviving child of a killed git command is exactly the orphan this fix exists to prevent"
+
+
+def _executor_with_fake_code_source(tmp_path: Path) -> "playbook_executor.PlaybookExecutor":
+    """A PlaybookExecutor whose code_source_dir (ansible_dir.parent.parent) has a `.git` dir.
+
+    Shared by the _update_code_source return-value tests below -- lets
+    `_update_code_source` past its early "no .git -- skipping" return
+    (itself always `True`, tested separately) without a real git checkout.
+    """
+    code_source_dir = tmp_path / "code_source"
+    (code_source_dir / ".git").mkdir(parents=True)
+    ansible_dir = code_source_dir / "autobot-slm-backend" / "ansible"
+    ansible_dir.mkdir(parents=True)
+    return playbook_executor.PlaybookExecutor(ansible_dir=ansible_dir)
+
+
+def test_update_code_source_returns_true_when_no_git_dir_present():
+    """Dev-mode / no code_source checkout: nothing to sync is success, not failure."""
+    executor = playbook_executor.PlaybookExecutor(ansible_dir=Path("/nonexistent/ansible"))
+    assert asyncio.run(executor._update_code_source()) is True
+
+
+def test_update_code_source_returns_true_when_every_git_step_succeeds(tmp_path):
+    """Discriminates against a pre-#14524-round-3 regression: `_update_code_source`
+    used to return `None` (discarded at the call site) -- `is True`, not
+    merely falsy, proves this is the NEW, real boolean contract.
+    """
+    executor = _executor_with_fake_code_source(tmp_path)
+
+    async def _ok(*_args, **_kwargs):
+        return 0
+
+    async def _noop_log(*_args, **_kwargs):
+        return None
+
+    executor._run_git = _ok
+    executor._log_updated_head_commit = _noop_log
+
+    assert asyncio.run(executor._update_code_source()) is True
+
+
+def test_update_code_source_returns_false_when_fetch_fails(tmp_path):
+    """`_run_git` returning non-zero for `fetch` must fail the WHOLE sync --
+    the pre-round-3 code already `return`ed early here, but discarded that
+    at the `execute_playbook` call site. This test covers the return VALUE;
+    `test_execute_playbook_refuses_detached_run_on_sync_failure` below covers
+    the caller actually using it.
+    """
+    executor = _executor_with_fake_code_source(tmp_path)
+
+    async def _run_git(_code_source_dir, *args, **_kwargs):
+        return 0 if args[0] == "checkout" else 1  # fetch (and reset) fail
+
+    executor._run_git = _run_git
+
+    assert asyncio.run(executor._update_code_source()) is False
+
+
+def test_update_code_source_returns_false_when_only_checkout_fails(tmp_path):
+    """A checkout failure alone does not early-return (fetch/reset still run,
+    matching the pre-existing "continuing" log message), but must still make
+    the overall result `False` -- the original code tracked this nowhere.
+    """
+    executor = _executor_with_fake_code_source(tmp_path)
+
+    async def _run_git(_code_source_dir, *args, **_kwargs):
+        return 1 if args[0] == "checkout" else 0
+
+    async def _noop_log(*_args, **_kwargs):
+        return None
+
+    executor._run_git = _run_git
+    executor._log_updated_head_commit = _noop_log
+
+    assert asyncio.run(executor._update_code_source()) is False
+
+
+def test_execute_playbook_refuses_detached_run_on_sync_failure():
+    """The second real defect from review round 2: a failed/timed-out code_source
+    sync used to be silently discarded, so `execute_playbook` deployed
+    whatever revision code_source held and could return `success: True` --
+    a SILENT STALE DEPLOY on the self-update (`detach=True`) path, worse
+    than the hang this issue fixes because it is invisible.
+
+    Discriminates: the nonexistent playbook name would raise `FileNotFoundError`
+    from the very next line if execution reached it -- this test asserts it
+    does NOT (the sync-failure return fires first), which fails loudly
+    (wrong exception, not silently) against pre-round-3 code, where
+    `_update_code_source`'s result was discarded and this early return did
+    not exist at all.
+    """
+    executor = playbook_executor.PlaybookExecutor()
+
+    async def _sync_failed():
+        return False
+
+    executor._update_code_source = _sync_failed
+
+    result = asyncio.run(executor.execute_playbook("definitely-does-not-exist.yml", detach=True))
+
+    assert result["success"] is False
+    assert result["timed_out"] is False
+    assert "sync failed" in result["output"]
+
+
+def test_execute_playbook_continues_non_detached_despite_sync_failure():
+    """The ordinary per-role/per-node restart path must keep its original
+    best-effort behaviour -- `manage-service.yml` barely depends on
+    code_source being current, and refusing every restart because of a
+    transient git hiccup would be a regression in the other direction.
+
+    Discriminates the ATTACHED-path branch specifically: proven by reaching
+    the FileNotFoundError the very next line raises, rather than the
+    sync-failure dict the detached branch returns instead.
+    """
+    executor = playbook_executor.PlaybookExecutor()
+
+    async def _sync_failed():
+        return False
+
+    executor._update_code_source = _sync_failed
+
     try:
-        started = time.monotonic()
-        returncode = asyncio.run(_go())
-        elapsed = time.monotonic() - started
+        asyncio.run(executor.execute_playbook("definitely-does-not-exist.yml", detach=False))
+        raised = False
+    except FileNotFoundError:
+        raised = True
 
-        assert returncode == -1, "a killed git command must report a non-zero, non-crash returncode"
-        assert elapsed < 5, f"a timed-out git command must return promptly, took {elapsed:.1f}s"
-
-        for _ in range(100):
-            if leader_pid_file.exists() and sibling_pid_file.exists():
-                break
-            time.sleep(0.02)
-        leader_pid = int(leader_pid_file.read_text().strip())
-        sibling_pid = int(sibling_pid_file.read_text().strip())
-        assert _wait_until_dead(leader_pid, timeout_s=2), "the fake git process itself survived its own timeout"
-        assert _wait_until_dead(
-            sibling_pid, timeout_s=3
-        ), "a surviving child of a killed git command is exactly the orphan this fix exists to prevent"
-    finally:
-        os.environ["PATH"] = original_path
-        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
-        playbook_executor.GIT_COMMAND_TIMEOUT_S = original_git_timeout
+    assert raised, "a non-detached run must still proceed past a sync failure to the playbook-exists check"

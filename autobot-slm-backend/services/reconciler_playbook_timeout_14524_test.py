@@ -7,13 +7,17 @@
 Three things this covers, each with its own discriminating test:
 
 1. The escalation floor (`_effective_tracker_expiry_s`) now folds in
-   `REMEDIATION_PLAYBOOK_TIMEOUT_S`. Pre-#14524 the margin was
+   `REMEDIATION_PLAYBOOK_TIMEOUT_S` AND `_update_code_source_worst_case_s()`
+   (review, round 3 -- `execute_playbook` runs `_update_code_source()` before
+   `_run_subprocess`, as part of the SAME attempt). Pre-#14524 the margin was
    `max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)`; the playbook run
-   itself was unbounded and simply never appeared in the formula at all. Post-
-   fix it is `max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S +
-   REMEDIATION_PLAYBOOK_TIMEOUT_S)` -- the two waits inside one
-   `_remediate_node` attempt are SEQUENTIAL (the ansible run, then, only if
-   it succeeded, the heartbeat poll), so their sum is the real worst case.
+   (and the git sync before it) were unbounded and simply never appeared in
+   the formula at all. Post-fix it is `max(reconcile_interval,
+   update_code_source_worst_case + REMEDIATION_HEARTBEAT_WAIT_S +
+   REMEDIATION_PLAYBOOK_TIMEOUT_S)` -- all three phases inside one
+   `_remediate_node` attempt are SEQUENTIAL (the git sync, then the ansible
+   run, then, only if it succeeded, the heartbeat poll), so their sum is the
+   real worst case.
 
 2. `_restart_service_via_ansible` must actually PASS a concrete `timeout_s`
    to `execute_playbook` -- the constant existing is not the same as it being
@@ -36,6 +40,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -70,26 +75,98 @@ def test_effective_expiry_floor_sums_heartbeat_wait_and_playbook_timeout():
     """The primary #14524 discriminator on the escalation floor.
 
     Pre-#14524: `margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)`
-    -- at the module defaults (reconcile_interval=60, HEARTBEAT_WAIT_S=90) that
-    is 90, giving a floor of 391. Post-fix: margin also folds in
-    `REMEDIATION_PLAYBOOK_TIMEOUT_S` (180 by default), giving 270 and a floor
-    of 571. Asserting the exact new value fails outright against the old
-    formula -- it would compute 391, not 571.
+    -- at the module defaults (reconcile_interval=60, HEARTBEAT_WAIT_S=90)
+    that is 90, giving a floor of 391. Post-fix (round 3): margin also folds
+    in `REMEDIATION_PLAYBOOK_TIMEOUT_S` (180) AND
+    `_update_code_source_worst_case_s()` (180 at defaults, whether read from
+    the real `playbook_executor` module or this function's own documented
+    fallback -- both agree at these defaults), giving 450 and a floor of 751.
+    Asserting the exact new value fails outright against either the
+    round-1 (391) or round-2 (571) formula -- neither computes 751.
+
+    `expected` is derived from `_update_code_source_worst_case_s()`'s ACTUAL
+    return value (not a bare 180) so this test passes whichever of the
+    fallback/real-import paths fires in a given test session -- see the two
+    dedicated tests below for which path fires when.
     """
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
     try:
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
         effective = reconciler._effective_tracker_expiry_s()
+        update_code_source_worst_case = reconciler._update_code_source_worst_case_s()
     finally:
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
-    expected = (
-        reconciler.REMEDIATION_COOLDOWN
+    single_node_attempt_ceiling_s = (
+        update_code_source_worst_case
         + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
         + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
-        + 1
     )
-    assert effective == expected, f"expected {expected} (folding in the playbook timeout), got {effective}"
+    expected = reconciler.REMEDIATION_COOLDOWN + math.ceil(single_node_attempt_ceiling_s) + 1
+    assert effective == expected, f"expected {expected}, got {effective}"
+    assert expected == 751, (
+        f"expected update_code_source_worst_case ({update_code_source_worst_case}) to still resolve to the "
+        f"documented 180s at these defaults -- got a floor of {expected}, not 751"
+    )
+
+
+def test_update_code_source_worst_case_s_falls_back_when_playbook_executor_unavailable():
+    """`services.playbook_executor` resolves to the conftest MagicMock stub in
+    this test's own session (it is derived into `_CODE_SYNC_SERVICE_MODULES`,
+    not the real-loaded allowlist) -- `_update_code_source_worst_case_s()`
+    must fall back to its documented 180.0, not silently propagate a
+    MagicMock into `_effective_tracker_expiry_s()`'s arithmetic (which would
+    raise `TypeError` one call later, not never, exactly the failure mode
+    `_effective_tracker_expiry_s`'s OWN `reconcile_interval` guard already
+    exists to avoid for a different attribute).
+    """
+    stub = sys.modules.get("services.playbook_executor")
+    assert stub is not None, "services.playbook_executor must already be stubbed by conftest"
+    # A MagicMock's attribute access always succeeds and returns another
+    # MagicMock -- confirms the PRECONDITION this test is named for, rather
+    # than assuming it.
+    assert not isinstance(stub.update_code_source_worst_case_s(), (int, float))
+
+    worst_case = reconciler._update_code_source_worst_case_s()
+    assert worst_case == 180.0, f"expected the documented fallback (180.0), got {worst_case!r}"
+
+
+def test_update_code_source_worst_case_s_reads_the_real_function_when_available():
+    """When `services.playbook_executor` IS the real module, `_update_code_source_worst_case_s()`
+    must read THROUGH to its live constants, not always return the hardcoded
+    fallback by coincidence. Proven by changing one constant on the real,
+    loaded module and confirming the returned value moves with it -- at the
+    unmodified defaults the real and fallback values are both 180.0, which
+    alone would not distinguish "read through" from "always fell back".
+    """
+    spec = importlib.util.spec_from_file_location(
+        "playbook_executor_for_worst_case_test", _SLM_ROOT / "services" / "playbook_executor.py"
+    )
+    real_playbook_executor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(real_playbook_executor)
+    assert real_playbook_executor.update_code_source_worst_case_s() == 180.0  # sanity: matches the fallback here
+
+    original_git_timeout = real_playbook_executor.GIT_COMMAND_TIMEOUT_S
+    real_playbook_executor.GIT_COMMAND_TIMEOUT_S = 999
+    original_module = sys.modules.get("services.playbook_executor")
+    sys.modules["services.playbook_executor"] = real_playbook_executor
+    try:
+        worst_case = reconciler._update_code_source_worst_case_s()
+    finally:
+        real_playbook_executor.GIT_COMMAND_TIMEOUT_S = original_git_timeout
+        if original_module is not None:
+            sys.modules["services.playbook_executor"] = original_module
+
+    assert worst_case != 180.0, "expected the raised GIT_COMMAND_TIMEOUT_S to change the computed worst case"
+    # 999 replaces 3 of the 4 GIT_COMMAND_TIMEOUT_S-bounded terms (checkout,
+    # fetch, reset -- rev-parse alone is bounded by the separate
+    # GIT_REV_PARSE_TIMEOUT_S, left untouched), each still carrying its own
+    # 4x-kill-grace worst case.
+    kill_worst_case = 4 * real_playbook_executor.PLAYBOOK_KILL_GRACE_S
+    expected_worst_case = 3 * (999 + kill_worst_case) + (
+        real_playbook_executor.GIT_REV_PARSE_TIMEOUT_S + kill_worst_case
+    )
+    assert worst_case == expected_worst_case, f"expected {expected_worst_case}, got {worst_case}"
 
 
 def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
@@ -273,28 +350,29 @@ def _gap_after_one_attempt(work_duration_s: int) -> int:
     return work_duration_s + remaining_cooldown + 60  # 60 == reconcile_interval fallback (getattr default)
 
 
-def test_escalation_reachable_at_the_shipped_default_because_the_timeout_bounds_the_run():
+def test_escalation_reachable_at_the_shipped_default_once_update_code_source_is_folded_in():
     """The actual fix for the reported "56 restarts / 0 escalations" shape, at
-    the SHIPPED default (review, round 2 -- correcting an earlier version of
-    this test's over-stated claim).
-
-    At `REMEDIATION_PLAYBOOK_TIMEOUT_S=180`, `work_duration =
-    REMEDIATION_PLAYBOOK_TIMEOUT_S + REMEDIATION_HEARTBEAT_WAIT_S = 270s`,
-    which is UNDER `REMEDIATION_COOLDOWN` (300s) -- so the resulting real gap
-    (`_gap_after_one_attempt(270)` = 360s) is already covered by the
-    PRE-#14524 margin too (floor 391s > 360s). What actually closes the
-    reported bug at these defaults is bounding `execute_playbook` AT ALL: pre-
-    #14524 that run was UNBOUNDED, so `work_duration` (and therefore the real
-    gap) could grow arbitrarily large and eventually exceed ANY finite floor,
-    no matter how it was computed. The floor formula change is a separate,
-    defensive improvement -- see the sibling test below for the scenario
-    where IT, specifically, is what matters.
+    the SHIPPED default (review round 3 -- corrects round 2's version of this
+    test, which modelled `work_duration` as `REMEDIATION_PLAYBOOK_TIMEOUT_S +
+    REMEDIATION_HEARTBEAT_WAIT_S` alone and concluded the pre-#14524 margin
+    already covered the shipped default (floor 391s > gap 360s). That
+    omitted `_update_code_source`'s own now-bounded worst case, which
+    `execute_playbook` runs as part of the SAME attempt: with it included,
+    `work_duration` is 450s (180 + 90 + 180), the real gap
+    (`_gap_after_one_attempt(450)`) is 510s, and 510 > 391 -- the PRE-#14524
+    margin does NOT cover the shipped default either, once the full attempt
+    is modelled honestly. The floor extension is load-bearing here, not
+    merely defensive -- see the sibling test below for a scenario where an
+    operator-raised timeout widens the gap further still.
     """
     service = reconciler.ReconcilerService()
     clock = _Clock(datetime.now(timezone.utc))
 
     async def _bounded_but_successful_restart(*_args, **_kwargs):
-        clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
+        # Models the WHOLE `_restart_service_via_ansible` call this stubs --
+        # execute_playbook runs _update_code_source before _run_subprocess,
+        # as part of the same attempt.
+        clock.advance(reconciler._update_code_source_worst_case_s() + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
         return True  # the run itself succeeds -- heartbeat is what never verifies
 
     async def _never_verifies(*_args, **_kwargs):
@@ -304,13 +382,23 @@ def test_escalation_reachable_at_the_shipped_default_because_the_timeout_bounds_
     service._restart_service_via_ansible = _bounded_but_successful_restart
     service._heartbeat_returned = _never_verifies
 
-    reconciler.datetime = clock
+    # Global monkeypatches (module-level `datetime`, `REMEDIATION_TRACKER_
+    # EXPIRY_S`) are set and restored ENTIRELY inside try/finally (review,
+    # round 3): an earlier version set them before `try:`, so an exception
+    # raised between the assignment and the `try` line (however unlikely
+    # today) would skip `finally` and leak a fake `datetime` into every
+    # later test in the session.
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the floor, not the 1800s default, to be binding
     try:
+        reconciler.datetime = clock
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the floor, not the 1800s default, to be binding
         db = _FakeSession()
         node = _degraded_node()
-        work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        work_duration = (
+            reconciler._update_code_source_worst_case_s()
+            + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+            + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        )
         outer_advance = _gap_after_one_attempt(work_duration) - work_duration
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
             asyncio.run(service._remediate_node(db, node))
@@ -324,32 +412,23 @@ def test_escalation_reachable_at_the_shipped_default_because_the_timeout_bounds_
     assert tracker.get("exhausted") is True, f"escalation failed at the shipped default -- got {tracker}"
 
 
-def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
-    """The scenario where the #14524 floor extension, specifically, is load-bearing.
-
-    Review, round 2: "the bump is harmless and future-proofs a raised
-    timeout, but it is not what fixes the 56/0 repro -- the timeout is."
-    Honoured here by finding the scenario where the bump DOES matter and
-    testing that one directly, instead of letting the default-value test
-    above imply credit it cannot support.
+def test_floor_extension_matters_more_once_an_operator_raises_the_playbook_timeout():
+    """A second scenario where the #14524 floor extension is load-bearing,
+    further past the shipped default than the sibling test above.
 
     `REMEDIATION_PLAYBOOK_TIMEOUT_S` is raised (in-test only) to 280 --
-    `work_duration = 280 + 90 = 370s`, over `REMEDIATION_COOLDOWN` (300s), so
-    the real gap (`_gap_after_one_attempt(370)` = 430s) exceeds the OLD
-    margin's floor (391s, `REMEDIATION_HEARTBEAT_WAIT_S` alone) -- forgiven
+    `work_duration = update_code_source_worst_case + 280 + 90 = 550s`, the
+    real gap (`_gap_after_one_attempt(550)`) is 610s, which exceeds the OLD
+    margin's floor (391s, `REMEDIATION_HEARTBEAT_WAIT_S` alone) by an even
+    wider margin than the sibling test's shipped-default scenario -- forgiven
     every cycle, escalation unreachable. The NEW margin folds in the raised
-    timeout too (floor 671s) and does not forgive.
+    timeout too (floor 851s) and does not forgive.
     """
     service = reconciler.ReconcilerService()
     clock = _Clock(datetime.now(timezone.utc))
 
-    original_playbook_timeout = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
-    reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = 280
-    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
-
     async def _slow_but_successful_restart(*_args, **_kwargs):
-        clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
+        clock.advance(reconciler._update_code_source_worst_case_s() + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
         return True
 
     async def _never_verifies(*_args, **_kwargs):
@@ -359,11 +438,20 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
     service._restart_service_via_ansible = _slow_but_successful_restart
     service._heartbeat_returned = _never_verifies
 
-    reconciler.datetime = clock
+    # See the sibling test above for why these are set INSIDE try (review, round 3).
+    original_playbook_timeout = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
     try:
+        reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = 280
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
+        reconciler.datetime = clock
         db = _FakeSession()
         node = _degraded_node()
-        work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        work_duration = (
+            reconciler._update_code_source_worst_case_s()
+            + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+            + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        )
         outer_advance = _gap_after_one_attempt(work_duration) - work_duration
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
             asyncio.run(service._remediate_node(db, node))
@@ -378,3 +466,122 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
     assert tracker.get("exhausted") is True, (
         f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
     )
+
+
+def test_launch_failed_service_remediation_sweep_does_not_block_the_caller():
+    """The finding-1-on-the-sibling-path fix (#14524, review round 3).
+
+    `_run_loop` used to `await self._remediate_failed_services()` inline --
+    fully serial with `_attempt_remediation`. A single failed
+    `ServiceCategory.AUTOBOT` unit legitimately (or via timeout) consuming a
+    meaningful fraction of `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` (2100s)
+    inflated the NODE tracker's own inter-attempt gap past
+    `_effective_tracker_expiry_s()`'s 1800s default with NO env override --
+    `_forgive_if_expired` then reset the node tracker every pass and node
+    escalation became permanently unreachable, re-entering the exact "56
+    restarts / 0 escalations" shape #14524 exists to fix, through the
+    sibling path this PR's own round-2 fix created.
+
+    `_launch_failed_service_remediation_sweep` must return control to the
+    caller WITHOUT waiting for `_remediate_failed_services()` to finish --
+    proven with an `asyncio.Event` the stub only sets partway through a
+    (simulated) long sweep; the launcher returning before that event is set
+    is the discriminator.
+    """
+    service = reconciler.ReconcilerService()
+    started = asyncio.Event()
+    may_finish = asyncio.Event()
+    finished = asyncio.Event()
+
+    async def _slow_sweep():
+        started.set()
+        await may_finish.wait()
+        finished.set()
+
+    service._remediate_failed_services = _slow_sweep
+
+    async def _go():
+        service._launch_failed_service_remediation_sweep()
+        # The launcher itself must not have awaited the sweep to completion --
+        # give the event loop one tick to let the background task actually start.
+        await asyncio.wait_for(started.wait(), timeout=1)
+        assert not finished.is_set(), "the sweep must not have completed synchronously inside the launcher"
+        may_finish.set()
+        await asyncio.wait_for(service._service_sweep_task, timeout=1)
+        assert finished.is_set()
+
+    asyncio.run(_go())
+
+
+def test_launch_failed_service_remediation_sweep_skips_overlap():
+    """Two sweeps racing the same `self._service_remediation_tracker` entries
+    would corrupt cooldown/count bookkeeping -- a second launch while the
+    first is still running must be a no-op, not a second concurrent task.
+    """
+    service = reconciler.ReconcilerService()
+    still_running = asyncio.Event()
+
+    async def _slow_sweep():
+        await still_running.wait()
+
+    service._remediate_failed_services = _slow_sweep
+
+    async def _go():
+        service._launch_failed_service_remediation_sweep()
+        first_task = service._service_sweep_task
+        await asyncio.sleep(0)  # let it actually start
+        service._launch_failed_service_remediation_sweep()
+        second_task = service._service_sweep_task
+        assert first_task is second_task, "an overlapping launch must not replace the still-running task"
+        still_running.set()
+        await asyncio.wait_for(first_task, timeout=1)
+
+    asyncio.run(_go())
+
+
+def test_launch_failed_service_remediation_sweep_relaunches_once_the_previous_one_finished():
+    """The overlap guard must not become a permanent latch -- once a sweep
+    finishes, the next reconcile tick's launch must start a NEW task.
+    """
+    service = reconciler.ReconcilerService()
+    call_count = {"n": 0}
+
+    async def _fast_sweep():
+        call_count["n"] += 1
+
+    service._remediate_failed_services = _fast_sweep
+
+    async def _go():
+        service._launch_failed_service_remediation_sweep()
+        await asyncio.wait_for(service._service_sweep_task, timeout=1)
+        first_task = service._service_sweep_task
+        service._launch_failed_service_remediation_sweep()
+        second_task = service._service_sweep_task
+        assert second_task is not first_task, "a finished sweep must not block the next tick's launch"
+        await asyncio.wait_for(second_task, timeout=1)
+
+    asyncio.run(_go())
+    assert call_count["n"] == 2
+
+
+def test_log_service_sweep_outcome_surfaces_an_exception_from_the_background_task():
+    """A fire-and-forget task's exception is otherwise swallowed silently --
+    `_run_loop`'s own broad `except Exception` no longer sees it once the
+    sweep is launched instead of awaited inline, so the done-callback must
+    surface it another way (logging here; asserted via caplog-free direct
+    call to keep this test independent of logging configuration).
+    """
+
+    async def _broken_sweep():
+        raise RuntimeError("boom")
+
+    async def _go():
+        task = asyncio.create_task(_broken_sweep())
+        try:
+            await task
+        except RuntimeError:
+            pass
+        # Must not itself raise -- this is what a done-callback is required not to do.
+        reconciler.ReconcilerService._log_service_sweep_outcome(task)
+
+    asyncio.run(_go())  # must not raise

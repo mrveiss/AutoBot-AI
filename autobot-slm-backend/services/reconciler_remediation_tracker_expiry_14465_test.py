@@ -161,28 +161,30 @@ def test_effective_expiry_survives_a_settings_stub_missing_reconcile_interval():
 
 def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
     """Confirms this genuinely reads the LIVE setting, not just falling back
-    to the pydantic default every time. `reconcile_interval=400` here is
-    larger than the default `REMEDIATION_HEARTBEAT_WAIT_S +
-    REMEDIATION_PLAYBOOK_TIMEOUT_S` (90 + 180 = 270, #14524), so it is the
-    winning term in the margin's `max()`. (Before #14524 this used 120 against
-    a 90 heartbeat-wait-only margin; the newly-bounded playbook timeout raised
-    what "larger than the other term" requires.)
+    to the pydantic default every time. `reconcile_interval=500` here is
+    larger than the default `update_code_source_worst_case +
+    REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S`
+    (180 + 90 + 180 = 450, #14524 round 3), so it is the winning term in the
+    margin's `max()`. (Before #14524 this used 120 against a 90
+    heartbeat-wait-only margin, then 400 once the playbook timeout alone was
+    folded in (round 1); folding in the now-bounded `_update_code_source`
+    too (round 3) raised what "larger than the other term" requires again.)
     """
     from types import SimpleNamespace as _SimpleNamespace
 
     original_settings = reconciler.settings
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.settings = _SimpleNamespace(reconcile_interval=400)
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
     try:
+        reconciler.settings = _SimpleNamespace(reconcile_interval=500)
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
         effective = reconciler._effective_tracker_expiry_s()
     finally:
         reconciler.settings = original_settings
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
     assert (
-        effective == reconciler.REMEDIATION_COOLDOWN + 400 + 1
-    ), f"expected the floor to be derived from reconcile_interval=400, got {effective}"
+        effective == reconciler.REMEDIATION_COOLDOWN + 500 + 1
+    ), f"expected the floor to be derived from reconcile_interval=500, got {effective}"
 
 
 def test_effective_expiry_margin_uses_heartbeat_wait_when_it_exceeds_reconcile_interval():
@@ -194,32 +196,39 @@ def test_effective_expiry_margin_uses_heartbeat_wait_when_it_exceeds_reconcile_i
     two, not the reconcile tick alone.
 
     #14524 (round 8) extended the non-reconcile_interval side of that `max()`
-    to `REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S`: within
-    one `_remediate_node` attempt the two waits are sequential (the ansible
-    run, then -- only if it succeeded -- the heartbeat poll), so their SUM is
-    the worst-case duration of a single node's own attempt, not
-    `REMEDIATION_HEARTBEAT_WAIT_S` alone.
+    to `REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S`, and
+    round 3 review (round 10 overall) extended it again to also include
+    `_update_code_source_worst_case_s()`: within one `_remediate_node`
+    attempt the git sync, the ansible run, and -- only if the run succeeded
+    -- the heartbeat poll are all sequential, so their SUM is the worst-case
+    duration of a single node's own attempt, not `REMEDIATION_HEARTBEAT_
+    WAIT_S` alone.
     """
     from types import SimpleNamespace as _SimpleNamespace
 
     original_settings = reconciler.settings
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.settings = _SimpleNamespace(reconcile_interval=30)
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
     try:
+        reconciler.settings = _SimpleNamespace(reconcile_interval=30)
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
         effective = reconciler._effective_tracker_expiry_s()
     finally:
         reconciler.settings = original_settings
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
+    import math as _math
+
     expected = (
         reconciler.REMEDIATION_COOLDOWN
-        + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
-        + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+        + _math.ceil(
+            reconciler._update_code_source_worst_case_s()
+            + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+            + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+        )
         + 1
     )
     assert effective == expected, (
-        f"expected the margin to fall back to REMEDIATION_HEARTBEAT_WAIT_S + "
+        f"expected the margin to fall back to update_code_source_worst_case + REMEDIATION_HEARTBEAT_WAIT_S + "
         f"REMEDIATION_PLAYBOOK_TIMEOUT_S ({reconciler.REMEDIATION_HEARTBEAT_WAIT_S} + "
         f"{reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S}) when it exceeds reconcile_interval (30), got {effective}"
     )
