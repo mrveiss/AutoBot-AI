@@ -23,6 +23,7 @@ from typing import Dict, List
 import psutil
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
 from autobot_shared.time_utils import utc_timestamp
 
 # App-level /health probes for services that expose engine state beyond
@@ -38,8 +39,11 @@ logger = logging.getLogger(__name__)
 
 _STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
 
-# Subprocess-heavy service sweep is cached this long to reduce system load (#9086)
-_SERVICE_DISCOVERY_TTL = 300  # seconds
+# Subprocess-heavy service sweep is cached this long to reduce system load
+# (#9086). Shared with services/reconciler.py's restart-churn window, which
+# must stay comfortably larger than this -- see autobot_shared/
+# service_discovery.py for why this is a plain constant, not env-backed.
+_SERVICE_DISCOVERY_TTL = SERVICE_DISCOVERY_TTL_S
 
 
 class HealthCollector:

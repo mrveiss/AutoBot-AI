@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
+from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from config import settings
 from models.database import (
@@ -82,9 +83,9 @@ MAX_SERVICE_RESTART_ATTEMPTS = 3
 
 # #14465 review: how long a service is reported as CHURNING after its last
 # observed `n_restarts` increase. Must be comfortably larger than health_
-# collector's own `discover_all_services()` cache TTL (300s,
-# `slm/agent/health_collector.py:_SERVICE_DISCOVERY_TTL`) -- against a 30s
-# heartbeat, 9 of every 10 beats otherwise carry a byte-identical cached
+# collector's own `discover_all_services()` cache TTL
+# (`autobot_shared.service_discovery.SERVICE_DISCOVERY_TTL_S`) -- against a
+# 30s heartbeat, 9 of every 10 beats otherwise carry a byte-identical cached
 # snapshot, so a bare "did it change since the immediately preceding
 # heartbeat" pulse only fires on the ~1 beat in 10 where the cache actually
 # refreshed (measured: 1 of 20 degraded across continuous churn, vs 20 of 20
@@ -94,16 +95,24 @@ MAX_SERVICE_RESTART_ATTEMPTS = 3
 # churning, which is what a status field means, instead of whether THIS
 # SPECIFIC sample happened to land on a cache refresh.
 #
-# Twice the discovery TTL: guarantees the window spans at least one full
-# cache-refresh cycle, so a service that is genuinely still churning re-arms
-# the window (a fresh increase observed within it) before the earlier arming
-# closes, keeping DEGRADED continuous throughout sustained churn. The
-# trade-off this makes explicit: a single benign restart (one OOM kill, one
-# dependency flap) now degrades the node for the whole window and stands a
-# real chance of triggering one ansible restart via remediation, where the
-# absolute threshold it replaced made that same trade unboundedly (forever,
-# once n_restarts crossed 3) rather than for one bounded window.
-RESTART_CHURN_WINDOW_S = env_int_clamped("AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=1)
+# min_v is DERIVED from SERVICE_DISCOVERY_TTL_S, not a second hardcoded
+# literal: an earlier version of this fix hardcoded `min_v=1`, and measured
+# with the TTL at its own default, every window from 1 to 271 seconds
+# restored the pulse-flapping regression this replaces -- a bare literal
+# gives no warning when the agent-side TTL changes out from under it (raising
+# the TTL to 900 would make the unrelated 600s DEFAULT flap too). Twice the
+# TTL guarantees the window spans at least one full cache-refresh cycle, so a
+# service that is genuinely still churning re-arms the window (a fresh
+# increase observed within it) before the earlier arming closes, keeping
+# DEGRADED continuous throughout sustained churn. The trade-off this makes
+# explicit: a single benign restart (one OOM kill, one dependency flap) now
+# degrades the node for the whole window and stands a real chance of
+# triggering one ansible restart via remediation, where the absolute
+# threshold it replaced made that same trade unboundedly (forever, once
+# n_restarts crossed 3) rather than for one bounded window.
+RESTART_CHURN_WINDOW_S = env_int_clamped(
+    "AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=SERVICE_DISCOVERY_TTL_S * 2 + 1
+)
 
 
 def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
@@ -1529,6 +1538,17 @@ class ReconcilerService:
 
         Returns whether this service is managed and CURRENTLY churning --
         see `_restart_churn_active` (#14465).
+
+        #14465 review: the broad `except Exception` below (pre-existing --
+        Ref #1088 -- kept broad so one service's sync failure never aborts
+        the whole heartbeat) also swallows a transient failure of the row
+        SELECT itself, not just the upsert logic after it. On that beat this
+        returns `False` ("not churning") regardless of the service's real
+        state -- the churn signal is a function of DB availability for that
+        one heartbeat, not just of the service. Self-healing (the next
+        heartbeat tries again, and the level design means one missed beat
+        does not by itself end an already-armed window), but not something
+        this fix eliminates.
         """
         service_name = svc_data.get("name")
         if not service_name:
