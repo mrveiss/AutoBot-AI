@@ -5,6 +5,7 @@
 # Author: mrveiss
 """Visual test for AutoBot GUI chat functionality using Playwright service."""
 
+import logging
 import time
 
 logger = logging.getLogger(__name__)

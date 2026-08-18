@@ -63,8 +63,29 @@ repos:
       - id: flake8
         # Uses .flake8 config file in repo root via args
         args: [--config=.flake8]
-        # Exclude tests, infrastructure, and code analysis tools (non-production code)
+        # Exclude tests, infrastructure, and code analysis tools (non-production code).
+        # This regex is correctly anchored -- it is NOT the #14419 depth bug -- and the
+        # full production ruleset genuinely does not apply here. The narrowing #14405
+        # needed is the hook below, not a hole in this line.
         exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
+
+      # #14405 -- undefined names ARE production defects, wherever they live.
+      # `autobot-infrastructure/` sat behind the exclude above with nothing else
+      # linting it (no CI flake8 invocation passes the tree either), and 12 operator
+      # scripts accumulated 103 undefined names -- live NameErrors, not style. This
+      # hook carves that one subtree back in for F821 alone, so the gate is clean
+      # today with no exemption list to grandfather the very defect it guards. The
+      # other codes there (E501, F841, F401, F541, E741) stay excluded as a separate
+      # cosmetic backlog. `--isolated` skips .flake8, whose `count`/`statistics`/
+      # `show-source` settings exist for the hook above's human output.
+      # tools/lint/check_infra_scripts_undefined_names.py --audit re-proves from the
+      # REQUIRED code-quality check that this hook still reaches the tree, because a
+      # regression here lints fewer files and would make every lint job look greener.
+      - id: flake8
+        alias: flake8-infra-scripts-undefined-names
+        name: flake8 F821 (autobot-infrastructure/shared/scripts) (#14405)
+        args: [--isolated, --select=F821]
+        files: ^autobot-infrastructure/shared/scripts/.*\.py$
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
