@@ -655,22 +655,22 @@ def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
         for _ in range(5):
             asyncio.run(service._remediate_node(db, node))
             clock.advance(60)
-        assert len(broadcasts) == 1, (
-            f"expected exactly one broadcast across 5 refusals inside the throttle window, got {len(broadcasts)}"
-        )
-        assert len(still_exhausted_events) == 1, (
-            f"expected exactly one persisted still-exhausted event, got {len(still_exhausted_events)}"
-        )
+        assert (
+            len(broadcasts) == 1
+        ), f"expected exactly one broadcast across 5 refusals inside the throttle window, got {len(broadcasts)}"
+        assert (
+            len(still_exhausted_events) == 1
+        ), f"expected exactly one persisted still-exhausted event, got {len(still_exhausted_events)}"
 
         # Past the throttle window: the next refusal must re-notify again, both ways.
         clock.advance(reconciler.MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S + 10)
         asyncio.run(service._remediate_node(db, node))
-        assert len(broadcasts) == 2, (
-            f"expected a second broadcast once the throttle window elapsed, got {len(broadcasts)}"
-        )
-        assert len(still_exhausted_events) == 2, (
-            f"expected a second persisted event once the throttle window elapsed, got {len(still_exhausted_events)}"
-        )
+        assert (
+            len(broadcasts) == 2
+        ), f"expected a second broadcast once the throttle window elapsed, got {len(broadcasts)}"
+        assert (
+            len(still_exhausted_events) == 2
+        ), f"expected a second persisted event once the throttle window elapsed, got {len(still_exhausted_events)}"
     finally:
         reconciler.datetime = datetime
 
