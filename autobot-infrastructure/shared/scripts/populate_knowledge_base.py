@@ -27,6 +27,8 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from autobot_shared.paths import project_root
+
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path
@@ -70,15 +72,6 @@ CATEGORY_PREFIXES = [
     ("docs/reports", "reports"),
     ("autobot-backend/resources/prompts", "prompts"),
 ]
-
-# Default deployment root, matching the ``${AUTOBOT_PROJECT_ROOT:-...}`` shell
-# fallback a sweep left embedded in a Python string literal (#14405).
-DEFAULT_PROJECT_ROOT = "/opt/autobot/code_source"
-
-
-def project_root() -> Path:
-    """Resolve the documentation root, honouring AUTOBOT_PROJECT_ROOT."""
-    return Path(os.environ.get("AUTOBOT_PROJECT_ROOT") or DEFAULT_PROJECT_ROOT)
 
 
 def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
