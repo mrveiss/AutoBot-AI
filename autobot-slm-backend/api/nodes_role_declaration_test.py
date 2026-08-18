@@ -33,11 +33,12 @@ _WANTED = {"_declare_role_on_node"}
 def _load() -> dict:
     tree = ast.parse(_NODES_PY.read_text(encoding="utf-8"), filename=str(_NODES_PY))
     wanted = [n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name in _WANTED]
-    assert len(wanted) == len(_WANTED), (
-        f"expected {sorted(_WANTED)} in {_NODES_PY}, found {sorted(n.name for n in wanted)} — rename tracking broke"
-    )
+    assert len(wanted) == len(
+        _WANTED
+    ), f"expected {sorted(_WANTED)} in {_NODES_PY}, found {sorted(n.name for n in wanted)} — rename tracking broke"
     module = ast.Module(body=wanted, type_ignores=[])
     ast.fix_missing_locations(module)
+
     # `select(Node).where(Node.node_id == ...)` must be constructible: the query
     # object is handed straight to the fake session, so only its shape matters.
     class _Query:
