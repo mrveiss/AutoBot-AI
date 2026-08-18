@@ -212,7 +212,15 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
 
 
 def _union_roles(node: Any) -> list[str]:
-    """Return union of node.roles and node.detected_roles as a deduped list."""
+    """Return union of node.roles and node.detected_roles as a deduped list.
+
+    Detection legitimately adds groups: a node running redis that nobody
+    declared still needs the redis plays to reach it, which
+    ``test_detected_roles_merged_with_roles`` pins.
+
+    What detection must NOT do is grant a privileged group -- see
+    ``_strip_undeclared_privileged_groups`` for why (#14513).
+    """
     seen: set[str] = set()
     result: list[str] = []
     for r in list(node.roles or []) + list(node.detected_roles or []):
@@ -220,6 +228,43 @@ def _union_roles(node: Any) -> list[str]:
             seen.add(r)
             result.append(r)
     return result
+
+
+# Groups whose plays DEPLOY a component's tree onto the host. Detection must
+# never add a node to one of these: the whole failure mode is a node being
+# handed software it does not run.
+#
+# `slm_server`   - "Play 1 - Update SLM Server First" unpacks the SLM manager's
+#                  backend/frontend/shared tree and reads /opt/autobot/code_source.
+# `backend`/`main` - Play 2 unarchives autobot-backend (`when: 'backend' in
+#                  group_names`) and runs the alembic upgrade sequence against
+#                  that host. Play 2 also sets `any_errors_fatal: true` with
+#                  `serial: 3`, so ONE wrongly-included node aborts the whole
+#                  batch of legitimate hosts -- a wider blast radius than the
+#                  Play 1 failure that surfaced this bug.
+#
+# Deliberately NOT everything: `test_detected_roles_merged_with_roles` pins that
+# a detected `redis` still joins `redis`/`database`, and that is wanted -- a
+# node genuinely running redis should keep receiving redis updates. The line is
+# drawn at groups whose plays were checked and found to deploy a tree or migrate
+# a database, not at "detection is untrusted".
+_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main"})
+
+
+def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
+    """Drop privileged groups the node's DECLARED roles do not justify (#14513).
+
+    Belt-and-braces alongside the change above: a node that has already had the
+    SLM tree unpacked onto it by this very bug will legitimately detect
+    ``slm-backend`` afterwards, so filtering the agent's report alone would not
+    stop the loop on an already-contaminated node.
+    """
+    undeclared = node_groups & _DECLARED_ONLY_GROUPS
+    if not undeclared:
+        return node_groups
+
+    declared_groups = groups_for_role_tokens(list(node.roles or []))
+    return node_groups - (undeclared - declared_groups)
 
 
 def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
@@ -352,7 +397,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         hostvars = _build_hostvars(node, local_ip_check)
         host_section[host_name] = hostvars
 
-        node_groups = groups_for_role_tokens(_union_roles(node))
+        node_groups = _strip_undeclared_privileged_groups(node, groups_for_role_tokens(_union_roles(node)))
 
         for g in node_groups:
             if g not in groups:
