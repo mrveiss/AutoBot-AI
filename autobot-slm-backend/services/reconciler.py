@@ -76,22 +76,63 @@ REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WA
 REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
 
 # #14524: wall-clock ceiling on the ansible-playbook subprocess launched by
-# `_restart_service_via_ansible`. Previously unbounded -- a genuinely hung SSH
-# connection or stuck remote task blocked `_remediate_node`, and therefore
-# that node's slot in `_attempt_remediation`'s serial pass, indefinitely.
+# `_restart_service_via_ansible` for the slm-agent restart (see
+# SERVICE_RESTART_PLAYBOOK_TIMEOUT_S below for the OTHER call path -- review,
+# round 2, found this constant applied to both and only the slm-agent side
+# was ever analysed). Previously unbounded -- a genuinely hung SSH connection
+# or stuck remote task blocked `_remediate_node`, and therefore that node's
+# slot in `_attempt_remediation`'s serial pass, indefinitely.
 #
 # `manage-service.yml` is the only playbook this call path ever runs: one
 # host, one systemd service action, no package installs or long-running
 # polling -- a legitimate run completes in seconds. 180s gives roughly two
 # orders of magnitude of headroom over that, while staying comfortably below
-# REMEDIATION_COOLDOWN (300s) and below the ~240s worst case ansible.cfg's own
-# `timeout = 30` connect timeout plus `ANSIBLE_SSH_RETRIES=3` already bounds
-# for this playbook's two remote-connecting tasks against a host that is
-# cleanly REFUSING a connection (not hung) -- so this timeout is only ever the
-# first thing to fire for a run that is genuinely wedged, not one that would
-# have failed cleanly on its own a little later anyway. See
-# `_effective_tracker_expiry_s` for how this now feeds the escalation floor.
+# REMEDIATION_COOLDOWN (300s).
+#
+# Review, round 2, corrected the original justification here: a host that
+# cleanly REFUSES the connection is not actually a ~240s risk -- ansible
+# marks it UNREACHABLE and drops it from the rest of the play after the
+# FIRST connecting task fails, so only one task pays `timeout = 30` (ssh
+# ConnectTimeout) x up to 4 attempts (`ANSIBLE_SSH_RETRIES=3` retries + the
+# initial try) =~ 124s, not two tasks =~ 240s. That case was never this
+# timeout's real target anyway -- it already fails cleanly on its own well
+# inside 180s. The genuine unbounded risk `timeout = 30` does NOT cover is a
+# host that ACCEPTS the TCP connection (so ConnectTimeout never fires) and
+# then stops responding -- including a hung `ControlPersist=60s`
+# (ssh_connection.ssh_args, ansible.cfg) multiplexed session, which is
+# exactly the "genuinely hung SSH connection" this constant exists to bound
+# from the OUTSIDE, since nothing in ansible.cfg bounds it from the inside.
+# See `_effective_tracker_expiry_s` for how this now feeds the escalation
+# floor.
 REMEDIATION_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S", 180, min_v=1)
+
+# Review on #14524 (round 2): the 180s bound above is sized for
+# `manage-service.yml` restarting `slm-agent` -- a single, lightweight
+# systemd action. `_restart_service_via_ansible` is ALSO the restart path for
+# `_remediate_failed_service`, which restarts ANY `ServiceCategory.AUTOBOT`
+# unit -- and `AUTOBOT_SERVICE_PATTERNS` (services/service_categorizer.py)
+# matches that category by NAME PREFIX (autobot-*, postgresql*, redis*,
+# docker*, ollama*, kafka*, ...), an open-ended set, not just AutoBot's own
+# units. `systemctl restart` on a `Type=oneshot` unit blocks for the WHOLE
+# ExecStart -- two AutoBot-owned units alone declare
+# `TimeoutStartSec=600`/`=1800` (autobot-key-rotation.service.j2,
+# autobot-pg-backup.service.j2; the repo's longest found). Reusing the
+# 180s bound here would SIGKILL a legitimate 5-30 minute backup/rotation run,
+# record it failed, and escalate after MAX_SERVICE_RESTART_ATTEMPTS while the
+# remote systemd job keeps running independently -- a new failure mode, not a
+# fix.
+#
+# Deriving a per-unit budget from that unit's own `TimeoutStartSec` would be
+# more precise, but the category is populated by regex on the unit NAME
+# alone (any `postgresql*`/`redis*`/`docker*`/... service on the host, not
+# just ones this repo ships a template for), so there is no reliable local
+# source for "this specific unit's configured TimeoutStartSec" without an
+# ansible fact-gathering round trip -- out of scope for a timeout bugfix.
+# Sized instead comfortably above the longest known case (1800s) with real
+# margin, so it still closes the original "no timeout at all" gap for this
+# path -- a genuinely hung restart is still bounded -- without the 180s
+# figure sized for a one-line systemd action ever applying to it.
+SERVICE_RESTART_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S", 2100, min_v=1)
 # #14465 review: this does NOT read any heartbeat/streak signal, which closes
 # the specific way the prior two designs were fakeable by a flap -- but it is
 # not, on its own, a general fix for escalation reachability. The dominant
@@ -922,6 +963,7 @@ class ReconcilerService:
         restarted = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
+            timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
         )
 
         # #14344: the restart exiting 0 is not remediation. A node whose agent
@@ -976,21 +1018,50 @@ class ReconcilerService:
         )
         return False
 
+    @staticmethod
+    def _log_restart_result(service_name: str, hostname: str, timeout_s: int, result: dict) -> bool:
+        """Log and interpret one execute_playbook result. Helper for _restart_service_via_ansible.
+
+        A timeout must read as a failure, never a silent success (#14524) --
+        `result["success"]` already reflects that (execute_playbook's
+        `returncode == 0` check), this only chooses which message to log.
+        `result.get("output", ...)`, not `.get("error", ...)`: execute_playbook
+        never returns an "error" key, only "output" -- the previous
+        `.get("error", ...)` here always fell through to its generic default.
+        """
+        if result.get("success"):
+            logger.info("Successfully restarted %s on %s", service_name, hostname)
+            return True
+        if result.get("timed_out"):
+            logger.warning(
+                "Restart of %s on %s timed out after %ds -- killed (#14524)", service_name, hostname, timeout_s
+            )
+            return False
+        logger.warning(
+            "Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error")
+        )
+        return False
+
     async def _restart_service_via_ansible(
         self,
         hostname: str,
         service_name: str,
+        timeout_s: int,
     ) -> bool:
         """Restart a systemd service on a remote node via Ansible playbook.
 
-        Returns True if successful, False otherwise -- including on a timeout
-        (#14524): `execute_playbook`'s `timeout_s` bounds this call to
-        `REMEDIATION_PLAYBOOK_TIMEOUT_S`, and a timed-out run comes back with
-        `success=False`, so this always returns False for it too, exactly
-        like any other failed run. That is what makes the timeout safe for
-        both callers of this method (`_remediate_node`'s and
-        `_remediate_service`'s attempt counters) to advance toward escalation
-        instead of quietly resetting.
+        A timed-out run comes back `success=False` (#14524), so this always
+        returns False for it too -- what makes the timeout safe for both
+        callers (`_remediate_node`, `_remediate_failed_service`) to advance
+        their attempt counters toward escalation instead of resetting.
+
+        `timeout_s` is REQUIRED, not defaulted (review, round 2): the two
+        callers restart very different shapes of unit -- `_remediate_node`
+        always the lightweight `slm-agent` (`REMEDIATION_PLAYBOOK_TIMEOUT_S`),
+        `_remediate_failed_service` an arbitrary `ServiceCategory.AUTOBOT`
+        unit that can be a `Type=oneshot` job with `TimeoutStartSec` up to
+        1800s (`SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`, see its own comment). A
+        default here would silently reapply one caller's budget onto the other.
         """
         try:
             from services.playbook_executor import get_playbook_executor
@@ -1003,33 +1074,9 @@ class ReconcilerService:
                     "service_name": service_name,
                     "service_action": "restarted",
                 },
-                timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
+                timeout_s=timeout_s,
             )
-
-            if result.get("success"):
-                logger.info("Successfully restarted %s on %s", service_name, hostname)
-                return True
-            elif result.get("timed_out"):
-                logger.warning(
-                    "Restart of %s on %s timed out after %ds -- killed (#14524)",
-                    service_name,
-                    hostname,
-                    REMEDIATION_PLAYBOOK_TIMEOUT_S,
-                )
-                return False
-            else:
-                # #14524: the playbook_executor result carries the failure detail
-                # under "output", not "error" -- there is no "error" key in its
-                # returned dict, so the previous `result.get("error", ...)` here
-                # always fell through to the generic default.
-                error_msg = result.get("output", "Unknown error")
-                logger.warning(
-                    "Failed to restart %s on %s: %s",
-                    service_name,
-                    hostname,
-                    error_msg,
-                )
-                return False
+            return self._log_restart_result(service_name, hostname, timeout_s, result)
 
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
@@ -1245,11 +1292,17 @@ class ReconcilerService:
             message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
-        # Try to restart via Ansible (#1814: prefer ansible_name)
+        # Try to restart via Ansible (#1814: prefer ansible_name). Review, round
+        # 2: this can be ANY ServiceCategory.AUTOBOT unit, including a
+        # Type=oneshot job with a multi-minute TimeoutStartSec -- the
+        # slm-agent-sized REMEDIATION_PLAYBOOK_TIMEOUT_S would SIGKILL a
+        # legitimate long-running restart, so this path gets its own, much
+        # larger budget (see SERVICE_RESTART_PLAYBOOK_TIMEOUT_S).
         ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
             ansible_target,
             service.service_name,
+            timeout_s=SERVICE_RESTART_PLAYBOOK_TIMEOUT_S,
         )
 
         # Update tracker
