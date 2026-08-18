@@ -45,6 +45,38 @@ if [[ -n "${TSC_OUTPUT_FILE:-}" && -n "${TSC_STATUS_FILE:-}" \
   echo "Reusing vue-tsc output captured by the type-check step (baseline: ${BASELINE} errors)..."
   TSC_OUTPUT="${TSC_OUTPUT_FILE}"
   TSC_STATUS="$(<"${TSC_STATUS_FILE}")"
+
+  # A status file is only a valid handoff if it holds exactly what the type-check
+  # step wrote: a single small non-negative integer (0-255, the POSIX exit status
+  # range). Anything else — empty (the file exists but the write raced or failed),
+  # whitespace, multiple lines, or non-numeric content — is a discriminator failure
+  # in its own right, not a status of 0. Trusting it as 0 is exactly the bug this
+  # block exists to prevent: a compiler that never produced a real status would
+  # silently read as a clean exit. Route this through the script's own error
+  # handling rather than letting `set -u`/arithmetic surface bash's raw message.
+  #
+  # `^[0-9]+$` alone is not enough — bash's `(( ))` is fixed-width (64-bit) and
+  # NOT decimal-only, so a value the pattern accepts can still defeat the range
+  # check below it:
+  #   - 2**64 (18446744073709551616) matches the pattern, then WRAPS to 0 in
+  #     fixed-width arithmetic, so `(( TSC_STATUS > 255 ))` silently evaluates
+  #     `0 > 255` and accepts it — exactly the empty-file bug, one layer down.
+  #   - A leading zero (e.g. "008") matches the pattern too, but bash parses a
+  #     leading-zero numeral as OCTAL, and 8/9 are not valid octal digits, so
+  #     `(( ))` throws — inside a *tested* context (`if (( ... ))`), where a
+  #     throw is swallowed as "false" rather than propagating. The guard
+  #     neither rejects nor errors, so this also reads as a clean pass.
+  #
+  # The shape check below rejects both before either reaches arithmetic — no
+  # valid status is longer than 3 digits (255) or has a leading zero followed
+  # by another digit — and `10#` on the surviving value forces base-10 parsing
+  # so nothing that does reach `(( ))` can ever be read as octal.
+  if [[ ! "${TSC_STATUS}" =~ ^([0-9]|[1-9][0-9]{1,2})$ ]] || (( 10#${TSC_STATUS} > 255 )); then
+    echo "ERROR: ${TSC_STATUS_FILE} does not hold a valid exit status." >&2
+    echo "Expected a single decimal integer 0-255 with no leading zero; got: '${TSC_STATUS}'" >&2
+    echo "Refusing to treat this as a clean compile — the compiler's actual exit status is unknown." >&2
+    exit 1
+  fi
 else
   #
   # Why not npx (#13341). This step ran unbounded for over three hours on the

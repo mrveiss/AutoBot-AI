@@ -9137,6 +9137,23 @@
       "agent": "Agente",
       "user": "Usuario",
       "contact": "Contacto"
-    }
+    },
+    "grant": "Conceder",
+    "revoke": "Revocar",
+    "attach": "Adjuntar",
+    "detach": "Quitar",
+    "assign": "Asignar",
+    "endTenure": "Finalizar asignación",
+    "holderIdPlaceholder": "ID del titular",
+    "permissionPlaceholder": "p. ej. knowledge.read",
+    "workflowPlaceholder": "ID del flujo",
+    "toolPlaceholder": "Nombre de herramienta",
+    "credentialPlaceholder": "ID del secreto",
+    "errorAssign": "No se pudo asignar ese titular.",
+    "errorEndTenure": "No se pudo finalizar la asignación.",
+    "errorGrant": "No se pudo conceder el permiso.",
+    "errorRevoke": "No se pudo revocar el permiso.",
+    "errorAttach": "No se pudo adjuntar.",
+    "errorDetach": "No se pudo quitar."
   }
 }

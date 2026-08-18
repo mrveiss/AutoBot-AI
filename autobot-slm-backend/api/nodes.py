@@ -1800,6 +1800,36 @@ def _has_failed_autobot_service(extra_data: dict | None) -> bool:
     return False
 
 
+def _detected_role_names(role_report: dict) -> list[str]:
+    """Role names the agent actually found on the node (#14513).
+
+    The agent probes EVERY known role and reports each one's verdict, so the
+    report's keys are the catalogue, not the node. Recording `.keys()` marked
+    every node as carrying everything: two nodes running completely different
+    things reported byte-identical 20-entry lists, and the inventory then
+    promoted plain fleet nodes into `slm_server`.
+
+    `status` is the agent's own verdict (`slm/agent/role_detector.py`):
+      * not_installed - target path absent
+      * inactive      - path present, service down
+      * active        - path present and running (or no service required)
+
+    Anything but `not_installed` counts as present: a role installed but
+    stopped is still on the node and must keep receiving updates.
+    """
+    detected: list[str] = []
+    for name, report in (role_report or {}).items():
+        status = getattr(report, "status", None)
+        if status is None and isinstance(report, dict):
+            status = report.get("status")
+        # Unknown/absent status is treated as NOT detected: this list grants
+        # group membership, so an unreadable verdict must not silently promote
+        # the node the way the old `.keys()` did.
+        if status and status != "not_installed":
+            detected.append(name)
+    return detected
+
+
 async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node) -> None:
     """Helper for node_heartbeat. Ref: #1088.
 
@@ -1809,7 +1839,7 @@ async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: He
     if heartbeat.role_report:
         try:
             await _process_role_report(db, node_id, heartbeat.role_report)
-            node.detected_roles = list(heartbeat.role_report.keys())
+            node.detected_roles = _detected_role_names(heartbeat.role_report)
             node.role_versions = {
                 name: report.version for name, report in heartbeat.role_report.items() if report.version
             }
