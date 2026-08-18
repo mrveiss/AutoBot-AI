@@ -187,9 +187,22 @@ async def send_message(
     # send paths. Guarding only the MessagingProtocol branch would leave the
     # Teams webhook fallback below ungoverned — the bypass reads as covered
     # because the governor's name appears in the function.
+    #
+    # channel_id is recorded and logged as-is: a Slack/Discord channel id is an
+    # opaque identifier scoped to this integration's own token, not directly
+    # usable outside this system — the "record as-is" side of the
+    # channel-identity rule (#14540, see services.gateway.egress_governor).
+    # Slack's identifier lives on `message.channel`, Discord's on
+    # `message.channel_id` (see `SendMessageRequest`) — read whichever the
+    # request populated, or the audit record silently records an empty
+    # identifier for every Slack send.
+    # The HTTPException below carries a fixed message, never verdict.reason —
+    # that field is audit-facing only and can carry raw approver-exception text
+    # once #14068 registers real approvers (#14539).
+    raw_channel_id = getattr(message, "channel_id", None) or getattr(message, "channel", None) or ""
     verdict = await egress_governor.evaluate(
         platform=provider_lower,
-        channel_id=str(getattr(message, "channel_id", "") or ""),
+        channel_id=str(raw_channel_id),
         message_id="",
     )
     if not verdict.allowed:

@@ -496,14 +496,23 @@ class NotificationService:
         # explicitly rather than relying on the env default, so arming the policy
         # cannot silence outage alerts or deadlock APPROVAL_NEEDED. The record
         # still lands, so an operator can see what left the machine.
+        # Host only, never the full URL — a path can embed a bearer token. Applied
+        # to the audit record and this log line alike (channel-identity rule,
+        # #14540, see services.gateway.egress_governor).
+        host = urlparse(url).hostname or "unknown"
         verdict = await egress_governor.evaluate(
             platform="webhook",
-            channel_id=urlparse(url).hostname or "unknown",
+            channel_id=host,
             message_id="",
             require_approval=False,
         )
         if not verdict.allowed:
-            logger.warning("webhook notification blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+            logger.warning(
+                "webhook notification to %s blocked by egress governance (%s): %s",
+                host,
+                verdict.rule,
+                verdict.reason,
+            )
             return
 
         headers = {

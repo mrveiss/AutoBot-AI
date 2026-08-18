@@ -195,7 +195,9 @@ def test_backend_errors():
         # Test Redis database manager import
         import sys
 
-        sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        from autobot_shared.paths import project_root
+
+        sys.path.append(str(project_root()))
 
         from utils.redis_database_manager import RedisDatabaseManager
 

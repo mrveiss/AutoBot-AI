@@ -60,23 +60,23 @@ class MCPDispatcher:
     calls do not incur extra HTTP round-trips for discovery.
 
     Cache refreshes automatically after CACHE_TTL_SECONDS (#2598).
-    Tools matching _ADMIN_ONLY_TOOLS patterns require role="admin" (#2598).
+
+    #14523: the original admin gate was ``_ADMIN_ONLY_TOOLS`` — a frozenset of
+    seven Redis command substrings (#2598) — checked before every real tool
+    lookup. It is retired here: ``dispatch()`` now denies on the same
+    canonical-RBAC verdict ``_would_deny`` already computed for stage 2's
+    shadow log, rather than a second, hand-maintained pattern list. Proven
+    equivalent for the blocklist's real targets before removal — every live
+    tool it matched (``redis_client_list``, ``redis_slowlog``) and every
+    pattern with no live tool yet (``config_set``, ``config_rewrite``,
+    ``debug``, ``flushdb``, ``flushall``, all declared ahead of time in
+    ``mcp_tool_permissions._DECLARED_AHEAD_OF_TIME``) resolve through
+    ``mcp_tool_permissions.TOOL_PERMISSIONS`` to ``Permission.MCP_MANAGE``,
+    which only the admin role holds — see the #14523 PR body for the set
+    comparison.
     """
 
     CACHE_TTL_SECONDS: int = 60
-
-    # Tool name substrings that require admin role (#2598)
-    _ADMIN_ONLY_TOOLS: frozenset = frozenset(
-        {
-            "client_list",
-            "slowlog",
-            "config_set",
-            "config_rewrite",
-            "debug",
-            "flushdb",
-            "flushall",
-        }
-    )
 
     def __init__(self) -> None:
         """Initialize dispatcher with empty tool cache."""
@@ -145,19 +145,16 @@ class MCPDispatcher:
     # Dispatch
     # ------------------------------------------------------------------
 
-    def _is_admin_only(self, tool_name: str) -> bool:
-        """Return True if tool_name matches any admin-only pattern (#2598)."""
-        return any(pattern in tool_name for pattern in self._ADMIN_ONLY_TOOLS)
-
     def _would_deny(self, tool_name: str, role: str) -> str | None:
-        """Return why RBAC *would* refuse this call, or None (#13228 stage 2).
+        """Return why canonical RBAC refuses this call, or None to permit (#13228/#14523).
 
-        Reports only; the caller does not act on it. The declaration landed in
-        stage 1 and the enforcement flip is stage 3, so this exists to answer the
-        one question the flip needs answered first: **which working calls would
-        it break?** The issue's own risk note predicts default-deny "will surface
-        tools that were silently reachable" — this turns that prediction into a
-        list before it costs anyone a broken agent run.
+        Stage 2 (#13228) used this for shadow logging only — the caller never
+        acted on it. Stage 3 (#14523) promotes it to the actual decision
+        ``dispatch()`` enforces, now that #14494 has proven the precondition
+        this needs: every tool the eleven governed bridges register carries an
+        exact ``TOOL_PERMISSIONS`` entry, so "undeclared" here means a tool
+        that should not have reached production, not a working call about to
+        break.
 
         Two distinct outcomes, kept distinct because they need different fixes:
         an undeclared tool needs a declaration; a declared one the role lacks
@@ -167,8 +164,8 @@ class MCPDispatcher:
             # An empty cache means the registry never answered, not that every
             # tool is undeclared (refresh_tool_cache swallows failures and
             # returns 0). Reporting "undeclared" here would fill the inventory
-            # with an infrastructure outage dressed as a policy gap — and if
-            # stage 3 enforced on that same signal, a registry blip would deny
+            # with an infrastructure outage dressed as a policy gap — and
+            # enforcing on that same signal would let a registry blip deny
             # every MCP call. No cache, no verdict.
             return None
 
@@ -181,7 +178,7 @@ class MCPDispatcher:
         # ADMIN_ROLES in autobot_shared.auth.permissions), so resolving it
         # through Role() would report the most privileged role in the system as
         # denied on every tool. is_admin_role is the canonical, case-insensitive
-        # answer and is what the legacy gate below already uses.
+        # answer.
         if is_admin_role(role):
             return None
         try:
@@ -192,15 +189,14 @@ class MCPDispatcher:
             return f"unknown-role:{role}"
         return None if declared in held else f"missing:{declared}"
 
-    def _log_rbac_shadow(self, tool_name: str, role: str) -> None:
-        """Log what canonical RBAC would have decided, without deciding (#13228).
+    def _log_rbac_shadow(self, tool_name: str, role: str, reason: str | None) -> None:
+        """Log a canonical-RBAC refusal (#13228 stage 2, now #14523's enforced verdict).
 
         Deduplicated on ``(tool, role, reason)``. The deliverable is the *set* of
-        disagreements, so repeating one per call would multiply the volume without
-        adding a fact — an agent loop touching one undeclared tool would otherwise
-        emit a warning per iteration.
+        distinct disagreements, so repeating one per call would multiply the
+        volume without adding a fact — an agent loop touching one undeclared
+        tool would otherwise emit a warning per iteration.
         """
-        reason = self._would_deny(tool_name, role)
         if reason is None:
             return
         seen_key = (tool_name, role, reason)
@@ -208,11 +204,20 @@ class MCPDispatcher:
             return
         self._rbac_shadow_seen.add(seen_key)
         logger.warning(
-            "MCPDispatcher[rbac-shadow]: role=%s tool=%s would be denied (%s) — " "not enforced yet, see #13228",
+            "MCPDispatcher[rbac-shadow]: role=%s tool=%s denied (%s) — #13228/#14523",
             role,
             tool_name,
             reason,
         )
+
+    @staticmethod
+    def _denial_response(tool_name: str, reason: str) -> dict:
+        """Build the refusal payload for a canonical-RBAC denial (#14523)."""
+        return {
+            "success": False,
+            "result": f"Tool {tool_name} denied: caller lacks the required permission ({reason})",
+            "bridge": None,
+        }
 
     async def dispatch(
         self,
@@ -224,7 +229,8 @@ class MCPDispatcher:
         """Dispatch a tool call to its registered MCP bridge.
 
         Refreshes the tool cache if stale (TTL-based, #2598).
-        Rejects admin-only tools when role != "admin" (#2598).
+        Denies on the canonical-RBAC verdict from ``_would_deny`` (#13228/#14523)
+        — an undeclared tool, or a declared one the caller's role lacks.
 
         Issue #3232: emits agent.tool.call before dispatch and
         agent.tool.result after, with sensitive argument redaction.
@@ -241,21 +247,12 @@ class MCPDispatcher:
 
         await self._ensure_cache_fresh()
 
-        # #13228 stage 2: record the canonical-RBAC verdict alongside the legacy
-        # blocklist without acting on it. The blocklist below still decides.
-        self._log_rbac_shadow(tool_name, role)
-
-        if not is_admin_role(role) and self._is_admin_only(tool_name):
-            logger.warning(
-                "MCPDispatcher: role=%s denied access to admin-only tool %s",
-                role,
-                tool_name,
-            )
-            return {
-                "success": False,
-                "result": f"Tool {tool_name} requires admin role",
-                "bridge": None,
-            }
+        # #14523: _would_deny now decides, replacing the retired _ADMIN_ONLY_TOOLS
+        # substring blocklist — see the class docstring for the coverage proof.
+        verdict = self._would_deny(tool_name, role)
+        self._log_rbac_shadow(tool_name, role, verdict)
+        if verdict is not None:
+            return self._denial_response(tool_name, verdict)
 
         tool = self.find_tool(tool_name)
         if not tool:
@@ -391,7 +388,10 @@ class MCPDispatcher:
     def get_tool_definitions(self, role: str = "user") -> list[dict]:
         """Return tool definitions in LLM-injectable format.
 
-        Admin-only tools are excluded when role != "admin" (#2598).
+        A tool is excluded when *role* fails its canonical-RBAC check (#2598,
+        folded into the canonical path at #14523) — this covers both an
+        under-privileged role and an undeclared tool, so the LLM is never
+        offered a tool that ``dispatch()`` would refuse anyway.
         Each entry contains name, description (prefixed with bridge name),
         and parameters (from the tool's input_schema).
 
@@ -408,7 +408,7 @@ class MCPDispatcher:
                 "parameters": tool.get("input_schema", {}),
             }
             for tool in self._tool_cache.values()
-            if is_admin_role(role) or not self._is_admin_only(tool["name"])
+            if self._would_deny(tool["name"], role) is None
         ]
 
 

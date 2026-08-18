@@ -238,6 +238,7 @@ import BaseBadge from '@/components/base/BaseBadge.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
 import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {
   id: string
@@ -300,18 +301,16 @@ const selectedRole = computed(
   () => roles.value.find((role) => role.id === selectedRoleId.value) ?? null,
 )
 
+/**
+ * Surface the server's reason rather than a generic message: a 403 from the
+ * admin gate and a 400 from validation need different actions from the user,
+ * and collapsing them into "something went wrong" hides which one happened.
+ *
+ * The extraction itself lives in `composables/llc/apiErrorMessage.ts` — shared
+ * with `OrgChart.vue` (#14549) rather than forked a second time.
+ */
 function describeError(error: unknown, fallbackKey: string): string {
-  // Surface the server's reason rather than a generic message: a 403 from the
-  // admin gate and a 400 from validation need different actions from the user,
-  // and collapsing them into "something went wrong" hides which one happened.
-  //
-  // ApiClient throws a plain Error whose message is already `HTTP <status>:
-  // <detail>` — it extracts `detail` itself (utils/ApiClient.ts
-  // _extractErrorInfo). It is NOT axios-shaped, so reading
-  // `error.response.data.detail` would silently always miss and this function
-  // would return the generic fallback every time while looking like it worked.
-  const message = error instanceof Error ? error.message : ''
-  return message.length > 0 ? message : t(fallbackKey)
+  return describeApiError(error, t(fallbackKey))
 }
 
 async function loadRoles(): Promise<void> {

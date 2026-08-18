@@ -11,11 +11,12 @@ Demonstrates the functionality of the awareness injection system
 import asyncio
 import logging
 import sys
-import os
+
+from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
 
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(str(project_root()))
 
 from autobot_shared.network_constants import ServiceURLs
 

@@ -35,34 +35,52 @@
 #   - tools/lint/check_canonical_role_names.py (pre-commit enforcement)
 #   - docs/developer/ANSIBLE_ROLE_NAMES.md (full reference)
 ---
+# #14560: the five facts below (backend, frontend, ai_stack, npu_worker,
+# browser) gate provision-fleet-roles.yml tasks that unpack a tree onto the
+# host (npm/vite, ChromaDB, OpenVINO, Playwright). #14513/#14552 filtered the
+# GROUP branch of these ORs so a node that only *detected* the role no longer
+# joins the ansible group -- but node_roles (declared UNION detected) was
+# never filtered, so the node_roles branch alone still activated these facts
+# for a detected-only node: the frontend role ran `npx vite build` with no
+# Node.js installed, the #14552 failure, reached through provisioning instead
+# of the update playbook. node_roles_declared (declared roles only) closes
+# that branch; it falls back to node_roles wherever it is not stamped
+# (static inventories, the synthetic test hosts below), so a role assigned
+# through a static inventory keeps activating unchanged. The other facts
+# below (redis, vnc, xrdp, llm, tts_worker) deliberately keep raw node_roles
+# -- role_tts_worker_active in particular has NO group fallback at all
+# (#9965), so node_roles is its only activation path by design. Guarded by
+# services/inventory_privileged_node_roles_test.py, which derives the
+# five-fact set from inventory_builder._DECLARED_ONLY_GROUPS instead of
+# repeating this list, so it fails loud on a sixth privileged fact.
 role_backend_active: >-
-  {{ ('backend' in (node_roles | default([]))) or
-     ('autobot-backend' in (node_roles | default([]))) or
+  {{ ('backend' in (node_roles_declared | default(node_roles | default([])))) or
+     ('autobot-backend' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('main', []) | default([]))) or
      (inventory_hostname in (groups.get('backend', []) | default([]))) }}
 
 role_frontend_active: >-
-  {{ ('frontend' in (node_roles | default([]))) or
-     ('autobot-frontend' in (node_roles | default([]))) or
+  {{ ('frontend' in (node_roles_declared | default(node_roles | default([])))) or
+     ('autobot-frontend' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('frontend', []) | default([]))) }}
 
 role_ai_stack_active: >-
-  {{ ('ai-stack' in (node_roles | default([]))) or
-     ('autobot-ai-stack' in (node_roles | default([]))) or
+  {{ ('ai-stack' in (node_roles_declared | default(node_roles | default([])))) or
+     ('autobot-ai-stack' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
      (inventory_hostname in (groups.get('aiml', []) | default([]))) }}
 
 role_npu_worker_active: >-
-  {{ ('npu-worker' in (node_roles | default([]))) or
-     ('autobot-npu-worker' in (node_roles | default([]))) or
+  {{ ('npu-worker' in (node_roles_declared | default(node_roles | default([])))) or
+     ('autobot-npu-worker' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('npu_worker', []) | default([]))) or
      (inventory_hostname in (groups.get('npu_workers', []) | default([]))) or
      (inventory_hostname in (groups.get('npu', []) | default([]))) }}
 
 role_browser_active: >-
-  {{ ('browser' in (node_roles | default([]))) or
-     ('autobot-browser-worker' in (node_roles | default([]))) or
-     ('browser-service' in (node_roles | default([]))) or
+  {{ ('browser' in (node_roles_declared | default(node_roles | default([])))) or
+     ('autobot-browser-worker' in (node_roles_declared | default(node_roles | default([])))) or
+     ('browser-service' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('browser', []) | default([]))) or
      (inventory_hostname in (groups.get('browser_worker', []) | default([]))) }}
 

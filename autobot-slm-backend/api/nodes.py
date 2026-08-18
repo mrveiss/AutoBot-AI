@@ -828,6 +828,34 @@ async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> Pref
     )
 
 
+async def _declare_role_on_node(db: AsyncSession, node_id: str, role_name: str) -> None:
+    """Record the role on ``Node.roles`` as well as the NodeRole table (#14552).
+
+    Assigning a role through the UI IS a declaration -- but this endpoint only
+    ever wrote a NodeRole row, leaving ``Node.roles`` untouched.
+
+    That was invisible until deploy groups became declaration-gated (#14513).
+    Now ``_strip_undeclared_privileged_groups`` reads ``Node.roles`` as the sole
+    record of operator intent, so a role assigned through "Assign Role Manually"
+    would be treated as undeclared: the group is stripped, the update playbook's
+    tasks for it never fire, and the component silently never installs. The
+    admin sees the assignment succeed and nothing happens.
+
+    ``api/npu.py`` already writes ``node.roles`` for its dedicated NPU modal,
+    which is why npu-worker never showed the problem. This brings the generic
+    path in line with it.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if node is None:
+        return
+
+    current = list(node.roles or [])
+    if role_name not in current:
+        node.roles = current + [role_name]
+        logger.info("Declared role on node: %s -> %s", node_id, role_name)
+
+
 async def _upsert_node_role(
     db: AsyncSession,
     node_id: str,
@@ -844,6 +872,7 @@ async def _upsert_node_role(
 
     if existing:
         existing.assignment_type = role_request.assignment_type
+        await _declare_role_on_node(db, node_id, role_request.role_name)
         await db.commit()
         await db.refresh(existing)
         logger.info(
@@ -861,6 +890,7 @@ async def _upsert_node_role(
         status="not_installed",
     )
     db.add(node_role)
+    await _declare_role_on_node(db, node_id, role_request.role_name)
     await db.commit()
     await db.refresh(node_role)
     logger.info(
