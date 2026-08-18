@@ -164,23 +164,33 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
 def _is_gated(call: ast.AST) -> bool:
     """Whether a registration actually carries a gate, not merely the keyword.
 
-    `dependencies=[]` is present and enforces nothing. Every gating decision in
-    this file used to be keyword *presence*, so an empty list read as gated
-    everywhere — and once the repeat rule compared presence too, a second live
-    mount with `dependencies=[]` matched its gated twin, took the
-    same-declaration path, and vanished from the map entirely rather than being
-    reported. A latent mistake became a hiding place.
+    Three rounds of this were patched one empty-form at a time — first
+    `dependencies=[]`, then `dependencies=None`, FastAPI's own default and
+    functionally identical to omitting the keyword. Each patch enumerated the
+    forms it had thought of and kept a permissive catch-all underneath, so the
+    next unlisted form read as gated. The rule is stated by kind now rather
+    than by example:
 
-    The value is evaluated rather than trusted: an empty list or tuple gates
-    nothing. Anything else — a name, a call, a non-empty literal — is treated as
-    a real gate, because this check cannot evaluate what a name resolves to and
-    must not guess in the permissive direction.
+    * **Any constant is ungated.** `None`, `False`, `0`, `""` — no constant is
+      a sequence of dependencies, so none of them can gate anything.
+    * **An empty collection is ungated.** `[]`, `()`, `set()` literals.
+    * **Everything else is gated** — a name, an attribute, a call, a
+      non-empty collection.
+
+    That last line is the residual, stated rather than hidden: this check
+    cannot evaluate what a name points at, so `dependencies=some_empty_var`
+    reads as gated. Resolving it needs the value, not the syntax. It is the
+    permissive direction, which is why the two rules above are exhaustive by
+    kind instead of by enumeration — a form nobody listed now falls into the
+    constant or collection rules rather than through a gap beneath them.
     """
     for keyword in getattr(call, "keywords", []):
         if keyword.arg != "dependencies":
             continue
         value = keyword.value
-        if isinstance(value, (ast.List, ast.Tuple)) and not value.elts:
+        if isinstance(value, ast.Constant):
+            return False
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts:
             return False
         return True
     return False
