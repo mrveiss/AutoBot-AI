@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "ID do fluxo",
       "attachError": "Não foi possível anexar esse fluxo.",
       "detachError": "Não foi possível remover esse fluxo.",
-      "processDetach": "Remover {workflow} de {role}"
+      "processDetach": "Remover {workflow} de {role}",
+      "attachRolesUnavailable": "Não foi possível carregar as funções, portanto esta lista pode estar incompleta."
     },
     "executorRollup": {
       "title": "Resumo de executores",

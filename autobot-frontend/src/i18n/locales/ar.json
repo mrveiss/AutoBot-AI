@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "معرّف سير العمل",
       "attachError": "تعذّر إرفاق سير العمل هذا.",
       "detachError": "تعذّرت إزالة سير العمل هذا.",
-      "processDetach": "إزالة {workflow} من {role}"
+      "processDetach": "إزالة {workflow} من {role}",
+      "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة."
     },
     "executorRollup": {
       "title": "ملخص المنفذين",

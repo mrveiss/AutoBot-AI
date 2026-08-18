@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "ID del flujo",
       "attachError": "No se pudo adjuntar ese flujo.",
       "detachError": "No se pudo quitar ese flujo.",
-      "processDetach": "Quitar {workflow} de {role}"
+      "processDetach": "Quitar {workflow} de {role}",
+      "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",

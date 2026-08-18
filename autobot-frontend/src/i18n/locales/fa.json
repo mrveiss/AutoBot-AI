@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "شناسه گردش‌کار",
       "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
-      "processDetach": "جدا کردن {workflow} از {role}"
+      "processDetach": "جدا کردن {workflow} از {role}",
+      "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

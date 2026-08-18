@@ -134,6 +134,8 @@ interface AttachableRole {
   name: string
 }
 const attachableRoles = ref<AttachableRole[]>([])
+/** The roles request did not answer — distinct from answering "none" (#14064). */
+const attachRolesFailed = ref(false)
 const rolesLoaded = ref(false)
 const attachRoleId = ref('')
 const attachWorkflowId = ref('')
@@ -371,9 +373,13 @@ async function fetchProcessNodes() {
 /**
  * Load the roles this company has, for the canvas attach picker (#14549).
  *
- * Failures are logged and left as an empty list rather than surfaced as a page
- * error — the same precedent `fetchProcessNodes` follows. An empty picker
- * simply means nothing can be attached yet, not that the org chart is broken.
+ * A failure is not surfaced as a page error — the org chart is still correct
+ * without the picker. But it is recorded in `attachRolesFailed`, because an
+ * empty picker and a picker that could not load are different claims: the
+ * first says this company has no roles, the second says we do not know. The
+ * People tab already refuses to conflate those (#14064), and a silent empty
+ * dropdown would tell someone their roles are gone when the request merely
+ * failed.
  */
 async function fetchRolesForAttach() {
   if (rolesLoaded.value) return
@@ -390,10 +396,12 @@ async function fetchRolesForAttach() {
             typeof row?.id === 'string' && typeof row?.name === 'string',
         )
       : []
+    attachRolesFailed.value = false
     rolesLoaded.value = true
   } catch (err: unknown) {
     logger.error('Failed to fetch roles for the attach picker:', err)
     attachableRoles.value = []
+    attachRolesFailed.value = true
   }
 }
 
@@ -657,7 +665,7 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
+    <div v-if="error" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
@@ -735,6 +743,15 @@ onMounted(() => {
               {{ role.name }}
             </option>
           </select>
+          <!-- Stated, not implied: an empty dropdown alone would read as "this
+               company has no roles" when the request simply did not answer. -->
+          <p
+            v-if="attachRolesFailed"
+            class="text-xs text-autobot-text-muted"
+            data-testid="process-attach-roles-unavailable"
+          >
+            {{ t('llc.orgChart.attachRolesUnavailable') }}
+          </p>
         </div>
         <div class="flex flex-col gap-1">
           <label for="process-attach-workflow" class="text-xs text-autobot-text-secondary">
@@ -761,7 +778,7 @@ onMounted(() => {
       </div>
       <div
         v-if="processMutationError"
-        class="border-b border-autobot-border bg-red-50 text-red-700 px-3 py-2 text-sm"
+        class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
         role="alert"
         data-testid="process-mutation-error"
       >

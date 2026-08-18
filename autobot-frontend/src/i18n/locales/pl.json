@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "ID przepływu",
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
-      "processDetach": "Odłącz {workflow} od {role}"
+      "processDetach": "Odłącz {workflow} od {role}",
+      "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna."
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",

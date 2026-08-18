@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "מזהה תהליך",
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
-      "processDetach": "הסר את {workflow} מ-{role}"
+      "processDetach": "הסר את {workflow} מ-{role}",
+      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית."
     },
     "executorRollup": {
       "title": "סיכום מבצעים",

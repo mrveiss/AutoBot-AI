@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "Darbplūsmas ID",
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
-      "processDetach": "Noņemt {workflow} no {role}"
+      "processDetach": "Noņemt {workflow} no {role}",
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",

@@ -8306,7 +8306,8 @@
       "attachWorkflowPlaceholder": "Workflow-ID",
       "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
       "detachError": "Dieser Workflow konnte nicht entfernt werden.",
-      "processDetach": "{workflow} von {role} entfernen"
+      "processDetach": "{workflow} von {role} entfernen",
+      "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig."
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",

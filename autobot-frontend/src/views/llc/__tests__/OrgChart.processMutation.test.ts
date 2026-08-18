@@ -110,6 +110,41 @@ describe('OrgChart process attach/detach (#14549)', () => {
     push.mockReset()
   })
 
+  // An empty picker and a picker that could not load are different claims, and
+  // the dropdown alone renders them identically (#14064's shape). The pair
+  // below is deliberate: neither test can pass on its own if the distinction is
+  // dropped, because one demands the notice and the other forbids it.
+  it('says so when the roles request did not answer', async () => {
+    respond()
+    get.mockImplementation((url: string) => {
+      if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      if (url.includes('/api/llc/roles/')) return Promise.reject(new Error('HTTP 503: upstream'))
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(wrapper.find('[data-testid="process-attach-roles-unavailable"]').exists()).toBe(true)
+    // Positive companion: the form is still there, so the assertion above
+    // cannot be satisfied by the view having failed to render at all.
+    expect(wrapper.find('[data-testid="process-attach-form"]').exists()).toBe(true)
+  })
+
+  it('stays silent when the roles request answers with none', async () => {
+    get.mockImplementation((url: string) => {
+      if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      if (url.includes('/api/llc/roles/')) return Promise.resolve([])
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(wrapper.find('[data-testid="process-attach-form"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="process-attach-roles-unavailable"]').exists()).toBe(false)
+  })
+
   it('detaches a process node from its own control and the node disappears', async () => {
     respond(PROCESSES, [])
     del.mockResolvedValue(undefined)

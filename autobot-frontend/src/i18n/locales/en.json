@@ -8294,7 +8294,8 @@
       "attachWorkflowPlaceholder": "Workflow id",
       "attachError": "Could not attach that workflow.",
       "detachError": "Could not detach that workflow.",
-      "processDetach": "Detach {workflow} from {role}"
+      "processDetach": "Detach {workflow} from {role}",
+      "attachRolesUnavailable": "Roles could not be loaded, so this list may be incomplete."
     },
     "executorRollup": {
       "title": "Executor Rollup",
