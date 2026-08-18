@@ -8551,7 +8551,9 @@
     },
     "orgPeople": {
       "unassigned": "sem função",
-      "unassignedHint": "Consta neste departamento, mas nenhuma função explica a sua presença"
+      "unassignedHint": "Consta neste departamento, mas nenhuma função explica a sua presença",
+      "inactive": "Inativo",
+      "inactiveHint": "Desativado ou removido — ainda apresentado porque os seus itens de trabalho e função permanecem, mas não lhe pode ser atribuído trabalho novo."
     }
   },
   "code": {

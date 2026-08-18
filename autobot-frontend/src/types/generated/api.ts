@@ -85004,6 +85004,8 @@ export interface components {
             adapter_type: string;
             /** Is Human */
             is_human: boolean;
+            /** Is Active */
+            is_active?: boolean | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */

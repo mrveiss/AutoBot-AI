@@ -8551,7 +8551,9 @@
     },
     "orgPeople": {
       "unassigned": "nav lomas",
-      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro",
+      "inactive": "Neaktīvs",
+      "inactiveHint": "Deaktivizēts vai noņemts — joprojām redzams, jo darba vienības un loma paliek, taču jaunu darbu piešķirt nevar."
     }
   },
   "code": {

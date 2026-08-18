@@ -8551,7 +8551,9 @@
     },
     "orgPeople": {
       "unassigned": "brak roli",
-      "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia"
+      "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia",
+      "inactive": "Nieaktywny",
+      "inactiveHint": "Dezaktywowany lub usunięty — nadal widoczny, ponieważ jego zadania i rola pozostają, ale nie można przydzielić mu nowej pracy."
     }
   },
   "code": {
