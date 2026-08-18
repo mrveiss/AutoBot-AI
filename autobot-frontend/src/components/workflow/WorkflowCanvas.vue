@@ -914,7 +914,10 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   e.preventDefault();
 
   if (e.ctrlKey || e.metaKey) {
-    if (props.readonly) return;
+    // Not gated on `readonly`, for the same reason the pointer drag is not:
+    // moving a node rearranges the *view* and persists nothing. Gating it here
+    // while a mouse could drag freely left keyboard users able to do strictly
+    // less on the same canvas — the inequity #14609 existed to remove.
     moveNodeByKeyboard(node, direction);
     return;
   }
@@ -993,14 +996,22 @@ function onNodePointerDown(node: CanvasNode, e: PointerEvent) {
   // this, every node — and every org-group container, the exact shape
   // #13996 already fixed for mouse — would be a dead zone for touch pan,
   // leaving only the canvas's bare gutters pannable on a tablet.
-  if (e.pointerType === 'touch' && props.readonly) return;
-
   e.stopPropagation();
-  // #14610: readonly (Company OS) must not let a press reposition a node —
-  // the same rule `onNodeKeydown` already applies to the keyboard move
-  // shortcut. A mouse press here is simply absorbed (unchanged pre-#14610
-  // behaviour); the plain `click` that follows still reaches `selectNode`.
-  if (props.readonly) return;
+  // Dragging a node is NOT gated on `readonly`, and that is deliberate.
+  //
+  // `readonly` means "cannot author the workflow" — no add, delete, connect or
+  // save. Rearranging where a node sits is a *view* gesture, not a change to
+  // anything stored: `OrgChart.onCanvasNodeMoved` writes the new position into
+  // its in-memory node list and nothing is persisted.
+  //
+  // It is also a feature the org chart deliberately supports. `OrgChart.vue`
+  // holds `canvasNodes` as a ref rather than a computed specifically so that
+  // "node drags stay put", and re-layout is avoided so "a drag survives
+  // pause/resume". Gating this on `readonly` would delete that, and would make
+  // `onCanvasNodeMoved` dead code on the only canvas that mounts read-only.
+  //
+  // Touch therefore behaves exactly as the mouse does: a press that starts on
+  // a node drags it, and a pan starts on empty canvas or a container.
   startDrag(node, e);
 }
 

@@ -7,6 +7,7 @@
 // resume / terminate and the detail drawer working exactly as before.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { firePointer } from '@/components/workflow/__tests__/pointerTestUtils'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
@@ -123,11 +124,14 @@ async function dragPerson(
   dx: number,
   dy: number,
 ) {
+  // #14610: the canvas listens for Pointer Events now — one path for mouse and
+  // touch — so a gesture driven with `mousedown`/`mousemove` reaches nothing.
+  // The gesture and every assertion around it are otherwise unchanged.
   const person = personNode(wrapper, name)
   const area = wrapper.get('.canvas-area')
-  await person.trigger('mousedown', { clientX: 300, clientY: 300, button: 0 })
-  await area.trigger('mousemove', { clientX: 300 + dx, clientY: 300 + dy })
-  await area.trigger('mouseup', { clientX: 300 + dx, clientY: 300 + dy })
+  await firePointer(person.element, 'pointerdown', { clientX: 300, clientY: 300, button: 0 })
+  await firePointer(area.element, 'pointermove', { clientX: 300 + dx, clientY: 300 + dy })
+  await firePointer(area.element, 'pointerup', { clientX: 300 + dx, clientY: 300 + dy })
   await flushPromises()
 }
 
@@ -258,6 +262,19 @@ describe('OrgChart view-mode toggle (#13939)', () => {
     expect(dragged).not.toEqual(before)
 
     // Resume the agent from the drawer — the primary canvas-mode action.
+    //
+    // The press is fired before the click on purpose. #14610 extended the
+    // "a gesture that moved is not a selection" rule from pans to node drags
+    // (the half #14079 deferred), and the flag clears on the next pointerdown
+    // — which a real browser always delivers before a click. A bare `click`
+    // here would be a sequence no user can produce, and would now read as the
+    // click that ended the drag above.
+    await firePointer(personNode(wrapper, 'Grace').element, 'pointerdown', {
+      clientX: 420, clientY: 360, button: 0,
+    })
+    await firePointer(personNode(wrapper, 'Grace').element, 'pointerup', {
+      clientX: 420, clientY: 360,
+    })
     await personNode(wrapper, 'Grace').trigger('click')
     await flushPromises()
     await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')

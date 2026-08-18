@@ -144,7 +144,18 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
     expect(transform(w)).toContain('translate(50px, 50px)')
   })
 
-  it('never drags the node, on a readonly canvas, no matter how far the finger moves', async () => {
+  it('drags the node on a readonly canvas, exactly as the mouse always has', async () => {
+    // The premise these tests were first written under was wrong, and #14610
+    // corrected it. `readonly` means "cannot author the workflow" — no add,
+    // delete, connect or save. Moving a node rearranges the *view* and
+    // persists nothing: `OrgChart.onCanvasNodeMoved` writes an in-memory
+    // position.
+    //
+    // It is also a feature the org chart deliberately supports. `OrgChart.vue`
+    // holds `canvasNodes` as a ref rather than a computed specifically so
+    // "node drags stay put", and avoids re-layout so "a drag survives
+    // pause/resume". Refusing the drag here would have made that engineering
+    // dead code on the only canvas that mounts read-only.
     const w = mountCanvas({ nodes: ORG_NODE, readonly: true })
 
     await firePointer(node(w).element, 'pointerdown', {
@@ -154,10 +165,15 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
       pointerType: 'touch', pointerId: 1, clientX: 130, clientY: 140,
     })
 
-    expect(w.emitted('node-moved')).toBeUndefined()
+    expect(w.emitted('node-moved')).toBeTruthy()
+    // A drag, not a pan: the canvas transform is untouched.
+    expect(transform(w)).toContain('translate(50px, 50px)')
   })
 
-  it('pans instead when the press starts on a node — a readonly node can never be dragged, so it is not a touch pan dead zone (#13996 for touch)', async () => {
+  it('drags rather than pans when a touch press starts on a node, matching the mouse', async () => {
+    // Parity is the point. A press on a node drags it and a pan starts on
+    // empty canvas or a container, for touch and mouse alike — one rule, not
+    // one rule per input device.
     const w = mountCanvas({ nodes: ORG_NODE, readonly: true })
 
     await firePointer(node(w).element, 'pointerdown', {
@@ -167,18 +183,10 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
       pointerType: 'touch', pointerId: 1, clientX: 130, clientY: 140,
     })
 
-    expect(w.emitted('node-moved')).toBeUndefined()
-    expect(transform(w)).toContain('translate(80px, 90px)')
+    expect(transform(w)).toContain('translate(50px, 50px)')
   })
 
-  it('never drags the node on a readonly canvas via mouse either — the pointer unification must not reopen this for touch only', async () => {
-    // #14610 found this while unifying mouse and touch onto one handler: a
-    // plain (unmodified) MOUSE press on a readonly node used to reach
-    // `startDrag` unconditionally — nothing gated it on `readonly` before
-    // this change, so a Company OS user could reposition an org node with a
-    // mouse even though the canvas is meant to be view-only. Fixed as part
-    // of the same `onNodePointerDown` readonly gate touch needs; guarded
-    // here so it cannot regress back to mouse-only special-casing.
+  it('drags on a readonly canvas by mouse too, so neither device is special-cased', async () => {
     const w = mountCanvas({ nodes: ORG_NODE, readonly: true })
 
     await firePointer(node(w).element, 'pointerdown', {
@@ -188,7 +196,7 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
       pointerType: 'mouse', pointerId: 1, clientX: 130, clientY: 140,
     })
 
-    expect(w.emitted('node-moved')).toBeUndefined()
+    expect(w.emitted('node-moved')).toBeTruthy()
   })
 
   it('readonly still selects the node on a genuine tap', async () => {
