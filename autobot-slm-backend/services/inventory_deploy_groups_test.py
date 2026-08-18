@@ -82,9 +82,9 @@ def test_the_derivation_finds_the_playbook_and_its_gates():
     gates = _groups_gating_deploy_tasks()
 
     assert gates, "no `'x' in group_names` gates parsed — the playbook's shape changed"
-    assert "backend" in gates and "frontend" in gates, (
-        f"expected the two known deploy gates in Play 2, found {sorted(gates)}"
-    )
+    assert (
+        "backend" in gates and "frontend" in gates
+    ), f"expected the two known deploy gates in Play 2, found {sorted(gates)}"
 
 
 def test_every_deploy_gated_group_is_declaration_gated():
@@ -119,6 +119,6 @@ def test_ordinary_groups_are_not_swept_in():
     """
     gated = set(inventory_builder._DECLARED_ONLY_GROUPS)
 
-    assert "redis" not in gated and "database" not in gated, (
-        "redis/database became declaration-gated — that is a larger behaviour change than #14552"
-    )
+    assert (
+        "redis" not in gated and "database" not in gated
+    ), "redis/database became declaration-gated — that is a larger behaviour change than #14552"

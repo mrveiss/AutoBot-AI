@@ -257,9 +257,7 @@ def _union_roles(node: Any) -> list[str]:
 # derivation immediately found three MORE gates I had also missed by reading
 # one range of the file -- `aiml`, `npu` and `browser` -- which is the whole
 # argument against maintaining this list by eye.
-_DECLARED_ONLY_GROUPS = frozenset(
-    {"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"}
-)
+_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
 
 
 def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
