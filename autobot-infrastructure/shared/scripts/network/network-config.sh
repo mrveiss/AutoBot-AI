@@ -43,8 +43,10 @@ export VNC_WEB_HOST="${AUTOBOT_VNC_WEB_HOST:-localhost}"
 export VNC_WEB_PORT="${AUTOBOT_VNC_WEB_PORT:-6080}"
 export VNC_WEB_URL="http://${VNC_WEB_HOST}:${VNC_WEB_PORT}"
 
+# 5901, not 5902 (#14173 review) -- matches ssot-config.sh/ssot_config.py's
+# PortConfig.vnc_server: 5900 + vnc_display, vnc_display default 1.
 export VNC_SERVER_HOST="${AUTOBOT_VNC_SERVER_HOST:-localhost}"
-export VNC_SERVER_PORT="${AUTOBOT_VNC_SERVER_PORT:-5902}"
+export VNC_SERVER_PORT="${AUTOBOT_VNC_SERVER_PORT:-5901}"
 
 # Log configuration loaded
 echo "✅ Network configuration loaded:"

@@ -71,7 +71,10 @@ def _make_client(caller_company_id: str, is_platform_admin: bool = False) -> Tes
     patch("llc.api.contacts.ContactService.create", new=AsyncMock(return_value=created)).start()
     patch("llc.api.contacts.ContactService.get", new=AsyncMock(return_value=created)).start()
     patch("llc.api.contacts.ContactService.update", new=AsyncMock(return_value=created)).start()
-    patch("llc.api.contacts.ContactService.delete", new=AsyncMock(return_value=True)).start()
+    # DELETE (both /{company_id}/{contact_id} and /{company_id}/directory/{contact_id})
+    # goes through ContactDirectoryService, not ContactService — #14464 review:
+    # the legacy route used to bypass the cross-company ContactInUseError guard.
+    patch("llc.api.contacts.ContactDirectoryService.delete", new=AsyncMock(return_value=True)).start()
 
     return TestClient(app)
 
@@ -198,14 +201,14 @@ class TestContactsActorDerivation:
         assert kwargs["actor"] == _FIXED_USER_ID
 
     def test_delete_derives_actor_from_authenticated_user(self):
-        from llc.api.contacts import ContactService  # noqa: PLC0415
+        from llc.api.contacts import ContactDirectoryService  # noqa: PLC0415
 
         company_id = str(uuid.uuid4())
         client = _make_client(company_id)
         resp = client.delete(f"/api/llc/contacts/{company_id}/{uuid.uuid4()}")
         assert resp.status_code == 204
-        _, kwargs = ContactService.delete.call_args
-        assert kwargs["actor"] == _FIXED_USER_ID
+        _, kwargs = ContactDirectoryService.delete.call_args
+        assert kwargs["actor_user_id"] == _FIXED_USER_ID
 
     def test_client_supplied_actor_field_in_body_is_ignored_not_500(self):
         """Before the fix, an unparseable client-supplied ``actor`` reached
