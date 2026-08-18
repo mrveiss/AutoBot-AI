@@ -248,7 +248,16 @@ def _union_roles(node: Any) -> list[str]:
 # node genuinely running redis should keep receiving redis updates. The line is
 # drawn at groups whose plays were checked and found to deploy a tree or migrate
 # a database, not at "detection is untrusted".
-_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main"})
+# #14552: `frontend` was missing, and the omission is instructive. Play 2 gates
+# its deploy tasks on exactly two groups -- `backend` and `frontend` -- and
+# #14513 gated only the first, so a vnc node still ran `npx vite build` and
+# failed for want of Node.js. Hand-picking the members is what let that recur;
+# `inventory_deploy_groups_test.py` now DERIVES this set from the playbook and
+# fails if a component is added there without being listed here. That
+# derivation immediately found three MORE gates I had also missed by reading
+# one range of the file -- `aiml`, `npu` and `browser` -- which is the whole
+# argument against maintaining this list by eye.
+_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
 
 
 def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:

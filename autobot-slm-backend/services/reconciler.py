@@ -74,6 +74,87 @@ REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WA
 # Clamped, not bare: env_int accepts 0 and negatives, and a 0 here turns the
 # verification poll into a tight open/close-session loop for the whole window.
 REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
+
+# #14524: wall-clock ceiling on the ansible-playbook subprocess launched by
+# `_restart_service_via_ansible` for the slm-agent restart (see
+# SERVICE_RESTART_PLAYBOOK_TIMEOUT_S below for the OTHER call path -- review,
+# round 2, found this constant applied to both and only the slm-agent side
+# was ever analysed). Previously unbounded -- a genuinely hung SSH connection
+# or stuck remote task blocked `_remediate_node`, and therefore that node's
+# slot in `_attempt_remediation`'s serial pass, indefinitely.
+#
+# `manage-service.yml` is the only playbook this call path ever runs: one
+# host, one systemd service action, no package installs or long-running
+# polling -- a legitimate run completes in seconds. 180s gives roughly two
+# orders of magnitude of headroom over that, while staying comfortably below
+# REMEDIATION_COOLDOWN (300s).
+#
+# Review, round 2, corrected the original justification here: a host that
+# cleanly REFUSES the connection is not actually a ~240s risk -- ansible
+# marks it UNREACHABLE and drops it from the rest of the play after the
+# FIRST connecting task fails, so only one task pays `timeout = 30` (ssh
+# ConnectTimeout) x up to 4 attempts (`ANSIBLE_SSH_RETRIES=3` retries + the
+# initial try) =~ 124s, not two tasks =~ 240s. That case was never this
+# timeout's real target anyway -- it already fails cleanly on its own well
+# inside 180s. The genuine unbounded risk `timeout = 30` does NOT cover is a
+# host that ACCEPTS the TCP connection (so ConnectTimeout never fires) and
+# then stops responding -- including a hung `ControlPersist=60s`
+# (ssh_connection.ssh_args, ansible.cfg) multiplexed session, which is
+# exactly the "genuinely hung SSH connection" this constant exists to bound
+# from the OUTSIDE, since nothing in ansible.cfg bounds it from the inside.
+# See `_effective_tracker_expiry_s` for how this now feeds the escalation
+# floor.
+REMEDIATION_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S", 180, min_v=1)
+
+# Review on #14524 (round 2): the 180s bound above is sized for
+# `manage-service.yml` restarting `slm-agent` -- a single, lightweight
+# systemd action. `_restart_service_via_ansible` is ALSO the restart path for
+# `_remediate_failed_service`, which restarts ANY `ServiceCategory.AUTOBOT`
+# unit -- and `AUTOBOT_SERVICE_PATTERNS` (services/service_categorizer.py)
+# matches that category by NAME PREFIX (autobot-*, postgresql*, redis*,
+# docker*, ollama*, kafka*, ...), an open-ended set, not just AutoBot's own
+# units. `systemctl restart` on a `Type=oneshot` unit blocks for the WHOLE
+# ExecStart -- two AutoBot-owned units alone declare
+# `TimeoutStartSec=600`/`=1800` (autobot-key-rotation.service.j2,
+# autobot-pg-backup.service.j2; the repo's longest found) -- a value sized
+# for that case would be the semantically correct fix.
+#
+# round 3 tried exactly that (2100s) and, separately, tried decoupling
+# `_remediate_failed_services()` into a background task so its duration could
+# no longer affect the node pass's timing at all. Review (round 3 re-review)
+# found the decoupling unsafe for reasons independent of timing: (a)
+# `_restart_service_via_ansible` goes through the SINGLETON
+# `get_playbook_executor()`, and `execute_playbook` always runs
+# `_update_code_source()` first -- a `git checkout`/`fetch`/`reset --hard` in
+# the ONE shared `code_source` working tree, with nothing to serialise a
+# concurrent node-pass call against a concurrent sweep call; worst case one
+# run rewrites roles/templates under a live `ansible-playbook` whose `cwd` is
+# that same tree. (b) `AUTOBOT_SERVICE_PATTERNS` includes `^slm-`, so the
+# sweep (which skips only OFFLINE nodes) can restart the SAME `slm-agent`
+# unit `_remediate_node` is independently restarting on a DEGRADED node --
+# `_heartbeat_returned` cannot attribute a resulting heartbeat to either
+# restart, so the node attempt can read `success=True` on the strength of
+# the SWEEP's restart and reset `count` to 0 -- "56 restarts / 0
+# escalations" again, through a third door. Both are reverted; `_run_loop`
+# is fully serial again (`_check_node_health` -> `_attempt_remediation` ->
+# `_remediate_failed_services` -> ...).
+#
+# With the sweep serial again, this budget directly extends the SAME
+# node-pass gap `_effective_tracker_expiry_s()` bounds (see there) -- a
+# single service run at the full 2100s this constant used to allow would, by
+# itself, exceed even the 1800s DEFAULT `AUTOBOT_REMEDIATION_TRACKER_
+# EXPIRY_S`. Capped instead at the SAME 180s as `REMEDIATION_PLAYBOOK_
+# TIMEOUT_S` above -- reintroducing round 2's own finding (a legitimate
+# multi-minute backup/rotation restart is killed early and eventually
+# escalates for human review, rather than running to completion) is the
+# lesser, and currently only SAFE, of the two known bad outcomes. The real
+# fix -- concurrency safe against the singleton executor (a per-executor
+# lock, a per-host lock, or a redesign) or a per-unit budget derived from
+# the unit's own `TimeoutStartSec` -- is a design decision with a real cost,
+# tracked separately rather than guessed at here: #14570.
+SERVICE_RESTART_PLAYBOOK_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S", REMEDIATION_PLAYBOOK_TIMEOUT_S, min_v=1
+)
 # #14465 review: this does NOT read any heartbeat/streak signal, which closes
 # the specific way the prior two designs were fakeable by a flap -- but it is
 # not, on its own, a general fix for escalation reachability. The dominant
@@ -125,7 +206,7 @@ MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
 )
 
 # #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
-# two "log once, not every call" warnings -- that function runs on every
+# "log once, not every call" warnings -- that function runs on every
 # _forgive_if_expired, up to once per reconcile pass per degraded node.
 _expiry_floor_override_logged = False
 _reconcile_interval_type_warning_logged = False
@@ -152,28 +233,71 @@ def _effective_tracker_expiry_s() -> int:
     With more than one such node in the same pass, the real gap between two
     `_remediate_node` calls for a GIVEN node can run well beyond `reconcile_
     interval` -- a margin of `reconcile_interval` alone was measured
-    defeated for realistic real-world pass durations. `REMEDIATION_
-    HEARTBEAT_WAIT_S` upper-bounds the dominant source of that variance for
-    ONE node; this does NOT bound the case of many nodes degraded
-    simultaneously, which needs either a known fleet-size ceiling or
-    restructuring `_attempt_remediation` to process nodes concurrently (each
-    with its own DB session -- sharing one `AsyncSession` across concurrent
-    coroutines is unsafe, so that is a real change, not a one-line fix).
-    Tracked as #14515. Nor does it bound `execute_playbook`'s own runtime,
-    which has no wall-clock timeout at all -- tracked separately as #14524,
-    since that is a single-node gap, not a many-nodes one.
+    defeated for realistic real-world pass durations. This does NOT bound
+    the case of many nodes degraded simultaneously, which needs either a
+    known fleet-size ceiling or restructuring `_attempt_remediation` to
+    process nodes concurrently (each with its own DB session -- sharing one
+    `AsyncSession` across concurrent coroutines is unsafe, so that is a real
+    change, not a one-line fix). Tracked as #14515.
+
+    #14524 (round 8): `execute_playbook`'s own runtime is now bounded too
+    (`REMEDIATION_PLAYBOOK_TIMEOUT_S`, wired through `_restart_service_via_
+    ansible`), and the margin folds that in. Within ONE `_remediate_node`
+    call the two waits are SEQUENTIAL, not alternatives -- the ansible run
+    happens, then, only if it succeeded, `_heartbeat_returned` polls for up
+    to `REMEDIATION_HEARTBEAT_WAIT_S` more -- so the worst-case duration of a
+    single node's own attempt is their SUM, not either alone (`ceiling`
+    below). Still scoped to ONE node; #14515's many-nodes gap is unchanged
+    by this. A round-3 attempt to also fold in `_update_code_source`'s own
+    worst case, and to run the service-restart sweep off the node pass
+    entirely, was reverted (review round 3 re-review): the sweep change
+    introduced two Criticals of its own -- a singleton `PlaybookExecutor`
+    left with two concurrent callers racing `git reset --hard` in the one
+    shared `code_source` tree, and a sweep that can restart the SAME
+    `slm-agent` unit `_remediate_node` is independently restarting (`^slm-`
+    is itself one of `AUTOBOT_SERVICE_PATTERNS`), letting the sweep's
+    restart silently reset the NODE tracker's own count. See
+    `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`'s own comment and #14570.
+
+    #14524 (review round 3 re-review): the margin's SHAPE was also wrong.
+    `floor = REMEDIATION_COOLDOWN + max(reconcile_interval, ceiling) + 1`
+    reads as "deliberately looser than necessary" in an earlier version of
+    this docstring -- backwards. `max(a, b) <= a + b` always, so that form
+    is TIGHTER than adding the two, not looser. At the SHIPPED `ceiling`
+    (270, <= REMEDIATION_COOLDOWN) the two forms happen to agree for every
+    `reconcile_interval >= ceiling`, and the old form is only ever the
+    LARGER (safer) one otherwise -- so this specific bug is latent at
+    today's defaults. It stops being latent the moment `ceiling` alone
+    exceeds `REMEDIATION_COOLDOWN` (e.g. an operator raising
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S` past ~210s -- exactly the scenario
+    `reconciler_playbook_timeout_14524_test.py`'s own
+    `test_floor_extension_matters_more_...` test already exercises, at
+    `ceiling=370`) AND `reconcile_interval` exceeds `ceiling` too -- e.g.
+    `ceiling=370, reconcile_interval=400` gives the old form 701 against a
+    real gap of 771, a 70s undercount, not merely a pathological corner.
+    The sound form follows directly from how the gap is actually produced:
+    `last_attempt` is stamped at attempt START, so `ceiling`'s own work runs
+    concurrently with (i.e. inside) the cooldown window, and exactly ONE
+    more `reconcile_interval` poll follows once cooldown clears --
+    `max(REMEDIATION_COOLDOWN, ceiling) + reconcile_interval + 1`. This is
+    the identical expression the test suite's own `_gap_after_one_attempt`
+    helper already used (`reconciler_playbook_timeout_14524_test.py`); only
+    the SHIPPED formula here had the bug.
 
     Two conditions are logged once (not on every call -- this runs on every
     `_forgive_if_expired`, up to once per reconcile pass per degraded node)
     rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
     EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
-    a short window silently gets 391+ instead, which is ALSO shorter than
-    the 1800s default, so the operator ends up less protected than doing
-    nothing while believing they configured something specific), and
-    `settings.reconcile_interval` being present but not a real int (an
-    auto-vivified `MagicMock` child, dormant today but would otherwise
-    silently collapse a legitimately large configured interval down to the
-    60s fallback with no warning).
+    a short window silently gets 361+ instead at the current defaults, which
+    is ALSO shorter than the 1800s default, so the operator ends up less
+    protected than doing nothing while believing they configured something
+    specific -- and, at that same 1800s default, this floor is inert either
+    way: `max(1800, 361) == 1800`, so its exact value only matters for an
+    operator who has lowered the raw constant below it, or raised `reconcile_
+    interval` far enough to matter), and `settings.reconcile_interval` being
+    present but not a real int (an auto-vivified `MagicMock` child, dormant
+    today but would otherwise silently collapse a legitimately large
+    configured interval down to the 60s fallback with no warning).
     """
     global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
 
@@ -188,18 +312,19 @@ def _effective_tracker_expiry_s() -> int:
             _reconcile_interval_type_warning_logged = True
         reconcile_interval = 60
 
-    margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)
-    floor = REMEDIATION_COOLDOWN + margin + 1
+    single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
+    floor = max(REMEDIATION_COOLDOWN, single_node_attempt_ceiling_s) + reconcile_interval + 1
     effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
     if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
         logger.warning(
             "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
-            "(REMEDIATION_COOLDOWN=%ds + margin=%ds + 1)",
+            "(max(REMEDIATION_COOLDOWN=%ds, ceiling=%ds) + reconcile_interval=%ds + 1)",
             REMEDIATION_TRACKER_EXPIRY_S,
             effective,
             REMEDIATION_COOLDOWN,
-            margin,
+            single_node_attempt_ceiling_s,
+            reconcile_interval,
         )
         _expiry_floor_override_logged = True
 
@@ -843,10 +968,11 @@ class ReconcilerService:
         # gated on elapsed time since the last ATTEMPT rather than any
         # heartbeat/streak signal, but NOT a complete fix on its own: see
         # `_effective_tracker_expiry_s` for what its margin does and does not
-        # bound (it does not bound `execute_playbook`'s own runtime, which has
-        # no wall-clock timeout at all -- #14524; the margin's own N=5
-        # coverage gap at this floor is #14515). It is also not the reason
-        # `count` stays low for a node whose agent keeps heartbeating;
+        # bound (`execute_playbook`'s own runtime IS now bounded --
+        # REMEDIATION_PLAYBOOK_TIMEOUT_S, #14524 -- and folded into that
+        # margin; the margin's own N-nodes coverage gap at this floor is
+        # still #14515). It is also not the reason `count` stays low for a
+        # node whose agent keeps heartbeating;
         # `success = restarted and await self._heartbeat_returned(...)`, a
         # few lines below, is.
 
@@ -890,6 +1016,7 @@ class ReconcilerService:
         restarted = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
+            timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
         )
 
         # #14344: the restart exiting 0 is not remediation. A node whose agent
@@ -944,14 +1071,48 @@ class ReconcilerService:
         )
         return False
 
+    @staticmethod
+    def _log_restart_result(service_name: str, hostname: str, timeout_s: int, result: dict) -> bool:
+        """Log and interpret one execute_playbook result. Helper for _restart_service_via_ansible.
+
+        A timeout must read as a failure, never a silent success (#14524) --
+        `result["success"]` already reflects that (execute_playbook's
+        `returncode == 0` check), this only chooses which message to log.
+        `result.get("output", ...)`, not `.get("error", ...)`: execute_playbook
+        never returns an "error" key, only "output" -- the previous
+        `.get("error", ...)` here always fell through to its generic default.
+        """
+        if result.get("success"):
+            logger.info("Successfully restarted %s on %s", service_name, hostname)
+            return True
+        if result.get("timed_out"):
+            logger.warning(
+                "Restart of %s on %s timed out after %ds -- killed (#14524)", service_name, hostname, timeout_s
+            )
+            return False
+        logger.warning("Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error"))
+        return False
+
     async def _restart_service_via_ansible(
         self,
         hostname: str,
         service_name: str,
+        timeout_s: int,
     ) -> bool:
         """Restart a systemd service on a remote node via Ansible playbook.
 
-        Returns True if successful, False otherwise.
+        A timed-out run comes back `success=False` (#14524), so this always
+        returns False for it too -- what makes the timeout safe for both
+        callers (`_remediate_node`, `_remediate_failed_service`) to advance
+        their attempt counters toward escalation instead of resetting.
+
+        `timeout_s` is REQUIRED, not defaulted (review, round 2): the two
+        callers restart very different shapes of unit -- `_remediate_node`
+        always the lightweight `slm-agent` (`REMEDIATION_PLAYBOOK_TIMEOUT_S`),
+        `_remediate_failed_service` an arbitrary `ServiceCategory.AUTOBOT`
+        unit that can be a `Type=oneshot` job with `TimeoutStartSec` up to
+        1800s (`SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`, see its own comment). A
+        default here would silently reapply one caller's budget onto the other.
         """
         try:
             from services.playbook_executor import get_playbook_executor
@@ -964,20 +1125,9 @@ class ReconcilerService:
                     "service_name": service_name,
                     "service_action": "restarted",
                 },
+                timeout_s=timeout_s,
             )
-
-            if result.get("success"):
-                logger.info("Successfully restarted %s on %s", service_name, hostname)
-                return True
-            else:
-                error_msg = result.get("error", "Unknown error")
-                logger.warning(
-                    "Failed to restart %s on %s: %s",
-                    service_name,
-                    hostname,
-                    error_msg,
-                )
-                return False
+            return self._log_restart_result(service_name, hostname, timeout_s, result)
 
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
@@ -1193,11 +1343,17 @@ class ReconcilerService:
             message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
-        # Try to restart via Ansible (#1814: prefer ansible_name)
+        # Try to restart via Ansible (#1814: prefer ansible_name). Review, round
+        # 2: this can be ANY ServiceCategory.AUTOBOT unit, including a
+        # Type=oneshot job with a multi-minute TimeoutStartSec -- the
+        # slm-agent-sized REMEDIATION_PLAYBOOK_TIMEOUT_S would SIGKILL a
+        # legitimate long-running restart, so this path gets its own, much
+        # larger budget (see SERVICE_RESTART_PLAYBOOK_TIMEOUT_S).
         ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
             ansible_target,
             service.service_name,
+            timeout_s=SERVICE_RESTART_PLAYBOOK_TIMEOUT_S,
         )
 
         # Update tracker

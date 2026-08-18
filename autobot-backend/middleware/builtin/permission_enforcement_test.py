@@ -73,23 +73,35 @@ class TestPermissionEnforcementExtension:
         assert self.ext.fail_closed is True
 
     # ------------------------------------------------------------------
-    # Undeclared/legacy tools (no tool_permission set) — backward compat
+    # Undeclared tools (no tool_permission set) — refused by default (#14523)
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_undeclared_tool_no_permission_allowed(self):
-        """Tools without tool_permission (undeclared/legacy) are allowed through."""
+    async def test_undeclared_tool_with_a_role_is_refused(self):
+        """#14523: no tool_permission means undeclared, and undeclared is refused
+        even for an otherwise-known caller — a role cannot make up for a tool
+        that never declared what it needs."""
         ctx = HookContext(session_id="s1", message="test")
         ctx.set("user_role", "user")
-        result = await self.ext.on_before_tool_execute(ctx)
-        assert result is None
+        with pytest.raises(PermissionError, match="no declared permission"):
+            await self.ext.on_before_tool_execute(ctx)
 
     @pytest.mark.asyncio
-    async def test_undeclared_tool_no_role_no_permission_allowed(self):
-        """No tool_permission and no user_role — undeclared, allowed."""
+    async def test_undeclared_tool_with_no_role_is_refused(self):
+        """#14523: no tool_permission and no user_role — still refused, not allowed."""
         ctx = HookContext(session_id="s1", message="test")
-        result = await self.ext.on_before_tool_execute(ctx)
-        assert result is None
+        with pytest.raises(PermissionError, match="no declared permission"):
+            await self.ext.on_before_tool_execute(ctx)
+
+    @pytest.mark.asyncio
+    async def test_undeclared_tool_is_refused_even_for_admin(self):
+        """#14523: undeclared denies unconditionally, before any role is even
+        consulted — an admin role does not grant access to a tool nobody has
+        judged what permission it needs."""
+        ctx = HookContext(session_id="s1", message="test")
+        ctx.set("user_role", "admin")
+        with pytest.raises(PermissionError, match="no declared permission"):
+            await self.ext.on_before_tool_execute(ctx)
 
     # ------------------------------------------------------------------
     # Declared permission, caller lacks it
