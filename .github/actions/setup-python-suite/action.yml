@@ -60,6 +60,28 @@ runs:
         # old versions.
         key: venv-python-suite-${{ runner.os }}-py${{ steps.env.outputs.pyversion }}-${{ hashFiles('requirements-ci.txt', 'requirements-ci/*.txt', 'requirements-ci-test.txt', 'constraints/*.txt') }}
 
+    # #13896: the OCR fallback needs the tesseract *binary*, not just the
+    # pytesseract binding. Ansible installs tesseract-ocr on every backend host
+    # (roles/backend/tasks/main.yml), but nothing installed it here — so
+    # pytesseract imported fine, get_tesseract_version() raised, and every OCR
+    # test skipped. That is #13885's exact shape reproduced in CI: the binding
+    # present, the binary absent, and a green run that proved nothing.
+    #
+    # Deliberately NOT inside the venv-cache guard below: the cache holds the
+    # virtualenv, not apt state, so a cache hit would skip this and the binary
+    # would be missing on exactly the runs that reuse a warm cache.
+    - name: Install OCR system packages (#13896)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v tesseract >/dev/null 2>&1; then
+          echo "tesseract already present: $(tesseract --version 2>&1 | head -1)"
+        else
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr
+          echo "installed: $(tesseract --version 2>&1 | head -1)"
+        fi
+
     - name: Install Python dependencies
       # Only on a miss. On a hit the venv is already complete and this whole
       # step is skipped, which is where the saving comes from.

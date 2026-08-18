@@ -22,6 +22,7 @@ scanned page can actually be read.
 """
 
 import io
+import os
 
 import pytest
 
@@ -166,13 +167,31 @@ def test_knobs_are_configurable(monkeypatch):
     assert max_ocr_pages() == 7
 
 
+@needs_ocr
 def test_page_ceiling_reports_what_it_skipped(monkeypatch):
-    """Silently reading fewer pages than asked is the failure this prevents."""
+    """Silently reading fewer pages than asked is the failure this prevents.
+
+    Needs the toolchain: without it the availability branch returns *every*
+    requested page as skipped, which is correct behaviour but not what this
+    asserts. Marking it was the fix for a real CI failure — the assertion read
+    ``(1, 2, 3, 4) == (3, 4)`` because tesseract was absent, not because the
+    ceiling was wrong.
+    """
     from autobot_shared.ssot_config import config
 
     monkeypatch.setattr(config.misc, "document_max_ocr_pages", "2", raising=False)
     result = ocr_pdf_pages(_scanned_pdf([None, None, None, None]), [1, 2, 3, 4])
     assert result.skipped_pages == (3, 4)
+
+
+def test_unavailable_toolchain_reports_every_page_as_skipped():
+    """The complement, which needs no toolchain: nothing is quietly dropped."""
+    if _OCR_AVAILABLE:
+        pytest.skip("covers the unavailable branch only")
+
+    result = ocr_pdf_pages(_scanned_pdf([None, None]), [1, 2])
+    assert result.attempted is False
+    assert result.skipped_pages == (1, 2), "an unattempted page must still be reported"
 
 
 def test_require_ocr_matches_availability():
@@ -205,6 +224,30 @@ def test_born_digital_documents_never_invoke_ocr(monkeypatch):
 
     assert calls == [], "OCR must not run for a document that already has text"
     assert "ocr_attempted" not in data
+
+
+# ---------------------------------------------------------------------------
+# The skip must not become permanent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not os.environ.get("CI"), reason="asserts the CI runner's provisioning, not a developer's")
+def test_ci_actually_has_the_ocr_toolchain():
+    """In CI the end-to-end tests must RUN, not skip.
+
+    Everything below this point is ``skipif``-gated, and a gate that is always
+    closed is indistinguishable from a suite that passes. #13885 is precisely
+    that failure: the binding shipped, the binary did not, and nothing noticed
+    for months. This makes the CI runner's provisioning an assertion, so
+    dropping the tesseract install from setup-python-suite fails loudly instead
+    of quietly reverting OCR to unverified.
+    """
+    available, reason = ocr_availability()
+    assert available, (
+        f"OCR toolchain missing on the CI runner: {reason}. "
+        "The end-to-end tests below are skipping, which means OCR is shipping unverified. "
+        "See the 'Install OCR system packages' step in .github/actions/setup-python-suite."
+    )
 
 
 # ---------------------------------------------------------------------------
