@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Izmantojiet bulttaustiņus, lai pārvietotu fokusu starp mezgliem. Nospiediet Enter vai atstarpi, lai atlasītu fokusēto mezglu. Nospiediet Escape, lai atceltu atlasi.",
+      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "Audekls",
       "canvasTabAll": "Visas vienības",
       "canvasUnit": "Vienība {name}",
+      "canvasTeam": "Komanda {name}",
       "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas.",
       "viewPeople": "Cilvēki",
       "peopleLegend": "Personu veidi",
@@ -8308,7 +8313,8 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
-      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
+      "canvasGroupKind": "Grupa"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -9170,6 +9176,23 @@
     "errorGrant": "Neizdevās piešķirt atļauju.",
     "errorRevoke": "Neizdevās atsaukt atļauju.",
     "errorAttach": "Neizdevās pievienot.",
-    "errorDetach": "Neizdevās noņemt."
+    "errorDetach": "Neizdevās noņemt.",
+    "rate": "Stundas likme",
+    "rateLabel": "Summa",
+    "currencyLabel": "Valūta",
+    "saveRate": "Saglabāt likmi",
+    "clearRate": "Notīrīt",
+    "noRate": "Likme nav iestatīta — šīs lomas soļiem vēl nevar aprēķināt izmaksas.",
+    "stepCosts": "Soļu izmaksas",
+    "minutesLabel": "Minūtes vienā izpildē",
+    "runsLabel": "Izpildes mēnesī",
+    "saveStepCost": "Saglabāt",
+    "perRun": "par izpildi",
+    "perMonth": "mēnesī",
+    "costNeedsRate": "Iestatiet šīs lomas stundas likmi, lai aprēķinātu šī soļa izmaksas.",
+    "costNeedsInputs": "Nav aprēķināts — norādiet, cik ilgs ir šis solis un cik bieži tas notiek.",
+    "errorSetRate": "Likmi neizdevās saglabāt.",
+    "errorClearRate": "Likmi neizdevās notīrīt.",
+    "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
   }
 }

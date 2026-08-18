@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Użyj klawiszy strzałek, aby przenieść fokus między węzłami. Naciśnij Enter lub Spację, aby wybrać zaznaczony węzeł. Naciśnij Escape, aby anulować wybór.",
+      "a11yInstructionsMove": "Przytrzymaj Control i naciśnij klawisz strzałki, aby przenieść wybrany węzeł."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "Płótno",
       "canvasTabAll": "Wszystkie jednostki",
       "canvasUnit": "Jednostka {name}",
+      "canvasTeam": "Zespół {name}",
       "canvasHint": "Shift+przeciągnięcie przesuwa, przewijanie przybliża, kliknij węzeł, aby zobaczyć szczegóły.",
       "viewPeople": "Osoby",
       "peopleLegend": "Rodzaje osób",
@@ -8308,7 +8313,8 @@
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
       "processDetach": "Odłącz {workflow} od {role}",
-      "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna."
+      "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna.",
+      "canvasGroupKind": "Grupa"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",
@@ -9170,6 +9176,23 @@
     "errorGrant": "Nie udało się przyznać uprawnienia.",
     "errorRevoke": "Nie udało się odebrać uprawnienia.",
     "errorAttach": "Nie udało się dołączyć.",
-    "errorDetach": "Nie udało się odłączyć."
+    "errorDetach": "Nie udało się odłączyć.",
+    "rate": "Stawka godzinowa",
+    "rateLabel": "Kwota",
+    "currencyLabel": "Waluta",
+    "saveRate": "Zapisz stawkę",
+    "clearRate": "Wyczyść",
+    "noRate": "Brak stawki — kroków tej roli nie można jeszcze wycenić.",
+    "stepCosts": "Koszty kroków",
+    "minutesLabel": "Minuty na uruchomienie",
+    "runsLabel": "Uruchomienia miesięcznie",
+    "saveStepCost": "Zapisz",
+    "perRun": "na uruchomienie",
+    "perMonth": "miesięcznie",
+    "costNeedsRate": "Ustaw stawkę godzinową dla tej roli, aby wycenić ten krok.",
+    "costNeedsInputs": "Bez wyceny — zapisz, ile trwa ten krok i jak często się wykonuje.",
+    "errorSetRate": "Nie udało się zapisać stawki.",
+    "errorClearRate": "Nie udało się wyczyścić stawki.",
+    "errorSetStepCost": "Nie udało się zapisać danych kosztowych kroku."
   }
 }
