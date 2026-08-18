@@ -9176,6 +9176,23 @@
     "errorGrant": "Could not grant that permission.",
     "errorRevoke": "Could not revoke that permission.",
     "errorAttach": "Could not attach that.",
-    "errorDetach": "Could not detach that."
+    "errorDetach": "Could not detach that.",
+    "rate": "Hourly rate",
+    "rateLabel": "Amount",
+    "currencyLabel": "Currency",
+    "saveRate": "Save rate",
+    "clearRate": "Clear",
+    "noRate": "No rate set — this role's steps cannot be costed yet.",
+    "stepCosts": "Step costs",
+    "minutesLabel": "Minutes per run",
+    "runsLabel": "Runs per month",
+    "saveStepCost": "Save",
+    "perRun": "per run",
+    "perMonth": "per month",
+    "costNeedsRate": "Set an hourly rate for this role to cost this step.",
+    "costNeedsInputs": "Not costed — record how long this step takes and how often it runs.",
+    "errorSetRate": "Could not save the rate.",
+    "errorClearRate": "Could not clear the rate.",
+    "errorSetStepCost": "Could not save this step's cost inputs."
   }
 }

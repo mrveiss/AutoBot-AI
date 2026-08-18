@@ -167,6 +167,109 @@
               @remove="detachWorkflow"
             />
 
+            <!-- #14607: the rate the role's steps are costed against. It sits
+                 with the role's other attachments because it belongs to the
+                 role, not to whoever currently holds it. -->
+            <section class="rounded-lg border border-autobot-border p-3" data-testid="role-rate-panel">
+              <h3 class="text-sm font-semibold text-autobot-text-primary">{{ t('llcRoles.rate') }}</h3>
+              <div class="mt-2 flex flex-wrap items-end gap-2">
+                <label class="flex flex-col gap-1 text-xs text-autobot-text-secondary">
+                  {{ t('llcRoles.rateLabel') }}
+                  <input
+                    v-model="rateDraft"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="w-28 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+                    data-testid="role-rate-amount"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-autobot-text-secondary">
+                  {{ t('llcRoles.currencyLabel') }}
+                  <input
+                    v-model="currencyDraft"
+                    maxlength="3"
+                    class="w-20 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm uppercase text-autobot-text-primary"
+                    data-testid="role-rate-currency"
+                  />
+                </label>
+                <BaseButton
+                  variant="primary"
+                  data-testid="role-rate-save"
+                  :disabled="!canSaveRate"
+                  @click="saveRate"
+                >
+                  {{ t('llcRoles.saveRate') }}
+                </BaseButton>
+                <BaseButton v-if="roleRate" variant="secondary" data-testid="role-rate-clear" @click="clearRate">
+                  {{ t('llcRoles.clearRate') }}
+                </BaseButton>
+              </div>
+              <!-- Stated, not implied: no rate is not a rate of zero, and every
+                   step of this role is not costable until one exists. -->
+              <p v-if="!roleRate" class="mt-2 text-xs text-autobot-text-muted" data-testid="role-rate-absent">
+                {{ t('llcRoles.noRate') }}
+              </p>
+            </section>
+
+            <!-- #14598: how long each step takes and how often it runs. -->
+            <section
+              v-if="stepCosts.length > 0"
+              class="rounded-lg border border-autobot-border p-3"
+              data-testid="step-costs-panel"
+            >
+              <h3 class="text-sm font-semibold text-autobot-text-primary">{{ t('llcRoles.stepCosts') }}</h3>
+              <ul class="mt-2 divide-y divide-autobot-border">
+                <li
+                  v-for="cost in stepCosts"
+                  :key="cost.workflow_id"
+                  class="flex flex-wrap items-end gap-2 py-2"
+                  :data-testid="`step-cost-${cost.workflow_id}`"
+                >
+                  <span class="min-w-0 flex-1 truncate text-sm text-autobot-text-primary">
+                    {{ cost.workflow_id }}
+                  </span>
+                  <label class="flex flex-col gap-1 text-xs text-autobot-text-secondary">
+                    {{ t('llcRoles.minutesLabel') }}
+                    <input
+                      v-model="stepDrafts[cost.workflow_id].minutes"
+                      type="number"
+                      min="0"
+                      class="w-20 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+                      :data-testid="`step-minutes-${cost.workflow_id}`"
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs text-autobot-text-secondary">
+                    {{ t('llcRoles.runsLabel') }}
+                    <input
+                      v-model="stepDrafts[cost.workflow_id].runs"
+                      type="number"
+                      min="0"
+                      class="w-20 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+                      :data-testid="`step-runs-${cost.workflow_id}`"
+                    />
+                  </label>
+                  <BaseButton
+                    variant="secondary"
+                    :data-testid="`step-cost-save-${cost.workflow_id}`"
+                    @click="saveStepCost(
+                      cost.workflow_id,
+                      stepDrafts[cost.workflow_id].minutes,
+                      stepDrafts[cost.workflow_id].runs,
+                    )"
+                  >
+                    {{ t('llcRoles.saveStepCost') }}
+                  </BaseButton>
+                  <span
+                    class="w-full text-xs text-autobot-text-muted"
+                    :data-testid="`step-cost-label-${cost.workflow_id}`"
+                  >
+                    {{ stepCostLabel(cost) }}
+                  </span>
+                </li>
+              </ul>
+            </section>
+
             <RoleAttachmentPanel
               panel-key="tools"
               :title="t('llcRoles.tools')"
@@ -269,6 +372,67 @@ const workflows = ref<string[]>([])
 const tools = ref<string[]>([])
 const credentials = ref<string[]>([])
 
+/**
+ * The role's hourly rate, and the cost of each workflow it runs (#14598, #14607).
+ *
+ * `null` rate means nobody has set one — not a rate of zero. Every step of the
+ * role is then *not costable*, which the panel says in words rather than
+ * showing a total of 0.
+ */
+interface RoleRate {
+  hourly_rate: string
+  currency: string
+}
+interface StepCost {
+  workflow_id: string
+  estimated_minutes: number | null
+  runs_per_month: number | null
+  per_run: string | null
+  per_month: string | null
+  per_year: string | null
+  currency: string | null
+  missing: string[]
+}
+const roleRate = ref<RoleRate | null>(null)
+const stepCosts = ref<StepCost[]>([])
+const rateDraft = ref<string | number>('')
+const currencyDraft = ref('')
+
+/**
+ * A draft field as text, whatever the input handed back.
+ *
+ * A `type="number"` input can yield a number rather than a string, and calling
+ * `.trim()` on it throws inside the render function — which takes the whole
+ * role detail down rather than just refusing the save.
+ */
+function asText(value: string | number | null | undefined): string {
+  return value === null || value === undefined ? '' : String(value)
+}
+
+/** Whether the rate is complete enough to send. */
+const canSaveRate = computed(
+  () => asText(rateDraft.value).trim() !== '' && asText(currencyDraft.value).trim().length === 3,
+)
+/**
+ * Per-step edits in progress, keyed by workflow id.
+ *
+ * Seeded from the loaded costs and re-seeded on every load, so switching role
+ * cannot leave the previous role's numbers sitting in the inputs — a stale
+ * draft that is then saved would write one role's measurement onto another.
+ */
+const stepDrafts = ref<Record<string, { minutes: string | number; runs: string | number }>>({})
+
+function seedStepDrafts(costs: StepCost[]): void {
+  const seeded: Record<string, { minutes: string | number; runs: string | number }> = {}
+  for (const cost of costs) {
+    seeded[cost.workflow_id] = {
+      minutes: cost.estimated_minutes === null ? '' : String(cost.estimated_minutes),
+      runs: cost.runs_per_month === null ? '' : String(cost.runs_per_month),
+    }
+  }
+  stepDrafts.value = seeded
+}
+
 const selectedRoleId = ref<string | null>(null)
 const includePastHolders = ref(false)
 const isLoading = ref(false)
@@ -341,13 +505,21 @@ async function loadDetail(): Promise<void> {
   try {
     // Fetched together so a slow panel cannot leave the others showing a
     // previous role's data — a partially-updated detail pane reads as fact.
-    const [loadedHolders, loadedPermissions, loadedWorkflows, loadedTools, loadedCredentials] =
+    const [
+      loadedHolders,
+      loadedPermissions,
+      loadedWorkflows,
+      loadedTools,
+      loadedCredentials,
+      loadedRate,
+    ] =
       await Promise.all([
         api.get<HolderRow[]>(`${base}/holders?include_past=${includePastHolders.value}`),
         api.get<string[]>(`${base}/permissions`),
         api.get<string[]>(`${base}/workflows`),
         api.get<string[]>(`${base}/tools`),
         api.get<string[]>(`${base}/credentials`),
+        api.get<RoleRate | null>(`${base}/rate`),
       ])
     // A newer load started while this one was in flight: its answer is the
     // current one, so this response is discarded rather than published.
@@ -357,12 +529,116 @@ async function loadDetail(): Promise<void> {
     workflows.value = Array.isArray(loadedWorkflows) ? loadedWorkflows : []
     tools.value = Array.isArray(loadedTools) ? loadedTools : []
     credentials.value = Array.isArray(loadedCredentials) ? loadedCredentials : []
+    roleRate.value = loadedRate ?? null
+    rateDraft.value = loadedRate?.hourly_rate ?? ''
+    currencyDraft.value = loadedRate?.currency ?? ''
+    // Costs depend on the workflow list, so they are fetched after it rather
+    // than alongside — and they carry the same stale-load ticket, so a slow
+    // cost fetch cannot publish a previous role's numbers.
+    await loadStepCosts(roleId, ticket, workflows.value)
   } catch (error) {
     logger.error('Failed to load role detail', error)
     errorMessage.value = describeError(error, 'llcRoles.errorLoadDetail')
   } finally {
     if (ticket === detailRequestId) isDetailLoading.value = false
   }
+}
+
+/**
+ * Fetch the cost of each workflow this role runs (#14598).
+ *
+ * One request per attached workflow. `Promise.allSettled`, not `all`: one step
+ * whose cost cannot be read must not blank the costs of every other step —
+ * that would turn a single failure into "nothing is costed", which reads as
+ * "nothing costs anything".
+ */
+async function loadStepCosts(roleId: string, ticket: number, ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    if (ticket === detailRequestId) {
+      stepCosts.value = []
+      seedStepDrafts([])
+    }
+    return
+  }
+  const base = `/api/llc/roles/${companyId.value}/${roleId}`
+  const results = await Promise.allSettled(
+    ids.map((id) => api.get<StepCost>(`${base}/workflows/${encodeURIComponent(id)}/cost`)),
+  )
+  if (ticket !== detailRequestId) return
+  stepCosts.value = results.flatMap((result, index) => {
+    if (result.status !== 'fulfilled') {
+      logger.error('Failed to load step cost', ids[index])
+      return []
+    }
+    // Accept only rows that actually carry the shape this panel reads. A
+    // response of the wrong shape reached the template once during development
+    // and `cost.missing.includes(...)` threw, taking the whole role detail
+    // down — the same failure #13617 fixed on the cost dashboard. Validating
+    // here means a bad payload costs one row, not the view.
+    const row = result.value as StepCost | undefined
+    if (!row || typeof row.workflow_id !== 'string' || !Array.isArray(row.missing)) {
+      logger.error('Step cost response had an unexpected shape', ids[index])
+      return []
+    }
+    return [row]
+  })
+  seedStepDrafts(stepCosts.value)
+}
+
+/** A step's cost line, or the reason it has none. Never a zero standing in. */
+function stepCostLabel(cost: StepCost): string {
+  if (cost.per_month !== null && cost.currency) {
+    return `${cost.per_month} ${cost.currency} ${t('llcRoles.perMonth')}`
+  }
+  if (cost.per_run !== null && cost.currency) {
+    return `${cost.per_run} ${cost.currency} ${t('llcRoles.perRun')}`
+  }
+  // Missing is not zero, and the reason is what tells someone how to fix it.
+  if (cost.missing.includes('no_role_rate')) return t('llcRoles.costNeedsRate')
+  return t('llcRoles.costNeedsInputs')
+}
+
+async function saveRate(): Promise<void> {
+  const amount = asText(rateDraft.value).trim()
+  const currency = asText(currencyDraft.value).trim().toUpperCase()
+  if (!amount || currency.length !== 3) return
+  await mutate(
+    () => api.put(`${detailBase()}/rate`, { hourly_rate: amount, currency }),
+    'llcRoles.errorSetRate',
+  )
+}
+
+async function clearRate(): Promise<void> {
+  await mutate(() => api.delete(`${detailBase()}/rate`), 'llcRoles.errorClearRate')
+}
+
+/**
+ * Record how long a step takes and how often it runs.
+ *
+ * An empty field sends `null`, which clears the value back to *not recorded*.
+ * Treating empty as "leave unchanged" would make a mistyped number impossible
+ * to remove, and a wrong measurement is worse than an absent one because it is
+ * silently summed.
+ */
+async function saveStepCost(
+  workflowId: string,
+  minutes: string | number,
+  runs: string | number,
+): Promise<void> {
+  const toValue = (raw: string | number): number | null => {
+    const trimmed = asText(raw).trim()
+    if (trimmed === '') return null
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null
+  }
+  await mutate(
+    () =>
+      api.put(`${detailBase()}/workflows/${encodeURIComponent(workflowId)}/cost`, {
+        estimated_minutes: toValue(minutes),
+        runs_per_month: toValue(runs),
+      }),
+    'llcRoles.errorSetStepCost',
+  )
 }
 
 async function selectRole(roleId: string): Promise<void> {

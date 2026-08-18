@@ -50519,6 +50519,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/roles/{company_id}/{role_id}/workflows/{workflow_id}/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Step Cost
+         * @description What this step costs to run, or why it cannot be costed.
+         */
+        get: operations["get_step_cost_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_get"];
+        /**
+         * Set Step Cost Inputs
+         * @description Record how long the step takes and how often it runs.
+         */
+        put: operations["set_step_cost_inputs_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Role Rate
+         * @description The role's hourly rate, or ``null`` when nobody has set one.
+         *
+         *     ``null`` rather than a zero-rate object: a role with no rate cannot have
+         *     its steps costed, which is not the same as its work being free.
+         */
+        get: operations["get_role_rate_api_llc_roles__company_id___role_id__rate_get"];
+        /** Set Role Rate */
+        put: operations["set_role_rate_api_llc_roles__company_id___role_id__rate_put"];
+        post?: never;
+        /**
+         * Clear Role Rate
+         * @description Remove the rate. Every step of this role becomes not costable again.
+         */
+        delete: operations["clear_role_rate_api_llc_roles__company_id___role_id__rate_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -90157,6 +90209,32 @@ export interface components {
          * @enum {string}
          */
         RoleHolderType: "user" | "agent" | "contact";
+        /** RoleRateResponse */
+        RoleRateResponse: {
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Hourly Rate */
+            hourly_rate: string;
+            /** Currency */
+            currency: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleRateSet
+         * @description The hourly cost of a role, with its unit (#14607).
+         */
+        RoleRateSet: {
+            /** Hourly Rate */
+            hourly_rate: number | string;
+            /** Currency */
+            currency: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** RoleUpdate */
         RoleUpdate: {
             /** Name */
@@ -94904,6 +94982,51 @@ export interface components {
             status: string;
             /** Comment */
             comment?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StepCostInputs
+         * @description How long a step takes and how often it runs (#14598).
+         *
+         *     Both optional and both meaning *not recorded* when absent — never zero, and
+         *     never "leave unchanged". Sending ``null`` clears a number someone entered
+         *     by mistake, which a partial-update idiom would make impossible.
+         */
+        StepCostInputs: {
+            /** Estimated Minutes */
+            estimated_minutes?: number | null;
+            /** Runs Per Month */
+            runs_per_month?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StepCostResponse
+         * @description A step's recorded inputs and the cost derived from them (#14598, #14607).
+         *
+         *     The derived figures are nullable and accompanied by ``missing``: a step
+         *     nobody measured, or a role with no rate, is *not costable* rather than
+         *     free. A zero here would understate every total it feeds and would be
+         *     indistinguishable from a genuinely free step.
+         */
+        StepCostResponse: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Estimated Minutes */
+            estimated_minutes: number | null;
+            /** Runs Per Month */
+            runs_per_month: number | null;
+            /** Per Run */
+            per_run: string | null;
+            /** Per Month */
+            per_month: string | null;
+            /** Per Year */
+            per_year: string | null;
+            /** Currency */
+            currency: string | null;
+            /** Missing */
+            missing: string[];
         } & {
             [key: string]: unknown;
         };
@@ -170357,6 +170480,174 @@ export interface operations {
                 company_id: string;
                 role_id: string;
                 secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_step_cost_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepCostResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_step_cost_inputs_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepCostInputs"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepCostResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_role_rate_api_llc_roles__company_id___role_id__rate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleRateResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_role_rate_api_llc_roles__company_id___role_id__rate_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRateSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleRateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_role_rate_api_llc_roles__company_id___role_id__rate_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
             };
             cookie?: never;
         };
