@@ -163,7 +163,9 @@ def print_summary(summary: dict[str, int], apply_changes: bool) -> None:
     if summary["lines_before"] > 0:
         saved = summary["lines_before"] - summary["lines_after"]
         percentage = saved / summary["lines_before"] * 100
-        print(f"  Total lines: {summary['lines_before']} -> {summary['lines_after']} (saved {saved}, {percentage:.1f}%)")
+        print(
+            f"  Total lines: {summary['lines_before']} -> {summary['lines_after']} (saved {saved}, {percentage:.1f}%)"
+        )
 
     if not apply_changes and summary["modified"]:
         print("\nThis was a dry run: no files were changed. Re-run with --apply to write these changes.")
