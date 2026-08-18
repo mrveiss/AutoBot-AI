@@ -29,6 +29,7 @@ from agents.sentiment_analysis_agent import SentimentAnalysisAgent
 from agents.summarization_agent import SummarizationAgent
 from agents.translation_agent import TranslationAgent
 from constants.threshold_constants import LLMDefaults
+from llm_shared.models import LLMResponse
 
 MODALITY_AGENTS = [
     AudioProcessingAgent,
@@ -110,6 +111,54 @@ class TestExtractContent:
     def test_unrecognized_dict_falls_back_to_str(self):
         assert self._agent()._extract_content({"unrelated": 1}) == "{'unrelated': 1}"
 
+    def test_llm_response_content_is_extracted(self):
+        """Issue #14559: `chat_optimized` returns `LLMResponse`, not str/dict.
+
+        Constructed exactly the way the vLLM provider builds the success
+        response inside `chat_optimized` (see
+        `llm_shared/providers/vllm_base.py::_chat_completion_impl`), not
+        hand-rolled with different fields.
+        """
+        response = LLMResponse(
+            content="  The document discusses quarterly revenue growth.  ",
+            model="meta-llama/Llama-3.2-3B-Instruct",
+            provider="vllm",
+            usage={"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160},
+            provider_metadata={"model_api_name": "meta-llama/Llama-3.2-3B-Instruct"},
+        )
+        assert self._agent()._extract_content(response) == "The document discusses quarterly revenue growth."
+
+    def test_genuinely_unrecognized_type_raises(self):
+        """Neither str, dict, nor LLMResponse must fail loudly, not repr silently."""
+        with pytest.raises(TypeError):
+            self._agent()._extract_content(12345)
+
+
+class TestExtractTokenUsage:
+    """`_extract_token_usage` (Issue #14559): populated from `LLMResponse.usage`."""
+
+    def _agent(self):
+        return AudioProcessingAgent.__new__(AudioProcessingAgent)
+
+    def test_llm_response_usage_is_extracted(self):
+        response = LLMResponse(
+            content="text",
+            model="m",
+            provider="vllm",
+            usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        )
+        assert self._agent()._extract_token_usage(response) == {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+        }
+
+    def test_dict_usage_is_extracted(self):
+        assert self._agent()._extract_token_usage({"usage": {"total_tokens": 3}}) == {"total_tokens": 3}
+
+    def test_unrecognized_type_returns_empty(self):
+        assert self._agent()._extract_token_usage(12345) == {}
+
 
 class TestAfterSuccessHook:
     """The one genuine per-agent difference: SentimentAnalysisAgent's diary write."""
@@ -149,3 +198,37 @@ class TestAfterSuccessHook:
             result = {"status": "success", "response": "x"}
             out = await inst._after_success(result, {}, "sess-1")
             assert out is result
+
+
+class TestProcessQueryEndToEnd:
+    """Issue #14559: `process_query` end-to-end against a real `LLMResponse`.
+
+    `llm_interface.chat_optimized` is mocked to return an `LLMResponse`
+    constructed the way the vLLM provider actually builds it (see
+    `llm_shared/providers/vllm_base.py::_chat_completion_impl`), not a bare
+    str/dict — that mismatch is exactly what hid this defect.
+    """
+
+    @pytest.mark.asyncio
+    async def test_success_response_and_token_usage_are_populated(self):
+        inst = SummarizationAgent.__new__(SummarizationAgent)
+        inst.AGENT_ID = "summarization"
+        inst.model_name = "meta-llama/Llama-3.2-3B-Instruct"
+        inst._LOGGER = SummarizationAgent._LOGGER
+        inst.QUERY_TEMPERATURE = SummarizationAgent.QUERY_TEMPERATURE
+        inst.QUERY_MAX_TOKENS = SummarizationAgent.QUERY_MAX_TOKENS
+        inst.QUERY_ERROR_MESSAGE = SummarizationAgent.QUERY_ERROR_MESSAGE
+        inst.llm_interface = AsyncMock()
+        inst.llm_interface.chat_optimized.return_value = LLMResponse(
+            content="Quarterly revenue grew 12% year over year.",
+            model=inst.model_name,
+            provider="vllm",
+            usage={"prompt_tokens": 200, "completion_tokens": 30, "total_tokens": 230},
+        )
+
+        result = await inst.process_query("Summarize the attached report", {"session_id": "sess-42"})
+
+        assert result["status"] == "success"
+        assert result["response"] == "Quarterly revenue grew 12% year over year."
+        assert result["response_text"] == "Quarterly revenue grew 12% year over year."
+        assert result["token_usage"] == {"prompt_tokens": 200, "completion_tokens": 30, "total_tokens": 230}

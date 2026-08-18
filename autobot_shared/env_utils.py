@@ -118,6 +118,35 @@ def env_int_clamped(
     return value
 
 
+def env_float_clamped(
+    name: str,
+    default: float,
+    min_v: float | None = None,
+    max_v: float | None = None,
+) -> float:
+    """Read a float environment variable with optional min/max clamping.
+
+    Mirrors :func:`env_int_clamped` for the float case (#14524): a bare
+    :func:`env_float` accepts 0 and negatives, and for a value used as a
+    signal-escalation grace period, 0 collapses the grace entirely (SIGKILL
+    fires with no chance for a well-behaved child to exit on SIGTERM first).
+    """
+    raw = env_raw(name)
+    if raw is None:
+        value = default
+    else:
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning("Invalid %s=%r; using %s", name, raw, default)
+            value = default
+    if min_v is not None:
+        value = max(min_v, value)
+    if max_v is not None:
+        value = min(max_v, value)
+    return value
+
+
 # Canonical truthy set for boolean env flags. Single source of truth so guards
 # don't drift (config_guard used to omit "on", silently ignoring
 # ``AUTOBOT_ALLOW_CONFIG_EDITS=on`` — #11220).

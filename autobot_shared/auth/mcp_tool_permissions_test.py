@@ -95,6 +95,31 @@ def test_the_bridge_sources_are_actually_being_read():
     assert total > 50, f"only {total} tool names extracted — the parser stopped matching: {found}"
 
 
+def test_no_tool_name_is_shared_across_two_bridges():
+    """#14523: TOOL_PERMISSIONS is keyed by tool name alone, not (bridge, tool).
+
+    Two bridges registering a tool with the same name would have one silently
+    resolve through the other's declared permission. Runs the checker's own
+    `tool_name_collisions()` — the required CI check, not a second parser that
+    could drift from it — against the real bridge sources. Zero collisions
+    across 104 tools when this landed.
+    """
+    checker = _load_coverage_checker()
+    collisions = checker.tool_name_collisions()
+
+    assert not collisions, f"tool name(s) registered on more than one bridge: {collisions}"
+
+
+def test_every_bridge_clears_its_own_discovery_floor():
+    """#14523: a per-bridge floor, so one bridge's count dropping cannot hide
+    inside a healthy sum. See `bridge_discovery_gaps` for the aggregate's
+    blind spot this closes."""
+    checker = _load_coverage_checker()
+    gaps = checker.bridge_discovery_gaps()
+
+    assert not gaps, "\n".join(gaps)
+
+
 def test_every_live_tool_carries_an_explicit_declaration():
     """#14494: the actual required-check guard, run against the real tree.
 
@@ -120,16 +145,21 @@ def test_an_exact_tool_entry_beats_its_bridge_default():
 
 
 def test_an_unknown_bridge_resolves_to_none():
-    """None is what stage 3 refuses — the inversion this issue is about."""
+    """#14523: this is now an actual refusal, not just a signal nothing acts on
+    — PermissionEnforcementExtension.on_before_tool_execute denies on None."""
     assert required_permission("whatever", "not_a_bridge") is None
 
 
-def test_an_undeclared_tool_on_a_known_bridge_inherits_the_least_privilege():
-    """A tool `required_permission` has never heard of under-grants rather than
-    over-grants. `tools/lint/check_mcp_tool_permission_coverage.py` is what stops
-    a REAL tool from staying in this state (#14494) — this pins the fallback
-    itself, which stays in place as defense-in-depth."""
-    assert required_permission("some_future_tool", "browser_mcp") == Permission.MCP_BROWSER_READ
+def test_an_undeclared_tool_on_a_known_bridge_is_also_refused():
+    """#14523 replaces the old invariant this test used to pin (a known bridge's
+    least-privileged default granting an undeclared tool a real read
+    permission). A tool `required_permission` has never heard of is now refused
+    exactly like one on a bridge this module has never heard of — bridge_name no
+    longer changes the answer. `tools/lint/check_mcp_tool_permission_coverage.py`
+    (#14494) is the CI-time guarantee that a REAL tool never actually reaches
+    this branch; this pins what happens if one somehow does."""
+    assert required_permission("some_future_tool", "browser_mcp") is None
+    assert required_permission("some_future_tool", "browser_mcp") != Permission.MCP_BROWSER_READ
 
 
 def test_the_old_blocklist_tools_still_require_management():

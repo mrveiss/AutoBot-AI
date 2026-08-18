@@ -26,26 +26,27 @@ Two levels, and the order matters:
    no exact entry here, which is what makes falling through to this baseline a
    CI-time event rather than a silent grant.
 
-**What this module actually guarantees, stated precisely (security review,
-#14521).** ``required_permission()`` is not changed by #14494 and still
-default-allows at runtime in both branches it can take:
+**#14523 (stage 3) — deny-by-default at runtime, closing the gap #14521's
+security review found in #14494.** Before this, ``required_permission()``
+default-allowed in both branches it could return: a tool absent from
+``TOOL_PERMISSIONS`` on a *known* bridge fell through to
+``BRIDGE_DEFAULT_PERMISSIONS`` (a real, grantable read permission, not a
+denial), and a tool on an *unknown* bridge resolved to ``None``, which
+``PermissionEnforcementExtension`` treated as "legacy — allow through" with no
+check at all. Both branches now return ``None`` for any tool absent from
+``TOOL_PERMISSIONS``, known bridge or not, and
+``PermissionEnforcementExtension.on_before_tool_execute`` refuses on ``None``
+instead of waving it through (see that module).
 
-* a tool absent from ``TOOL_PERMISSIONS`` on a *known* bridge resolves through
-  ``BRIDGE_DEFAULT_PERMISSIONS`` — a real, grantable read permission, not a
-  denial (pinned by
-  ``test_an_undeclared_tool_on_a_known_bridge_inherits_the_least_privilege``);
-* a tool on an *unknown* bridge resolves to ``None``, and
-  ``PermissionEnforcementExtension`` currently treats ``None`` as legacy —
-  allowed through with no check at all.
-
-What #14494 actually delivers is **complete CI-time coverage**: every tool the
-eleven governed bridges register today has an exact entry, and
-``tools/lint/check_mcp_tool_permission_coverage.py`` (a required check) fails
-the moment a live tool has none. That coverage is backstopped at runtime only
-by the read-level default above — not by a denial. Tightening
-``required_permission``/the enforcement extension so an undeclared tool is
-refused rather than default-allowed at runtime is tracked separately as the
-#13228 stage-3 follow-up; this module does not attempt it.
+This was safe to flip only because #14494 already proved the precondition:
+every tool the eleven governed bridges register carries an exact
+``TOOL_PERMISSIONS`` entry (measured independently at #14523 time: 104 live
+tools, 0 undeclared, 0 name collisions across bridges — see
+``tools/lint/check_mcp_tool_permission_coverage.py``, still the required
+check that keeps it true). ``BRIDGE_DEFAULT_PERMISSIONS`` no longer grants
+anything at runtime; it stays as the registry ``test_every_bridge_has_a_default``
+checks a new bridge into before any of its tools can be declared, and as the
+source for the coverage checker's per-bridge discovery floors.
 
 **#14494 — every tool this system knows about carries an exact entry below.**
 The under-grant guard used to infer "mutating" from a hand-written verb list
@@ -57,17 +58,25 @@ registers today is declared here explicitly, so classification is a property of
 the tool, not a guess from its name. ``_DECLARED_AHEAD_OF_TIME`` below is the
 only sanctioned exception, and only for a tool that does not exist yet.
 
-**This module only describes. It enforces nothing on its own.** Stage 1 attaches
-the resolved value to the registry entry so it can be inspected and logged;
-``dispatch()`` still applies the old rule until the fallout inventory is in.
+**This module only describes; it does not execute a check itself.** Stage 1
+attached the resolved value to the registry entry so it could be inspected and
+logged. ``PermissionEnforcementExtension`` (stage 3, #14523) is what turns the
+``None`` this module now returns for an undeclared tool into an actual refusal;
+``MCPDispatcher.dispatch()`` also acts on the same canonical resolution (via
+``_would_deny``) rather than the retired ``_ADMIN_ONLY_TOOLS`` substring list.
 """
 
 from typing import Dict, Optional
 
 from autobot_shared.auth.permissions import Permission
 
-# Baseline per bridge — deliberately the least-privileged operation the bridge
-# offers, so an undeclared future tool under-grants rather than over-grants.
+# The eleven bridges this system governs, and the least-privileged operation
+# each offers. #14523: no longer consulted by ``required_permission()`` as a
+# runtime fallback grant — an undeclared tool is refused regardless of bridge.
+# Retained as the registry ``test_every_bridge_has_a_default`` requires a new
+# bridge to join before any of its tools can be declared, and as the source
+# for the coverage checker's per-bridge discovery floors
+# (``tools/lint/check_mcp_tool_permission_coverage.py``).
 BRIDGE_DEFAULT_PERMISSIONS: Dict[str, Permission] = {
     "browser_mcp": Permission.MCP_BROWSER_READ,
     "database_mcp": Permission.MCP_DATABASE_READ,
@@ -276,22 +285,25 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
 
 
 def required_permission(tool_name: str, bridge_name: str = "") -> Optional[Permission]:
-    """Return the permission *tool_name* requires, or ``None`` for an unknown bridge.
+    """Return the permission *tool_name* requires, or ``None`` if undeclared (#14523).
 
-    A tool absent from ``TOOL_PERMISSIONS`` still resolves through
-    ``BRIDGE_DEFAULT_PERMISSIONS`` as long as *bridge_name* is one of the eleven
-    governed bridges — a real, grantable read permission, not a refusal.
-    ``None`` only happens for a bridge this module has never heard of, and
-    ``PermissionEnforcementExtension`` currently treats that ``None`` as legacy
-    (allowed through, unchecked) rather than as a denial — see the module
-    docstring's "what this actually guarantees" note and the #13228 stage-3
-    follow-up. #14494 makes every tool on a *known* bridge carry an exact entry
-    at CI time; it does not change what this function returns.
+    Deny-by-default: an exact ``TOOL_PERMISSIONS`` entry is the only way a tool
+    resolves to a permission. Everything else returns ``None`` — a tool on one
+    of the eleven governed bridges with no exact entry included, not only a
+    tool on a bridge this module has never heard of. Before #14523 the known-
+    bridge case fell through to ``BRIDGE_DEFAULT_PERMISSIONS`` and granted a
+    real read permission instead of refusing; that fallback is retired here.
+    ``PermissionEnforcementExtension.on_before_tool_execute`` refuses on
+    ``None`` rather than treating it as a legacy allow — see that module.
+
+    *bridge_name* is kept for call-site symmetry with callers that already
+    know a tool's bridge (``mcp_registry._build_tool_entry``,
+    ``_handle_browser_tool``); it no longer changes what this function
+    returns. #14494's required check is what keeps the precondition this
+    relies on true: every tool a governed bridge registers today carries an
+    exact entry, so nothing that was reachable before #14523 loses its grant.
     """
-    exact = TOOL_PERMISSIONS.get(tool_name)
-    if exact is not None:
-        return exact
-    return BRIDGE_DEFAULT_PERMISSIONS.get(bridge_name)
+    return TOOL_PERMISSIONS.get(tool_name)
 
 
 __all__ = [
