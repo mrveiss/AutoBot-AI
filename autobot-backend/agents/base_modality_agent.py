@@ -26,6 +26,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
+from llm_shared.models import LLMResponse
 
 from .standardized_agent import StandardizedAgent
 
@@ -76,7 +77,7 @@ class BaseModalityAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": self.AGENT_ID,
                 "model_used": self.model_name,
-                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
+                "token_usage": self._extract_token_usage(response),
             }
             return await self._after_success(result, context or {}, session_id)
         except Exception as e:
@@ -98,9 +99,20 @@ class BaseModalityAgent(StandardizedAgent):
         return result
 
     def _extract_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
+        """Extract text content from LLM response.
+
+        Issue #14559: ``chat_optimized`` — the only thing ``process_query``
+        calls — always returns an ``LLMResponse`` dataclass, on every one of
+        its return paths (cache hit, provider-missing error, request
+        exception, and the normal success path). It is neither a ``str`` nor
+        a ``dict``, so that branch is added here rather than replacing the
+        pre-existing ones, which stay for any caller that still hands this
+        method a raw provider payload.
+        """
         if isinstance(response, str):
             return response.strip()
+        if isinstance(response, LLMResponse):
+            return (response.content or "").strip()
         if isinstance(response, dict):
             msg = response.get("message", {})
             if isinstance(msg, dict) and msg.get("content"):
@@ -112,4 +124,26 @@ class BaseModalityAgent(StandardizedAgent):
                     return choice_msg["content"].strip()
             if "content" in response:
                 return str(response["content"]).strip()
-        return str(response)
+            return str(response)
+        # Issue #14559: a genuinely unrecognized shape used to fall through to
+        # `str(response)`, which always succeeds and hides the defect behind a
+        # plausible-looking string (e.g. a dataclass repr). Fail loudly instead;
+        # `process_query`'s `except Exception` turns this into a proper error
+        # result rather than a silent content leak.
+        raise TypeError(
+            f"{self.AGENT_ID}: _extract_content got an unrecognized LLM response "
+            f"type {type(response).__name__!r}; expected str, dict, or LLMResponse"
+        )
+
+    def _extract_token_usage(self, response: Any) -> Dict[str, Any]:
+        """Extract token usage accounting from an LLM response.
+
+        Mirrors `_extract_content`'s shape handling: `LLMResponse.usage` is
+        the real producer shape (Issue #14559); the dict branch is kept for
+        any raw provider payload still passed through.
+        """
+        if isinstance(response, LLMResponse):
+            return response.usage or {}
+        if isinstance(response, dict):
+            return response.get("usage", {})
+        return {}
