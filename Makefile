@@ -2,7 +2,7 @@
 # Requires: pytest, pytest-cov, pytest-asyncio installed in the active venv
 # Frontend targets require Node.js 20+ and npm ci run inside autobot-frontend/
 
-.PHONY: test test-coverage test-backend test-frontend test-e2e format format-check help canonical-check canonical-check-py canonical-check-fe canonical-check-infra canonical-audit
+.PHONY: test test-coverage test-backend test-frontend test-e2e frontend-setup lint-stylelint format format-check help canonical-check canonical-check-py canonical-check-fe canonical-check-infra canonical-audit
 
 # Default target: run all backend unit tests without coverage
 test: test-backend
@@ -32,6 +32,21 @@ test-frontend:
 test-e2e:
 	cd autobot-frontend && npm run test:playwright
 
+## Install frontend dependencies in a fresh worktree (#14554: a fresh
+## worktree has no node_modules, so no frontend gate — lint, test, build —
+## can run there until this has been run once for each project)
+frontend-setup:
+	cd autobot-frontend && npm ci
+	cd autobot-slm-frontend && npm ci
+
+## Run stylelint over the full autobot-frontend + autobot-slm-frontend
+## trees (#14554). CI only lints CHANGED files (see
+## .github/workflows/stylelint-tokens.yml); this target is the full-tree
+## equivalent for local backlog triage.
+lint-stylelint:
+	cd autobot-frontend && npm run lint:stylelint
+	cd autobot-slm-frontend && npm run lint:stylelint
+
 ## Format Python with project-pinned Black + isort settings (#7249)
 format:
 	@bash scripts/format.sh
@@ -47,6 +62,8 @@ help:
 	@echo "  make test-coverage   - backend tests + coverage gate (>=70%)"
 	@echo "  make test-frontend   - frontend vitest coverage (>=70%)"
 	@echo "  make test-e2e        - Playwright E2E tests"
+	@echo "  make frontend-setup  - npm ci in autobot-frontend + autobot-slm-frontend (run once per fresh worktree)"
+	@echo "  make lint-stylelint  - stylelint over the full frontend trees (report-only, matches CI rule set)"
 	@echo "  make format          - format Python with project Black+isort settings"
 	@echo "  make format-check    - check formatting without modifying files (CI)"
 
