@@ -1,19 +1,72 @@
 # Bandit security configuration for AutoBot
 # https://bandit.readthedocs.io/en/latest/config.html
 
+# Exclude directories from scanning.
+#
+# #14489 — HOW BANDIT READS THIS LIST, and why every genuinely-needed entry
+# below is wrapped in path separators. bandit's matcher
+# (`bandit/core/manager.py`, `_is_file_included`) tests each exclude_dirs
+# entry with `x in path for x in excluded_path_strings` — a raw SUBSTRING
+# test against the full candidate path, with no path-component boundary at
+# all. That is broader than flake8's #14419 defect (flake8 at least compares
+# against `os.path.basename()`, so it matches whole components): a bare
+# bandit entry excludes any path that merely *contains* the string anywhere,
+# including mid-filename.
+#
+# Measured against `bandit -c .bandit -r autobot-backend/ autobot-slm-backend/
+# autobot_shared/` (the exact invocation code-quality.yml and security.yml
+# run) with `git ls-files` as ground truth: the pre-fix bare entries `temp`,
+# `logs`, `reports`, `archive` and `venv` silently excluded 34 tracked
+# production files that matched none of them as a real directory — among
+# them all nine files under `autobot-backend/workflow_templates/` (via
+# `temp`), `autobot-backend/archive_safety.py` (via `archive`), and
+# `autobot-backend/services/saved_reports_service.py` (via `reports`).
+# Re-including them surfaced exactly 3 real findings (B608 x1, B311 x2), both
+# reviewed and suppressed at the call site with a specific-ID `# nosec` and a
+# reason — see `autobot-backend/llc/services/template.py` and
+# `autobot-backend/services/autoresearch/archive.py`. None of the five named
+# directories exists anywhere under the three scanned trees (confirmed with
+# `find`), so unlike `tests` below they were never anchoring anything —
+# dropped rather than anchored, the same treatment #14419 gave `.flake8`
+# entries naming no tracked directory.
+#
+# The rule this list now follows, enforced by
+# `repo_tests/bandit_exclude_anchoring_test.py`:
+#   * a bare (separator-free) entry is allowed ONLY for a build/VCS/runtime
+#     artifact directory name that covers no tracked Python anywhere in the
+#     repo, checked with bandit's own substring test — not a component or
+#     basename test, because bandit does not use either. `venv` fails this
+#     check (2 tracked files carry "venv" only in their *filename*, e.g.
+#     `check_venv_producers.py`) even though no `venv/` directory exists in
+#     the scanned trees, so it is dropped rather than kept;
+#   * every other entry is anchored by wrapping it in `/`, requiring a path
+#     separator on both sides. That is bandit's own anchoring form, distinct
+#     from flake8's: flake8 turns a separator-containing entry into an
+#     absolute path prefix naming ONE location, but bandit never rewrites an
+#     entry, so `/tests/` stays a substring test — it still matches every
+#     `tests/` directory at any depth (which is the intent: 786 files across
+#     dozens of `tests/` directories), while no longer matching `repo_tests/`
+#     or `run_unit_tests.py`, which the bare `tests` did.
 exclude_dirs:
+  # Build, VCS and runtime artifact directories. Deliberately depth-agnostic:
+  # none of them holds tracked Python anywhere in the repo (verified with
+  # bandit's own substring test, not a component test), so matching by name
+  # prunes artifacts and never source. A name added here that DOES cover
+  # tracked Python fails the guard, so this list cannot become the new
+  # hiding place.
   - node_modules
   - .venv
-  - venv
   - __pycache__
-  - temp
-  - logs
-  - reports
-  - archive
-  - tests
+  # Test trees, at any depth. Wrapped in `/` so this is a component match,
+  # not the bare `tests` substring that also matched `repo_tests/` and any
+  # `*tests*` filename.
+  - /tests/
   # Co-located test files (repo convention: foo_test.py beside foo.py).
   # Test fixtures legitimately contain dummy passwords/SQL — production
-  # code keeps full per-call-site scanning (#9709).
+  # code keeps full per-call-site scanning (#9709). These are fnmatch
+  # globs, not bare directory names — bandit's substring test never matches
+  # a literal "*" against a real path, so their only exclusion power comes
+  # from `_matches_glob_list`, which is unaffected by #14489.
   - "*_test.py"
   - "*/test_*.py"
 
