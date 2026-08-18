@@ -10,6 +10,7 @@ on:
       - '**/*.py'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
+      - 'repo_tests/**'
       - 'pyproject.toml'
       - '.flake8'
       - '.bandit'
@@ -26,6 +27,13 @@ on:
       - 'autobot-slm-backend/ansible/roles/backend/files/**'
       - 'autobot-backend/config/permission_rules.yaml'
       - 'autobot-backend/static/error_messages.yaml'
+      # #14550/#14551: the ansible role check_ci_system_package_provisioning.py reads,
+      # and the composite action both new guards exist to protect. Neither matched any
+      # prior entry, so a PR touching only one of these skipped `code-quality` entirely
+      # -- a required check reporting skipped reads as satisfied to branch protection,
+      # so the guard could not fire on the change it exists to catch.
+      - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
+      - '.github/actions/setup-python-suite/**'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
@@ -62,6 +70,7 @@ jobs:
               - '**/*.py'
               - '**/requirements*.txt'
               - 'requirements-ci/**'
+              - 'repo_tests/**'
               - 'pyproject.toml'
               - '.flake8'
               - '.bandit'
@@ -78,6 +87,8 @@ jobs:
               - 'autobot-slm-backend/ansible/roles/backend/files/**'
               - 'autobot-backend/config/permission_rules.yaml'
               - 'autobot-backend/static/error_messages.yaml'
+              - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
+              - '.github/actions/setup-python-suite/**'
               - 'docs/developer/**'
               - '.github/workflows/code-quality.yml'
 
@@ -554,6 +565,19 @@ jobs:
         # in the job summary. This fails on any such gate whose package is not
         # installed in .github/actions/setup-python-suite/action.yml.
         python3 tools/lint/check_ci_system_package_provisioning.py --audit
+
+    - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
+      run: |
+        # This job only runs at all when the `changes` job's dorny/paths-filter
+        # reports a `backend` path touched -- a job that is SKIPPED satisfies
+        # branch protection the same as one that PASSED. The two audits above
+        # read files (the ansible task list, the setup-python-suite action)
+        # that the filter did not originally cover, so a PR touching only one
+        # of them skipped code-quality entirely and neither audit ever ran.
+        # Re-derives each checker's own GUARD_INPUT_PATHS and asserts the
+        # filter covers all of them, so the next guard input added without a
+        # matching filter entry fails loudly instead of silently going dark.
+        python3 tools/lint/check_code_quality_guard_reach.py --audit
 
     - name: Code quality summary
       if: always()
