@@ -5,6 +5,7 @@
 # Author: mrveiss
 """Quick backend diagnostic script"""
 
+import logging
 import os
 import sys
 import time

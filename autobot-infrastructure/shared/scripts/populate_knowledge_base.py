@@ -5,14 +5,29 @@
 # Author: mrveiss
 """
 Script to populate the knowledge base with all project documentation.
+
+#14405: an automated function-length pass (Issue #825) sliced the single
+``add_documentation_to_kb`` coroutine into eight ``_add_documentation_to_kb_block_N``
+helpers that took no arguments and returned nothing, then left the caller reading
+the locals those helpers had carried away with them -- ``doc_patterns``,
+``exclude_patterns``, ``filtered_files``, ``determine_category``,
+``add_single_file``, ``all_files``, ``project_root``, ``kb``, ``test_queries``
+and ``error_count`` were all undefined at their point of use (13 x F821), so the
+script raised NameError on its first statement of real work. The blocks are
+reassembled below as helpers that take what they read and return what they
+produce, keeping every step the extraction had preserved.
 """
 
 import asyncio
+import fnmatch
 import glob
 import logging
 import os
 import sys
 from pathlib import Path
+from typing import List, Tuple
+
+from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
 
@@ -21,136 +36,113 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from knowledge_base import KnowledgeBase
 
+# Documentation patterns to include.
+DOC_PATTERNS = [
+    "README.md",
+    "CLAUDE.md",
+    "docs/**/*.md",
+    "autobot-backend/resources/prompts/**/*.md",
+    "*.md",  # Any markdown files in root
+]
 
-async def _add_documentation_to_kb_block_5():
-    """Define documentation patterns to include.
+# Files to exclude (e.g., test results, node_modules).
+EXCLUDE_PATTERNS = [
+    "**/node_modules/**",
+    "**/venv/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    "**/.pytest_cache/**",
+]
 
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-    # Define documentation patterns to include
-    doc_patterns = [
-        "README.md",
-        "CLAUDE.md",
-        "docs/**/*.md",
-        "autobot-backend/resources/prompts/**/*.md",
-        "*.md",  # Any markdown files in root
-    ]
+# Queries used to smoke-test retrieval once the base has been populated.
+SEARCH_SMOKE_QUERIES = [
+    "installation",
+    "configuration",
+    "embedding",
+    "redis",
+    "ollama",
+    "vue",
+    "debian",
+]
+
+# Category mapping for path prefixes (Issue #315: use lookup instead of elif chain)
+CATEGORY_PREFIXES = [
+    ("docs/developer", "developer-docs"),
+    ("docs/user_guide", "user-guide"),
+    ("docs/reports", "reports"),
+    ("autobot-backend/resources/prompts", "prompts"),
+]
 
 
-async def _add_documentation_to_kb_block_6():
-    """Files to exclude (e.g., test results, node_modules).
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-    # Files to exclude (e.g., test results, node_modules)
-    exclude_patterns = [
-        "**/node_modules/**",
-        "**/venv/**",
-        "**/test-results/**",
-        "**/playwright-report/**",
-        "**/.pytest_cache/**",
-    ]
+def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
+    """Check if file matches any exclude pattern (Issue #315: extracted helper)."""
+    for exclude in exclude_patterns:
+        if fnmatch.fnmatch(file_path, exclude):
+            return True
+    return False
 
 
-async def _add_documentation_to_kb_block_8():
-    """unique_files = set(all_files).
+def determine_category(rel_path: str) -> str:
+    """Determine doc category from relative path (Issue #315: extracted helper)."""
+    # Check exact matches first
+    if rel_path == "README.md":
+        return "main-readme"
+    if rel_path == "CLAUDE.md":
+        return "claude-instructions"
+    # Check prefix matches
+    for prefix, category in CATEGORY_PREFIXES:
+        if rel_path.startswith(prefix):
+            return category
+    return "documentation"
 
-    Helper for add_documentation_to_kb (Issue #825).
-    """
+
+def collect_documentation_files(root: Path) -> List[str]:
+    """Expand DOC_PATTERNS under *root*, de-duplicate, and drop excluded paths."""
+    all_files: List[str] = []
+    for pattern in DOC_PATTERNS:
+        all_files.extend(glob.glob(str(root / pattern), recursive=True))
+
     unique_files = set(all_files)
-    filtered_files = [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, exclude_patterns)]
+    return [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, EXCLUDE_PATTERNS)]
 
 
-async def _add_documentation_to_kb_block_1():
-    """Category mapping for path prefixes (Issue #315: use lookup i.
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-
-    # Category mapping for path prefixes (Issue #315: use lookup instead of elif chain)
-    def determine_category(rel_path: str) -> str:
-        """Determine doc category from relative path (Issue #315: extracted helper)."""
-        category_map = [
-            ("docs/developer", "developer-docs"),
-            ("docs/user_guide", "user-guide"),
-            ("docs/reports", "reports"),
-            ("autobot-backend/resources/prompts", "prompts"),
-        ]
-        # Check exact matches first
-        if rel_path == "README.md":
-            return "main-readme"
-        if rel_path == "CLAUDE.md":
-            return "claude-instructions"
-        # Check prefix matches
-        for prefix, cat in category_map:
-            if rel_path.startswith(prefix):
-                return cat
-        return "documentation"
+async def add_single_file(fp: str, root: Path, kb) -> tuple:
+    """Add a single file to KB (Issue #315: extracted helper)."""
+    rel_path = os.path.relpath(fp, root)
+    category = determine_category(rel_path)
+    metadata = {
+        "source": "project-docs",
+        "category": category,
+        "relative_path": rel_path,
+        "doc_type": "markdown",
+    }
+    logger.info(f"Adding: {rel_path} [{category}]")
+    result = await kb.add_file(file_path=fp, file_type="txt", metadata=metadata)
+    return result["status"] == "success", result
 
 
-async def _add_documentation_to_kb_block_2():
-    """async def add_single_file(fp: str, project_root: Path, kb) -.
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-
-    async def add_single_file(fp: str, project_root: Path, kb) -> tuple:
-        """Add a single file to KB (Issue #315: extracted helper)."""
-        rel_path = os.path.relpath(fp, project_root)
-        category = determine_category(rel_path)
-        metadata = {
-            "source": "project-docs",
-            "category": category,
-            "relative_path": rel_path,
-            "doc_type": "markdown",
-        }
-        logger.info(f"Adding: {rel_path} [{category}]")
-        result = await kb.add_file(file_path=fp, file_type="txt", metadata=metadata)
-        return result["status"] == "success", result
-
-
-async def _add_documentation_to_kb_block_3():
-    """for file_path in sorted(filtered_files):.
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-    for file_path in sorted(filtered_files):
+async def add_files_to_kb(files: List[str], root: Path, kb) -> Tuple[int, int]:
+    """Add every file to the knowledge base, returning (successes, errors)."""
+    success_count = 0
+    error_count = 0
+    for file_path in sorted(files):
         try:
-            success, result = await add_single_file(file_path, project_root, kb)
+            success, result = await add_single_file(file_path, root, kb)
             if success:
-                pass
+                success_count += 1
             else:
                 error_count += 1
                 logger.error(f"  Error: {result.get('message', 'Unknown error')}")
         except Exception as e:
             error_count += 1
             logger.info(f"  Exception adding {file_path}: {str(e)}")
+    return success_count, error_count
 
 
-async def _add_documentation_to_kb_block_4():
-    """Test search functionality.
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-    # Test search functionality
+async def run_search_smoke_tests(kb) -> None:
+    """Query the populated base so an empty or unindexed collection is visible."""
     logger.info("\nTesting search functionality...")
-    test_queries = [
-        "installation",
-        "configuration",
-        "embedding",
-        "redis",
-        "ollama",
-        "vue",
-        "debian",
-    ]
-
-
-async def _add_documentation_to_kb_block_7():
-    """for query in test_queries:.
-
-    Helper for add_documentation_to_kb (Issue #825).
-    """
-    for query in test_queries:
+    for query in SEARCH_SMOKE_QUERIES:
         results = await kb.search(query, n_results=2)
         logger.info(f"\nSearch for '{query}': {len(results)} results")
         if results:
@@ -162,49 +154,17 @@ async def add_documentation_to_kb():
     kb = KnowledgeBase()
     await kb.ainit()
 
-    # Base paths for documentation
-    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-
-    await _add_documentation_to_kb_block_5()
-
-    await _add_documentation_to_kb_block_6()
-
-    all_files = []
-
-    # Collect all documentation files
-    for pattern in doc_patterns:
-        files = glob.glob(str(project_root / pattern), recursive=True)
-        all_files.extend(files)
-
-    # Remove duplicates and filter out excluded patterns (Issue #315: extracted logic)
-    def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
-        """Check if file matches any exclude pattern (Issue #315: extracted helper)."""
-        for exclude in exclude_patterns:
-            if glob.fnmatch.fnmatch(file_path, exclude):
-                return True
-        return False
-
-    await _add_documentation_to_kb_block_8()
-
+    root = project_root()
+    filtered_files = collect_documentation_files(root)
     logger.info(f"Found {len(filtered_files)} documentation files to add to knowledge base")
 
-    await _add_documentation_to_kb_block_1()
-
-    await _add_documentation_to_kb_block_2()
-
-    # Add each file to the knowledge base
-    success_count = 0
-    error_count = 0
-
-    await _add_documentation_to_kb_block_3()
+    success_count, error_count = await add_files_to_kb(filtered_files, root, kb)
 
     logger.info("\nKnowledge base population complete!")
     logger.info(f"Successfully added: {success_count} files")
     logger.error(f"Errors: {error_count} files")
 
-    await _add_documentation_to_kb_block_4()
-
-    await _add_documentation_to_kb_block_7()
+    await run_search_smoke_tests(kb)
 
 
 if __name__ == "__main__":

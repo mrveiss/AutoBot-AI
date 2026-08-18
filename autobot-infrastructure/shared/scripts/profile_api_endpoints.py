@@ -14,6 +14,8 @@ import os
 import sys
 import time
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 # Add the project root to Python path
