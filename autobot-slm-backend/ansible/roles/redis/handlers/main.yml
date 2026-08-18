@@ -5,7 +5,7 @@
 
 - name: restart redis-stack
   systemd:
-    name: redis-stack-server
+    name: "{{ redis_service_name | default('redis-stack-server') }}"
     state: restarted
   become: true
 
