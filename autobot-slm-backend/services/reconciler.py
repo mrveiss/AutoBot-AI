@@ -94,28 +94,45 @@ REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_PO
 # selected DEGRADED -- so it can only go this stale if the reconciler
 # genuinely stopped re-selecting the node for the whole window.
 #
-# min_v must be STRICTLY greater than REMEDIATION_COOLDOWN plus a reconcile
-# -tick margin, not merely >=: at exactly REMEDIATION_COOLDOWN, the cooldown
-# check and the forgive check both flip at the identical elapsed time, and
-# `_forgive_if_expired` runs first -- so a tracker is forgiven back to 0 in
-# the same instant an attempt becomes due, every time, and count can never
-# exceed 1 no matter how many attempts fail. That degenerate case is reachable
-# from EVERY value in the input's low end (all of -1, 0, 1, 60, 299 and 300
-# clamp to the same floor), which is why the floor itself must clear it, not
-# just the default. `settings.reconcile_interval` is read defensively: it is
-# a real int in production (a plain pydantic setting, fixed for the process
-# lifetime, not re-read from the `Setting` table) but a `MagicMock` under the
-# test suite's stubbed `config`, and `int()` on that raises -- falling back to
-# the pydantic default (60) keeps this module importable either way.
-try:
-    _RECONCILE_INTERVAL_FOR_FLOOR = int(settings.reconcile_interval)
-except (TypeError, ValueError):
-    _RECONCILE_INTERVAL_FOR_FLOOR = 60
-REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped(
-    "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S",
-    1800,
-    min_v=REMEDIATION_COOLDOWN + _RECONCILE_INTERVAL_FOR_FLOOR + 1,
-)
+# This value alone is NOT what `_forgive_if_expired` enforces -- see
+# `_effective_tracker_expiry_s()`. It must be strictly greater than
+# REMEDIATION_COOLDOWN plus a reconcile-tick margin, not merely >=: at exactly
+# REMEDIATION_COOLDOWN, the cooldown check and the forgive check flip at the
+# identical elapsed time, and forgive runs first -- so a tracker is forgiven
+# back to 0 in the same instant an attempt becomes due, every time, and count
+# can never exceed 1. That reconcile-tick margin depends on `settings.
+# reconcile_interval`, a per-process pydantic setting -- deliberately NOT read
+# here at import time. A review-caught regression: one test module stubs
+# `config.settings` as a bare `SimpleNamespace` lacking `reconcile_interval`,
+# and reading it here raised `AttributeError` at module-exec time, which
+# aborted collection for that entire file, not just this constant. `min_v=1`
+# is a cheap sanity floor only; the real, reconcile-interval-aware floor is
+# computed fresh on every call, from the LIVE `settings` object, exactly where
+# it is used.
+REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped("AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=1)
+
+
+def _effective_tracker_expiry_s() -> int:
+    """The expiry window actually enforced by `_forgive_if_expired` (#14465 review).
+
+    Reads `settings.reconcile_interval` fresh on every call rather than once
+    at import time -- see `REMEDIATION_TRACKER_EXPIRY_S` for why. `getattr`
+    with a default cannot raise for a genuinely missing attribute, unlike a
+    `try/except` around a narrower guess at which exception a stub might
+    raise; the `isinstance` check below additionally covers a stub where the
+    attribute IS present but is not a real int (e.g. an auto-vivified
+    `MagicMock` child under the root conftest's `config.settings = MagicMock()`
+    stub) -- `int + MagicMock` does not raise either, it silently produces
+    another `MagicMock`, which `max()` against would raise `TypeError` one
+    call later instead of never.
+    """
+    reconcile_interval = getattr(settings, "reconcile_interval", 60)
+    if not isinstance(reconcile_interval, int):
+        reconcile_interval = 60
+    floor = REMEDIATION_COOLDOWN + reconcile_interval + 1
+    return max(REMEDIATION_TRACKER_EXPIRY_S, floor)
+
+
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 # Service remediation cooldown (shorter than node remediation)
@@ -368,10 +385,11 @@ class ReconcilerService:
         """Reset a stale, non-exhausted tracker's count to zero, once genuinely idle (#14465).
 
         Helper for _check_remediation_limits; see REMEDIATION_TRACKER_EXPIRY_S
-        for what this does and does not fix -- it is scoped to time since the
-        last ATTEMPT, not any heartbeat-side signal, but it is not the gate
-        that decides whether count accumulates in the first place for a node
-        whose agent keeps heartbeating; `_heartbeat_returned`, below, is.
+        and `_effective_tracker_expiry_s` for what this does and does not fix
+        -- it is scoped to time since the last ATTEMPT, not any heartbeat-side
+        signal, but it is not the gate that decides whether count accumulates
+        in the first place for a node whose agent keeps heartbeating;
+        `_heartbeat_returned`, below, is.
 
         `exhausted` trackers are deliberately excluded: that flag means human
         intervention was already required, and forgiving it on a timer alone
@@ -381,7 +399,8 @@ class ReconcilerService:
         if tracker.get("exhausted") or not tracker.get("count"):
             return tracker
         last_attempt = tracker.get("last_attempt")
-        if last_attempt is None or (now - last_attempt).total_seconds() < REMEDIATION_TRACKER_EXPIRY_S:
+        effective_expiry_s = _effective_tracker_expiry_s()
+        if last_attempt is None or (now - last_attempt).total_seconds() < effective_expiry_s:
             return tracker
 
         forgiven = {"count": 0, "last_attempt": last_attempt}
@@ -389,7 +408,7 @@ class ReconcilerService:
         logger.info(
             "Node %s remediation history expired after %ds with no further attempts - forgiving",
             node_id,
-            REMEDIATION_TRACKER_EXPIRY_S,
+            effective_expiry_s,
         )
         return forgiven
 
