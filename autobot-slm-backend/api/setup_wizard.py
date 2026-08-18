@@ -163,11 +163,16 @@ def _build_inventory_children(
     # nothing.
     #
     # The two maps are unioned rather than swapped, because neither is a
-    # superset: `databases`, `browser_automation` and tts-worker's
-    # `npu_worker` exist only in ROLE_ANSIBLE_GROUPS, and playbooks gate on
-    # them. Dropping either vocabulary would trade one silent no-op for
-    # another; a host in more groups cannot make a previously-matching play
-    # stop matching.
+    # superset: tts-worker's `npu_worker` exists only in ROLE_ANSIBLE_GROUPS,
+    # and playbooks gate on it. Dropping either vocabulary would trade one
+    # silent no-op for another; a host in more groups cannot make a
+    # previously-matching play stop matching.
+    #
+    # #14460: the other two names this note used to cite -- `databases` and
+    # `browser_automation` -- were NOT gated on anywhere. They were emitted
+    # and read back by nothing, so they contributed no activation at all;
+    # ROLE_ANSIBLE_GROUPS now names the consulted spellings (`database`,
+    # `browser`), which the canonical map emits too.
     ansible_groups = _ansible_groups_for_nodes(node_roles, node_id_to_inv_name)
 
     children: dict[str, dict] = {

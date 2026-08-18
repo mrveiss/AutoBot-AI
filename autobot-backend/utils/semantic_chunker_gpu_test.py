@@ -36,6 +36,27 @@ from utils.semantic_chunker_gpu import GPUSemanticChunker, get_gpu_semantic_chun
 
 _TEXT = "First sentence here. Second sentence follows now. Third one too right now."
 
+# Issue #14467: input shapes that exercise `chunk_text()`'s zero/one-sentence
+# fallback (`_create_single_sentence_chunk`) instead of the boundary-detection
+# path. "Hi." is filtered to zero sentences by the >=3-word rule in
+# `_split_into_sentences` (#380); the other has exactly one qualifying sentence.
+_EMPTY_SENTENCE_TEXT = "Hi."
+_ONE_SENTENCE_TEXT = "This single sentence is deliberately long enough to survive filtering."
+
+# Keys `_build_chunk_metadata()`/`_extra_chunk_metadata()` add on every chunk,
+# regardless of which internal path produced it.
+_SUBCLASS_METADATA_KEYS = frozenset(
+    {
+        "chunk_index",
+        "total_chunks",
+        "source_metadata",
+        "embedding_model",
+        "chunking_method",
+        "gpu_batch_size",
+        "optimization_version",
+    }
+)
+
 
 @pytest.mark.asyncio
 class TestOptimizationMetadataReachesTheProductionSingleton:
@@ -74,3 +95,49 @@ class TestOptimizationMetadataReachesTheProductionSingleton:
 
         assert chunks
         assert all(c.metadata.get("optimization_version") == "rtx4070_gpu" for c in chunks)
+
+
+@pytest.mark.asyncio
+class TestShortInputChunksCarryTheSameMetadataAsLongInput:
+    """Issue #14467: `_create_single_sentence_chunk` used to return before
+    `_enrich_chunks_with_metadata()` ran, so `chunk_text()` on zero- or
+    one-sentence input silently dropped `optimization_version` and the rest
+    of `_build_chunk_metadata()`'s keys, while identical multi-sentence input
+    kept them. All three assertions below enter through the real, public
+    `chunk_text()` — never `_create_single_sentence_chunk` directly — so a fix
+    that only special-cases the private method without wiring it into the
+    public path would still fail here.
+
+    Pre-fix: the single- and empty-input cases fail (missing every key in
+    `_SUBCLASS_METADATA_KEYS`). Post-fix: all three pass.
+    """
+
+    async def _chunk_text(self, chunker: GPUSemanticChunker, text: str):
+        with (
+            patch.object(chunker, "_initialize_model", AsyncMock(return_value=None)),
+            patch.object(chunker, "_compute_embeddings", AsyncMock(return_value=np.zeros((3, 4)))),
+            patch.object(chunker, "_compute_semantic_distances", return_value=[0.1, 0.1]),
+        ):
+            return await chunker.chunk_text(text)
+
+    async def test_single_sentence_input_matches_multi_sentence_metadata_keys(self):
+        chunker = GPUSemanticChunker(gpu_batch_size=10, enable_gpu_memory_pool=False)
+
+        multi_chunks = await self._chunk_text(chunker, _TEXT)
+        single_chunks = await self._chunk_text(chunker, _ONE_SENTENCE_TEXT)
+
+        assert multi_chunks and single_chunks
+        for chunk in multi_chunks + single_chunks:
+            missing = _SUBCLASS_METADATA_KEYS - chunk.metadata.keys()
+            assert not missing, f"chunk missing keys {missing}: {sorted(chunk.metadata.keys())}"
+
+    async def test_empty_input_matches_multi_sentence_metadata_keys(self):
+        chunker = GPUSemanticChunker(gpu_batch_size=10, enable_gpu_memory_pool=False)
+
+        empty_chunks = await self._chunk_text(chunker, _EMPTY_SENTENCE_TEXT)
+
+        assert empty_chunks
+        for chunk in empty_chunks:
+            missing = _SUBCLASS_METADATA_KEYS - chunk.metadata.keys()
+            assert not missing, f"chunk missing keys {missing}: {sorted(chunk.metadata.keys())}"
+            assert chunk.metadata.get("empty_input") is True

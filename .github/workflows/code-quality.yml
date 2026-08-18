@@ -32,7 +32,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 
 permissions:
@@ -417,6 +417,17 @@ jobs:
         # Fails on grandfathered entries whose import no longer exists. A dormant
         # exemption naming a moved file exempts nothing and hides that it does.
         python3 tools/lint/check_extension_import_boundaries.py --audit-baseline
+
+    - name: Audit the .flake8 exclude anchoring (#14419)
+      run: |
+        # A bare directory name in `exclude` prunes that name at ANY depth, not
+        # only at the repo root; 973 tracked .py files were unlinted that way,
+        # three production `monitoring` packages among them. This has to run in
+        # a REQUIRED check because of the direction it fails in: re-adding a
+        # bare name lints FEWER files, so every lint step above reports fewer
+        # violations and goes greener. The pytest copy of these assertions runs
+        # in `python-suite`, which gates nothing (#14353).
+        python3 tools/lint/check_flake8_exclude_anchoring.py --audit-excludes
 
     - name: Audit the python-file-size ceilings for drift (#14236)
       run: |
