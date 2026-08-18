@@ -255,4 +255,25 @@ describe('RolesView operations (#14221 step 6b)', () => {
     expect(wrapper.text()).toContain('fresh.permission')
     expect(wrapper.text()).not.toContain('stale.permission')
   })
+
+  it('does not assign a holder from an empty or whitespace id', async () => {
+    // The submit button is disabled for an empty draft, but the handler is also
+    // reachable by pressing Enter in the field, and a whitespace-only id would
+    // otherwise post `holder_id: ""` — creating a tenure whose holder matches
+    // nothing, which reads as a filled role on the org chart.
+    respond()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      newHolderId: string
+      assignHolder: () => Promise<void>
+    }
+
+    vm.newHolderId = ''
+    await vm.assignHolder()
+    vm.newHolderId = '   '
+    await vm.assignHolder()
+    await flushPromises()
+
+    expect(post).not.toHaveBeenCalled()
+  })
 })
