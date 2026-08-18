@@ -15,6 +15,7 @@ import sys
 import os
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.paths import project_root
 from constants import ServiceURLs
 
 # Add project root to path
@@ -655,9 +656,10 @@ async def main():
     analyzer = RedisVectorStoreAnalyzer()
     recommendation = await analyzer.run_comprehensive_analysis()
 
-    from pathlib import Path
-
-    output_file = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/redis_vector_recommendation.json")
+    # #14517: was a shell placeholder in a plain string literal, so mkdir(parents=True)
+    # created a junk tree literally named ``${AUTOBOT_PROJECT_ROOT:-`` under the
+    # working directory rather than writing into the project's reports/ (#13149).
+    output_file = project_root() / "reports" / "redis_vector_recommendation.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(recommendation, f, indent=2)

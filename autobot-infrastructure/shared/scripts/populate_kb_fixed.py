@@ -12,6 +12,8 @@ import os
 import sys
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path
@@ -100,8 +102,12 @@ async def populate_knowledge_base_chromadb():
         return False
 
     logger.info("Knowledge base initialized with ChromaDB")
-    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-    filtered_files = _find_documentation_files(project_root)
+    # #14517: was a shell placeholder in a plain string literal, so the discovery
+    # below found nothing and the ingest reported a clean zero. Named ``root``:
+    # assigning to the imported ``project_root`` would shadow it as a local and
+    # raise UnboundLocalError on the call itself.
+    root = project_root()
+    filtered_files = _find_documentation_files(root)
     logger.info("Found %s documentation files", len(filtered_files))
 
     success_count = 0
@@ -109,7 +115,7 @@ async def populate_knowledge_base_chromadb():
 
     for file_path in filtered_files:
         try:
-            rel_path = os.path.relpath(file_path, project_root)
+            rel_path = os.path.relpath(file_path, root)
             category = _categorize_document(rel_path)
             metadata = {
                 "source": "project-docs",
