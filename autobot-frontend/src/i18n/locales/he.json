@@ -8008,7 +8008,18 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "ההוצאות נרשמות כסכומים לכל סוכן ולא כאירועים מתוארכים, ולכן אין עדיין היסטוריה יומית."
+      "noDatedEvents": "ההוצאות נרשמות כסכומים לכל סוכן ולא כאירועים מתוארכים, ולכן אין עדיין היסטוריה יומית.",
+      "stepRollup": "עלות התפעול הממופה",
+      "byRole": "לפי תפקיד",
+      "byTool": "לפי כלי",
+      "role": "תפקיד",
+      "tool": "כלי",
+      "coverage": "כיסוי",
+      "coverageComplete": "כל השלבים תומחרו",
+      "coveragePartial": "תומחרו {costed} מתוך {total} שלבים",
+      "stepRollupEmpty": "עדיין לא מופו שלבי תהליך, ולכן אין מה לסכם.",
+      "stepRollupUnavailable": "לא ניתן היה לטעון את הסכומים.",
+      "stepRollupToolNote": "שלב נספר לכל כלי של התפקיד שלו, ולכן סכומי הכלים אינם מצטברים לסכומי התפקידים."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

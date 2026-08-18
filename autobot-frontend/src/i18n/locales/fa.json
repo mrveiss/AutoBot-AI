@@ -8008,7 +8008,18 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "هزینه به‌صورت مجموع برای هر عامل ثبت می‌شود، نه رویدادهای تاریخ‌دار؛ بنابراین هنوز تاریخچهٔ روزانه وجود ندارد."
+      "noDatedEvents": "هزینه به‌صورت مجموع برای هر عامل ثبت می‌شود، نه رویدادهای تاریخ‌دار؛ بنابراین هنوز تاریخچهٔ روزانه وجود ندارد.",
+      "stepRollup": "هزینهٔ عملیات ترسیم‌شده",
+      "byRole": "بر پایهٔ نقش",
+      "byTool": "بر پایهٔ ابزار",
+      "role": "نقش",
+      "tool": "ابزار",
+      "coverage": "پوشش",
+      "coverageComplete": "همهٔ گام‌ها محاسبه شد",
+      "coveragePartial": "{costed} از {total} گام محاسبه شد",
+      "stepRollupEmpty": "هنوز گامی از فرایند ترسیم نشده است، پس چیزی برای جمع‌زدن نیست.",
+      "stepRollupUnavailable": "بارگیری مجموع‌ها ممکن نشد.",
+      "stepRollupToolNote": "هر گام برای همهٔ ابزارهای نقش خود شمرده می‌شود، بنابراین مجموع ابزارها با مجموع نقش‌ها برابر نیست."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

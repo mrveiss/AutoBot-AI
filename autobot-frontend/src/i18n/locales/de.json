@@ -8008,7 +8008,18 @@
       "colInputTokens": "Eingabe-Token",
       "colOutputTokens": "Ausgabe-Token",
       "colCost": "Kosten",
-      "noDatedEvents": "Ausgaben werden als Summen je Agent erfasst, nicht als datierte Ereignisse — daher gibt es noch keinen Tagesverlauf."
+      "noDatedEvents": "Ausgaben werden als Summen je Agent erfasst, nicht als datierte Ereignisse — daher gibt es noch keinen Tagesverlauf.",
+      "stepRollup": "Kosten des abgebildeten Betriebs",
+      "byRole": "Nach Rolle",
+      "byTool": "Nach Werkzeug",
+      "role": "Rolle",
+      "tool": "Werkzeug",
+      "coverage": "Abdeckung",
+      "coverageComplete": "Alle Schritte kalkuliert",
+      "coveragePartial": "{costed} von {total} Schritten kalkuliert",
+      "stepRollupEmpty": "Es sind noch keine Prozessschritte abgebildet, daher gibt es nichts zu summieren.",
+      "stepRollupUnavailable": "Die Summen konnten nicht geladen werden.",
+      "stepRollupToolNote": "Ein Schritt zählt für jedes Werkzeug seiner Rolle; die Werkzeugsummen ergeben daher nicht die Rollensummen."
     },
     "heartbeat": {
       "title": "Heartbeat-Monitor",
