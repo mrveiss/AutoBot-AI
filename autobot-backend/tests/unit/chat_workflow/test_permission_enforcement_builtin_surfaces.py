@@ -221,3 +221,145 @@ class TestWebSearchDenial:
             pass
 
         handler._execute_web_search.assert_awaited_once()
+
+# --------------------------------------------------------------------------
+# LLC work-object tools — Permission.WORKFLOW_CREATE (#14491)
+#
+# `_handle_llc_tool` never called BEFORE_TOOL_EXECUTE at all before this: the
+# branch reached `dispatch_llc_tool` (a real DB mutation) directly. This is
+# the highest-risk of the seven branches #14491 catalogued.
+# --------------------------------------------------------------------------
+
+
+class TestLLCToolDenial:
+    def _tool_call(self) -> dict:
+        return {"name": "create_task", "params": {"title": "Ship it"}, "description": ""}
+
+    @pytest.mark.asyncio
+    async def test_a_role_lacking_workflow_create_is_denied(self):
+        handler = _handler()
+        with patch("chat_workflow.tool_handler.dispatch_llc_tool", AsyncMock()) as mock_dispatch:
+            messages = [
+                msg
+                async for msg in handler._handle_llc_tool(
+                    "create_task", self._tool_call(), [], None, session_id="sess-1", role="user"
+                )
+            ]
+
+        assert messages[-1].type == "error"
+        assert messages[-1].metadata.get("cancelled_by_hook") is True
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        mock_dispatch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_an_unauthenticated_caller_is_denied(self):
+        handler = _handler()
+        with patch("chat_workflow.tool_handler.dispatch_llc_tool", AsyncMock()) as mock_dispatch:
+            async for _msg in handler._handle_llc_tool(
+                "create_task", self._tool_call(), [], None, session_id="sess-1", role=None
+            ):
+                pass
+
+        mock_dispatch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_role_holding_workflow_create_is_allowed(self):
+        """`operator` holds WORKFLOW_CREATE — the control case proving this
+        discriminates rather than always denying."""
+        handler = _handler()
+        with patch(
+            "chat_workflow.tool_handler.dispatch_llc_tool",
+            AsyncMock(return_value={"status": "success", "entity_type": "work_item", "entity_id": "wi-1"}),
+        ) as mock_dispatch:
+            async for _msg in handler._handle_llc_tool(
+                "create_task", self._tool_call(), [], None, session_id="sess-1", role="operator"
+            ):
+                pass
+
+        mock_dispatch.assert_awaited_once()
+
+
+# --------------------------------------------------------------------------
+# Web research tools — reuse TOOL_PERMISSIONS' existing KNOWLEDGE_READ/WRITE
+# declaration for the same tool names on the MCP-registry path (#14491).
+# --------------------------------------------------------------------------
+
+
+class TestWebResearchToolDenial:
+    def _tool_call(self, name: str, params: dict) -> dict:
+        return {"name": name, "params": params, "description": ""}
+
+    @pytest.mark.asyncio
+    async def test_an_unauthenticated_caller_is_denied_for_scrape_url(self):
+        """scrape_url declares KNOWLEDGE_READ; role=None holds nothing."""
+        handler = _handler()
+        handler._exec_scrape_url = AsyncMock(return_value="content")
+
+        messages = [
+            msg
+            async for msg in handler._handle_web_research_tool(
+                "scrape_url",
+                self._tool_call("scrape_url", {"url": "https://example.com"}),
+                [],
+                session_id="sess-1",
+                role=None,
+            )
+        ]
+
+        assert messages[-1].metadata.get("cancelled_by_hook") is True
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        handler._exec_scrape_url.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_role_holding_knowledge_read_is_allowed_for_scrape_url(self):
+        handler = _handler()
+        handler._exec_scrape_url = AsyncMock(return_value="content")
+
+        async for _msg in handler._handle_web_research_tool(
+            "scrape_url",
+            self._tool_call("scrape_url", {"url": "https://example.com"}),
+            [],
+            session_id="sess-1",
+            role="user",
+        ):
+            pass
+
+        handler._exec_scrape_url.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_role_lacking_knowledge_write_is_denied_for_crawl_site(self):
+        """crawl_site declares KNOWLEDGE_WRITE; `user` holds only KNOWLEDGE_READ."""
+        handler = _handler()
+        handler._exec_crawl_site = AsyncMock(return_value="index")
+
+        messages = [
+            msg
+            async for msg in handler._handle_web_research_tool(
+                "crawl_site",
+                self._tool_call("crawl_site", {"seed_urls": ["https://example.com"]}),
+                [],
+                session_id="sess-1",
+                role="user",
+            )
+        ]
+
+        assert messages[-1].metadata.get("cancelled_by_hook") is True
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        handler._exec_crawl_site.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_role_holding_knowledge_write_is_allowed_for_crawl_site(self):
+        """`operator` holds KNOWLEDGE_WRITE — the control case."""
+        handler = _handler()
+        handler._exec_crawl_site = AsyncMock(return_value="index")
+
+        async for _msg in handler._handle_web_research_tool(
+            "crawl_site",
+            self._tool_call("crawl_site", {"seed_urls": ["https://example.com"]}),
+            [],
+            session_id="sess-1",
+            role="operator",
+        ):
+            pass
+
+        handler._exec_crawl_site.assert_awaited_once()

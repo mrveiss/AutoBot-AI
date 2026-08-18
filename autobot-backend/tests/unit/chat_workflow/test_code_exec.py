@@ -389,7 +389,9 @@ async def test_compose_e2e_with_fake_executor():
     fake_executor_instance.execute_with_stdio_broker = AsyncMock(return_value=fake_result)
 
     msgs = []
-    with patch("chat_workflow.tool_handler.CODEEXEC_AUTOAPPROVE_READONLY", True):
+    # #14491: CODEEXEC_AUTOAPPROVE_READONLY moved to compose_tool_handler.py
+    # with the function (_compose_auto_approvable's body) that reads it.
+    with patch("chat_workflow.compose_tool_handler.CODEEXEC_AUTOAPPROVE_READONLY", True):
         with patch("secure_sandbox_executor.SecureSandboxExecutor", return_value=fake_executor_instance):
             async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
                 msgs.append(msg)
