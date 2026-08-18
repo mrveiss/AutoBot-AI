@@ -212,14 +212,47 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
 
 
 def _union_roles(node: Any) -> list[str]:
-    """Return union of node.roles and node.detected_roles as a deduped list."""
-    seen: set[str] = set()
-    result: list[str] = []
-    for r in list(node.roles or []) + list(node.detected_roles or []):
-        if r not in seen:
-            seen.add(r)
-            result.append(r)
-    return result
+    """Roles that decide what this node runs (#14513).
+
+    Declared roles are the operator's intent. ``detected_roles`` is an
+    OBSERVATION reported by the agent, and until #14513 it recorded every role
+    the agent probed -- installed or not -- so every node reported the entire
+    catalogue. Unioning that into group membership promoted plain fleet nodes
+    into ``slm_server``, and ``update-all-nodes.yml``'s "Update SLM Server
+    First" play then unpacked the manager's backend/frontend/shared tree onto
+    them before failing on a ``code_source`` checkout they do not have.
+
+    Detection no longer decides. It is kept only as a fallback for a node that
+    declares nothing at all -- the one case where dropping it would stop plays
+    reaching a node they previously reached -- and even then it cannot grant
+    ``slm_server`` (see ``_DECLARED_ONLY_GROUPS``).
+    """
+    declared = list(node.roles or [])
+    if declared:
+        return declared
+    return list(node.detected_roles or [])
+
+
+# Groups carrying manager-only, destructive plays. These must never be reached
+# by observation: `slm_server` is targeted by "Play 1 - Update SLM Server
+# First", which deploys the SLM tree and reads /opt/autobot/code_source.
+_DECLARED_ONLY_GROUPS = frozenset({"slm_server"})
+
+
+def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
+    """Drop privileged groups the node's DECLARED roles do not justify (#14513).
+
+    Belt-and-braces alongside the change above: a node that has already had the
+    SLM tree unpacked onto it by this very bug will legitimately detect
+    ``slm-backend`` afterwards, so filtering the agent's report alone would not
+    stop the loop on an already-contaminated node.
+    """
+    undeclared = node_groups & _DECLARED_ONLY_GROUPS
+    if not undeclared:
+        return node_groups
+
+    declared_groups = groups_for_role_tokens(list(node.roles or []))
+    return node_groups - (undeclared - declared_groups)
 
 
 def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
@@ -352,7 +385,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         hostvars = _build_hostvars(node, local_ip_check)
         host_section[host_name] = hostvars
 
-        node_groups = groups_for_role_tokens(_union_roles(node))
+        node_groups = _strip_undeclared_privileged_groups(node, groups_for_role_tokens(_union_roles(node)))
 
         for g in node_groups:
             if g not in groups:
