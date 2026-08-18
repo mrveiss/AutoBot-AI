@@ -463,9 +463,9 @@ def test_floor_extension_matters_more_once_an_operator_raises_the_playbook_timeo
 
     tracker = service._remediation_tracker[node.node_id]
     assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
-    assert tracker.get("exhausted") is True, (
-        f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
-    )
+    assert (
+        tracker.get("exhausted") is True
+    ), f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
 
 
 def test_launch_failed_service_remediation_sweep_does_not_block_the_caller():
