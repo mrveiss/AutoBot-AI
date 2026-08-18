@@ -460,9 +460,13 @@ class ReconcilerService:
         # refused remediation for the life of the process on every future
         # degradation, until someone called the manual reset endpoint.
         #
-        # A heartbeat newer than our last attempt IS the recovery signal, and it
-        # is already on the row we were handed.
-        self._clear_tracker_if_recovered(node)
+        # #14465: the recovery reset used to live here, keyed off "heartbeat
+        # newer than our last attempt". It was unreachable for the one node
+        # shape that actually recovers -- this query only ever selects
+        # DEGRADED nodes, and a recovering node flips to ONLINE and stops
+        # matching before this function runs. The reset now happens in
+        # `update_node_heartbeat`, on the ONLINE transition itself, which is
+        # the one place recovery is both real and observable.
 
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
@@ -599,57 +603,28 @@ class ReconcilerService:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
             return False
 
-    def _clear_tracker_if_recovered(self, node: Node) -> None:
-        """Forget past attempts once the node is heartbeating again for real.
+    def _clear_tracker_on_recovery(self, node_id: str) -> None:
+        """Forget remediation history once a node is observed back online.
 
-        Guards against a node being permanently locked out of remediation after
-        recovering by some route the reconciler never observes (#14344 review).
+        #14465: this used to live inside the DEGRADED remediation path
+        (`_clear_tracker_if_recovered`), keyed off "heartbeat newer than our
+        last attempt". That was unreachable for the one node shape it existed
+        to protect -- `_attempt_remediation` only ever selects DEGRADED nodes,
+        and a node that genuinely recovers flips to ONLINE in
+        `update_node_heartbeat` and stops matching the query before the old
+        check ever ran. It also could not fire for a node degraded on a
+        non-staleness reason (resource pressure, a crash-looping service)
+        that keeps heartbeating on schedule: that node reached the old check
+        with a current beat on every pass, so its count was cleared every
+        pass and it could never reach `MAX_REMEDIATION_ATTEMPTS`.
 
-        #14454: "newer than the last attempt" was too weak a test, and the
-        reason is structural. `_attempt_remediation` only reaches nodes that are
-        currently DEGRADED, and any heartbeat flips a node out of DEGRADED --
-        so a node that genuinely recovers never arrives here at all, it simply
-        stops matching the query. The only node that DOES arrive here with a
-        newer beat is one that flapped: a single heartbeat landed, then it went
-        stale again and was re-degraded.
-
-        That is exactly the shape of a #14350 auth-rejected agent -- restart,
-        one heartbeat, rejected, silence, repeat. Clearing on that reset the
-        counter every cycle, so MAX_REMEDIATION_ATTEMPTS was never reached and
-        escalation never fired: the #14344 defect rebuilt inside its own fix.
-
-        So recovery now requires the beat to still be CURRENT, and the reset
-        keeps `last_attempt` so the cooldown continues to apply.
-
-        KNOWN GAP (#14465), not closed here: a node degraded for a reason other
-        than staleness -- resource pressure, or a crash-looping service --
-        heartbeats on schedule while staying DEGRADED, so it reaches this
-        function with a current beat every pass and has its count cleared every
-        pass. For that node a current beat does not mean recovery, and it never
-        escalates. That shape predates this fix and is unchanged by it; closing
-        it means clearing on the ONLINE transition rather than inside the
-        DEGRADED remediation path.
+        Recovery is the ONLINE transition itself, computed fresh on the same
+        heartbeat that proves it -- so that is where this has to run. It is
+        called only on a genuine old-status -> ONLINE transition, so it fires
+        once per recovery rather than repeatedly re-deriving "still current"
+        from a fixed timestamp the way the old check did.
         """
-        tracker = self._remediation_tracker.get(node.node_id)
-        if not tracker:
-            return
-
-        last_attempt = tracker.get("last_attempt")
-        beat = node.last_heartbeat
-        if last_attempt is None or beat is None or beat <= last_attempt:
-            return
-
-        # A beat older than the staleness cutoff is not a recovery -- it is the
-        # flap that put this node back in the degraded set to begin with.
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._heartbeat_timeout)
-        if beat < cutoff:
-            return
-
-        self._remediation_tracker[node.node_id] = {"count": 0, "last_attempt": last_attempt}
-        logger.info(
-            "Node %s is heartbeating again - clearing attempt history (cooldown preserved)",
-            node.node_id,
-        )
+        self.reset_remediation_tracker(node_id)
 
     def reset_remediation_tracker(self, node_id: str) -> None:
         """Reset remediation tracker for a node (e.g., after manual intervention)."""
@@ -1310,6 +1285,12 @@ class ReconcilerService:
             db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
         )
 
+        # #14465: recovery is this transition, so the remediation attempt
+        # history clears here -- not inside the DEGRADED remediation path,
+        # which by construction never sees a node that has actually recovered.
+        if new_status == NodeStatus.ONLINE.value and old_status != NodeStatus.ONLINE.value:
+            self._clear_tracker_on_recovery(node.node_id)
+
         node.status = new_status
 
         await db.commit()
@@ -1479,6 +1460,21 @@ class ReconcilerService:
         """Calculate node status based on health metrics and services.
 
         Issue #1604: Also degrade if any autobot service is crash-looping.
+
+        #14465: the crash-loop signal is `status == "crash-loop"` alone now.
+        That maps directly to systemd's own `activating`+`auto-restart`
+        sub-state (health_collector._map_status_from_states) -- true only
+        while the unit is presently churning, and gone the moment it settles
+        into `running` or exhausts systemd's own start-limit into `failed`.
+        The `n_restarts > 3` branch this replaced read `NRestarts`, which
+        systemd never resets except at reboot or `reset-failed`. Used as a
+        static gate, a lifetime-cumulative counter can only ever climb: once
+        any autobot service anywhere in the node's uptime crosses 3 restarts
+        -- a redeploy, an operator restart, a genuine but long-resolved
+        crash-loop -- every future heartbeat is forced DEGRADED regardless of
+        current metrics or service state, with no path back to ONLINE. That
+        is what left this issue's node stuck degraded while heartbeating
+        healthily.
         """
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
@@ -1487,12 +1483,7 @@ class ReconcilerService:
         if extra_data:
             for svc in extra_data.get("discovered_services", []):
                 svc_name = svc.get("name", "")
-                if not svc_name.startswith("autobot"):
-                    continue
-                if svc.get("status") == "crash-loop":
-                    return NodeStatus.DEGRADED.value
-                n_restarts = svc.get("n_restarts", 0)
-                if n_restarts > 3:
+                if svc_name.startswith("autobot") and svc.get("status") == "crash-loop":
                     return NodeStatus.DEGRADED.value
 
         if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
