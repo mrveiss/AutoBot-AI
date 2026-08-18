@@ -142,7 +142,9 @@ def build_compose_dispatch(
         # authenticated caller. Omitting the role here left this one path on
         # the "user" default — the very bug this issue fixes, unfixed.
         role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
-        async for _ in dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx, role=role):
+        async for _ in dispatch_tool_call(
+            sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx, role=role
+        ):
             pass
         last = sub_results[-1] if sub_results else {}
         if last.get("status") == "error":

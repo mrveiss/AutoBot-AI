@@ -222,6 +222,7 @@ class TestWebSearchDenial:
 
         handler._execute_web_search.assert_awaited_once()
 
+
 # --------------------------------------------------------------------------
 # LLC work-object tools — Permission.WORKFLOW_CREATE (#14491)
 #

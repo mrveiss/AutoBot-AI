@@ -2629,7 +2629,9 @@ class ToolHandlerMixin:
                 metadata={"tool": tool_name, "error": True},
             )
 
-    async def _handle_llc_tool(self, tool_name, tool_call, execution_results, ctx, session_id: str = "", role: str = "user"):
+    async def _handle_llc_tool(
+        self, tool_name, tool_call, execution_results, ctx, session_id: str = "", role: str = "user"
+    ):
         """Dispatch an LLC work-object tool company-scoped (#11501).
 
         company_id comes from the chat request context (set by the CEO-chat
