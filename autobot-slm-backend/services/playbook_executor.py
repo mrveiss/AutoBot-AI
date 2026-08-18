@@ -913,7 +913,9 @@ class PlaybookExecutor:
         )
         await self._kill_process_group(process)
         return {
-            "output": (f"[TIMEOUT] ansible-playbook killed after exceeding {timeout_s:.0f}s wall-clock timeout (#14524)"),
+            "output": (
+                f"[TIMEOUT] ansible-playbook killed after exceeding {timeout_s:.0f}s wall-clock timeout (#14524)"
+            ),
             "returncode": -9,
             "timed_out": True,
         }

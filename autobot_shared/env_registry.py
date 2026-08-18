@@ -1714,6 +1714,38 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S",
+        type=int,
+        default=180,
+        description=(
+            "Wall-clock ceiling on the ansible-playbook subprocess _restart_service_via_ansible "
+            "launches. Previously unbounded — a hung SSH connection or stuck remote task blocked "
+            "remediation for a node indefinitely. manage-service.yml (the only playbook this call "
+            "path runs) is a single-host, single-service restart that normally completes in "
+            "seconds; 180s stays comfortably below REMEDIATION_COOLDOWN (300s) while giving "
+            "generous headroom (services/reconciler.py, services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAYBOOK_KILL_GRACE_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Grace period between SIGTERM and SIGKILL when killing a timed-out playbook "
+            "subprocess's whole process group. Long enough for ansible-playbook / a forked ssh "
+            "child to unwind cleanly; short enough that a wedged process does not itself become "
+            "an unbounded second wait (services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S",
         type=int,
         default=3600,

@@ -464,6 +464,10 @@ To add a new variable:
 | `AUTOBOT_CODEEXEC_TIMEOUT_SECONDS` | execution | int | `120` | Seconds a compose-tool sandbox execution may run (GH#11568). |
 | `AUTOBOT_CODE_ANALYSIS_POOL_MAX_TASKS` | backend | int | `8` | Tasks a code-analysis child handles before it is recycled. Recycling bounds memory growth in long-lived children. |
 | `AUTOBOT_CODE_ANALYSIS_POOL_WORKERS` | backend | int | `2` | Child processes used to offload code analysis. Deliberately small: each carries a full interpreter, and analysis is bursty rather than sustained. |
+| `AUTOBOT_COMPACTION_BOUNDARY_WINDOW` | chat | int | `10` | How far back the compaction boundary looks for a user turn before settling for any turn start, so the cut cannot be dragged far from the midpoint. |
+| `AUTOBOT_COMPACTION_STATE_COMMAND_CAP` | chat | int | `10` | Most recent shell commands named in a compaction's extracted state block. |
+| `AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS` | chat | int | `400` | Maximum characters of a tool result in the summarised region before it is clipped for the summariser; a file read many turns ago is cheaper to re-read than to carry. |
+| `AUTOBOT_COMPACTION_USER_MESSAGE_CAP` | chat | int | `40` | How many of the most recent user messages cross a context compaction verbatim instead of being summarised. Bounded so repeated compaction cannot grow the preserved set without limit. |
 | `AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS` | redis | float | `30.0` | Interval between config-registry attempts to reconnect to Redis after a failure, so a Redis outage does not become a reconnect storm. |
 | `AUTOBOT_DELEGATION_ENABLED` | ai | bool | false | Master switch for the delegate tool. Off, it records the delegation request and does not dispatch it. |
 | `AUTOBOT_DEPLOYMENT_MODE` | system | str | `'distributed'` | Deployment topology: 'distributed' or 'standalone'. |
@@ -476,6 +480,7 @@ To add a new variable:
 | `AUTOBOT_ENV` | system | str | `'production'` | Short environment label used in logs and traces (e.g. 'development', 'production'). |
 | `AUTOBOT_ENVIRONMENT` | system | str | `'development'` | Full environment name for OTel deployment.environment attribute. Prefer AUTOBOT_ENV for new code. |
 | `AUTOBOT_FACT_FORCING` | ai | bool | false | Enable the fact-forcing gate, which requires an answer to cite retrieved facts. |
+| `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` | gateway | bool | false | Require approval before the Gateway hands an agent-authored message to a channel adapter. Off means audit-only: every governed send is recorded, none is blocked. On fails closed — no registered approver, a denial, or an approver error all deny the send. |
 | `AUTOBOT_GIT_BRANCH` | system | str | `'Dev_new_gui'` | Git branch that the running instance was built from. |
 | `AUTOBOT_GRAFANA_PORT` | monitoring | str | `'3000'` | TCP port of the Grafana instance. Also declared in ssot_config.py; 3000 is Grafana's own default and is NOT the browser service, which is 9001 (#4052, #14198). |
 | `AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS` | kb | float | `10.0` | Ceiling on a knowledge-graph path search. Path queries are unbounded in the worst case, so this is what stops one request occupying a worker indefinitely. |
@@ -492,6 +497,7 @@ To add a new variable:
 | `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
 | `AUTOBOT_MATRIX_E2EE` | gateway | bool | false | Opt in to end-to-end encryption for the Matrix adapter. Off by default because E2EE needs the optional olm dependency and a persisted device store. |
+| `AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S` | backend | int | `3600` | How often to re-broadcast that a node is still at MAX_REMEDIATION_ATTEMPTS. Once exhausted, last_attempt freezes and this refusal is refused again on every reconcile pass forever — unthrottled, that is once per reconcile_interval (services/reconciler.py, #14465). |
 | `AUTOBOT_MAX_DELEGATIONS_PER_TURN` | ai | int | `5` | Delegate calls allowed in a single LLM turn — a fan-out bound, not a quality setting. |
 | `AUTOBOT_MAX_DELEGATION_DEPTH` | ai | int | `2` | How deep delegation may nest before it is refused, bounding runaway recursive delegation. |
 | `AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD` | voice | float | `0.7` | Fallback confidence threshold for VoiceProcessor when the multimodal.voice config section omits it (#13207). Range: 0.0–1.0. |
@@ -511,6 +517,8 @@ To add a new variable:
 | `AUTOBOT_OWNERSHIP_BUDGET_SECONDS` | backend | float | `20.0` | Total seconds ownership analysis may spend blaming files before it returns what it has (#13602). |
 | `AUTOBOT_OWNERSHIP_MAX_FILES` | backend | int | `2000` | How many files ownership analysis will blame. Paired with the time budget because a file count alone is the wrong bound — file size dominates blame cost (#13602). |
 | `AUTOBOT_PLAN_BEST_OF_N_COUNT` | ai | int | `3` | How many candidate plans best-of-N generates before selection. Clamped to a minimum of 2, since best-of-1 is not a selection. |
+| `AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS` | backend | int | `500` | How many characters of a failed playbook's output to fall back to when no failed task can be parsed out of it. Taken from the END of the run: ansible opens with its banner, so a head slice returns deprecation warnings and hides the failure (services/ansible_utils.py, #14298). |
+| `AUTOBOT_PLAYBOOK_KILL_GRACE_S` | backend | float | `5.0` | Grace period between SIGTERM and SIGKILL when killing a timed-out playbook subprocess's whole process group. Long enough for ansible-playbook / a forked ssh child to unwind cleanly; short enough that a wedged process does not itself become an unbounded second wait (services/playbook_executor.py, #14524). |
 | `AUTOBOT_POSTGRES_DB` | postgres | str | `'autobot_users'` | PostgreSQL database name. |
 | `AUTOBOT_POSTGRES_HOST` | postgres | str | `'127.0.0.1'` | PostgreSQL server hostname or IP. |
 | `AUTOBOT_POSTGRES_PASSWORD` | postgres | str | `""` | PostgreSQL user password. |
@@ -528,7 +536,12 @@ To add a new variable:
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
 | `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
+| `AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S` | backend | int | `5` | How often to re-read the node row while waiting for a post-restart heartbeat (services/reconciler.py, #14344). |
+| `AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S` | backend | int | `90` | Seconds to wait for a heartbeat after the reconciler restarts a node's agent before recording the remediation as failed. Remediation exists to restore the heartbeat, so the heartbeat is what success means — the restart exiting 0 only says the command ran (services/reconciler.py, #14344). |
+| `AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S` | backend | int | `180` | Wall-clock ceiling on the ansible-playbook subprocess _restart_service_via_ansible launches. Previously unbounded — a hung SSH connection or stuck remote task blocked remediation for a node indefinitely. manage-service.yml (the only playbook this call path runs) is a single-host, single-service restart that normally completes in seconds; 180s stays comfortably below REMEDIATION_COOLDOWN (300s) while giving generous headroom (services/reconciler.py, services/playbook_executor.py, #14524). |
+| `AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S` | backend | int | `1800` | Seconds a non-exhausted remediation attempt tracker may sit with no NEW attempt before its count is forgiven. Clamped strictly above REMEDIATION_COOLDOWN plus a reconcile-tick margin — a lower value forgives an attempt in the same instant one becomes due, so count could never exceed 1 (services/reconciler.py, #14465). |
 | `AUTOBOT_REQUIRE_CLASSIFICATION` | orchestrator | bool | false | Fail orchestrator construction when request classification is unavailable. Default (off) degrades gracefully: every request is defaulted to COMPLEX and the reason is reported in the orchestration status. Deployments that depend on classification set this so the failure is loud instead of silent (#13807). |
+| `AUTOBOT_RESTART_CHURN_WINDOW_S` | backend | int | `600` | Seconds a managed autobot/slm-agent service is reported as CURRENTLY churning after its last observed n_restarts increase, for node-status degrade purposes. Must clear health_collector's own 300s discovery-cache TTL by a comfortable margin — a shorter window only fires on the beat that happens to land on a cache refresh (services/reconciler.py, #14465). |
 | `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` | redis | float | `1.5` | Seconds the retrieval learner waits for its Redis lock before proceeding without it. Short on purpose — retrieval must answer even when the learner cannot record what it learned. |
 | `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
 | `AUTOBOT_SIGNAL_ENABLED` | gateway | bool | false | Opt in to the Signal gateway adapter. Off by default: it needs a running signal-cli daemon and a registered number. |
@@ -561,5 +574,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*123 variables registered as of last generation.*
+*136 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
