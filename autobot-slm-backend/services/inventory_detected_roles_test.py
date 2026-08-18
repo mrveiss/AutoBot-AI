@@ -119,10 +119,30 @@ def test_detection_still_adds_ordinary_groups():
     ), "detection no longer contributes ordinary groups — this fix was over-broad"
 
 
-def test_a_node_that_declares_nothing_still_gets_groups_from_detection():
-    node = _node([], ["backend", "redis"])
+def test_a_node_that_declares_nothing_still_gets_ordinary_groups_from_detection():
+    """Dropping the detection fallback entirely would strand such a node.
 
-    assert "backend" in _groups(node)
+    `redis` rather than `backend`: since the gate widened to the deploy groups,
+    `backend` is no longer an ordinary group, and asserting it here would be
+    asserting the thing the gate exists to prevent.
+    """
+    node = _node([], ["redis"])
+
+    assert "redis" in _groups(node) and "database" in _groups(node)
+
+
+def test_a_node_that_declares_nothing_is_not_a_deploy_target():
+    """No declared roles means no operator intent to deploy anything to it.
+
+    Detection alone must not make a node receive the backend tree and the
+    alembic sequence — that is the contamination this PR exists to stop, and a
+    node with nothing declared is the weakest possible evidence of intent.
+    """
+    node = _node([], ["backend", "slm-backend"])
+    groups = _groups(node)
+
+    assert "backend" not in groups and "main" not in groups
+    assert "slm_server" not in groups
 
 
 def test_a_vnc_node_does_not_join_slm_server():
@@ -163,15 +183,15 @@ def test_the_real_manager_keeps_slm_server():
 
 
 def test_non_privileged_groups_are_left_alone():
-    """Only manager-only groups are declaration-gated.
+    """Only groups whose plays deploy a tree are declaration-gated.
 
-    Narrowing everything would be a different, larger behaviour change; this
-    fix is scoped to the group whose play is destructive on the wrong host.
+    Narrowing everything would be a different, larger behaviour change: a node
+    genuinely running redis should keep receiving redis updates.
     """
-    node = _node([], ["backend"])
+    node = _node([], ["redis"])
     groups = _groups(node)
 
-    assert "backend" in groups, "a detection-only node lost its ordinary groups"
+    assert "redis" in groups, "a detection-only node lost its ordinary groups"
 
 
 def test_a_contaminated_node_is_also_kept_out_of_the_backend_group():
