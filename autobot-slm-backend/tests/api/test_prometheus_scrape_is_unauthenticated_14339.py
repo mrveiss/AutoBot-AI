@@ -161,6 +161,23 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
     return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
+def _is_empty_constructor(value: ast.expr) -> bool:
+    """`list()`, `tuple()`, `set()` with no arguments.
+
+    These parse as calls, so the collection-literal rule does not see them, and
+    the residual below would read them as gates. They are statically resolvable
+    — a no-argument builtin constructor is empty by definition — so they belong
+    with the literals rather than with the names this check cannot evaluate.
+    """
+    return (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id in {"list", "tuple", "set"}
+        and not value.args
+        and not value.keywords
+    )
+
+
 def _is_gated(call: ast.AST) -> bool:
     """Whether a registration actually carries a gate, not merely the keyword.
 
@@ -173,7 +190,9 @@ def _is_gated(call: ast.AST) -> bool:
 
     * **Any constant is ungated.** `None`, `False`, `0`, `""` — no constant is
       a sequence of dependencies, so none of them can gate anything.
-    * **An empty collection is ungated.** `[]`, `()`, `set()` literals.
+    * **An empty collection is ungated** — the `[]` and `()` literals, and a
+      no-argument `list()` / `tuple()` / `set()`, which parse as calls rather
+      than literals but construct exactly the same nothing.
     * **Everything else is gated** — a name, an attribute, a call, a
       non-empty collection.
 
@@ -191,6 +210,8 @@ def _is_gated(call: ast.AST) -> bool:
         if isinstance(value, ast.Constant):
             return False
         if isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts:
+            return False
+        if _is_empty_constructor(value):
             return False
         return True
     return False
@@ -881,3 +902,42 @@ def test_an_empty_dependency_list_cannot_hide_a_second_mount():
     calls, unparseable = _all_bypass_calls(tree)
     assert unparseable, "an ungated repeat with dependencies=[] was swallowed"
     assert any("evil_router" in item for item in unparseable)
+
+
+def test_no_constant_is_a_gate():
+    """`dependencies=None` is FastAPI's default and gates nothing.
+
+    Ruled by kind rather than by listing forms: no constant is a sequence of
+    dependencies, so every one of these is ungated. Three rounds of this were
+    patched a form at a time — `[]`, then `None` — each keeping a permissive
+    catch-all that the next unlisted form fell through.
+    """
+    for literal in ("None", "False", "0", '""'):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_every_empty_collection_literal_is_ungated():
+    for literal in ("[]", "()", "set()"):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_a_real_dependency_list_is_still_a_gate():
+    """Guard the guard: if the rules above swallowed everything, the whole
+    suite would report the real `main.py` as entirely ungated."""
+    for expr in ("_SM", "[Depends(require_service_management)]", "get_deps()"):
+        call = ast.parse(f"app.include_router(r, dependencies={expr})").body[0].value
+        assert _is_gated(call), f"dependencies={expr} was not treated as a gate"
+
+
+def test_a_none_dependency_cannot_hide_a_second_mount():
+    """The masking case, through `None` rather than `[]`."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies=None)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies=None was swallowed"
+    assert any("widgets_router" in item for item in unparseable)
