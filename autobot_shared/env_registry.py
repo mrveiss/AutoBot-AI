@@ -1683,6 +1683,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S",
+        type=int,
+        default=1800,
+        description=(
+            "Seconds a non-exhausted remediation attempt tracker may sit with no NEW attempt "
+            "before its count is forgiven. Clamped strictly above REMEDIATION_COOLDOWN plus a "
+            "reconcile-tick margin — a lower value forgives an attempt in the same instant one "
+            "becomes due, so count could never exceed 1 (services/reconciler.py, #14465)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
         type=int,
         default=500,
