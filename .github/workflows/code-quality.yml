@@ -455,6 +455,23 @@ jobs:
         # reports a comfortable zero. There is no exemption list, deliberately.
         python3 tools/lint/check_infra_scripts_undefined_names.py --audit
 
+    - name: Audit unexpanded shell placeholders in Python string constants (#14517)
+      run: |
+        # A pasted `${AUTOBOT_PROJECT_ROOT:-...}` inside a PLAIN Python string
+        # literal is never expanded, so the value names a directory that cannot
+        # exist: reads return empty and writes create a junk tree actually named
+        # after the expression. #14405/#14504 could only see the f-string form,
+        # which produces an F821; a plain literal is reported by no flake8 code,
+        # no bandit check and no type checker, and 32 sites accumulated that way
+        # (#14517). This has to run in a REQUIRED check for the same directional
+        # reason as #14419/#14405/#14489: every one of these sites fails quietly,
+        # so a run that stops looking at them goes greener rather than redder.
+        # It fails below a discovery floor, because a sweep handed an empty file
+        # list reports a comfortable zero, and it re-proves the three deliberate
+        # literals (#13658) by path, anchor symbol and exact count, so a rename
+        # cannot strand an exemption. There is no growable baseline.
+        python3 tools/lint/check_no_shell_placeholder_paths.py --audit
+
     - name: Audit MCP tool permission coverage (#14494)
       run: |
         # The under-grant guard used to infer "this tool mutates state" from a

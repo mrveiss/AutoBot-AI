@@ -18,6 +18,10 @@ obvious:
 * an entry whose file has dropped to the limit must be *removed* — a list still
   naming a compliant file exempts nothing while looking authoritative.
 
+A shrink also has to be locked in, not merely recorded (#14498). ``RATCHET_BASELINE``
+below is re-lowered with every shrink and pinned to the files themselves, so the
+lines a decomposition removed cannot be spent back inside a stale tolerance.
+
 The last test is the reach self-check. It runs the hook's own matcher over a
 tracked-file enumeration produced by ``git ls-files`` rather than by anything in
 the hook, so a matcher that has silently stopped matching cannot pass by
@@ -37,20 +41,39 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 
-# Frozen snapshot of the exemption as it stood when the ratchet landed (#14236).
-# It is deliberately a second copy: a ratchet needs a fixed reference point, and
-# a list that is only ever compared against itself can drift anywhere. Lowering
-# a ceiling in the hook is fine and needs no edit here. Raising one, or adding a
-# fourth file, must fail — so DO NOT "sync" this dict to make a test pass.
+# The ratchet's second reference point: every entry's size, re-measured on the
+# tree, held outside the hook it constrains. It is deliberately a second copy —
+# a list only ever compared against itself can drift anywhere — and neither copy
+# is derived from the other. The hook's ceilings are anchored to the files by
+# ``audit_ceilings``; this dict is anchored to them by
+# ``test_the_baseline_is_relowered_by_every_shrink``. So no ceiling can be
+# raised by editing one file alone: a bump here alone exceeds the file it names,
+# a bump in the hook alone exceeds this dict.
+#
+# It re-baselines on every shrink (#14498): a file that gets smaller lowers BOTH
+# this dict and ``KNOWN_LARGE`` to the count just achieved, which is what locks
+# the gain in. Left high, the gap between it and the new ceiling is regrowth the
+# ratchet would wave through one compliant-looking raise at a time — 344 lines
+# of it on ``tool_handler.py`` alone. Sync this dict DOWN with every shrink;
+# never up to make a test pass.
 RATCHET_BASELINE = {
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 4063,
+    "autobot-backend/chat_workflow/tool_handler.py": 3694,
 }
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
 # An enumeration that returns nothing must not read as "nothing to check".
 _TRACKED_PY_FLOOR = 3000
+
+
+def _count_lines(rel: str) -> int | None:
+    """Line count for a repo-relative path, or None when it cannot be read."""
+    try:
+        with (REPO_ROOT / rel).open(encoding="utf-8") as handle:
+            return sum(1 for _ in handle)
+    except OSError:
+        return None
 
 
 def _load():
@@ -144,6 +167,33 @@ def test_an_entry_whose_file_is_now_compliant_fails(hook):
         message = hook.verdict(rel, hook.MAX_LINES)
         assert message is not None, f"{rel} could sit here compliant and exempt"
         assert "Delete its KNOWN_LARGE entry" in message
+
+
+def test_the_baseline_is_relowered_by_every_shrink():
+    """A shrink recorded only in the hook leaves the cut lines spendable.
+
+    ``test_a_shrunk_file_must_lower_its_ceiling`` makes a shrink lower the
+    hook's ceiling; without this, the baseline stays where it was and the gap
+    between the two is regrowth every later raise can claim while staying
+    "under the baseline" — the defect in #14498, worth 344 lines on
+    ``tool_handler.py``. Sizes are counted here rather than read out of the
+    hook: a second reference point derived from the thing it checks agrees with
+    it by construction.
+    """
+    stale = {}
+    for rel, baseline in RATCHET_BASELINE.items():
+        actual = _count_lines(rel)
+        assert actual is not None, (
+            f"{rel}: the baseline names a file that moved or was deleted — "
+            "drop the entry from RATCHET_BASELINE with the KNOWN_LARGE one."
+        )
+        if baseline > actual:
+            stale[rel] = (baseline, actual)
+    assert stale == {}, (
+        f"baseline above the file it names (baseline, actual): {stale}. Lower "
+        "RATCHET_BASELINE to the size achieved — a baseline left above the "
+        "file re-licenses every line the shrink removed (#14498)."
+    )
 
 
 def test_a_shrunk_file_must_lower_its_ceiling(hook):

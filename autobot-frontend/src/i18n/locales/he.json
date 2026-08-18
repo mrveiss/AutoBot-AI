@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "ללא תפקיד",
+      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת"
     }
   },
   "code": {
@@ -9137,6 +9141,23 @@
       "agent": "סוכן",
       "user": "משתמש",
       "contact": "איש קשר"
-    }
+    },
+    "grant": "הענק",
+    "revoke": "בטל",
+    "attach": "צרף",
+    "detach": "הסר",
+    "assign": "שבץ",
+    "endTenure": "סיים כהונה",
+    "holderIdPlaceholder": "מזהה ממלא התפקיד",
+    "permissionPlaceholder": "למשל knowledge.read",
+    "workflowPlaceholder": "מזהה תהליך",
+    "toolPlaceholder": "שם כלי",
+    "credentialPlaceholder": "מזהה סוד",
+    "errorAssign": "לא ניתן לשבץ.",
+    "errorEndTenure": "לא ניתן לסיים את הכהונה.",
+    "errorGrant": "לא ניתן להעניק הרשאה.",
+    "errorRevoke": "לא ניתן לבטל הרשאה.",
+    "errorAttach": "לא ניתן לצרף.",
+    "errorDetach": "לא ניתן להסיר."
   }
 }

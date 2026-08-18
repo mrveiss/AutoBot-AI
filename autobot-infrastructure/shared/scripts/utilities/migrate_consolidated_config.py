@@ -30,6 +30,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, List
 
+from autobot_shared.paths import project_root
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -244,14 +246,19 @@ def main():
     )
     parser.add_argument(
         "--project-root",
-        default="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
+        # #14517: the default was a shell placeholder in a plain string literal, so
+        # an invocation without --project-root scanned a directory that cannot
+        # exist and reported "0 files scanned" as a successful migration.
+        default=str(project_root()),
         help="Project root directory",
     )
 
     args = parser.parse_args()
 
-    project_root = Path(args.project_root)
-    migrator = ConfigMigrator(project_root)
+    # Named ``root``: assigning to the imported ``project_root`` would make it a
+    # function-local name and raise UnboundLocalError inside the parser default.
+    root = Path(args.project_root)
+    migrator = ConfigMigrator(root)
 
     stats = migrator.run_migration(dry_run=args.dry_run)
 

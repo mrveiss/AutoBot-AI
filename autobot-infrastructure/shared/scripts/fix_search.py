@@ -11,6 +11,8 @@ import sys
 
 import requests
 
+from autobot_shared.paths import project_root
+
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,13 +20,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def upload_docs_as_searchable_facts():
     """Upload docs as facts that can be searched via simple text matching."""
 
-    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    # #14517: was a shell placeholder in a plain string literal, so every glob below
+    # matched nothing and the run reported "Found 0 documentation files" as success.
+    # Named ``root``: assigning to the imported ``project_root`` would make it a
+    # function-local name and raise UnboundLocalError on the call itself.
+    root = str(project_root())
 
     # Find all documentation files
     doc_files = []
     patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
     for pattern in patterns:
-        files = glob.glob(os.path.join(project_root, pattern), recursive=True)
+        files = glob.glob(os.path.join(root, pattern), recursive=True)
         doc_files.extend(files)
 
     filtered_files = [f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f]
@@ -35,7 +41,7 @@ def upload_docs_as_searchable_facts():
 
     for file_path in filtered_files:
         try:
-            rel_path = os.path.relpath(file_path, project_root)
+            rel_path = os.path.relpath(file_path, root)
 
             # Read file content
             with open(file_path, "r", encoding="utf-8") as f:

@@ -161,6 +161,105 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
     return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
+def _is_empty_constructor(value: ast.expr) -> bool:
+    """`list()`, `tuple()`, `set()` with no arguments.
+
+    These parse as calls, so the collection-literal rule does not see them, and
+    the residual below would read them as gates. They are statically resolvable
+    — a no-argument builtin constructor is empty by definition — so they belong
+    with the literals rather than with the names this check cannot evaluate.
+    """
+    return (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id in {"list", "tuple", "set", "dict"}
+        and not value.args
+        and not value.keywords
+    )
+
+
+def _is_gated(call: ast.AST) -> bool:
+    """Whether a registration actually carries a gate, not merely the keyword.
+
+    Three rounds of this were patched one empty-form at a time — first
+    `dependencies=[]`, then `dependencies=None`, FastAPI's own default and
+    functionally identical to omitting the keyword. Each patch enumerated the
+    forms it had thought of and kept a permissive catch-all underneath, so the
+    next unlisted form read as gated. The rule is stated by kind now rather
+    than by example:
+
+    * **Any constant is ungated.** `None`, `False`, `0`, `""` — no constant is
+      a sequence of dependencies, so none of them can gate anything.
+    * **An empty collection is ungated** — the `[]`, `()` and `{}` literals,
+      and a no-argument `list()` / `tuple()` / `set()` / `dict()`, which parse
+      as calls rather than literals but construct exactly the same nothing.
+      `{}` belongs here for the same reason as the rest: FastAPI stores
+      `list(dependencies or [])`, and an empty dict is falsy.
+    * **Everything else is gated** — a name, an attribute, a call, a
+      non-empty collection.
+
+    That last line is the residual, stated rather than hidden: this check
+    cannot evaluate what a name points at, so `dependencies=some_empty_var`
+    reads as gated. Resolving it needs the value, not the syntax. It is the
+    permissive direction, which is why the two rules above are exhaustive by
+    kind instead of by enumeration — a form nobody listed now falls into the
+    constant or collection rules rather than through a gap beneath them.
+    """
+    for keyword in getattr(call, "keywords", []):
+        if keyword.arg != "dependencies":
+            continue
+        value = keyword.value
+        if isinstance(value, ast.Constant):
+            return False
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts:
+            return False
+        if isinstance(value, ast.Dict) and not value.keys:
+            return False
+        if _is_empty_constructor(value):
+            return False
+        return True
+    return False
+
+
+def _record(calls: dict, unparseable: list, idiom: str, name: str, node, lineno: int) -> None:
+    """Store a public-surface registration, reporting an ambiguous name.
+
+    Registrations are keyed by name because the registry declares names. A name
+    is not a unique identity for a route surface, though: a router and an
+    endpoint function can carry the same one. The three collectors overwrote
+    each other, so the last registration won — and FastAPI resolves
+    first-match-wins, meaning the overwritten one is what serves. The check
+    reported clean about a route it was not looking at.
+
+    Two registrations of one name are reported when they cannot be the same
+    declaration:
+
+    * **Different idioms.** An `@app.get` endpoint named after a declared router
+      borrows that router's registry entry while being a different surface. Both
+      may be ungated, so comparing gating alone does not catch it.
+    * **Same idiom, different gating.** One carries the service-management
+      dependency and the other does not.
+
+    The same router mounted twice with identical gating — two prefixes, both
+    gated — is a legitimate FastAPI pattern and is deliberately left alone.
+    """
+    previous = calls.get(name)
+    if previous is None:
+        calls[name] = (idiom, node)
+        return
+    prior_idiom, prior_node = previous
+    if prior_idiom != idiom:
+        unparseable.append(
+            f"line {lineno}: {name} registered as both {prior_idiom} and {idiom}; "
+            "the registry declares names, so it cannot say which surface it covers"
+        )
+    elif _is_gated(prior_node) != _is_gated(node):
+        unparseable.append(
+            f"line {lineno}: {name} registered twice with different gating; "
+            "first-match-wins means the ungated registration serves"
+        )
+
+
 def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], list[str]]:
     """`app.include_router(...)` calls, split into readable and unreadable.
 
@@ -207,11 +306,11 @@ def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], li
             unparseable.append(f"line {node.lineno}: receiver {ast.dump(receiver)[:70]}")
             continue
         if _is_plain_name_arg(node):
-            calls[node.args[0].id] = node
+            _record(calls, unparseable, "include_router", node.args[0].id, node, node.lineno)
         else:
             shape = ast.dump(node.args[0])[:80] if node.args else "no arguments"
             unparseable.append(f"line {node.lineno}: argument {shape}")
-    return calls, unparseable
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _decorator_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dict[str, ast.Call], list[str]]:
@@ -243,8 +342,8 @@ def _decorator_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dict[st
             if kind == "unparseable":
                 unparseable.append(f"line {deco.lineno}: receiver {ast.dump(receiver)[:70]}")
                 continue
-            calls[node.name] = deco
-    return calls, unparseable
+            _record(calls, unparseable, "decorator", node.name, deco, node.lineno)
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _endpoint_arg(call: ast.Call) -> ast.expr | None:
@@ -281,11 +380,11 @@ def _add_api_route_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dic
             continue
         endpoint = _endpoint_arg(node)
         if isinstance(endpoint, ast.Name):
-            calls[endpoint.id] = node
+            _record(calls, unparseable, "add_api_route", endpoint.id, node, node.lineno)
         else:
             shape = ast.dump(endpoint)[:80] if endpoint is not None else "no endpoint argument"
             unparseable.append(f"line {node.lineno}: endpoint {shape}")
-    return calls, unparseable
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _all_bypass_calls(tree: ast.Module | None = None) -> tuple[dict[str, ast.AST], list[str]]:
@@ -306,10 +405,22 @@ def _all_bypass_calls(tree: ast.Module | None = None) -> tuple[dict[str, ast.AST
     decorator_calls, decorator_unparseable = _decorator_calls(tree, aliases)
     api_route_calls, api_route_unparseable = _add_api_route_calls(tree, aliases)
 
-    calls: dict[str, ast.AST] = dict(router_calls)
-    calls.update(decorator_calls)
-    calls.update(api_route_calls)
-    return calls, [*unparseable, *decorator_unparseable, *api_route_unparseable]
+    # NOT `dict.update` across the three. That is the same name-keyed collapse
+    # the collectors themselves had, one layer up: a name registered by two
+    # different idioms silently kept the last, and when the colliding name was
+    # already on the registry's open list the resulting ungated route passed
+    # with zero failures. Reconciled through `_record` so every registration is
+    # judged by the same rule wherever it came from.
+    calls: dict[str, tuple[str, ast.AST]] = {}
+    merged: list[str] = [*unparseable, *decorator_unparseable, *api_route_unparseable]
+    for idiom, source in (
+        ("include_router", router_calls),
+        ("decorator", decorator_calls),
+        ("add_api_route", api_route_calls),
+    ):
+        for name, node in source.items():
+            _record(calls, merged, idiom, name, node, getattr(node, "lineno", 0))
+    return {name: node for name, (_, node) in calls.items()}, merged
 
 
 def _bypass_calls() -> dict[str, ast.AST]:
@@ -392,11 +503,11 @@ def test_the_app_mounts_the_scrape_router_without_auth_and_the_rest_with_it():
     assert "performance_metrics_router" in calls, "the scrape router is never mounted on the app"
     assert "performance_router" in calls, "the authenticated performance router is not mounted"
 
-    assert "dependencies" not in _keywords(calls["performance_metrics_router"]), (
+    assert not _is_gated(calls["performance_metrics_router"]), (
         "the scrape router is mounted with a router-level dependency; prometheus "
         "cannot authenticate and every scrape will 401 again (#14339)"
     )
-    assert "dependencies" in _keywords(
+    assert _is_gated(
         calls["performance_router"]
     ), "the authenticated performance router lost its service-management dependency"
 
@@ -439,7 +550,7 @@ def test_every_ungated_router_is_named_in_the_registry():
     """
     declared = _registry_block()
 
-    ungated = {name for name, call in _bypass_calls().items() if "dependencies" not in _keywords(call)}
+    ungated = {name for name, call in _bypass_calls().items() if not _is_gated(call)}
     undeclared = sorted(name for name in ungated if not _is_declared(name, declared))
     assert not undeclared, (
         f"reachable without the service-management gate but not declared in the registry: "
@@ -559,7 +670,7 @@ def test_the_registry_check_actually_sees_the_ungated_mounts():
     If the mount matcher stopped matching — a rename, a different idiom — every
     router would look gated and the registry check would pass over all of them.
     """
-    ungated = {name for name, call in _bypass_calls().items() if "dependencies" not in _keywords(call)}
+    ungated = {name for name, call in _bypass_calls().items() if not _is_gated(call)}
     assert "performance_metrics_router" in ungated
     assert "root" in ungated, "the @app.get('/') banner route is not seen as an ungated bypass"
     assert "prometheus_registry_metrics" in ungated, "the @app.get('/metrics') route is not seen as an ungated bypass"
@@ -585,7 +696,7 @@ def test_a_bare_app_get_route_is_caught_as_an_ungated_bypass():
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
     assert "sneaky_list" in calls, "a bare @app.get(...) route was not caught by the decorator matcher"
-    assert "dependencies" not in _keywords(calls["sneaky_list"])
+    assert not _is_gated(calls["sneaky_list"])
 
 
 def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
@@ -596,7 +707,7 @@ def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
     assert "reports" in calls
-    assert "dependencies" in _keywords(calls["reports"])
+    assert _is_gated(calls["reports"])
 
 
 def test_an_add_api_route_call_is_caught_as_an_ungated_bypass():
@@ -606,7 +717,7 @@ def test_an_add_api_route_call_is_caught_as_an_ungated_bypass():
     calls, unparseable = _add_api_route_calls(tree, frozenset())
     assert not unparseable
     assert "sneaky" in calls, "app.add_api_route(...) was not caught"
-    assert "dependencies" not in _keywords(calls["sneaky"])
+    assert not _is_gated(calls["sneaky"])
 
 
 def test_an_alias_of_app_is_resolved_before_receiver_matching():
@@ -689,3 +800,174 @@ def test_the_registry_check_sees_the_root_and_metrics_routes_as_app_get_calls():
     assert not unparseable
     assert "root" in decorator_calls
     assert "prometheus_registry_metrics" in decorator_calls
+
+
+def test_a_repeat_registration_cannot_hide_an_ungated_one():
+    """Two registrations of one name must fail, not collapse to the last.
+
+    The collectors keyed by name and the merge did `dict.update`, so an ungated
+    registration was masked whenever the same name was also registered with the
+    gate elsewhere. FastAPI resolves first-match-wins, so the masked one is the
+    registration that actually serves — the check reported clean about a route
+    it was not looking at.
+
+    Asserted against synthetic source: the real `main.py` registers no name
+    twice, so a test built on it could only ever prove the happy path.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/evil")\n'
+        'app.include_router(widgets_router, prefix="/api", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "a name registered twice was collapsed instead of reported"
+    assert any("widgets_router" in item for item in unparseable)
+
+
+def test_the_repeat_check_does_not_fire_on_distinct_names():
+    """Guard the guard: if it flagged every registration, the suite would be
+    red for the real file and the assertion above would prove nothing."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(alpha_router, prefix="/a", dependencies=_SM)\n'
+        'app.include_router(beta_router, prefix="/b", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert not unparseable, f"distinct names were reported as repeats: {unparseable}"
+    assert set(calls) == {"alpha_router", "beta_router"}
+
+
+def test_a_name_registered_by_two_idioms_is_reported():
+    """An endpoint function named after a router borrows the router's entry.
+
+    The registry declares names, and a name is not a unique identity for a
+    route surface. `performance_metrics_router` is legitimately on the open
+    list as a router; an `@app.get` endpoint function of the same name is a
+    different surface that inherits the declaration.
+
+    Both registrations here are ungated, so a rule comparing only gating lets
+    this through — which is exactly how it survived the first fix.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(performance_metrics_router, prefix="/api")\n'
+        '@app.get("/api/services/admin-dump")\n'
+        "async def performance_metrics_router():\n"
+        "    return {}\n"
+    )
+    _, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "a name registered by two different idioms was collapsed"
+    assert any("performance_metrics_router" in item for item in unparseable)
+
+
+def test_one_router_under_two_prefixes_with_equal_gating_is_allowed():
+    """A legitimate FastAPI pattern must not be forbidden to close the hole.
+
+    An earlier revision failed on any repeat at all, which would have rejected
+    this with no way to declare an exception. The registrations agree on both
+    idiom and gating, so they are the same declaration seen twice.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert not unparseable, f"a legitimate two-prefix mount was reported: {unparseable}"
+    assert "widgets_router" in calls
+
+
+def test_an_empty_dependency_list_is_not_a_gate():
+    """`dependencies=[]` is present and enforces nothing.
+
+    Deciding by keyword presence read it as gated, so a route could be
+    registered wide open while every check in this file called it protected.
+    """
+    gated = ast.parse("app.include_router(r, dependencies=_SM)").body[0].value
+    empty = ast.parse("app.include_router(r, dependencies=[])").body[0].value
+    bare = ast.parse('app.include_router(r, prefix="/x")').body[0].value
+    assert _is_gated(gated)
+    assert not _is_gated(empty), "an empty dependency list gates nothing"
+    assert not _is_gated(bare)
+
+
+def test_an_empty_dependency_list_cannot_hide_a_second_mount():
+    """The interaction that made the latent gap dangerous.
+
+    Comparing presence, this pair looked like one declaration seen twice, so
+    the ungated `/v2` mount was dropped from the map rather than reported —
+    it is a second, independent, live registration.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(evil_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(evil_router, prefix="/v2", dependencies=[])\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies=[] was swallowed"
+    assert any("evil_router" in item for item in unparseable)
+
+
+def test_no_constant_is_a_gate():
+    """`dependencies=None` is FastAPI's default and gates nothing.
+
+    Ruled by kind rather than by listing forms: no constant is a sequence of
+    dependencies, so every one of these is ungated. Three rounds of this were
+    patched a form at a time — `[]`, then `None` — each keeping a permissive
+    catch-all that the next unlisted form fell through.
+    """
+    for literal in ("None", "False", "0", '""'):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_every_empty_collection_literal_is_ungated():
+    for literal in ("[]", "()", "set()"):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_a_real_dependency_list_is_still_a_gate():
+    """Guard the guard: if the rules above swallowed everything, the whole
+    suite would report the real `main.py` as entirely ungated."""
+    for expr in ("_SM", "[Depends(require_service_management)]", "get_deps()"):
+        call = ast.parse(f"app.include_router(r, dependencies={expr})").body[0].value
+        assert _is_gated(call), f"dependencies={expr} was not treated as a gate"
+
+
+def test_a_none_dependency_cannot_hide_a_second_mount():
+    """The masking case, through `None` rather than `[]`."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies=None)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies=None was swallowed"
+    assert any("widgets_router" in item for item in unparseable)
+
+
+def test_an_empty_dict_is_not_a_gate():
+    """`{}` and `dict()` are the dict spellings of the empty collection.
+
+    FastAPI stores `list(dependencies or [])`, so an empty dict is falsy and
+    enforces exactly nothing — the same runtime outcome as `[]`, `()`, `set()`
+    and `None`, all of which were already handled. Reaching for "the empty
+    version of a collection" and typing the dict spelling is an ordinary slip,
+    which is why this belongs in the rule rather than in the residual.
+    """
+    for literal in ("{}", "dict()"):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_an_empty_dict_cannot_hide_a_second_mount():
+    """The masking case, through `{}`."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies={})\n'
+    )
+    _, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies={} was swallowed"
+    assert any("widgets_router" in item for item in unparseable)

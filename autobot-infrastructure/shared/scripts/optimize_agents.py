@@ -11,6 +11,8 @@ Reduces token consumption while preserving critical policies.
 import re
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 
 def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
     """
@@ -19,7 +21,7 @@ def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
     Returns:
         (modified, lines_before, lines_after)
     """
-    content = file_path.read_text()
+    content = file_path.read_text(encoding="utf-8")
     original_lines = content.count("\n")
 
     # Pattern to match the entire "MANDATORY LOCAL-ONLY EDITING ENFORCEMENT" section
@@ -44,7 +46,7 @@ def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
     optimized_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
     # Write back
-    file_path.write_text(optimized_content)
+    file_path.write_text(optimized_content, encoding="utf-8")
 
     optimized_lines = optimized_content.count("\n")
     original_lines - optimized_lines
@@ -54,7 +56,10 @@ def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
 
 def main():
     """Main optimization routine."""
-    agents_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.claude/agents")
+    # #14517: was a shell placeholder in a plain string literal, so the exists()
+    # check below always failed and the script exited 1 with "Agents directory not
+    # found" no matter where it ran (#13149).
+    agents_dir = project_root() / ".claude" / "agents"
 
     if not agents_dir.exists():
         print(f"❌ Error: Agents directory not found: {agents_dir}")
