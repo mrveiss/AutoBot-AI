@@ -437,9 +437,11 @@ def _build_tool_entry(tool: dict, bridge_name: str, bridge_desc: str, endpoint: 
     and ``get_tool_definitions`` both read the cache this populates, so one
     declaration governs execution and advertisement alike.
 
-    ``None`` means the tool is undeclared. Stage 1 records that without acting
-    on it; enforcement (denying the undeclared) is a later, separately
-    revertible step, so this change cannot break a working agent flow.
+    ``None`` means the tool is undeclared. Stage 1 only recorded that value;
+    stage 3 (#14523) is what acts on it — ``PermissionEnforcementExtension``
+    refuses a ``None`` ``tool_permission`` and ``MCPDispatcher.dispatch``/
+    ``get_tool_definitions`` both deny/hide a tool this resolves to ``None``
+    for, via the same canonical check.
     """
     from autobot_shared.auth.mcp_tool_permissions import required_permission  # noqa: PLC0415
 

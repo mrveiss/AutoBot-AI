@@ -13,7 +13,14 @@ Coverage:
 - get_tool_definitions() formats correctly
 - refresh_tool_cache() handles registry HTTP errors gracefully
 - Cache TTL triggers refresh after expiry (#2598)
-- RBAC filtering hides admin-only tools from non-admin callers (#2598)
+- RBAC filtering hides admin-only tools from non-admin callers (#2598, folded
+  into the canonical `_would_deny` check at #14523)
+
+#14523: fixture tool dicts now carry `required_permission`, matching what the
+real registry (`mcp_registry._build_tool_entry`) always sets. Before this,
+`dispatch()` only checked a name-based admin blocklist and everything else was
+reachable regardless of declaration; a fixture with no `required_permission`
+would now read as "undeclared" and be refused, same as a real one would be.
 """
 
 import time
@@ -35,6 +42,10 @@ _SAMPLE_TOOL = {
     "bridge": "knowledge_mcp",
     "endpoint": get_test_backend_url() + "/api/knowledge/mcp/search_knowledge_base",
     "features": ["search"],
+    # #14523: real value from mcp_tool_permissions.TOOL_PERMISSIONS — every
+    # role from "user" up holds this, so it stays permitted everywhere it was
+    # implicitly permitted before declarations were enforced.
+    "required_permission": "knowledge.read",
 }
 
 
@@ -242,6 +253,8 @@ _ADMIN_TOOL = {
     "bridge": "redis_mcp",
     "endpoint": get_test_backend_url() + "/api/redis/mcp/client_list",
     "features": [],
+    # #14523: real value from mcp_tool_permissions.TOOL_PERMISSIONS — admin-only.
+    "required_permission": "mcp.manage",
 }
 
 
@@ -329,12 +342,42 @@ def test_get_tool_definitions_shows_all_for_admin() -> None:
 
 @pytest.mark.asyncio
 async def test_dispatch_rejects_admin_tool_for_user() -> None:
-    """dispatch() should return success=False for admin-only tool when role='user' (#2598)."""
+    """dispatch() should return success=False for admin-only tool when role='user'
+    (#2598, now enforced via the canonical `_would_deny` verdict — #14523)."""
     d = _make_dispatcher_with_cache(_ADMIN_TOOL)
     d._cache_timestamp = time.monotonic()  # keep cache fresh to avoid network call
 
     result = await d.dispatch("redis_client_list", {}, role="user")
 
     assert result["success"] is False
-    assert "admin" in result["result"].lower()
+    assert "permission" in result["result"].lower()
     assert result["bridge"] is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_allows_admin_tool_for_admin() -> None:
+    """#14523: the control case — admin still reaches the admin-only tool."""
+    d = _make_dispatcher_with_cache(_ADMIN_TOOL)
+    d._cache_timestamp = time.monotonic()
+    d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran", "bridge": "redis_mcp"})
+
+    result = await d.dispatch("redis_client_list", {}, role="admin")
+
+    assert result["success"] is True
+    d._call_bridge.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejects_an_undeclared_tool() -> None:
+    """#14523: a cached tool with no `required_permission` at all is refused,
+    not silently dispatched — the runtime half of #13228 this issue closes."""
+    undeclared = {**_SAMPLE_TOOL, "name": "mystery_tool", "required_permission": None}
+    d = _make_dispatcher_with_cache(undeclared)
+    d._cache_timestamp = time.monotonic()
+    d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran", "bridge": "knowledge_mcp"})
+
+    result = await d.dispatch("mystery_tool", {}, role="admin")
+
+    assert result["success"] is False
+    assert "permission" in result["result"].lower()
+    d._call_bridge.assert_not_called()
