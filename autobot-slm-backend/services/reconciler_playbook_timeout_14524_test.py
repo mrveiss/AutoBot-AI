@@ -177,9 +177,9 @@ def test_remediate_failed_service_uses_its_own_much_larger_playbook_timeout():
         real_playbook_executor_module.get_playbook_executor = original_getter
 
     assert result is True
-    assert reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S > reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S, (
-        "the service-restart budget must be the LARGER of the two for this test to mean anything"
-    )
+    assert (
+        reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S > reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+    ), "the service-restart budget must be the LARGER of the two for this test to mean anything"
     assert captured.get("timeout_s") == reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S, (
         f"expected the service-restart path to use SERVICE_RESTART_PLAYBOOK_TIMEOUT_S="
         f"{reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S}, got {captured.get('timeout_s')!r} "
@@ -375,6 +375,6 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
 
     tracker = service._remediation_tracker[node.node_id]
     assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
-    assert tracker.get("exhausted") is True, (
-        f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
-    )
+    assert (
+        tracker.get("exhausted") is True
+    ), f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
