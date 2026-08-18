@@ -230,10 +230,25 @@ def _union_roles(node: Any) -> list[str]:
     return result
 
 
-# Groups carrying manager-only, destructive plays. These must never be reached
-# by observation: `slm_server` is targeted by "Play 1 - Update SLM Server
-# First", which deploys the SLM tree and reads /opt/autobot/code_source.
-_DECLARED_ONLY_GROUPS = frozenset({"slm_server"})
+# Groups whose plays DEPLOY a component's tree onto the host. Detection must
+# never add a node to one of these: the whole failure mode is a node being
+# handed software it does not run.
+#
+# `slm_server`   - "Play 1 - Update SLM Server First" unpacks the SLM manager's
+#                  backend/frontend/shared tree and reads /opt/autobot/code_source.
+# `backend`/`main` - Play 2 unarchives autobot-backend (`when: 'backend' in
+#                  group_names`) and runs the alembic upgrade sequence against
+#                  that host. Play 2 also sets `any_errors_fatal: true` with
+#                  `serial: 3`, so ONE wrongly-included node aborts the whole
+#                  batch of legitimate hosts -- a wider blast radius than the
+#                  Play 1 failure that surfaced this bug.
+#
+# Deliberately NOT everything: `test_detected_roles_merged_with_roles` pins that
+# a detected `redis` still joins `redis`/`database`, and that is wanted -- a
+# node genuinely running redis should keep receiving redis updates. The line is
+# drawn at groups whose plays were checked and found to deploy a tree or migrate
+# a database, not at "detection is untrusted".
+_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main"})
 
 
 def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
