@@ -111,6 +111,18 @@ REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_PO
 # it is used.
 REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped("AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=1)
 
+# #14465 review: how often `_handle_max_attempts_refusal` re-broadcasts "still
+# exhausted" for a node parked at MAX_REMEDIATION_ATTEMPTS. Once exhausted,
+# `last_attempt` freezes, so this branch runs on every reconcile pass for as
+# long as the node stays selected DEGRADED -- unthrottled, that is once per
+# `reconcile_interval` forever (~1400/day at the 60s default). An hour is
+# frequent enough that a human watching the UI sees the node is still stuck
+# without needing to have caught the one original event, and infrequent
+# enough not to be noise.
+MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
+    "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
+)
+
 
 def _effective_tracker_expiry_s() -> int:
     """The expiry window actually enforced by `_forgive_if_expired` (#14465 review).
@@ -125,11 +137,28 @@ def _effective_tracker_expiry_s() -> int:
     stub) -- `int + MagicMock` does not raise either, it silently produces
     another `MagicMock`, which `max()` against would raise `TypeError` one
     call later instead of never.
+
+    The margin is NOT `reconcile_interval` alone (review, round 6):
+    `_attempt_remediation` processes every currently-degraded node SERIALLY
+    within one pass, and `_heartbeat_returned` blocks that pass for up to
+    `REMEDIATION_HEARTBEAT_WAIT_S` for EACH node that gets an actual attempt.
+    With more than one such node in the same pass, the real gap between two
+    `_remediate_node` calls for a GIVEN node can run well beyond `reconcile_
+    interval` -- a margin of `reconcile_interval` alone was measured
+    defeated for realistic real-world pass durations. `REMEDIATION_
+    HEARTBEAT_WAIT_S` upper-bounds the dominant source of that variance for
+    ONE node; this does NOT bound the case of many nodes degraded
+    simultaneously, which needs either a known fleet-size ceiling or
+    restructuring `_attempt_remediation` to process nodes concurrently (each
+    with its own DB session -- sharing one `AsyncSession` across concurrent
+    coroutines is unsafe, so that is a real change, not a one-line fix).
+    Tracked as #14515 rather than attempted blind here.
     """
     reconcile_interval = getattr(settings, "reconcile_interval", 60)
     if not isinstance(reconcile_interval, int):
         reconcile_interval = 60
-    floor = REMEDIATION_COOLDOWN + reconcile_interval + 1
+    margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)
+    floor = REMEDIATION_COOLDOWN + margin + 1
     return max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
 
@@ -478,24 +507,48 @@ class ReconcilerService:
         remediable again -- rarely reachable, per this issue's own root-cause
         finding, but a real path. `_forgive_if_expired` deliberately excludes
         `exhausted` trackers (see its docstring), so with no other path back
-        this refusal now repeats silently: `_create_max_attempts_event` fires
-        once, and every later pass was only a `logger.warning` inside
+        this refusal now repeats silently: `_create_max_attempts_event` fired
+        once and every later pass was only a `logger.warning` inside
         `_check_remediation_limits` -- no event, no broadcast, no UI signal
-        that the node is still stuck. Broadcasting (not a second DB-persisted
-        `NodeEvent`, which would grow unbounded for a node parked here
-        indefinitely) on every subsequent refusal is the minimum fix; an
-        automatic un-exhaust path is a design decision, tracked on #14465,
-        not built here.
+        that the node is still stuck. An automatic un-exhaust path is a
+        design decision, tracked on #14465, not built here.
+
+        `exhausted` is set and stored BEFORE `_create_max_attempts_event`'s
+        `db.commit()` is even attempted, not after: `last_attempt` is now
+        frozen (nothing advances it once exhausted), so this branch runs on
+        EVERY future reconcile pass for as long as the node stays selected
+        DEGRADED. If the flag were only set after a successful commit, a
+        commit failure would leave it unset and every subsequent pass would
+        retry the same DB write -- unbounded for a sustained outage. Setting
+        it first means at worst one informational event is lost to a
+        transient failure, never a retry loop.
+
+        The follow-up visibility fix is throttled
+        (`MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S`), and deliberately NOT
+        `event_type="completed"`: `FleetOverview.vue`'s `onRemediationEvent`
+        handler calls `fleetStore.refreshNode(nodeId)` -- a real API request
+        -- for exactly that `event_type`. Broadcasting `"completed"` on every
+        refusal would have turned "make the lockout visible" into a refresh
+        storm once per reconcile tick, forever, for every exhausted node.
         """
         if not tracker.get("exhausted"):
-            await self._create_max_attempts_event(db, node, tracker)
             tracker["exhausted"] = True
             self._remediation_tracker[node.node_id] = tracker
+            await self._create_max_attempts_event(db, node, tracker)
             return
 
+        now = datetime.now(timezone.utc)
+        last_broadcast = tracker.get("last_refusal_broadcast")
+        if last_broadcast is not None and (now - last_broadcast).total_seconds() < (
+            MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S
+        ):
+            return
+
+        tracker["last_refusal_broadcast"] = now
+        self._remediation_tracker[node.node_id] = tracker
         await self._broadcast_remediation_event(
             node.node_id,
-            "completed",
+            "still_exhausted",
             success=False,
             message=f"Node {node.hostname} remains at max remediation attempts - human intervention required",
         )

@@ -1698,6 +1698,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=(
+            "How often to re-broadcast that a node is still at MAX_REMEDIATION_ATTEMPTS. "
+            "Once exhausted, last_attempt freezes and this refusal is refused again on every "
+            "reconcile pass forever — unthrottled, that is once per reconcile_interval "
+            "(services/reconciler.py, #14465)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
         type=int,
         default=500,
