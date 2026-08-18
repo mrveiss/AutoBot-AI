@@ -102,9 +102,7 @@ class TestApprovalRequiredFailsClosed:
         with patch("services.gateway.egress_governor.get_audit_logger") as mock_get:
             audit = AsyncMock()
             mock_get.return_value = audit
-            verdict = await governor.evaluate(
-                platform="slack", channel_id="c1", message_id="m1", require_approval=True
-            )
+            verdict = await governor.evaluate(platform="slack", channel_id="c1", message_id="m1", require_approval=True)
 
         assert verdict.allowed is False
         assert exception_text not in verdict.safe_reason

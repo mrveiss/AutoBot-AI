@@ -358,9 +358,7 @@ class TestApproverExceptionTextNeverReachesTheCaller:
     the real ``_decide`` branch that builds them.
     """
 
-    EXCEPTION_TEXT = (
-        "auth rejected for host internal-db-01.svc.cluster.local using key file /etc/autobot/approver.pem"
-    )
+    EXCEPTION_TEXT = "auth rejected for host internal-db-01.svc.cluster.local using key file /etc/autobot/approver.pem"
 
     @pytest.mark.asyncio
     async def test_telegram_denial_omits_the_approver_exception_text(self):
@@ -479,9 +477,7 @@ class TestChannelIdentityRule:
         wa._make_request = AsyncMock()
 
         with caplog.at_level(logging.WARNING):
-            with patch(
-                "integrations.whatsapp_integration.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)
-            ):
+            with patch("integrations.whatsapp_integration.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
                 await wa.send_text_message({"to": "+15551234567", "body": "hi"})
 
         assert "5551234567" not in caplog.text
