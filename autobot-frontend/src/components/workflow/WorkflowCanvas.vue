@@ -86,6 +86,12 @@
     <div ref="canvasRef" class="canvas-area" @mousedown="startPan" @mousemove="onMouseMove"
          @mouseup="endInteraction" @wheel.prevent="handleWheel">
       <div class="canvas-content" :style="canvasTransform">
+        <!-- #14609: keyboard instructions for the canvas's own composite-widget
+             navigation (roving tabindex + arrow keys) — not discoverable from
+             markup alone, so a screen-reader user needs it stated. Visually
+             hidden; referenced from every node via aria-describedby. -->
+        <p :id="navInstructionsId" class="sr-only">{{ $t('workflow.canvas.a11yInstructions') }}</p>
+        <p v-if="!readonly" :id="moveInstructionsId" class="sr-only">{{ $t('workflow.canvas.a11yInstructionsMove') }}</p>
         <!-- Connection Lines SVG -->
         <svg class="connections-svg">
           <defs>
@@ -98,11 +104,29 @@
         </svg>
 
         <!-- Nodes -->
+        <!-- #14609: roving tabindex (WAI-ARIA APG composite-widget pattern) —
+             exactly one node is a Tab stop; arrow keys move focus between the
+             rest, Enter/Space selects (mirrors @click), Escape deselects, and
+             a modifier+arrow moves the node (drag's keyboard equivalent, only
+             when not readonly). `@keydown` guards `e.target === e.currentTarget`
+             so a keypress inside a node's own input/select/button — e.g. typing
+             a literal space into a step's description — reaches that control
+             instead of being hijacked as "select the node". -->
         <div v-for="node in nodes" :key="node.id" class="workflow-node"
+             :ref="(el) => registerNodeEl(node.id, el as Element | null)"
              :class="[node.type, { selected: selectedNodeId === node.id }, ...ruleClasses(node)]"
              :data-rule-id="nodeRuleId(node)"
+             :data-node-id="node.id"
              :style="nodeStyle(node)"
-             @mousedown="onNodeMouseDown(node, $event)" @click.stop="selectNode(node.id)">
+             role="button"
+             :tabindex="rovingTabStopId === node.id ? 0 : -1"
+             :aria-label="nodeAriaLabel(node)"
+             :aria-pressed="selectedNodeId === node.id"
+             :aria-describedby="instructionsId"
+             @mousedown="onNodeMouseDown(node, $event)"
+             @click.stop="selectNode(node.id)"
+             @focus="focusedNodeId = node.id"
+             @keydown="onNodeKeydown(node, $event)">
           <div class="node-header">
             <Icon :name="nodeIcons[node.type]" />
             <span>{{ nodeTitle(node) }}</span>
@@ -281,13 +305,16 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, nextTick, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
+import { CANVAS_NODE_WIDTH } from './canvasNode';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
   SELECTABLE_RULE_DIMENSIONS,
+  STATUS_RULES,
+  OWNER_RULES,
   activeRules,
   matchRule,
   orgNodeFacts,
@@ -389,6 +416,40 @@ function nodeText(node: CanvasNode, key: string): string {
  *  flag read through it is always falsy and can never gate anything (GH#13936). */
 function nodeFlag(node: CanvasNode, key: string): boolean {
   return (node.data as Record<string, unknown>)[key] === true;
+}
+
+/**
+ * Accessible name for a node (#14609): kind, name and — for an org-person,
+ * the only node type carrying a status concept — its current state.
+ *
+ * Built from `STATUS_RULES`/`OWNER_RULES` directly rather than through
+ * `ruleForNode`/`nodeRuleLabel`: those read the *active* `colourMode`, and the
+ * announcement must not change depending on which dimension the sighted
+ * legend happens to be colouring by.
+ */
+function nodeAriaLabel(node: CanvasNode): string {
+  const kind = nodeKindLabel(node);
+  const name = nodeTitle(node);
+  const state = nodeStatusLabel(node);
+  return state
+    ? t('workflow.canvas.nodeAriaLabelWithState', { kind, name, state })
+    : t('workflow.canvas.nodeAriaLabel', { kind, name });
+}
+
+/** The "kind" component of a node's accessible name. */
+function nodeKindLabel(node: CanvasNode): string {
+  if (node.type === 'org-person') {
+    const facts = orgFacts.value.get(node.id);
+    if (facts) return ruleLabel(matchRule(OWNER_RULES, facts));
+  }
+  if (node.type === 'org-group') return t('llc.orgChart.canvasGroupKind');
+  return (nodeLabels.value as Record<string, string | undefined>)[node.type] ?? '';
+}
+
+/** The "state" component of a node's accessible name — '' when the node carries none. */
+function nodeStatusLabel(node: CanvasNode): string {
+  const facts = orgFacts.value.get(node.id);
+  return facts ? ruleLabel(matchRule(STATUS_RULES, facts)) : '';
 }
 
 /**
@@ -495,6 +556,57 @@ const showSaveDialog = ref(false);
 const saveName = ref('');
 const saveDesc = ref('');
 
+/* ------------------------------------------------------------------ *
+ * GH#14609: keyboard operation — a roving-tabindex node graph.
+ *
+ * `focusedNodeId` is only ever written by user-driven focus (Tab landing on
+ * the roving stop, or an arrow-key move) — never reset when `nodes` changes,
+ * so a canvas re-layout (same ids, new node objects/positions) keeps the
+ * focused DOM element focused: Vue's `:key="node.id"` patching reuses the
+ * existing element rather than recreating it, and native browser focus
+ * survives that unaffected. A naive index-based (rather than id-based)
+ * implementation loses this for free.
+ * ------------------------------------------------------------------ */
+
+const _uid = useId();
+const navInstructionsId = `workflow-canvas-nav-instructions-${_uid}`;
+const moveInstructionsId = `workflow-canvas-move-instructions-${_uid}`;
+/** Move instructions only apply when dragging itself is possible. */
+const instructionsId = computed(() =>
+  props.readonly ? navInstructionsId : `${navInstructionsId} ${moveInstructionsId}`,
+);
+
+const focusedNodeId = ref<string | null>(null);
+const nodeEls = new Map<string, HTMLElement>();
+
+function registerNodeEl(id: string, el: Element | null): void {
+  if (el instanceof HTMLElement) nodeEls.set(id, el);
+  else nodeEls.delete(id);
+}
+
+/** Row tolerance for the default (first-tab) reading order: nodes within this
+ *  many px of vertical offset are treated as the same visual row. */
+const NODE_ROW_TOLERANCE = 60;
+
+/** `nodes` sorted into a predictable top-to-bottom, start-to-end reading order —
+ *  used only to pick the initial roving tab stop before any focus has occurred. */
+const visualOrder = computed<CanvasNode[]>(() =>
+  [...props.nodes].sort((a, b) => {
+    const rowDelta = a.position.y - b.position.y;
+    if (Math.abs(rowDelta) > NODE_ROW_TOLERANCE) return rowDelta;
+    return a.position.x - b.position.x;
+  }),
+);
+
+/** The single node that is a Tab stop. Falls back to reading order when
+ *  nothing has been focused yet, or the previously-focused node is gone. */
+const rovingTabStopId = computed<string | null>(() => {
+  if (focusedNodeId.value && props.nodes.some((n) => n.id === focusedNodeId.value)) {
+    return focusedNodeId.value;
+  }
+  return visualOrder.value[0]?.id ?? null;
+});
+
 const canvasTransform = computed(() => ({ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom.value})` }));
 
 const connections = computed(() => {
@@ -594,6 +706,134 @@ function deleteNode(id: string) {
 }
 
 function selectNode(id: string) { emit('node-selected', id); }
+
+/** Fixed-size step for a keyboard-driven node move — matches the background grid. */
+const NODE_KEYBOARD_MOVE_STEP = 20;
+
+type SpatialDirection = 'up' | 'down' | 'left' | 'right';
+
+/**
+ * Resolve an arrow key to a canvas-space direction, folding in writing
+ * direction (#14609 acceptance): in an RTL locale, ArrowRight is "back" in
+ * reading order — the same node it would reach visually to the left — and
+ * ArrowLeft is "forward". ArrowUp/ArrowDown are direction-agnostic.
+ *
+ * Node positions themselves are never mirrored for RTL (`nodeStyle` always
+ * writes a physical `left`, see the #13939 pan/position tests) — only the
+ * *meaning* of the two horizontal keys flips, matching how a toolbar or
+ * listbox's horizontal arrow-key navigation is expected to behave per the
+ * writing-direction convention, independent of whether the widget's own
+ * visual layout mirrors.
+ */
+function resolveArrowDirection(key: string): SpatialDirection | null {
+  if (key === 'ArrowUp') return 'up';
+  if (key === 'ArrowDown') return 'down';
+  if (key === 'ArrowLeft') return isRtl() ? 'right' : 'left';
+  if (key === 'ArrowRight') return isRtl() ? 'left' : 'right';
+  return null;
+}
+
+/** Read fresh on every keypress — not a computed: `document.documentElement.dir`
+ *  is not a Vue-reactive source, so caching it would never pick up a runtime
+ *  locale switch (`setLocale` in `src/i18n/index.ts` flips the attribute). */
+function isRtl(): boolean {
+  return document.documentElement.dir === 'rtl';
+}
+
+/** A node's approximate visual centre, in canvas space — same anchor the
+ *  connection-line paths already use (`x + 240`, `y + 50`, see `connections`). */
+function nodeCenter(node: CanvasNode): { x: number; y: number } {
+  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + 50 };
+}
+
+/**
+ * Nearest node in `direction` from `from`, by visual position rather than
+ * array order (#14609 acceptance) — a directional nearest-neighbour search:
+ * candidates strictly on the correct side of `from` are scored by distance
+ * along the primary axis plus a heavily-weighted cross-axis penalty, so
+ * movement favours a node roughly aligned with the current one (a laid-out
+ * grid or row) over one merely closer in Euclidean distance off-axis.
+ */
+function findNodeInDirection(from: CanvasNode, direction: SpatialDirection): CanvasNode | null {
+  const origin = nodeCenter(from);
+  let best: CanvasNode | null = null;
+  let bestScore = Infinity;
+  for (const candidate of props.nodes) {
+    if (candidate.id === from.id) continue;
+    const point = nodeCenter(candidate);
+    const dx = point.x - origin.x;
+    const dy = point.y - origin.y;
+    let primary: number;
+    let cross: number;
+    if (direction === 'left') { if (dx >= 0) continue; primary = -dx; cross = dy; }
+    else if (direction === 'right') { if (dx <= 0) continue; primary = dx; cross = dy; }
+    else if (direction === 'up') { if (dy >= 0) continue; primary = -dy; cross = dx; }
+    else { if (dy <= 0) continue; primary = dy; cross = dx; }
+    const score = primary + Math.abs(cross) * 2;
+    if (score < bestScore) { bestScore = score; best = candidate; }
+  }
+  return best;
+}
+
+/** Move focus (not the node) to the nearest node in `direction`, if any. */
+function focusNodeInDirection(from: CanvasNode, direction: SpatialDirection): void {
+  const target = findNodeInDirection(from, direction);
+  if (!target) return;
+  focusedNodeId.value = target.id;
+  void nextTick(() => nodeEls.get(target.id)?.focus());
+}
+
+/** Move the node itself (drag's keyboard equivalent, #14609) — only ever
+ *  called when `!readonly`, mirroring `onMouseMove`'s own drag emit. */
+function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void {
+  const delta: Record<SpatialDirection, { x: number; y: number }> = {
+    up: { x: 0, y: -NODE_KEYBOARD_MOVE_STEP },
+    down: { x: 0, y: NODE_KEYBOARD_MOVE_STEP },
+    left: { x: -NODE_KEYBOARD_MOVE_STEP, y: 0 },
+    right: { x: NODE_KEYBOARD_MOVE_STEP, y: 0 },
+  };
+  const { x: dx, y: dy } = delta[direction];
+  emit('node-moved', node.id, {
+    x: Math.max(0, node.position.x + dx),
+    y: Math.max(0, node.position.y + dy),
+  });
+}
+
+/**
+ * Keyboard entry point for a node (#14609): Enter/Space selects — the same
+ * effect as `@click` — Escape deselects, a plain arrow moves focus, and a
+ * Ctrl/Cmd+arrow moves the node (only when not readonly; dragging is a
+ * mutation the read-only Company OS canvas must not offer).
+ *
+ * Guarded to `e.target === e.currentTarget`: a keypress that bubbled up from
+ * one of the node's own inputs/selects/buttons (typing, picking an option)
+ * must reach that control, not be reinterpreted as a node-level shortcut.
+ */
+function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
+  if (e.target !== e.currentTarget) return;
+
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+    e.preventDefault();
+    selectNode(node.id);
+    return;
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    emit('node-selected', null);
+    return;
+  }
+
+  const direction = resolveArrowDirection(e.key);
+  if (!direction) return;
+  e.preventDefault();
+
+  if (e.ctrlKey || e.metaKey) {
+    if (props.readonly) return;
+    moveNodeByKeyboard(node, direction);
+    return;
+  }
+  focusNodeInDirection(node, direction);
+}
 
 async function clearCanvas() {
   if (props.nodes.length && (await confirm({ title: t('common.confirm'), message: t('workflow.canvas.clearConfirm') }))) {
@@ -698,6 +938,25 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
 .workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
+/* #14609: keyboard focus indicator — nodes carry no native focus styling of
+   their own (a styled `<div>`), so this is the only visible cue a keyboard
+   user gets that a node is focused. */
+.workflow-node:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* #14609: visually hidden but readable by a screen reader — same rule as
+   LoadingSpinner.vue's `.sr-only`, kept in sync rather than shared, since
+   this file's styles are scoped. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: var(--spacing-0);
+  margin: var(--spacing-neg-px);
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
 .workflow-node.switch .node-header { background: var(--wfcanvas-node-switch); }

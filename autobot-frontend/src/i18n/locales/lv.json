@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Izmantojiet bulttaustiņus, lai pārvietotu fokusu starp mezgliem. Nospiediet Enter vai atstarpi, lai atlasītu fokusēto mezglu. Nospiediet Escape, lai atceltu atlasi.",
+      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8307,7 +8311,8 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
-      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
+      "canvasGroupKind": "Grupa"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",

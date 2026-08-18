@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Verwenden Sie die Pfeiltasten, um den Fokus zwischen den Knoten zu bewegen. Drücken Sie Eingabe oder Leertaste, um den fokussierten Knoten auszuwählen. Drücken Sie Escape, um die Auswahl aufzuheben.",
+      "a11yInstructionsMove": "Halten Sie Strg gedrückt und drücken Sie eine Pfeiltaste, um den ausgewählten Knoten zu verschieben."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8307,7 +8311,8 @@
       "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
       "detachError": "Dieser Workflow konnte nicht entfernt werden.",
       "processDetach": "{workflow} von {role} entfernen",
-      "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig."
+      "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig.",
+      "canvasGroupKind": "Gruppe"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",

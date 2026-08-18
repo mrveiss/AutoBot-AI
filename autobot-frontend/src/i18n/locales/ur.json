@@ -3815,7 +3815,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "نوڈز کے درمیان فوکس منتقل کرنے کے لیے ایرو کیز استعمال کریں۔ فوکس شدہ نوڈ کو منتخب کرنے کے لیے Enter یا Space دبائیں۔ انتخاب ختم کرنے کے لیے Escape دبائیں۔",
+      "a11yInstructionsMove": "منتخب نوڈ کو حرکت دینے کے لیے Control دبائے رکھیں اور ایک ایرو کی دبائیں۔"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8307,7 +8311,8 @@
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
-      "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔"
+      "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔",
+      "canvasGroupKind": "گروپ"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",
