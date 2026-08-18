@@ -3,12 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-
-logger = logging.getLogger(__name__)
-
-Test LLM interface with a simplified version bypassing retry mechanism
-"""
+"""Test LLM interface with a simplified version bypassing retry mechanism."""
 
 import asyncio
 import json
@@ -17,6 +12,8 @@ import sys
 from pathlib import Path
 
 import aiohttp
+
+logger = logging.getLogger(__name__)
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))

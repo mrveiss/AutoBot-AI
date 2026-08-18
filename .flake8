@@ -50,7 +50,15 @@ extend-ignore = E203,W503,E704,E402
 #
 # Cross-tool agreement (#14419 AC5): pre-commit's flake8 hook adds
 # `^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)`, all three
-# of which are also excluded here. black and isort each carry `exclude:
+# of which are also excluded here. #14405 added a SECOND pre-commit flake8 hook
+# that carves `autobot-infrastructure/shared/scripts/` back in for F821 alone —
+# 12 operator scripts there had accumulated 103 undefined names with nothing
+# linting them. That hook passes `--isolated`, so it does not read this file;
+# note that flake8 applies `exclude` while RECURSING, not to a path named
+# explicitly on the command line, so the entry below never protected a file
+# pre-commit handed it by name.
+#
+# Cross-tool agreement (#14419 AC5), continued: black and isort each carry `exclude:
 # ^autobot-infrastructure/` on their own pre-commit hook, and declare nothing
 # further — `[tool.black]` and `[tool.isort]` in pyproject.toml define no
 # exclusion, and in CI both take explicit directory arguments with none either.
