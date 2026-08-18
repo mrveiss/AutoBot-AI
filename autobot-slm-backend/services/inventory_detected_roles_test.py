@@ -53,10 +53,26 @@ def _node(declared, detected):
 
 # The full catalogue every agent probes, as observed live on both nodes.
 _PROBED = [
-    "ai-stack", "autobot-llm-cpu", "autobot-llm-gpu", "autobot_shared", "backend",
-    "browser-service", "celery", "chromadb", "frontend", "npu-worker", "postgres",
-    "redis", "scheduler", "slm-agent", "slm-backend", "slm-database", "slm-frontend",
-    "slm-monitoring", "tts-worker", "vnc",
+    "ai-stack",
+    "autobot-llm-cpu",
+    "autobot-llm-gpu",
+    "autobot_shared",
+    "backend",
+    "browser-service",
+    "celery",
+    "chromadb",
+    "frontend",
+    "npu-worker",
+    "postgres",
+    "redis",
+    "scheduler",
+    "slm-agent",
+    "slm-backend",
+    "slm-database",
+    "slm-frontend",
+    "slm-monitoring",
+    "tts-worker",
+    "vnc",
 ]
 
 
@@ -71,9 +87,10 @@ def test_declared_roles_decide_what_a_node_runs():
     """Detection is an observation, not an instruction."""
     node = _node(["vnc", "slm-agent"], _PROBED)
 
-    assert inventory_builder._union_roles(node) == ["vnc", "slm-agent"], (
-        "detected roles are still deciding what the node runs (#14513)"
-    )
+    assert inventory_builder._union_roles(node) == [
+        "vnc",
+        "slm-agent",
+    ], "detected roles are still deciding what the node runs (#14513)"
 
 
 def test_a_node_that_declares_nothing_still_falls_back_to_detection():
@@ -111,9 +128,9 @@ def test_an_already_contaminated_node_still_does_not_join_slm_server():
         node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
     )
 
-    assert "slm_server" not in groups, (
-        "a contaminated node re-qualifies for slm_server, so the failure repeats every update"
-    )
+    assert (
+        "slm_server" not in groups
+    ), "a contaminated node re-qualifies for slm_server, so the failure repeats every update"
 
 
 def test_the_real_manager_keeps_slm_server():

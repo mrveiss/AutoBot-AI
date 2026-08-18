@@ -32,9 +32,9 @@ _WANTED = {"_detected_role_names"}
 def _load_pure_functions() -> dict:
     tree = ast.parse(_NODES_PY.read_text(encoding="utf-8"), filename=str(_NODES_PY))
     wanted = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in _WANTED]
-    assert len(wanted) == len(_WANTED), (
-        f"expected {sorted(_WANTED)} in {_NODES_PY}, found {sorted(n.name for n in wanted)} — rename tracking broke"
-    )
+    assert len(wanted) == len(
+        _WANTED
+    ), f"expected {sorted(_WANTED)} in {_NODES_PY}, found {sorted(n.name for n in wanted)} — rename tracking broke"
     module = ast.Module(body=wanted, type_ignores=[])
     ast.fix_missing_locations(module)
     namespace: dict = {}
@@ -58,9 +58,10 @@ def test_absent_roles_are_not_reported_as_detected():
     """
     report = _report(vnc="active", **{"slm-agent": "active", "slm-backend": "not_installed", "redis": "not_installed"})
 
-    assert sorted(_detected_role_names(report)) == ["slm-agent", "vnc"], (
-        "roles the agent reported as not_installed are still recorded as detected (#14513)"
-    )
+    assert sorted(_detected_role_names(report)) == [
+        "slm-agent",
+        "vnc",
+    ], "roles the agent reported as not_installed are still recorded as detected (#14513)"
 
 
 def test_an_installed_but_stopped_role_still_counts():
@@ -102,10 +103,26 @@ def test_the_whole_catalogue_does_not_become_the_node():
     Every node probes all 20 roles; a node running two of them must report two.
     """
     catalogue = [
-        "ai-stack", "autobot-llm-cpu", "autobot-llm-gpu", "autobot_shared", "backend",
-        "browser-service", "celery", "chromadb", "frontend", "npu-worker", "postgres",
-        "redis", "scheduler", "slm-agent", "slm-backend", "slm-database", "slm-frontend",
-        "slm-monitoring", "tts-worker", "vnc",
+        "ai-stack",
+        "autobot-llm-cpu",
+        "autobot-llm-gpu",
+        "autobot_shared",
+        "backend",
+        "browser-service",
+        "celery",
+        "chromadb",
+        "frontend",
+        "npu-worker",
+        "postgres",
+        "redis",
+        "scheduler",
+        "slm-agent",
+        "slm-backend",
+        "slm-database",
+        "slm-frontend",
+        "slm-monitoring",
+        "tts-worker",
+        "vnc",
     ]
     report = _report(**{name: ("active" if name in ("vnc", "slm-agent") else "not_installed") for name in catalogue})
 
