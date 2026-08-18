@@ -6,34 +6,45 @@
 
 `_calculate_node_status` degraded on `n_restarts > 3` -- systemd's `NRestarts`
 property, read in `health_collector._get_service_details` -- treated as a
-static absolute threshold. `NRestarts` is lifetime-cumulative: systemd never
-resets it except at reboot or `systemctl reset-failed`. Used as a static gate,
-it can only ever climb: once any managed service anywhere in a node's uptime
-crossed 3 restarts, every future heartbeat computed DEGRADED regardless of
-current metrics or the service's current state, with no path back to ONLINE.
+static absolute threshold. `NRestarts` climbs for as long as a unit keeps
+failing (systemd resets it on the next clean manual start once a unit settles,
+not merely with the passage of time), so a static gate on it can climb past 3
+and never come back down on its own: once any managed service anywhere in a
+node's uptime crossed 3 restarts, every future heartbeat computed DEGRADED
+regardless of current metrics or the service's current state.
 
-Review of two earlier versions of this fix found real regressions:
+Review found regressions in two earlier versions of this fix:
 
 1. Dropping `n_restarts > 3` in favour of `status == "failed"` alone lost the
    CHURNING shape -- a service restarting faster than the heartbeat samples
-   it (`RestartSec` typically well under the heartbeat interval) reads
-   `"running"` on most samples and never reaches `"failed"` at all while it
+   it reads `"running"` on most samples and never reaches `"failed"` while it
    is actively unstable.
 2. The restored `status == "failed"` check, scoped to `extra_data["services"]`
    (`slm_services_to_monitor`), is dark on most of a fleet: that operator
    -declared set is `[]` by role default, `[]` on at least one real inventory
-   node, and never contains `slm-agent` -- the one unit remediation actually
-   restarts.
+   node, and never contains `slm-agent`.
+3. A THIRD round replaced the absolute threshold with a bare DELTA ("did
+   `n_restarts` rise since the immediately preceding heartbeat") -- still a
+   regression, just subtler: `health_collector`'s own service-discovery sweep
+   is cached for 300s against a 30s heartbeat, so 9 of every 10 beats carry a
+   byte-identical cached snapshot. Measured: 1 of 20 beats degraded across
+   continuous churn, and the node flapped ONLINE/DEGRADED every 5 minutes
+   instead of staying DEGRADED. A pulse tells you an increase happened; a
+   level tells you the node is CURRENTLY churning, which is what a status
+   field means.
 
-This fix replaces the absolute threshold with a DELTA -- `n_restarts` rising
-since the immediately preceding heartbeat, persisted per service on
-`Service.extra_data` -- which catches the churning shape without needing any
-single sample to land on a particular status string, kept alongside
-`status == "failed"` for the shape that has already settled and stopped
-restarting altogether (a delta alone goes quiet the moment `NRestarts` stops
-climbing). Both are scoped by `is_managed_autobot_service`
+This fix (`_restart_churn_active`) persists the TIMESTAMP of the last observed
+increase and reports churning while `now - last_increase < RESTART_CHURN_
+WINDOW_S` -- a level, comfortably larger than the 300s discovery cache TTL --
+kept alongside `status == "failed"` for the shape that has already settled and
+stopped restarting altogether (a level still goes quiet once `NRestarts` stops
+climbing for long enough; only the CURRENT status string catches "stayed
+dead"). Both signals are scoped by `is_managed_autobot_service`
 (`services/service_extra_data.py`): `autobot*`-prefixed or `slm-agent` itself,
-AND systemd-`enabled` on this node -- not the monitored-services list.
+NOT explicitly disabled in systemd -- not `enabled` alone (which excludes
+`static`/`indirect`/`enabled-runtime`/`generated`/`alias`, invisible-forever
+units like `autobot-key-rotation`/`autobot-pg-backup`), and not the
+monitored-services list.
 
 The module is loaded from disk, not imported, because the package conftest
 stubs `services.*` and a plain `import services.reconciler` yields a
@@ -46,7 +57,7 @@ import asyncio
 import importlib.util
 import inspect
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -72,10 +83,10 @@ reconciler = _load_real_reconciler()
 _CPU, _MEM, _DISK = 0.0, 23.4, 18.1
 
 
-def _status(extra_data=None, restart_increase_detected=False) -> str:
+def _status(extra_data=None, restart_churn_active=False) -> str:
     """Call the real `_calculate_node_status` -- it does not touch `self`."""
     return reconciler.ReconcilerService._calculate_node_status(
-        SimpleNamespace(), _CPU, _MEM, _DISK, extra_data, restart_increase_detected
+        SimpleNamespace(), _CPU, _MEM, _DISK, extra_data, restart_churn_active
     )
 
 
@@ -83,68 +94,42 @@ def test_the_real_module_was_loaded_not_a_stub():
     """`hasattr`/`callable` are true of any MagicMock and cannot tell the two apart."""
     assert not isinstance(reconciler.ReconcilerService, MagicMock)
     assert inspect.isfunction(reconciler.ReconcilerService._calculate_node_status)
+    assert inspect.isfunction(reconciler.ReconcilerService._update_existing_service)
 
 
 def test_a_service_that_restarted_long_ago_but_is_now_running_is_not_degraded():
     """The original defect, reproduced directly.
 
     `autobot-vnc` crossed several restarts at some point in the node's uptime
-    and is presently `status: "running"` with NO fresh delta this heartbeat.
+    and is presently `status: "running"` with no active churn this heartbeat.
     Healthy metrics, no active instability: this must be ONLINE.
     """
     extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 5, "enabled": True}]
+        "discovered_services": [
+            {"name": "autobot-vnc", "status": "running", "n_restarts": 5, "unit_file_state": "static"}
+        ]
     }
 
-    assert _status(extra_data, restart_increase_detected=False) == reconciler.NodeStatus.ONLINE.value, (
+    assert _status(extra_data, restart_churn_active=False) == reconciler.NodeStatus.ONLINE.value, (
         "a service with an old, non-advancing restart count pinned the node DEGRADED forever (#14465)"
     )
 
 
-def test_a_churning_service_degrades_via_the_restart_delta_not_an_absolute():
-    """Review's exact counter-example: `{"status": "running", "n_restarts": 47}`.
-
-    A slow-churning service samples as "running" on most heartbeats
-    (RestartSec well under the heartbeat interval) and would never trip a
-    `status == "failed"`-only check. The delta -- computed elsewhere, against
-    the previous heartbeat's stored value, and passed in here -- is what must
-    degrade the node, independent of the absolute `n_restarts` value.
+def test_a_settled_failed_service_still_degrades_with_no_active_churn():
+    """The shape a churn window alone would eventually miss: `NRestarts`
+    stopped climbing because systemd's own `StartLimitBurst`/
+    `StartLimitIntervalSec` (#4090) gave up and parked the unit at `"failed"`
+    -- its designed end state for a real, sustained crash loop, not
+    `"crash-loop"` (`_map_status_from_states` never maps to that string for
+    `failed`).
     """
     extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 47, "enabled": True}]
+        "discovered_services": [
+            {"name": "autobot-vnc", "status": "failed", "n_restarts": 8, "unit_file_state": "static"}
+        ]
     }
 
-    assert _status(extra_data, restart_increase_detected=True) == reconciler.NodeStatus.DEGRADED.value
-
-
-def test_a_single_fresh_restart_degrades_even_below_the_old_absolute_threshold():
-    """Discriminates directly against the deleted `n_restarts > 3` branch.
-
-    `n_restarts: 1` would never have tripped `n_restarts > 3` on `origin/
-    Dev_new_gui` no matter what `restart_increase_detected` says -- this
-    fails against that code path and passes only against the delta-based one.
-    """
-    extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 1, "enabled": True}]
-    }
-
-    assert _status(extra_data, restart_increase_detected=True) == reconciler.NodeStatus.DEGRADED.value, (
-        "a fresh restart must degrade immediately, not wait for an arbitrary absolute count"
-    )
-
-
-def test_a_settled_failed_service_still_degrades_with_no_fresh_delta():
-    """The shape a delta alone would miss: `NRestarts` stopped climbing because
-    systemd's own `StartLimitBurst`/`StartLimitIntervalSec` (#4090) gave up and
-    parked the unit at `"failed"` -- its designed end state for a real,
-    sustained crash loop, not `"crash-loop"` (`_map_status_from_states` never
-    maps to that string for `failed`).
-    """
-    extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "failed", "n_restarts": 8, "enabled": True}]
-    }
-
-    assert _status(extra_data, restart_increase_detected=False) == reconciler.NodeStatus.DEGRADED.value
+    assert _status(extra_data, restart_churn_active=False) == reconciler.NodeStatus.DEGRADED.value
 
 
 def test_a_presently_crash_looping_service_still_degrades_the_node():
@@ -155,7 +140,9 @@ def test_a_presently_crash_looping_service_still_degrades_the_node():
     sample time.
     """
     extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "crash-loop", "n_restarts": 1, "enabled": True}]
+        "discovered_services": [
+            {"name": "autobot-vnc", "status": "crash-loop", "n_restarts": 1, "unit_file_state": "static"}
+        ]
     }
 
     assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
@@ -166,21 +153,43 @@ def test_slm_agent_itself_is_in_scope():
     is the one unit remediation actually restarts. It must not be permanently
     excluded from every degrade signal just because of its name.
     """
-    extra_data = {"discovered_services": [{"name": "slm-agent", "status": "failed", "n_restarts": 4, "enabled": True}]}
+    extra_data = {
+        "discovered_services": [
+            {"name": "slm-agent", "status": "failed", "n_restarts": 4, "unit_file_state": "enabled"}
+        ]
+    }
 
     assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
 
 
-def test_a_disabled_non_primary_autobot_unit_never_false_positives():
+def test_a_static_unit_with_no_install_section_is_still_in_scope():
+    """Review: `UnitFileState == "enabled"` alone excludes `static` units --
+    `autobot-key-rotation.service.j2`/`autobot-pg-backup.service.j2` have no
+    `[Install]` section and are `static` forever. Gating on "not explicitly
+    disabled" instead must still catch a `static` unit that is `"failed"`.
+    """
+    extra_data = {
+        "discovered_services": [
+            {"name": "autobot-key-rotation", "status": "failed", "n_restarts": 1, "unit_file_state": "static"}
+        ]
+    }
+
+    assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
+
+
+def test_an_explicitly_disabled_unit_never_false_positives():
     """#1709, restated against the new scope.
 
     `autobot-vnc` failed on a node where VNC was never installed
-    (`install_vnc` unset, so the unit stays `enabled: false`) must not
-    degrade the node -- exactly the false positive #1709 existed to prevent,
-    now derived from `enabled` rather than a monitored-services list.
+    (`install_vnc` unset, so the unit stays `UnitFileState: "disabled"`) must
+    not degrade the node -- exactly the false positive #1709 existed to
+    prevent, now derived from "not explicitly disabled" rather than a
+    monitored-services list or an `enabled`-only gate.
     """
     extra_data = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "failed", "n_restarts": 1, "enabled": False}]
+        "discovered_services": [
+            {"name": "autobot-vnc", "status": "failed", "n_restarts": 1, "unit_file_state": "disabled"}
+        ]
     }
 
     assert _status(extra_data) == reconciler.NodeStatus.ONLINE.value
@@ -188,7 +197,11 @@ def test_a_disabled_non_primary_autobot_unit_never_false_positives():
 
 def test_a_non_autobot_service_never_mattered_regardless_of_state():
     """Scope guard: only managed autobot/slm-agent units are in play."""
-    extra_data = {"discovered_services": [{"name": "sshd", "status": "failed", "n_restarts": 50, "enabled": True}]}
+    extra_data = {
+        "discovered_services": [
+            {"name": "sshd", "status": "failed", "n_restarts": 50, "unit_file_state": "enabled"}
+        ]
+    }
 
     assert _status(extra_data) == reconciler.NodeStatus.ONLINE.value
 
@@ -204,6 +217,89 @@ def test_high_metrics_still_win_over_a_clean_service_list():
         reconciler.ReconcilerService._calculate_node_status(SimpleNamespace(), 85.0, 0.0, 0.0, None, False)
         == reconciler.NodeStatus.DEGRADED.value
     )
+
+
+# ---------------------------------------------------------------------------
+# `_restart_churn_active` / `_update_existing_service` executed directly.
+#
+# Review: the churn signal being TRUE or FALSE is not itself interesting to
+# assert on in isolation -- passing `restart_churn_active=True` straight into
+# `_calculate_node_status` only exercises `_service_health_degraded`'s first
+# `if`, which is true by construction. What must be tested is whether the
+# REAL computation (against a real, persisted previous row) produces that
+# value in the first place. These tests call the real, module-level
+# `_restart_churn_active` and the real `_update_existing_service`.
+# ---------------------------------------------------------------------------
+
+
+def test_a_fresh_increase_arms_the_churn_window():
+    """Discriminates directly against the deleted `n_restarts > 3` branch AND
+    against a bare pulse: `n_restarts: 1` (up from a stored 0) would never
+    have tripped `n_restarts > 3` on `origin/Dev_new_gui`, and the real
+    `_restart_churn_active` -- not a hand-fed boolean -- is what must detect
+    the rise.
+    """
+    svc_data = {"name": "autobot-vnc", "status": "running", "n_restarts": 1, "unit_file_state": "static"}
+    now = datetime.now(timezone.utc)
+
+    churning, last_increase_iso = reconciler._restart_churn_active(svc_data, {"n_restarts": 0}, now)
+
+    assert churning is True, "a fresh restart must arm the churn window, not wait for an arbitrary absolute count"
+    assert last_increase_iso is not None
+
+
+def test_a_second_consecutive_beat_with_an_unchanged_count_still_reports_churning():
+    """The level/pulse distinction itself -- one of the two tests review named
+    as missing. A service armed the window on a prior beat; THIS beat shows
+    no new increase (the discovery cache had not refreshed). Under the
+    deleted pulse design this would report `False`; the level must still
+    report `True` while within `RESTART_CHURN_WINDOW_S`, and must NOT re-arm
+    the window with a fresh timestamp on a beat that added nothing new.
+    """
+    t0 = datetime.now(timezone.utc)
+    armed_svc = {"name": "autobot-vnc", "status": "running", "n_restarts": 10, "unit_file_state": "static"}
+    churning_t0, last_increase_t0 = reconciler._restart_churn_active(armed_svc, {"n_restarts": 5}, t0)
+    assert churning_t0 is True, "sanity: the first beat must arm the window"
+
+    t1 = t0 + timedelta(seconds=30)
+    unchanged_svc = {"name": "autobot-vnc", "status": "running", "n_restarts": 10, "unit_file_state": "static"}
+    previous_extra = {"n_restarts": 10, "n_restarts_increased_at": last_increase_t0}
+    churning_t1, last_increase_t1 = reconciler._restart_churn_active(unchanged_svc, previous_extra, t1)
+
+    assert churning_t1 is True, "an unchanged count must still report churning while inside the armed window"
+    assert last_increase_t1 == last_increase_t0, "an unchanged count must not re-arm the window with a new timestamp"
+
+
+def test_the_churn_window_eventually_closes_for_a_single_benign_restart():
+    """A single restart (an OOM kill, a dependency flap) must not degrade the
+    node forever -- only for `RESTART_CHURN_WINDOW_S`. This is the trade this
+    fix makes explicit in place of the absolute threshold's unbounded one.
+    """
+    t0 = datetime.now(timezone.utc)
+    svc_data = {"name": "autobot-vnc", "status": "running", "n_restarts": 10, "unit_file_state": "static"}
+    _, last_increase = reconciler._restart_churn_active(svc_data, {"n_restarts": 5}, t0)
+
+    far_future = t0 + timedelta(seconds=reconciler.RESTART_CHURN_WINDOW_S + 30)
+    previous_extra = {"n_restarts": 10, "n_restarts_increased_at": last_increase}
+    still_churning, _ = reconciler._restart_churn_active(svc_data, previous_extra, far_future)
+
+    assert still_churning is False, "the churn window must close -- a single restart cannot degrade the node forever"
+
+
+def test_a_churning_payload_with_no_prior_row_does_not_fabricate_a_signal():
+    """The second test review named as missing: first-ever observation (a
+    node registering, a row `_remove_stale_services` deleted and the agent
+    re-reported, or a restored manager DB) genuinely has no rate information.
+    Honestly reports "not churning" rather than guessing -- the accepted
+    trade-off for a LEVEL signal (the next real increase arms the window),
+    unlike a static absolute threshold which had no such excuse.
+    """
+    svc_data = {"name": "autobot-vnc", "status": "running", "n_restarts": 47, "unit_file_state": "static"}
+
+    churning, last_increase_iso = reconciler._restart_churn_active(svc_data, {}, datetime.now(timezone.utc))
+
+    assert churning is False
+    assert last_increase_iso is None
 
 
 class _ServiceRow:
@@ -234,7 +330,7 @@ class _SeededServiceHeartbeatSession:
 
     The FIRST `execute()` is `_find_node_by_id_or_hostname`'s node lookup.
     The SECOND is `_upsert_service`'s existing-row lookup -- returns the
-    seeded `_ServiceRow`, taking the update path where the delta lives.
+    seeded `_ServiceRow`, taking the update path where the churn signal lives.
     Every later call (`_remove_stale_services`'s stale-service scan) resolves
     to "nothing found".
     """
@@ -263,15 +359,18 @@ class _SeededServiceHeartbeatSession:
 
 
 def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_row():
-    """The full path, not `_calculate_node_status` in isolation.
+    """The full path, not `_calculate_node_status` or `_restart_churn_active`
+    in isolation.
 
     A `Service` row already on record from a PRIOR heartbeat shows
     `n_restarts: 44`. This heartbeat reports `n_restarts: 47`, still
-    `"running"` -- the exact review counter-example -- and must transition
-    the node to DEGRADED because `_update_existing_service` detects the rise
-    against that prior row, through the real `update_node_heartbeat` ->
-    `_update_node_metrics` -> `_sync_discovered_services` ->
-    `_upsert_service` -> `_calculate_node_status` chain.
+    `"running"` -- the review's original counter-example -- and must
+    transition the node to DEGRADED because `_update_existing_service`
+    detects the rise against that prior row, through the real
+    `update_node_heartbeat` -> `_update_node_metrics` ->
+    `_sync_discovered_services` -> `_upsert_service` ->
+    `_calculate_node_status` chain, and persists the churn timestamp for the
+    NEXT heartbeat to read.
     """
     node = SimpleNamespace(
         node_id="node-14465",
@@ -290,7 +389,9 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
     service = reconciler.ReconcilerService()
 
     this_beat = {
-        "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 47, "enabled": True}]
+        "discovered_services": [
+            {"name": "autobot-vnc", "status": "running", "n_restarts": 47, "unit_file_state": "static"}
+        ]
     }
 
     result = asyncio.run(service.update_node_heartbeat(session, node.node_id, _CPU, _MEM, _DISK, extra_data=this_beat))
@@ -299,3 +400,7 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
         "n_restarts rising from 44 to 47 against the prior heartbeat's row did not degrade the node"
     )
     assert seeded_service.extra_data.get("n_restarts") == 47, "the new count must be persisted for the NEXT heartbeat"
+    assert seeded_service.extra_data.get("n_restarts_increased_at") is not None, (
+        "the churn-arming timestamp must be persisted so the NEXT heartbeat can still report churning "
+        "even without a further increase (the pulse-to-level fix's whole point)"
+    )
