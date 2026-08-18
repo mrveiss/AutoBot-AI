@@ -8003,7 +8003,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "يُسجَّل الإنفاق كإجماليات لكل وكيل، لا كأحداث مؤرَّخة، لذا لا يوجد سجل يومي بعد."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8551,7 +8552,9 @@
     },
     "orgPeople": {
       "unassigned": "بلا دور",
-      "unassignedHint": "مُدرج في هذا القسم، لكن لا يوجد دور يفسّر وجوده"
+      "unassignedHint": "مُدرج في هذا القسم، لكن لا يوجد دور يفسّر وجوده",
+      "inactive": "غير نشط",
+      "inactiveHint": "مُعطَّل أو مُزال — لا يزال ظاهرًا لأن عناصر عمله ودوره باقية، لكن لا يمكن إسناد عمل جديد إليه."
     }
   },
   "code": {

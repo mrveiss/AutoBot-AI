@@ -8003,7 +8003,8 @@
       "colProvider": "Anbieter",
       "colInputTokens": "Eingabe-Token",
       "colOutputTokens": "Ausgabe-Token",
-      "colCost": "Kosten"
+      "colCost": "Kosten",
+      "noDatedEvents": "Ausgaben werden als Summen je Agent erfasst, nicht als datierte Ereignisse — daher gibt es noch keinen Tagesverlauf."
     },
     "heartbeat": {
       "title": "Heartbeat-Monitor",
@@ -8551,7 +8552,9 @@
     },
     "orgPeople": {
       "unassigned": "keine Rolle",
-      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit"
+      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit",
+      "inactive": "Inaktiv",
+      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden."
     }
   },
   "code": {

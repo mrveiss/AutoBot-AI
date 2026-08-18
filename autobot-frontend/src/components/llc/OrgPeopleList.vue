@@ -189,6 +189,18 @@ function groupLabel(group: OrgPeopleGroup): string {
               >
                 {{ t('llc.orgPeople.unassigned') }}
               </span>
+              <!-- #13956: shown, not filtered. Someone who has left keeps the
+                   work items and the role they held, so removing them from the
+                   chart would leave those with no visible owner. The badge is
+                   what stops "still listed" reading as "still available". -->
+              <span
+                v-if="person.isInactive"
+                class="ms-2 rounded-full border border-autobot-text-muted px-2 py-0.5 text-xs text-autobot-text-muted"
+                :data-testid="`org-person-inactive-${person.key}`"
+                :title="t('llc.orgPeople.inactiveHint')"
+              >
+                {{ t('llc.orgPeople.inactive') }}
+              </span>
               <span v-if="person.subtitle" class="block truncate text-xs text-autobot-text-muted">
                 {{ person.subtitle }}
               </span>

@@ -8003,7 +8003,8 @@
       "colProvider": "Fournisseur",
       "colInputTokens": "Jetons d'entrée",
       "colOutputTokens": "Jetons de sortie",
-      "colCost": "Coût"
+      "colCost": "Coût",
+      "noDatedEvents": "Les dépenses sont enregistrées en totaux par agent, non en événements datés : il n'y a donc pas encore d'historique quotidien."
     },
     "heartbeat": {
       "title": "Moniteur de heartbeat",
@@ -8551,7 +8552,9 @@
     },
     "orgPeople": {
       "unassigned": "aucun rôle",
-      "unassignedHint": "Rattaché à ce département, mais aucun rôle n'explique sa présence"
+      "unassignedHint": "Rattaché à ce département, mais aucun rôle n'explique sa présence",
+      "inactive": "Inactif",
+      "inactiveHint": "Désactivé ou supprimé — toujours affiché car ses tâches et son rôle subsistent, mais aucun nouveau travail ne peut lui être attribué."
     }
   },
   "code": {

@@ -7991,7 +7991,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "Spend is recorded as per-agent totals, not dated events, so there is no daily history yet."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8539,7 +8540,9 @@
     },
     "orgPeople": {
       "unassigned": "no role",
-      "unassignedHint": "Carried by this department, but no role explains their presence"
+      "unassignedHint": "Carried by this department, but no role explains their presence",
+      "inactive": "Inactive",
+      "inactiveHint": "Deactivated or removed — still shown because their work items and role remain, but they cannot be given new work."
     }
   },
   "mobile": {
