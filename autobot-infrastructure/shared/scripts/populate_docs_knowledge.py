@@ -16,6 +16,8 @@ import os
 import sys
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -147,12 +149,16 @@ async def populate_docs_knowledge():
 
         await asyncio.sleep(2)
 
-        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-        filtered_files = _gather_documentation_files(project_root)
+        # #14517: was a shell placeholder in a plain string literal, so the gather
+        # below globbed a directory that cannot exist and indexed nothing. Named
+        # ``root``: assigning to the imported ``project_root`` would shadow it as a
+        # local and raise UnboundLocalError on the call itself.
+        root = project_root()
+        filtered_files = _gather_documentation_files(root)
 
         logger.info("Found %s documentation files to index", len(filtered_files))
 
-        successful_adds, failed_adds = await _process_documentation_files(kb, filtered_files, project_root)
+        successful_adds, failed_adds = await _process_documentation_files(kb, filtered_files, root)
 
         logger.info("=== Documentation Population Complete ===")
         logger.info("✓ Successfully added: %s documents", successful_adds)

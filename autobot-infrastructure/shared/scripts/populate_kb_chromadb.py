@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -162,11 +164,15 @@ async def populate_with_chromadb():
     logger.info("ChromaDB knowledge base initialized successfully!")
 
     # Issue #281: Use extracted helpers
-    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-    filtered_files = _find_documentation_files(project_root)
+    # #14517: was a shell placeholder in a plain string literal, so the discovery
+    # below found nothing and the collection was built empty. Named ``root``:
+    # assigning to the imported ``project_root`` would make it a function-local
+    # name and raise UnboundLocalError on the call itself.
+    root = project_root()
+    filtered_files = _find_documentation_files(root)
     logger.info("Found %d documentation files", len(filtered_files))
 
-    success_count, error_count = _add_documents_to_index(filtered_files, project_root, index, Document)
+    success_count, error_count = _add_documents_to_index(filtered_files, root, index, Document)
 
     logger.info("Added %d documents successfully!", success_count)
     logger.info("Errors: %d", error_count)
