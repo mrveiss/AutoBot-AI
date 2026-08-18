@@ -61,7 +61,17 @@ def _groups_gating_deploy_tasks() -> set[str]:
     `when:`, and what matters is which group name each one tests.
     """
     text = _PLAYBOOK.read_text(encoding="utf-8")
-    return set(re.findall(r"when:\s*\"'([a-z_]+)' in group_names\"", text))
+
+    # Every `'x' in group_names` occurrence, whatever syntax carries it.
+    #
+    # Review of #14552: an earlier version anchored on `when:` and double
+    # quotes, which misses the folded-scalar and list forms -- already the
+    # dominant style for the npu and browser gates in this very file. It
+    # happened to produce the right answer only because each of those groups
+    # also appears once in the single-line form. A new gate written in the
+    # folded style would have been omitted silently, and the rule would have
+    # reported "missing: none" while the hole it exists to catch was open.
+    return set(re.findall(r"'([a-z_]+)'\s+in\s+group_names", text))
 
 
 def _plays_targeting_a_group_directly() -> set[str]:
