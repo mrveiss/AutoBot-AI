@@ -8003,7 +8003,8 @@
       "colProvider": "Provedor",
       "colInputTokens": "Tokens de entrada",
       "colOutputTokens": "Tokens de saída",
-      "colCost": "Custo"
+      "colCost": "Custo",
+      "noDatedEvents": "Os gastos são registados como totais por agente, não como eventos datados, portanto ainda não há histórico diário."
     },
     "heartbeat": {
       "title": "Monitor de heartbeat",

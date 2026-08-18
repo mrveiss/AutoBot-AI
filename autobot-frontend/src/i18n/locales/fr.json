@@ -8003,7 +8003,8 @@
       "colProvider": "Fournisseur",
       "colInputTokens": "Jetons d'entrée",
       "colOutputTokens": "Jetons de sortie",
-      "colCost": "Coût"
+      "colCost": "Coût",
+      "noDatedEvents": "Les dépenses sont enregistrées en totaux par agent, non en événements datés : il n'y a donc pas encore d'historique quotidien."
     },
     "heartbeat": {
       "title": "Moniteur de heartbeat",
