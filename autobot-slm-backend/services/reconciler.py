@@ -12,7 +12,6 @@ human approval for re-enrollment.
 
 import asyncio
 import logging
-import math
 import ssl
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -117,41 +116,45 @@ REMEDIATION_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_REMEDIATION_PLAYBOOK_T
 # units. `systemctl restart` on a `Type=oneshot` unit blocks for the WHOLE
 # ExecStart -- two AutoBot-owned units alone declare
 # `TimeoutStartSec=600`/`=1800` (autobot-key-rotation.service.j2,
-# autobot-pg-backup.service.j2; the repo's longest found). Reusing the
-# 180s bound here would SIGKILL a legitimate 5-30 minute backup/rotation run,
-# record it failed, and escalate after MAX_SERVICE_RESTART_ATTEMPTS while the
-# remote systemd job keeps running independently -- a new failure mode, not a
-# fix.
+# autobot-pg-backup.service.j2; the repo's longest found) -- a value sized
+# for that case would be the semantically correct fix.
 #
-# Deriving a per-unit budget from that unit's own `TimeoutStartSec` would be
-# more precise, but the category is populated by regex on the unit NAME
-# alone (any `postgresql*`/`redis*`/`docker*`/... service on the host, not
-# just ones this repo ships a template for), so there is no reliable local
-# source for "this specific unit's configured TimeoutStartSec" without an
-# ansible fact-gathering round trip -- out of scope for a timeout bugfix.
-# Sized instead comfortably above the longest known case (1800s) with real
-# margin, so it still closes the original "no timeout at all" gap for this
-# path -- a genuinely hung restart is still bounded -- without the 180s
-# figure sized for a one-line systemd action ever applying to it.
+# round 3 tried exactly that (2100s) and, separately, tried decoupling
+# `_remediate_failed_services()` into a background task so its duration could
+# no longer affect the node pass's timing at all. Review (round 3 re-review)
+# found the decoupling unsafe for reasons independent of timing: (a)
+# `_restart_service_via_ansible` goes through the SINGLETON
+# `get_playbook_executor()`, and `execute_playbook` always runs
+# `_update_code_source()` first -- a `git checkout`/`fetch`/`reset --hard` in
+# the ONE shared `code_source` working tree, with nothing to serialise a
+# concurrent node-pass call against a concurrent sweep call; worst case one
+# run rewrites roles/templates under a live `ansible-playbook` whose `cwd` is
+# that same tree. (b) `AUTOBOT_SERVICE_PATTERNS` includes `^slm-`, so the
+# sweep (which skips only OFFLINE nodes) can restart the SAME `slm-agent`
+# unit `_remediate_node` is independently restarting on a DEGRADED node --
+# `_heartbeat_returned` cannot attribute a resulting heartbeat to either
+# restart, so the node attempt can read `success=True` on the strength of
+# the SWEEP's restart and reset `count` to 0 -- "56 restarts / 0
+# escalations" again, through a third door. Both are reverted; `_run_loop`
+# is fully serial again (`_check_node_health` -> `_attempt_remediation` ->
+# `_remediate_failed_services` -> ...).
 #
-# This value does NOT feed `_effective_tracker_expiry_s()` (review, round 3):
-# an earlier version of this comment argued it didn't need to because the
-# SERVICE tracker has no forgive-if-expired path -- true, but not the reason
-# that matters. `_remediate_failed_services()` used to run serially, inside
-# the SAME `_run_loop` pass that defines the NODE tracker's own inter-attempt
-# gap; one failed service legitimately (or a timeout) consuming a meaningful
-# fraction of this budget inflated that gap directly, at shipped defaults,
-# with no env override needed. `AUTOBOT_SERVICE_PATTERNS` makes
-# `n_failed_services` fleet-sized, so no FIXED addition to the node floor
-# could soundly cover `n x SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` -- the same
-# reasoning #14515 gives for not trying to bound N-degraded-nodes with a
-# floor constant either. Fixed instead by decoupling: `_run_loop` now
-# launches `_remediate_failed_services()` as an independent background task
-# (`_launch_failed_service_remediation_sweep`) rather than awaiting it
-# inline, so this constant's value can no longer affect the node pass's
-# timing at all, regardless of how large it is or how many services fail at
-# once.
-SERVICE_RESTART_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S", 2100, min_v=1)
+# With the sweep serial again, this budget directly extends the SAME
+# node-pass gap `_effective_tracker_expiry_s()` bounds (see there) -- a
+# single service run at the full 2100s this constant used to allow would, by
+# itself, exceed even the 1800s DEFAULT `AUTOBOT_REMEDIATION_TRACKER_
+# EXPIRY_S`. Capped instead at the SAME 180s as `REMEDIATION_PLAYBOOK_
+# TIMEOUT_S` above -- reintroducing round 2's own finding (a legitimate
+# multi-minute backup/rotation restart is killed early and eventually
+# escalates for human review, rather than running to completion) is the
+# lesser, and currently only SAFE, of the two known bad outcomes. The real
+# fix -- concurrency safe against the singleton executor (a per-executor
+# lock, a per-host lock, or a redesign) or a per-unit budget derived from
+# the unit's own `TimeoutStartSec` -- is a design decision with a real cost,
+# tracked separately rather than guessed at here: #14570.
+SERVICE_RESTART_PLAYBOOK_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S", REMEDIATION_PLAYBOOK_TIMEOUT_S, min_v=1
+)
 # #14465 review: this does NOT read any heartbeat/streak signal, which closes
 # the specific way the prior two designs were fakeable by a flap -- but it is
 # not, on its own, a general fix for escalation reachability. The dominant
@@ -207,44 +210,6 @@ MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
 # _forgive_if_expired, up to once per reconcile pass per degraded node.
 _expiry_floor_override_logged = False
 _reconcile_interval_type_warning_logged = False
-# #14524 round 3: ditto, for _update_code_source_worst_case_s()'s fallback.
-_update_code_source_worst_case_warning_logged = False
-
-
-def _update_code_source_worst_case_s() -> float:
-    """`_update_code_source`'s own worst-case duration (#14524, round 3).
-
-    Helper for _effective_tracker_expiry_s. A LOCAL (call-time) import, not
-    a module-level one: `services.playbook_executor` is derived into the
-    package conftest's `_CODE_SYNC_SERVICE_MODULES` stub set, not its
-    real-loaded allowlist, so importing it at reconciler.py's own import
-    time would resolve against a MagicMock in most test contexts (the same
-    reason `_restart_service_via_ansible` already imports
-    `get_playbook_executor` locally rather than at module level).
-
-    Falls back to 180.0 -- playbook_executor.update_code_source_worst_case_s()'s
-    own value at ITS documented defaults, verified by hand rather than
-    guessed -- if the import or call does not produce a real number. Logged
-    once so a genuine failure in production (as opposed to a test stub
-    resolving) is not silent.
-    """
-    global _update_code_source_worst_case_warning_logged
-    try:
-        from services.playbook_executor import update_code_source_worst_case_s
-
-        worst_case = update_code_source_worst_case_s()
-        if not isinstance(worst_case, (int, float)):
-            raise TypeError(f"non-numeric worst case: {worst_case!r}")
-        return worst_case
-    except Exception as exc:
-        if not _update_code_source_worst_case_warning_logged:
-            logger.warning(
-                "Could not read update_code_source_worst_case_s() from services.playbook_executor "
-                "(%s) -- falling back to 180s for the remediation-tracker expiry floor margin",
-                exc,
-            )
-            _update_code_source_worst_case_warning_logged = True
-        return 180.0
 
 
 def _effective_tracker_expiry_s() -> int:
@@ -281,40 +246,58 @@ def _effective_tracker_expiry_s() -> int:
     call the two waits are SEQUENTIAL, not alternatives -- the ansible run
     happens, then, only if it succeeded, `_heartbeat_returned` polls for up
     to `REMEDIATION_HEARTBEAT_WAIT_S` more -- so the worst-case duration of a
-    single node's own attempt is their SUM, not either alone. That sum
-    replaces the bare `REMEDIATION_HEARTBEAT_WAIT_S` term inside the existing
-    `max(reconcile_interval, ...)`, which is deliberately a looser bound than
-    strictly necessary (a tight bound would ADD `reconcile_interval` rather
-    than `max` against it) -- symmetric with round 6's own choice, and safe
-    in the same direction: this floor coming out too generous only delays
-    forgiveness of a genuinely stale tracker, never lets a live one be
-    forgiven too soon. Still scoped to ONE node; #14515's many-nodes gap is
-    unchanged by this.
+    single node's own attempt is their SUM, not either alone (`ceiling`
+    below). Still scoped to ONE node; #14515's many-nodes gap is unchanged
+    by this. A round-3 attempt to also fold in `_update_code_source`'s own
+    worst case, and to run the service-restart sweep off the node pass
+    entirely, was reverted (review round 3 re-review): the sweep change
+    introduced two Criticals of its own -- a singleton `PlaybookExecutor`
+    left with two concurrent callers racing `git reset --hard` in the one
+    shared `code_source` tree, and a sweep that can restart the SAME
+    `slm-agent` unit `_remediate_node` is independently restarting (`^slm-`
+    is itself one of `AUTOBOT_SERVICE_PATTERNS`), letting the sweep's
+    restart silently reset the NODE tracker's own count. See
+    `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`'s own comment and #14570.
 
-    #14524 (round 10 / review round 3): `_update_code_source_worst_case_s()`
-    is ALSO folded in. `execute_playbook` runs `_update_code_source()`
-    BEFORE `_run_subprocess`, as part of the SAME `_remediate_node` attempt
-    -- omitting it was review-caught as an undercount, not merely a missing
-    nice-to-have: at the SHIPPED defaults, `_update_code_source`'s own
-    now-bounded worst case (180s, three git subcommands plus a trailing
-    rev-parse, each individually timeout-and-kill-bounded) pushes the real
-    single-attempt ceiling to 450s -- already ABOVE `REMEDIATION_COOLDOWN`
-    (300s), meaning the pre-this-fold floor (571s) did NOT safely cover the
-    resulting ~510s real gap either. This is not a defensive-only change;
-    without it the floor is unsafe even without any operator raising
-    anything.
+    #14524 (review round 3 re-review): the margin's SHAPE was also wrong.
+    `floor = REMEDIATION_COOLDOWN + max(reconcile_interval, ceiling) + 1`
+    reads as "deliberately looser than necessary" in an earlier version of
+    this docstring -- backwards. `max(a, b) <= a + b` always, so that form
+    is TIGHTER than adding the two, not looser. At the SHIPPED `ceiling`
+    (270, <= REMEDIATION_COOLDOWN) the two forms happen to agree for every
+    `reconcile_interval >= ceiling`, and the old form is only ever the
+    LARGER (safer) one otherwise -- so this specific bug is latent at
+    today's defaults. It stops being latent the moment `ceiling` alone
+    exceeds `REMEDIATION_COOLDOWN` (e.g. an operator raising
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S` past ~210s -- exactly the scenario
+    `reconciler_playbook_timeout_14524_test.py`'s own
+    `test_floor_extension_matters_more_...` test already exercises, at
+    `ceiling=370`) AND `reconcile_interval` exceeds `ceiling` too -- e.g.
+    `ceiling=370, reconcile_interval=400` gives the old form 701 against a
+    real gap of 771, a 70s undercount, not merely a pathological corner.
+    The sound form follows directly from how the gap is actually produced:
+    `last_attempt` is stamped at attempt START, so `ceiling`'s own work runs
+    concurrently with (i.e. inside) the cooldown window, and exactly ONE
+    more `reconcile_interval` poll follows once cooldown clears --
+    `max(REMEDIATION_COOLDOWN, ceiling) + reconcile_interval + 1`. This is
+    the identical expression the test suite's own `_gap_after_one_attempt`
+    helper already used (`reconciler_playbook_timeout_14524_test.py`); only
+    the SHIPPED formula here had the bug.
 
     Two conditions are logged once (not on every call -- this runs on every
     `_forgive_if_expired`, up to once per reconcile pass per degraded node)
     rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
     EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
-    a short window silently gets 751+ instead at the current defaults, which
+    a short window silently gets 361+ instead at the current defaults, which
     is ALSO shorter than the 1800s default, so the operator ends up less
     protected than doing nothing while believing they configured something
-    specific), and `settings.reconcile_interval` being present but not a real
-    int (an auto-vivified `MagicMock` child, dormant today but would
-    otherwise silently collapse a legitimately large configured interval down
-    to the 60s fallback with no warning).
+    specific -- and, at that same 1800s default, this floor is inert either
+    way: `max(1800, 361) == 1800`, so its exact value only matters for an
+    operator who has lowered the raw constant below it, or raised `reconcile_
+    interval` far enough to matter), and `settings.reconcile_interval` being
+    present but not a real int (an auto-vivified `MagicMock` child, dormant
+    today but would otherwise silently collapse a legitimately large
+    configured interval down to the 60s fallback with no warning).
     """
     global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
 
@@ -329,27 +312,19 @@ def _effective_tracker_expiry_s() -> int:
             _reconcile_interval_type_warning_logged = True
         reconcile_interval = 60
 
-    # #14524 round 3: folds in _update_code_source's own worst case too --
-    # execute_playbook runs it BEFORE _run_subprocess, so it is part of the
-    # same single _remediate_node attempt's real duration. Omitting it here
-    # was review-caught: raising the git subcommand timeouts past their
-    # defaults could inflate the real per-attempt gap past this floor with
-    # no warning, since nothing here previously read them at all.
-    single_node_attempt_ceiling_s = (
-        _update_code_source_worst_case_s() + REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
-    )
-    margin = math.ceil(max(reconcile_interval, single_node_attempt_ceiling_s))
-    floor = REMEDIATION_COOLDOWN + margin + 1
+    single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
+    floor = max(REMEDIATION_COOLDOWN, single_node_attempt_ceiling_s) + reconcile_interval + 1
     effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
     if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
         logger.warning(
             "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
-            "(REMEDIATION_COOLDOWN=%ds + margin=%ds + 1)",
+            "(max(REMEDIATION_COOLDOWN=%ds, ceiling=%ds) + reconcile_interval=%ds + 1)",
             REMEDIATION_TRACKER_EXPIRY_S,
             effective,
             REMEDIATION_COOLDOWN,
-            margin,
+            single_node_attempt_ceiling_s,
+            reconcile_interval,
         )
         _expiry_floor_override_logged = True
 
@@ -497,9 +472,6 @@ class ReconcilerService:
         # Timestamps for rate-limited background tasks (#926 Phase 3)
         self._last_manifest_health_check: float = 0.0
         self._last_cert_expiry_check: float = 0.0
-        # #14524 (round 3): the currently in-flight _remediate_failed_services()
-        # sweep, if any -- see _launch_failed_service_remediation_sweep.
-        self._service_sweep_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start the reconciler background task."""
@@ -520,12 +492,6 @@ class ReconcilerService:
             except asyncio.CancelledError:
                 pass
             self._task = None
-        if self._service_sweep_task and not self._service_sweep_task.done():
-            self._service_sweep_task.cancel()
-            try:
-                await self._service_sweep_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Reconciler service stopped")
 
     async def _run_loop(self) -> None:
@@ -536,7 +502,7 @@ class ReconcilerService:
             try:
                 await self._check_node_health()
                 await self._attempt_remediation()
-                self._launch_failed_service_remediation_sweep()
+                await self._remediate_failed_services()
                 await self._check_auto_rollback()
                 await self._reconcile_roles()
 
@@ -554,64 +520,6 @@ class ReconcilerService:
                 logger.error("Reconciler error: %s", e)
 
             await asyncio.sleep(settings.reconcile_interval)
-
-    def _launch_failed_service_remediation_sweep(self) -> None:
-        """Kick off `_remediate_failed_services()` WITHOUT blocking the node pass (#14524, round 3).
-
-        Round 2 added `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` (2100s) for this
-        path, but `_run_loop` was fully serial: `_check_node_health` ->
-        `_attempt_remediation` -> `_remediate_failed_services` -> `sleep`. A
-        single failed `ServiceCategory.AUTOBOT` unit legitimately taking
-        >=1470s (the `autobot-pg-backup` `TimeoutStartSec=1800` case that
-        budget exists for) pushed the NODE tracker's own inter-attempt gap
-        past `_effective_tracker_expiry_s()`'s 1800s default, resetting node
-        escalation every pass -- the exact "56 restarts / 0 escalations"
-        shape this issue exists to fix, reintroduced through this sibling
-        path (review, round 3).
-
-        Folding `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` into the node floor
-        instead was rejected: `ServiceCategory.AUTOBOT` is populated by an
-        open-ended unit-name pattern match (`AUTOBOT_SERVICE_PATTERNS`), so
-        `n_failed_services` is fleet-sized, not a fixed count a floor
-        constant could soundly cover -- the identical reason #14515 gives
-        for not trying to bound N-degraded-nodes with a floor constant
-        either. Decoupling removes the node pass's dependency on this
-        duration entirely, rather than guessing a number for it.
-
-        Safe because `_remediate_failed_services()` already opens its OWN
-        `db_service.session()` per call (never shared with `_attempt_
-        remediation`'s), so this is one additional independent task, not
-        N-way concurrent access to one session -- unlike #14515's node case,
-        which needs a session PER degraded node and was deferred for exactly
-        that reason.
-
-        Guarded against overlap: if the previous sweep is still running when
-        the next reconcile tick fires (itself now possible, since a sweep no
-        longer blocks the tick), a second one is not started -- two
-        concurrent sweeps would race on the same `SERVICE_REMEDIATION_
-        COOLDOWN`-gated `self._service_remediation_tracker` entries.
-        """
-        if self._service_sweep_task is not None and not self._service_sweep_task.done():
-            logger.debug("Service remediation sweep still running -- skipping this tick's launch")
-            return
-        self._service_sweep_task = asyncio.create_task(self._remediate_failed_services())
-        self._service_sweep_task.add_done_callback(self._log_service_sweep_outcome)
-
-    @staticmethod
-    def _log_service_sweep_outcome(task: asyncio.Task) -> None:
-        """Surface an exception from the background sweep (#14524, round 3).
-
-        Helper for _launch_failed_service_remediation_sweep. A fire-and-
-        forget task's exception is otherwise swallowed silently until (or
-        unless) something later awaits it -- `_run_loop`'s own broad
-        `except Exception` no longer sees it once the sweep is no longer
-        awaited inline.
-        """
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc is not None:
-            logger.error("Service remediation sweep failed: %s", exc, exc_info=exc)
 
     async def _handle_degraded_node(self, db: AsyncSession, node: Node, old_status: str) -> None:
         """Mark node as degraded, create event, and broadcast status.
