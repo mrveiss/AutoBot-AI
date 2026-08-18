@@ -51,6 +51,13 @@ def _node(declared, detected):
     return SimpleNamespace(roles=list(declared), detected_roles=list(detected))
 
 
+def _groups(node):
+    """Groups this node ends up in, guard applied — what the inventory writes."""
+    return inventory_builder._strip_undeclared_privileged_groups(
+        node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
+    )
+
+
 # The full catalogue every agent probes, as observed live on both nodes.
 _PROBED = [
     "ai-stack",
@@ -83,21 +90,28 @@ def test_the_module_really_loaded():
     assert "slm_server" in inventory_builder._DECLARED_ONLY_GROUPS
 
 
-def test_declared_roles_decide_what_a_node_runs():
-    """Detection is an observation, not an instruction."""
-    node = _node(["vnc", "slm-agent"], _PROBED)
+def test_detection_still_adds_ordinary_groups():
+    """Deliberately NOT narrowed to declared roles only.
 
-    assert inventory_builder._union_roles(node) == [
-        "vnc",
-        "slm-agent",
-    ], "detected roles are still deciding what the node runs (#14513)"
+    My first attempt at this fix made `_union_roles` return declared roles
+    alone. CI caught it: `test_detected_roles_merged_with_roles` pins a real
+    contract -- a node running redis that nobody declared still needs the redis
+    plays to reach it. Detection adding ordinary groups is a feature.
+
+    The defect is narrower than "detection is used at all", so the fix is too.
+    """
+    node = _node(["backend"], ["redis"])
+    groups = _groups(node)
+
+    assert "backend" in groups and "redis" in groups, (
+        "detection no longer contributes ordinary groups — this fix was over-broad"
+    )
 
 
-def test_a_node_that_declares_nothing_still_falls_back_to_detection():
-    """Dropping the fallback would stop plays reaching such a node entirely."""
+def test_a_node_that_declares_nothing_still_gets_groups_from_detection():
     node = _node([], ["backend", "redis"])
 
-    assert inventory_builder._union_roles(node) == ["backend", "redis"]
+    assert "backend" in _groups(node)
 
 
 def test_a_vnc_node_does_not_join_slm_server():
@@ -106,9 +120,7 @@ def test_a_vnc_node_does_not_join_slm_server():
     `slm_server` is what "Play 1 - Update SLM Server First" targets.
     """
     node = _node(["vnc", "slm-agent"], _PROBED)
-    groups = inventory_builder._strip_undeclared_privileged_groups(
-        node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
-    )
+    groups = _groups(node)
 
     assert "slm_server" not in groups, (
         "a vnc/slm-agent node is still in slm_server — Play 1 will deploy the manager tree "
@@ -124,9 +136,7 @@ def test_an_already_contaminated_node_still_does_not_join_slm_server():
     bug itself created. Declared roles are what must decide.
     """
     node = _node(["vnc", "slm-agent"], ["slm-backend", "slm-frontend", "vnc", "slm-agent"])
-    groups = inventory_builder._strip_undeclared_privileged_groups(
-        node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
-    )
+    groups = _groups(node)
 
     assert (
         "slm_server" not in groups
@@ -136,9 +146,7 @@ def test_an_already_contaminated_node_still_does_not_join_slm_server():
 def test_the_real_manager_keeps_slm_server():
     """The guard must not lock the actual manager out of its own play."""
     node = _node(["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"], _PROBED)
-    groups = inventory_builder._strip_undeclared_privileged_groups(
-        node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
-    )
+    groups = _groups(node)
 
     assert "slm_server" in groups, "the SLM manager lost slm_server — Play 1 would never run"
 
@@ -150,8 +158,6 @@ def test_non_privileged_groups_are_left_alone():
     fix is scoped to the group whose play is destructive on the wrong host.
     """
     node = _node([], ["backend"])
-    groups = inventory_builder._strip_undeclared_privileged_groups(
-        node, inventory_builder.groups_for_role_tokens(inventory_builder._union_roles(node))
-    )
+    groups = _groups(node)
 
     assert "backend" in groups, "a detection-only node lost its ordinary groups"
