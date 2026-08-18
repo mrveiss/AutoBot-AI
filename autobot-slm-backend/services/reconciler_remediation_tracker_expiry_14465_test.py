@@ -42,11 +42,23 @@ and how to widen "recovered" to also cover a node that heartbeats but never
 truly fixes itself is a posted, unresolved decision on #14465 (labelled
 `needs-decision`) -- out of scope for this PR.
 
+A fourth round: the expiry floor's own `settings.reconcile_interval` read was
+first done at module-import time, guarded by `except (TypeError, ValueError)`
+-- narrower than the failure modes it actually met. A sibling test module
+(`reconciler_check_node_health_test.py`) stubs `config.settings` as a bare
+`SimpleNamespace(heartbeat_interval=30, unhealthy_threshold=3)`, and reading
+a missing attribute off that raises `AttributeError`, which took collection
+of that entire, otherwise-unrelated file down on CI. Moved to
+`_effective_tracker_expiry_s()`, computed fresh from the live `settings`
+object at the one call site that needs it (`_forgive_if_expired`), via
+`getattr` with a default rather than a `try/except` around a guess at which
+exception a given stub might raise.
+
 These tests drive the real `_remediate_node`/`_check_remediation_limits`/
-`_forgive_if_expired`/`_heartbeat_returned`. The module is loaded from disk
-for the same reason as its siblings: the package conftest stubs `services.*`,
-and a plain import yields a MagicMock that would pass every assertion here
-while exercising nothing.
+`_forgive_if_expired`/`_effective_tracker_expiry_s`/`_heartbeat_returned`. The
+module is loaded from disk for the same reason as its siblings: the package
+conftest stubs `services.*`, and a plain import yields a MagicMock that would
+pass every assertion here while exercising nothing.
 """
 
 from __future__ import annotations
@@ -94,7 +106,7 @@ def test_the_real_module_was_loaded_not_a_stub():
     ), "the streak dict from the superseded dwell-window mechanism must not still be tracked"
 
 
-def test_the_expiry_floor_clears_the_cooldown_by_more_than_a_reconcile_tick():
+def test_the_effective_expiry_floor_clears_the_cooldown_by_more_than_a_reconcile_tick():
     """Review: `min_v=REMEDIATION_COOLDOWN` alone let the floor itself BE the
     degenerate value -- every operator setting in {-1, 0, 1, 60, 299, 300}
     clamped to exactly 300, at which point forgive and cooldown fired at the
@@ -102,10 +114,79 @@ def test_the_expiry_floor_clears_the_cooldown_by_more_than_a_reconcile_tick():
     no matter how many attempts failed. The floor must be strictly above
     `REMEDIATION_COOLDOWN` plus a reconcile-tick margin, structurally, not by
     the module's chosen default happening to clear it.
+
+    Asserted on `_effective_tracker_expiry_s()`, the value `_forgive_if_
+    expired` actually enforces -- NOT on the raw `REMEDIATION_TRACKER_
+    EXPIRY_S` module constant, which a second review round moved this floor
+    off of entirely (reading `settings.reconcile_interval` at import time
+    crashed collection for a module whose config stub is a bare
+    `SimpleNamespace`; see `test_effective_expiry_survives_a_settings_stub_
+    missing_reconcile_interval` below).
     """
-    assert reconciler.REMEDIATION_TRACKER_EXPIRY_S > reconciler.REMEDIATION_COOLDOWN + 1, (
+    assert reconciler._effective_tracker_expiry_s() > reconciler.REMEDIATION_COOLDOWN + 1, (
         "the expiry floor must clear the cooldown by more than a reconcile-tick margin, "
         "or forgive and cooldown fire at the same elapsed time and forgive always wins"
+    )
+
+
+def test_effective_expiry_ignores_a_pathologically_low_raw_constant():
+    """The runtime floor, not the module constant, is what protects against the
+    degenerate case now -- so it must rescue ANY value the raw constant could
+    be set to, not just the ones review happened to list.
+    """
+    original = reconciler.REMEDIATION_TRACKER_EXPIRY_S
+    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
+    try:
+        effective = reconciler._effective_tracker_expiry_s()
+    finally:
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = original
+
+    assert effective > reconciler.REMEDIATION_COOLDOWN + 1, (
+        f"a pathologically low raw constant (1) produced an effective expiry of {effective}, "
+        "which does not clear the cooldown -- the runtime floor did not rescue it"
+    )
+
+
+def test_effective_expiry_survives_a_settings_stub_missing_reconcile_interval():
+    """The exact regression this test module caused elsewhere in the suite:
+    `services/reconciler_check_node_health_test.py` stubs `config.settings`
+    as a bare `SimpleNamespace(heartbeat_interval=30, unhealthy_threshold=3)`
+    -- no `reconcile_interval` at all. Reading that attribute at import time
+    raised `AttributeError`, uncaught by a `(TypeError, ValueError)` guard,
+    and took collection of that entire unrelated file down with it. Computed
+    at call time via `getattr(..., default)` instead, which cannot raise for
+    a missing attribute; reproduced here with the identical stub shape.
+    """
+    from types import SimpleNamespace as _SimpleNamespace
+
+    original_settings = reconciler.settings
+    reconciler.settings = _SimpleNamespace(heartbeat_interval=30, unhealthy_threshold=3)
+    try:
+        effective = reconciler._effective_tracker_expiry_s()
+    finally:
+        reconciler.settings = original_settings
+
+    assert effective > reconciler.REMEDIATION_COOLDOWN + 1
+
+
+def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
+    """Confirms this genuinely reads the LIVE setting, not just falling back
+    to the pydantic default every time.
+    """
+    from types import SimpleNamespace as _SimpleNamespace
+
+    original_settings = reconciler.settings
+    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
+    reconciler.settings = _SimpleNamespace(reconcile_interval=120)
+    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
+    try:
+        effective = reconciler._effective_tracker_expiry_s()
+    finally:
+        reconciler.settings = original_settings
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
+
+    assert effective == reconciler.REMEDIATION_COOLDOWN + 120 + 1, (
+        f"expected the floor to be derived from reconcile_interval=120, got {effective}"
     )
 
 
@@ -211,10 +292,12 @@ def test_a_node_whose_restart_never_gets_a_heartbeat_accepted_reaches_max_attemp
 
 
 def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
-    """Structural claim above, exercised behaviourally: even forced down to
-    its own computed floor -- the worst case any `AUTOBOT_REMEDIATION_
-    TRACKER_EXPIRY_S` operator setting can clamp to -- the never-verifies
-    scenario above must still escalate.
+    """Structural claim above, exercised behaviourally: even with the raw
+    `AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S` constant forced to a pathologically
+    low value (1 -- lower than any operator setting the review measured, and
+    lower than the module's own `min_v=1` sanity clamp would even need to
+    rescue), the runtime floor in `_effective_tracker_expiry_s` must still
+    protect the never-verifies scenario above and let it escalate.
     """
     service = reconciler.ReconcilerService()
     service._restart_service_via_ansible = _AsyncReturns(True)
@@ -223,7 +306,7 @@ def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
     clock = _Clock(datetime.now(timezone.utc))
     reconciler.datetime = clock
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = reconciler.REMEDIATION_COOLDOWN + 61
+    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
     try:
         db = _FakeSession()
         node = _degraded_node()
