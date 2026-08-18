@@ -8298,7 +8298,15 @@
         "handoffNotApplicableHuman": "Le transfert s'applique uniquement aux agents."
       },
       "processNodeLabel": "Processus",
-      "processOpensWorkflow": "Ouvre le workflow de ce rôle"
+      "processOpensWorkflow": "Ouvre le workflow de ce rôle",
+      "attach": "Associer",
+      "attachRoleLabel": "Rôle",
+      "attachRolePlaceholder": "Choisir un rôle…",
+      "attachWorkflowLabel": "ID du workflow",
+      "attachWorkflowPlaceholder": "ID du workflow",
+      "attachError": "Impossible d'associer ce workflow.",
+      "detachError": "Impossible de détacher ce workflow.",
+      "processDetach": "Détacher {workflow} de {role}"
     },
     "executorRollup": {
       "title": "Récapitulatif des exécutants",

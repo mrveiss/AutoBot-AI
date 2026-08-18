@@ -8298,7 +8298,15 @@
         "handoffNotApplicableHuman": "منتقلی صرف ایجنٹس پر لاگو ہوتی ہے۔"
       },
       "processNodeLabel": "عمل",
-      "processOpensWorkflow": "اس کردار کا ورک فلو کھولتا ہے"
+      "processOpensWorkflow": "اس کردار کا ورک فلو کھولتا ہے",
+      "attach": "منسلک کریں",
+      "attachRoleLabel": "کردار",
+      "attachRolePlaceholder": "ایک کردار منتخب کریں…",
+      "attachWorkflowLabel": "ورک فلو شناخت",
+      "attachWorkflowPlaceholder": "ورک فلو شناخت",
+      "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
+      "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
+      "processDetach": "{workflow} کو {role} سے الگ کریں"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",

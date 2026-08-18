@@ -8298,7 +8298,15 @@
         "handoffNotApplicableHuman": "Przekazanie dotyczy tylko agentów."
       },
       "processNodeLabel": "Proces",
-      "processOpensWorkflow": "Otwiera przepływ tej roli"
+      "processOpensWorkflow": "Otwiera przepływ tej roli",
+      "attach": "Dołącz",
+      "attachRoleLabel": "Rola",
+      "attachRolePlaceholder": "Wybierz rolę…",
+      "attachWorkflowLabel": "ID przepływu",
+      "attachWorkflowPlaceholder": "ID przepływu",
+      "attachError": "Nie udało się dołączyć tego przepływu.",
+      "detachError": "Nie udało się odłączyć tego przepływu.",
+      "processDetach": "Odłącz {workflow} od {role}"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",

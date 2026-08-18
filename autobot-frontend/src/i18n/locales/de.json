@@ -8298,7 +8298,15 @@
         "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
       },
       "processNodeLabel": "Prozess",
-      "processOpensWorkflow": "Öffnet den Workflow dieser Rolle"
+      "processOpensWorkflow": "Öffnet den Workflow dieser Rolle",
+      "attach": "Zuordnen",
+      "attachRoleLabel": "Rolle",
+      "attachRolePlaceholder": "Rolle auswählen…",
+      "attachWorkflowLabel": "Workflow-ID",
+      "attachWorkflowPlaceholder": "Workflow-ID",
+      "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
+      "detachError": "Dieser Workflow konnte nicht entfernt werden.",
+      "processDetach": "{workflow} von {role} entfernen"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
