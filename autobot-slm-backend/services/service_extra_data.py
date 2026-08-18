@@ -27,6 +27,9 @@ def engine_degraded_fields(svc_data: dict) -> dict:
     }
 
 
+_EXPLICITLY_DISABLED_UNIT_FILE_STATES = frozenset({"disabled", "masked", "masked-runtime"})
+
+
 def is_managed_autobot_service(svc_data: dict) -> bool:
     """Is this systemd unit one AutoBot manages and expects running on this node?
 
@@ -38,14 +41,28 @@ def is_managed_autobot_service(svc_data: dict) -> bool:
     most of a fleet for the one service that matters most.
 
     Scoped instead by naming convention (`autobot*`, or `slm-agent` itself)
-    plus `enabled` -- systemd's own `UnitFileState`, already collected by
-    `health_collector._get_service_details` on every discovered unit, no
-    monitored-list dependency required. `enabled` reflects what THIS node's
-    deployment actually turned on (e.g. `autobot-vnc` only when `install_vnc`
-    is set in the browser role) -- exactly the signal #1709 needed to avoid
-    flagging a non-primary autobot unit a node was never meant to run.
+    plus `unit_file_state` -- the RAW `UnitFileState` string, already
+    collected by `health_collector._get_service_details` on every discovered
+    unit, no monitored-list dependency required.
+
+    Gated on NOT explicitly disabled, not on `enabled` (review): `UnitFileState
+    == "enabled"` alone excludes `static`, `indirect`, `enabled-runtime`,
+    `generated` and `alias` -- and `autobot-key-rotation.service.j2` /
+    `autobot-pg-backup.service.j2` have no `[Install]` section, so they are
+    `static` and would be permanently invisible to this check under an
+    `enabled`-only gate. A unit burning its own start limit does NOT get
+    disabled by systemd -- `UnitFileState` is untouched by that -- so this
+    guard is not accidentally empty for a crash-looping unit either; it was
+    just narrower than base's `discovered_services` sweep in the wrong place.
+
+    Absent `unit_file_state` (the field is new; a stale cached snapshot or a
+    caller outside `discovered_services` may not carry it) is treated as
+    OUT of scope, matching the previous conservative default.
     """
     name = svc_data.get("name", "")
     if not (name.startswith("autobot") or name == "slm-agent"):
         return False
-    return bool(svc_data.get("enabled", False))
+    unit_file_state = svc_data.get("unit_file_state")
+    if unit_file_state is None:
+        return False
+    return unit_file_state not in _EXPLICITLY_DISABLED_UNIT_FILE_STATES

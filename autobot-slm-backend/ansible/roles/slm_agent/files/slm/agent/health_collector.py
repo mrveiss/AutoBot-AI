@@ -285,6 +285,21 @@ class HealthCollector:
                             details["description"] = value[:500]
                         elif key == "UnitFileState":
                             details["enabled"] = value == "enabled"
+                            # #14465: `enabled` above is deliberately narrow
+                            # (only "starts on boot", used for the Service
+                            # table's own `enabled` column/UI display) --
+                            # do not widen it, other consumers rely on that
+                            # exact meaning. `unit_file_state` carries the raw
+                            # string so a degrade-signal consumer can gate on
+                            # "not explicitly disabled" instead: `static`
+                            # units (no [Install] section -- e.g.
+                            # autobot-key-rotation, autobot-pg-backup) and
+                            # `indirect`/`enabled-runtime`/`generated`/`alias`
+                            # are all legitimately deployed and never
+                            # `UnitFileState == "enabled"`, so a check scoped
+                            # to that string alone leaves them permanently
+                            # invisible.
+                            details["unit_file_state"] = value
                         elif key == "NRestarts" and value.isdigit():
                             details["n_restarts"] = int(value)
 
