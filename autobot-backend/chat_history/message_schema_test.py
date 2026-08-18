@@ -87,14 +87,28 @@ class TestTheApiShapeStillWorks:
         that pins why the narrower check was chosen."""
         assert message_text({"content": "", "text": "real"}) == "real"
 
-    def test_an_empty_list_content_does_NOT_fall_back(self):
-        """Pins the deliberate narrowing against a bare `or`.
+    def test_an_empty_list_content_DOES_fall_back(self):
+        """Reversed deliberately in #14335 — this test previously asserted the
+        opposite.
 
-        An empty multimodal list is a well-formed answer — *this message has no
-        text parts* — so there is nothing to look for in `text`. A bare
-        `content or text` would fall back here and invent content.
+        The old reasoning was that an empty part-list is a well-formed *"this
+        message has no text parts"*, so nothing needs looking up elsewhere. That
+        holds for a single-schema reader and not for this one: the whole premise
+        here is that either key may carry the body, so an empty `content` has
+        told us nothing while `text` may still hold everything.
+
+        It also failed in the direction that costs data. Every consumer reads an
+        empty result as *absent*: distillation drops the message (the #14259
+        defect this module exists to fix), the overflow tracker under-counts
+        retained tokens and delays compaction, and the chat path sends an empty
+        turn. `context_overflow._message_text` always fell through here, which
+        is the divergence #14335 consolidated — toward the forgiving one.
         """
-        assert message_text({"content": [], "text": "fallback"}) == ""
+        assert message_text({"content": [], "text": "fallback"}) == "fallback"
+
+    def test_an_empty_list_with_no_other_key_is_still_empty(self):
+        """Falling through must not invent content when there is none to find."""
+        assert message_text({"content": []}) == ""
 
     @pytest.mark.parametrize("invalid", [0, False, {"a": 1}], ids=["zero", "false", "dict"])
     def test_an_invalid_content_type_is_treated_as_absent(self, invalid):

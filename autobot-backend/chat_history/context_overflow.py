@@ -24,6 +24,7 @@ from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 from autobot_shared.tool_catalogue import FILE_WRITE_TOOLS, SHELL_EXEC_TOOLS, match_tool_name
+from chat_history.message_schema import message_text
 
 logger = get_logger(__name__)
 
@@ -222,24 +223,21 @@ class SessionTokenTracker:
 def _message_text(msg: object) -> str:
     """The text of a message, for token estimation, on any input (#14065 review).
 
-    ``estimate_fast`` needs a string. A non-dict entry or a non-string ``text``
-    (a provider emitting ``None``, an int, a content-part list) used to raise
-    here — after the token tracker had already been reset.
+    #14335: now backed by the shared reader. This and
+    `message_schema.message_text` were two implementations of the same job, from
+    two sessions fixing the same defect class at once, and they disagreed on
+    `content: []` beside a populated `text` — this one fell through, that one
+    did not. The consolidation adopted falling through, because an empty result
+    here under-counts `retained_tokens` and delays the next compaction. See that
+    function for why the same choice is right for every other consumer.
 
-    #14066: reads **both** schemas. This used to read only ``text``, so every
-    API-schema message (``role``/``content``) estimated as 0 tokens and the
-    post-compaction refill under-counted the retained half — which delays the
-    next compaction rather than triggering it early, so nothing surfaced it.
-    ``_format_messages`` already handled both; this did not.
+    The non-dict guard stays local: `estimate_fast` needs a string, and this
+    runs outside `summarize_messages`' try, so raising would 500 a turn whose
+    answer was already generated and stored.
     """
     if not isinstance(msg, dict):
         return ""
-    value = msg.get("content")
-    if isinstance(value, list):
-        value = " ".join(_text_parts(value))
-    if not isinstance(value, str) or not value:
-        value = msg.get("text", "")
-    return value if isinstance(value, str) else ""
+    return message_text(msg)
 
 
 def _text_parts(parts: list) -> List[str]:
