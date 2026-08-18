@@ -201,6 +201,18 @@ jobs:
     - name: Block hardcoded-IP fallback regressions (#6783, #6991)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_hardcoded_ip_fallbacks.py --ext py
 
+    - name: Block live-install sys.path default regressions (#14544)
+      run: |
+        # 18 sys.path bootstraps across 17 files open-coded the project root
+        # as `os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source")`
+        # instead of the canonical `autobot_shared.paths.project_root()` walk.
+        # With the env var unset -- the normal case in a checkout -- that put
+        # the LIVE DEPLOYED INSTALL first on sys.path, so a script run from a
+        # working tree silently imported the deployed copy of every
+        # first-party module it named. #14544 swept all 18; this blocks a new
+        # one from copying the pattern forward.
+        bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
+
     - name: Block direct redis client regressions (#1086, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
 

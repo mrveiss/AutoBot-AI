@@ -10,13 +10,12 @@ Test Documentation API Endpoints (Local Testing)
 import asyncio
 import logging
 import sys
-import os
 from pathlib import Path
 
 from autobot_shared.paths import project_root
 
 # Add project root to Python path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, str(project_root()))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
