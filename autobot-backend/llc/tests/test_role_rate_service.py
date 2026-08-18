@@ -20,18 +20,34 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.models.membership import LLCCompanyMembership
 from llc.models.role_rate import LLCRoleRate
 from llc.services.authz import NotAuthorisedError
 from llc.services.role_rate import RoleRateService
 from llc.tests import _e2e_harness as harness
+from user_management.models.base import Base
 
 
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
+    """Create only the tables this test needs.
+
+    Not ``harness.create_loop_schema``: that builds an explicit list of *loop*
+    models and ``llc_role_rates`` is not one of them, so every query here failed
+    with "no such table". The role tests already establish this pattern
+    (``test_role_workflows.py``) — declare the tables the test touches, and
+    adding a model to the shared loop list stays a deliberate act rather than a
+    side effect of writing a test.
+    """
     eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    await harness.create_loop_schema(eng)
+    tables = [LLCRoleRate.__table__, LLCCompanyMembership.__table__]
+    for table in tables:
+        harness._scrub_pg_server_defaults(table)
+        harness._clientside_timestamps(table)
+    async with eng.begin() as conn:
+        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables))
     yield eng
     await eng.dispose()
 
