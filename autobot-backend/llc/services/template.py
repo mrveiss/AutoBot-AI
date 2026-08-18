@@ -148,7 +148,7 @@ class TemplateService:
                 GROUP BY t.id
                 ORDER BY t.created_at DESC
                 LIMIT :page_size OFFSET :offset
-                """),
+                """),  # nosec B608  # filters is hardcoded clause literals; values are bound params
             {
                 **bind,
                 "page_size": params.page_size,

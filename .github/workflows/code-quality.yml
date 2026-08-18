@@ -16,7 +16,7 @@ on:
       - '.pre-commit-config.yaml'
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
-      - 'autobot-infrastructure/shared/scripts/hooks/**'
+      - 'autobot-infrastructure/shared/scripts/**'
       - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
@@ -60,7 +60,7 @@ jobs:
               - '.pre-commit-config.yaml'
               - 'pipeline-scripts/**'
               - 'tools/lint/**'
-              - 'autobot-infrastructure/shared/scripts/hooks/**'
+              - 'autobot-infrastructure/shared/scripts/**'
               - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
               - 'docs/developer/**'
               - '.github/workflows/code-quality.yml'
@@ -354,6 +354,18 @@ jobs:
           exit 1
         }
 
+    - name: Audit the .bandit exclude_dirs anchoring (#14489)
+      run: |
+        # bandit tests each exclude_dirs entry as a raw SUBSTRING of the full
+        # path, with no path-component boundary -- broader than #14419's flake8
+        # defect. A bare entry like `temp` or `archive` silently excluded 34
+        # tracked production files (all of autobot-backend/workflow_templates/
+        # among them) that named no real directory anywhere in the repo. This
+        # has to run in a REQUIRED check because of the direction it fails in:
+        # re-adding a bare name excludes MORE files, so bandit reports FEWER
+        # findings and this job goes greener.
+        python3 tools/lint/check_bandit_exclude_anchoring.py --audit-excludes
+
     - name: Security check with bandit
       run: |
         python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
@@ -428,6 +440,20 @@ jobs:
         # violations and goes greener. The pytest copy of these assertions runs
         # in `python-suite`, which gates nothing (#14353).
         python3 tools/lint/check_flake8_exclude_anchoring.py --audit-excludes
+
+    - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
+      run: |
+        # `autobot-infrastructure/` is excluded by the pre-commit flake8 hook and
+        # named by no CI flake8 invocation, so nothing ever linted this tree; 12
+        # operator scripts accumulated 103 undefined names -- live NameErrors, not
+        # style. #14405 fixed all 12 and scoped a second pre-commit hook to the tree
+        # for F821. This has to run in a REQUIRED check for the same directional
+        # reason as #14419 and #14489: re-widening the exclusion lints FEWER files, so
+        # every lint step reports fewer violations and goes greener. It re-proves both
+        # halves -- the tree is F821-clean AND a pre-commit hook still reaches it --
+        # and fails below a discovery floor, because a sweep handed an empty file list
+        # reports a comfortable zero. There is no exemption list, deliberately.
+        python3 tools/lint/check_infra_scripts_undefined_names.py --audit
 
     - name: Audit the python-file-size ceilings for drift (#14236)
       run: |

@@ -208,8 +208,9 @@ RUN apt-get update && apt-get install -y \
     ocl-icd-libopencl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenVINO
-RUN pip install openvino openvino-dev[pytorch,onnx]
+# Install OpenVINO (no openvino-dev: it is a deprecated meta-package
+# incompatible with openvino 2026.x -- see #14447)
+RUN pip install "openvino[pytorch,onnx]>=2026.3.0"
 
 # Set OpenVINO environment
 ENV OPENVINO_CACHE_DIR=/app/openvino_cache

@@ -226,34 +226,42 @@ class AgentExecutor:
         return result
 
     async def _maybe_trigger_gap_development(self, response_text: str, context: Dict[str, Any]) -> None:
-        """Detect gap signals in agent output and trigger autonomous development.
+        """Detect gap signals in agent output and emit the declared trigger.
 
         Called after every agent response (Issue #951).  Non-fatal on error.
+
+        #14406: this used to name ``autonomous-skill-development`` directly, so
+        the ``explicit_gap_signal`` trigger that skill declares was never
+        actually the thing that fired.  It now emits the declared event and lets
+        ``skills/trigger_dispatcher`` resolve it, so the manifest describes what
+        really happens and the invocation is metered through ``SkillManager``
+        like every other one.
+
+        The event is ``explicit_gap_signal`` unconditionally because
+        ``analyze_agent_output`` returns ``GapTrigger.EXPLICIT`` by construction
+        — it matches only patterns in which the agent states outright that it
+        lacks a tool.  ``trigger_dispatcher_test.py`` asserts that invariant, so
+        a detector change that broke it fails rather than silently mislabelling.
         """
         try:
             from skills.gap_detector import SkillGapDetector
             from skills.registry import get_skill_registry
+            from skills.trigger_dispatcher import emit_skill_trigger
 
             registry = get_skill_registry()
-            skill = registry.get("autonomous-skill-development")
-            if skill is None or not skill.enabled:
-                return
-
-            existing_tools = list(registry._skills.keys())
+            existing_tools = [info["name"] for info in registry.list_skills()]
             gap = SkillGapDetector(existing_tools).analyze_agent_output(response_text)
             if gap is None:
                 return
 
-            logger.info(
-                "Capability gap detected: %s — triggering skill development",
-                gap.capability,
-            )
-            await skill.execute(
+            logger.info("Explicit capability gap signalled: %s", gap.capability)
+            await emit_skill_trigger(
+                "explicit_gap_signal",
                 {
                     "capability": gap.capability,
                     "requested_by": "autobot-self",
                     "context": {**gap.context, "agent_response": response_text[:200]},
-                }
+                },
             )
         except Exception as exc:
             logger.debug("Gap development hook failed (non-critical): %s", exc)

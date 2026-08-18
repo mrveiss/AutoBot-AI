@@ -65,8 +65,9 @@ Get-WmiObject -Class Win32_PnPEntity | Where-Object {$_.Name -like "*NPU*"}
 
 #### 1.2 Install OpenVINO with NPU Support
 ```powershell
-# Install OpenVINO
-pip install openvino openvino-dev[pytorch,tensorflow]
+# Install OpenVINO (no openvino-dev: it is a deprecated meta-package
+# incompatible with openvino 2026.x -- see #14447)
+pip install "openvino[pytorch,tensorflow]>=2026.3.0"
 
 # Install NPU-specific plugins
 pip install openvino-npu --upgrade

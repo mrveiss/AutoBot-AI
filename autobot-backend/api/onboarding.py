@@ -180,9 +180,9 @@ async def onboarding_status() -> OnboardingStatus:
 async def _activate_skills(skill_names: list[str], rollback_stack: list) -> list[str]:
     """Activate each skill via SkillManager; register rollback for each."""
     try:
-        from skills.manager import SkillManager
+        from skills.manager import get_skill_manager
 
-        manager = SkillManager()
+        manager = get_skill_manager()
         await manager.initialize()
     except Exception as exc:
         logger.warning("SkillManager unavailable (%s) — skipping skill activation", exc)

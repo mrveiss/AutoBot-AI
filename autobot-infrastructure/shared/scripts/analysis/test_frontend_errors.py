@@ -6,6 +6,7 @@
 """Test script to capture frontend console errors using Playwright"""
 
 import asyncio
+import logging
 import sys
 
 logger = logging.getLogger(__name__)
