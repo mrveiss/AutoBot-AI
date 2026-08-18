@@ -41,6 +41,9 @@ from media.document.extraction import DocumentExtractionError, extract_docx, ext
 
 logger = get_logger(__name__)
 
+# Formats DocumentExtractor delegates to DocumentParser (#14333).
+_WIDE_FORMAT_SUFFIXES = {".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".odg"}
+
 # Module-level constants for O(1) lookups (Issue #326)
 DOCX_EXTENSIONS = {".docx", ".doc"}
 
@@ -90,6 +93,13 @@ class DocumentExtractor:
         "pdf": [".pdf"],
         "docx": [".docx", ".doc"],
         "text": [".txt", ".md", ".rst", ".markdown", ".text"],
+        # #14333: spreadsheets, presentations and OpenDocument formats, parsed by
+        # DocumentParser. Listed here so get_supported_extensions() and
+        # is_supported_format() — which drive directory discovery — agree with
+        # what extract_from_file() can actually handle. They disagreed before,
+        # and a discovery pass that skips a format the extractor supports is a
+        # silently smaller ingest, not an error anyone sees.
+        "office": [".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".odg"],
     }
 
     @staticmethod
@@ -253,11 +263,37 @@ class DocumentExtractor:
             return await DocumentExtractor.extract_from_docx(file_path)
         elif suffix in DocumentExtractor.SUPPORTED_FORMATS["text"]:
             return await DocumentExtractor.extract_from_text(file_path)
+        elif suffix in _WIDE_FORMAT_SUFFIXES:
+            # #14333: spreadsheets, presentations and OpenDocument formats are
+            # handled by DocumentParser, which owns those parsers. Delegating
+            # rather than reimplementing keeps one extraction path per format —
+            # both routes bottom out in media/document/extraction.py for PDF and
+            # DOCX, so nothing is forked here.
+            return await DocumentExtractor.extract_from_office(file_path)
         else:
             raise ValueError(
                 f"Unsupported file type: {suffix}. "
                 f"Supported formats: {DocumentExtractor.get_supported_extensions()}"
             )
+
+    @staticmethod
+    async def extract_from_office(file_path: str | Path) -> str:
+        """Extract text from a spreadsheet, presentation or OpenDocument file.
+
+        Thin delegation to :class:`~utils.document_parser.DocumentParser`, which
+        carries the parsers for these formats. Imported at call time so a caller
+        that never touches them does not pay for odfpy/openpyxl/python-pptx.
+        """
+        from utils.document_parser import document_parser
+
+        file_path = Path(file_path)
+        if not await asyncio.to_thread(file_path.exists):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        text, metadata = await document_parser.extract_text(file_path)
+        if not metadata.get("extraction_success", False):
+            raise ValueError(f"Failed to parse {file_path.name}: {metadata.get('extraction_error', 'unknown error')}")
+        return text
 
     @staticmethod
     async def _validate_directory(directory_path: Path) -> None:
