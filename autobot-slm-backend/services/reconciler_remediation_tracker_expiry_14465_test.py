@@ -588,7 +588,7 @@ def test_an_exhausted_tracker_never_auto_expires():
 
 
 def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
-    """Review, two findings on the same test:
+    """Review, three findings on the same test:
 
     1. It seeded `last_attempt = datetime.now()` -- RECENT -- so `_check_
        remediation_limits`'s cooldown check (which runs BEFORE the max
@@ -604,6 +604,12 @@ def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
        -- a real API request -- specifically for `event_type == "completed"`;
        broadcasting that type unthrottled would have turned "make the
        lockout visible" into a refresh storm.
+    3. A live-only broadcast reaches nobody who was not watching at that
+       exact moment -- "make the lockout visible" needs a DB-persisted
+       record too, or the historical timeline shows the one original event
+       and nothing after. `_create_still_exhausted_event` must fire on the
+       SAME cadence as the broadcast, not the DB write review's item 2
+       already forbids repeating on every pass.
     """
     service = reconciler.ReconcilerService()
     node = _degraded_node()
@@ -623,14 +629,23 @@ def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
 
     service._broadcast_remediation_event = _spy_broadcast.__get__(service)
 
-    events_created: list[dict] = []
+    max_attempts_events: list[dict] = []
     original_create_event = reconciler.ReconcilerService._create_max_attempts_event
 
     async def _spy_create_event(self, db, node_, tracker):
-        events_created.append(dict(tracker))
+        max_attempts_events.append(dict(tracker))
         await original_create_event(self, db, node_, tracker)
 
     service._create_max_attempts_event = _spy_create_event.__get__(service)
+
+    still_exhausted_events: list[dict] = []
+    original_create_still_exhausted = reconciler.ReconcilerService._create_still_exhausted_event
+
+    async def _spy_still_exhausted(self, db, node_, tracker):
+        still_exhausted_events.append(dict(tracker))
+        await original_create_still_exhausted(self, db, node_, tracker)
+
+    service._create_still_exhausted_event = _spy_still_exhausted.__get__(service)
 
     clock = _Clock(datetime.now(timezone.utc))
     reconciler.datetime = clock
@@ -643,17 +658,23 @@ def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
         assert len(broadcasts) == 1, (
             f"expected exactly one broadcast across 5 refusals inside the throttle window, got {len(broadcasts)}"
         )
+        assert len(still_exhausted_events) == 1, (
+            f"expected exactly one persisted still-exhausted event, got {len(still_exhausted_events)}"
+        )
 
-        # Past the throttle window: the next refusal must broadcast again.
+        # Past the throttle window: the next refusal must re-notify again, both ways.
         clock.advance(reconciler.MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S + 10)
         asyncio.run(service._remediate_node(db, node))
         assert len(broadcasts) == 2, (
             f"expected a second broadcast once the throttle window elapsed, got {len(broadcasts)}"
         )
+        assert len(still_exhausted_events) == 2, (
+            f"expected a second persisted event once the throttle window elapsed, got {len(still_exhausted_events)}"
+        )
     finally:
         reconciler.datetime = datetime
 
-    assert len(events_created) == 0, "an already-exhausted tracker must not create a second DB-persisted event"
+    assert len(max_attempts_events) == 0, "an already-exhausted tracker must not repeat the FIRST exhaustion event"
     assert all(event_type != "completed" for (_, event_type, _, _) in broadcasts), (
         "must never broadcast event_type='completed' for a mere refusal -- FleetOverview.vue "
         "triggers a real fleetStore.refreshNode() API call for exactly that type"
