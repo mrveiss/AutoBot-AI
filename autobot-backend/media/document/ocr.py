@@ -42,6 +42,11 @@ DEFAULT_OCR_DPI = 300
 # minutes — a caller that wants more must say so explicitly.
 DEFAULT_MAX_OCR_PAGES = 50
 
+# Per-page OCR wall-clock ceiling, seconds. Tesseract on a dense A4 page at 300
+# DPI runs in single-digit seconds; this leaves headroom while still bounding a
+# pathological page. Override with AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT.
+DEFAULT_OCR_PAGE_TIMEOUT = 60
+
 
 def ocr_dpi() -> int:
     """Resolve the rasterization DPI from config."""
@@ -49,6 +54,20 @@ def ocr_dpi() -> int:
         blank_to_none(config.misc.document_ocr_dpi),
         DEFAULT_OCR_DPI,
         "AUTOBOT_DOCUMENT_OCR_DPI",
+    )
+
+
+def ocr_page_timeout() -> int:
+    """Resolve the per-page OCR wall-clock ceiling, in seconds.
+
+    The page ceiling bounds how many pages are read; this bounds how long any
+    one of them may take. Both are needed on an ingest path taking arbitrary
+    uploads — a single page can be arbitrarily expensive regardless of count.
+    """
+    return _positive_int_setting(
+        blank_to_none(config.misc.document_ocr_page_timeout),
+        DEFAULT_OCR_PAGE_TIMEOUT,
+        "AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT",
     )
 
 
@@ -128,9 +147,9 @@ def ocr_availability() -> Tuple[bool, str]:
         return False, "pytesseract is not installed"
 
     try:
-        import fitz  # noqa: F401  (PyMuPDF; import name differs from the distribution)
+        import pypdfium2  # noqa: F401
     except ImportError:
-        return False, "PyMuPDF is not installed, so PDF pages cannot be rasterized"
+        return False, "pypdfium2 is not installed, so PDF pages cannot be rasterized"
 
     try:
         pytesseract.get_tesseract_version()
@@ -181,20 +200,23 @@ def ocr_pdf_pages(raw: bytes, page_numbers: Sequence[int]) -> OcrResult:
 
 def _run_ocr(raw: bytes, wanted: List[int], skipped: Tuple[int, ...]) -> OcrResult:
     """Render and read the pages, translating any failure into a reported reason."""
-    import fitz
+    import pypdfium2
     import pytesseract
-    from PIL import Image
 
     dpi = ocr_dpi()
     recovered: Dict[int, str] = {}
 
     try:
-        with fitz.open(stream=raw, filetype="pdf") as document:
+        document = pypdfium2.PdfDocument(raw)
+        try:
+            page_count = len(document)
             for number in wanted:
-                if not 1 <= number <= document.page_count:
-                    logger.warning("Requested OCR for page %d outside a %d-page document", number, document.page_count)
+                if not 1 <= number <= page_count:
+                    logger.warning("Requested OCR for page %d outside a %d-page document", number, page_count)
                     continue
-                recovered[number] = _ocr_one_page(document, number, dpi, pytesseract, Image)
+                recovered[number] = _ocr_one_page(document, number, dpi, pytesseract)
+        finally:
+            document.close()
     except Exception as exc:
         logger.warning("OCR failed while rasterizing: %s", exc)
         return OcrResult(attempted=False, reason=f"rasterization failed: {exc}", skipped_pages=tuple(wanted) + skipped)
@@ -202,12 +224,26 @@ def _run_ocr(raw: bytes, wanted: List[int], skipped: Tuple[int, ...]) -> OcrResu
     return OcrResult(attempted=True, pages=recovered, skipped_pages=skipped)
 
 
-def _ocr_one_page(document, number: int, dpi: int, pytesseract, image_module) -> str:
-    """Read one page, degrading to empty text rather than failing the document."""
+def _ocr_one_page(document, number: int, dpi: int, pytesseract) -> str:
+    """Read one page, degrading to empty text rather than failing the document.
+
+    `render(scale=...)` takes a multiple of 72 DPI, pdfium's unit, and returns a
+    PIL image directly — so the explicit `frombytes` round-trip the PyMuPDF
+    version needed is gone rather than reimplemented.
+
+    The `timeout` is not optional decoration. This runs on an ingest path that
+    accepts arbitrary uploads, and `image_to_string` is otherwise unbounded: a
+    page whose MediaBox is pathological still renders a very large bitmap
+    however few pages were requested, so the page ceiling caps count and this
+    caps cost.
+    """
     try:
-        pixmap = document.load_page(number - 1).get_pixmap(dpi=dpi)
-        image = image_module.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-        return pytesseract.image_to_string(image) or ""
+        page = document[number - 1]
+        image = page.render(scale=dpi / 72).to_pil()
+        try:
+            return pytesseract.image_to_string(image, timeout=ocr_page_timeout()) or ""
+        finally:
+            image.close()
     except Exception as exc:
         logger.warning("OCR failed on page %d: %s", number, exc)
         return ""

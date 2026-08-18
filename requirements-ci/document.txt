@@ -13,4 +13,4 @@ markdownify==1.2.3
 # pytesseract is the binding; the tesseract binary is installed by the
 # "Install OCR system packages" step in .github/actions/setup-python-suite.
 pytesseract>=0.3.13
-PyMuPDF>=1.26.0            # import name `fitz`; renders PDF pages for OCR
+pypdfium2>=4.30.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
