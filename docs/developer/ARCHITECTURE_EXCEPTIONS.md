@@ -180,3 +180,27 @@ account is validated to never be `autobot_admin` (the emergency admin
 safety-net account) — see the `assert` task at the top of `tasks/main.yml`.
 
 **Grep check:** `grep -n "vnc_user\|vnc_forbidden_user" autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`
+
+---
+
+## Service-Discovery Cache TTL — Plain Shared Constant, Not Env-Backed
+
+**File:** `autobot_shared/service_discovery.py`
+**Issue:** #14465
+
+**Pattern bypassed:** "Cache TTL — never hard-code — module-level constant
+from an env var."
+
+**Reason:** `slm/agent/health_collector.py`'s discovery-sweep cache TTL and
+`services/reconciler.py`'s restart-churn window (which must stay
+comfortably larger than that TTL, or the churn signal regresses to a pulse
+that misses most heartbeats) run in two DIFFERENT processes on two
+DIFFERENT machines — the agent on each fleet node, the backend on the
+manager host. An env var only provides a genuine single source of truth if
+it is set to the identical value on every one of those machines; nothing in
+either process can enforce that. A plain constant, shipped in the one
+codebase both processes deploy from, cannot drift that way — changing it is
+one edit that reaches every node on the next code-sync, not an env var an
+operator has to remember to set identically everywhere.
+
+**Grep check:** `grep -rn "SERVICE_DISCOVERY_TTL_S" autobot_shared/service_discovery.py autobot-slm-backend/slm/agent/health_collector.py autobot-slm-backend/services/reconciler.py` should show one definition and two importers, no second hardcoded literal.

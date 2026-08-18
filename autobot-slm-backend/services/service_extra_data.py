@@ -25,3 +25,54 @@ def engine_degraded_fields(svc_data: dict) -> dict:
         "engine_degraded": bool(svc_data.get("engine_degraded")),
         "degraded_reason": svc_data.get("degraded_reason"),
     }
+
+
+_EXPLICITLY_DISABLED_UNIT_FILE_STATES = frozenset({"disabled", "masked", "masked-runtime"})
+
+
+def is_managed_autobot_service(svc_data: dict) -> bool:
+    """Is this systemd unit one AutoBot manages and expects running on this node?
+
+    #14465: scope for node-status degrade signals, deliberately NOT
+    `extra_data["services"]` / `slm_services_to_monitor`. That operator
+    -declared set defaults to `[]` per role, is `[]` on at least one real
+    inventory node, and never contains `slm-agent` -- the one unit
+    remediation actually restarts -- so a check scoped to it goes dark on
+    most of a fleet for the one service that matters most.
+
+    Scoped instead by naming convention (`autobot*`, or `slm-agent` itself)
+    plus `unit_file_state` -- the RAW `UnitFileState` string, already
+    collected by `health_collector._get_service_details` on every discovered
+    unit, no monitored-list dependency required.
+
+    Gated on NOT explicitly disabled, not on `enabled` (review): `UnitFileState
+    == "enabled"` alone excludes `static`, `indirect`, `enabled-runtime`,
+    `generated` and `alias` -- and `autobot-key-rotation.service.j2` /
+    `autobot-pg-backup.service.j2` have no `[Install]` section, so they are
+    `static` and would be permanently invisible to this check under an
+    `enabled`-only gate. A unit burning its own start limit does NOT get
+    disabled by systemd -- `UnitFileState` is untouched by that -- so this
+    guard is not accidentally empty for a crash-looping unit either; it was
+    just narrower than base's `discovered_services` sweep in the wrong place.
+
+    Absent `unit_file_state` means IN scope (review: fail safe, not open).
+    This field is new -- every node still running the currently-deployed
+    agent (before its own code-sync + process restart picks up this PR)
+    reports `discovered_services` without it, on every heartbeat, for up to
+    the agent's 300s discovery-cache TTL after that. Treating "absent" as
+    "out of scope" would have made `_service_health_degraded` return `False`
+    unconditionally fleet-wide for that entire rollout window -- blind to a
+    genuinely crash-looping autobot service on every node, the exact symptom
+    this issue reports, reintroduced by the fix meant to close it. Falling
+    back to base's original name-prefix-only behaviour (no enabled/disabled
+    gate at all) when the field is missing means an old agent's report is
+    scored exactly as base would have scored it; only a NEW agent's report,
+    which does carry the field, gets the narrower gate.
+    """
+    name = svc_data.get("name", "")
+    if not (name.startswith("autobot") or name == "slm-agent"):
+        return False
+    unit_file_state = svc_data.get("unit_file_state")
+    if unit_file_state is None:
+        return True
+    return unit_file_state not in _EXPLICITLY_DISABLED_UNIT_FILE_STATES
