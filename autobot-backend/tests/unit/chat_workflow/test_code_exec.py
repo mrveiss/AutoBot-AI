@@ -597,8 +597,8 @@ def test_tool_policy_and_mcp_permissions_agree_on_readonly_tools():
     Scoped to tools both sources name at all — a rename or moved constant on
     either side must fail loud, not silently pass an empty overlap.
     """
-    from chat_workflow.code_exec import tool_policy as tp
     from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
+    from chat_workflow.code_exec import tool_policy as tp
 
     tool_policy_named = tp.SENSITIVE_TOOLS | tp.CODEEXEC_INJECTABLE_TOOLS
     assert tool_policy_named, "tool_policy.py names no tools — source resolved empty"
