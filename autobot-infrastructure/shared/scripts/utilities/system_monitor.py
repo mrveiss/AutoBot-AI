@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
+import psutil
 import requests
 
 from autobot_shared.network_constants import NetworkConstants, ServiceURLs

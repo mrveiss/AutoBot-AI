@@ -17,6 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+import aiohttp
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 # Add AutoBot to path

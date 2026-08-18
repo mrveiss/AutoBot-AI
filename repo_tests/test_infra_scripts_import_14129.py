@@ -12,20 +12,29 @@ its `sys.path` insertion two directories short of `autobot-backend/` (landing on
 `autobot-infrastructure/shared/`, which has no `utils` package). Both operator entry
 points were unimportable.
 
-Nothing caught either: `.pre-commit-config.yaml`'s flake8 hook excludes
+Nothing caught either: `.pre-commit-config.yaml`'s flake8 hook excluded
 `autobot-infrastructure/` entirely, so F821 never gated a commit here, and neither
 script is imported by anything under test. "An import smoke test... would have caught
 both on the commit that broke them" (#14129) — this is that smoke test, generalised to
 the whole directory so the next regression is caught too, not just these two.
 
-Two checks:
+#14405 closed the rest of the hole: the 12 pre-existing offenders this guard once
+`xfail`-marked are fixed, the `KNOWN_BROKEN_AT_GUARD_INTRODUCTION` list is gone with
+them (an undefined name may not be grandfathered — that would exempt the exact defect
+the guard exists for), and the sweep now has a commit-time and a required-check home.
+The static half below therefore imports `tools/lint/check_infra_scripts_undefined_names.py`
+rather than restating it: the copy `code-quality` runs is the one that blocks a merge,
+and a test agreeing with a second copy of the rule proves nothing about it.
+
+Three checks:
 
 1. `test_script_has_no_undefined_names` — a static, per-file `flake8 --select=F821`
    sweep of every script in the tree. Cheap, catches names referenced but never
-   imported/defined (the `manage_system_knowledge.py` class of bug). Pre-existing
-   offenders beyond the two fixed here are tracked in `KNOWN_BROKEN_AT_GUARD_INTRODUCTION`
-   with a reference to #14405 — fixing #14129 is not the same PR as fixing all of them.
-2. `test_operator_script_imports_in_a_realistic_subprocess` — a genuine dynamic import,
+   imported/defined (the `manage_system_knowledge.py` class of bug).
+2. `test_a_pre_commit_hook_still_lints_this_tree` — the commit-time gate is a regex in
+   another file and can be widened back in one line. This replays pre-commit's own
+   file selection to prove some flake8 hook is still handed a script from this tree.
+3. `test_operator_script_imports_in_a_realistic_subprocess` — a genuine dynamic import,
    in a fresh subprocess with `autobot-backend` and the repo root (for `autobot_shared`)
    on PYTHONPATH (the convention every other script under this tree assumes; see
    `autobot-infrastructure/shared/scripts/restore_kb_backup.sh`), for the two scripts
@@ -36,6 +45,7 @@ Two checks:
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -46,24 +56,22 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPTS_DIR = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 _BACKEND_DIR = _REPO_ROOT / "autobot-backend"
+_CHECKER = _REPO_ROOT / "tools" / "lint" / "check_infra_scripts_undefined_names.py"
 
-# Pre-existing undefined-name breakage found while introducing this guard, not fixed
-# here (#14129 scoped its fix to the two scripts below). Remove an entry when its file
-# is fixed and #14405 can drop the corresponding acceptance criterion.
-KNOWN_BROKEN_AT_GUARD_INTRODUCTION: dict[str, str] = {
-    "populate_knowledge_base.py": "#14405",
-    "comprehensive_log_aggregator.py": "#14405",
-    "seq_log_forwarder.py": "#14405",
-    "profile_api_endpoints.py": "#14405",
-    "diagnose_backend.py": "#14405",
-    "analysis/test_gui_chat_visual.py": "#14405",
-    "analysis/check_backend_status.py": "#14405",
-    "analysis/test_llm_interface_direct.py": "#14405",
-    "analysis/npu_performance_measurement.py": "#14405",
-    "analysis/test_frontend_errors.py": "#14405",
-    "utilities/report_processing_system.py": "#14405",
-    "utilities/system_monitor.py": "#14405",
-}
+
+def _load_checker():
+    """Import the checker `code-quality` runs, by path (#14405).
+
+    Restating the sweep here would give it two definitions that could drift, and
+    the copy CI executes is the one that blocks a merge.
+    """
+    spec = importlib.util.spec_from_file_location("check_infra_scripts_undefined_names", _CHECKER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+checker = _load_checker()
 
 # The two scripts #14129 made importable. Exercised with a real subprocess import
 # (Verification bar: "in a subprocess with a realistic path, not via a fixture that
@@ -84,38 +92,9 @@ def _relative_key(path: Path) -> str:
     return str(path.relative_to(_SCRIPTS_DIR))
 
 
-def _undefined_name_lines(path: Path) -> list[str]:
-    """Every `flake8 --select=F821` finding for *path*, one per line.
-
-    `--isolated`: the repo's own `.flake8` sets `count = True` / `statistics = True`
-    for the pre-commit hook's human-readable output, which appends a bare count line
-    (and, with findings, a summary line) after the real violations. Reading `.flake8`
-    here would count every clean file as "broken" (its trailing ``0``).
-    """
-    result = subprocess.run(
-        [sys.executable, "-m", "flake8", "--isolated", "--select=F821", str(path)],
-        capture_output=True,
-        text=True,
-        cwd=_REPO_ROOT,
-        check=False,
-    )
-    return [line for line in result.stdout.splitlines() if line.strip()]
-
-
 def _script_params() -> list:
-    params = []
-    for path in _discover_scripts():
-        key = _relative_key(path)
-        marks = []
-        if key in KNOWN_BROKEN_AT_GUARD_INTRODUCTION:
-            marks.append(
-                pytest.mark.xfail(
-                    reason=f"tracked in {KNOWN_BROKEN_AT_GUARD_INTRODUCTION[key]}",
-                    strict=True,
-                )
-            )
-        params.append(pytest.param(path, id=key, marks=marks))
-    return params
+    """Every script, unmarked. There is no xfail list any more (#14405)."""
+    return [pytest.param(path, id=_relative_key(path)) for path in _discover_scripts()]
 
 
 def test_the_guard_actually_found_scripts():
@@ -131,8 +110,21 @@ def test_script_has_no_undefined_names(path: Path):
     `SystemKnowledgeManager` and `yaml` were referenced inside function bodies with no
     corresponding import anywhere in the file.
     """
-    undefined = _undefined_name_lines(path)
+    undefined = checker.undefined_name_findings([path], _REPO_ROOT)
     assert undefined == [], "\n".join(undefined)
+
+
+def test_a_pre_commit_hook_still_lints_this_tree():
+    """The commit-time gate must keep reaching this tree (#14405).
+
+    Fixing the 12 files by hand while the tree stayed excluded would have left
+    nothing stopping a 13th. That protection is a regex in `.pre-commit-config.yaml`
+    and can be widened back in one line, by someone with no reason to connect the
+    edit to these scripts. `code-quality` re-proves the same thing on every PR;
+    this is its pytest mirror.
+    """
+    problems = checker.commit_gate_problems(_REPO_ROOT)
+    assert problems == [], "\n\n".join(problems)
 
 
 @pytest.mark.parametrize("relative_path", _OPERATOR_ENTRYPOINTS)
