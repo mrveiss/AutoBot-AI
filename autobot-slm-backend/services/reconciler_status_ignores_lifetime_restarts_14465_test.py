@@ -103,9 +103,9 @@ def test_a_presently_crash_looping_service_still_degrades_the_node():
     """
     extra_data = {"discovered_services": [{"name": "autobot-vnc", "status": "crash-loop", "n_restarts": 1}]}
 
-    assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value, (
-        "a service actively crash-looping right now must still degrade the node"
-    )
+    assert (
+        _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
+    ), "a service actively crash-looping right now must still degrade the node"
 
 
 def test_a_non_autobot_service_with_a_high_restart_count_never_mattered():
@@ -196,6 +196,6 @@ def test_a_healthy_heartbeat_against_a_degraded_node_transitions_it_online():
     )
 
     assert result is not None
-    assert result.status == reconciler.NodeStatus.ONLINE.value, (
-        "a healthy heartbeat against a degraded node did not transition it back to online"
-    )
+    assert (
+        result.status == reconciler.NodeStatus.ONLINE.value
+    ), "a healthy heartbeat against a degraded node did not transition it back to online"

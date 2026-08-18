@@ -278,9 +278,9 @@ def test_online_transition_clears_a_pending_remediation_tracker():
 
     asyncio.run(service.update_node_heartbeat(_HeartbeatSession(node), node.node_id, 0.0, 23.4, 18.1, extra_data={}))
 
-    assert node.node_id not in service._remediation_tracker, (
-        "a node observed transitioning to online must have its remediation history cleared"
-    )
+    assert (
+        node.node_id not in service._remediation_tracker
+    ), "a node observed transitioning to online must have its remediation history cleared"
 
 
 def test_a_heartbeat_that_stays_degraded_does_not_clear_the_tracker():
@@ -311,6 +311,6 @@ def test_a_heartbeat_that_stays_degraded_does_not_clear_the_tracker():
     )
 
     assert node.status == reconciler.NodeStatus.DEGRADED.value
-    assert service._remediation_tracker[node.node_id]["count"] == 2, (
-        "a heartbeat that recomputes DEGRADED cleared the remediation tracker anyway"
-    )
+    assert (
+        service._remediation_tracker[node.node_id]["count"] == 2
+    ), "a heartbeat that recomputes DEGRADED cleared the remediation tracker anyway"
