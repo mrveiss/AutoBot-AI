@@ -161,6 +161,29 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
     return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
+def _record(calls: dict, unparseable: list, name: str, node, lineno: int) -> None:
+    """Store a public-surface call, reporting a repeat rather than overwriting it.
+
+    The three collectors keyed by name and the merge did `dict.update`, so two
+    registrations of the same name collapsed and the LAST one won. That made an
+    ungated registration invisible whenever the same name was also registered
+    with the gate somewhere else — and FastAPI resolves first-match-wins, so the
+    ungated one is the registration that actually serves.
+
+    Demonstrated against the real file: mounting `errors_router` ungated before
+    its existing gated mount left all 22 tests green while the ungated route was
+    the live one.
+
+    A repeat is reported rather than silently kept, because once a name maps to
+    two calls this check cannot say which one it is answering about — the same
+    reason an unreadable call fails instead of being skipped.
+    """
+    if name in calls:
+        unparseable.append(f"line {lineno}: {name} registered more than once; this check cannot say which gates it")
+        return
+    calls[name] = node
+
+
 def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], list[str]]:
     """`app.include_router(...)` calls, split into readable and unreadable.
 
@@ -207,7 +230,7 @@ def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], li
             unparseable.append(f"line {node.lineno}: receiver {ast.dump(receiver)[:70]}")
             continue
         if _is_plain_name_arg(node):
-            calls[node.args[0].id] = node
+            _record(calls, unparseable, node.args[0].id, node, node.lineno)
         else:
             shape = ast.dump(node.args[0])[:80] if node.args else "no arguments"
             unparseable.append(f"line {node.lineno}: argument {shape}")
@@ -243,7 +266,7 @@ def _decorator_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dict[st
             if kind == "unparseable":
                 unparseable.append(f"line {deco.lineno}: receiver {ast.dump(receiver)[:70]}")
                 continue
-            calls[node.name] = deco
+            _record(calls, unparseable, node.name, deco, node.lineno)
     return calls, unparseable
 
 
@@ -281,7 +304,7 @@ def _add_api_route_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dic
             continue
         endpoint = _endpoint_arg(node)
         if isinstance(endpoint, ast.Name):
-            calls[endpoint.id] = node
+            _record(calls, unparseable, endpoint.id, node, node.lineno)
         else:
             shape = ast.dump(endpoint)[:80] if endpoint is not None else "no endpoint argument"
             unparseable.append(f"line {node.lineno}: endpoint {shape}")
