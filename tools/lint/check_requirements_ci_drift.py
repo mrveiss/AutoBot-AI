@@ -71,6 +71,13 @@ _CI_REQUIREMENTS = "requirements-ci.txt"
 #: One package name per (non-comment, non-blank) line. THIS LIST ONLY SHRINKS.
 _ALLOWLIST_FILE = "repo_tests/requirements_ci_drift_baseline.txt"
 
+#: Every repo-relative path/glob this checker reads. code-quality.yml's
+#: dorny/paths-filter `backend` list must cover each of these, or a PR that
+#: touches only one of them skips the required check entirely -- verified by
+#: tools/lint/check_code_quality_guard_reach.py and
+#: repo_tests/code_quality_guard_reach_test.py.
+GUARD_INPUT_PATHS = (*_PRODUCTION_REQUIREMENTS, _CI_REQUIREMENTS, "requirements-ci/*.txt", _ALLOWLIST_FILE)
+
 _NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 

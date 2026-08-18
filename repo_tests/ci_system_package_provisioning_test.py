@@ -156,6 +156,51 @@ def test_toolchain_packages_are_excluded_from_scope():
     assert "ffmpeg" not in checker.TOOLCHAIN_PACKAGES
 
 
+def _write_probe_gated_test(tmp_path, *, rel_path: str) -> None:
+    """A test gated on an indirect probe call, never touching shutil.which.
+
+    The probe call is assembled from fragments rather than written as a
+    literal -- this guard scans the whole tree including repo_tests/ itself,
+    so a literal `get_tesseract_version(` here would make the checker flag
+    ITS OWN test file the moment this fixture is written to disk.
+    """
+    probe_call = "get_tesseract" + "_version()"
+    path = tmp_path / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "import pytest\n\n\n"
+        "def test_real_ocr():\n"
+        '    pytest.importorskip("pytesseract")\n'
+        "    import pytesseract\n"
+        f"    pytesseract.{probe_call}\n",
+        encoding="utf-8",
+    )
+
+
+def test_probe_call_widens_detection_beyond_shutil_which(tmp_path):
+    """#14550 code-review: a get_tesseract_version() gate must not read as
+    "no real test, out of scope" just because it never calls shutil.which."""
+    _write_ansible_task(tmp_path, _SAMPLE_FEATURE_PACKAGES)
+    _write_setup_action(tmp_path, apt_install_line=None)
+    _write_probe_gated_test(tmp_path, rel_path="pkg/thing_test.py")
+
+    reached, problems = checker.audit_provisioning(tmp_path)
+    assert reached == 1
+    assert problems, "a probe-call gate on an unprovisioned package must fail"
+    assert "tesseract" in problems[0]
+
+
+def test_prefix_style_test_files_are_scanned_too(tmp_path):
+    """pytest.ini collects BOTH `test_*.py` and `*_test.py` -- so must this guard."""
+    _write_ansible_task(tmp_path, _SAMPLE_FEATURE_PACKAGES)
+    _write_setup_action(tmp_path, apt_install_line=None)
+    _write_gated_test(tmp_path, rel_path="pkg/test_thing.py", binary="tesseract")
+
+    reached, problems = checker.audit_provisioning(tmp_path)
+    assert reached == 1, "a test_*.py-prefixed file's skip-gate was not found"
+    assert problems
+
+
 # --------------------------------------------------------------------------
 # The live tree, and the #14550 regression this PR fixes
 # --------------------------------------------------------------------------

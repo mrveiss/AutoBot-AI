@@ -6,3 +6,20 @@ markdown==3.10.3
 nltk==3.10.2
 beautifulsoup4==4.15.0
 markdownify==1.2.3
+# #14551: production dep (autobot-backend/requirements.txt, Live Canvas
+# HTML->PDF export). transcriber/tests/test_export_api.py gates on
+# pytest.importorskip("weasyprint") — silently skipping without this.
+weasyprint>=69.0
+# #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
+# readable-article extraction, lazy). tests/content_reach/sources/test_web_page.py
+# gates on pytest.importorskip("trafilatura") — silently skipping without this.
+trafilatura>=2.2.0
+# #14551: production dep (autobot-backend/requirements.txt, code-graph AST
+# parsing). services/knowledge/code_indexer_test.py, impact_analysis_test.py,
+# code_indexer_extensions_test.py, code_indexer_shape_test.py and
+# code_intelligence/fingerprinting/shared_identity_test.py all gate on
+# `tree_sitter_python` being importable — 5 files silently skipping code
+# indexing coverage without this. Pulls in the base `tree-sitter` package as
+# its own transitive dependency (tree-sitter itself stays out of this file
+# deliberately, the same shape as torch/sentence-transformers in ai-ml.txt).
+tree-sitter-python>=0.25.0

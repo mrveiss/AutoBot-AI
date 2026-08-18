@@ -120,6 +120,20 @@ def test_audit_fails_on_zero_production_packages(tmp_path):
     assert problems and "zero packages" in problems[0]
 
 
+def test_audit_fails_on_zero_ci_packages(tmp_path):
+    """The sibling of test_audit_fails_on_zero_production_packages — same guard,
+    same anti-empty-result requirement, other side of the comparison. audit_drift()
+    has a symmetric `if not ci:` branch that was previously exercised only ad hoc."""
+    (tmp_path / "autobot-backend").mkdir()
+    (tmp_path / "autobot-backend" / "requirements.txt").write_text("widget>=1.0\n", encoding="utf-8")
+    (tmp_path / "autobot-slm-backend").mkdir()
+    (tmp_path / "autobot-slm-backend" / "requirements.txt").write_text("", encoding="utf-8")
+    (tmp_path / "requirements-ci.txt").write_text("", encoding="utf-8")
+    reached, problems = checker.audit_drift(tmp_path)
+    assert reached == 1
+    assert problems and "zero packages" in problems[0]
+
+
 def test_audit_is_clean_on_the_real_tree():
     """The live repo's guard must pass against itself — proves the seed was accurate."""
     reached, problems = checker.audit_drift()
@@ -132,17 +146,61 @@ def test_audit_is_clean_on_the_real_tree():
 # --------------------------------------------------------------------------
 
 
-def test_pytesseract_is_mirrored_into_ci_not_allowlisted():
-    """The headline incident this issue documents must not recur.
+def test_pytesseract_is_tracked_pending_the_colliding_pr():
+    """The headline incident this issue documents, without racing #14510.
 
     pytesseract sat declared in production and undeclared in CI for months
-    (#13885) while every real OCR test skipped. It must now be a genuine CI
-    package, not an allowlist entry papering over the same gap again.
+    (#13885) while every real OCR test skipped — normally this guard's policy
+    is "mirror it, don't allowlist it" (see the fixes for scikit-learn, ldap3,
+    etc. below). pytesseract is the one deliberate exception: #14510 (open as
+    of this writing) already adds it to requirements-ci/document.txt for its
+    own OCR-fallback feature. Landing it from BOTH PRs would collide, so it is
+    allowlisted here instead, with a comment pointing at #14510 — and the
+    audit will force this line's removal the moment either PR lands it for
+    real, which is the self-correcting property that makes the exception safe.
+    """
+    allowlist = checker.load_allowlist()
+    assert "pytesseract" in allowlist, "pytesseract must stay tracked (allowlisted) until #14510 lands it for real"
+
+
+def test_the_9_corrected_baseline_entries_are_now_mirrored_not_allowlisted():
+    """Re-proves the code-reviewer finding this baseline was corrected against.
+
+    9 packages were allowlisted with a false "no CI-scoped test" rationale
+    while a real importorskip/find_spec gate existed and silently skipped.
+    Each must now be a genuine CI package, not still papering over the gap.
     """
     ci = checker.ci_requirement_names()
     allowlist = checker.load_allowlist()
-    assert "pytesseract" in ci, "pytesseract must be declared in requirements-ci/*.txt (#14551)"
-    assert "pytesseract" not in allowlist, "pytesseract must not be allowlisted — it is the bug this guard exists for"
+    corrected = {
+        "scikit-learn",
+        "ldap3",
+        "weasyprint",
+        "faiss-cpu",
+        "datasketch",
+        "tree-sitter-python",
+        "trafilatura",
+        "yt-dlp",
+        "ddgs",
+    }
+    for name in corrected:
+        assert name in ci, f"{name} must be declared in requirements-ci/*.txt (#14551)"
+        assert name not in allowlist, f"{name} must not be allowlisted — it is a corrected false rationale"
+
+
+def test_bcrypt_and_pydantic_settings_are_mirrored_not_allowlisted():
+    """autobot_shared/pyproject.toml is NOT installed by CI (#13411's shape).
+
+    Both are unconditionally imported by autobot_shared modules reached by
+    nearly the whole suite (auth/jwt_core.py, ssot_config.py) — the same
+    class of bug as the pre-existing PyJWT[crypto] comment in security.txt,
+    just not previously caught for these two.
+    """
+    ci = checker.ci_requirement_names()
+    allowlist = checker.load_allowlist()
+    for name in ("bcrypt", "pydantic-settings"):
+        assert name in ci, f"{name} must be declared in requirements-ci/*.txt (#14551)"
+        assert name not in allowlist, f"{name} must not be allowlisted — collection-critical, not a soft omission"
 
 
 # --------------------------------------------------------------------------

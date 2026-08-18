@@ -4,11 +4,3 @@ mouseinfo==0.1.3
 opencv-python==5.0.0.93
 pygetwindow==0.0.9
 playwright==1.62.0
-# OCR binding (#13885/#14551). Mirrors autobot-backend/requirements.txt's
-# pytesseract pin — declared there for months while absent here, so every
-# real (non-mocked) OCR test would have skipped or import-errored silently.
-# The tesseract-ocr system BINARY it wraps is a separate concern tracked by
-# #14550: no CI-scoped test currently invokes the real binary (every OCR
-# call site in the test suite stubs pytesseract via sys.modules), so this
-# only needs the Python binding, not the apt package.
-pytesseract>=0.3.13

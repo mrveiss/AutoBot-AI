@@ -14,14 +14,18 @@ only, so a test gated on one of those binaries being on ``PATH`` — via
 ``pytest.skip`` — has been silently skipping in CI, and a skip is
 indistinguishable from a pass in the job summary.
 
-That is exactly what happened with ``tesseract`` (#13885/#13896): the OCR
-toolchain was fully mocked in every existing test (never a bug on its own),
-but the *pattern* generalises to any capability whose real-binary test lands
-without the matching apt install. #14550 found one live instance:
-``media/audio/ffmpeg_service_test.py::test_real_audio_extraction`` skips
-"FFmpeg not installed" on every CI run because ffmpeg was never provisioned —
-fixed in the same PR that added this guard, by installing ffmpeg in
-``.github/actions/setup-python-suite/action.yml``.
+As of this guard landing, every existing ``tesseract`` call site in the test
+tree is fully mocked (``sys.modules`` stubs), so no CURRENT test needs the
+real binary — not a bug on its own, but the *pattern* generalises to any
+capability whose real-binary test lands without the matching apt install
+already in place. #14550 found one live instance: ``media/audio/
+ffmpeg_service_test.py::test_real_audio_extraction`` skips "FFmpeg not
+installed" on every CI run because ffmpeg was never provisioned — fixed in
+the same PR that added this guard, by installing ffmpeg in
+``.github/actions/setup-python-suite/action.yml``. A real ``tesseract``
+call-site gate landing later (tracked separately; not yet merged as of this
+writing) will be caught by this same guard the day it appears, since
+:data:`BINARY_TO_PACKAGE` already maps ``tesseract`` to ``tesseract-ocr``.
 
 Design, deliberately narrow:
 
@@ -66,6 +70,13 @@ _ANSIBLE_BACKEND_TASKS = "autobot-slm-backend/ansible/roles/backend/tasks/main.y
 _ANSIBLE_TASK_NAME = "Backend | Install backend-specific system dependencies"
 _SETUP_ACTION = ".github/actions/setup-python-suite/action.yml"
 
+#: Every repo-relative path this checker reads. code-quality.yml's
+#: dorny/paths-filter `backend` list must cover each of these, or a PR that
+#: touches only one of them skips the required check entirely -- verified by
+#: tools/lint/check_code_quality_guard_reach.py and
+#: repo_tests/code_quality_guard_reach_test.py.
+GUARD_INPUT_PATHS = (_ANSIBLE_BACKEND_TASKS, _SETUP_ACTION)
+
 #: Python-build toolchain packages ansible installs so pyenv/deadsnakes can
 #: compile CPython from source, plus baseline tools every GitHub-hosted
 #: runner image already ships. Out of scope for this guard — see module
@@ -105,6 +116,16 @@ BINARY_TO_PACKAGE = {
     "pg_dump": "postgresql-client",
 }
 
+#: Function calls that indirectly probe for a binary WITHOUT ever calling
+#: ``shutil.which`` -- e.g. a library's own version check raises when the
+#: underlying binary is missing. A guard that only matched the literal
+#: ``shutil.which("x")`` shape would keep reporting a binary "no real test,
+#: out of scope" the day a gate using one of these lands instead. Mapped to
+#: the same package namespace as BINARY_TO_PACKAGE, keyed by binary name.
+PROBE_CALL_TO_BINARY = {
+    "get_tesseract_version(": "tesseract",
+}
+
 #: Floor for the ansible package enumeration. A parse that resolved to fewer
 #: than this many packages means the task moved or was renamed, not that the
 #: role shrank — the pre-guard baseline has 13 feature packages.
@@ -112,6 +133,7 @@ FEATURE_PACKAGE_FLOOR = 10
 
 _APT_LIST_ITEM_RE = re.compile(r"^\s*-\s*([A-Za-z0-9][A-Za-z0-9.+-]*)\s*$")
 _SHUTIL_WHICH_RE = re.compile(r"""shutil\.which\(\s*["']([^"']+)["']\s*\)""")
+_PROBE_CALL_RE = re.compile("|".join(re.escape(call) for call in PROBE_CALL_TO_BINARY))
 _APT_INSTALL_LINE_RE = re.compile(r"apt(?:-get)?\s+install[^\n]*")
 
 
@@ -158,7 +180,13 @@ def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
 
 
 def _test_files(root: pathlib.Path) -> list[pathlib.Path]:
-    """Tracked test files: `*_test.py` anywhere, plus anything under a `tests/` dir.
+    """Tracked test files, matching pytest.ini's own collection patterns exactly.
+
+    ``pytest.ini`` sets ``python_files = test_*.py *_test.py`` — BOTH prefix
+    and suffix conventions are collected (``transcriber/tests/test_export_api.py``
+    is prefix-style). Globbing only the suffix form would under-scan relative
+    to what pytest itself actually runs, the same "guard narrower than its own
+    subject" shape this guard exists to close.
 
     Filters on the path RELATIVE to `root`, not the absolute path — `root`
     itself commonly sits inside a `.worktrees/<branch>/` checkout, and an
@@ -166,17 +194,48 @@ def _test_files(root: pathlib.Path) -> list[pathlib.Path]:
     this against its own guard before it ever reached CI).
     """
     candidates = set(root.glob("**/*_test.py"))
+    candidates.update(root.glob("**/test_*.py"))
     candidates.update(p for p in root.glob("**/tests/**/*.py") if p.is_file())
     excluded = {"node_modules", "__pycache__"}
     return [p for p in candidates if not excluded & set(p.relative_to(root).parts)]
 
 
+def _match_gated_binary(line: str) -> str | None:
+    """The binary a line's ``shutil.which(...)`` or a known probe call names.
+
+    Two independent shapes reach the same binary: a direct PATH lookup, or a
+    library call that raises unless the underlying binary works (e.g.
+    ``pytesseract.get_tesseract_version()``, which calls ``tesseract``
+    without ever touching ``shutil.which``). Missing the second shape would
+    keep reporting that binary "no real test, out of scope" the day a gate
+    using it lands.
+    """
+    which_match = _SHUTIL_WHICH_RE.search(line)
+    if which_match and which_match.group(1) in BINARY_TO_PACKAGE:
+        return which_match.group(1)
+    probe_match = _PROBE_CALL_RE.search(line)
+    if probe_match:
+        return PROBE_CALL_TO_BINARY[probe_match.group(0)]
+    return None
+
+
+#: Substrings whose presence within a few lines of a matched binary marks it
+#: "gated" -- pytest's three shapes for making a test conditional. Checked as
+#: plain substrings, not `importorskip(` alone, so `pytest.skip(` does not
+#: accidentally match inside a longer `pytest.importorskip(` call (it does
+#: NOT: "skip(" is a substring of "importorskip(", but "pytest.skip(" is not,
+#: since "importor" sits between them -- kept as three explicit, disjoint
+#: markers instead of relying on that overlap not mattering by accident).
+_SKIP_MARKERS = ("skipif", "pytest.skip(", "importorskip(")
+
+
 def gated_binaries(root: pathlib.Path | None = None) -> list[tuple[str, str, int]]:
     """Every ``(binary, relative_file, lineno)`` where a known binary is skip-gated.
 
-    "Gated" means ``shutil.which("binary")`` appears within 3 lines of
-    ``skipif`` or ``pytest.skip(`` — covering both the decorator style
-    (ffmpeg_service_test.py) and the in-body-skip style (this repo uses both).
+    "Gated" means :func:`_match_gated_binary` matches within a few lines of
+    one of :data:`_SKIP_MARKERS` — covering the decorator style
+    (ffmpeg_service_test.py), the in-body ``pytest.skip(`` style, an indirect
+    probe, and ``pytest.importorskip(`` (the style scikit-learn/ldap3/etc. use).
     """
     base = root if root is not None else repo_root()
     findings: list[tuple[str, str, int]] = []
@@ -186,12 +245,12 @@ def gated_binaries(root: pathlib.Path | None = None) -> list[tuple[str, str, int
         except (OSError, UnicodeDecodeError):
             continue
         for lineno, line in enumerate(lines, start=1):
-            match = _SHUTIL_WHICH_RE.search(line)
-            if not match or match.group(1) not in BINARY_TO_PACKAGE:
+            binary = _match_gated_binary(line)
+            if binary is None:
                 continue
             window = "\n".join(lines[max(0, lineno - 4) : lineno + 2])
-            if "skipif" in window or "pytest.skip(" in window:
-                findings.append((match.group(1), str(path.relative_to(base)), lineno))
+            if any(marker in window for marker in _SKIP_MARKERS):
+                findings.append((binary, str(path.relative_to(base)), lineno))
     return findings
 
 
