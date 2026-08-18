@@ -840,3 +840,34 @@ def test_one_router_under_two_prefixes_with_equal_gating_is_allowed():
     calls, unparseable = _all_bypass_calls(tree)
     assert not unparseable, f"a legitimate two-prefix mount was reported: {unparseable}"
     assert "widgets_router" in calls
+
+
+def test_an_empty_dependency_list_is_not_a_gate():
+    """`dependencies=[]` is present and enforces nothing.
+
+    Deciding by keyword presence read it as gated, so a route could be
+    registered wide open while every check in this file called it protected.
+    """
+    gated = ast.parse("app.include_router(r, dependencies=_SM)").body[0].value
+    empty = ast.parse("app.include_router(r, dependencies=[])").body[0].value
+    bare = ast.parse('app.include_router(r, prefix="/x")').body[0].value
+    assert _is_gated(gated)
+    assert not _is_gated(empty), "an empty dependency list gates nothing"
+    assert not _is_gated(bare)
+
+
+def test_an_empty_dependency_list_cannot_hide_a_second_mount():
+    """The interaction that made the latent gap dangerous.
+
+    Comparing presence, this pair looked like one declaration seen twice, so
+    the ungated `/v2` mount was dropped from the map rather than reported —
+    it is a second, independent, live registration.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(evil_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(evil_router, prefix="/v2", dependencies=[])\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies=[] was swallowed"
+    assert any("evil_router" in item for item in unparseable)
