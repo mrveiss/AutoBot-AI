@@ -57,6 +57,13 @@ Environment=SLM_ADMIN_URL={{ effective_admin_url }}
 # /opt/autobot/autobot_shared directly, independent of the per-dir symlink.
 Environment=PYTHONPATH={{ slm_agent_dir }}:{{ slm_agent_dir | dirname }}
 Environment=PYTHONUNBUFFERED=1
+# #14544/#14575: agent.py imports autobot_shared.ssot_config (get_config),
+# and neither {{ slm_agent_dir | dirname }} nor the autobot_shared install
+# beneath it carries a .env or a .git, so
+# autobot_shared.paths.project_root() cannot infer the root by walking up
+# and raises ProjectRootUndeterminable rather than silently guessing
+# /opt/autobot. Tell it explicitly.
+Environment=AUTOBOT_PROJECT_ROOT={{ slm_agent_dir | dirname }}
 # Issue #9226: Redis connection for autobot_shared imports
 Environment=REDIS_HOST={{ slm_agent_redis_host }}
 Environment=AUTOBOT_REDIS_HOST={{ slm_agent_redis_host }}
