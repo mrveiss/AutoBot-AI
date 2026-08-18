@@ -96,9 +96,9 @@ def test_a_service_that_restarted_long_ago_but_is_now_running_is_not_degraded():
         "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 5, "enabled": True}]
     }
 
-    assert _status(extra_data, restart_increase_detected=False) == reconciler.NodeStatus.ONLINE.value, (
-        "a service with an old, non-advancing restart count pinned the node DEGRADED forever (#14465)"
-    )
+    assert (
+        _status(extra_data, restart_increase_detected=False) == reconciler.NodeStatus.ONLINE.value
+    ), "a service with an old, non-advancing restart count pinned the node DEGRADED forever (#14465)"
 
 
 def test_a_churning_service_degrades_via_the_restart_delta_not_an_absolute():
@@ -128,9 +128,9 @@ def test_a_single_fresh_restart_degrades_even_below_the_old_absolute_threshold()
         "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 1, "enabled": True}]
     }
 
-    assert _status(extra_data, restart_increase_detected=True) == reconciler.NodeStatus.DEGRADED.value, (
-        "a fresh restart must degrade immediately, not wait for an arbitrary absolute count"
-    )
+    assert (
+        _status(extra_data, restart_increase_detected=True) == reconciler.NodeStatus.DEGRADED.value
+    ), "a fresh restart must degrade immediately, not wait for an arbitrary absolute count"
 
 
 def test_a_settled_failed_service_still_degrades_with_no_fresh_delta():
@@ -295,7 +295,7 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
 
     result = asyncio.run(service.update_node_heartbeat(session, node.node_id, _CPU, _MEM, _DISK, extra_data=this_beat))
 
-    assert result.status == reconciler.NodeStatus.DEGRADED.value, (
-        "n_restarts rising from 44 to 47 against the prior heartbeat's row did not degrade the node"
-    )
+    assert (
+        result.status == reconciler.NodeStatus.DEGRADED.value
+    ), "n_restarts rising from 44 to 47 against the prior heartbeat's row did not degrade the node"
     assert seeded_service.extra_data.get("n_restarts") == 47, "the new count must be persisted for the NEXT heartbeat"
