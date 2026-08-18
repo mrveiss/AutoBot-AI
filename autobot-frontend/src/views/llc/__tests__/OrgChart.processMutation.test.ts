@@ -37,7 +37,6 @@ vi.mock('vue-router', () => ({
 }))
 
 const companyRef = ref('c1')
-
 vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
   useLlcCompanyContext: () => ({
     companyId: companyRef,
@@ -143,6 +142,57 @@ describe('OrgChart process attach/detach (#14549)', () => {
 
     expect(wrapper.find('[data-testid="process-attach-form"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="process-attach-roles-unavailable"]').exists()).toBe(false)
+  })
+
+  // The guards below are not decoration: each one is reachable, and each
+  // prevents a request that would otherwise be malformed or duplicated.
+  // What actually stops a double POST here is the submit button's disabled
+  // binding, not the handler's in-flight guard — so that is what this asserts.
+  // (The handler keeps its own guard as defence for callers that are not the
+  // button; nothing in the UI can reach it, and it is left uncovered rather
+  // than reached by a contrived call that would prove nothing.)
+  it('disables the submit button while an attach is in flight, so it cannot post twice', async () => {
+    respond([], PROCESSES)
+    let resolvePost: () => void = () => {}
+    post.mockImplementation(() => new Promise<void>((r) => { resolvePost = () => r() }))
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    await wrapper.find('[data-testid="process-attach-role-select"]').setValue('r1')
+    await wrapper.find('[data-testid="process-attach-workflow-input"]').setValue('wf-quarterly')
+    const submit = wrapper.find('[data-testid="process-attach-submit"]')
+    await submit.trigger('click')
+    // Second click while the first is still in flight.
+    await submit.trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(
+      wrapper.find('[data-testid="process-attach-submit"]').attributes('disabled'),
+    ).toBeDefined()
+
+    // Not asserting it re-enables on success: the handler clears the workflow
+    // field once the attach lands, so the button is legitimately disabled again
+    // for that reason instead.
+    resolvePost()
+    await flushPromises()
+  })
+
+  it('does not delete the same attachment twice when detached rapidly', async () => {
+    respond(PROCESSES, [])
+    let resolveDel: () => void = () => {}
+    del.mockImplementation(() => new Promise<void>((r) => { resolveDel = () => r() }))
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+    canvas.vm.$emit('process-detached', 'r1', 'wf-quarterly')
+    canvas.vm.$emit('process-detached', 'r1', 'wf-quarterly')
+    await flushPromises()
+
+    expect(del).toHaveBeenCalledTimes(1)
+    resolveDel()
+    await flushPromises()
   })
 
   it('detaches a process node from its own control and the node disappears', async () => {
