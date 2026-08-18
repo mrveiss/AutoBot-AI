@@ -81,10 +81,7 @@ async def test_handle_llc_tool_dispatches_company_scoped():
         "chat_workflow.tool_handler.dispatch_llc_tool",
         new=AsyncMock(return_value={"status": "success", "entity_type": "work_item", "entity_id": "wi-1"}),
     ) as disp:
-        msgs = [
-            msg
-            async for msg in m._handle_llc_tool("create_task", tool_call, exec_results, ctx, role="operator")
-        ]
+        msgs = [msg async for msg in m._handle_llc_tool("create_task", tool_call, exec_results, ctx, role="operator")]
     disp.assert_awaited_once()
     args = disp.await_args.args
     # dispatch_llc_tool(tool_name, params, company_id, user_id)
