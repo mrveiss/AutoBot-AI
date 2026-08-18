@@ -177,9 +177,9 @@ def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
         reconciler.settings = original_settings
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
-    assert effective == reconciler.REMEDIATION_COOLDOWN + 120 + 1, (
-        f"expected the floor to be derived from reconcile_interval=120, got {effective}"
-    )
+    assert (
+        effective == reconciler.REMEDIATION_COOLDOWN + 120 + 1
+    ), f"expected the floor to be derived from reconcile_interval=120, got {effective}"
 
 
 def test_effective_expiry_margin_uses_heartbeat_wait_when_it_exceeds_reconcile_interval():
