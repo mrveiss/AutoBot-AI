@@ -21,20 +21,27 @@ produce, keeping every step the extraction had preserved.
 import asyncio
 import fnmatch
 import glob
-import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from knowledge_base import KnowledgeBase
+# #14507: this used to insert ``autobot-infrastructure/shared`` -- the script's
+# grandparent -- and then ``from knowledge_base import KnowledgeBase``, so the
+# script died with ModuleNotFoundError on its own import block, before reaching
+# any of the code #14405 repaired. The module it wanted is a first-party
+# ``autobot-backend`` module, and that directory was never on the path. Add it
+# the way the other operator entry points in this tree do (#14129), and import
+# the canonical ``knowledge`` package rather than the ``knowledge_base``
+# backward-compatibility shim, whose own docstring points new code here.
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 # Documentation patterns to include.
 DOC_PATTERNS = [
@@ -117,8 +124,12 @@ async def add_single_file(fp: str, root: Path, kb) -> tuple:
         "doc_type": "markdown",
     }
     logger.info(f"Adding: {rel_path} [{category}]")
-    result = await kb.add_file(file_path=fp, file_type="txt", metadata=metadata)
-    return result["status"] == "success", result
+    # #14507: ``kb.add_file`` is not a KnowledgeBase method -- nothing in the
+    # mixin chain defines it, so every file raised AttributeError and was
+    # counted as an error. ``add_document_from_file`` is the canonical ingest
+    # entry point and takes the category as a first-class argument.
+    result = await kb.add_document_from_file(file_path=fp, category=category, metadata=metadata)
+    return result.get("status") == "success", result
 
 
 async def add_files_to_kb(files: List[str], root: Path, kb) -> Tuple[int, int]:
@@ -143,7 +154,10 @@ async def run_search_smoke_tests(kb) -> None:
     """Query the populated base so an empty or unindexed collection is visible."""
     logger.info("\nTesting search functionality...")
     for query in SEARCH_SMOKE_QUERIES:
-        results = await kb.search(query, n_results=2)
+        # #14507: ``n_results`` is not a parameter of the canonical KB search
+        # (#10666 consolidated the three search paths onto ``top_k``), so this
+        # call raised TypeError on the first smoke query.
+        results = await kb.search(query, top_k=2)
         logger.info(f"\nSearch for '{query}': {len(results)} results")
         if results:
             logger.info(f"  First result: {results[0].get('metadata', {}).get('relative_path', 'Unknown')}")
@@ -151,6 +165,11 @@ async def run_search_smoke_tests(kb) -> None:
 
 async def add_documentation_to_kb():
     """Add all project documentation to the knowledge base."""
+    # Imported here rather than at module scope: ``knowledge/__init__`` loads
+    # the composed class lazily (#1514), so a module-scope import would pull
+    # redis, chromadb and llama_index in merely to inspect this script.
+    from knowledge import KnowledgeBase
+
     kb = KnowledgeBase()
     await kb.ainit()
 
