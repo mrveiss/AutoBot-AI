@@ -8526,6 +8526,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "no role",
+      "unassignedHint": "Carried by this department, but no role explains their presence"
     }
   },
   "mobile": {
@@ -9137,6 +9141,23 @@
       "agent": "Agent",
       "user": "User",
       "contact": "Contact"
-    }
+    },
+    "grant": "Grant",
+    "revoke": "Revoke",
+    "attach": "Attach",
+    "detach": "Detach",
+    "assign": "Assign",
+    "endTenure": "End tenure",
+    "holderIdPlaceholder": "Holder id",
+    "permissionPlaceholder": "e.g. knowledge.read",
+    "workflowPlaceholder": "Workflow id",
+    "toolPlaceholder": "Tool name",
+    "credentialPlaceholder": "Secret id",
+    "errorAssign": "Could not assign that holder.",
+    "errorEndTenure": "Could not end that tenure.",
+    "errorGrant": "Could not grant that permission.",
+    "errorRevoke": "Could not revoke that permission.",
+    "errorAttach": "Could not attach that.",
+    "errorDetach": "Could not detach that."
   }
 }

@@ -15,14 +15,20 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from autobot_shared.paths import project_root
+
+# #14517: this module-level name was ``project_root`` while holding
+# ``autobot-infrastructure/shared`` -- the script's grandparent, not the project
+# root -- so it read as the canonical resolver and was not. Renamed to what it
+# actually is; the value is deliberately unchanged, because the analysis scripts
+# it addresses live at no path in this repo (tracked separately).
+_SHARED_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(_SHARED_DIR))
 
 
 def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
     """Run code quality analysis"""
-    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_code_quality.py"
+    script_path = _SHARED_DIR / "tools" / "code-analysis-suite" / "scripts" / "analyze_code_quality.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -61,7 +67,7 @@ def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
     """Run duplicate code analysis"""
-    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_duplicates.py"
+    script_path = _SHARED_DIR / "tools" / "code-analysis-suite" / "scripts" / "analyze_duplicates.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -93,11 +99,11 @@ def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_performance_analysis(target_path: str) -> Dict[str, Any]:
     """Run performance analysis"""
-    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance_simple.py"
+    script_path = _SHARED_DIR / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance_simple.py"
 
     if not script_path.exists():
         # Fallback to regular performance script
-        script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance.py"
+        script_path = _SHARED_DIR / "tools" / "code-analysis-suite" / "scripts" / "analyze_performance.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -128,7 +134,7 @@ def run_performance_analysis(target_path: str) -> Dict[str, Any]:
 
 def run_architecture_analysis(target_path: str) -> Dict[str, Any]:
     """Run architecture analysis"""
-    script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_architecture.py"
+    script_path = _SHARED_DIR / "tools" / "code-analysis-suite" / "scripts" / "analyze_architecture.py"
 
     if not script_path.exists():
         return {"error": f"Script not found: {script_path}"}
@@ -205,7 +211,9 @@ def main():
     parser = argparse.ArgumentParser(description="Run code analysis suite")
     parser.add_argument(
         "--target",
-        default="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
+        # #14517: the default was a shell placeholder in a plain string literal, so
+        # an invocation without --target analysed a directory that cannot exist.
+        default=str(project_root()),
         help="Target path to analyze",
     )
     parser.add_argument(

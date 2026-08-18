@@ -23,6 +23,8 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -263,7 +265,10 @@ class DuplicateDetector:
 
 def main():
     """Main execution function"""
-    root_path = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    # #14517: both paths below were shell placeholders in plain string literals.
+    # The read never matched, so the existence check below turned every run into an
+    # early "AutoBot directory not found" return (#13149).
+    root_path = str(project_root())
 
     if not os.path.exists(root_path):
         logger.error("AutoBot directory not found at %s", root_path)
@@ -274,7 +279,7 @@ def main():
     detector.generate_report(analysis)
 
     # Save detailed results
-    output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/duplicate_analysis_results.json"
+    output_file = str(project_root() / "reports" / "duplicate_analysis_results.json")
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     # Prepare serializable data

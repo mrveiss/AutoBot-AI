@@ -253,6 +253,35 @@ async def delete_from_directory(
     )
 
 
+class DepartmentContacts(BaseModel):
+    """A department's people, split by whether a role explains their presence."""
+
+    with_role: List[ContactResponse]
+    unassigned: List[ContactResponse]
+
+
+@router.get("/{company_id}/involved", response_model=DepartmentContacts)
+async def list_involved_contacts(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> DepartmentContacts:
+    """Contacts on this department's org chart (#13998).
+
+    Two groups rather than one list: people whose presence a role explains, and
+    people carrying the legacy per-company stamp with no role yet. Merging them
+    would assert involvement nobody recorded; hiding the second group would make
+    people vanish from a department already using them.
+    """
+    assert_company_access(ctx, company_id)
+    groups = await _get_directory().list_for_department(session, company_id)
+    return DepartmentContacts(
+        with_role=[ContactResponse.model_validate(c) for c in groups["with_role"]],
+        unassigned=[ContactResponse.model_validate(c) for c in groups["unassigned"]],
+    )
+
+
 @router.get("/{company_id}", response_model=List[ContactResponse])
 async def list_contacts(
     company_id: uuid.UUID,

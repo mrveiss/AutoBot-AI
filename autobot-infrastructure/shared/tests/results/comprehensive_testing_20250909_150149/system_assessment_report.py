@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 
+from autobot_shared.paths import project_root
+
 
 @dataclass
 class TestResult:
@@ -461,7 +463,10 @@ class AutoBotSystemTester:
         print("🏗️  Analyzing Frontend Build...")
 
         # Check if frontend directory exists
-        frontend_dir = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue"
+        # #14517: was a shell placeholder in a plain string literal, so the exists()
+        # check below always failed and this analysis reported "Frontend directory
+        # not found" as a HIGH-severity finding on every run (#13149).
+        frontend_dir = str(project_root() / "autobot-vue")
         if not os.path.exists(frontend_dir):
             self.add_result(
                 "Frontend Build",
@@ -799,9 +804,10 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save to multiple formats
-    results_dir = (
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/comprehensive_testing_20250909_150149"
-    )
+    # #14517: was a shell placeholder in a plain string literal, so os.makedirs
+    # created a junk tree literally named ``${AUTOBOT_PROJECT_ROOT:-`` under the
+    # working directory and both reports were written into it.
+    results_dir = str(project_root() / "tests" / "results" / "comprehensive_testing_20250909_150149")
     os.makedirs(results_dir, exist_ok=True)
 
     # JSON report for detailed analysis

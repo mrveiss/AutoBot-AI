@@ -72,6 +72,10 @@ const activeTabId = ref<string>(ALL_UNITS_TAB)
 // opened. The org chart's own mount stays a single request, and a terminate
 // reload keeps reloading exactly the hierarchy it changed.
 const contacts = ref<ContactSource[]>([])
+// #13998: ids of contacts this department carries with no role to explain them.
+// Kept separate from `contacts` so the list the org chart builds stays one
+// list, while the People view can still label the difference honestly.
+const unassignedContactIds = ref<Set<string>>(new Set())
 const teams = ref<CompanyTeam[]>([])
 const peopleLoaded = ref(false)
 // A source that did not answer — kept apart from a source that answered
@@ -209,11 +213,24 @@ async function loadPeopleSources(): Promise<void> {
     return
   }
   const [contactsResult, teamsResult] = await Promise.allSettled([
-    api.get<ContactSource[]>(`/api/llc/contacts/${cid}`),
+    api.get<{ with_role: ContactSource[]; unassigned: ContactSource[] }>(
+      `/api/llc/contacts/${cid}/involved`,
+    ),
     api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
   ])
   if (contactsResult.status === 'fulfilled') {
-    contacts.value = Array.isArray(contactsResult.value) ? contactsResult.value : []
+    // Two groups, one list to draw: people whose presence a role explains, and
+    // people the department carries from before the directory was shared.
+    // Merging them here would assert an involvement nobody recorded, so the
+    // second group is tracked by id and labelled rather than blended in.
+    const withRole = Array.isArray(contactsResult.value?.with_role)
+      ? contactsResult.value.with_role
+      : []
+    const unassigned = Array.isArray(contactsResult.value?.unassigned)
+      ? contactsResult.value.unassigned
+      : []
+    contacts.value = [...withRole, ...unassigned]
+    unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
     contactsFailed.value = false
   } else {
     // A failed fetch must never be reported as "this company has no people".
@@ -567,6 +584,7 @@ onMounted(() => {
         :counts="peopleCounts"
         :has-teams="teams.length > 0"
         :teams-failed="teamsFailed"
+        :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
         @select="onPersonSelected"
       />
