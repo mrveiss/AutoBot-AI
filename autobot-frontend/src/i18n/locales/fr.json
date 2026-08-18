@@ -8550,7 +8550,9 @@
     },
     "orgPeople": {
       "unassigned": "aucun rôle",
-      "unassignedHint": "Rattaché à ce département, mais aucun rôle n'explique sa présence"
+      "unassignedHint": "Rattaché à ce département, mais aucun rôle n'explique sa présence",
+      "inactive": "Inactif",
+      "inactiveHint": "Désactivé ou supprimé — toujours affiché car ses tâches et son rôle subsistent, mais aucun nouveau travail ne peut lui être attribué."
     }
   },
   "code": {

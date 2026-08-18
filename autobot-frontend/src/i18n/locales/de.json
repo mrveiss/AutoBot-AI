@@ -8550,7 +8550,9 @@
     },
     "orgPeople": {
       "unassigned": "keine Rolle",
-      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit"
+      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit",
+      "inactive": "Inaktiv",
+      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden."
     }
   },
   "code": {
