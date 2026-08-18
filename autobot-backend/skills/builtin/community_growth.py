@@ -123,6 +123,17 @@ class CommunityGrowthSkill(BaseSkill):
             tags=["community", "reddit", "twitter", "discord", "github", "outreach"],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind each declared trigger to the action that handles it (#14406).
+
+        A periodic tick starts the outreach cycle with a subreddit scan; a
+        release event starts it by pulling the release the announcement is about.
+        """
+        return {
+            "scheduled": "reddit_search",
+            "github_release": "github_get_releases",
+        }
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a community growth action."""
         handlers = {

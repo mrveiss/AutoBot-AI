@@ -57,6 +57,10 @@ class CalendarIntegrationSkill(BaseSkill):
             tags=["calendar", "scheduling", "events", "productivity"],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind the declared trigger to the action that handles it (#14406)."""
+        return {"schedule_requested": "create_event"}
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute calendar action."""
         handlers = {

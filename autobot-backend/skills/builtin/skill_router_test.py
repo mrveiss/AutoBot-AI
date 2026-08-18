@@ -277,27 +277,33 @@ async def test_find_skill_no_skills_registered():
     mock_registry = MagicMock()
     mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = []
-    mock_registry.get.return_value = None  # autonomous-skill-development not found
+    mock_registry.get.return_value = None
 
-    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
+    # #14406: the gap-fill path emits `agent_capability_gap` instead of naming
+    # the build skill, so "nothing to delegate to" is now "nothing dispatchable".
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.trigger_dispatcher.emit_skill_trigger", new=AsyncMock(return_value=[])),
+    ):
         skill = SkillRouterSkill()
         result = await skill.execute("find_skill", {"task": "do something"})
 
     assert result["success"] is False
-    assert "no skills" in result["error"].lower()
+    assert "dispatchable" in result["error"].lower()
 
 
 @pytest.mark.asyncio
 async def test_find_skill_no_match_delegates_to_autonomous():
-    """When no skill matches the task, delegate to autonomous-skill-development."""
-    mock_build_skill = MagicMock()
-    mock_build_skill.execute = AsyncMock(
-        return_value={
-            "success": True,
-            "state": "pending_approval",
-            "skill_name": "audio-transcriber",
-            "message": "Skill queued for approval.",
-        }
+    """When no skill matches the task, emit the declared agent_capability_gap trigger."""
+    emit = AsyncMock(
+        return_value=[
+            {
+                "success": True,
+                "state": "pending_approval",
+                "skill_name": "audio-transcriber",
+                "message": "Skill queued for approval.",
+            }
+        ]
     )
     mock_registry = MagicMock()
     mock_registry.get_routing_index.return_value = None
@@ -309,10 +315,12 @@ async def test_find_skill_no_match_delegates_to_autonomous():
             ["create_event"],
         ),
     ]
-    # skill-researcher not registered; autonomous-skill-development is
-    mock_registry.get.side_effect = lambda name: (None if name == "skill-researcher" else mock_build_skill)
+    mock_registry.get.return_value = None  # skill-researcher not registered
 
-    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.trigger_dispatcher.emit_skill_trigger", new=emit),
+    ):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
         result = await skill.execute("find_skill", {"task": "transcribe this audio file"})
@@ -320,12 +328,13 @@ async def test_find_skill_no_match_delegates_to_autonomous():
     assert result["success"] is True
     assert result["build_triggered"] is True
     assert result["enabled_skill"] is None
-    mock_build_skill.execute.assert_called_once_with(
+    emit.assert_awaited_once_with(
+        "agent_capability_gap",
         {
             "capability": "transcribe this audio file",
             "requested_by": "skill-router",
             "context": {},
-        }
+        },
     )
 
 
@@ -345,14 +354,16 @@ async def test_find_skill_no_match_uses_research_context():
             "implementation_hints": "Use faster-whisper for speed",
         }
     )
-    mock_build_skill = MagicMock()
-    mock_build_skill.execute = AsyncMock(return_value={"success": True, "state": "pending_approval"})
+    emit = AsyncMock(return_value=[{"success": True, "state": "pending_approval"}])
     mock_registry = MagicMock()
     mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = []
-    mock_registry.get.side_effect = lambda name: (mock_researcher if name == "skill-researcher" else mock_build_skill)
+    mock_registry.get.side_effect = lambda name: (mock_researcher if name == "skill-researcher" else None)
 
-    with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
+    with (
+        patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry),
+        patch("skills.trigger_dispatcher.emit_skill_trigger", new=emit),
+    ):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
         result = await skill.execute("find_skill", {"task": "voice transcription"})
@@ -360,9 +371,9 @@ async def test_find_skill_no_match_uses_research_context():
     assert result["success"] is True
     assert result["research_performed"] is True
     # capability must be enriched with implementation hints
-    call_args = mock_build_skill.execute.call_args[0][0]
-    assert "faster-whisper" in call_args["capability"]
-    assert call_args["context"].get("implementation_hints") == "Use faster-whisper for speed"
+    emitted_params = emit.await_args.args[1]
+    assert "faster-whisper" in emitted_params["capability"]
+    assert emitted_params["context"].get("implementation_hints") == "Use faster-whisper for speed"
 
 
 @pytest.mark.asyncio
