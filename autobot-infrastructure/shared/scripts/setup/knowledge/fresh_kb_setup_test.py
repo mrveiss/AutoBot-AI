@@ -46,12 +46,20 @@ class FakeRedis:
 
 
 class FakeKnowledgeBase:
-    """Answers add_file/search like a successful ingest without touching llama_index."""
+    """Answers ingest/search like a successful run without touching llama_index.
 
-    async def add_file(self, **_kwargs):
+    #14507: this used to answer ``add_file(**kwargs)`` and ``search(*a, **kw)``
+    -- a shape the real ``KnowledgeBase`` never produced. ``add_file`` is
+    defined nowhere in the mixin chain and ``search`` takes ``top_k``, not
+    ``n_results``, so the fake made two dead calls look alive. Both signatures
+    now mirror the real ones (``knowledge/documents.py``, ``knowledge/search.py``)
+    and reject anything they would reject.
+    """
+
+    async def add_document_from_file(self, file_path: str, category: str = "general", metadata=None):
         return {"status": "success"}
 
-    async def search(self, *_args, **_kwargs):
+    async def search(self, query, top_k=10, similarity_top_k=None, filters=None, mode="auto"):
         return []
 
 
