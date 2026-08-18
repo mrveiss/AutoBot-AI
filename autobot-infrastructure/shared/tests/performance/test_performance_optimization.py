@@ -29,7 +29,6 @@ import logging
 import statistics
 import subprocess
 import sys
-import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -40,7 +39,7 @@ import psutil
 from autobot_shared.paths import project_root
 
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(str(project_root()))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

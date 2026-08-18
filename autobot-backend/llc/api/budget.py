@@ -326,11 +326,33 @@ async def list_cost_events(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    """Return per-agent budget spend summary as cost events (GH#8551).
+    """Return per-agent budget spend summaries (GH#8551, GH#13617).
 
-    Returns one entry per agent with non-zero spend in the given company.
-    A dedicated cost-event store is not yet implemented; this derives the
-    data from LLCAgentBudget rows.
+    Returns one entry per agent in the given company. A dedicated cost-event
+    store is not yet implemented, so this derives from ``LLCAgentBudget``
+    rows — which are running totals, not a per-event log.
+
+    The field names are the ones the client's ``CostEvent`` already declares.
+    They previously were not (``ts`` vs ``created_at``, ``cost_usd`` vs
+    ``cost``, ``tokens_in``/``tokens_out`` vs ``input_tokens``/
+    ``output_tokens``), so every field the dashboard read came back
+    ``undefined`` and the view crashed on the first row (GH#13617).
+
+    What has no source is sent as ``None`` rather than a plausible-looking
+    stand-in:
+
+    * ``created_at`` — ``LLCAgentBudget`` carries no timestamp at all, so
+      there is no date to report. Sending "now" would turn a running total
+      into a fake event dated today.
+    * ``model`` / ``provider`` — a total spans every model an agent used;
+      naming one would be wrong. The previous literal ``"unknown"`` read as
+      a real model name in the table.
+    * ``input_tokens`` / ``output_tokens`` — the split is not stored. The
+      previous hardcoded ``0`` claimed an agent had used no tokens; the
+      total that *is* known is sent as ``tokens_spent`` instead.
+
+    ``source`` names what each row actually is, so the client can say so
+    rather than presenting totals as a per-event history.
     """
     assert_company_access(ctx, company_id)
     result = await session.execute(
@@ -342,13 +364,17 @@ async def list_cost_events(
     rows = result.scalars().all()
     return [
         {
+            "id": str(row.id),
             "agent_id": row.agent_id,
-            "event_type": "budget_summary",
-            "tokens_in": 0,
-            "tokens_out": 0,
-            "cost_usd": str(row.budget_spent),
-            "model": "unknown",
-            "ts": None,
+            "work_item_id": None,
+            "model": None,
+            "provider": None,
+            "input_tokens": None,
+            "output_tokens": None,
+            "tokens_spent": int(row.tokens_spent),
+            "cost": float(row.budget_spent),
+            "created_at": None,
+            "source": "budget_summary",
         }
         for row in rows
     ]

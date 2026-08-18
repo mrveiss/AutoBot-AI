@@ -8003,7 +8003,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "هزینه به‌صورت مجموع برای هر عامل ثبت می‌شود، نه رویدادهای تاریخ‌دار؛ بنابراین هنوز تاریخچهٔ روزانه وجود ندارد."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

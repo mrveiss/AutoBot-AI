@@ -33,3 +33,15 @@ python:
   - '.github/workflows/python-required-context.yml'
   # A change here changes what "python" means for both workflows.
   - '.github/filters/python-paths.yml'
+  # #14544/#14575: repo_tests/deployment_declares_project_root_14544_test.py
+  # asserts each of these five non-.py deployment sources still declares
+  # AUTOBOT_PROJECT_ROOT. Without an explicit entry here, editing only one of
+  # them (no `**/*.py` touched) computes `python != 'true'`, the shim reports
+  # `python-suite` green, and the guard test that would have caught a dropped
+  # declaration never runs -- the exact "required check gated by a filter that
+  # omits the inputs it guards" shape flagged in review.
+  - 'docker/backend/Dockerfile'
+  - 'docker/slm/Dockerfile'
+  - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2'
+  - 'autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2'
+  - 'autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2'

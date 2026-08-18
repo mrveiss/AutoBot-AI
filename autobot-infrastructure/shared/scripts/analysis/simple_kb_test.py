@@ -10,9 +10,10 @@ Simple test of current AutoBot knowledge base functionality
 import asyncio
 import logging
 import sys
-import os
 
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+from autobot_shared.paths import project_root
+
+sys.path.insert(0, str(project_root()))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
