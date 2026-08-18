@@ -49,8 +49,8 @@ from .replay_log import LLCRunReplayLog
 from .review_gate import LLCReviewGatePolicy
 from .role_assignment import LLCRoleAssignment
 from .role_credential import LLCRoleCredential
-from .role_tool import LLCRoleTool
 from .role_rate import LLCRoleRate
+from .role_tool import LLCRoleTool
 from .role_workflow import LLCRoleWorkflow
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint

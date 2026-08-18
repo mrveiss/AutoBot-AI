@@ -58,9 +58,7 @@ class RoleRateService(LLCServiceBase):
             after=after,
         )
 
-    async def get(
-        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
-    ) -> Optional[LLCRoleRate]:
+    async def get(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> Optional[LLCRoleRate]:
         """The role's rate, or ``None`` when nobody has set one.
 
         ``None`` is not zero. A role with no rate cannot have its steps costed,
@@ -139,8 +137,6 @@ class RoleRateService(LLCServiceBase):
         existing = await self.get(session, company_id, role_id)
         if existing is None:
             return False
-        await self._record(
-            session, existing, "role_rate.cleared", str(actor_user_id), {"role_id": str(role_id)}
-        )
+        await self._record(session, existing, "role_rate.cleared", str(actor_user_id), {"role_id": str(role_id)})
         await session.execute(sa_delete(LLCRoleRate).where(LLCRoleRate.id == existing.id))
         return True
