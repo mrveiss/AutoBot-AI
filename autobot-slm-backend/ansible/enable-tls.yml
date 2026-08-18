@@ -223,7 +223,8 @@
   handlers:
     - name: restart redis
       ansible.builtin.systemd:
-        name: redis-server
+        # #14516: redis-stack's unit; `redis-server` does not exist on these hosts.
+        name: "{{ redis_service_name | default('redis-stack-server') }}"
         state: restarted
       ignore_errors: true
 
