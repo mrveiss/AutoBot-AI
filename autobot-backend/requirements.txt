@@ -117,6 +117,11 @@ Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
 # vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
 # guard-import it and degrade to "pytesseract not installed" with no alert.
 pytesseract>=0.3.13
+# PDF rasterizer for the OCR fallback (#13896). pypdf cannot render pages, so
+# without this a scanned PDF can be *detected* (#13884) but never *read*. Import
+# name is `fitz`; media/document/ocr.py guard-imports it and degrades to
+# "OCR unavailable" rather than failing extraction.
+PyMuPDF>=1.26.0
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):

@@ -63,7 +63,8 @@ class DocumentPipeline(BasePipeline):
             logger.warning("Document extraction failed: %s", exc)
             return self._error_result(detect_format(raw_bytes, mime_type), str(exc), media_input.metadata)
 
-        return self._to_result(extracted, media_input.metadata)
+        extracted, ocr = self._recover_scanned_pages(extracted, raw_bytes)
+        return self._to_result(extracted, media_input.metadata, ocr)
 
     # ------------------------------------------------------------------
     # Decoding helpers
@@ -86,7 +87,46 @@ class DocumentPipeline(BasePipeline):
     # Result adaptation
     # ------------------------------------------------------------------
 
-    def _to_result(self, extracted: ExtractedDocument, metadata: Dict) -> Dict[str, Any]:
+    def _recover_scanned_pages(self, extracted: ExtractedDocument, raw_bytes: bytes):
+        """OCR the pages that produced no text, when there are any (#13896).
+
+        Runs only on pages that came back empty, so a born-digital document
+        rasterizes nothing. Returns the (possibly augmented) extraction and the
+        OCR outcome, which is reported either way — an attempt that recovered
+        nothing and an attempt that never happened are different answers.
+        """
+        from media.document.ocr import OcrResult, ocr_pdf_pages
+
+        if extracted.format != "pdf" or not extracted.empty_page_numbers:
+            return extracted, OcrResult(attempted=False, reason="no unreadable pages")
+
+        result = ocr_pdf_pages(raw_bytes, extracted.empty_page_numbers)
+        if not result.recovered_any:
+            return extracted, result
+
+        return self._merge_ocr_text(extracted, result), result
+
+    def _merge_ocr_text(self, extracted: ExtractedDocument, result) -> ExtractedDocument:
+        """Fold recovered page text back into the extraction.
+
+        Rebuilt through the canonical renderer rather than string-appended, so
+        OCR text carries the same page markers and the same span arithmetic as
+        text-layer content — page provenance (#13894) must not depend on how a
+        page happened to be read.
+        """
+        from dataclasses import replace
+
+        from media.document.extraction import PageText, render_pages
+
+        pages = tuple(
+            PageText(number=page.number, text=result.pages.get(page.number, "") or page.text)
+            if not page.text.strip()
+            else page
+            for page in extracted.pages
+        )
+        return replace(extracted, pages=pages, text=render_pages(pages))
+
+    def _to_result(self, extracted: ExtractedDocument, metadata: Dict, ocr=None) -> Dict[str, Any]:
         """Adapt a canonical ExtractedDocument to this pipeline's result dict."""
         # Resolved once and threaded through, rather than each helper reading
         # ``has_usable_text_layer`` (and re-resolving the config knobs behind
@@ -103,7 +143,22 @@ class DocumentPipeline(BasePipeline):
         }
         result.update(self._format_fields(extracted))
         result.update(self._text_layer_fields(extracted, usable_content))
+        result.update(self._ocr_fields(ocr))
         return result
+
+    def _ocr_fields(self, ocr) -> Dict[str, Any]:
+        """Say what OCR did, including when it did nothing and why (#13896)."""
+        if ocr is None or (not ocr.attempted and not ocr.skipped_pages):
+            return {}
+
+        fields: Dict[str, Any] = {"ocr_attempted": ocr.attempted}
+        if ocr.attempted:
+            fields["ocr_pages"] = sorted(n for n, text in ocr.pages.items() if text.strip())
+        if ocr.reason:
+            fields["ocr_reason"] = ocr.reason
+        if ocr.skipped_pages:
+            fields["ocr_skipped_pages"] = list(ocr.skipped_pages)
+        return fields
 
     def _text_layer_fields(self, extracted: ExtractedDocument, usable_content: bool) -> Dict[str, Any]:
         """Report what was actually readable, so empty is never mistaken for blank.
