@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -147,7 +147,19 @@ SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_S
 # its own. Long enough for ansible-playbook's own signal handling / a forked
 # ssh child to unwind cleanly; short enough that a wedged run does not become
 # a second, unbounded wait stacked on top of the timeout that triggered it.
-PLAYBOOK_KILL_GRACE_S = env_float("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0)
+# Clamped, not bare (review, round 2): a bare env_float accepts 0 and
+# negatives, and 0 here collapses the grace entirely -- SIGKILL fires with no
+# chance for a well-behaved child to exit on SIGTERM first.
+PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, min_v=0.1)
+
+# Timeouts for the individual git subcommands _update_code_source runs
+# (#14524 round 2): previously bare literals (30, 10) inline at each call
+# site -- pulled out as named, env-backed constants both to follow this
+# repo's "no hardcoded TTL" convention and so tests can exercise the
+# timeout-kill path (_run_git -> _kill_process_group) at CI speed rather
+# than actually waiting out a 30s git hang.
+GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
+GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -531,6 +543,70 @@ class PlaybookExecutor:
         ):  # nosec B108
             Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
 
+    async def _run_git(self, code_source_dir: Path, *args: str) -> int:
+        """Run a git command in code_source_dir with a 30-second timeout.
+
+        Helper for _update_code_source.
+
+        Review on #14524 (round 2): a lone ``proc.kill()`` only reaches
+        git's own pid. ``git fetch``/``checkout`` over ssh can leave an
+        ``ssh`` (or credential-helper) child still holding these pipes open,
+        and the retry ``await proc.communicate()`` that followed used to
+        have no timeout of its own -- the exact unbounded-wait shape this
+        issue exists to close, one function away from ``execute_playbook``'s
+        own run (``_update_code_source`` runs before ``_run_subprocess``,
+        outside its ``timeout_s``). ``start_new_session=True`` +
+        ``self._kill_process_group`` reuse the same whole-process-group kill
+        ``_run_subprocess`` uses, and never block unboundedly themselves.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(code_source_dir),
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            await self._kill_process_group(proc)
+            return -1
+        return proc.returncode
+
+    async def _log_updated_head_commit(self, code_source_dir: Path, branch: str) -> None:
+        """Log the resulting HEAD commit for traceability (#2896).
+
+        Helper for _update_code_source. Best-effort: a timeout here must not
+        abandon the process unkilled (#14524 round 2 -- the previous,
+        un-wrapped version of this call had no kill at all on timeout, worse
+        than _run_git's original bare ``proc.kill()``: an orphan, not just a
+        leaked pipe wait).
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(code_source_dir),
+            "rev-parse",
+            "--short",
+            "HEAD",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=GIT_REV_PARSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            await self._kill_process_group(proc)
+            return
+        commit_hash = stdout.decode("utf-8", errors="replace").strip()
+        logger.info(
+            "_update_code_source: code_source updated to %s on branch %s",
+            commit_hash,
+            branch,
+        )
+
     async def _update_code_source(self) -> None:
         """
         Pull latest code into code_source before running a playbook (#2896).
@@ -548,57 +624,22 @@ class PlaybookExecutor:
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
 
-        async def _run_git(*args: str) -> int:
-            """Run a git command in code_source_dir with a 30-second timeout."""
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(code_source_dir),
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=30)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.communicate()
-                return -1
-            return proc.returncode
-
         try:
-            if await _run_git("checkout", "--", ".") != 0:
+            if await self._run_git(code_source_dir, "checkout", "--", ".") != 0:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
 
-            if await _run_git("fetch", "origin") != 0:
+            if await self._run_git(code_source_dir, "fetch", "origin") != 0:
                 logger.warning("_update_code_source: git fetch origin failed; continuing")
                 return
 
-            if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
+            if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:
                 logger.warning(
                     "_update_code_source: git reset --hard origin/%s failed; continuing",
                     branch,
                 )
                 return
 
-            # Log the resulting HEAD commit for traceability
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(code_source_dir),
-                "rev-parse",
-                "--short",
-                "HEAD",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            commit_hash = stdout.decode("utf-8", errors="replace").strip()
-            logger.info(
-                "_update_code_source: code_source updated to %s on branch %s",
-                commit_hash,
-                branch,
-            )
+            await self._log_updated_head_commit(code_source_dir, branch)
         except Exception as exc:
             logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
 
@@ -917,32 +958,74 @@ class PlaybookExecutor:
         """SIGTERM then SIGKILL the WHOLE process group of a timed-out run (#14524).
 
         ``ansible-playbook`` forks per-host workers (``forks=5``, ansible.cfg)
-        and ssh connection children; killing only the direct PID would leave
-        those running as orphans -- the exact "orphaned ansible-playbook or
-        SSH session" this fix exists to avoid. The subprocess was started
-        with ``start_new_session=True`` (see _run_subprocess), which makes
-        its PID equal to its own process group ID, so a single ``os.killpg``
-        reaches every descendant. SIGTERM first, for children with a clean
-        shutdown handler; SIGKILL only if the group is still alive after the
-        grace period.
+        and ssh children; killing only the direct PID leaves those running as
+        orphans. ``start_new_session=True`` (_run_subprocess) makes the
+        spawned pid its own process group id, so ``pgid = process.pid`` needs
+        no ``os.getpgid()`` lookup -- review round 2, Case B: that lookup
+        raised ``ProcessLookupError`` and returned, signalling NOTHING, the
+        moment the direct child was already reaped while a SIBLING (e.g. a
+        leader that exits on its own after backgrounding one) was still
+        alive -- the only way an ATTACHED run wedges after ansible itself has
+        exited. And escalation below checks the WHOLE GROUP via
+        `_process_group_is_dead` (signal 0 -- an existence probe, nothing
+        sent), not `await process.wait()`'s one direct pid -- review round 2,
+        Case C: a direct child that dies on SIGTERM while a sibling ignores
+        it used to make the old, pid-only check return early, and SIGKILL was
+        never sent to the survivor. Both fail-open shapes were reproduced
+        against a standalone prototype before this fix, and fixed by it.
         """
-        try:
-            pgid = os.getpgid(process.pid)
-        except ProcessLookupError:
-            return  # already gone
+        pgid = process.pid
 
         for sig in (signal.SIGTERM, signal.SIGKILL):
             try:
                 os.killpg(pgid, sig)
             except ProcessLookupError:
-                return
+                return  # whole group already gone -- nothing left to escalate to
+
+            # Reap the direct child promptly: an unreaped zombie still
+            # "belongs" to this pgid and would make the group-liveness probe
+            # below always see something, masking whether a SIBLING is still
+            # alive once the direct child itself is gone.
             try:
                 await asyncio.wait_for(process.wait(), timeout=PLAYBOOK_KILL_GRACE_S)
-                return
             except asyncio.TimeoutError:
-                continue
+                pass
+
+            if await self._wait_for_process_group_death(pgid, PLAYBOOK_KILL_GRACE_S):
+                return
 
         logger.error("Playbook process group %d survived SIGKILL after grace period (#14524)", pgid)
+
+    @staticmethod
+    def _process_group_is_dead(pgid: int) -> bool:
+        """True if no process remains in *pgid*. Signal 0 sends nothing -- existence-only probe."""
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            # A process with this pgid exists but signalling it is refused
+            # (e.g. uid mismatch) -- it still exists, so not dead.
+            return False
+        return False
+
+    async def _wait_for_process_group_death(self, pgid: int, timeout_s: float) -> bool:
+        """Poll `_process_group_is_dead` for up to *timeout_s* (#14524).
+
+        Helper for _kill_process_group. Checking the GROUP, not the one pid
+        `asyncio` tracks, is what makes the SIGTERM/SIGKILL escalation
+        decision correct when a sibling -- not the direct child -- is the
+        one still alive (review round 2, Case C).
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        poll_s = min(0.1, timeout_s) if timeout_s > 0 else 0.05
+        while True:
+            if self._process_group_is_dead(pgid):
+                return True
+            if loop.time() >= deadline:
+                return self._process_group_is_dead(pgid)
+            await asyncio.sleep(poll_s)
 
     @staticmethod
     def _stage_dir_for_run(detach: bool) -> str | None:
