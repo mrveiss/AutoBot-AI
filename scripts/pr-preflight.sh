@@ -253,10 +253,28 @@ else
     # That produced failures on pre-existing findings in excluded trees
     # (code_analysis, tools, scripts, tests...) that CI never sees. Drop the same
     # directories here so the gate matches the gate it is meant to predict.
-    FLAKE_EXCLUDES=$(awk '/^exclude *=/{f=1;next} /^[a-z_-]+ *=/{f=0} f' .flake8 \
-                     | sed 's/#.*//' | tr -d ' ,' | grep -vE '^\*|^$' | tr '\n' '|' | sed 's/|$//')
-    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}" \
-                           | grep -vE "(^|/)(${FLAKE_EXCLUDES})(/|$)" || true)
+    # #14419: the list now carries two shapes and they are dropped differently.
+    # A bare name (build/runtime artifact directories only) is matched by flake8
+    # against a path's basename, so it prunes at any depth. An anchored entry
+    # ends in `/` and prunes only that path. Treating an anchored entry as a
+    # bare component would drop nothing and make this gate stricter than CI
+    # again -- the exact #13521 regression the block exists to prevent.
+    FLAKE_ENTRIES=$(awk '/^exclude *=/{f=1;next} /^[a-z_-]+ *=/{f=0} f' .flake8 \
+                    | sed 's/#.*//' | tr ',' '\n' | tr -d ' ' | grep -vE '^\*|^$')
+    FLAKE_BARE=$(printf '%s\n' "$FLAKE_ENTRIES" | grep -v '/' | tr '\n' '|' | sed 's/|$//')
+    FLAKE_ANCHORED=$(printf '%s\n' "$FLAKE_ENTRIES" | grep '/' | tr '\n' '|' | sed 's/|$//')
+    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}")
+    if [ -n "$FLAKE_BARE" ]; then
+      mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "(^|/)(${FLAKE_BARE})(/|$)" || true)
+    fi
+    if [ -n "$FLAKE_ANCHORED" ]; then
+      mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "^(${FLAKE_ANCHORED})" || true)
+    fi
+    # An empty array round-trips through printf as one empty line; drop it so
+    # the count below means "nothing to lint" rather than "one blank path".
+    if [ "${#PY_LINT[@]}" -eq 1 ] && [ -z "${PY_LINT[0]}" ]; then
+      PY_LINT=()
+    fi
 
     if [ "${#PY_LINT[@]}" -eq 0 ]; then
       note "flake8 -- every changed Python file is in .flake8's exclude list"
