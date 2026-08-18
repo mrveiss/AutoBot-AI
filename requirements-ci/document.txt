@@ -6,3 +6,11 @@ markdown==3.10.3
 nltk==3.10.2
 beautifulsoup4==4.15.0
 markdownify==1.2.3
+# OCR fallback (#13896). CI installs requirements-ci/*, never
+# autobot-backend/requirements.txt, so a production declaration alone never
+# reaches a test runner: pytesseract was declared in #13885 and still absent
+# here months later, which is why every OCR test skipped.
+# pytesseract is the binding; the tesseract binary is installed by the
+# "Install OCR system packages" step in .github/actions/setup-python-suite.
+pytesseract>=0.3.13
+PyMuPDF>=1.26.0            # import name `fitz`; renders PDF pages for OCR
