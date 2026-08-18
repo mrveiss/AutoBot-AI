@@ -38,7 +38,7 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
-from services.service_extra_data import engine_degraded_fields
+from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,43 @@ DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 SERVICE_REMEDIATION_COOLDOWN = 120  # 2 minutes
 # Maximum service restart attempts before requiring human intervention
 MAX_SERVICE_RESTART_ATTEMPTS = 3
+
+
+def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
+    """Did a managed service's `n_restarts` rise since the last heartbeat?
+
+    Helper for ReconcilerService._update_existing_service (#14465). Compares
+    against the immediately preceding heartbeat's stored value, never an
+    absolute threshold -- `NRestarts` is lifetime-cumulative, so a static gate
+    on it can never self-heal (see `_calculate_node_status`'s docstring).
+    Module-level and pure so it stays testable without a DB or a class instance.
+    """
+    if not is_managed_autobot_service(svc_data):
+        return False
+    current = svc_data.get("n_restarts")
+    previous = previous_extra.get("n_restarts")
+    if current is None or previous is None:
+        return False
+    return current > previous
+
+
+def _service_health_degraded(extra_data: dict | None, restart_increase_detected: bool) -> bool:
+    """The two current-state service signals `_calculate_node_status` acts on.
+
+    Module-level and pure: `restart_increase_detected` is computed elsewhere
+    (against the OLD `Service` row this function does not have); this only
+    combines it with the current-heartbeat status scan.
+    """
+    if restart_increase_detected:
+        return True
+    if not extra_data:
+        return False
+    for svc in extra_data.get("discovered_services", []):
+        if not is_managed_autobot_service(svc):
+            continue
+        if svc.get("status") in ("crash-loop", "failed"):
+            return True
+    return False
 
 
 class ReconcilerService:
@@ -1188,10 +1225,13 @@ class ReconcilerService:
         agent_version: str | None = None,
         os_info: str | None = None,
         extra_data: dict | None = None,
-    ) -> None:
+    ) -> bool:
         """Update basic metrics and optional fields.
 
         Helper for update_node_heartbeat (Issue #665).
+
+        Returns whether a managed service's restart count increased since the
+        last heartbeat (#14465), for `_calculate_node_status` to act on.
         """
         node.cpu_percent = cpu_percent
         node.memory_percent = memory_percent
@@ -1202,12 +1242,14 @@ class ReconcilerService:
             node.agent_version = agent_version
         if os_info:
             node.os_info = os_info
-        if extra_data:
-            node.extra_data = {**(node.extra_data or {}), **extra_data}
+        if not extra_data:
+            return False
 
-            services_data = extra_data.get("discovered_services") or extra_data.get("services")
-            if services_data:
-                await self._sync_discovered_services(db, node.node_id, services_data)
+        node.extra_data = {**(node.extra_data or {}), **extra_data}
+        services_data = extra_data.get("discovered_services") or extra_data.get("services")
+        if not services_data:
+            return False
+        return await self._sync_discovered_services(db, node.node_id, services_data)
 
     async def _handle_node_status_change(
         self,
@@ -1292,7 +1334,7 @@ class ReconcilerService:
         if not node:
             return None
 
-        await self._update_node_metrics(
+        restart_increase_detected = await self._update_node_metrics(
             db,
             node,
             cpu_percent,
@@ -1304,7 +1346,9 @@ class ReconcilerService:
         )
 
         old_status = node.status
-        new_status = self._calculate_node_status(cpu_percent, memory_percent, disk_percent, extra_data)
+        new_status = self._calculate_node_status(
+            cpu_percent, memory_percent, disk_percent, extra_data, restart_increase_detected
+        )
 
         await self._handle_node_status_change(
             db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
@@ -1326,11 +1370,18 @@ class ReconcilerService:
         status: str,
         error_msg: str,
         now: datetime,
-    ) -> None:
+    ) -> bool:
         """Apply heartbeat data to an existing Service row.
 
         Helper for _upsert_service. Ref: #1088.
+
+        Returns whether THIS heartbeat shows a managed service's restart
+        count higher than the value stored from the previous one (#14465).
+        Computed here, not in `_calculate_node_status`, because only this
+        call site holds the OLD `Service` row before it gets overwritten.
         """
+        restart_increased = _restart_count_increased(svc_data, service.extra_data or {})
+
         service.status = status
         service.active_state = svc_data.get("active_state")
         service.sub_state = svc_data.get("sub_state")
@@ -1339,13 +1390,16 @@ class ReconcilerService:
         service.enabled = svc_data.get("enabled", False)
         service.description = svc_data.get("description")
         service.last_checked = now
-        existing_extra = service.extra_data or {}
+        existing_extra = dict(service.extra_data or {})
         if error_msg:
             existing_extra["error_message"] = error_msg
         else:
             existing_extra.pop("error_message", None)
         existing_extra.update(engine_degraded_fields(svc_data))
+        if "n_restarts" in svc_data:
+            existing_extra["n_restarts"] = svc_data["n_restarts"]
         service.extra_data = existing_extra
+        return restart_increased
 
     def _create_new_service(
         self,
@@ -1359,8 +1413,13 @@ class ReconcilerService:
         """Construct a new Service ORM object from heartbeat data.
 
         Helper for _upsert_service. Ref: #1088.
+
+        Stores `n_restarts` so the NEXT heartbeat has something to compare
+        against (#14465) -- a first observation is never itself a delta.
         """
         category = categorize_service(service_name)
+        if "n_restarts" in svc_data:
+            svc_extra = {**svc_extra, "n_restarts": svc_data["n_restarts"]}
         return Service(
             node_id=node_id,
             service_name=service_name,
@@ -1382,14 +1441,17 @@ class ReconcilerService:
         node_id: str,
         svc_data: dict,
         now: datetime,
-    ) -> None:
+    ) -> bool:
         """Upsert a single discovered service record into the database.
 
         Helper for _sync_discovered_services. Ref: #1088.
+
+        Returns whether this service is managed and its restart count
+        increased since the last heartbeat (#14465).
         """
         service_name = svc_data.get("name")
         if not service_name:
-            return
+            return False
 
         try:
             result = await db.execute(
@@ -1410,10 +1472,10 @@ class ReconcilerService:
             svc_extra.update(engine_degraded_fields(svc_data))
 
             if service:
-                self._update_existing_service(service, svc_data, status, error_msg, now)
-            else:
-                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
-                db.add(service)
+                return self._update_existing_service(service, svc_data, status, error_msg, now)
+            service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
+            db.add(service)
+            return False
         except Exception as exc:
             logger.warning(
                 "service sync failed node=%s service=%s error=%s",
@@ -1421,6 +1483,7 @@ class ReconcilerService:
                 service_name,
                 exc,
             )
+            return False
 
     async def _remove_stale_services(
         self,
@@ -1450,24 +1513,30 @@ class ReconcilerService:
         db: AsyncSession,
         node_id: str,
         discovered_services: list,
-    ) -> None:
+    ) -> bool:
         """
         Sync discovered services from agent heartbeat to database.
 
         Related to Issue #728.
+
+        Returns whether ANY managed service's restart count increased since
+        the last heartbeat (#14465).
         """
         if not discovered_services:
-            return
+            return False
 
         now = datetime.now(timezone.utc)
 
+        restart_increase_detected = False
         for svc_data in discovered_services:
-            await self._upsert_service(db, node_id, svc_data, now)
+            if await self._upsert_service(db, node_id, svc_data, now):
+                restart_increase_detected = True
 
         # Remove stale services no longer reported by the agent (#1018)
         await self._remove_stale_services(db, node_id, discovered_services)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
+        return restart_increase_detected
 
     def _calculate_node_status(
         self,
@@ -1475,25 +1544,53 @@ class ReconcilerService:
         memory_percent: float,
         disk_percent: float,
         extra_data: dict | None = None,
+        restart_increase_detected: bool = False,
     ) -> str:
         """Calculate node status based on health metrics and services.
 
         Issue #1604: Also degrade if any autobot service is crash-looping.
+
+        #14465: this used to degrade on `n_restarts > 3` -- systemd's
+        `NRestarts` read as a static absolute threshold. `NRestarts` is
+        lifetime-cumulative (never resets except at reboot or
+        `reset-failed`), so a static gate on it can only ever climb: once any
+        managed service anywhere in the node's uptime crossed 3 restarts --
+        one redeploy, one operator restart, one long-resolved crash-loop --
+        every future heartbeat was forced DEGRADED regardless of current
+        state, with no path back to ONLINE.
+
+        Replaced with two signals over the SAME field, each answering a
+        different question a static threshold cannot:
+
+        - `restart_increase_detected` (computed in `_update_existing_service`,
+          against the immediately preceding heartbeat's stored value, not an
+          absolute) catches a service CHURNING -- restarting faster than it
+          settles. `RestartSec` is typically far shorter than the heartbeat
+          interval, so most samples land on `"running"` between restarts; a
+          rising count between two consecutive heartbeats is what actually
+          proves instability there, regardless of what any single sample's
+          status says.
+        - `status == "failed"` (below) catches a service that has SETTLED --
+          every unit template sets `StartLimitBurst`/`StartLimitIntervalSec`
+          (#4090), so a real, ongoing crash loop eventually reaches systemd's
+          designed end state and stops restarting altogether. A pure delta
+          goes quiet the moment `NRestarts` stops climbing, so this half
+          would go blind exactly when the first stopped.
+
+        Both are scoped by `is_managed_autobot_service` (autobot*-prefixed
+        service names, or `slm-agent` itself, that are systemd-`enabled` on
+        THIS node) rather than `extra_data["services"]`
+        (`slm_services_to_monitor`) -- that operator-declared set is `[]` by
+        role default, is `[]` on at least one real inventory node, and never
+        contains `slm-agent`, the one unit remediation actually restarts, so
+        scoping to it left this whole class of signal dark for most of the
+        fleet on the one service that matters most.
         """
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
 
-        # Issue #1604: Check for crash-looping services
-        if extra_data:
-            for svc in extra_data.get("discovered_services", []):
-                svc_name = svc.get("name", "")
-                if not svc_name.startswith("autobot"):
-                    continue
-                if svc.get("status") == "crash-loop":
-                    return NodeStatus.DEGRADED.value
-                n_restarts = svc.get("n_restarts", 0)
-                if n_restarts > 3:
-                    return NodeStatus.DEGRADED.value
+        if _service_health_degraded(extra_data, restart_increase_detected):
+            return NodeStatus.DEGRADED.value
 
         if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
             return NodeStatus.DEGRADED.value
