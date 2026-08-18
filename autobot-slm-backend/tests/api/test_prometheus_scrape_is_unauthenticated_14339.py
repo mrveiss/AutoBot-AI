@@ -712,3 +712,38 @@ def test_the_registry_check_sees_the_root_and_metrics_routes_as_app_get_calls():
     assert not unparseable
     assert "root" in decorator_calls
     assert "prometheus_registry_metrics" in decorator_calls
+
+
+def test_a_repeat_registration_cannot_hide_an_ungated_one():
+    """Two registrations of one name must fail, not collapse to the last.
+
+    The collectors keyed by name and the merge did `dict.update`, so an ungated
+    registration was masked whenever the same name was also registered with the
+    gate elsewhere. FastAPI resolves first-match-wins, so the masked one is the
+    registration that actually serves — the check reported clean about a route
+    it was not looking at.
+
+    Asserted against synthetic source: the real `main.py` registers no name
+    twice, so a test built on it could only ever prove the happy path.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/evil")\n'
+        'app.include_router(widgets_router, prefix="/api", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "a name registered twice was collapsed instead of reported"
+    assert any("widgets_router" in item for item in unparseable)
+
+
+def test_the_repeat_check_does_not_fire_on_distinct_names():
+    """Guard the guard: if it flagged every registration, the suite would be
+    red for the real file and the assertion above would prove nothing."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(alpha_router, prefix="/a", dependencies=_SM)\n'
+        'app.include_router(beta_router, prefix="/b", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert not unparseable, f"distinct names were reported as repeats: {unparseable}"
+    assert set(calls) == {"alpha_router", "beta_router"}
