@@ -8,8 +8,15 @@ Permission Enforcement Extension — issue #3009.
 Built-in extension that checks tool permission levels against user roles
 before allowing tool execution. Wires into the BEFORE_TOOL_EXECUTE hook.
 
-Legacy tools that do not set ``tool_permission`` on HookContext are allowed
-through unchanged so that existing callers are not broken.
+Issue #14523 (stage 3 of #13228): an undeclared tool — ``tool_permission`` is
+``None`` on HookContext — is refused, not allowed through. Before this, a
+missing ``tool_permission`` was read as "legacy tool, no schema declared" and
+waved through unconditionally; that was the runtime half of the default-allow
+#14521's security review flagged in
+``autobot_shared.auth.mcp_tool_permissions.required_permission``. #14494 made
+every tool the eleven governed bridges register today carry an exact
+declaration (measured at #14523 time: 104 live tools, 0 undeclared), which is
+what makes refusing ``None`` safe rather than breaking a working agent flow.
 
 Issue #14420: two gaps kept this extension inert even once it was correctly
 registered on the live ``ExtensionManager`` singleton (#14280 / #14414):
@@ -56,10 +63,13 @@ class PermissionEnforcementExtension(Extension):
     Reads ``tool_permission`` and ``user_role`` from HookContext.data and
     raises ``PermissionError`` when the caller lacks sufficient privilege.
 
-    Legacy tools that do not set ``tool_permission`` on HookContext are
-    allowed through without any check (backward compatibility) — this
-    matches how #13228 stage 1 marks a tool as undeclared rather than
-    denied.
+    #14523: a tool that does not set ``tool_permission`` on HookContext — an
+    undeclared tool, per ``mcp_tool_permissions.required_permission`` — is
+    refused, not allowed through. Before #14523 this was read as "legacy,
+    no schema declared" and waved through unconditionally; #14494 proved
+    every tool the eleven governed bridges register today carries a real
+    declaration, so refusing the undeclared case no longer breaks a working
+    call — it refuses exactly the tool that reached production without one.
 
     Priority 0 ensures this extension runs before all others so that a
     permission denial short-circuits the entire tool-execution chain.
@@ -88,8 +98,10 @@ class PermissionEnforcementExtension(Extension):
             ctx: Hook context.  Reads:
                  - ``ctx.data["tool_permission"]``: the dot-style
                    ``Permission`` value the tool requires (e.g.
-                   ``"mcp.database.write"``). If absent the tool is
-                   undeclared/legacy and allowed through.
+                   ``"mcp.database.write"``). ``None`` means the tool is
+                   undeclared and is refused (#14523) — every tool a governed
+                   bridge registers today carries a real declaration, so this
+                   should never fire for a working call.
                  - ``ctx.data["user_role"]``: caller's role string.
                    If absent the caller is treated as unauthenticated.
 
@@ -97,12 +109,20 @@ class PermissionEnforcementExtension(Extension):
             None when the check passes (execution continues normally).
 
         Raises:
-            PermissionError: When the caller lacks the required permission.
+            PermissionError: When the caller lacks the required permission,
+                or the tool is undeclared (``tool_permission`` is ``None``).
         """
         tool_permission = ctx.get("tool_permission")
         if tool_permission is None:
-            # Undeclared/legacy tool — no permission schema declared; allow through
-            return None
+            # #14523: an undeclared tool is refused, not waved through as legacy.
+            logger.warning(
+                "Permission denied: tool '%s' has no declared permission (session=%s)",
+                ctx.get("tool_name"),
+                ctx.session_id,
+            )
+            raise PermissionError(
+                f"Tool '{ctx.get('tool_name')}' has no declared permission — refused by default (#14523)"
+            )
 
         user_role = ctx.get("user_role")
 
