@@ -60,7 +60,7 @@ SELF_REL = "scripts/check_python_file_size.py"
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3863,
+    "autobot-backend/chat_workflow/tool_handler.py": 3719,
 }
 
 

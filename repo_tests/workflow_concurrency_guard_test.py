@@ -108,48 +108,35 @@ def test_a_pull_request_workflow_cancels_superseded_runs(path):
 
 # Workflows that trigger on pull_request AND push, and cancel unconditionally, so
 # a merge to the base branch cancels the previous merge's verification (#13432).
-# Measured on Dev_new_gui at d68c09c88 while fixing #14434. This is a RATCHET: the
-# number may only ever go DOWN. Fixing one means deleting its line.
 #
-# SCOPED BY DESIGN, and the scope is narrower than the defect. Everything here
+# #14434 found and fixed twelve workflows with no concurrency group at all, and
+# along the way flagged sixteen more that DID have one but cancelled unconditionally
+# - a RATCHET (`UNGUARDED_BASE_BRANCH_CANCEL`) recorded all sixteen because they
+# could not all be fixed in one change. #14450 fixed the last of them: every one now
+# guards `cancel-in-progress` on `github.event_name == 'pull_request'`, so a
+# base-branch push run is never cancelled by the next one - PR-run superseding,
+# which is correct and saves the singleton runner, is unaffected. With zero
+# offenders left, the ratchet's allowlist has nothing left to name, so this is now
+# a permanent zero-tolerance guard instead: any workflow reintroducing the
+# unconditional idiom fails here immediately, rather than accumulating until the
+# next audit finds it.
+#
+# SCOPED BY DESIGN, and the scope is narrower than the defect. Everything below
 # filters through `_pull_request_workflows()` first, so a workflow with the same
 # collision shape but NO pull_request trigger is structurally invisible to this
-# ratchet - `coverage.yml` (push + schedule) is exactly that, and its own comment
+# guard - `coverage.yml` (push + schedule) is exactly that, and its own comment
 # claims the figure "tracks what actually landed" while two merges inside its ~35
 # minute window cancel each other. Stating the scope because a guard narrower than
-# its subject otherwise reads as coverage of the whole subject. Those cases are
-# recorded on #14450 rather than silently absent.
+# its subject otherwise reads as coverage of the whole subject. That case is
+# tracked on #14450 rather than silently absent.
 #
-# It is not a style nit. Seven of the ten required contexts are produced by
-# workflows on this list - api-wiring, code-quality, smoke-test (docker-smoke-test),
-# migration-gate, startup-import-smoke, verify-generated-types, and
-# "Unit & Integration Tests" (frontend-test) - so on a busy day the base branch is
-# verified by whichever merge happens not to be superseded. #13432 measured exactly
-# that for ci.yml: of 39 completed base runs, 26 were cancelled and NONE succeeded.
-# ci.yml was fixed; these were not. Tracked separately - see the issue referenced
-# from #14434.
-UNGUARDED_BASE_BRANCH_CANCEL = frozenset(
-    {
-        "actionlint.yml",
-        "api-wiring.yml",
-        "code-quality.yml",
-        "docker-smoke-test.yml",
-        "frontend-test.yml",
-        "hardened-smoke-test.yml",
-        "llc-contract.yml",
-        "migration-gate.yml",
-        "phase_validation.yml",
-        "security.yml",
-        "slm-frontend-check.yml",
-        "slm-migration-gate.yml",
-        "ssot-coverage.yml",
-        "startup-import-smoke.yml",
-        "trajectory-eval.yml",
-        "verify-generated-types.yml",
-    }
-)
-
-
+# It was not a style nit. Seven of the ten required contexts were produced by the
+# sixteen - api-wiring, code-quality, smoke-test (docker-smoke-test), migration-gate,
+# startup-import-smoke, verify-generated-types, and "Unit & Integration Tests"
+# (frontend-test) - so on a busy day the base branch was verified by whichever merge
+# happened not to be superseded. #13432 measured exactly that for ci.yml: of 39
+# completed base runs, 26 were cancelled and NONE succeeded. ci.yml was fixed first;
+# the sixteen followed under #14434 and #14450.
 def _cancels_base_branch_runs_unguarded(path: Path, doc: dict) -> bool:
     if "push" not in _triggers(doc):
         return False
@@ -157,11 +144,11 @@ def _cancels_base_branch_runs_unguarded(path: Path, doc: dict) -> bool:
 
 
 def test_base_branch_cancellation_does_not_spread():
-    """A ratchet, because the existing offenders cannot all be fixed in one change.
+    """Zero-tolerance: no pull_request workflow may cancel base-branch runs.
 
-    Each entry cancels base-branch verification. The set may shrink, never grow -
-    a new workflow copying the `cancel-in-progress: true` idiom from a neighbour is
-    exactly how this reached sixteen.
+    #14450 fixed the last of sixteen workflows that cancelled unconditionally.
+    A new offender - e.g. copying `cancel-in-progress: true` from a neighbour -
+    must fail here, not accumulate until the next audit finds it.
     """
     offenders = {
         path.name
@@ -169,16 +156,8 @@ def test_base_branch_cancellation_does_not_spread():
         if _cancels_base_branch_runs_unguarded(path, doc)
     }
 
-    new = offenders - UNGUARDED_BASE_BRANCH_CANCEL
-    assert not new, (
-        f"{sorted(new)} also trigger on push and cancel unconditionally, so a merge "
+    assert not offenders, (
+        f"{sorted(offenders)} trigger on push and cancel unconditionally, so a merge "
         "cancels the previous merge's verification (#13432). Guard cancel-in-progress "
         "on github.event_name == 'pull_request'."
-    )
-
-    fixed = UNGUARDED_BASE_BRANCH_CANCEL - offenders
-    assert not fixed, (
-        f"{sorted(fixed)} no longer cancel base-branch runs - delete them from "
-        "UNGUARDED_BASE_BRANCH_CANCEL so the ratchet keeps its grip. A list that "
-        "still names a fixed file exempts nothing while looking like it does."
     )

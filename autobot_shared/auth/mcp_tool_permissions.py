@@ -64,6 +64,12 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
     "fill_index": Permission.MCP_BROWSER_CONTROL,
     "hover": Permission.MCP_BROWSER_CONTROL,
     "hover_index": Permission.MCP_BROWSER_CONTROL,
+    # #14469: `select` changes a dropdown's value same as click/fill do — its
+    # name carries none of the mutating verbs `mcp_tool_permissions_test.py`
+    # scans for, so the state-changing-tool guard never caught it inheriting
+    # the bridge's read-level default.
+    "select": Permission.MCP_BROWSER_CONTROL,
+    "select_index": Permission.MCP_BROWSER_CONTROL,
     # `evaluate` runs caller-supplied JavaScript in the page — the strongest
     # thing this bridge can do, and it read as an ordinary user tool before.
     "evaluate": Permission.MCP_BROWSER_CONTROL,

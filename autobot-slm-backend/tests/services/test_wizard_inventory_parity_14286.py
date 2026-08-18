@@ -188,10 +188,15 @@ def test_the_wizard_children_carry_the_canonical_alias_groups():
 def test_no_group_this_path_already_emitted_disappears():
     """Every ROLE_ANSIBLE_GROUPS value still resolves after the change.
 
-    The two maps are not supersets of each other — `databases`,
-    `browser_automation` and tts-worker's `npu_worker` exist only in
-    ROLE_ANSIBLE_GROUPS, and playbooks gate on them. Swapping rather than
-    unioning would trade one silent no-op for another.
+    The two maps are not supersets of each other — tts-worker's `npu_worker`
+    exists only in ROLE_ANSIBLE_GROUPS, and playbooks gate on it. Swapping
+    rather than unioning would trade one silent no-op for another.
+
+    #14460: this note used to cite `databases` and `browser_automation` as
+    gated-on too. They were not gated on anywhere, which is why they could sit
+    inert; ROLE_ANSIBLE_GROUPS now names `database`/`browser`, so this test
+    passes through the canonical map for those roles rather than through a
+    name only this path emitted.
     """
     for role, legacy_group in ROLE_ANSIBLE_GROUPS.items():
         children = _children_for({"n": [role]})
