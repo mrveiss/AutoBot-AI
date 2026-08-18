@@ -138,7 +138,14 @@ class DocumentsMixin:
         self, file_path: str, category: str = "general", metadata: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        Add a document from a file (supports TXT, MD, PDF, etc).
+        Add a document from a file.
+
+        #14333: this used to claim PDF support in its docstring and then call
+        ``read_text(encoding="utf-8")``, which reads a PDF as UTF-8 — raising on
+        the binary header or, worse, storing mojibake. Extraction now goes
+        through DocumentExtractor, so the advertised formats are the handled
+        ones: PDF, DOC/DOCX, plain text, and the spreadsheet / presentation /
+        OpenDocument set it delegates to DocumentParser.
 
         Args:
             file_path: Path to the file
@@ -154,8 +161,13 @@ class DocumentsMixin:
             if not await asyncio.to_thread(file_path_obj.exists):
                 return {"status": "error", "message": "File not found"}
 
-            # Read file content
-            content = await asyncio.to_thread(file_path_obj.read_text, encoding="utf-8")
+            content = await self._extract_file_text(file_path_obj)
+            if content is None:
+                return {"status": "error", "message": f"Unsupported file type: {file_path_obj.suffix}"}
+            if not content.strip():
+                # A file that parsed cleanly and yielded nothing is the scanned-PDF
+                # shape (#13884); storing it would be a silently empty document.
+                return {"status": "error", "message": "No extractable text content"}
 
             # Prepare metadata
             if metadata is None:
@@ -172,6 +184,44 @@ class DocumentsMixin:
         except Exception as e:
             logger.error("Failed to add document from file %s: %s", file_path, e)
             return {"status": "error", "message": "Document operation failed"}
+
+    async def _discover_documents(self, dir_path: Path, pattern: str | None) -> List[Path]:
+        """List the files in *dir_path* worth attempting.
+
+        Without an explicit pattern this uses DocumentExtractor's own notion of
+        what it supports, so discovery and extraction cannot disagree — a
+        discovery pass that skips a handled format is a silently smaller ingest
+        that reports success.
+        """
+        from utils.document_extractors import DocumentExtractor
+
+        if pattern:
+            return await asyncio.to_thread(lambda: list(dir_path.glob(pattern)))
+
+        def _scan() -> List[Path]:
+            return [
+                path
+                for path in sorted(dir_path.glob("*"))
+                if path.is_file() and DocumentExtractor.is_supported_format(path)
+            ]
+
+        return await asyncio.to_thread(_scan)
+
+    async def _extract_file_text(self, file_path: Path) -> str | None:
+        """Extract text for any supported format, or None if unsupported.
+
+        Single entry point on purpose — the batch path had its own
+        ``read_text`` while five other extractors existed elsewhere (#13893).
+        """
+        from utils.document_extractors import DocumentExtractor
+
+        if not DocumentExtractor.is_supported_format(file_path):
+            return None
+        try:
+            return await DocumentExtractor.extract_from_file(file_path)
+        except (ValueError, FileNotFoundError) as exc:
+            logger.warning("Extraction failed for %s: %s", file_path.name, exc)
+            return None
 
     async def _validate_directory(self, dir_path: str) -> Path | None:
         """Validate directory exists and is accessible (Issue #398: extracted)."""
@@ -204,16 +254,23 @@ class DocumentsMixin:
         return success_count, error_count
 
     async def add_documents_from_directory(
-        self, dir_path: str, category: str = "general", pattern: str = "*.txt"
+        self, dir_path: str, category: str = "general", pattern: str | None = None
     ) -> Dict[str, Any]:
-        """Add documents from directory matching pattern (Issue #398: refactored)."""
+        """Add documents from a directory (Issue #398: refactored).
+
+        #14333: ``pattern`` defaulted to ``"*.txt"``, so a directory of PDFs
+        ingested nothing and reported ``total_files: 0`` — a successful-looking
+        no-op. With no pattern the discovery set is now every format
+        DocumentExtractor can actually handle. An explicit pattern still wins,
+        for callers that mean to narrow it.
+        """
         try:
             dir_path_obj = await self._validate_directory(dir_path)
             if not dir_path_obj:
                 return {"status": "error", "message": "Directory not found"}
 
-            files = await asyncio.to_thread(lambda: list(dir_path_obj.glob(pattern)))
-            logger.info("Found %d files matching pattern '%s'", len(files), pattern)
+            files = await self._discover_documents(dir_path_obj, pattern)
+            logger.info("Found %d ingestible file(s) in %s", len(files), dir_path_obj.name)
 
             semaphore = asyncio.Semaphore(10)
             results = await asyncio.gather(
