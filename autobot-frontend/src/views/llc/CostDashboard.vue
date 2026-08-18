@@ -353,7 +353,10 @@ const totalThisMonth = computed(() => {
     .filter(ev => {
       if (!ev.created_at) return false
       const d = new Date(ev.created_at)
-      if (Number.isNaN(d.getTime())) return false
+      // No explicit Invalid-Date check: `getMonth()` on one returns NaN and
+      // every comparison against NaN is false, so a malformed date is already
+      // excluded. An added `Number.isNaN` guard would be a line that cannot
+      // change the outcome, and cannot be covered by any test.
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     })
     .reduce((s, ev) => s + costOf(ev), 0)

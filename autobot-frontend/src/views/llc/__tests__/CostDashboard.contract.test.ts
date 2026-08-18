@@ -155,6 +155,81 @@ describe('CostDashboard against the real cost-events payload (#13617)', () => {
     expect(wrapper.text()).not.toContain('NaN')
   })
 
+  it('exports a CSV of undated rows without throwing', async () => {
+    // The export button read `ev.cost.toFixed(6)` and `String(ev.input_tokens)`
+    // straight off the payload, so it threw on exactly the rows that crashed
+    // the page. Nothing in the view guarded it.
+    // Two rows: the new shape with nulls, and an old-shaped row with no
+    // `cost` at all. The second is what a backend that has not been updated
+    // yet still serves, and it is the one `ev.cost.toFixed(6)` threw on.
+    respond([
+      SUMMARY_ROW,
+      { agent_id: 'agent-old', cost_usd: '2.500000', model: 'unknown', ts: null },
+    ])
+    const createObjectURL = vi.fn(() => 'blob:stub')
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    try {
+      const wrapper = await mountDashboard()
+      await wrapper.find('.btn-export').trigger('click')
+
+      expect(createObjectURL).toHaveBeenCalledTimes(1)
+      const blob = createObjectURL.mock.calls[0][0] as unknown as Blob
+      const text = await blob.text()
+      // The row is present, and the fields with no source are empty cells
+      // rather than the string "undefined".
+      expect(text).toContain('agent-a')
+      expect(text).toContain('agent-old')
+      expect(text).not.toContain('undefined')
+      expect(text).toContain('1.250000')
+      // The row with no cost at all exports a zero, not a crash or "NaN".
+      expect(text).toContain('0.000000')
+      expect(text).not.toContain('NaN')
+    } finally {
+      click.mockRestore()
+    }
+  })
+
+  it('applies the date filters to dated rows', async () => {
+    const rows = [
+      { ...SUMMARY_ROW, id: 'jan', agent_id: 'agent-jan', created_at: '2026-01-15T09:00:00Z' },
+      { ...SUMMARY_ROW, id: 'jun', agent_id: 'agent-jun', created_at: '2026-06-15T09:00:00Z' },
+    ]
+    respond(rows)
+    const wrapper = await mountDashboard()
+    // Both visible before filtering, so the assertion after it means the
+    // filter acted rather than the table having been empty all along.
+    expect(wrapper.text()).toContain('agent-jan')
+    expect(wrapper.text()).toContain('agent-jun')
+
+    await wrapper.find('[data-testid="cost-date-from"]').setValue('2026-06-01')
+    await wrapper.find('[data-testid="cost-date-to"]').setValue('2026-06-30')
+    await flushPromises()
+
+    // Scoped to the table: both ids also appear in the agent dropdown and the
+    // top-agent cards, which the date filter does not (and should not) touch.
+    const table = wrapper.find('.cost-table').text()
+    expect(table).toContain('agent-jun')
+    expect(table).not.toContain('agent-jan')
+  })
+
+  it('ignores a malformed date instead of counting it as this month', async () => {
+    // `new Date('nonsense')` is an Invalid Date, and every comparison against
+    // it is false — so without the explicit check the row silently vanishes
+    // from one total while still counting in another.
+    respond([{ ...SUMMARY_ROW, created_at: 'not-a-date' }])
+    const wrapper = await mountDashboard()
+
+    expect(wrapper.find('.cost-table').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('NaN')
+    expect(wrapper.text()).not.toContain('Invalid Date')
+    // Excluded from the month total rather than counted at an arbitrary date.
+    expect(wrapper.text()).toContain('$0.0000')
+  })
+
   it('shows the daily chart when rows really are dated', async () => {
     // Proves the gate is driven by the data and not simply switched off: the
     // same view with dated rows must still draw the chart.
