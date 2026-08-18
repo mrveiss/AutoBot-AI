@@ -165,7 +165,13 @@ def ansible_feature_packages(root: pathlib.Path | None = None) -> set[str]:
 
 
 def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
-    """Packages installed by an `apt-get install` / `apt install` line in the CI action."""
+    """Packages installed by an `apt-get install` / `apt install` line in the CI action.
+
+    Excludes anything starting with `-` generically (an apt flag), rather
+    than an explicit allowlist of known flags — a flag this parser has not
+    seen before (`--no-install-recommends`, `-qq`, ...) must never be
+    reported as an installed "package".
+    """
     base = root if root is not None else repo_root()
     path = base / _SETUP_ACTION
     if not path.is_file():
@@ -173,7 +179,7 @@ def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
     packages: set[str] = set()
     for install_line in _APT_INSTALL_LINE_RE.findall(path.read_text(encoding="utf-8")):
         for token in install_line.split():
-            if token in ("apt", "apt-get", "install", "-y", "--yes", "-qq", "sudo"):
+            if token in ("apt", "apt-get", "install", "sudo") or token.startswith("-"):
                 continue
             packages.add(token)
     return packages
