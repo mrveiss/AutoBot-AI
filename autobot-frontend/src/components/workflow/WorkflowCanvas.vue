@@ -546,6 +546,20 @@ const canvasRef = ref<HTMLElement | null>(null);
 const zoom = ref(1);
 const pan = reactive({ x: 50, y: 50 });
 const isPanning = ref(false);
+/**
+ * Whether the gesture that is ending actually panned the canvas (#14079).
+ *
+ * A pan translates the canvas by the pointer delta, so the node the gesture
+ * started on stays under the cursor. `mouseup` therefore lands on that node,
+ * the browser fires `click`, and the node's drawer opens over the canvas the
+ * user was navigating.
+ *
+ * Cleared on the next `mousedown` rather than by the click it suppresses: a
+ * pan that ends over empty canvas is followed by no node click at all, so a
+ * flag cleared only on click would stay set and swallow the user's next
+ * genuine click on a node.
+ */
+const pannedThisGesture = ref(false);
 const panStart = reactive({ x: 0, y: 0 });
 const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
@@ -705,7 +719,11 @@ function deleteNode(id: string) {
   if (props.selectedNodeId === id) emit('node-selected', null);
 }
 
-function selectNode(id: string) { emit('node-selected', id); }
+function selectNode(id: string) {
+  // The click that closes a pan is not a selection (#14079).
+  if (pannedThisGesture.value) return;
+  emit('node-selected', id);
+}
 
 /** Fixed-size step for a keyboard-driven node move — matches the background grid. */
 const NODE_KEYBOARD_MOVE_STEP = 20;
@@ -854,6 +872,7 @@ function resetZoom() { zoom.value = 1; pan.x = 50; pan.y = 50; }
 function handleWheel(e: WheelEvent) { zoom.value = Math.max(0.3, Math.min(2, zoom.value + (e.deltaY > 0 ? -0.05 : 0.05))); }
 
 function startPan(e: MouseEvent) {
+  pannedThisGesture.value = false;
   if (e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
 }
 
@@ -865,6 +884,9 @@ function startPan(e: MouseEvent) {
  * gesture is handed on; everything else still starts a node drag.
  */
 function onNodeMouseDown(node: CanvasNode, e: MouseEvent) {
+  // Reset here too: a plain press on a node stops propagation below, so
+  // `startPan` never runs and would never clear the flag.
+  pannedThisGesture.value = false;
   if (e.shiftKey || e.button === 1) return;
   e.stopPropagation();
   startDrag(node, e);
@@ -889,7 +911,12 @@ function startConnect(nodeId: string, port: string, e: MouseEvent) {
 
 function onMouseMove(e: MouseEvent) {
   mousePos.x = e.clientX; mousePos.y = e.clientY;
-  if (isPanning.value) { pan.x = e.clientX - panStart.x; pan.y = e.clientY - panStart.y; }
+  if (isPanning.value) {
+    pan.x = e.clientX - panStart.x; pan.y = e.clientY - panStart.y;
+    // Set on movement, not on press: a shift-click that never moves is still
+    // a selection, and suppressing it would break selecting with shift held.
+    pannedThisGesture.value = true;
+  }
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;

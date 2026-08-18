@@ -8007,7 +8007,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8555,7 +8556,9 @@
     },
     "orgPeople": {
       "unassigned": "nav lomas",
-      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro",
+      "inactive": "Neaktīvs",
+      "inactiveHint": "Deaktivizēts vai noņemts — joprojām redzams, jo darba vienības un loma paliek, taču jaunu darbu piešķirt nevar."
     }
   },
   "code": {

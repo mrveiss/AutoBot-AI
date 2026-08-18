@@ -8007,7 +8007,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "Wydatki są zapisywane jako sumy na agenta, a nie datowane zdarzenia, więc nie ma jeszcze historii dziennej."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8555,7 +8556,9 @@
     },
     "orgPeople": {
       "unassigned": "brak roli",
-      "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia"
+      "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia",
+      "inactive": "Nieaktywny",
+      "inactiveHint": "Dezaktywowany lub usunięty — nadal widoczny, ponieważ jego zadania i rola pozostają, ale nie można przydzielić mu nowej pracy."
     }
   },
   "code": {

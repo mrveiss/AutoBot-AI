@@ -21,6 +21,21 @@ export interface HumanOption {
   role: string
 }
 
+/**
+ * Members who are still members but can no longer be given work (#13956) —
+ * deactivated, or soft-deleted while their membership row remains.
+ *
+ * Reported separately rather than dropped on the floor. These pickers choose an
+ * assignment *target*, so an inactive person must not be selectable; but a
+ * surface that shows a shorter list with no explanation invites the reading
+ * that those people are gone from the company, which is a different claim. A
+ * picker can state the count; the org chart still shows the people themselves.
+ */
+export interface InactiveMember {
+  user_id: string
+  name: string
+}
+
 interface OrgNode {
   node_id: string
   name: string
@@ -38,6 +53,7 @@ function flattenAgents(nodes: OrgNode[], out: AgentOption[]): void {
 export function useCompanyPeople(companyId: string) {
   const agents = ref<AgentOption[]>([])
   const humans = ref<HumanOption[]>([])
+  const inactiveHumans = ref<InactiveMember[]>([])
   const isLoading = ref(false)
 
   async function load(): Promise<void> {
@@ -46,26 +62,38 @@ export function useCompanyPeople(companyId: string) {
     try {
       const [org, members] = await Promise.all([
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
-        api.get<{ user_id: string; display_name: string | null; role: string }[]>(
+        api.get<
+          { user_id: string; display_name: string | null; role: string; is_active?: boolean }[]
+        >(
           `/api/llc/companies/${companyId}/members`,
         ),
       ])
       const flat: AgentOption[] = []
       flattenAgents(org?.nodes ?? [], flat)
       agents.value = flat
-      humans.value = (members ?? []).map((m) => ({
-        user_id: m.user_id,
-        name: m.display_name || m.user_id,
-        role: m.role,
-      }))
+      const rows = members ?? []
+      // `is_active !== false` rather than a truthy test: a server that predates
+      // this field omits it, and treating "absent" as inactive would empty
+      // every picker during a rolling update.
+      humans.value = rows
+        .filter((m) => m.is_active !== false)
+        .map((m) => ({
+          user_id: m.user_id,
+          name: m.display_name || m.user_id,
+          role: m.role,
+        }))
+      inactiveHumans.value = rows
+        .filter((m) => m.is_active === false)
+        .map((m) => ({ user_id: m.user_id, name: m.display_name || m.user_id }))
     } catch (err) {
       logger.error('Failed to load company people', err)
       agents.value = []
       humans.value = []
+      inactiveHumans.value = []
     } finally {
       isLoading.value = false
     }
   }
 
-  return { agents, humans, isLoading, load }
+  return { agents, humans, inactiveHumans, isLoading, load }
 }

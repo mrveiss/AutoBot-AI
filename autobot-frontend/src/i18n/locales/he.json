@@ -8007,7 +8007,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "ההוצאות נרשמות כסכומים לכל סוכן ולא כאירועים מתוארכים, ולכן אין עדיין היסטוריה יומית."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8555,7 +8556,9 @@
     },
     "orgPeople": {
       "unassigned": "ללא תפקיד",
-      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת"
+      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת",
+      "inactive": "לא פעיל",
+      "inactiveHint": "הושבת או הוסר — עדיין מוצג משום שפריטי העבודה והתפקיד שלו נותרים, אך לא ניתן להקצות לו עבודה חדשה."
     }
   },
   "code": {
