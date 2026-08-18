@@ -83,8 +83,8 @@
     </div>
 
     <!-- Canvas -->
-    <div ref="canvasRef" class="canvas-area" @mousedown="startPan" @mousemove="onMouseMove"
-         @mouseup="endInteraction" @wheel.prevent="handleWheel">
+    <div ref="canvasRef" class="canvas-area" @pointerdown="startPan" @pointermove="onPointerMove"
+         @pointerup="endInteraction" @pointercancel="endInteraction" @wheel.prevent="handleWheel">
       <div class="canvas-content" :style="canvasTransform">
         <!-- #14609: keyboard instructions for the canvas's own composite-widget
              navigation (roving tabindex + arrow keys) — not discoverable from
@@ -124,7 +124,7 @@
              :aria-label="nodeAriaLabel(node)"
              :aria-pressed="selectedNodeId === node.id"
              :aria-describedby="instructionsId"
-             @mousedown="onNodeMouseDown(node, $event)"
+             @pointerdown="onNodePointerDown(node, $event)"
              @click.stop="selectNode(node.id)"
              @focus="focusedNodeId = node.id"
              @keydown="onNodeKeydown(node, $event)">
@@ -256,8 +256,8 @@
               </div>
             </template>
           </div>
-          <div v-if="!readonly" class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>
-          <div v-if="!readonly" class="port port-out" @mousedown.stop="startConnect(node.id, 'out', $event)"></div>
+          <div v-if="!readonly" class="port port-in" @pointerdown.stop="startConnect(node.id, 'in', $event)"></div>
+          <div v-if="!readonly" class="port port-out" @pointerdown.stop="startConnect(node.id, 'out', $event)"></div>
         </div>
 
         <!-- Empty State -->
@@ -561,19 +561,29 @@ const zoom = ref(1);
 const pan = reactive({ x: 50, y: 50 });
 const isPanning = ref(false);
 /**
- * Whether the gesture that is ending actually panned the canvas (#14079).
+ * Whether the gesture that is ending actually moved something — panned the
+ * canvas, or (#14610) dragged a node — rather than merely pressed and
+ * released in place.
  *
- * A pan translates the canvas by the pointer delta, so the node the gesture
- * started on stays under the cursor. `mouseup` therefore lands on that node,
- * the browser fires `click`, and the node's drawer opens over the canvas the
+ * Originated as `pannedThisGesture` (#14079): a pan translates the canvas by
+ * the pointer delta, so the node the gesture started on stays under the
+ * cursor/finger. The `mouseup`/`pointerup` therefore lands on that node, the
+ * browser fires `click`, and the node's drawer opens over the canvas the
  * user was navigating.
  *
- * Cleared on the next `mousedown` rather than by the click it suppresses: a
- * pan that ends over empty canvas is followed by no node click at all, so a
- * flag cleared only on click would stay set and swallow the user's next
- * genuine click on a node.
+ * #14610 generalised it from "panned" to "moved something": a touch drag has
+ * the identical hazard for a node — the finger lifts over the node it just
+ * dragged, `click` fires, and without this the drawer would open right after
+ * the user repositioned it. One flag covers both cases (and both input
+ * types) rather than a second, parallel one — `selectNode` only ever needs
+ * to know "did this gesture move", not which kind of move it was.
+ *
+ * Cleared on the next `pointerdown` rather than by the click it suppresses: a
+ * gesture that ends over empty canvas is followed by no node click at all, so
+ * a flag cleared only on click would stay set and swallow the user's next
+ * genuine click/tap on a node.
  */
-const pannedThisGesture = ref(false);
+const movedThisGesture = ref(false);
 const panStart = reactive({ x: 0, y: 0 });
 const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
@@ -583,6 +593,63 @@ const mousePos = reactive({ x: 0, y: 0 });
 const showSaveDialog = ref(false);
 const saveName = ref('');
 const saveDesc = ref('');
+
+/* ------------------------------------------------------------------ *
+ * GH#14610: touch support.
+ *
+ * The canvas unifies mouse and touch on Pointer Events (`pointerdown` /
+ * `pointermove` / `pointerup` / `pointercancel`) rather than adding a
+ * parallel `touchstart`/`touchmove`/`touchend` path — one input path per
+ * gesture, per the repo's "reuse, never fork" rule. `PointerEvent` carries
+ * `clientX`/`clientY`/`shiftKey`/`button` exactly like `MouseEvent`, so the
+ * existing pan/drag/connect math is untouched; only the event names and the
+ * "what starts a pan" decision below changed.
+ *
+ * How a one-finger touch is disambiguated between pan and drag: there is no
+ * modifier key on touch (no shift, no middle button), so the decision moves
+ * from "which key is held" to "where the finger landed" — a press starting
+ * on empty canvas (or an org-group container, matching the existing
+ * shift-drag-from-anywhere behaviour, #13996) pans; a press starting on a
+ * node drags it (`onNodePointerDown`), exactly as a plain mouse press
+ * already did. `pointerType === 'touch'` is the only new branch in
+ * `startPan`; everything downstream (movement math, drag math, the
+ * `movedThisGesture` suppression) is shared with mouse.
+ *
+ * Two-finger touch is reserved for pinch-to-zoom (`activePointers`,
+ * `beginPinch`, `applyPinchZoom`) rather than a two-finger pan — pinch takes
+ * over as soon as a second pointer is detected, cancelling any in-flight
+ * one-finger pan/drag from the first finger.
+ */
+const activePointers = new Map<number, { x: number; y: number }>();
+const pinchStartDistance = ref(0);
+const pinchStartZoom = ref(1);
+
+/** Distance between the two active pointers, in client px; 0 with fewer than two. */
+function pinchDistance(): number {
+  const points = [...activePointers.values()];
+  if (points.length < 2) return 0;
+  return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+}
+
+/** A second pointer just went down: hand off from pan/drag to pinch-zoom. */
+function beginPinch(): void {
+  isPanning.value = false;
+  dragNode.value = null;
+  pinchStartDistance.value = pinchDistance();
+  pinchStartZoom.value = zoom.value;
+}
+
+/**
+ * Widens capture past the element the gesture started on — without it, a
+ * touch that drifts off `canvasRef` (or off whichever node it started on)
+ * during a pan/drag stops delivering `pointermove` there. Feature-detected:
+ * unsupported in jsdom (and on very old engines), where the gesture still
+ * works because tests dispatch events directly on the target element.
+ */
+function capturePointer(e: PointerEvent): void {
+  const el = canvasRef.value;
+  if (el && typeof el.setPointerCapture === 'function') el.setPointerCapture(e.pointerId);
+}
 
 /* ------------------------------------------------------------------ *
  * GH#14609: keyboard operation — a roving-tabindex node graph.
@@ -734,8 +801,9 @@ function deleteNode(id: string) {
 }
 
 function selectNode(id: string) {
-  // The click that closes a pan is not a selection (#14079).
-  if (pannedThisGesture.value) return;
+  // The click/tap that closes a pan or a node drag is not a selection
+  // (#14079, generalised for touch drag by #14610).
+  if (movedThisGesture.value) return;
   emit('node-selected', id);
 }
 
@@ -816,7 +884,7 @@ function focusNodeInDirection(from: CanvasNode, direction: SpatialDirection): vo
 }
 
 /** Move the node itself (drag's keyboard equivalent, #14609) — only ever
- *  called when `!readonly`, mirroring `onMouseMove`'s own drag emit. */
+ *  called when `!readonly`, mirroring `onPointerMove`'s own drag emit. */
 function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void {
   const delta: Record<SpatialDirection, { x: number; y: number }> = {
     up: { x: 0, y: -NODE_KEYBOARD_MOVE_STEP },
@@ -860,7 +928,10 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   e.preventDefault();
 
   if (e.ctrlKey || e.metaKey) {
-    if (props.readonly) return;
+    // Not gated on `readonly`, for the same reason the pointer drag is not:
+    // moving a node rearranges the *view* and persists nothing. Gating it here
+    // while a mouse could drag freely left keyboard users able to do strictly
+    // less on the same canvas — the inequity #14609 existed to remove.
     moveNodeByKeyboard(node, direction);
     return;
   }
@@ -880,14 +951,35 @@ function autoLayout() {
   });
 }
 
-function zoomIn() { zoom.value = Math.min(2, zoom.value + 0.1); }
-function zoomOut() { zoom.value = Math.max(0.3, zoom.value - 0.1); }
-function resetZoom() { zoom.value = 1; pan.x = 50; pan.y = 50; }
-function handleWheel(e: WheelEvent) { zoom.value = Math.max(0.3, Math.min(2, zoom.value + (e.deltaY > 0 ? -0.05 : 0.05))); }
+/** Zoom clamp shared by every way of changing it — buttons, wheel, pinch. */
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2;
+function clampZoom(value: number): number { return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value)); }
 
-function startPan(e: MouseEvent) {
-  pannedThisGesture.value = false;
-  if (e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
+function zoomIn() { zoom.value = clampZoom(zoom.value + 0.1); }
+function zoomOut() { zoom.value = clampZoom(zoom.value - 0.1); }
+function resetZoom() { zoom.value = 1; pan.x = 50; pan.y = 50; }
+function handleWheel(e: WheelEvent) { zoom.value = clampZoom(zoom.value + (e.deltaY > 0 ? -0.05 : 0.05)); }
+
+/** Rescale from the pinch's starting distance/zoom — proportional, like `handleWheel`
+ *  and the zoom buttons, none of which anchor around a point either (#14610). */
+function applyPinchZoom(): void {
+  const distance = pinchDistance();
+  if (pinchStartDistance.value <= 0 || distance <= 0) return;
+  zoom.value = clampZoom(pinchStartZoom.value * (distance / pinchStartDistance.value));
+}
+
+function startPan(e: PointerEvent) {
+  movedThisGesture.value = false;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  capturePointer(e);
+  if (activePointers.size >= 2) { beginPinch(); return; }
+
+  // #14610: touch carries no shift key and no middle button, so a one-finger
+  // press starting on empty canvas (or an org container, handed on below) is
+  // always a pan — mirrors the mouse's shift/middle-click modifier.
+  const isTouchPan = e.pointerType === 'touch';
+  if (isTouchPan || e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
 }
 
 /**
@@ -896,23 +988,54 @@ function startPan(e: MouseEvent) {
  * sized to its whole subtree and covers the drawing area, which left the
  * shift-drag pan the UI advertises working only in the canvas gutters. A pan
  * gesture is handed on; everything else still starts a node drag.
+ *
+ * #14610: a second finger landing on a node (rather than empty canvas) is
+ * still a pinch — `activePointers` is tracked here too, before any of the
+ * single-pointer branches below run.
  */
-function onNodeMouseDown(node: CanvasNode, e: MouseEvent) {
+function onNodePointerDown(node: CanvasNode, e: PointerEvent) {
   // Reset here too: a plain press on a node stops propagation below, so
   // `startPan` never runs and would never clear the flag.
-  pannedThisGesture.value = false;
+  movedThisGesture.value = false;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  capturePointer(e);
+  if (activePointers.size >= 2) { beginPinch(); e.stopPropagation(); return; }
+
   if (e.shiftKey || e.button === 1) return;
+
+  // #14610: `readonly` (Company OS) never drags a node — see below — so on
+  // touch a one-finger press starting on a node has nothing else useful to
+  // do there. Handing it on to `startPan` (by not stopping propagation) is
+  // the touch equivalent of the shift/middle-click bubble above: without
+  // this, every node — and every org-group container, the exact shape
+  // #13996 already fixed for mouse — would be a dead zone for touch pan,
+  // leaving only the canvas's bare gutters pannable on a tablet.
   e.stopPropagation();
+  // Dragging a node is NOT gated on `readonly`, and that is deliberate.
+  //
+  // `readonly` means "cannot author the workflow" — no add, delete, connect or
+  // save. Rearranging where a node sits is a *view* gesture, not a change to
+  // anything stored: `OrgChart.onCanvasNodeMoved` writes the new position into
+  // its in-memory node list and nothing is persisted.
+  //
+  // It is also a feature the org chart deliberately supports. `OrgChart.vue`
+  // holds `canvasNodes` as a ref rather than a computed specifically so that
+  // "node drags stay put", and re-layout is avoided so "a drag survives
+  // pause/resume". Gating this on `readonly` would delete that, and would make
+  // `onCanvasNodeMoved` dead code on the only canvas that mounts read-only.
+  //
+  // Touch therefore behaves exactly as the mouse does: a press that starts on
+  // a node drags it, and a pan starts on empty canvas or a container.
   startDrag(node, e);
 }
 
-function startDrag(node: CanvasNode, e: MouseEvent) {
+function startDrag(node: CanvasNode, e: PointerEvent) {
   dragNode.value = node;
   dragOffset.x = e.clientX - node.position.x * zoom.value - pan.x;
   dragOffset.y = e.clientY - node.position.y * zoom.value - pan.y;
 }
 
-function startConnect(nodeId: string, port: string, e: MouseEvent) {
+function startConnect(nodeId: string, port: string, e: PointerEvent) {
   drawingLine.value = true;
   const node = props.nodes.find(n => n.id === nodeId);
   if (node) {
@@ -921,24 +1044,32 @@ function startConnect(nodeId: string, port: string, e: MouseEvent) {
     lineStart.y = node.position.y + 50;
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
+  capturePointer(e);
 }
 
-function onMouseMove(e: MouseEvent) {
+function onPointerMove(e: PointerEvent) {
+  if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (activePointers.size >= 2) { applyPinchZoom(); return; }
+
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   if (isPanning.value) {
     pan.x = e.clientX - panStart.x; pan.y = e.clientY - panStart.y;
-    // Set on movement, not on press: a shift-click that never moves is still
-    // a selection, and suppressing it would break selecting with shift held.
-    pannedThisGesture.value = true;
+    // Set on movement, not on press: a shift-click/tap that never moves is
+    // still a selection, and suppressing it would break selecting with shift
+    // held (mouse) or a plain tap (touch).
+    movedThisGesture.value = true;
   }
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;
     emit('node-moved', dragNode.value.id, { x: Math.max(0, x), y: Math.max(0, y) });
+    // #14610: a drag that actually moved the node must not also select it
+    // when the gesture ends — the drag counterpart of the pan case above.
+    movedThisGesture.value = true;
   }
 }
 
-function endInteraction(e: MouseEvent) {
+function endInteraction(e: PointerEvent) {
   if (drawingLine.value) {
     const rect = canvasRef.value?.getBoundingClientRect();
     if (rect) {
@@ -948,6 +1079,10 @@ function endInteraction(e: MouseEvent) {
       if (target && target.id !== lineStart.nodeId) emit('nodes-connected', lineStart.nodeId, target.id);
     }
   }
+  // #14610: lifting one finger of a pinch leaves the other still down; it
+  // does not resume as a one-finger pan — the user has to lift fully and
+  // start a fresh gesture, same as releasing mid-drag does for a mouse.
+  activePointers.delete(e.pointerId);
   isPanning.value = false; dragNode.value = null; drawingLine.value = false;
 }
 
@@ -968,7 +1103,10 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .badge-experimental { font-size: 9px; padding: var(--spacing-px) var(--spacing-1); background: var(--color-warning); color: var(--wfcanvas-on-warning); border-radius: var(--radius-default); font-weight: 700; text-transform: uppercase; line-height: 1; }
 .toolbar-divider { width: 1px; height: var(--spacing-6); background: var(--border-default); margin: var(--spacing-0) var(--spacing-1); }
 
-.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; }
+/* #14610: `touch-action: none` on every custom-gesture surface — without it, the
+   browser's own touch scroll/pinch-zoom competes with our own pan/pinch/drag
+   handling for the same one- and two-finger gestures. */
+.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; touch-action: none; }
 .canvas-area:active { cursor: grabbing; }
 .canvas-content { position: absolute; min-width: 100%; min-height: 100%; transform-origin: 0 0; }
 
@@ -976,7 +1114,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; }
+.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; touch-action: none; }
 .workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 /* #14609: keyboard focus indicator — nodes carry no native focus styling of
@@ -1094,8 +1232,20 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 
 .node-header { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); color: var(--text-on-primary); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-size: var(--text-sm); font-weight: 600; }
 .node-header span { flex: 1; }
-.delete-btn { padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
+.delete-btn { position: relative; padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
 .delete-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+/* #14610: same WCAG 2.5.5 touch-target widening as `.port`, for the same reason
+   — the visible icon stays compact inside the node header on a mouse. */
+@media (pointer: coarse) {
+  .delete-btn::before {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: var(--spacing-12);
+    height: var(--spacing-12);
+    transform: translate(-50%, -50%);
+  }
+}
 
 .node-body { padding: var(--spacing-3); display: flex; flex-direction: column; gap: var(--spacing-2); }
 .node-body input, .node-body select { width: 100%; padding: var(--spacing-1-5) var(--spacing-2); background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-default); color: var(--text-primary); font-size: var(--text-xs); }
@@ -1107,10 +1257,29 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .checkbox { display: flex; align-items: center; gap: var(--spacing-1); font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
 .checkbox input { width: 14px; height: 14px; }
 
-.port { position: absolute; width: var(--spacing-3); height: var(--spacing-3); background: var(--bg-secondary); border: 2px solid var(--color-primary); border-radius: 50%; cursor: crosshair; top: 50%; transform: translateY(-50%); }
+.port { position: absolute; width: var(--spacing-3); height: var(--spacing-3); background: var(--bg-secondary); border: 2px solid var(--color-primary); border-radius: 50%; cursor: crosshair; top: 50%; transform: translateY(-50%); touch-action: none; }
 .port:hover { transform: translateY(-50%) scale(1.3); background: var(--color-primary); }
 .port-in { left: -6px; }
 .port-out { right: -6px; }
+
+/* #14610: the visible port stays its usual small size (it sits right on the
+   node's edge — growing it would overlap the body), but a coarse (touch)
+   pointer gets an invisible `::before` overlay sized to the WCAG 2.5.5
+   44x44px minimum, centred on the same point, so the port is still reliably
+   tappable without changing how it looks to a mouse user. */
+@media (pointer: coarse) {
+  .port::before {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    /* #14610: no --spacing token lands on the WCAG 2.5.5 44px minimum exactly
+       (--spacing-10 is 40px, --spacing-12 is 48px) — round up to the token
+       that clears it rather than a bare literal. */
+    width: var(--spacing-12);
+    height: var(--spacing-12);
+    transform: translate(-50%, -50%);
+  }
+}
 
 .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: var(--spacing-10); }
 .empty-state i { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
