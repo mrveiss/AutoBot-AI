@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "Nodošana attiecas tikai uz aģentiem."
       },
       "processNodeLabel": "Process",
-      "processOpensWorkflow": "Atver šīs lomas darbplūsmu"
+      "processOpensWorkflow": "Atver šīs lomas darbplūsmu",
+      "attach": "Pievienot",
+      "attachRoleLabel": "Loma",
+      "attachRolePlaceholder": "Izvēlieties lomu…",
+      "attachWorkflowLabel": "Darbplūsmas ID",
+      "attachWorkflowPlaceholder": "Darbplūsmas ID",
+      "attachError": "Neizdevās pievienot šo darbplūsmu.",
+      "detachError": "Neizdevās noņemt šo darbplūsmu.",
+      "processDetach": "Noņemt {workflow} no {role}",
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "nav lomas",
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
     }
   },
   "code": {

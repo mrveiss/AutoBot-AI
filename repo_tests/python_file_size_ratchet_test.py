@@ -59,7 +59,7 @@ _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 RATCHET_BASELINE = {
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3719,
+    "autobot-backend/chat_workflow/tool_handler.py": 3694,
 }
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).

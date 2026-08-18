@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "A transferência se aplica apenas a agentes."
       },
       "processNodeLabel": "Processo",
-      "processOpensWorkflow": "Abre o fluxo que esta função executa"
+      "processOpensWorkflow": "Abre o fluxo que esta função executa",
+      "attach": "Anexar",
+      "attachRoleLabel": "Função",
+      "attachRolePlaceholder": "Escolher uma função…",
+      "attachWorkflowLabel": "ID do fluxo",
+      "attachWorkflowPlaceholder": "ID do fluxo",
+      "attachError": "Não foi possível anexar esse fluxo.",
+      "detachError": "Não foi possível remover esse fluxo.",
+      "processDetach": "Remover {workflow} de {role}",
+      "attachRolesUnavailable": "Não foi possível carregar as funções, portanto esta lista pode estar incompleta."
     },
     "executorRollup": {
       "title": "Resumo de executores",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "sem função",
+      "unassignedHint": "Consta neste departamento, mas nenhuma função explica a sua presença"
     }
   },
   "code": {

@@ -38,6 +38,8 @@ import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import { availableLensRoles, applyRoleLens, roleLensCounts } from '@/composables/llc/orgRoleLens'
+import { describeApiError } from '@/composables/llc/apiErrorMessage'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -72,6 +74,10 @@ const activeTabId = ref<string>(ALL_UNITS_TAB)
 // opened. The org chart's own mount stays a single request, and a terminate
 // reload keeps reloading exactly the hierarchy it changed.
 const contacts = ref<ContactSource[]>([])
+// #13998: ids of contacts this department carries with no role to explain them.
+// Kept separate from `contacts` so the list the org chart builds stays one
+// list, while the People view can still label the difference honestly.
+const unassignedContactIds = ref<Set<string>>(new Set())
 const teams = ref<CompanyTeam[]>([])
 const peopleLoaded = ref(false)
 // A source that did not answer — kept apart from a source that answered
@@ -118,6 +124,25 @@ const canvasNodes = ref<CanvasNode[]>([])
 // render as "this company has no org chart".
 const processNodes = ref<ProcessNodeSource[]>([])
 const processNodesLoaded = ref(false)
+
+// #14549: the canvas can now change the attachment it displays, not just show
+// it. `roles` backs the "choose a role" picker for attach; fetched lazily like
+// `processNodes`, on the same canvas-open trigger, since neither is needed in
+// tree or people mode.
+interface AttachableRole {
+  id: string
+  name: string
+}
+const attachableRoles = ref<AttachableRole[]>([])
+/** The roles request did not answer — distinct from answering "none" (#14064). */
+const attachRolesFailed = ref(false)
+const rolesLoaded = ref(false)
+const attachRoleId = ref('')
+const attachWorkflowId = ref('')
+// One flag for both mutations, mirroring RolesView.vue's `isMutating`: a
+// second attach/detach cannot fire while the first is still in flight.
+const processMutationInFlight = ref(false)
+const processMutationError = ref<string | null>(null)
 
 /**
  * Explicit, shallow layout source (#13996): ids, nesting and labels — never
@@ -209,11 +234,24 @@ async function loadPeopleSources(): Promise<void> {
     return
   }
   const [contactsResult, teamsResult] = await Promise.allSettled([
-    api.get<ContactSource[]>(`/api/llc/contacts/${cid}`),
+    api.get<{ with_role: ContactSource[]; unassigned: ContactSource[] }>(
+      `/api/llc/contacts/${cid}/involved`,
+    ),
     api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
   ])
   if (contactsResult.status === 'fulfilled') {
-    contacts.value = Array.isArray(contactsResult.value) ? contactsResult.value : []
+    // Two groups, one list to draw: people whose presence a role explains, and
+    // people the department carries from before the directory was shared.
+    // Merging them here would assert an involvement nobody recorded, so the
+    // second group is tracked by id and labelled rather than blended in.
+    const withRole = Array.isArray(contactsResult.value?.with_role)
+      ? contactsResult.value.with_role
+      : []
+    const unassigned = Array.isArray(contactsResult.value?.unassigned)
+      ? contactsResult.value.unassigned
+      : []
+    contacts.value = [...withRole, ...unassigned]
+    unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
     contactsFailed.value = false
   } else {
     // A failed fetch must never be reported as "this company has no people".
@@ -239,7 +277,11 @@ function setViewMode(mode: OrgViewMode) {
   // #13963: process nodes only render on the canvas, so they are fetched when
   // the canvas is opened — same principle the People list already encodes. A
   // reader who stays in tree mode should not pay for a request they never see.
-  if (mode === 'canvas') void fetchProcessNodes()
+  if (mode === 'canvas') {
+    void fetchProcessNodes()
+    // #14549: the attach picker needs the role list, same lazy trigger.
+    void fetchRolesForAttach()
+  }
 }
 
 /** A People-list selection opens the same drawer the tree and canvas open. */
@@ -325,6 +367,103 @@ async function fetchProcessNodes() {
   } catch (err: unknown) {
     logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
     processNodes.value = []
+  }
+}
+
+/**
+ * Load the roles this company has, for the canvas attach picker (#14549).
+ *
+ * A failure is not surfaced as a page error — the org chart is still correct
+ * without the picker. But it is recorded in `attachRolesFailed`, because an
+ * empty picker and a picker that could not load are different claims: the
+ * first says this company has no roles, the second says we do not know. The
+ * People tab already refuses to conflate those (#14064), and a silent empty
+ * dropdown would tell someone their roles are gone when the request merely
+ * failed.
+ */
+async function fetchRolesForAttach() {
+  if (rolesLoaded.value) return
+  try {
+    const cid = await resolveCompanyIdOnce()
+    if (!cid) {
+      attachableRoles.value = []
+      return
+    }
+    const resp = await api.get<AttachableRole[]>(`/api/llc/roles/${cid}`)
+    attachableRoles.value = Array.isArray(resp)
+      ? resp.filter(
+          (row): row is AttachableRole =>
+            typeof row?.id === 'string' && typeof row?.name === 'string',
+        )
+      : []
+    attachRolesFailed.value = false
+    rolesLoaded.value = true
+  } catch (err: unknown) {
+    logger.error('Failed to fetch roles for the attach picker:', err)
+    attachableRoles.value = []
+    attachRolesFailed.value = true
+  }
+}
+
+/**
+ * Force the lazy process-node fetch to actually re-run (#14549).
+ *
+ * `processNodesLoaded` guards `fetchProcessNodes` so the canvas fetches once
+ * per visit rather than on every render — a mutation has to clear that guard
+ * first, or the "refetch" would hit it and silently keep showing the
+ * pre-mutation list while looking like it worked.
+ */
+async function reloadProcessNodes(): Promise<void> {
+  processNodesLoaded.value = false
+  await fetchProcessNodes()
+}
+
+function describeError(error: unknown, fallbackKey: string): string {
+  return describeApiError(error, t(fallbackKey))
+}
+
+/** Attach a workflow to a role from the canvas (#14549). */
+async function onProcessAttach(): Promise<void> {
+  const roleId = attachRoleId.value
+  const workflowId = attachWorkflowId.value.trim()
+  if (!companyId.value || !roleId || !workflowId || processMutationInFlight.value) return
+  processMutationInFlight.value = true
+  processMutationError.value = null
+  try {
+    await api.post(`/api/llc/roles/${companyId.value}/${roleId}/workflows`, {
+      workflow_id: workflowId,
+    })
+    attachWorkflowId.value = ''
+    // The canvas is the confirmation (#14549 issue body): a successful attach
+    // must be visible on it, not just accepted by the server.
+    await reloadProcessNodes()
+  } catch (err: unknown) {
+    logger.error('Failed to attach workflow:', err)
+    processMutationError.value = describeError(err, 'llc.orgChart.attachError')
+  } finally {
+    processMutationInFlight.value = false
+  }
+}
+
+/**
+ * Detach a workflow from a role, reached from the process node's own control
+ * on the canvas (#14549). No optimistic update: a failed call leaves
+ * `processNodes` — and so the graph — exactly as it was.
+ */
+async function onProcessDetached(roleId: string, workflowId: string): Promise<void> {
+  if (!companyId.value || processMutationInFlight.value) return
+  processMutationInFlight.value = true
+  processMutationError.value = null
+  try {
+    await api.delete(
+      `/api/llc/roles/${companyId.value}/${roleId}/workflows/${encodeURIComponent(workflowId)}`,
+    )
+    await reloadProcessNodes()
+  } catch (err: unknown) {
+    logger.error('Failed to detach workflow:', err)
+    processMutationError.value = describeError(err, 'llc.orgChart.detachError')
+  } finally {
+    processMutationInFlight.value = false
   }
 }
 
@@ -526,7 +665,7 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
+    <div v-if="error" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
@@ -567,6 +706,7 @@ onMounted(() => {
         :counts="peopleCounts"
         :has-teams="teams.length > 0"
         :teams-failed="teamsFailed"
+        :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
         @select="onPersonSelected"
       />
@@ -578,6 +718,73 @@ onMounted(() => {
       class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden flex flex-col"
       data-testid="org-canvas"
     >
+      <!-- #14549: the canvas shows the attachment (role, workflow) it draws a
+           process node from, but could not change it — attach reaches from
+           here, detach reaches from the node itself (below). Always shown in
+           canvas mode, independent of the role lens: it is a mutation
+           control, not a view filter. -->
+      <div
+        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
+        data-testid="process-attach-form"
+      >
+        <div class="flex flex-col gap-1">
+          <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
+            {{ t('llc.orgChart.attachRoleLabel') }}
+          </label>
+          <select
+            id="process-attach-role"
+            v-model="attachRoleId"
+            :disabled="processMutationInFlight"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="process-attach-role-select"
+          >
+            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
+            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
+              {{ role.name }}
+            </option>
+          </select>
+          <!-- Stated, not implied: an empty dropdown alone would read as "this
+               company has no roles" when the request simply did not answer. -->
+          <p
+            v-if="attachRolesFailed"
+            class="text-xs text-autobot-text-muted"
+            data-testid="process-attach-roles-unavailable"
+          >
+            {{ t('llc.orgChart.attachRolesUnavailable') }}
+          </p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label for="process-attach-workflow" class="text-xs text-autobot-text-secondary">
+            {{ t('llc.orgChart.attachWorkflowLabel') }}
+          </label>
+          <input
+            id="process-attach-workflow"
+            v-model="attachWorkflowId"
+            type="text"
+            :disabled="processMutationInFlight"
+            :placeholder="t('llc.orgChart.attachWorkflowPlaceholder')"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="process-attach-workflow-input"
+          />
+        </div>
+        <BaseButton
+          variant="primary"
+          data-testid="process-attach-submit"
+          :disabled="!attachRoleId || !attachWorkflowId.trim() || processMutationInFlight"
+          @click="onProcessAttach"
+        >
+          {{ t('llc.orgChart.attach') }}
+        </BaseButton>
+      </div>
+      <div
+        v-if="processMutationError"
+        class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
+        role="alert"
+        data-testid="process-mutation-error"
+      >
+        {{ processMutationError }}
+      </div>
+
       <!-- GH#13943: the lens's own affordance. Shown whenever a role is
            selected, independent of whether it still matches anything, so a
            reduced (or emptied) canvas reads as "filtered by view", never as
@@ -628,6 +835,7 @@ onMounted(() => {
         @node-selected="onCanvasNodeSelected"
         @node-moved="onCanvasNodeMoved"
         @tab-selected="activeTabId = $event"
+        @process-detached="onProcessDetached"
       />
     </div>
     <p v-if="viewMode === 'canvas' && !isLoading && tree.length > 0" class="mt-2 text-xs text-autobot-text-muted">

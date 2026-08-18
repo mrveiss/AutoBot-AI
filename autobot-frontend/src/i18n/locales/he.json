@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "ההעברה חלה על סוכנים בלבד."
       },
       "processNodeLabel": "תהליך",
-      "processOpensWorkflow": "פותח את התהליך שתפקיד זה מריץ"
+      "processOpensWorkflow": "פותח את התהליך שתפקיד זה מריץ",
+      "attach": "צרף",
+      "attachRoleLabel": "תפקיד",
+      "attachRolePlaceholder": "בחר תפקיד…",
+      "attachWorkflowLabel": "מזהה תהליך",
+      "attachWorkflowPlaceholder": "מזהה תהליך",
+      "attachError": "לא ניתן היה לצרף תהליך זה.",
+      "detachError": "לא ניתן היה להסיר תהליך זה.",
+      "processDetach": "הסר את {workflow} מ-{role}",
+      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית."
     },
     "executorRollup": {
       "title": "סיכום מבצעים",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "ללא תפקיד",
+      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת"
     }
   },
   "code": {
