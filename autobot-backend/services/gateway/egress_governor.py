@@ -56,9 +56,21 @@ it:
   ``channel_id`` — is recorded as-is. It resolves to a person only through
   the bot token that already gates access to the channel, so masking it buys
   no confidentiality and only makes the record useless for locating which
-  conversation was blocked. Telegram's ``chat_id`` is this case, deliberately
-  unmasked — pinned by ``TestChannelIdentityRule`` in
-  ``services/gateway/live_egress_seams_test.py``.
+  conversation was blocked. Telegram's ``chat_id`` and Slack/Discord's
+  ``channel_id`` are this case, deliberately unmasked — pinned by
+  ``TestChannelIdentityRule`` in ``services/gateway/live_egress_seams_test.py``.
+
+  Caveat: Telegram is the weaker instance of this case. A Slack/Discord
+  ``channel_id`` is workspace-scoped — near-useless outside that workspace's
+  own token. For a 1:1 chat, a Telegram ``chat_id`` *is* the user's global
+  Telegram account ID: stable, and resolvable by any bot or client that has
+  contact/API access, not only this one. It is still recorded unmasked
+  because an audit trail that cannot identify the blocked conversation has a
+  real cost, and #14540 asked for a documented, tested choice rather than a
+  particular answer — but this is the one identifier here that is closer to
+  a phone number than to an opaque workspace handle, and a future review
+  should not assume the two platforms are equivalent just because this rule
+  groups them the same way.
 """
 
 from __future__ import annotations
