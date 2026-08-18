@@ -26,6 +26,8 @@
 import type { CanvasNode } from '@/components/workflow/canvasNode'
 import { CANVAS_NODE_WIDTH } from '@/components/workflow/canvasNode'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
+import type { CompanyTeam, OrgPerson } from './orgPeople'
+import { UNGROUPED_TEAM_ID, groupPeopleByTeam } from './orgPeople'
 
 /** Horizontal distance between two depth levels. */
 const COLUMN_GAP = 80
@@ -45,6 +47,18 @@ const GROUP_GAP = 60
  */
 const UNGROUPED_COLUMNS = 4
 /** Id prefix that keeps container ids from colliding with agent ids. */
+/**
+ * What a container node stands for (#14596).
+ *
+ * Carried in `data` rather than as a new `CanvasNodeType`: the renderer's
+ * `nodeIcons` / `nodeLabels` are `Record<CanvasNodeType, ...>` literals, so a
+ * new member is a compile error until both gain entries — and neither an icon
+ * nor a type label is what distinguishes these. What differs is how the box is
+ * drawn, which is a styling concern.
+ */
+export const GROUP_KIND_UNIT = 'unit'
+export const GROUP_KIND_TEAM = 'team'
+
 export const ORG_GROUP_PREFIX = 'org-group:'
 
 interface PlacedNode {
@@ -111,6 +125,11 @@ function toGroupNode(
     position: { x: 0, y: topOffset },
     data: {
       label: unitLabel(root.name),
+      // #14596: which kind of container this is, so the renderer can draw them
+      // differently. A team and a reporting unit answer different questions —
+      // "who works together" and "who reports to whom" — and until this
+      // existed they were the same box with different words in it.
+      kind: GROUP_KIND_UNIT,
       width: 2 * GROUP_PADDING + (depth + 1) * CANVAS_NODE_WIDTH + depth * COLUMN_GAP,
       height: GROUP_HEADER + 2 * GROUP_PADDING + rows * ROW_HEIGHT,
     },
@@ -297,4 +316,161 @@ export function workflowIdFromProcessNode(nodeId: string): string | null {
 /** Lowest edge of a laid-out graph, so later sections start below it. */
 export function canvasBottom(nodes: CanvasNode[]): number {
   return nodes.reduce((lowest, node) => Math.max(lowest, node.position.y + ROW_HEIGHT), 0)
+}
+
+/**
+ * Teams on the canvas (GH#14596, parent #13938).
+ *
+ * `isOrgUnit`/`org-group` above answers "who reports to whom", derived from
+ * the hierarchy. A team is a different question — "who works together" — and
+ * is read from `GET .../teams` via `groupPeopleByTeam` (`orgPeople.ts`), the
+ * same function the People list already groups by, so the canvas and the
+ * People list can never disagree about who is on a team.
+ *
+ * A team container reuses the `org-group` node type rather than inventing a
+ * new one: `WorkflowCanvas.vue` sizes and renders `org-group` generically
+ * already, so a team container needs no new branch there. It is visually
+ * distinct from a reporting-unit container by construction — a different id
+ * namespace (`TEAM_GROUP_PREFIX`, never `ORG_GROUP_PREFIX`), a different
+ * caption ("<name> team" vs "<name> unit", GH#14596), and its own section
+ * below the hierarchy — not a CSS variant of the same box, which would need
+ * a change to `WorkflowCanvas.vue` this composable does not make.
+ */
+
+/**
+ * Id prefix for a team's own container, and for every duplicate member node
+ * inside it. Deliberately not `ORG_GROUP_PREFIX`: a reporting unit and a team
+ * must never collide on id, and the prefix alone is enough for a reader of
+ * the graph (or a test) to tell which kind of container a node is.
+ */
+export const TEAM_GROUP_PREFIX = 'org-team:'
+
+/** Separates a team's id from the real org-chart id inside a composite id. */
+const TEAM_MEMBER_MARK = ':member:'
+
+/**
+ * A team member's canvas id: stable and unique per (team, person) pair.
+ *
+ * Not the person's own `orgNodeId` — the same person can be on several teams,
+ * and the canvas cannot draw two nodes that share an id. It is also not a
+ * fresh, disconnected identity: the real org-chart id is embedded whole, so
+ * `teamMemberOrgNodeId` can always recover exactly who this node is.
+ */
+function teamMemberNodeId(groupId: string, orgNodeId: string): string {
+  return `${TEAM_GROUP_PREFIX}${groupId}${TEAM_MEMBER_MARK}${orgNodeId}`
+}
+
+/**
+ * The real org-chart node id behind a team-member canvas node, or `null` when
+ * `nodeId` does not name one (a team container, an `org-person` from the
+ * reporting hierarchy, a process node, …).
+ *
+ * Lets a click on a person's roster card in a team open the same drawer a
+ * click on their reporting-hierarchy node opens — the two are the same
+ * person, not two identities that happen to share a name.
+ */
+export function teamMemberOrgNodeId(nodeId: string): string | null {
+  if (!nodeId.startsWith(TEAM_GROUP_PREFIX)) return null
+  const at = nodeId.indexOf(TEAM_MEMBER_MARK)
+  if (at < 0) return null
+  const orgNodeId = nodeId.slice(at + TEAM_MEMBER_MARK.length)
+  return orgNodeId.length > 0 ? orgNodeId : null
+}
+
+/**
+ * One team's (or the ungrouped bucket's) people, packed in a grid inside
+ * their own container — a team carries no hierarchy, so it lays out like the
+ * ungrouped grid above, not like a unit's tree (#13994's same reasoning,
+ * applied to a team instead of a bare root).
+ *
+ * @returns the next free top offset, so groups stack without overlapping.
+ */
+function layoutTeamGroup(
+  groupId: string,
+  label: string,
+  members: OrgNode[],
+  topOffset: number,
+  groups: CanvasNode[],
+  memberNodes: CanvasNode[],
+): number {
+  const columns = Math.min(UNGROUPED_COLUMNS, Math.max(1, members.length))
+  const rows = Math.max(1, Math.ceil(members.length / UNGROUPED_COLUMNS))
+  const contentTop = topOffset + GROUP_HEADER + GROUP_PADDING
+  members.forEach((member, index) => {
+    memberNodes.push({
+      id: teamMemberNodeId(groupId, member.id),
+      type: 'org-person',
+      position: {
+        x: GROUP_PADDING + (index % UNGROUPED_COLUMNS) * (CANVAS_NODE_WIDTH + COLUMN_GAP),
+        y: contentTop + Math.floor(index / UNGROUPED_COLUMNS) * ROW_HEIGHT,
+      },
+      data: {
+        label: member.name,
+        title: member.title,
+        status: member.status,
+        adapter_type: member.adapter_type,
+        is_human: member.is_human,
+      },
+      // A roster is not a reporting line: nobody in it reports to anyone
+      // else in it by virtue of team membership alone.
+      connections: [],
+    })
+  })
+  groups.push({
+    id: `${TEAM_GROUP_PREFIX}${groupId}`,
+    type: 'org-group',
+    position: { x: 0, y: topOffset },
+    data: {
+      label,
+      kind: GROUP_KIND_TEAM,
+      width: 2 * GROUP_PADDING + columns * CANVAS_NODE_WIDTH + (columns - 1) * COLUMN_GAP,
+      height: GROUP_HEADER + 2 * GROUP_PADDING + rows * ROW_HEIGHT,
+    },
+    connections: [],
+  })
+  return topOffset + GROUP_HEADER + 2 * GROUP_PADDING + rows * ROW_HEIGHT + GROUP_GAP
+}
+
+/**
+ * Build the canvas rendering of the company's teams.
+ *
+ * Every member becomes its own `org-person` canvas node inside its team's
+ * container — one node per (team, person) pair, so a person on several teams
+ * appears in each without duplicating their identity (`teamMemberNodeId`).
+ * The `UNGROUPED_TEAM_ID` bucket (`orgPeople.ts`) renders the same way, so a
+ * person on no team is still a first-class, visible, labelled node — never
+ * silently dropped the way a filtered-out node would be.
+ *
+ * Only people with an `orgNodeId` are placed — a contact has none and is
+ * already absent from the canvas everywhere else (#13938); this does not
+ * introduce a new exclusion, it stays consistent with the one that exists.
+ *
+ * Draws nothing at all when the company has zero teams — mirroring
+ * `OrgPeopleList.vue`'s own `v-if="hasTeams"` gate on its group headers. A
+ * company with no teams has no team *structure* to draw a boundary around;
+ * boxing everyone into a single "not in a team" container would assert a
+ * grouping that does not exist. The honest statement for that case is the
+ * "no teams are defined" banner the caller renders beside the canvas, not an
+ * empty-of-meaning box drawn here.
+ */
+export function buildTeamCanvasNodes(
+  orgNodesById: Map<string, OrgNode>,
+  people: OrgPerson[],
+  teams: CompanyTeam[],
+  topOffset: number,
+  teamLabel: (name: string) => string,
+  ungroupedLabel: string,
+): CanvasNode[] {
+  if (teams.length === 0) return []
+  const groups: CanvasNode[] = []
+  const memberNodes: CanvasNode[] = []
+  let cursor = topOffset
+  for (const group of groupPeopleByTeam(people, teams)) {
+    const members = group.people
+      .map((person) => (person.orgNodeId ? orgNodesById.get(person.orgNodeId) : undefined))
+      .filter((node): node is OrgNode => node !== undefined)
+    const label = group.id === UNGROUPED_TEAM_ID ? ungroupedLabel : teamLabel(group.name)
+    cursor = layoutTeamGroup(group.id, label, members, cursor, groups, memberNodes)
+  }
+  return [...groups, ...memberNodes]
 }
