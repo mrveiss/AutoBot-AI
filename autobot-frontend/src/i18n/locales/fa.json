@@ -8239,6 +8239,7 @@
       "viewCanvas": "بوم",
       "canvasTabAll": "همه واحدها",
       "canvasUnit": "واحد {name}",
+      "canvasTeam": "تیم {name}",
       "canvasHint": "برای جابه‌جایی Shift را نگه دارید و بکشید، برای بزرگ‌نمایی اسکرول کنید و برای جزئیات روی گره کلیک کنید.",
       "viewPeople": "افراد",
       "peopleLegend": "انواع افراد",

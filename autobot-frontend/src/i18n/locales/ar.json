@@ -8239,6 +8239,7 @@
       "viewCanvas": "لوحة",
       "canvasTabAll": "كل الوحدات",
       "canvasUnit": "وحدة {name}",
+      "canvasTeam": "فريق {name}",
       "canvasHint": "اضغط Shift واسحب للتحريك، ومرّر للتكبير، وانقر على عقدة لعرض التفاصيل.",
       "viewPeople": "الأشخاص",
       "peopleLegend": "أنواع الأشخاص",

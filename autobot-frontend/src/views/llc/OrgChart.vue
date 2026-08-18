@@ -17,10 +17,12 @@ import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
   buildOrgCanvasGraph,
   buildProcessCanvasNodes,
+  buildTeamCanvasNodes,
   canvasBottom,
   flattenOrgNodes,
   orgLayoutKey,
   orgUnitRoots,
+  teamMemberOrgNodeId,
   workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
@@ -84,6 +86,11 @@ const peopleLoaded = ref(false)
 // "nothing", so the list never states a fact it does not know (#14064).
 const contactsFailed = ref(false)
 const teamsFailed = ref(false)
+// #14596: distinguishes "the teams request has not answered yet" from "it
+// answered with zero teams" — `teams.value` is `[]` in both cases, and the
+// canvas must never say "this company has no teams" before the request that
+// would prove it has actually completed (#14064's failure shape).
+const teamsAttempted = ref(false)
 const peopleLoading = ref(false)
 
 /**
@@ -200,21 +207,48 @@ const processCanvasNodes = computed<CanvasNode[]>(() =>
   buildProcessCanvasNodes(processNodes.value, canvasBottom(canvasNodes.value)),
 )
 
-const lensedCanvasNodes = computed<CanvasNode[]>(() => [
-  ...applyRoleLens(canvasNodes.value, roleLens.value || null),
-  // Not lensed: the role lens filters *people* by role, and a process is not a
-  // person. Hiding processes when a lens is active would remove them for a
-  // reason that does not apply to them.
-  ...processCanvasNodes.value,
-])
-const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
-
 /** Everyone in the company, of all three kinds, in one list (#13938). */
 const people = computed(() => buildOrgPeople(tree.value, contacts.value))
 
 const peopleGroups = computed(() => groupPeopleByTeam(people.value, teams.value))
 
 const peopleCounts = computed(() => countByKind(people.value))
+
+/**
+ * Teams, drawn as their own section below the units/ungrouped/process areas
+ * (#14596, parent #13938) — a team answers a different question than the
+ * reporting hierarchy `canvasNodes` draws, so it gets a visually separate
+ * area rather than nesting inside a reporting unit's `org-group`.
+ *
+ * Derived, like `processCanvasNodes`, rather than stored in `canvasNodes`
+ * (#13996): a status change flows straight through because this recomputes
+ * from `tree.value` (via `flattenOrgNodes`) on every render, with nothing
+ * dragged here to lose.
+ */
+const teamCanvasNodes = computed<CanvasNode[]>(() =>
+  buildTeamCanvasNodes(
+    flattenOrgNodes(tree.value),
+    people.value,
+    teams.value,
+    canvasBottom([...canvasNodes.value, ...processCanvasNodes.value]),
+    (name) => t('llc.orgChart.canvasTeam', { name }),
+    t('llc.orgChart.peopleNoTeam'),
+  ),
+)
+
+const lensedCanvasNodes = computed<CanvasNode[]>(() => [
+  ...applyRoleLens(canvasNodes.value, roleLens.value || null),
+  // Not lensed: the role lens filters *people* by role, and a process is not a
+  // person. Hiding processes when a lens is active would remove them for a
+  // reason that does not apply to them.
+  ...processCanvasNodes.value,
+  // #14596: a team roster is a different grouping question than the role
+  // lens's own filter, and it is never the only place a person is drawn
+  // (they are always still on the reporting-hierarchy canvas too), so it is
+  // left unlensed for the same reason process nodes are.
+  ...teamCanvasNodes.value,
+])
+const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
 
 /**
  * Load the two sources the People list needs beyond the org chart.
@@ -266,6 +300,7 @@ async function loadPeopleSources(): Promise<void> {
     teamsFailed.value = true
     logger.error('Failed to fetch company teams:', teamsResult.reason)
   }
+  teamsAttempted.value = true
   // Only a complete answer is cached; a partial one retries on re-entry.
   peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
   peopleLoading.value = false
@@ -281,6 +316,10 @@ function setViewMode(mode: OrgViewMode) {
     void fetchProcessNodes()
     // #14549: the attach picker needs the role list, same lazy trigger.
     void fetchRolesForAttach()
+    // #14596: teams render on the canvas too, sharing the same lazy fetch
+    // and the same guard the People list already uses — a second entry into
+    // canvas mode does not re-request them.
+    void loadPeopleSources()
   }
 }
 
@@ -304,7 +343,11 @@ function onCanvasNodeSelected(nodeId: string | null) {
     })
     return
   }
-  const node = flattenOrgNodes(tree.value).get(nodeId)
+  // #14596: a team roster card carries a composite id (team + real person),
+  // never the bare org-chart id, so it opens the same drawer the person's
+  // reporting-hierarchy node opens rather than silently doing nothing.
+  const realNodeId = teamMemberOrgNodeId(nodeId) ?? nodeId
+  const node = flattenOrgNodes(tree.value).get(realNodeId)
   if (node) openDrawer(node)
 }
 
@@ -784,6 +827,26 @@ onMounted(() => {
       >
         {{ processMutationError }}
       </div>
+
+      <!-- #14596: teams on the canvas carry the same honest-failure distinction
+           the People list already makes (#14064, #13617, #14556) — a request
+           that failed must never read as "this company has no teams". Shown
+           only once the teams request has actually answered (or failed), so
+           the banner cannot appear before there is anything to report. -->
+      <p
+        v-if="teamsFailed"
+        class="border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-xs text-autobot-text-muted"
+        data-testid="canvas-teams-unavailable"
+      >
+        {{ t('llc.orgChart.peopleTeamsUnavailable') }}
+      </p>
+      <p
+        v-else-if="teamsAttempted && teams.length === 0"
+        class="border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-xs text-autobot-text-muted"
+        data-testid="canvas-no-teams"
+      >
+        {{ t('llc.orgChart.peopleNoTeamsDefined') }}
+      </p>
 
       <!-- GH#13943: the lens's own affordance. Shown whenever a role is
            selected, independent of whether it still matches anything, so a

@@ -8239,6 +8239,7 @@
       "viewCanvas": "Lienzo",
       "canvasTabAll": "Todas las unidades",
       "canvasUnit": "Unidad {name}",
+      "canvasTeam": "Equipo {name}",
       "canvasHint": "Mayús+arrastrar para desplazar, rueda para acercar, haz clic en un nodo para ver detalles.",
       "viewPeople": "Personas",
       "peopleLegend": "Tipos de persona",

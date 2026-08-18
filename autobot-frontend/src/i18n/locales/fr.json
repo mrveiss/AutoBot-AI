@@ -8239,6 +8239,7 @@
       "viewCanvas": "Canevas",
       "canvasTabAll": "Toutes les unités",
       "canvasUnit": "Unité {name}",
+      "canvasTeam": "Équipe {name}",
       "canvasHint": "Maj+glisser pour déplacer, molette pour zoomer, cliquez sur un nœud pour les détails.",
       "viewPeople": "Personnes",
       "peopleLegend": "Types de personne",

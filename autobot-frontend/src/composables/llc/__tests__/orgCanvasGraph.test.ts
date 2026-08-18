@@ -9,13 +9,18 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildOrgCanvasGraph,
+  buildTeamCanvasNodes,
   flattenOrgNodes,
   orgLayoutKey,
   isOrgUnit,
   orgUnitRoots,
+  teamMemberOrgNodeId,
   ORG_GROUP_PREFIX,
+  TEAM_GROUP_PREFIX,
 } from '../orgCanvasGraph'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
+import { buildOrgPeople } from '../orgPeople'
+import type { CompanyTeam } from '../orgPeople'
 
 function node(id: string, children: OrgNode[] = []): OrgNode {
   return {
@@ -248,5 +253,97 @@ describe('grouping is by descendants, not root-ness (#13994)', () => {
     expect(isOrgUnit({ ...FOREST[1], children: undefined as unknown as OrgNode[] })).toBe(false)
     expect(orgUnitRoots([...FOREST, ...PEOPLE_ONLY]).map((r) => r.id)).toEqual(['ceo'])
     expect(orgUnitRoots(PEOPLE_ONLY)).toEqual([])
+  })
+})
+
+// GH#14596: teams as a first-class canvas grouping — a different question
+// than `isOrgUnit`'s reporting units ("who reports to whom" vs "who works
+// together"), read from the same `groupPeopleByTeam` the People list uses.
+describe('buildTeamCanvasNodes (#14596)', () => {
+  const alice = person('user:alice', 'Alice')
+  const bob = person('user:bob', 'Bob')
+  const charlie = node('agent:charlie') // an agent — never a team member (#13938)
+  const TEAM_FOREST: OrgNode[] = [alice, bob, charlie]
+  const teamPeople = buildOrgPeople(TEAM_FOREST, [])
+  const byId = flattenOrgNodes(TEAM_FOREST)
+  const teamLabel = (name: string) => `TEAM ${name}`
+  const UNGROUPED_LABEL = 'UNGROUPED'
+
+  const TWO_TEAMS: CompanyTeam[] = [
+    { id: 't1', name: 'Platform', member_user_ids: ['alice', 'bob'] },
+    { id: 't2', name: 'Growth', member_user_ids: ['alice'] },
+  ]
+
+  it('draws a team container in its own id namespace, distinct from a reporting-unit container', () => {
+    const graph = buildTeamCanvasNodes(byId, teamPeople, TWO_TEAMS, 0, teamLabel, UNGROUPED_LABEL)
+    const groups = graph.filter((n) => n.type === 'org-group')
+
+    expect(groups.map((g) => g.id).sort()).toEqual(
+      [`${TEAM_GROUP_PREFIX}t1`, `${TEAM_GROUP_PREFIX}t2`, `${TEAM_GROUP_PREFIX}__no_team__`].sort(),
+    )
+    // The discriminator a mutation would break: a team container never
+    // carries the reporting-unit prefix, and vice versa.
+    for (const group of groups) {
+      expect(group.id.startsWith(TEAM_GROUP_PREFIX)).toBe(true)
+      expect(group.id.startsWith(ORG_GROUP_PREFIX)).toBe(false)
+    }
+    expect(groups.map((g) => g.data.label).sort()).toEqual(
+      ['TEAM Growth', 'TEAM Platform', 'UNGROUPED'].sort(),
+    )
+  })
+
+  it('draws one node per (team, person) pair — a person on two teams appears in each, same identity', () => {
+    const graph = buildTeamCanvasNodes(byId, teamPeople, TWO_TEAMS, 0, teamLabel, UNGROUPED_LABEL)
+    const aliceNodes = graph.filter((n) => n.type === 'org-person' && n.data.label === 'Alice')
+
+    // Two distinct canvas nodes (t1 and t2 each get their own)…
+    expect(aliceNodes).toHaveLength(2)
+    expect(new Set(aliceNodes.map((n) => n.id)).size).toBe(2)
+    // …but both resolve back to the exact same real org-chart identity — the
+    // duplication is visual, not a second person invented from nothing.
+    for (const aliceNode of aliceNodes) {
+      expect(teamMemberOrgNodeId(aliceNode.id)).toBe('user:alice')
+    }
+  })
+
+  it('puts a person on no team in the honest ungrouped bucket, never dropped', () => {
+    const graph = buildTeamCanvasNodes(byId, teamPeople, TWO_TEAMS, 0, teamLabel, UNGROUPED_LABEL)
+    const ungroupedContainer = graph.find((n) => n.id === `${TEAM_GROUP_PREFIX}__no_team__`)!
+    const charlieNodes = graph.filter(
+      (n) => n.type === 'org-person' && teamMemberOrgNodeId(n.id) === 'agent:charlie',
+    )
+
+    expect(ungroupedContainer.data.label).toBe(UNGROUPED_LABEL)
+    // Alice and Bob are both claimed by a team, so charlie is the only
+    // member of the ungrouped bucket — and mutating either predicate above
+    // must not silently absorb charlie into a team he was never added to.
+    expect(charlieNodes).toHaveLength(1)
+  })
+
+  it('draws nothing when the company has zero teams — the caller states that fact in words instead', () => {
+    expect(buildTeamCanvasNodes(byId, teamPeople, [], 0, teamLabel, UNGROUPED_LABEL)).toEqual([])
+  })
+
+  it('still draws an empty team as an empty container, rather than dropping it', () => {
+    const emptyTeam: CompanyTeam[] = [{ id: 't3', name: 'Marketing', member_user_ids: [] }]
+    const graph = buildTeamCanvasNodes(byId, teamPeople, emptyTeam, 0, teamLabel, UNGROUPED_LABEL)
+    const marketing = graph.find((n) => n.id === `${TEAM_GROUP_PREFIX}t3`)!
+    // Nobody claims the team, so everyone (alice, bob, charlie) falls into
+    // the ungrouped bucket instead — that bucket's people are not what this
+    // assertion is about, so it is scoped to `t3`'s own roster alone.
+    const marketingMembers = graph.filter((n) => n.id.startsWith(`${TEAM_GROUP_PREFIX}t3:member:`))
+
+    expect(marketing).toBeDefined()
+    expect(marketing.data.label).toBe('TEAM Marketing')
+    expect(marketingMembers).toHaveLength(0)
+  })
+
+  it('resolves a team-member canvas id back to the real org-chart id, and rejects anything else', () => {
+    expect(teamMemberOrgNodeId(`${TEAM_GROUP_PREFIX}t1:member:user:alice`)).toBe('user:alice')
+    // Not a team-member id at all — a reporting-unit container, a bare
+    // person, a process node: none of these should resolve to anything.
+    expect(teamMemberOrgNodeId(`${ORG_GROUP_PREFIX}ceo`)).toBeNull()
+    expect(teamMemberOrgNodeId('ceo')).toBeNull()
+    expect(teamMemberOrgNodeId(`${TEAM_GROUP_PREFIX}t1`)).toBeNull()
   })
 })

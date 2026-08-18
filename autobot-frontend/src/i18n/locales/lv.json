@@ -8239,6 +8239,7 @@
       "viewCanvas": "Audekls",
       "canvasTabAll": "Visas vienības",
       "canvasUnit": "Vienība {name}",
+      "canvasTeam": "Komanda {name}",
       "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas.",
       "viewPeople": "Cilvēki",
       "peopleLegend": "Personu veidi",

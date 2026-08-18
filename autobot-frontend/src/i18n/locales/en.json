@@ -8227,6 +8227,7 @@
       "viewCanvas": "Canvas",
       "canvasTabAll": "All units",
       "canvasUnit": "{name} unit",
+      "canvasTeam": "{name} team",
       "canvasHint": "Shift-drag to pan, scroll to zoom, click a node for details.",
       "viewPeople": "People",
       "peopleLegend": "Person kinds",

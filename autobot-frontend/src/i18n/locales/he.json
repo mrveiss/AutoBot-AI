@@ -8239,6 +8239,7 @@
       "viewCanvas": "קנבס",
       "canvasTabAll": "כל היחידות",
       "canvasUnit": "יחידת {name}",
+      "canvasTeam": "צוות {name}",
       "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים.",
       "viewPeople": "אנשים",
       "peopleLegend": "סוגי אנשים",
