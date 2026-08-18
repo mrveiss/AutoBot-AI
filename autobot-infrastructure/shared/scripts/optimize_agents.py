@@ -114,7 +114,10 @@ def _handle_agent_file(agent_file: Path, apply_changes: bool) -> dict[str, int]:
     """
     try:
         needs_change, original, optimized = compute_optimization(agent_file)
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
+        # UnicodeDecodeError is a ValueError subclass, not an OSError — a
+        # badly-encoded file must not propagate past this point and abort
+        # the run for every other file (#14546 review).
         logger.error("Failed to read %s: %s", agent_file, exc)
         return {"modified": 0, "errors": 1, "lines_before": 0, "lines_after": 0}
 

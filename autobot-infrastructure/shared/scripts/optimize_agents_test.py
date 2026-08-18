@@ -145,6 +145,26 @@ def test_atomic_write_leaves_no_partial_file_on_failure(agent_dir: pathlib.Path,
     assert leftover_tmp == [], f"temp file(s) leaked: {leftover_tmp}"
 
 
+def test_invalid_utf8_file_counts_as_error_and_run_continues(agent_dir: pathlib.Path):
+    """A badly-encoded file must not abort the run for every other file.
+
+    UnicodeDecodeError is a ValueError subclass, not an OSError — a
+    ``except OSError`` alone lets it propagate straight out of
+    ``process_agent_files`` and crash the whole run (#14546 review).
+    """
+    bad_file = agent_dir / "bad-encoding.md"
+    bad_file.write_bytes(b"\xff\xfe not valid utf-8 \x80\x81")
+    agent_files = sorted(agent_dir.glob("*.md"))
+    assert len(agent_files) == 3  # needs-change.md, unchanged.md, bad-encoding.md
+
+    summary = optimize_agents.process_agent_files(agent_files, apply_changes=False)
+
+    assert summary["processed"] == 3
+    assert summary["errors"] == 1
+    # the two well-formed files were still processed despite the bad one
+    assert summary["modified"] == 1
+
+
 def test_empty_directory_is_loud_not_silent():
     """An empty .md glob must be reported, not read as a clean no-op."""
     summary = optimize_agents.process_agent_files([], apply_changes=False)
