@@ -38,7 +38,7 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
-from services.service_extra_data import engine_degraded_fields
+from services.service_extra_data import engine_degraded_fields, monitored_autobot_service_failed
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,13 @@ class ReconcilerService:
         self._remediation_tracker: Dict[str, Dict] = {}
         # Track service restart attempts: {(node_id, svc_name): {"count": int, "last_attempt": dt}}
         self._service_remediation_tracker: Dict[tuple, Dict] = {}
+        # #14465: consecutive ONLINE heartbeats per node, {node_id: int}. A node
+        # must sustain ONLINE for `settings.unhealthy_threshold` heartbeats in a
+        # row -- reset by ANY non-ONLINE observation, from a heartbeat or from
+        # _check_node_health's staleness sweep -- before its remediation history
+        # clears. A single flapping heartbeat can satisfy an old_status->ONLINE
+        # transition without satisfying this; only a sustained recovery can.
+        self._online_streak: Dict[str, int] = {}
         # Timestamps for rate-limited background tasks (#926 Phase 3)
         self._last_manifest_health_check: float = 0.0
         self._last_cert_expiry_check: float = 0.0
@@ -154,8 +161,13 @@ class ReconcilerService:
         """Mark node as degraded, create event, and broadcast status.
 
         Helper for _check_node_health (Issue #665).
+
+        #14465: also breaks the ONLINE streak the heartbeat path tracks for
+        remediation-recovery -- this is the "goes stale again" half of a flap,
+        and it does not run through update_node_heartbeat at all.
         """
         node.status = NodeStatus.DEGRADED.value
+        self._online_streak.pop(node.node_id, None)
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
@@ -176,8 +188,11 @@ class ReconcilerService:
         """Mark node as offline, create event, and broadcast status.
 
         Helper for _check_node_health (Issue #665).
+
+        #14465: also breaks the ONLINE streak -- see _handle_degraded_node.
         """
         node.status = NodeStatus.OFFLINE.value
+        self._online_streak.pop(node.node_id, None)
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
@@ -520,14 +535,18 @@ class ReconcilerService:
         # over fifty minutes, with the node never heartbeating once.
         success = restarted and await self._heartbeat_returned(node, now)
 
-        # Update tracker (reset on success, increment on failure)
+        # Record result and broadcast first -- it commits the outcome event.
+        await self._record_remediation_result(db, node, success, tracker, restarted=restarted)
+
+        # #14465: mutate the tracker only once that commit has actually
+        # happened. This governs whether a real ansible restart runs and
+        # whether escalation ever fires, so a failed commit must not leave
+        # in-memory state claiming an attempt this cycle's DB row never
+        # recorded (reset on success, increment on failure).
         self._remediation_tracker[node_id] = {
             "count": tracker["count"] + 1 if not success else 0,
             "last_attempt": now,
         }
-
-        # Record result and broadcast
-        await self._record_remediation_result(db, node, success, tracker, restarted=restarted)
         return True
 
     async def _heartbeat_returned(self, node: Node, restarted_at: datetime) -> bool:
@@ -604,7 +623,7 @@ class ReconcilerService:
             return False
 
     def _clear_tracker_on_recovery(self, node_id: str) -> None:
-        """Forget remediation history once a node is observed back online.
+        """Forget a remediation attempt COUNT once a node has sustained ONLINE.
 
         #14465: this used to live inside the DEGRADED remediation path
         (`_clear_tracker_if_recovered`), keyed off "heartbeat newer than our
@@ -618,13 +637,29 @@ class ReconcilerService:
         with a current beat on every pass, so its count was cleared every
         pass and it could never reach `MAX_REMEDIATION_ATTEMPTS`.
 
-        Recovery is the ONLINE transition itself, computed fresh on the same
-        heartbeat that proves it -- so that is where this has to run. It is
-        called only on a genuine old-status -> ONLINE transition, so it fires
-        once per recovery rather than repeatedly re-deriving "still current"
-        from a fixed timestamp the way the old check did.
+        Called from `update_node_heartbeat` only once a node's ONLINE streak
+        (see `self._online_streak`) reaches `settings.unhealthy_threshold`
+        consecutive heartbeats -- a single flapping heartbeat computing ONLINE
+        satisfies an old-status -> ONLINE transition without satisfying a
+        sustained streak, so a flap cannot trigger this. An earlier version of
+        this fix cleared on the transition alone; review caught that a flap
+        (one healthy beat, then stale again, repeated) reproduces that exact
+        transition every cycle, reinstating #14454's defect through this call
+        site instead of `_clear_tracker_if_recovered`.
+
+        `last_attempt` is deliberately preserved, not deleted: a full delete
+        makes `_check_remediation_limits` see no `last_attempt` at all, so the
+        very next degradation is remediated with no cooldown -- pacing every
+        `reconcile_interval` instead of every `REMEDIATION_COOLDOWN`, worse
+        than the bug this issue reports. Keeping it means a node that
+        oscillates between sustained-online and degraded still restarts no
+        faster than the configured cooldown.
         """
-        self.reset_remediation_tracker(node_id)
+        tracker = self._remediation_tracker.get(node_id)
+        if not tracker:
+            return
+        self._remediation_tracker[node_id] = {"count": 0, "last_attempt": tracker.get("last_attempt")}
+        logger.info("Node %s sustained online - clearing remediation attempt count (cooldown preserved)", node_id)
 
     def reset_remediation_tracker(self, node_id: str) -> None:
         """Reset remediation tracker for a node (e.g., after manual intervention)."""
@@ -1285,20 +1320,41 @@ class ReconcilerService:
             db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
         )
 
-        # #14465: recovery is this transition, so the remediation attempt
-        # history clears here -- not inside the DEGRADED remediation path,
-        # which by construction never sees a node that has actually recovered.
-        if new_status == NodeStatus.ONLINE.value and old_status != NodeStatus.ONLINE.value:
-            self._clear_tracker_on_recovery(node.node_id)
-
         node.status = new_status
 
         await db.commit()
         await db.refresh(node)
 
+        # #14465: only once the status write is durable -- see _track_online_streak.
+        self._track_online_streak(node.node_id, new_status)
+
         await self._broadcast_heartbeat_update(node, cpu_percent, memory_percent, disk_percent, new_status)
 
         return node
+
+    def _track_online_streak(self, node_id: str, new_status: str) -> None:
+        """Update the consecutive-ONLINE streak; clear remediation history once sustained.
+
+        Helper for update_node_heartbeat (#14465). Called only after the status
+        write commits: `self._remediation_tracker` gates whether a real ansible
+        restart runs and whether escalation ever fires, so it must not be
+        mutated ahead of confirmation the recovery it is reacting to is
+        actually durable.
+
+        Any non-ONLINE observation -- including one `_check_node_health`
+        assigns directly, outside this function entirely -- resets the streak
+        to zero (see `_handle_degraded_node`/`_handle_offline_node`), so a
+        node that flaps online for a single heartbeat and then goes stale
+        again can never accumulate toward the threshold.
+        """
+        if new_status != NodeStatus.ONLINE.value:
+            self._online_streak.pop(node_id, None)
+            return
+
+        streak = self._online_streak.get(node_id, 0) + 1
+        self._online_streak[node_id] = streak
+        if streak >= settings.unhealthy_threshold:
+            self._clear_tracker_on_recovery(node_id)
 
     def _update_existing_service(
         self,
@@ -1461,20 +1517,29 @@ class ReconcilerService:
 
         Issue #1604: Also degrade if any autobot service is crash-looping.
 
-        #14465: the crash-loop signal is `status == "crash-loop"` alone now.
-        That maps directly to systemd's own `activating`+`auto-restart`
-        sub-state (health_collector._map_status_from_states) -- true only
-        while the unit is presently churning, and gone the moment it settles
-        into `running` or exhausts systemd's own start-limit into `failed`.
-        The `n_restarts > 3` branch this replaced read `NRestarts`, which
-        systemd never resets except at reboot or `reset-failed`. Used as a
-        static gate, a lifetime-cumulative counter can only ever climb: once
-        any autobot service anywhere in the node's uptime crosses 3 restarts
-        -- a redeploy, an operator restart, a genuine but long-resolved
-        crash-loop -- every future heartbeat is forced DEGRADED regardless of
-        current metrics or service state, with no path back to ONLINE. That
-        is what left this issue's node stuck degraded while heartbeating
-        healthily.
+        #14465: the crash-loop signal read from `discovered_services` (the full
+        systemd sweep) is `status == "crash-loop"` alone now -- systemd's own
+        `activating`+`auto-restart` sub-state (health_collector.
+        _map_status_from_states), true only while a unit is presently
+        churning. The `n_restarts > 3` branch this replaced read `NRestarts`,
+        a counter systemd never resets except at reboot or `reset-failed`.
+        Used as a static gate, it can only ever climb: once any autobot
+        service anywhere in the node's uptime crosses 3 restarts -- a
+        redeploy, an operator restart, a genuine but long-resolved crash-loop
+        -- every future heartbeat was forced DEGRADED regardless of current
+        metrics or service state, with no path back to ONLINE.
+
+        Every unit template also sets `StartLimitBurst`/`StartLimitIntervalSec`
+        (#4090), so a real, ongoing crash loop reaches `failed` -- systemd's
+        designed end state, once it gives up restarting -- not just
+        `crash-loop`. `_map_status_from_states` never maps to `crash-loop` for
+        that state, and the sweep alone would go blind to a dead service the
+        moment it stops churning. `monitored_autobot_service_failed` restores
+        that signal, narrowed to `extra_data["services"]` -- the operator's
+        own `slm_services_to_monitor` set -- per #1709, so a non-primary
+        autobot unit the node was never meant to run (autobot-vnc on a
+        headless node) cannot false-positive this the way the full
+        `discovered_services` sweep did before #1709 narrowed it.
         """
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
@@ -1485,6 +1550,10 @@ class ReconcilerService:
                 svc_name = svc.get("name", "")
                 if svc_name.startswith("autobot") and svc.get("status") == "crash-loop":
                     return NodeStatus.DEGRADED.value
+
+        # #14465: a monitored autobot unit that has given up and gone "failed".
+        if monitored_autobot_service_failed(extra_data):
+            return NodeStatus.DEGRADED.value
 
         if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
             return NodeStatus.DEGRADED.value
