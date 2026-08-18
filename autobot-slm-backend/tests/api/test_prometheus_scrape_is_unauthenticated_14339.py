@@ -161,27 +161,43 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
     return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
-def _record(calls: dict, unparseable: list, name: str, node, lineno: int) -> None:
-    """Store a public-surface call, reporting a repeat rather than overwriting it.
+def _record(calls: dict, unparseable: list, idiom: str, name: str, node, lineno: int) -> None:
+    """Store a public-surface registration, reporting an ambiguous name.
 
-    The three collectors keyed by name and the merge did `dict.update`, so two
-    registrations of the same name collapsed and the LAST one won. That made an
-    ungated registration invisible whenever the same name was also registered
-    with the gate somewhere else — and FastAPI resolves first-match-wins, so the
-    ungated one is the registration that actually serves.
+    Registrations are keyed by name because the registry declares names. A name
+    is not a unique identity for a route surface, though: a router and an
+    endpoint function can carry the same one. The three collectors overwrote
+    each other, so the last registration won — and FastAPI resolves
+    first-match-wins, meaning the overwritten one is what serves. The check
+    reported clean about a route it was not looking at.
 
-    Demonstrated against the real file: mounting `errors_router` ungated before
-    its existing gated mount left all 22 tests green while the ungated route was
-    the live one.
+    Two registrations of one name are reported when they cannot be the same
+    declaration:
 
-    A repeat is reported rather than silently kept, because once a name maps to
-    two calls this check cannot say which one it is answering about — the same
-    reason an unreadable call fails instead of being skipped.
+    * **Different idioms.** An `@app.get` endpoint named after a declared router
+      borrows that router's registry entry while being a different surface. Both
+      may be ungated, so comparing gating alone does not catch it.
+    * **Same idiom, different gating.** One carries the service-management
+      dependency and the other does not.
+
+    The same router mounted twice with identical gating — two prefixes, both
+    gated — is a legitimate FastAPI pattern and is deliberately left alone.
     """
-    if name in calls:
-        unparseable.append(f"line {lineno}: {name} registered more than once; this check cannot say which gates it")
+    previous = calls.get(name)
+    if previous is None:
+        calls[name] = (idiom, node)
         return
-    calls[name] = node
+    prior_idiom, prior_node = previous
+    if prior_idiom != idiom:
+        unparseable.append(
+            f"line {lineno}: {name} registered as both {prior_idiom} and {idiom}; "
+            "the registry declares names, so it cannot say which surface it covers"
+        )
+    elif ("dependencies" in _keywords(prior_node)) != ("dependencies" in _keywords(node)):
+        unparseable.append(
+            f"line {lineno}: {name} registered twice with different gating; "
+            "first-match-wins means the ungated registration serves"
+        )
 
 
 def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], list[str]]:
@@ -230,11 +246,11 @@ def _app_mounts(tree: ast.Module | None = None) -> tuple[dict[str, ast.Call], li
             unparseable.append(f"line {node.lineno}: receiver {ast.dump(receiver)[:70]}")
             continue
         if _is_plain_name_arg(node):
-            _record(calls, unparseable, node.args[0].id, node, node.lineno)
+            _record(calls, unparseable, "include_router", node.args[0].id, node, node.lineno)
         else:
             shape = ast.dump(node.args[0])[:80] if node.args else "no arguments"
             unparseable.append(f"line {node.lineno}: argument {shape}")
-    return calls, unparseable
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _decorator_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dict[str, ast.Call], list[str]]:
@@ -266,8 +282,8 @@ def _decorator_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dict[st
             if kind == "unparseable":
                 unparseable.append(f"line {deco.lineno}: receiver {ast.dump(receiver)[:70]}")
                 continue
-            _record(calls, unparseable, node.name, deco, node.lineno)
-    return calls, unparseable
+            _record(calls, unparseable, "decorator", node.name, deco, node.lineno)
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _endpoint_arg(call: ast.Call) -> ast.expr | None:
@@ -304,11 +320,11 @@ def _add_api_route_calls(tree: ast.Module, aliases: frozenset[str]) -> tuple[dic
             continue
         endpoint = _endpoint_arg(node)
         if isinstance(endpoint, ast.Name):
-            _record(calls, unparseable, endpoint.id, node, node.lineno)
+            _record(calls, unparseable, "add_api_route", endpoint.id, node, node.lineno)
         else:
             shape = ast.dump(endpoint)[:80] if endpoint is not None else "no endpoint argument"
             unparseable.append(f"line {node.lineno}: endpoint {shape}")
-    return calls, unparseable
+    return {name: node for name, (_, node) in calls.items()}, unparseable
 
 
 def _all_bypass_calls(tree: ast.Module | None = None) -> tuple[dict[str, ast.AST], list[str]]:
@@ -329,10 +345,22 @@ def _all_bypass_calls(tree: ast.Module | None = None) -> tuple[dict[str, ast.AST
     decorator_calls, decorator_unparseable = _decorator_calls(tree, aliases)
     api_route_calls, api_route_unparseable = _add_api_route_calls(tree, aliases)
 
-    calls: dict[str, ast.AST] = dict(router_calls)
-    calls.update(decorator_calls)
-    calls.update(api_route_calls)
-    return calls, [*unparseable, *decorator_unparseable, *api_route_unparseable]
+    # NOT `dict.update` across the three. That is the same name-keyed collapse
+    # the collectors themselves had, one layer up: a name registered by two
+    # different idioms silently kept the last, and when the colliding name was
+    # already on the registry's open list the resulting ungated route passed
+    # with zero failures. Reconciled through `_record` so every registration is
+    # judged by the same rule wherever it came from.
+    calls: dict[str, tuple[str, ast.AST]] = {}
+    merged: list[str] = [*unparseable, *decorator_unparseable, *api_route_unparseable]
+    for idiom, source in (
+        ("include_router", router_calls),
+        ("decorator", decorator_calls),
+        ("add_api_route", api_route_calls),
+    ):
+        for name, node in source.items():
+            _record(calls, merged, idiom, name, node, getattr(node, "lineno", 0))
+    return {name: node for name, (_, node) in calls.items()}, merged
 
 
 def _bypass_calls() -> dict[str, ast.AST]:
