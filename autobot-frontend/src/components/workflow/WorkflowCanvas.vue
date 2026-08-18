@@ -116,6 +116,7 @@
              :ref="(el) => registerNodeEl(node.id, el as Element | null)"
              :class="[node.type, { selected: selectedNodeId === node.id }, ...ruleClasses(node)]"
              :data-rule-id="nodeRuleId(node)"
+             :data-group-kind="groupKind(node)"
              :data-node-id="node.id"
              :style="nodeStyle(node)"
              role="button"
@@ -530,6 +531,19 @@ function ruleLabel(rule: CanvasNodeRule): string {
 function nodeRuleLabel(node: CanvasNode): string {
   const rule = ruleForNode(node);
   return rule ? ruleLabel(rule) : '';
+}
+
+/**
+ * Which kind of container an `org-group` node is — team or reporting unit (#14596).
+ *
+ * `undefined` for every other node type, so the attribute is absent rather
+ * than empty: an empty attribute still matches `[data-group-kind]` in CSS and
+ * would style nodes that are not containers at all.
+ */
+function groupKind(node: CanvasNode): string | undefined {
+  if (node.type !== 'org-group') return undefined;
+  const kind = (node.data as { kind?: unknown } | undefined)?.kind;
+  return typeof kind === 'string' ? kind : undefined;
 }
 
 function nodeRuleId(node: CanvasNode): string | undefined {
@@ -991,6 +1005,14 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.org-person .node-header { background: var(--color-info); }
 .workflow-node.org-group { background: var(--color-info-bg); border-style: dashed; cursor: default; }
 .workflow-node.org-group .node-header { background: transparent; color: var(--text-secondary); border-bottom: 1px dashed var(--border-default); }
+/* #14596: a team is not a reporting unit. The dashed info-coloured box above
+   stands for a reporting line; a team roster is drawn solid in the warning
+   accent so the two are told apart at a glance rather than only by reading
+   their captions. Colour is not the only signal — the border STYLE differs
+   too (solid vs dashed), so the distinction survives for a reader who cannot
+   separate the hues, which is the rule #13941 established on this canvas. */
+.workflow-node.org-group[data-group-kind='team'] { background: var(--color-warning-bg); border-style: solid; }
+.workflow-node.org-group[data-group-kind='team'] .node-header { border-bottom: 1px solid var(--color-warning); }
 .org-title { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); }
 .org-meta { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-xs); color: var(--text-tertiary); }
 
