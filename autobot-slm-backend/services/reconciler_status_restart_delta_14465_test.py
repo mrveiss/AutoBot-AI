@@ -148,6 +148,29 @@ def test_a_presently_crash_looping_service_still_degrades_the_node():
     assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
 
 
+def test_a_crash_looping_service_from_an_agent_that_predates_this_fix_still_degrades():
+    """The fleet-wide rollout defect review caught: `unit_file_state` is a
+    field THIS PR introduces. Every node running the currently-deployed agent
+    (until its own code-sync lands and its agent process restarts -- up to
+    the agent's 300s discovery-cache TTL after that) reports
+    `discovered_services` WITHOUT this key at all, on every heartbeat.
+
+    Before this test existed, all 13 payloads in this file included the
+    field, so the suite stayed green on a version of `is_managed_autobot_
+    service` that returned `False` for an absent `unit_file_state` --
+    `_service_health_degraded` unconditionally `False`, node status blind to
+    a dead autobot service fleet-wide for the whole rollout window. Fail
+    safe, not open: absent must mean IN scope, matching base's original
+    name-prefix-only behaviour exactly.
+    """
+    extra_data = {"discovered_services": [{"name": "autobot-vnc", "status": "crash-loop", "n_restarts": 1}]}
+
+    assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value, (
+        "a crash-looping autobot service reported by a pre-rollout agent (no unit_file_state at all) "
+        "must still degrade the node -- absent must fail safe, not open"
+    )
+
+
 def test_slm_agent_itself_is_in_scope():
     """#14465 review: `slm-agent` never matches `startswith("autobot")`, and it
     is the one unit remediation actually restarts. It must not be permanently
@@ -216,6 +239,24 @@ def test_high_metrics_still_win_over_a_clean_service_list():
     assert (
         reconciler.ReconcilerService._calculate_node_status(SimpleNamespace(), 85.0, 0.0, 0.0, None, False)
         == reconciler.NodeStatus.DEGRADED.value
+    )
+
+
+def test_the_churn_window_floor_is_derived_from_the_shared_discovery_ttl_not_a_bare_literal():
+    """Review: `min_v=1` on `RESTART_CHURN_WINDOW_S` measured a break-even at
+    272s -- every value from 1 to 271 restored the pulse-flapping regression
+    this fix replaces. A bare literal also gives no warning when the agent
+    -side TTL changes: raising `SERVICE_DISCOVERY_TTL_S` without also
+    raising this floor would silently reintroduce the same regression at a
+    higher threshold. `min_v` must be DERIVED from the shared constant both
+    processes import (`autobot_shared.service_discovery`), not an
+    independent number that can drift from it.
+    """
+    from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
+
+    assert reconciler.RESTART_CHURN_WINDOW_S >= SERVICE_DISCOVERY_TTL_S * 2 + 1, (
+        f"RESTART_CHURN_WINDOW_S ({reconciler.RESTART_CHURN_WINDOW_S}) does not clear twice the shared "
+        f"discovery TTL ({SERVICE_DISCOVERY_TTL_S}) -- the floor is not actually derived from it"
     )
 
 

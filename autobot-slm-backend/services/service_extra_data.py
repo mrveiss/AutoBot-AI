@@ -55,14 +55,24 @@ def is_managed_autobot_service(svc_data: dict) -> bool:
     guard is not accidentally empty for a crash-looping unit either; it was
     just narrower than base's `discovered_services` sweep in the wrong place.
 
-    Absent `unit_file_state` (the field is new; a stale cached snapshot or a
-    caller outside `discovered_services` may not carry it) is treated as
-    OUT of scope, matching the previous conservative default.
+    Absent `unit_file_state` means IN scope (review: fail safe, not open).
+    This field is new -- every node still running the currently-deployed
+    agent (before its own code-sync + process restart picks up this PR)
+    reports `discovered_services` without it, on every heartbeat, for up to
+    the agent's 300s discovery-cache TTL after that. Treating "absent" as
+    "out of scope" would have made `_service_health_degraded` return `False`
+    unconditionally fleet-wide for that entire rollout window -- blind to a
+    genuinely crash-looping autobot service on every node, the exact symptom
+    this issue reports, reintroduced by the fix meant to close it. Falling
+    back to base's original name-prefix-only behaviour (no enabled/disabled
+    gate at all) when the field is missing means an old agent's report is
+    scored exactly as base would have scored it; only a NEW agent's report,
+    which does carry the field, gets the narrower gate.
     """
     name = svc_data.get("name", "")
     if not (name.startswith("autobot") or name == "slm-agent"):
         return False
     unit_file_state = svc_data.get("unit_file_state")
     if unit_file_state is None:
-        return False
+        return True
     return unit_file_state not in _EXPLICITLY_DISABLED_UNIT_FILE_STATES
