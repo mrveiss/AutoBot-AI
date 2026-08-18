@@ -110,9 +110,7 @@ MAX_SERVICE_RESTART_ATTEMPTS = 3
 # triggering one ansible restart via remediation, where the absolute
 # threshold it replaced made that same trade unboundedly (forever, once
 # n_restarts crossed 3) rather than for one bounded window.
-RESTART_CHURN_WINDOW_S = env_int_clamped(
-    "AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=SERVICE_DISCOVERY_TTL_S * 2 + 1
-)
+RESTART_CHURN_WINDOW_S = env_int_clamped("AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=SERVICE_DISCOVERY_TTL_S * 2 + 1)
 
 
 def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
