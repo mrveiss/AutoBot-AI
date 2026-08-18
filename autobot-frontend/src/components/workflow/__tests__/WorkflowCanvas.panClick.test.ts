@@ -10,6 +10,12 @@
 // The suppression has to be narrow in two directions, and both are asserted
 // here: a shift-click that never moves is still a selection, and a pan that
 // ends over empty canvas must not swallow the user's NEXT click on a node.
+//
+// #14610: the component now listens for Pointer Events (`pointerdown` /
+// `pointermove` / `pointerup`), not `mousedown`/`mousemove`/`mouseup` — one
+// input path for mouse and touch. The gestures below are triggered with the
+// pointer event names; the flag they exercise (`movedThisGesture`, renamed
+// from `pannedThisGesture`) and the assertions are otherwise unchanged.
 
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -18,6 +24,7 @@ import en from '@/i18n/locales/en.json'
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
+import { firePointer } from './pointerTestUtils'
 
 const NODES: CanvasNode[] = [
   {
@@ -45,9 +52,9 @@ const selections = (w: Wrapper) => w.emitted('node-selected') ?? []
 
 /** Shift-drag from `from` to `to`, starting on whichever element is given. */
 async function panFrom(w: Wrapper, start: ReturnType<typeof node>, dx: number): Promise<void> {
-  await start.trigger('mousedown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
-  await area(w).trigger('mousemove', { clientX: 100 + dx, clientY: 100 + dx })
-  await area(w).trigger('mouseup', { clientX: 100 + dx, clientY: 100 + dx })
+  await firePointer(start.element, 'pointerdown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
+  await firePointer(area(w).element, 'pointermove', { clientX: 100 + dx, clientY: 100 + dx })
+  await firePointer(area(w).element, 'pointerup', { clientX: 100 + dx, clientY: 100 + dx })
 }
 
 describe('a pan gesture is not a selection (#14079)', () => {
@@ -62,8 +69,8 @@ describe('a pan gesture is not a selection (#14079)', () => {
 
   it('still selects on a plain click', async () => {
     const w = mountCanvas()
-    await node(w).trigger('mousedown', { clientX: 100, clientY: 100, button: 0 })
-    await node(w).trigger('mouseup', { clientX: 100, clientY: 100 })
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 100, clientY: 100 })
     await node(w).trigger('click')
 
     expect(selections(w)).toEqual([['ceo']])
@@ -74,8 +81,8 @@ describe('a pan gesture is not a selection (#14079)', () => {
     // Keying the suppression on the modifier instead of on movement would
     // silently make shift-click stop working.
     const w = mountCanvas()
-    await node(w).trigger('mousedown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
-    await node(w).trigger('mouseup', { clientX: 100, clientY: 100 })
+    await firePointer(node(w).element, 'pointerdown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 100, clientY: 100 })
     await node(w).trigger('click')
 
     expect(selections(w)).toEqual([['ceo']])
@@ -86,11 +93,11 @@ describe('a pan gesture is not a selection (#14079)', () => {
     // pan is followed by no node click at all, so the flag would still be set
     // when the user next clicks a node.
     const w = mountCanvas()
-    await area(w).trigger('mousedown', { shiftKey: true, clientX: 10, clientY: 10, button: 0 })
-    await area(w).trigger('mousemove', { clientX: 90, clientY: 90 })
-    await area(w).trigger('mouseup', { clientX: 90, clientY: 90 })
+    await firePointer(area(w).element, 'pointerdown', { shiftKey: true, clientX: 10, clientY: 10, button: 0 })
+    await firePointer(area(w).element, 'pointermove', { clientX: 90, clientY: 90 })
+    await firePointer(area(w).element, 'pointerup', { clientX: 90, clientY: 90 })
 
-    await node(w).trigger('mousedown', { clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
     await node(w).trigger('click')
 
     expect(selections(w)).toEqual([['ceo']])
