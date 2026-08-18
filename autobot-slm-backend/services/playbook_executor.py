@@ -149,8 +149,14 @@ SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_S
 # a second, unbounded wait stacked on top of the timeout that triggered it.
 # Clamped, not bare (review, round 2): a bare env_float accepts 0 and
 # negatives, and 0 here collapses the grace entirely -- SIGKILL fires with no
-# chance for a well-behaved child to exit on SIGTERM first.
-PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, min_v=0.1)
+# chance for a well-behaved child to exit on SIGTERM first. `max_v` added
+# (review, round 3): env_float_clamped's min-only clamp let
+# AUTOBOT_PLAYBOOK_KILL_GRACE_S=inf produce `asyncio.wait_for(..., timeout=
+# inf)` -- an unbounded wait inside the function that exists to bound one.
+# 60s is already generous for a SIGTERM/SIGKILL grace; a process still alive
+# that much later than an uncatchable SIGKILL is in D-state (uninterruptible
+# I/O sleep), which no additional waiting here resolves.
+PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, min_v=0.1, max_v=60.0)
 
 # Timeouts for the individual git subcommands _update_code_source runs
 # (#14524 round 2): previously bare literals (30, 10) inline at each call
@@ -160,6 +166,41 @@ PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, 
 # than actually waiting out a 30s git hang.
 GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
 GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
+
+# Number of git subcommands _update_code_source runs that are bounded by
+# GIT_COMMAND_TIMEOUT_S (checkout, fetch, reset) vs GIT_REV_PARSE_TIMEOUT_S
+# (the trailing rev-parse) -- named so update_code_source_worst_case_s()
+# below states its formula in terms of _update_code_source's actual shape
+# instead of a bare "3" and "1" that would silently go stale if a step is
+# ever added or removed there.
+_UPDATE_CODE_SOURCE_GIT_TIMEOUT_STEPS = 3
+_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_STEPS = 1
+
+
+def update_code_source_worst_case_s() -> float:
+    """Upper bound on `_update_code_source`'s own wall-clock duration (#14524, round 3).
+
+    `_update_code_source` runs three git subcommands bounded by
+    `GIT_COMMAND_TIMEOUT_S` (checkout, fetch, reset) plus one trailing
+    best-effort rev-parse bounded by `GIT_REV_PARSE_TIMEOUT_S`. On TOP of
+    each of those four, a step that times out pays up to
+    `_kill_process_group`'s own worst case: two signal rounds (SIGTERM,
+    SIGKILL), each paying up to `PLAYBOOK_KILL_GRACE_S` TWICE -- once
+    reaping the direct child, once for the group-death probe
+    (`_wait_for_process_group_death`) -- so `4 * PLAYBOOK_KILL_GRACE_S` per
+    killed subcommand, worst case. Omitting that kill-grace term here (an
+    earlier version of this comment quoted "~100s") undercounted the true
+    worst case by 80s at the shipped defaults (100s vs the correct 180s).
+
+    Exists as one function, not duplicated arithmetic, so
+    `reconciler._effective_tracker_expiry_s()` can fold this into its own
+    margin without a second copy of this formula silently drifting from
+    this one.
+    """
+    kill_worst_case = 4 * PLAYBOOK_KILL_GRACE_S
+    return _UPDATE_CODE_SOURCE_GIT_TIMEOUT_STEPS * (GIT_COMMAND_TIMEOUT_S + kill_worst_case) + (
+        _UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_STEPS * (GIT_REV_PARSE_TIMEOUT_S + kill_worst_case)
+    )
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -607,41 +648,65 @@ class PlaybookExecutor:
             branch,
         )
 
-    async def _update_code_source(self) -> None:
+    async def _update_code_source(self) -> bool:
         """
         Pull latest code into code_source before running a playbook (#2896).
 
         Derives code_source root from self.ansible_dir (two levels up).
         Skips silently when the path does not exist or has no .git dir — safe
-        in local dev environments.  Never blocks provisioning: any failure is
-        logged as a warning and the caller continues.
+        in local dev environments (treated as success: there is nothing to
+        sync, not a failure to sync it).
+
+        Returns:
+            True if code_source is confirmed at `origin/<branch>` (or there
+            was nothing to sync); False if any step failed or timed out.
+
+        #14524 (round 3): this used to return None and its result was
+        DISCARDED at the call site -- a git step that failed (including one
+        that timed out, post round 2's own fix) was logged and swallowed,
+        and `execute_playbook` went on to run the playbook against whatever
+        revision code_source already held, reporting `success: True`. Never
+        blocking PROVISIONING is still the right default for the ordinary
+        per-role/per-node restart path (manage-service.yml barely depends on
+        code_source being current), but for the SELF-UPDATE path
+        (`detach=True`) that is a SILENT STALE DEPLOY across the whole
+        fleet -- worse than the hang this issue fixes, because it is
+        invisible. The caller now sees this result and decides; see
+        `execute_playbook`.
         """
         code_source_dir = self.ansible_dir.parent.parent
         git_dir = code_source_dir / ".git"
         if not git_dir.exists():
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
-            return
+            return True
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+        synced = True
 
         try:
             if await self._run_git(code_source_dir, "checkout", "--", ".") != 0:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
+                synced = False
 
             if await self._run_git(code_source_dir, "fetch", "origin") != 0:
                 logger.warning("_update_code_source: git fetch origin failed; continuing")
-                return
+                return False
 
             if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:
                 logger.warning(
                     "_update_code_source: git reset --hard origin/%s failed; continuing",
                     branch,
                 )
-                return
+                return False
 
+            # Best-effort only: a failure here means the commit hash was not
+            # LOGGED, not that the reset above did not happen -- does not
+            # affect `synced`.
             await self._log_updated_head_commit(code_source_dir, branch)
+            return synced
         except Exception as exc:
             logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
+            return False
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """
@@ -1127,6 +1192,43 @@ class PlaybookExecutor:
         """
         link_group_vars(inventory_path, self.ansible_dir)
 
+    @staticmethod
+    def _code_source_sync_failure_result(
+        playbook_name: str, detach: bool, code_source_synced: bool
+    ) -> Dict[str, any] | None:
+        """A failed code_source sync's consequence for THIS run. Helper for execute_playbook.
+
+        Returns a ready-to-return failure dict for the DETACHED (self-update)
+        path -- refusing to deploy a possibly-stale revision fleet-wide is a
+        real abort, not a warning (#14524 round 3: the self-update path
+        exists to deploy the LATEST revision; running it anyway on a sync
+        failure would be a SILENT STALE DEPLOY, reporting `success: True`
+        while every node gets whatever code_source already held, invisible
+        until symptoms show up elsewhere). Returns None otherwise -- the
+        ordinary per-role/per-node path (`detach=False`) keeps its original
+        best-effort "never blocks provisioning" behaviour, only logged.
+        """
+        if code_source_synced:
+            return None
+        if detach:
+            logger.error(
+                "execute_playbook: code_source sync failed before a DETACHED (self-update) "
+                "run of %s -- refusing to deploy a possibly-stale revision fleet-wide (#14524)",
+                playbook_name,
+            )
+            return {
+                "success": False,
+                "output": f"code_source sync failed before self-update of {playbook_name} (#14524)",
+                "returncode": -1,
+                "timed_out": False,
+            }
+        logger.warning(
+            "execute_playbook: code_source sync failed for %s -- continuing with "
+            "whatever code_source currently holds (#14524)",
+            playbook_name,
+        )
+        return None
+
     async def execute_playbook(
         self,
         playbook_name: str,
@@ -1172,7 +1274,10 @@ class PlaybookExecutor:
             Dict with keys: success (bool), output (str), returncode (int),
             timed_out (bool) -- True only when ``timeout_s`` was exceeded.
         """
-        await self._update_code_source()
+        code_source_synced = await self._update_code_source()
+        sync_failure = self._code_source_sync_failure_result(playbook_name, detach, code_source_synced)
+        if sync_failure is not None:
+            return sync_failure
 
         playbook_path = self.ansible_dir / playbook_name
         if not playbook_path.exists():
