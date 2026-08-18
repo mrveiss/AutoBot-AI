@@ -116,9 +116,19 @@ class ReportDiscoveryAgent:
             "other": [],
         }
 
+        # #14507: the patterns overlap -- ``security_report.json`` matches both
+        # ``*report*`` and ``*.json`` -- so without this set every such file was
+        # discovered, counted, analysed and archived once per matching pattern.
+        # The second archival attempt moves a file that is no longer there.
+        seen: set = set()
+
         for pattern in report_patterns:
             for file_path in self.base_path.rglob(pattern):
+                resolved = file_path.resolve()
+                if resolved in seen:
+                    continue
                 if file_path.is_file() and not self._should_exclude(file_path):
+                    seen.add(resolved)
                     report_file = self._create_report_file(file_path)
                     category = self._categorize_file(report_file)
                     discovered[category].append(report_file)
@@ -469,9 +479,9 @@ class ReportProcessingCoordinator:
         self.processing_start = datetime.datetime.now()
 
         # Initialize agents
-        self.discovery_agent = ReportDiscoveryAgent(base_path)
+        self.discovery_agent = ReportDiscoveryAgent(self.base_path)
         self.error_agent = ErrorAnalysisAgent()
-        self.archive_agent = ArchiveOrganizationAgent(base_path)
+        self.archive_agent = ArchiveOrganizationAgent(self.base_path)
 
         # Processing statistics
         self.stats = {
