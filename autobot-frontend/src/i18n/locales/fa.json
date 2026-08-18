@@ -3815,7 +3815,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "برای انتقال فوکوس بین گره‌ها از کلیدهای جهت‌نما استفاده کنید. برای انتخاب گره فوکوس‌شده، Enter یا Space را فشار دهید. برای لغو انتخاب، Escape را فشار دهید.",
+      "a11yInstructionsMove": "کلید Control را نگه دارید و یک کلید جهت‌نما را فشار دهید تا گره انتخاب‌شده جابه‌جا شود."
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "بوم",
       "canvasTabAll": "همه واحدها",
       "canvasUnit": "واحد {name}",
+      "canvasTeam": "تیم {name}",
       "canvasHint": "برای جابه‌جایی Shift را نگه دارید و بکشید، برای بزرگ‌نمایی اسکرول کنید و برای جزئیات روی گره کلیک کنید.",
       "viewPeople": "افراد",
       "peopleLegend": "انواع افراد",
@@ -8308,7 +8313,8 @@
       "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
       "processDetach": "جدا کردن {workflow} از {role}",
-      "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد."
+      "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد.",
+      "canvasGroupKind": "گروه"
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

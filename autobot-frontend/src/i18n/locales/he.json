@@ -3815,7 +3815,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "השתמשו במקשי החצים כדי להזיז את המיקוד בין הצמתים. הקישו Enter או Space כדי לבחור בצומת הממוקד. הקישו Escape כדי לבטל את הבחירה.",
+      "a11yInstructionsMove": "החזיקו את מקש Control ולחצו על מקש חץ כדי להזיז את הצומת הנבחרת."
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "קנבס",
       "canvasTabAll": "כל היחידות",
       "canvasUnit": "יחידת {name}",
+      "canvasTeam": "צוות {name}",
       "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים.",
       "viewPeople": "אנשים",
       "peopleLegend": "סוגי אנשים",
@@ -8308,7 +8313,8 @@
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
-      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית."
+      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית.",
+      "canvasGroupKind": "קבוצה"
     },
     "executorRollup": {
       "title": "סיכום מבצעים",

@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind} : {name}",
+      "nodeAriaLabelWithState": "{kind} : {name}, {state}",
+      "a11yInstructions": "Utilisez les touches fléchées pour déplacer le focus entre les nœuds. Appuyez sur Entrée ou Espace pour sélectionner le nœud ciblé. Appuyez sur Échap pour désélectionner.",
+      "a11yInstructionsMove": "Maintenez Ctrl enfoncé et appuyez sur une touche fléchée pour déplacer le nœud sélectionné."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "Canevas",
       "canvasTabAll": "Toutes les unités",
       "canvasUnit": "Unité {name}",
+      "canvasTeam": "Équipe {name}",
       "canvasHint": "Maj+glisser pour déplacer, molette pour zoomer, cliquez sur un nœud pour les détails.",
       "viewPeople": "Personnes",
       "peopleLegend": "Types de personne",
@@ -8308,7 +8313,8 @@
       "attachError": "Impossible d'associer ce workflow.",
       "detachError": "Impossible de détacher ce workflow.",
       "processDetach": "Détacher {workflow} de {role}",
-      "attachRolesUnavailable": "Les rôles n'ont pas pu être chargés, cette liste peut donc être incomplète."
+      "attachRolesUnavailable": "Les rôles n'ont pas pu être chargés, cette liste peut donc être incomplète.",
+      "canvasGroupKind": "Groupe"
     },
     "executorRollup": {
       "title": "Récapitulatif des exécutants",

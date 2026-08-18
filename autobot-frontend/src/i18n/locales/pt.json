@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Use as teclas de seta para mover o foco entre os nós. Pressione Enter ou Espaço para selecionar o nó focado. Pressione Escape para desmarcar.",
+      "a11yInstructionsMove": "Mantenha pressionado Control e pressione uma tecla de seta para mover o nó selecionado."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8240,6 +8244,7 @@
       "viewCanvas": "Tela",
       "canvasTabAll": "Todas as unidades",
       "canvasUnit": "Unidade {name}",
+      "canvasTeam": "Equipa {name}",
       "canvasHint": "Shift+arrastar para deslocar, rolar para ampliar, clique num nó para ver detalhes.",
       "viewPeople": "Pessoas",
       "peopleLegend": "Tipos de pessoa",
@@ -8308,7 +8313,8 @@
       "attachError": "Não foi possível anexar esse fluxo.",
       "detachError": "Não foi possível remover esse fluxo.",
       "processDetach": "Remover {workflow} de {role}",
-      "attachRolesUnavailable": "Não foi possível carregar as funções, portanto esta lista pode estar incompleta."
+      "attachRolesUnavailable": "Não foi possível carregar as funções, portanto esta lista pode estar incompleta.",
+      "canvasGroupKind": "Grupo"
     },
     "executorRollup": {
       "title": "Resumo de executores",
