@@ -56,7 +56,8 @@
   post_tasks:
     - name: Verify Redis service
       systemd:
-        name: redis-server
+        # #14516: redis-stack's unit, not the plain Debian one that is never installed.
+        name: "{{ redis_service_name | default('redis-stack-server') }}"
         state: started
         enabled: true
       tags: [verify]
@@ -74,7 +75,7 @@
           ═══════════════════════════════════════════════════════════════
           Redis Stack Setup Complete
           ═══════════════════════════════════════════════════════════════
-          Service: redis-server
+          Service: {{ redis_service_name | default('redis-stack-server') }}
           Status: {{ 'Running' if redis_ping.rc == 0 else 'Not responding' }}
           URL: redis://{{ ansible_host }}:{{ redis_port }}
           Data: {{ redis_data_dir }}

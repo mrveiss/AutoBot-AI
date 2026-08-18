@@ -18,6 +18,16 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 
+# #14516: ONE definition of the Redis unit name.
+#
+# The platform installs redis-stack, whose unit is `redis-stack-server`.
+# `redis-server` is the plain Debian package and is never installed here, yet
+# three playbooks managed that name as a literal and failed with "Could not
+# find the requested service redis-server" the moment they ran. The redis
+# role's own handlers and package check had the right name all along -- the
+# literals drifted because nothing tied them to it.
+redis_service_name: "redis-stack-server"
+
 autobot:
   version: "2.0.0"
   environment: "production"
