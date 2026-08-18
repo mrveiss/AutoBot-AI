@@ -74,6 +74,24 @@ REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WA
 # Clamped, not bare: env_int accepts 0 and negatives, and a 0 here turns the
 # verification poll into a tight open/close-session loop for the whole window.
 REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
+
+# #14524: wall-clock ceiling on the ansible-playbook subprocess launched by
+# `_restart_service_via_ansible`. Previously unbounded -- a genuinely hung SSH
+# connection or stuck remote task blocked `_remediate_node`, and therefore
+# that node's slot in `_attempt_remediation`'s serial pass, indefinitely.
+#
+# `manage-service.yml` is the only playbook this call path ever runs: one
+# host, one systemd service action, no package installs or long-running
+# polling -- a legitimate run completes in seconds. 180s gives roughly two
+# orders of magnitude of headroom over that, while staying comfortably below
+# REMEDIATION_COOLDOWN (300s) and below the ~240s worst case ansible.cfg's own
+# `timeout = 30` connect timeout plus `ANSIBLE_SSH_RETRIES=3` already bounds
+# for this playbook's two remote-connecting tasks against a host that is
+# cleanly REFUSING a connection (not hung) -- so this timeout is only ever the
+# first thing to fire for a run that is genuinely wedged, not one that would
+# have failed cleanly on its own a little later anyway. See
+# `_effective_tracker_expiry_s` for how this now feeds the escalation floor.
+REMEDIATION_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S", 180, min_v=1)
 # #14465 review: this does NOT read any heartbeat/streak signal, which closes
 # the specific way the prior two designs were fakeable by a flap -- but it is
 # not, on its own, a general fix for escalation reachability. The dominant
@@ -152,28 +170,40 @@ def _effective_tracker_expiry_s() -> int:
     With more than one such node in the same pass, the real gap between two
     `_remediate_node` calls for a GIVEN node can run well beyond `reconcile_
     interval` -- a margin of `reconcile_interval` alone was measured
-    defeated for realistic real-world pass durations. `REMEDIATION_
-    HEARTBEAT_WAIT_S` upper-bounds the dominant source of that variance for
-    ONE node; this does NOT bound the case of many nodes degraded
-    simultaneously, which needs either a known fleet-size ceiling or
-    restructuring `_attempt_remediation` to process nodes concurrently (each
-    with its own DB session -- sharing one `AsyncSession` across concurrent
-    coroutines is unsafe, so that is a real change, not a one-line fix).
-    Tracked as #14515. Nor does it bound `execute_playbook`'s own runtime,
-    which has no wall-clock timeout at all -- tracked separately as #14524,
-    since that is a single-node gap, not a many-nodes one.
+    defeated for realistic real-world pass durations. This does NOT bound
+    the case of many nodes degraded simultaneously, which needs either a
+    known fleet-size ceiling or restructuring `_attempt_remediation` to
+    process nodes concurrently (each with its own DB session -- sharing one
+    `AsyncSession` across concurrent coroutines is unsafe, so that is a real
+    change, not a one-line fix). Tracked as #14515.
+
+    #14524 (round 8): `execute_playbook`'s own runtime is now bounded too
+    (`REMEDIATION_PLAYBOOK_TIMEOUT_S`, wired through `_restart_service_via_
+    ansible`), and the margin folds that in. Within ONE `_remediate_node`
+    call the two waits are SEQUENTIAL, not alternatives -- the ansible run
+    happens, then, only if it succeeded, `_heartbeat_returned` polls for up
+    to `REMEDIATION_HEARTBEAT_WAIT_S` more -- so the worst-case duration of a
+    single node's own attempt is their SUM, not either alone. That sum
+    replaces the bare `REMEDIATION_HEARTBEAT_WAIT_S` term inside the existing
+    `max(reconcile_interval, ...)`, which is deliberately a looser bound than
+    strictly necessary (a tight bound would ADD `reconcile_interval` rather
+    than `max` against it) -- symmetric with round 6's own choice, and safe
+    in the same direction: this floor coming out too generous only delays
+    forgiveness of a genuinely stale tracker, never lets a live one be
+    forgiven too soon. Still scoped to ONE node; #14515's many-nodes gap is
+    unchanged by this.
 
     Two conditions are logged once (not on every call -- this runs on every
     `_forgive_if_expired`, up to once per reconcile pass per degraded node)
     rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
     EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
-    a short window silently gets 391+ instead, which is ALSO shorter than
-    the 1800s default, so the operator ends up less protected than doing
-    nothing while believing they configured something specific), and
-    `settings.reconcile_interval` being present but not a real int (an
-    auto-vivified `MagicMock` child, dormant today but would otherwise
-    silently collapse a legitimately large configured interval down to the
-    60s fallback with no warning).
+    a short window silently gets 571+ instead at the current defaults, which
+    is ALSO shorter than the 1800s default, so the operator ends up less
+    protected than doing nothing while believing they configured something
+    specific), and `settings.reconcile_interval` being present but not a real
+    int (an auto-vivified `MagicMock` child, dormant today but would
+    otherwise silently collapse a legitimately large configured interval down
+    to the 60s fallback with no warning).
     """
     global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
 
@@ -188,7 +218,8 @@ def _effective_tracker_expiry_s() -> int:
             _reconcile_interval_type_warning_logged = True
         reconcile_interval = 60
 
-    margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)
+    single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
+    margin = max(reconcile_interval, single_node_attempt_ceiling_s)
     floor = REMEDIATION_COOLDOWN + margin + 1
     effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
@@ -843,10 +874,11 @@ class ReconcilerService:
         # gated on elapsed time since the last ATTEMPT rather than any
         # heartbeat/streak signal, but NOT a complete fix on its own: see
         # `_effective_tracker_expiry_s` for what its margin does and does not
-        # bound (it does not bound `execute_playbook`'s own runtime, which has
-        # no wall-clock timeout at all -- #14524; the margin's own N=5
-        # coverage gap at this floor is #14515). It is also not the reason
-        # `count` stays low for a node whose agent keeps heartbeating;
+        # bound (`execute_playbook`'s own runtime IS now bounded --
+        # REMEDIATION_PLAYBOOK_TIMEOUT_S, #14524 -- and folded into that
+        # margin; the margin's own N-nodes coverage gap at this floor is
+        # still #14515). It is also not the reason `count` stays low for a
+        # node whose agent keeps heartbeating;
         # `success = restarted and await self._heartbeat_returned(...)`, a
         # few lines below, is.
 
@@ -951,7 +983,14 @@ class ReconcilerService:
     ) -> bool:
         """Restart a systemd service on a remote node via Ansible playbook.
 
-        Returns True if successful, False otherwise.
+        Returns True if successful, False otherwise -- including on a timeout
+        (#14524): `execute_playbook`'s `timeout_s` bounds this call to
+        `REMEDIATION_PLAYBOOK_TIMEOUT_S`, and a timed-out run comes back with
+        `success=False`, so this always returns False for it too, exactly
+        like any other failed run. That is what makes the timeout safe for
+        both callers of this method (`_remediate_node`'s and
+        `_remediate_service`'s attempt counters) to advance toward escalation
+        instead of quietly resetting.
         """
         try:
             from services.playbook_executor import get_playbook_executor
@@ -964,13 +1003,26 @@ class ReconcilerService:
                     "service_name": service_name,
                     "service_action": "restarted",
                 },
+                timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
             )
 
             if result.get("success"):
                 logger.info("Successfully restarted %s on %s", service_name, hostname)
                 return True
+            elif result.get("timed_out"):
+                logger.warning(
+                    "Restart of %s on %s timed out after %ds -- killed (#14524)",
+                    service_name,
+                    hostname,
+                    REMEDIATION_PLAYBOOK_TIMEOUT_S,
+                )
+                return False
             else:
-                error_msg = result.get("error", "Unknown error")
+                # #14524: the playbook_executor result carries the failure detail
+                # under "output", not "error" -- there is no "error" key in its
+                # returned dict, so the previous `result.get("error", ...)` here
+                # always fell through to the generic default.
+                error_msg = result.get("output", "Unknown error")
                 logger.warning(
                     "Failed to restart %s on %s: %s",
                     service_name,

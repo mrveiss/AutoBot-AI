@@ -15,11 +15,13 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
+from autobot_shared.env_utils import env_float
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -139,6 +141,13 @@ SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.l
 
 # Poll interval while tailing the detached run's log file for live progress.
 SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
+
+# #14524: grace period between SIGTERM and SIGKILL when a timed-out playbook
+# subprocess's WHOLE process group (see _kill_process_group) does not exit on
+# its own. Long enough for ansible-playbook's own signal handling / a forked
+# ssh child to unwind cleanly; short enough that a wedged run does not become
+# a second, unbounded wait stacked on top of the timeout that triggered it.
+PLAYBOOK_KILL_GRACE_S = env_float("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0)
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -811,6 +820,7 @@ class PlaybookExecutor:
         env: Dict[str, str],
         progress_callback: Callable | None,
         detach: bool = False,
+        timeout_s: float | None = None,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
@@ -826,6 +836,15 @@ class PlaybookExecutor:
                 unchanged direct exec + pipe when systemd-run/systemd-service
                 context or the log file is unavailable (dev mode, tests,
                 containers).
+            timeout_s: Wall-clock ceiling on the whole run (#14524). ``None``
+                (the default) preserves the previous, unbounded behaviour --
+                deployment/provisioning playbooks legitimately run for many
+                minutes (package installs, model pulls) and are out of this
+                issue's scope. Only a caller that wants a bounded run (the
+                reconciler's remediation restart) passes a concrete value. On
+                expiry the WHOLE process group is killed (_kill_process_group)
+                and a failed, non-zero-returncode result comes back -- never a
+                silent success.
         """
         effective_cmd = cmd
         log_path: Path | None = None
@@ -848,13 +867,87 @@ class PlaybookExecutor:
             stderr=stderr_target,
             cwd=str(self.ansible_dir),
             env=env,
+            # #14524: own process group, so a timeout can kill the WHOLE tree
+            # (ansible-playbook's forked workers/ssh children too), not just
+            # this one PID.
+            start_new_session=True,
         )
-        if log_path is not None:
-            output_lines = await self._tail_playbook_log(log_path, process, progress_callback)
-        else:
-            output_lines = await self._stream_playbook_output(process, progress_callback)
-        await process.wait()
-        return {"output": "\n".join(output_lines), "returncode": process.returncode}
+
+        async def _collect() -> List[str]:
+            if log_path is not None:
+                lines = await self._tail_playbook_log(log_path, process, progress_callback)
+            else:
+                lines = await self._stream_playbook_output(process, progress_callback)
+            await process.wait()
+            return lines
+
+        if timeout_s is None:
+            output_lines = await _collect()
+            return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+
+        try:
+            output_lines = await asyncio.wait_for(_collect(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            return await self._handle_playbook_timeout(process, effective_cmd, timeout_s)
+
+        return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+
+    async def _handle_playbook_timeout(
+        self, process: asyncio.subprocess.Process, cmd: List[str], timeout_s: float
+    ) -> Dict[str, any]:
+        """Kill a wedged playbook run and report it as a FAILURE, not a success (#14524).
+
+        Helper for _run_subprocess. ``returncode=-9`` (never 0) and
+        ``timed_out=True`` let every caller's existing success check
+        (``execute_playbook``: ``success = returncode == 0``) treat this
+        exactly like any other failed run -- so, for the remediation restart
+        path, ``_restart_service_via_ansible`` returns False and the
+        escalation counter advances instead of being silently reset. A
+        timeout that read as success would be the exact silent-failure shape
+        this repo keeps finding.
+        """
+        logger.error(
+            "Playbook subprocess exceeded %.0fs wall-clock timeout -- killing process group (#14524): %s",
+            timeout_s,
+            " ".join(cmd[:3]),
+        )
+        await self._kill_process_group(process)
+        return {
+            "output": (f"[TIMEOUT] ansible-playbook killed after exceeding {timeout_s:.0f}s wall-clock timeout (#14524)"),
+            "returncode": -9,
+            "timed_out": True,
+        }
+
+    async def _kill_process_group(self, process: asyncio.subprocess.Process) -> None:
+        """SIGTERM then SIGKILL the WHOLE process group of a timed-out run (#14524).
+
+        ``ansible-playbook`` forks per-host workers (``forks=5``, ansible.cfg)
+        and ssh connection children; killing only the direct PID would leave
+        those running as orphans -- the exact "orphaned ansible-playbook or
+        SSH session" this fix exists to avoid. The subprocess was started
+        with ``start_new_session=True`` (see _run_subprocess), which makes
+        its PID equal to its own process group ID, so a single ``os.killpg``
+        reaches every descendant. SIGTERM first, for children with a clean
+        shutdown handler; SIGKILL only if the group is still alive after the
+        grace period.
+        """
+        try:
+            pgid = os.getpgid(process.pid)
+        except ProcessLookupError:
+            return  # already gone
+
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(pgid, sig)
+            except ProcessLookupError:
+                return
+            try:
+                await asyncio.wait_for(process.wait(), timeout=PLAYBOOK_KILL_GRACE_S)
+                return
+            except asyncio.TimeoutError:
+                continue
+
+        logger.error("Playbook process group %d survived SIGKILL after grace period (#14524)", pgid)
 
     @staticmethod
     def _stage_dir_for_run(detach: bool) -> str | None:
@@ -966,6 +1059,7 @@ class PlaybookExecutor:
         progress_callback: Callable | None = None,
         inventory_path: Path | None = None,
         detach: bool = False,
+        timeout_s: float | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -988,9 +1082,17 @@ class PlaybookExecutor:
                 True for the SLM self-update path (the run that restarts
                 autobot-slm-backend); ordinary per-role/per-node deploys leave
                 this False, since they don't kill their own process.
+            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``
+                (the default) is unbounded, matching the previous behaviour --
+                required for long deployment/provisioning runs. Pass a concrete
+                value only where a caller can safely bound the run (e.g. the
+                reconciler's remediation restart); mutually exclusive with
+                ``detach`` in practice, since a detached run is designed to
+                outlive this coroutine entirely.
 
         Returns:
-            Dict with keys: success (bool), output (str), returncode (int)
+            Dict with keys: success (bool), output (str), returncode (int),
+            timed_out (bool) -- True only when ``timeout_s`` was exceeded.
         """
         await self._update_code_source()
 
@@ -1050,16 +1152,19 @@ class PlaybookExecutor:
             # Override ansible.cfg default inventory to prevent merging
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
-            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach)
+            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
+            elif proc_result.get("timed_out"):
+                logger.error(f"Playbook {playbook_name} timed out after {timeout_s}s (#14524)")
             else:
                 logger.error(f"Playbook {playbook_name} failed with code {proc_result['returncode']}")
             return {
                 "success": success,
                 "output": proc_result["output"],
                 "returncode": proc_result["returncode"],
+                "timed_out": proc_result.get("timed_out", False),
             }
 
         except Exception as e:
@@ -1068,6 +1173,7 @@ class PlaybookExecutor:
                 "success": False,
                 "output": f"Error: {str(e)}",
                 "returncode": -1,
+                "timed_out": False,
             }
         finally:
             # Clean up the per-run temp inventory and extra-vars files.
