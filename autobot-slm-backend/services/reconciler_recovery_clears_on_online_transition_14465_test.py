@@ -235,9 +235,9 @@ def test_recovery_clear_preserves_last_attempt_for_cooldown_pacing():
 
     tracker = service._remediation_tracker["node-14465"]
     assert tracker["count"] == 0, "recovery must forgive the attempt count"
-    assert tracker["last_attempt"] == last_attempt, (
-        "recovery deleted last_attempt -- the next degradation would be remediated with no cooldown at all"
-    )
+    assert (
+        tracker["last_attempt"] == last_attempt
+    ), "recovery deleted last_attempt -- the next degradation would be remediated with no cooldown at all"
 
 
 class _AsyncReturns:
@@ -330,9 +330,9 @@ def test_a_single_flapping_heartbeat_does_not_clear_the_tracker():
         )
 
     assert node.status == reconciler.NodeStatus.ONLINE.value, "sanity: this heartbeat must compute ONLINE"
-    assert service._remediation_tracker[node.node_id]["count"] == 2, (
-        "a single flapping heartbeat cleared the remediation tracker -- the #14454 defect, reinstated"
-    )
+    assert (
+        service._remediation_tracker[node.node_id]["count"] == 2
+    ), "a single flapping heartbeat cleared the remediation tracker -- the #14454 defect, reinstated"
 
 
 def test_a_sustained_online_streak_clears_the_pending_remediation_tracker():
@@ -379,9 +379,9 @@ def test_a_heartbeat_that_stays_degraded_does_not_clear_the_tracker():
     )
 
     assert node.status == reconciler.NodeStatus.DEGRADED.value
-    assert service._remediation_tracker[node.node_id]["count"] == 2, (
-        "a heartbeat that recomputes DEGRADED cleared the remediation tracker anyway"
-    )
+    assert (
+        service._remediation_tracker[node.node_id]["count"] == 2
+    ), "a heartbeat that recomputes DEGRADED cleared the remediation tracker anyway"
 
 
 def test_a_flapping_node_reaches_max_attempts_and_escalates_with_cooldown_pacing():
@@ -426,9 +426,7 @@ def test_a_flapping_node_reaches_max_attempts_and_escalates_with_cooldown_pacing
         with _patched_settings(unhealthy_threshold=3):
             for _ in range(iterations):
                 asyncio.run(
-                    service.update_node_heartbeat(
-                        _HeartbeatSession(node), node.node_id, 0.0, 10.0, 10.0, extra_data={}
-                    )
+                    service.update_node_heartbeat(_HeartbeatSession(node), node.node_id, 0.0, 10.0, 10.0, extra_data={})
                 )
                 assert node.status == reconciler.NodeStatus.ONLINE.value, "sanity: the flap beat must land healthy"
 
@@ -441,13 +439,13 @@ def test_a_flapping_node_reaches_max_attempts_and_escalates_with_cooldown_pacing
         reconciler.datetime = datetime
 
     tracker = service._remediation_tracker[node.node_id]
-    assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS, (
-        f"count is {tracker['count']} after {iterations} flap cycles -- escalation is unreachable"
-    )
+    assert (
+        tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
+    ), f"count is {tracker['count']} after {iterations} flap cycles -- escalation is unreachable"
     assert tracker.get("exhausted") is True
-    assert len(max_attempts_events) == 1, (
-        f"_create_max_attempts_event fired {len(max_attempts_events)} times -- expected exactly once"
-    )
+    assert (
+        len(max_attempts_events) == 1
+    ), f"_create_max_attempts_event fired {len(max_attempts_events)} times -- expected exactly once"
 
     total_seconds = iterations * flap_interval
     max_paced_attempts = total_seconds // reconciler.REMEDIATION_COOLDOWN + 2

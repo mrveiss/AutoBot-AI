@@ -152,9 +152,9 @@ def test_a_failed_monitored_autobot_service_still_degrades_the_node():
         "discovered_services": [{"name": "autobot-vnc", "status": "failed", "n_restarts": 6}],
     }
 
-    assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value, (
-        "a monitored autobot service that has given up (status: failed) did not degrade the node"
-    )
+    assert (
+        _status(extra_data) == reconciler.NodeStatus.DEGRADED.value
+    ), "a monitored autobot service that has given up (status: failed) did not degrade the node"
 
 
 def test_a_failed_but_unmonitored_autobot_service_does_not_degrade_the_node():
