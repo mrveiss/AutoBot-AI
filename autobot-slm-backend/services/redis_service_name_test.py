@@ -96,9 +96,9 @@ def test_the_sources_this_rule_reads_exist():
     found = list(_service_task_names())
 
     assert found, "no Redis service tasks found at all — this rule is pinned to the wrong shape"
-    assert any(unit == canonical for _, unit in found), (
-        f"the scan found Redis tasks but none naming {canonical!r} — it is no longer reading real unit names"
-    )
+    assert any(
+        unit == canonical for _, unit in found
+    ), f"the scan found Redis tasks but none naming {canonical!r} — it is no longer reading real unit names"
 
 
 def test_no_playbook_manages_a_redis_unit_by_a_conflicting_literal():
@@ -110,9 +110,7 @@ def test_no_playbook_manages_a_redis_unit_by_a_conflicting_literal():
     canonical = _canonical_name()
 
     offenders = [
-        f"{path} manages {unit!r}"
-        for path, unit in _service_task_names()
-        if "{{" not in unit and unit != canonical
+        f"{path} manages {unit!r}" for path, unit in _service_task_names() if "{{" not in unit and unit != canonical
     ]
 
     assert not offenders, (
@@ -125,6 +123,6 @@ def test_the_role_handler_and_the_ssot_agree():
     """The role was already right; pin the two together so neither drifts alone."""
     handlers = (_ANSIBLE / "roles" / "redis" / "handlers" / "main.yml").read_text(encoding="utf-8")
 
-    assert re.search(rf"name:\s*{re.escape(_canonical_name())}\b", handlers), (
-        "the redis role's handler no longer names the canonical unit"
-    )
+    assert re.search(
+        rf"name:\s*{re.escape(_canonical_name())}\b", handlers
+    ), "the redis role's handler no longer names the canonical unit"
