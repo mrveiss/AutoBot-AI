@@ -77,7 +77,6 @@ from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from services.service_extra_data import monitored_autobot_service_failed
 from services.ssh_utils import build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
@@ -1775,12 +1774,30 @@ def _has_failed_autobot_service(extra_data: dict | None) -> bool:
 
     Issue #1605: Prevents code_status=up_to_date when service is broken.
     Issue #1709: Scope narrowed to monitored services only (extra_data["services"]).
+    Previously checked discovered_services (all systemd units), which caused false
+    positives on nodes like .25 where non-primary autobot-* units (e.g. autobot-vnc)
+    are present but not expected to run in headless mode.
 
-    Thin re-export of the shared implementation (#14465) -- kept as a distinct
-    name here because `_derive_code_status`'s call site and this module's own
-    tests (tests/services/code_version_test.py) are pinned to it.
+    The "services" dict contains only the services from slm_services_to_monitor —
+    the set the operator has declared this node should run. A failed unit outside
+    that set (e.g. autobot-vnc when VNC is not in use) must not flag the monitored
+    service as broken.
+
+    Format: {"service-name": {"active": bool, "status": "<systemctl is-active output>"}}
+    Failure statuses: "failed", "crash-loop".
     """
-    return monitored_autobot_service_failed(extra_data)
+    if not extra_data:
+        return False
+    monitored = extra_data.get("services", {})
+    if not monitored:
+        return False
+    for name, info in monitored.items():
+        if not name.startswith("autobot"):
+            continue
+        svc_status = info.get("status", "") if isinstance(info, dict) else ""
+        if svc_status in ("failed", "crash-loop"):
+            return True
+    return False
 
 
 async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node) -> None:
