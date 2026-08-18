@@ -87,9 +87,7 @@ REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_PO
 # whatever degraded it before is over. min_v=REMEDIATION_COOLDOWN: an expiry
 # shorter than the cooldown would forgive an attempt before the NEXT one is
 # even allowed to run, defeating escalation entirely from the other side.
-REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped(
-    "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=REMEDIATION_COOLDOWN
-)
+REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped("AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=REMEDIATION_COOLDOWN)
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 # Service remediation cooldown (shorter than node remediation)
