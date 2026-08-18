@@ -455,6 +455,24 @@ jobs:
         # reports a comfortable zero. There is no exemption list, deliberately.
         python3 tools/lint/check_infra_scripts_undefined_names.py --audit
 
+    - name: Audit MCP tool permission coverage (#14494)
+      run: |
+        # The under-grant guard used to infer "this tool mutates state" from a
+        # hand-written verb list matched against the tool's NAME (write, delete,
+        # click, ...). #14469 found `select`/`select_index` inheriting their
+        # bridge's read-level default because neither name matched a verb -- the
+        # guard's reach was decided by a list nobody revisits, while the set of
+        # real tools grows independently of it. This has to run in a REQUIRED
+        # check for the same directional reason as #14419/#14405/#14489: an
+        # under-declared tool makes the audit report FEWER problems, not more, so
+        # it goes greener by doing nothing. The pytest copy of this same guard
+        # runs in `python-suite`, which gates nothing (#14353). Fails below a
+        # discovery floor too, because a bridge scan that reaches zero tools
+        # (this pass found one: `sequential_thinking_mcp`'s only tool was
+        # declared in a source shape the original scanner never matched) reads
+        # as clean having asserted nothing.
+        python3 tools/lint/check_mcp_tool_permission_coverage.py --audit
+
     - name: Audit the python-file-size ceilings for drift (#14236)
       run: |
         # The pre-commit hook only sees staged files, so a grandfathered entry
