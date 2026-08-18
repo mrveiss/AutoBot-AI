@@ -38,8 +38,24 @@ CHECKOUT_MARKERS = (".git", "autobot_shared")
 #: the shell scripts honour, so exporting it once governs both languages.
 PROJECT_ROOT_ENV = "AUTOBOT_PROJECT_ROOT"
 
-#: Where a deployed install lives when nothing else identifies the root.
-DEFAULT_INSTALL_ROOT = "/opt/autobot"
+#: Environment variable naming an explicit deployed-install location. Distinct
+#: from ``PROJECT_ROOT_ENV``: this one is read only as the last resort, after
+#: the walk in step 2 has found neither a ``.env`` nor a checkout.
+BASE_DIR_ENV = "AUTOBOT_BASE_DIR"
+
+
+class ProjectRootUndeterminable(RuntimeError):
+    """No override, ``.env`` or checkout marker identifies the project root.
+
+    #14544: this module used to answer that question with a hardcoded
+    ``/opt/autobot`` guess. A wrong-but-plausible path is exactly how 18
+    ``sys.path`` bootstraps silently imported the live deployed install
+    instead of the checkout under test, and stayed invisible for as long as
+    they did — the guess always looked like a working answer. Raising here
+    forces every caller to say explicitly where it is running (via
+    ``AUTOBOT_PROJECT_ROOT`` or ``AUTOBOT_BASE_DIR``) instead of getting one
+    handed to it silently.
+    """
 
 
 def is_checkout_root(path: Path) -> bool:
@@ -56,7 +72,12 @@ def project_root() -> Path:
        and matches what the shell scripts already do.
     2. Walking up from this file, the nearest ancestor that either holds a
        ``.env`` (a configured deployment) **or** looks like a source checkout.
-    3. ``AUTOBOT_BASE_DIR``/``/opt/autobot`` — the deployed install.
+    3. ``AUTOBOT_BASE_DIR`` — an operator naming the deployed install
+       explicitly. There is no further, unconditional fallback: on a real
+       checkout or a real install, step 1 or step 2 always resolves first
+       (an install always carries a ``.env``), so reaching here at all means
+       the environment is too broken to place. Raises
+       :class:`ProjectRootUndeterminable` rather than guessing (#14544).
 
     Step 2 is a *single* walk on purpose, and a checkout root is a hard
     boundary. The two-pass form — all ancestors for ``.env``, then all
@@ -101,4 +122,14 @@ def resolve_project_root(start: Path) -> Path:
 
     # ssot-config-exempt: bootstrap self-reference (carried from the
     # implementation this replaced, landed in #13646).
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", DEFAULT_INSTALL_ROOT))
+    base_dir = os.environ.get(BASE_DIR_ENV)
+    if base_dir:
+        return Path(base_dir)
+
+    raise ProjectRootUndeterminable(
+        f"cannot determine the project root by walking up from {start}: no "
+        f"{PROJECT_ROOT_ENV} override, no {BASE_DIR_ENV} override, and no "
+        "ancestor holds a .env or looks like a source checkout "
+        f"({', '.join(CHECKOUT_MARKERS)}). Set one of those two environment "
+        "variables — a silent guess is the defect this raise replaces (#14544)."
+    )
