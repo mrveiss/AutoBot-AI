@@ -274,8 +274,6 @@ class GenerateImageTool(BaseTool):
         images = []
         for artifact in data.get("artifacts", []):
             if artifact.get("finishReason") == "SUCCESS":
-                import base64
-
                 b64 = artifact.get("base64", "")
                 # Return as data URL so frontend can display without a CDN
                 images.append({

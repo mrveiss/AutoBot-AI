@@ -84,6 +84,27 @@ def test_inventories_use_canonical_ssh_key_var():
     )
 
 
+def test_management_ssh_key_never_used_for_inter_node_ssh():
+    """#14173: config.path.management_ssh_key_path/.management_ssh_key is the
+    operator's own $HOME key for management scripts a human runs -- it is
+    NOT ssh_key_path/.ssh_key, the service account's key deployed by Ansible
+    for automated fleet orchestration. Reusing it here would reintroduce
+    #12429's split at a new layer.
+    """
+    offenders: list[str] = []
+    for path in _runtime_py_files():
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if "management_ssh_key" in line:
+                rel = path.relative_to(_BACKEND_ROOT)
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+    assert not offenders, (
+        "Inter-node SSH orchestration must use config.path.ssh_key_path/.ssh_key "
+        "(#12429), never config.path.management_ssh_key_path/.management_ssh_key "
+        "(#14173, a different key for a different consumer). Found:\n" + "\n".join(offenders)
+    )
+
+
 def test_canonical_ssh_key_var_defined_once():
     """The single canonical Ansible var exists with the /etc default (#12429)."""
     all_yml = _BACKEND_ROOT / "ansible" / "inventory" / "group_vars" / "all.yml"

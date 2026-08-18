@@ -19,12 +19,12 @@
 #
 # Scope note (#14041 enumeration, docs/audit/ssot_config_shell_library_14041.md):
 # this file exports exactly the variables the 56 scripts were proven to consume.
-# It deliberately does NOT export AUTOBOT_SSH_KEY, AUTOBOT_SSH_USER,
-# AUTOBOT_SLM_NODE_ID, or the four AUTOBOT_VNC_* names some scripts also read --
-# none of those has a canonical value anywhere (not autobot_shared/ssot_config.py,
-# not .env.example, not the Ansible group_vars). Inventing a default for them here
-# would be a second source of truth, which is exactly the failure mode this file
-# exists to end. Those scripts keep their own literal fallback unchanged.
+#
+# #14173 follow-up: AUTOBOT_SSH_KEY, AUTOBOT_SSH_USER, AUTOBOT_SLM_NODE_ID and
+# the four AUTOBOT_VNC_* names below were left out of the original #14041 pass
+# because none of them had a canonical value anywhere at the time. They now do
+# (autobot_shared/ssot_config.py PathConfig.management_ssh_key_path/ssh_user,
+# MiscConfig.slm_node_id, PortConfig.vnc_server) -- see section 3b below.
 #
 # Source this file -- do not execute it.
 
@@ -129,6 +129,40 @@ fi
 : "${AUTOBOT_NOVNC_PATH:=/opt/novnc}"
 : "${NETWORK_SUBNET:=}"
 
+# ---------------------------------------------------------------------------
+# 3b. #14173 -- the four var families #14041 deliberately left unexported
+#     because nothing defined them anywhere. Each now has a real SSOT field
+#     in autobot_shared/ssot_config.py; values below mirror those defaults.
+# ---------------------------------------------------------------------------
+
+# PathConfig.management_ssh_key_path (alias AUTOBOT_SSH_KEY) -- distinct from
+# PathConfig.ssh_key_path (AUTOBOT_SSH_KEY_PATH/SLM_SSH_KEY, #12429). This is
+# the operator's own key, generated under $HOME by
+# utilities/setup-ssh-keys.sh; ssh_key_path is the service account's key
+# under /etc/autobot, deployed by Ansible. Deliberately NOT the same default
+# -- see the field comment in ssot_config.py for the evidence.
+: "${AUTOBOT_SSH_KEY:=${HOME}/.ssh/autobot_key}"
+
+# PathConfig.ssh_user
+: "${AUTOBOT_SSH_USER:=autobot}"
+
+# MiscConfig.slm_node_id
+: "${AUTOBOT_SLM_NODE_ID:=00-SLM-Manager}"
+
+# VNC: network/network-config.sh is the only script that reads all four
+# AUTOBOT_VNC_* names below. WEB is the noVNC/websockify HTTP port and runs
+# on the same machine as the backend (Main/WSL) -- it now consolidates onto
+# the two names that were already canonical (AUTOBOT_BACKEND_HOST,
+# AUTOBOT_VNC_PORT) instead of carrying its own separate, coincidentally-equal
+# literal. SERVER is the raw VNC protocol port (x11vnc), a genuinely separate
+# concept with no prior SSOT source -- PortConfig.vnc_server's field comment
+# has the derivation (5900 + vnc_display, corrected from the script's stale
+# 5902 literal to 5901).
+: "${AUTOBOT_VNC_WEB_HOST:=${AUTOBOT_BACKEND_HOST}}"
+: "${AUTOBOT_VNC_WEB_PORT:=${AUTOBOT_VNC_PORT}}"
+: "${AUTOBOT_VNC_SERVER_HOST:=${AUTOBOT_BACKEND_HOST}}"
+: "${AUTOBOT_VNC_SERVER_PORT:=5901}"
+
 export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_REDIS_HOST AUTOBOT_AI_STACK_HOST AUTOBOT_BROWSER_SERVICE_HOST \
     AUTOBOT_SLM_HOST AUTOBOT_OLLAMA_HOST \
@@ -136,7 +170,9 @@ export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_REDIS_PORT AUTOBOT_AI_STACK_PORT AUTOBOT_BROWSER_SERVICE_PORT \
     AUTOBOT_OLLAMA_PORT AUTOBOT_VNC_PORT \
     AUTOBOT_REDIS_PASSWORD AUTOBOT_REDIS_DB_CELERY_BROKER AUTOBOT_REDIS_DB_CELERY_RESULTS \
-    AUTOBOT_NOVNC_PATH NETWORK_SUBNET
+    AUTOBOT_NOVNC_PATH NETWORK_SUBNET \
+    AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \
+    AUTOBOT_VNC_WEB_HOST AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_HOST AUTOBOT_VNC_SERVER_PORT
 
 # ---------------------------------------------------------------------------
 # 4. VMS associative array -- vm-management/status-all-vms.sh is the one script

@@ -198,6 +198,15 @@ class PortConfig(RedactedSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
+    # Raw VNC protocol port (x11vnc via vncserver), NOT the noVNC web port
+    # above (#14173). autobot-slm-backend/ansible/roles/vnc/defaults/main.yml
+    # computes this as 5900 + vnc_display, and vnc_display defaults to 1 ->
+    # 5901; vm-management/status-all-vms.sh independently hardcodes the same
+    # "VNC Client: localhost:5901" line. network/network-config.sh's own
+    # AUTOBOT_VNC_SERVER_PORT literal was 5902 -- one off from every other
+    # source of truth in the repo -- so 5901 here is a correction, not a
+    # preserved literal.
+    vnc_server: int = Field(default=5901, alias="AUTOBOT_VNC_SERVER_PORT")
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
@@ -1359,6 +1368,31 @@ class PathConfig(RedactedSettings):
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
 
+    # Management-plane SSH key (#14173) — DISTINCT from ssh_key_path above, not
+    # an alias of it. autobot-infrastructure/shared/scripts/utilities/setup-ssh-keys.sh
+    # generates and deploys THIS key under the operator's own $HOME the first
+    # time a human runs the vm-management/utilities scripts from their own
+    # workstation; ssh_key_path is the service account's key, deployed by
+    # Ansible to /etc/autobot/ssh for automated fleet orchestration (SLM
+    # backend, code-sync agents). The two are provably different files with
+    # different owners and different consumers — #14173's audit found ~24
+    # scripts reading AUTOBOT_SSH_KEY with a $HOME-relative fallback and
+    # confirmed collapsing it onto ssh_key_path's /etc default would silently
+    # break the human-operator flow, so this stays a second field rather than
+    # a rename or an alias.
+    management_ssh_key_path: str = Field(
+        default_factory=lambda: str(Path.home() / ".ssh" / "autobot_key"),
+        alias="AUTOBOT_SSH_KEY",
+    )
+
+    # SSH user for inter-node connections from management scripts (#14173).
+    # Not a path, but belongs beside the two SSH key fields above — same
+    # feature (fleet SSH identity). Matches the 'autobot' operational account
+    # (autobot-slm-backend/ansible/ansible.cfg remote_user,
+    # inventory/*.yml ansible_user, inventory/group_vars/all.yml
+    # autobot_ssh_key_path's owning account).
+    ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
+
     # Explicit override for the `claude` CLI binary used by the LLC claude_code
     # adapter (GH#12478). Empty string means "not configured" — the adapter falls
     # back to shutil.which("claude") then common per-user install locations before
@@ -1419,6 +1453,11 @@ class PathConfig(RedactedSettings):
     def ssh_pubkey_path(self) -> str:
         """Path to the canonical inter-node SSH public key (private key + .pub)."""
         return f"{self.ssh_key_path}.pub"
+
+    @property
+    def management_ssh_key(self) -> Path:
+        """Absolute path to the management-plane SSH key (#14173, distinct from ssh_key)."""
+        return Path(self.management_ssh_key_path)
 
 
 class MiscConfig(RedactedSettings):
@@ -2038,6 +2077,13 @@ class MiscConfig(RedactedSettings):
     discord_bot_token: str = Field(default="", alias="DISCORD_BOT_TOKEN")
     slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
+    # SLM manager's DB node_id (#14173, #9956). Deployments may rename the
+    # node; this default matches the inventory default (slm_server host in
+    # autobot-slm-backend/ansible/inventory/slm-nodes.yml) and the Ansible
+    # fact derived from it (inventory/group_vars/all.yml slm_manager_node_id).
+    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID; no SSOT source
+    # existed under this name before this field.
+    slm_node_id: str = Field(default="00-SLM-Manager", alias="AUTOBOT_SLM_NODE_ID")
     slm_url: str = Field(default="", alias="SLM_URL")
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")
