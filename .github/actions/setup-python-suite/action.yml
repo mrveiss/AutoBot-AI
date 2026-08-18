@@ -29,6 +29,23 @@ runs:
           requirements*.txt
           autobot-backend/requirements*.txt
 
+    # #14550: system packages ansible installs on every backend host for a
+    # real capability (audio extraction here), that setup-python-suite never
+    # provisioned. media/audio/ffmpeg_service_test.py::test_real_audio_extraction
+    # skip-gates on `shutil.which("ffmpeg")` and was silently skipping on every
+    # CI run as a result — a skip that read as a pass in the job summary.
+    # tools/lint/check_ci_system_package_provisioning.py enforces the pairing
+    # going forward: any new shutil.which(...)-gated test on an ansible-installed
+    # binary must have its package added here too, or code-quality fails.
+    # Unconditional (not gated on the venv cache hit below): apt state is not
+    # part of that cache and must be present on every run regardless.
+    - name: Install CI system packages (#14550)
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends ffmpeg
+
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
     # repo would fight over it, and pytest would try to collect tests out of

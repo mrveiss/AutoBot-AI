@@ -533,6 +533,28 @@ jobs:
         # fail, and the run reports how many entries it reached.
         python3 scripts/check_python_file_size.py --audit-ceilings
 
+    - name: Audit requirements-ci for silent drift from production (#14551)
+      run: |
+        # autobot-backend/requirements.txt and autobot-slm-backend/requirements.txt
+        # declare production; requirements-ci.txt is a hand-maintained mirror
+        # setup-python-suite actually installs. A package present in one and not
+        # the other produces no error -- pytesseract sat undeclared in CI for
+        # months this way (#13885) while every OCR test skipped. This compares
+        # the two sets against repo_tests/requirements_ci_drift_baseline.txt,
+        # which only ever shrinks: a new undeclared omission, or a baseline entry
+        # that no longer describes a real one, both fail.
+        python3 tools/lint/check_requirements_ci_drift.py --audit
+
+    - name: Audit CI system-package provisioning against ansible (#14550)
+      run: |
+        # ansible installs apt packages on every backend host (GUI/VNC, audio,
+        # TTS, OCR, pg_dump) that setup-python-suite never provisions. A test
+        # that skip-gates on one of those binaries via shutil.which(...) has
+        # been silently skipping in CI rather than passing -- indistinguishable
+        # in the job summary. This fails on any such gate whose package is not
+        # installed in .github/actions/setup-python-suite/action.yml.
+        python3 tools/lint/check_ci_system_package_provisioning.py --audit
+
     - name: Code quality summary
       if: always()
       run: |
