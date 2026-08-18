@@ -40,6 +40,14 @@ down_revision: Union[str, None] = "20260822_082"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Table names are written as string literals at every ``op.*`` call site, not
+# passed as these constants. ``migrations/baseline.py`` AST-extracts the
+# artifacts of each revision, and that extraction is only sound while the names
+# are literals — a constant makes the revision invisible to the probe ladder,
+# which then widens its adoption bracket. The self-check
+# (tests/migrations/test_probe_ladder_selfcheck.py) enforces exactly that, and
+# caught this. The constants remain for the guard helpers below, which are not
+# part of the extracted surface.
 _ATTACH_TABLE = "llc_role_workflows"
 _RATE_TABLE = "llc_role_rates"
 _RATE_UNIQUE = "uq_llc_role_rates_role"
@@ -62,14 +70,15 @@ def upgrade() -> None:
     # 1. Per-step inputs. Nullable: an existing attachment has never been
     #    measured, and backfilling a 0 would assert it costs nothing.
     if _has_table(inspector, _ATTACH_TABLE):
-        for column in ("estimated_minutes", "runs_per_month"):
-            if not _has_column(inspector, _ATTACH_TABLE, column):
-                op.add_column(_ATTACH_TABLE, sa.Column(column, sa.Integer(), nullable=True))
+        if not _has_column(inspector, _ATTACH_TABLE, "estimated_minutes"):
+            op.add_column("llc_role_workflows", sa.Column("estimated_minutes", sa.Integer(), nullable=True))
+        if not _has_column(inspector, _ATTACH_TABLE, "runs_per_month"):
+            op.add_column("llc_role_workflows", sa.Column("runs_per_month", sa.Integer(), nullable=True))
 
     # 2. The rate the cost derives from.
     if not _has_table(inspector, _RATE_TABLE):
         op.create_table(
-            _RATE_TABLE,
+            "llc_role_rates",
             sa.Column("id", sa.UUID(as_uuid=True), primary_key=True, nullable=False),
             sa.Column("company_id", sa.UUID(as_uuid=True), nullable=False),
             sa.Column("role_id", sa.UUID(as_uuid=True), nullable=False),
@@ -81,8 +90,8 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.UniqueConstraint("role_id", name=_RATE_UNIQUE),
         )
-        op.create_index("ix_llc_role_rates_company_id", _RATE_TABLE, ["company_id"])
-        op.create_index("ix_llc_role_rates_role_id", _RATE_TABLE, ["role_id"])
+        op.create_index("ix_llc_role_rates_company_id", "llc_role_rates", ["company_id"])
+        op.create_index("ix_llc_role_rates_role_id", "llc_role_rates", ["role_id"])
 
 
 def downgrade() -> None:
@@ -90,11 +99,12 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if _has_table(inspector, _RATE_TABLE):
-        op.drop_index("ix_llc_role_rates_role_id", table_name=_RATE_TABLE)
-        op.drop_index("ix_llc_role_rates_company_id", table_name=_RATE_TABLE)
-        op.drop_table(_RATE_TABLE)
+        op.drop_index("ix_llc_role_rates_role_id", table_name="llc_role_rates")
+        op.drop_index("ix_llc_role_rates_company_id", table_name="llc_role_rates")
+        op.drop_table("llc_role_rates")
 
     if _has_table(inspector, _ATTACH_TABLE):
-        for column in ("runs_per_month", "estimated_minutes"):
-            if _has_column(inspector, _ATTACH_TABLE, column):
-                op.drop_column(_ATTACH_TABLE, column)
+        if _has_column(inspector, _ATTACH_TABLE, "runs_per_month"):
+            op.drop_column("llc_role_workflows", "runs_per_month")
+        if _has_column(inspector, _ATTACH_TABLE, "estimated_minutes"):
+            op.drop_column("llc_role_workflows", "estimated_minutes")
