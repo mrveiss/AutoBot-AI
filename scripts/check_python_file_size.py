@@ -24,6 +24,9 @@ The ratchet turns one way only:
 * below its ceiling      -> fail; lower the ceiling to the count just achieved
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
+Every lowering is mirrored in ``RATCHET_BASELINE`` in the ratchet test, so the
+shrink is locked in rather than left as headroom to regrow into (#14498).
+
 ``--audit-ceilings`` applies those rules to every entry regardless of what is
 staged, so an entry cannot sit here exempting nothing after the file it names
 has shrunk, moved, or been deleted. It reports how many entries it reached,
@@ -52,11 +55,19 @@ MAX_LINES = 600
 #: Repo-relative path of this hook, quoted in the messages that ask for an edit.
 SELF_REL = "scripts/check_python_file_size.py"
 
+#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
+#: Every message that asks for an edit here names it too: a ceiling lowered in
+#: one file alone leaves the other holding the old size (#14498).
+RATCHET_REL = "repo_tests/python_file_size_ratchet_test.py"
+
 # Grandfathered files: over MAX_LINES before the guard existed, mapped to the
 # line count recorded for each. THIS MAPPING ONLY SHRINKS — entries leave when
 # the file reaches MAX_LINES, and a ceiling may be lowered but never raised.
 # Never add an entry to make a new file pass; split the file instead.
-# ``repo_tests/python_file_size_ratchet_test.py`` holds both directions.
+# ``repo_tests/python_file_size_ratchet_test.py`` holds both directions, and its
+# ``RATCHET_BASELINE`` is the second copy of these numbers: lower an entry here
+# and lower it there in the same commit (#14498), or the lines just cut stay
+# spendable in the gap between the two.
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/chat_workflow/manager.py": 4068,
@@ -92,8 +103,9 @@ def _grandfathered_verdict(rel: str, line_count: int, ceiling: int) -> str | Non
     if line_count <= MAX_LINES:
         return (
             f"{rel}: {line_count} lines — now within the {MAX_LINES}-line limit. "
-            f"Delete its KNOWN_LARGE entry in {SELF_REL}: an entry naming a "
-            "compliant file exempts nothing while looking authoritative."
+            f"Delete its KNOWN_LARGE entry in {SELF_REL}, and its RATCHET_BASELINE "
+            f"entry in {RATCHET_REL}: an entry naming a compliant file exempts "
+            "nothing while looking authoritative."
         )
     if line_count > ceiling:
         return (
@@ -104,8 +116,9 @@ def _grandfathered_verdict(rel: str, line_count: int, ceiling: int) -> str | Non
     if line_count < ceiling:
         return (
             f"{rel}: {line_count} lines, under its recorded ceiling of {ceiling}. "
-            f"Lower the ceiling to {line_count} in {SELF_REL} — the ratchet only "
-            "turns down, and an unlowered ceiling re-licenses the lines just cut."
+            f"Lower the ceiling to {line_count} in {SELF_REL}, and the matching "
+            f"RATCHET_BASELINE entry in {RATCHET_REL} — the ratchet only turns "
+            "down, and an unlowered ceiling re-licenses the lines just cut."
         )
     return None
 

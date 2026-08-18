@@ -9141,6 +9141,23 @@
       "agent": "Agent",
       "user": "Benutzer",
       "contact": "Kontakt"
-    }
+    },
+    "grant": "Gewähren",
+    "revoke": "Entziehen",
+    "attach": "Zuordnen",
+    "detach": "Entfernen",
+    "assign": "Zuweisen",
+    "endTenure": "Zuweisung beenden",
+    "holderIdPlaceholder": "Inhaber-ID",
+    "permissionPlaceholder": "z. B. knowledge.read",
+    "workflowPlaceholder": "Workflow-ID",
+    "toolPlaceholder": "Werkzeugname",
+    "credentialPlaceholder": "Secret-ID",
+    "errorAssign": "Inhaber konnte nicht zugewiesen werden.",
+    "errorEndTenure": "Zuweisung konnte nicht beendet werden.",
+    "errorGrant": "Berechtigung konnte nicht gewährt werden.",
+    "errorRevoke": "Berechtigung konnte nicht entzogen werden.",
+    "errorAttach": "Zuordnung fehlgeschlagen.",
+    "errorDetach": "Entfernen fehlgeschlagen."
   }
 }

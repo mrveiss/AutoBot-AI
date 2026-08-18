@@ -9141,6 +9141,23 @@
       "agent": "ایجنٹ",
       "user": "صارف",
       "contact": "رابطہ"
-    }
+    },
+    "grant": "دیں",
+    "revoke": "واپس لیں",
+    "attach": "منسلک کریں",
+    "detach": "الگ کریں",
+    "assign": "تفویض",
+    "endTenure": "مدت ختم کریں",
+    "holderIdPlaceholder": "حامل کی شناخت",
+    "permissionPlaceholder": "مثلاً knowledge.read",
+    "workflowPlaceholder": "ورک فلو شناخت",
+    "toolPlaceholder": "اوزار کا نام",
+    "credentialPlaceholder": "راز کی شناخت",
+    "errorAssign": "حامل تفویض نہیں ہو سکا۔",
+    "errorEndTenure": "مدت ختم نہیں ہو سکی۔",
+    "errorGrant": "اجازت نہیں دی جا سکی۔",
+    "errorRevoke": "اجازت واپس نہیں لی جا سکی۔",
+    "errorAttach": "منسلک نہیں ہو سکا۔",
+    "errorDetach": "الگ نہیں ہو سکا۔"
   }
 }

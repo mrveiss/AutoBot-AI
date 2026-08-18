@@ -9141,6 +9141,23 @@
       "agent": "Agent",
       "user": "Użytkownik",
       "contact": "Kontakt"
-    }
+    },
+    "grant": "Przyznaj",
+    "revoke": "Odbierz",
+    "attach": "Dołącz",
+    "detach": "Odłącz",
+    "assign": "Przypisz",
+    "endTenure": "Zakończ przypisanie",
+    "holderIdPlaceholder": "ID pełniącego",
+    "permissionPlaceholder": "np. knowledge.read",
+    "workflowPlaceholder": "ID przepływu",
+    "toolPlaceholder": "Nazwa narzędzia",
+    "credentialPlaceholder": "ID poświadczenia",
+    "errorAssign": "Nie udało się przypisać.",
+    "errorEndTenure": "Nie udało się zakończyć przypisania.",
+    "errorGrant": "Nie udało się przyznać uprawnienia.",
+    "errorRevoke": "Nie udało się odebrać uprawnienia.",
+    "errorAttach": "Nie udało się dołączyć.",
+    "errorDetach": "Nie udało się odłączyć."
   }
 }

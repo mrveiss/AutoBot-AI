@@ -9141,6 +9141,23 @@
       "agent": "عامل",
       "user": "کاربر",
       "contact": "مخاطب"
-    }
+    },
+    "grant": "اعطا",
+    "revoke": "لغو",
+    "attach": "پیوست",
+    "detach": "جدا کردن",
+    "assign": "انتساب",
+    "endTenure": "پایان تصدی",
+    "holderIdPlaceholder": "شناسه دارنده",
+    "permissionPlaceholder": "مثلاً knowledge.read",
+    "workflowPlaceholder": "شناسه گردش‌کار",
+    "toolPlaceholder": "نام ابزار",
+    "credentialPlaceholder": "شناسه راز",
+    "errorAssign": "انتساب دارنده ممکن نشد.",
+    "errorEndTenure": "پایان تصدی ممکن نشد.",
+    "errorGrant": "اعطای دسترسی ممکن نشد.",
+    "errorRevoke": "لغو دسترسی ممکن نشد.",
+    "errorAttach": "پیوست ممکن نشد.",
+    "errorDetach": "جدا کردن ممکن نشد."
   }
 }
