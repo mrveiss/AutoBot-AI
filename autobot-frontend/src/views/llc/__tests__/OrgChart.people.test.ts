@@ -108,6 +108,10 @@ type Fixture = {
   contacts?: unknown[]
   /** #13998: people the department carries with no role to explain them. */
   unassignedContacts?: unknown[]
+  /** A response that is not the two-array shape at all. */
+  malformedContacts?: boolean
+  /** Only `unassigned` is unreadable; `with_role` is fine. */
+  halfMalformedContacts?: boolean
   teams?: unknown[]
   contactsFail?: boolean
   teamsFail?: boolean
@@ -118,6 +122,8 @@ function mockApi({
   nodes = ORG_NODES,
   contacts = CONTACTS,
   unassignedContacts = [],
+  malformedContacts = false,
+  halfMalformedContacts = false,
   teams = TEAMS,
   contactsFail = false,
   teamsFail = false,
@@ -138,12 +144,15 @@ function mockApi({
       // #13998: the People tab reads a department's people as two groups —
       // those a role explains, and those carried from before the directory was
       // shared. `unassignedContacts` lets a test put a person in the second.
-      return contactsFail
-        ? Promise.reject(new Error('contacts unavailable'))
-        : Promise.resolve({
-            with_role: structuredClone(contacts),
-            unassigned: structuredClone(unassignedContacts),
-          })
+      if (contactsFail) return Promise.reject(new Error('contacts unavailable'))
+      if (malformedContacts) return Promise.resolve({ detail: 'not the expected shape' })
+      if (halfMalformedContacts) {
+        return Promise.resolve({ with_role: structuredClone(contacts), unassigned: null })
+      }
+      return Promise.resolve({
+        with_role: structuredClone(contacts),
+        unassigned: structuredClone(unassignedContacts),
+      })
     }
     if (url === '/api/llc/companies/c1/teams') {
       return teamsFail
@@ -532,5 +541,37 @@ describe('the executor rollup never reports zero when it failed to load (#13942)
     expect(
       wrapper.find(`[data-testid="org-person-unassigned-contact:${CONTACTS[0].id}"]`).exists(),
     ).toBe(false)
+  })
+
+  it('treats a malformed involved response as no contacts, not a crash (#13998)', async () => {
+    // The endpoint returns two arrays. A response shaped differently — an older
+    // backend, a proxy returning an error body with a 200, a contract change —
+    // must yield an empty list rather than throwing inside the People tab or
+    // spreading a non-iterable. The teams half must still render.
+    const wrapper = await mountPeople({ malformedContacts: true })
+
+    // The teams half is loaded AFTER contacts in the same function, so its
+    // presence proves the contacts block completed rather than threw. Without
+    // this the test passes on a crash: a thrown spread leaves `contacts` empty,
+    // which satisfies the "no contact rendered" assertion below for the wrong
+    // reason. Verified by mutation.
+    expect(wrapper.text()).toContain(TEAM_NAME)
+    expect(wrapper.text()).toContain(AGENT_NAME)
+    // ...and no contact is invented from a response that did not contain any.
+    expect(
+      wrapper
+        .findAll('[data-testid^="org-person-"]')
+        .some((row) => row.text().includes(CONTACT_NAME)),
+    ).toBe(false)
+  })
+
+  it('keeps the people it did get when only one group is malformed', async () => {
+    // A partial answer is still an answer: dropping the valid half because the
+    // other is unreadable would hide people the department genuinely has.
+    const wrapper = await mountPeople({ halfMalformedContacts: true })
+
+    // `with_role` was readable, so its people are shown even though the other
+    // group was not.
+    expect(wrapper.text()).toContain(CONTACT_NAME)
   })
 })
