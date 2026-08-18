@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "بلا دور",
+      "unassignedHint": "مُدرج في هذا القسم، لكن لا يوجد دور يفسّر وجوده"
     }
   },
   "code": {

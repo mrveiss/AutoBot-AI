@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "nav lomas",
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
     }
   },
   "code": {

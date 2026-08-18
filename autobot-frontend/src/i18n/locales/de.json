@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "keine Rolle",
+      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit"
     }
   },
   "code": {

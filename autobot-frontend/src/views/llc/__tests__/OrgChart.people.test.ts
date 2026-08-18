@@ -28,7 +28,7 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 // Mutable so a test can exercise the "no company selected" path — the guard
-// that stops the People tab requesting /api/llc/contacts/undefined. A real
+// that stops the People tab requesting /api/llc/contacts/undefined/involved. A real
 // `ref`, not a `{ value }` look-alike (#13940): `companyId` is now also
 // forwarded as a typed `string` prop to `CanvasNodeSidebar`, and only an
 // actual `Ref` auto-unwraps in the template.
@@ -86,7 +86,7 @@ const ORG_NODES = [
   },
 ]
 
-/** A contact as `GET /api/llc/contacts/{company_id}` returns it (#13969). */
+/** A contact as `GET /api/llc/contacts/{company_id}/involved` returns it (#13969, #13998). */
 const CONTACTS = [
   {
     id: 'c0ffee00-0000-0000-0000-000000000001',
@@ -106,6 +106,8 @@ const TEAMS = [{ id: 't1', name: TEAM_NAME, member_user_ids: [USER_ID] }]
 type Fixture = {
   nodes?: unknown[]
   contacts?: unknown[]
+  /** #13998: people the department carries with no role to explain them. */
+  unassignedContacts?: unknown[]
   teams?: unknown[]
   contactsFail?: boolean
   teamsFail?: boolean
@@ -115,6 +117,7 @@ type Fixture = {
 function mockApi({
   nodes = ORG_NODES,
   contacts = CONTACTS,
+  unassignedContacts = [],
   teams = TEAMS,
   contactsFail = false,
   teamsFail = false,
@@ -131,10 +134,16 @@ function mockApi({
         ? Promise.reject(new Error('rollup unavailable'))
         : Promise.resolve({ cells: [] })
     }
-    if (url === '/api/llc/contacts/c1') {
+    if (url === '/api/llc/contacts/c1/involved') {
+      // #13998: the People tab reads a department's people as two groups —
+      // those a role explains, and those carried from before the directory was
+      // shared. `unassignedContacts` lets a test put a person in the second.
       return contactsFail
         ? Promise.reject(new Error('contacts unavailable'))
-        : Promise.resolve(structuredClone(contacts))
+        : Promise.resolve({
+            with_role: structuredClone(contacts),
+            unassigned: structuredClone(unassignedContacts),
+          })
     }
     if (url === '/api/llc/companies/c1/teams') {
       return teamsFail
@@ -313,7 +322,7 @@ describe('A partial source failure stays partial (#13938)', () => {
       await wrapper.get('[data-testid="org-view-people"]').trigger('click')
       await flushPromises()
 
-      // Without the guard these become /api/llc/contacts/null.
+      // Without the guard these become /api/llc/contacts/null/involved.
       const peopleCalls = get.mock.calls.filter(([url]) =>
         String(url).includes('/contacts/') || String(url).includes('/teams'),
       )
@@ -326,7 +335,7 @@ describe('A partial source failure stays partial (#13938)', () => {
   it('fetches the people sources once, however often the tab is re-entered', async () => {
     const wrapper = await mountPeople()
     const countContactCalls = () =>
-      get.mock.calls.filter(([url]) => url === '/api/llc/contacts/c1').length
+      get.mock.calls.filter(([url]) => url === '/api/llc/contacts/c1/involved').length
     expect(countContactCalls()).toBe(1)
 
     // Leave and come back twice — the guard must hold, or every tab switch
@@ -448,7 +457,7 @@ describe('People list loading behaviour (#13938)', () => {
     await wrapper.get('[data-testid="org-view-people"]').trigger('click')
     await flushPromises()
 
-    expect(get).toHaveBeenCalledWith('/api/llc/contacts/c1')
+    expect(get).toHaveBeenCalledWith('/api/llc/contacts/c1/involved')
     expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/teams')
   })
 
@@ -502,5 +511,26 @@ describe('the executor rollup never reports zero when it failed to load (#13942)
     expect(wrapper.find('[data-testid="executor-rollup-unavailable"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="executor-rollup-empty"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="executor-rollup-total"]').exists()).toBe(true)
+  })
+
+  it('labels a contact no role explains, and only that one (#13998)', async () => {
+    // The two groups must stay distinguishable in the UI. Merging them would
+    // assert an involvement nobody recorded; hiding the second would make
+    // people vanish from a department already using them.
+    const wrapper = await mountPeople({
+      contacts: [CONTACTS[0]],
+      unassignedContacts: [
+        { id: 'legacy-1', full_name: 'Hedy Lamarr', email: null, role_title: null },
+      ],
+    })
+
+    expect(wrapper.text()).toContain('Hedy Lamarr')
+    expect(wrapper.find('[data-testid="org-person-unassigned-contact:legacy-1"]').exists()).toBe(
+      true,
+    )
+    // The role-explained contact carries no label.
+    expect(
+      wrapper.find(`[data-testid="org-person-unassigned-contact:${CONTACTS[0].id}"]`).exists(),
+    ).toBe(false)
   })
 })

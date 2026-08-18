@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "sin rol",
+      "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia"
     }
   },
   "code": {

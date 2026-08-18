@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "sem função",
+      "unassignedHint": "Consta neste departamento, mas nenhuma função explica a sua presença"
     }
   },
   "code": {
