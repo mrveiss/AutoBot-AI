@@ -71,7 +71,7 @@ RATCHET_REL = "repo_tests/python_file_size_ratchet_test.py"
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/orchestrator.py": 1114,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3719,
+    "autobot-backend/chat_workflow/tool_handler.py": 3694,
 }
 
 

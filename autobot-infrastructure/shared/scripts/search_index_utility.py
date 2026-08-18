@@ -17,6 +17,8 @@ from typing import Optional
 
 import requests
 
+from autobot_shared.paths import project_root
+
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -113,13 +115,17 @@ def search_queries_batch(queries: list, max_workers: int = 4) -> list:
 
 def upload_docs_as_searchable_facts():
     """Upload docs as facts that can be searched via simple text matching."""
-    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    # #14517: was a shell placeholder in a plain string literal, so every glob below
+    # matched nothing and the run reported "Found 0 documentation files" as success.
+    # Named ``root``: assigning to the imported ``project_root`` would make it a
+    # function-local name and raise UnboundLocalError on the call itself.
+    root = str(project_root())
 
     # Find all documentation files
     doc_files = []
     patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
     for pattern in patterns:
-        files = glob.glob(os.path.join(project_root, pattern), recursive=True)
+        files = glob.glob(os.path.join(root, pattern), recursive=True)
         doc_files.extend(files)
 
     filtered_files = [f for f in set(doc_files) if os.path.isfile(f) and "node_modules" not in f]
@@ -128,7 +134,7 @@ def upload_docs_as_searchable_facts():
     print(f"Uploading {len(filtered_files)} documents concurrently...")
 
     # Upload all documents concurrently
-    results = upload_docs_batch(filtered_files, project_root)
+    results = upload_docs_batch(filtered_files, root)
 
     added_count = 0
     for result in results:

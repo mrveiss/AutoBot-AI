@@ -6,7 +6,7 @@
 
 Code-exec tool policy was split across two modules with two env vars that
 could drift: ``shim_codegen.SENSITIVE_TOOLS`` / ``CODEEXEC_INJECTABLE_TOOLS``
-(what may be shimmed) and ``tool_handler.CODEEXEC_READONLY_TOOLS`` (what may
+(what may be shimmed) and ``compose_tool_handler.CODEEXEC_READONLY_TOOLS`` (what may
 be auto-approved). This module is the ONE classification: every tool is
 exactly one of **sensitive** / **mutating** / **readonly**, and the consumer
 sets are derived views with invariants enforced at import:

@@ -23,6 +23,8 @@ os.environ["AUTOBOT_VECTOR_STORE_TYPE"] = "chroma"
 
 import requests
 
+from autobot_shared.paths import project_root
+
 API_URL = "http://localhost:8001"
 
 
@@ -90,12 +92,16 @@ def main():
         return
 
     # Find all documentation files
-    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    # #14517: was a shell placeholder in a plain string literal, so every glob below
+    # matched nothing and the run added no documents while reporting success. Named
+    # ``root``: assigning to the imported ``project_root`` would shadow it as a
+    # local and raise UnboundLocalError on the call itself.
+    root = str(project_root())
     doc_files = []
 
     patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
     for pattern in patterns:
-        files = glob.glob(os.path.join(project_root, pattern), recursive=True)
+        files = glob.glob(os.path.join(root, pattern), recursive=True)
         doc_files.extend(files)
 
     # Remove duplicates and filter
@@ -109,7 +115,7 @@ def main():
     print(f"Adding {len(files_to_add)} documents concurrently...")
 
     try:
-        results = add_docs_batch(files_to_add, project_root)
+        results = add_docs_batch(files_to_add, root)
 
         added_count = 0
         for result in results:

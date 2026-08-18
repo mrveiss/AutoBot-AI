@@ -44,7 +44,16 @@ from redis.commands.search.field import NumericField, TagField, TextField, Vecto
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
+from autobot_shared.paths import project_root
 from constants.network_constants import NetworkConstants
+
+# #14517: the log path was a shell placeholder in a plain string literal. Python
+# never expands one, so FileHandler was handed a directory that cannot exist and
+# raised at import time -- every entry point in this module was dead. Resolving it
+# makes the handler reachable, so the directory has to be created first: a fresh
+# checkout has no logs/ at all, and FileHandler does not create parents (#13149).
+_LOG_PATH = project_root() / "logs" / "database" / "memory_graph_init.log"
+_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
@@ -52,10 +61,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/database/memory_graph_init.log",
-            mode="a",
-        ),
+        logging.FileHandler(_LOG_PATH, mode="a", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
@@ -878,7 +884,7 @@ def _execute_memory_graph_phases(initializer: MemoryGraphInitializer, args) -> b
         logger.info("PHASE 3: Conversation Migration")
         logger.info("=" * 80)
 
-        transcript_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/conversation_transcripts")
+        transcript_dir = project_root() / "data" / "conversation_transcripts"
         migration_stats = initializer.migrate_conversations(transcript_dir)
         logger.info("\nMigration Results:")
         logger.info(json.dumps(migration_stats, indent=2))
