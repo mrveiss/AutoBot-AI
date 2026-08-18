@@ -124,6 +124,12 @@ MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
     "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
 )
 
+# #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
+# two "log once, not every call" warnings -- that function runs on every
+# _forgive_if_expired, up to once per reconcile pass per degraded node.
+_expiry_floor_override_logged = False
+_reconcile_interval_type_warning_logged = False
+
 
 def _effective_tracker_expiry_s() -> int:
     """The expiry window actually enforced by `_forgive_if_expired` (#14465 review).
@@ -153,14 +159,51 @@ def _effective_tracker_expiry_s() -> int:
     restructuring `_attempt_remediation` to process nodes concurrently (each
     with its own DB session -- sharing one `AsyncSession` across concurrent
     coroutines is unsafe, so that is a real change, not a one-line fix).
-    Tracked as #14515 rather than attempted blind here.
+    Tracked as #14515. Nor does it bound `execute_playbook`'s own runtime,
+    which has no wall-clock timeout at all -- tracked separately as #14524,
+    since that is a single-node gap, not a many-nodes one.
+
+    Two conditions are logged once (not on every call -- this runs on every
+    `_forgive_if_expired`, up to once per reconcile pass per degraded node)
+    rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
+    EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
+    a short window silently gets 391+ instead, which is ALSO shorter than
+    the 1800s default, so the operator ends up less protected than doing
+    nothing while believing they configured something specific), and
+    `settings.reconcile_interval` being present but not a real int (an
+    auto-vivified `MagicMock` child, dormant today but would otherwise
+    silently collapse a legitimately large configured interval down to the
+    60s fallback with no warning).
     """
+    global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
+
     reconcile_interval = getattr(settings, "reconcile_interval", 60)
     if not isinstance(reconcile_interval, int):
+        if not _reconcile_interval_type_warning_logged:
+            logger.warning(
+                "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
+                "remediation-tracker expiry floor margin",
+                reconcile_interval,
+            )
+            _reconcile_interval_type_warning_logged = True
         reconcile_interval = 60
+
     margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)
     floor = REMEDIATION_COOLDOWN + margin + 1
-    return max(REMEDIATION_TRACKER_EXPIRY_S, floor)
+    effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
+
+    if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
+        logger.warning(
+            "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
+            "(REMEDIATION_COOLDOWN=%ds + margin=%ds + 1)",
+            REMEDIATION_TRACKER_EXPIRY_S,
+            effective,
+            REMEDIATION_COOLDOWN,
+            margin,
+        )
+        _expiry_floor_override_logged = True
+
+    return effective
 
 
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
@@ -638,12 +681,23 @@ class ReconcilerService:
         transient failure, never a retry loop.
 
         The follow-up visibility fix is throttled
-        (`MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S`), and deliberately NOT
-        `event_type="completed"`: `FleetOverview.vue`'s `onRemediationEvent`
-        handler calls `fleetStore.refreshNode(nodeId)` -- a real API request
-        -- for exactly that `event_type`. Broadcasting `"completed"` on every
-        refusal would have turned "make the lockout visible" into a refresh
-        storm once per reconcile tick, forever, for every exhausted node.
+        (`MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S`) and does two things,
+        not one (#14465 review round 7 -- a live-only broadcast reaches
+        nobody who is not watching at that exact moment, and was found
+        emitted onto a wire nothing renders):
+
+        - Persists a throttled `NodeEvent` (`_create_still_exhausted_event`)
+          so the DB-backed timeline shows the node is STILL stuck, not just
+          the one original exhaustion event -- reusing the same generic,
+          already-rendered `EventType.REMEDIATION_COMPLETED` shape rather
+          than inventing a new one, so this needs no new frontend work.
+        - Broadcasts over the websocket for anyone watching live, with
+          `event_type="still_exhausted"` -- deliberately NOT `"completed"`:
+          `FleetOverview.vue`'s `onRemediationEvent` handler calls
+          `fleetStore.refreshNode(nodeId)`, a real API request, for exactly
+          that `event_type`. Broadcasting `"completed"` on every refusal
+          would have turned "make the lockout visible" into a refresh storm
+          once per reconcile tick, forever, for every exhausted node.
         """
         if not tracker.get("exhausted"):
             tracker["exhausted"] = True
@@ -660,12 +714,43 @@ class ReconcilerService:
 
         tracker["last_refusal_broadcast"] = now
         self._remediation_tracker[node.node_id] = tracker
+        await self._create_still_exhausted_event(db, node, tracker)
         await self._broadcast_remediation_event(
             node.node_id,
             "still_exhausted",
             success=False,
             message=f"Node {node.hostname} remains at max remediation attempts - human intervention required",
         )
+
+    async def _create_still_exhausted_event(self, db: AsyncSession, node: Node, tracker: dict) -> None:
+        """Persist a throttled record of an ONGOING refusal, distinct from the first (#14465).
+
+        Helper for _handle_max_attempts_refusal. Reusing `_create_max_attempts_
+        event`'s exact message would misrepresent every later refusal as a
+        fresh exhaustion; this is the same `event_type`/`severity` (so the
+        existing generic events timeline, which renders by message and
+        severity rather than a fixed per-event_type template, shows it with
+        no new frontend work) with wording that says "still", and the
+        attempt count is unchanged from the first event by design -- it is
+        frozen along with `last_attempt` once exhausted.
+        """
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=(
+                f"Node {node.hostname} still requires human intervention "
+                f"({tracker['count']} failed remediation attempts)"
+            ),
+            details={
+                "attempts": tracker["count"],
+                "action_required": "manual_review",
+                "still_exhausted": True,
+            },
+        )
+        db.add(event)
+        await db.commit()
 
     async def _record_remediation_result(
         self, db: AsyncSession, node: Node, success: bool, tracker: dict, restarted: bool = True
@@ -754,11 +839,16 @@ class ReconcilerService:
         # transition, then behind a dwell window there. All three cleared on a
         # POSITIVE observation of health that a later flap does not retract,
         # which made each one fakeable by a flap in a different way. Replaced
-        # with the purely time-based `_forgive_if_expired`, inside
-        # `_check_remediation_limits` -- see REMEDIATION_TRACKER_EXPIRY_S for
-        # what that does and does not fix. It is not the reason `count` stays
-        # low for a node whose agent keeps heartbeating; `success = restarted
-        # and await self._heartbeat_returned(...)`, a few lines below, is.
+        # with `_forgive_if_expired`, inside `_check_remediation_limits` --
+        # gated on elapsed time since the last ATTEMPT rather than any
+        # heartbeat/streak signal, but NOT a complete fix on its own: see
+        # `_effective_tracker_expiry_s` for what its margin does and does not
+        # bound (it does not bound `execute_playbook`'s own runtime, which has
+        # no wall-clock timeout at all -- #14524; the margin's own N=5
+        # coverage gap at this floor is #14515). It is also not the reason
+        # `count` stays low for a node whose agent keeps heartbeating;
+        # `success = restarted and await self._heartbeat_returned(...)`, a
+        # few lines below, is.
 
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
