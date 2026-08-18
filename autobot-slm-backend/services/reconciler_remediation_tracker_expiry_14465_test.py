@@ -89,9 +89,9 @@ def test_the_real_module_was_loaded_not_a_stub():
             f"{dead_name} is still present -- two superseded heartbeat-side clearing "
             "mechanisms should not sit alongside the time-based one"
         )
-    assert not hasattr(reconciler.ReconcilerService(), "_online_streak"), (
-        "the streak dict from the superseded dwell-window mechanism must not still be tracked"
-    )
+    assert not hasattr(
+        reconciler.ReconcilerService(), "_online_streak"
+    ), "the streak dict from the superseded dwell-window mechanism must not still be tracked"
 
 
 def test_the_expiry_floor_clears_the_cooldown_by_more_than_a_reconcile_tick():
@@ -205,9 +205,9 @@ def test_a_node_whose_restart_never_gets_a_heartbeat_accepted_reaches_max_attemp
         f"{reconciler.MAX_REMEDIATION_ATTEMPTS + 2} cycles -- escalation is unreachable (#14465)"
     )
     assert tracker.get("exhausted") is True
-    assert len(max_attempts_events) == 1, (
-        f"_create_max_attempts_event fired {len(max_attempts_events)} times -- expected exactly once"
-    )
+    assert (
+        len(max_attempts_events) == 1
+    ), f"_create_max_attempts_event fired {len(max_attempts_events)} times -- expected exactly once"
 
 
 def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
@@ -480,9 +480,9 @@ def test_an_exhausted_tracker_never_auto_expires():
     far_future = last_attempt + timedelta(seconds=reconciler.REMEDIATION_TRACKER_EXPIRY_S * 100)
     tracker = service._forgive_if_expired("node-14465", service._remediation_tracker["node-14465"], far_future)
 
-    assert tracker["count"] == 3 and tracker.get("exhausted") is True, (
-        "an exhausted tracker must stay exhausted no matter how much time passes"
-    )
+    assert (
+        tracker["count"] == 3 and tracker.get("exhausted") is True
+    ), "an exhausted tracker must stay exhausted no matter how much time passes"
 
 
 def test_an_exhausted_node_broadcasts_on_every_subsequent_refusal():
