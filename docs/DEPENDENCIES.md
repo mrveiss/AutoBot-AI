@@ -185,9 +185,11 @@ python3-pip
 python3-venv
 
 # Intel OpenVINO (optional - for NPU acceleration)
-# Repository: https://apt.repos.intel.com/openvino/2024
-openvino-libraries (2024.0+)
-openvino-dev (2024.0+)
+# Repository: https://apt.repos.intel.com/openvino/2026
+openvino-libraries (2026.3+)
+openvino-dev (2026.3+)  # apt C++ SDK headers -- distinct from the deprecated
+                        # PyPI openvino-dev meta-package; never `pip install
+                        # openvino-dev` (#14447)
 ```
 
 ### Python Packages
@@ -196,7 +198,7 @@ See `autobot-npu-worker/requirements.txt`
 Key packages:
 - fastapi (0.104+)
 - uvicorn[standard] (0.24+)
-- openvino (2024.0+)
+- openvino (2026.3+)
 - numpy
 - pillow
 

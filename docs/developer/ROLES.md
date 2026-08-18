@@ -237,7 +237,7 @@ These conflicts drive the default fleet layout:
 | **Ansible playbook** | `setup-npu-worker.yml` |
 | **Source path** | `autobot-npu-worker/` |
 | **Post-sync** | `pip install -r requirements.txt` |
-| **Key Python packages** | FastAPI, Uvicorn, openvino>=2024.0, openvino-dev, numpy, pillow, transformers, optimum[openvino] |
+| **Key Python packages** | FastAPI, Uvicorn, openvino>=2026.3.0, numpy, pillow, transformers, optimum[openvino] |
 | **Special hardware** | Intel NPU device (optional, falls back to CPU) |
 | **Degraded without** | GPU inference offloading — backend falls back to local Ollama |
 
