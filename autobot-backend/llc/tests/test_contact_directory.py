@@ -305,3 +305,124 @@ def test_the_directory_routes_are_reachable_before_the_catch_all() -> None:
         assert (
             paths.index(literal) < catch_all
         ), f"{literal} is declared after /{{company_id}} and is therefore unreachable"
+
+
+@pytest.mark.asyncio
+async def test_department_view_separates_role_holders_from_legacy_contacts(session_factory):  # noqa: ANN001
+    """The two groups must stay two groups.
+
+    Merging them asserts an involvement nobody recorded; dropping the legacy
+    group makes people vanish from a department already using them. Only the
+    split states the truth: they are here, and no role explains why.
+    """
+    service = ContactDirectoryService()
+    company = uuid.uuid4()
+    holder = await _seed_contact(session_factory, "Ada Holder", company_id=uuid.uuid4())
+    legacy = await _seed_contact(session_factory, "Bob Legacy", company_id=company)
+    await _hold_role(session_factory, company, holder)
+
+    async with session_factory() as session:
+        groups = await service.list_for_department(session, company)
+
+    assert [c.id for c in groups["with_role"]] == [holder]
+    assert [c.id for c in groups["unassigned"]] == [legacy]
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_contact_moves_group_once_it_holds_a_role(session_factory):  # noqa: ANN001
+    """The unassigned group empties itself, so it disappears when the migration
+    is genuinely done rather than on a date someone guessed."""
+    service = ContactDirectoryService()
+    company = uuid.uuid4()
+    contact_id = await _seed_contact(session_factory, "Bob", company_id=company)
+
+    async with session_factory() as session:
+        before = await service.list_for_department(session, company)
+    assert [c.id for c in before["unassigned"]] == [contact_id]
+
+    await _hold_role(session_factory, company, contact_id)
+
+    async with session_factory() as session:
+        after = await service.list_for_department(session, company)
+    assert [c.id for c in after["with_role"]] == [contact_id]
+    assert after["unassigned"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_role_holder_is_never_listed_twice(session_factory):  # noqa: ANN001
+    """A contact both stamped with the company and holding a role appears once."""
+    service = ContactDirectoryService()
+    company = uuid.uuid4()
+    contact_id = await _seed_contact(session_factory, "Ada", company_id=company)
+    await _hold_role(session_factory, company, contact_id)
+    await _hold_role(session_factory, company, contact_id)  # a second role here
+
+    async with session_factory() as session:
+        groups = await service.list_for_department(session, company)
+
+    assert [c.id for c in groups["with_role"]] == [contact_id]
+    assert groups["unassigned"] == []
+
+
+@pytest.mark.asyncio
+async def test_another_departments_people_never_appear(session_factory):  # noqa: ANN001
+    """A shared directory must not leak into a department's org chart."""
+    service = ContactDirectoryService()
+    company_a, company_b = uuid.uuid4(), uuid.uuid4()
+    theirs = await _seed_contact(session_factory, "Theirs", company_id=company_b)
+    await _hold_role(session_factory, company_b, theirs)
+
+    async with session_factory() as session:
+        groups = await service.list_for_department(session, company_a)
+
+    assert groups["with_role"] == []
+    assert groups["unassigned"] == []
+
+
+@pytest.mark.asyncio
+async def test_merge_survives_both_contacts_holding_the_same_role(session_factory):  # noqa: ANN001
+    """Two duplicates of one person often hold the same role — that is *why* they
+    are duplicates.
+
+    Moving both tenures onto the survivor would leave two open tenures for the
+    same (role, holder), which the partial unique index forbids: an
+    IntegrityError at the exact moment an admin tries to clean up.
+    """
+    service = ContactDirectoryService()
+    company = uuid.uuid4()
+    await _grant_admin(session_factory, company)
+    keep = await _seed_contact(session_factory, "Ada Lovelace", "ada@x.test")
+    dupe = await _seed_contact(session_factory, "A. Lovelace", "ada@x.test")
+
+    role_id = uuid.uuid4()
+    async with session_factory() as session:
+        for contact_id in (keep, dupe):
+            session.add(
+                LLCRoleAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company,
+                    role_id=role_id,
+                    holder_type=RoleHolderType.CONTACT.value,
+                    holder_contact_id=contact_id,
+                )
+            )
+        await session.commit()
+
+    async with session_factory() as session:
+        survivor = await service.merge(
+            session, company_id=company, keep_id=keep, merge_id=dupe, actor_user_id=_ADMIN_USER
+        )
+        await session.commit()
+
+    assert survivor.id == keep
+    assert not await _exists(session_factory, dupe)
+    # Exactly one open tenure for that role — not two, not zero.
+    async with session_factory() as session:
+        rows = await session.execute(
+            sa.select(LLCRoleAssignment.id).where(
+                LLCRoleAssignment.role_id == role_id,
+                LLCRoleAssignment.holder_contact_id == keep,
+                LLCRoleAssignment.ended_at.is_(None),
+            )
+        )
+        assert len(list(rows.scalars().all())) == 1

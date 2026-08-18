@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "کوئی کردار نہیں",
+      "unassignedHint": "اس شعبے میں شامل، مگر کوئی کردار اس کی وضاحت نہیں کرتا"
     }
   },
   "code": {
