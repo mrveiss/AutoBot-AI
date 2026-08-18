@@ -26,9 +26,26 @@ Two levels, and the order matters:
    no exact entry here, which is what makes falling through to this baseline a
    CI-time event rather than a silent grant.
 
-A tool on an unknown bridge with no exact entry resolves to ``None``, which is
-what the enforcement stage (#13228 step 5) refuses. Absence is a denial, not a
-default-allow — that inversion is the point of the issue.
+**What this module actually guarantees, stated precisely (security review,
+#14521).** ``required_permission()`` is not changed by #14494 and still
+default-allows at runtime in both branches it can take:
+
+* a tool absent from ``TOOL_PERMISSIONS`` on a *known* bridge resolves through
+  ``BRIDGE_DEFAULT_PERMISSIONS`` — a real, grantable read permission, not a
+  denial (pinned by
+  ``test_an_undeclared_tool_on_a_known_bridge_inherits_the_least_privilege``);
+* a tool on an *unknown* bridge resolves to ``None``, and
+  ``PermissionEnforcementExtension`` currently treats ``None`` as legacy —
+  allowed through with no check at all.
+
+What #14494 actually delivers is **complete CI-time coverage**: every tool the
+eleven governed bridges register today has an exact entry, and
+``tools/lint/check_mcp_tool_permission_coverage.py`` (a required check) fails
+the moment a live tool has none. That coverage is backstopped at runtime only
+by the read-level default above — not by a denial. Tightening
+``required_permission``/the enforcement extension so an undeclared tool is
+refused rather than default-allowed at runtime is tracked separately as the
+#13228 stage-3 follow-up; this module does not attempt it.
 
 **#14494 — every tool this system knows about carries an exact entry below.**
 The under-grant guard used to infer "mutating" from a hand-written verb list
@@ -254,11 +271,17 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
 
 
 def required_permission(tool_name: str, bridge_name: str = "") -> Optional[Permission]:
-    """Return the permission *tool_name* requires, or ``None`` if undeclared.
+    """Return the permission *tool_name* requires, or ``None`` for an unknown bridge.
 
-    ``None`` means "no declaration exists", which the enforcement stage treats as
-    a refusal. It is deliberately not a permissive fallback: the whole defect in
-    #13228 is that an undeclared tool was reachable.
+    A tool absent from ``TOOL_PERMISSIONS`` still resolves through
+    ``BRIDGE_DEFAULT_PERMISSIONS`` as long as *bridge_name* is one of the eleven
+    governed bridges — a real, grantable read permission, not a refusal.
+    ``None`` only happens for a bridge this module has never heard of, and
+    ``PermissionEnforcementExtension`` currently treats that ``None`` as legacy
+    (allowed through, unchecked) rather than as a denial — see the module
+    docstring's "what this actually guarantees" note and the #13228 stage-3
+    follow-up. #14494 makes every tool on a *known* bridge carry an exact entry
+    at CI time; it does not change what this function returns.
     """
     exact = TOOL_PERMISSIONS.get(tool_name)
     if exact is not None:
