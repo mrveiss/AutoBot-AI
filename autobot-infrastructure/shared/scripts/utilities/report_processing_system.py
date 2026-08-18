@@ -75,8 +75,25 @@ class ReportDiscoveryAgent:
         self.report_files: List[ReportFile] = []
 
     def discover_reports(self) -> Dict[str, List[ReportFile]]:
-        """Scan all folders for reports and categorize them"""
+        """Scan all folders for reports and categorize them.
+
+        Raises:
+            NotADirectoryError: the configured base path does not exist or is
+                not a directory. ``Path.rglob`` yields nothing at all in that
+                case rather than raising, so without this check a mission
+                pointed at the wrong place is indistinguishable from one that
+                legitimately found no reports (#14507).
+        """
         self.logger.info(f"Starting report discovery in {self.base_path}")
+
+        # #14507: only an unusable *root* is an error. A readable root holding
+        # no matching files is a legitimate outcome -- a fresh checkout, or a
+        # tree whose reports a previous run already archived -- so that case
+        # warns and returns empty rather than failing the mission.
+        if not self.base_path.is_dir():
+            raise NotADirectoryError(
+                f"Report discovery base path does not exist or is not a directory: {self.base_path}"
+            )
 
         report_patterns = [
             "*report*",
@@ -99,9 +116,19 @@ class ReportDiscoveryAgent:
             "other": [],
         }
 
+        # #14507: the patterns overlap -- ``security_report.json`` matches both
+        # ``*report*`` and ``*.json`` -- so without this set every such file was
+        # discovered, counted, analysed and archived once per matching pattern.
+        # The second archival attempt moves a file that is no longer there.
+        seen: set = set()
+
         for pattern in report_patterns:
             for file_path in self.base_path.rglob(pattern):
+                resolved = file_path.resolve()
+                if resolved in seen:
+                    continue
                 if file_path.is_file() and not self._should_exclude(file_path):
+                    seen.add(resolved)
                     report_file = self._create_report_file(file_path)
                     category = self._categorize_file(report_file)
                     discovered[category].append(report_file)
@@ -114,6 +141,13 @@ class ReportDiscoveryAgent:
         for category, files in discovered.items():
             if files:
                 self.logger.info(f"  {category}: {len(files)} files")
+
+        if total_files == 0:
+            self.logger.warning(
+                f"No report files matched any pattern under {self.base_path} -- "
+                "the directory is readable but empty of reports, so this mission "
+                "has nothing to process"
+            )
 
         return discovered
 
@@ -430,15 +464,24 @@ class ArchiveOrganizationAgent:
 class ReportProcessingCoordinator:
     """Main coordinator for multi-agent report processing"""
 
-    def __init__(self, base_path: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"):
-        self.base_path = base_path
+    def __init__(self, base_path: str | None = None):
+        # #14507: the default used to be the *literal* string
+        # ``"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"``. Python does not
+        # expand shell syntax inside a plain string literal, so every default-
+        # constructed coordinator -- which is exactly what ``main()`` builds --
+        # scanned a directory named after an unexpanded shell expression. #14504
+        # fixed this same defect class at the two f-string sites in this file,
+        # where pyflakes could see the undefined name; a plain literal is
+        # invisible to every lint code. ``autobot_shared.paths.project_root()``
+        # is the one place allowed to answer this question (#13149).
+        self.base_path = str(project_root()) if base_path is None else base_path
         self.logger = logging.getLogger("Coordinator")
         self.processing_start = datetime.datetime.now()
 
         # Initialize agents
-        self.discovery_agent = ReportDiscoveryAgent(base_path)
+        self.discovery_agent = ReportDiscoveryAgent(self.base_path)
         self.error_agent = ErrorAnalysisAgent()
-        self.archive_agent = ArchiveOrganizationAgent(base_path)
+        self.archive_agent = ArchiveOrganizationAgent(self.base_path)
 
         # Processing statistics
         self.stats = {
