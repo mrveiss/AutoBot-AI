@@ -15,11 +15,13 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -139,6 +141,42 @@ SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.l
 
 # Poll interval while tailing the detached run's log file for live progress.
 SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
+
+# #14524: grace period between SIGTERM and SIGKILL when a timed-out playbook
+# subprocess's WHOLE process group (see _kill_process_group) does not exit on
+# its own. Long enough for ansible-playbook's own signal handling / a forked
+# ssh child to unwind cleanly; short enough that a wedged run does not become
+# a second, unbounded wait stacked on top of the timeout that triggered it.
+# Clamped, not bare (review, round 2): a bare env_float accepts 0 and
+# negatives, and 0 here collapses the grace entirely -- SIGKILL fires with no
+# chance for a well-behaved child to exit on SIGTERM first. `max_v` added
+# (review, round 3): env_float_clamped's min-only clamp let
+# AUTOBOT_PLAYBOOK_KILL_GRACE_S=inf produce `asyncio.wait_for(..., timeout=
+# inf)` -- an unbounded wait inside the function that exists to bound one.
+# 60s is already generous for a SIGTERM/SIGKILL grace; a process still alive
+# that much later than an uncatchable SIGKILL is in D-state (uninterruptible
+# I/O sleep), which no additional waiting here resolves.
+PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, min_v=0.1, max_v=60.0)
+
+# Timeouts for the individual git subcommands _update_code_source runs
+# (#14524 round 2): previously bare literals (30, 10) inline at each call
+# site -- pulled out as named, env-backed constants both to follow this
+# repo's "no hardcoded TTL" convention and so tests can exercise the
+# timeout-kill path (_run_git -> _kill_process_group) at CI speed rather
+# than actually waiting out a 30s git hang.
+#
+# #14524 round 3 added a derived update_code_source_worst_case_s() here so
+# reconciler.py's escalation floor could fold this module's worst case into
+# its own margin -- reverted (review round 3 re-review): folding it in
+# required the service-restart sweep to run off the node pass so its own
+# duration didn't ALSO need bounding by the same floor, and that decoupling
+# was itself unsafe (a singleton PlaybookExecutor with two concurrent
+# callers racing _update_code_source's git operations against the one
+# shared code_source tree; see reconciler.py's SERVICE_RESTART_PLAYBOOK_
+# TIMEOUT_S comment and #14570). These two constants
+# remain -- they still bound _run_git/_kill_process_group directly.
+GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
+GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -522,76 +560,129 @@ class PlaybookExecutor:
         ):  # nosec B108
             Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
 
-    async def _update_code_source(self) -> None:
+    async def _run_git(self, code_source_dir: Path, *args: str) -> int:
+        """Run a git command in code_source_dir with a 30-second timeout.
+
+        Helper for _update_code_source.
+
+        Review on #14524 (round 2): a lone ``proc.kill()`` only reaches
+        git's own pid. ``git fetch``/``checkout`` over ssh can leave an
+        ``ssh`` (or credential-helper) child still holding these pipes open,
+        and the retry ``await proc.communicate()`` that followed used to
+        have no timeout of its own -- the exact unbounded-wait shape this
+        issue exists to close, one function away from ``execute_playbook``'s
+        own run (``_update_code_source`` runs before ``_run_subprocess``,
+        outside its ``timeout_s``). ``start_new_session=True`` +
+        ``self._kill_process_group`` reuse the same whole-process-group kill
+        ``_run_subprocess`` uses, and never block unboundedly themselves.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(code_source_dir),
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            await self._kill_process_group(proc)
+            return -1
+        return proc.returncode
+
+    async def _log_updated_head_commit(self, code_source_dir: Path, branch: str) -> None:
+        """Log the resulting HEAD commit for traceability (#2896).
+
+        Helper for _update_code_source. Best-effort: a timeout here must not
+        abandon the process unkilled (#14524 round 2 -- the previous,
+        un-wrapped version of this call had no kill at all on timeout, worse
+        than _run_git's original bare ``proc.kill()``: an orphan, not just a
+        leaked pipe wait).
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(code_source_dir),
+            "rev-parse",
+            "--short",
+            "HEAD",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=GIT_REV_PARSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            await self._kill_process_group(proc)
+            return
+        commit_hash = stdout.decode("utf-8", errors="replace").strip()
+        logger.info(
+            "_update_code_source: code_source updated to %s on branch %s",
+            commit_hash,
+            branch,
+        )
+
+    async def _update_code_source(self) -> bool:
         """
         Pull latest code into code_source before running a playbook (#2896).
 
         Derives code_source root from self.ansible_dir (two levels up).
         Skips silently when the path does not exist or has no .git dir — safe
-        in local dev environments.  Never blocks provisioning: any failure is
-        logged as a warning and the caller continues.
+        in local dev environments (treated as success: there is nothing to
+        sync, not a failure to sync it).
+
+        Returns:
+            True if code_source is confirmed at `origin/<branch>` (or there
+            was nothing to sync); False if any step failed or timed out.
+
+        #14524 (round 3): this used to return None and its result was
+        DISCARDED at the call site -- a git step that failed (including one
+        that timed out, post round 2's own fix) was logged and swallowed,
+        and `execute_playbook` went on to run the playbook against whatever
+        revision code_source already held, reporting `success: True`. Never
+        blocking PROVISIONING is still the right default for the ordinary
+        per-role/per-node restart path (manage-service.yml barely depends on
+        code_source being current), but for the SELF-UPDATE path
+        (`detach=True`) that is a SILENT STALE DEPLOY across the whole
+        fleet -- worse than the hang this issue fixes, because it is
+        invisible. The caller now sees this result and decides; see
+        `execute_playbook`.
         """
         code_source_dir = self.ansible_dir.parent.parent
         git_dir = code_source_dir / ".git"
         if not git_dir.exists():
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
-            return
+            return True
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
-
-        async def _run_git(*args: str) -> int:
-            """Run a git command in code_source_dir with a 30-second timeout."""
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(code_source_dir),
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=30)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.communicate()
-                return -1
-            return proc.returncode
+        synced = True
 
         try:
-            if await _run_git("checkout", "--", ".") != 0:
+            if await self._run_git(code_source_dir, "checkout", "--", ".") != 0:
                 logger.warning("_update_code_source: git checkout -- . failed; continuing")
+                synced = False
 
-            if await _run_git("fetch", "origin") != 0:
+            if await self._run_git(code_source_dir, "fetch", "origin") != 0:
                 logger.warning("_update_code_source: git fetch origin failed; continuing")
-                return
+                return False
 
-            if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
+            if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:
                 logger.warning(
                     "_update_code_source: git reset --hard origin/%s failed; continuing",
                     branch,
                 )
-                return
+                return False
 
-            # Log the resulting HEAD commit for traceability
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                str(code_source_dir),
-                "rev-parse",
-                "--short",
-                "HEAD",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            commit_hash = stdout.decode("utf-8", errors="replace").strip()
-            logger.info(
-                "_update_code_source: code_source updated to %s on branch %s",
-                commit_hash,
-                branch,
-            )
+            # Best-effort only: a failure here means the commit hash was not
+            # LOGGED, not that the reset above did not happen -- does not
+            # affect `synced`.
+            await self._log_updated_head_commit(code_source_dir, branch)
+            return synced
         except Exception as exc:
             logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
+            return False
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """
@@ -805,42 +896,45 @@ class PlaybookExecutor:
         logger.info("Self-update run detached into transient systemd service, output -> %s", log_path)
         return self._wrap_with_systemd_unit(cmd, env, log_path), log_path
 
+    def _resolve_stdio_targets(
+        self, cmd: List[str], env: Dict[str, str], detach: bool
+    ) -> tuple[List[str], Path | None, int, int]:
+        """Resolve the effective argv and stdout/stderr targets for a run.
+
+        Helper for _run_subprocess. Returns
+        ``(effective_cmd, log_path, stdout_target, stderr_target)``. For an
+        attached run (the common case) this is just ``(cmd, None, PIPE,
+        STDOUT)``; for a detached one, output is redirected to a file (see
+        _wrap_with_systemd_unit) -- leaving the outer pipe PIPE-but-unread
+        risks the wrapper deadlocking once the OS pipe buffer fills, so it is
+        DEVNULL instead.
+        """
+        if not detach:
+            return cmd, None, asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT
+
+        effective_cmd, log_path = self._prepare_detached_run(cmd, env)
+        if log_path is None:
+            return effective_cmd, None, asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT
+        return effective_cmd, log_path, asyncio.subprocess.DEVNULL, asyncio.subprocess.DEVNULL
+
     async def _run_subprocess(
         self,
         cmd: List[str],
         env: Dict[str, str],
         progress_callback: Callable | None,
         detach: bool = False,
+        timeout_s: float | None = None,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
 
-        Helper for execute_playbook.
-
-        Args:
-            detach: When True AND the runtime supports it (#11492), wrap the
-                command in a ``systemd-run`` transient service with file-backed
-                stdout/stderr so it survives a same-process ``systemctl
-                restart autobot-slm-backend`` mid-run (the self-update path)
-                without a dead backend's pipe crashing it. Falls back to the
-                unchanged direct exec + pipe when systemd-run/systemd-service
-                context or the log file is unavailable (dev mode, tests,
-                containers).
+        Helper for execute_playbook -- see its docstring for what ``detach``
+        and ``timeout_s`` (#14524) each mean; both are passed through
+        unchanged. ``start_new_session=True`` below gives the child its own
+        process group so a ``timeout_s`` expiry can kill the WHOLE tree
+        (_kill_process_group), not just this one PID.
         """
-        effective_cmd = cmd
-        log_path: Path | None = None
-        stdout_target: int = asyncio.subprocess.PIPE
-        stderr_target: int = asyncio.subprocess.STDOUT
-
-        if detach:
-            effective_cmd, log_path = self._prepare_detached_run(cmd, env)
-            if log_path is not None:
-                # Real output goes to the file (see _wrap_with_systemd_unit);
-                # nothing meaningful is expected on this outer pipe, and
-                # leaving it as PIPE-but-unread risks the wrapper deadlocking
-                # once the OS pipe buffer fills.
-                stdout_target = asyncio.subprocess.DEVNULL
-                stderr_target = asyncio.subprocess.DEVNULL
+        effective_cmd, log_path, stdout_target, stderr_target = self._resolve_stdio_targets(cmd, env, detach)
 
         process = await asyncio.create_subprocess_exec(
             *effective_cmd,
@@ -848,13 +942,131 @@ class PlaybookExecutor:
             stderr=stderr_target,
             cwd=str(self.ansible_dir),
             env=env,
+            # #14524: own process group, so a timeout can kill the WHOLE tree
+            # (ansible-playbook's forked workers/ssh children too), not just
+            # this one PID.
+            start_new_session=True,
         )
-        if log_path is not None:
-            output_lines = await self._tail_playbook_log(log_path, process, progress_callback)
-        else:
-            output_lines = await self._stream_playbook_output(process, progress_callback)
-        await process.wait()
-        return {"output": "\n".join(output_lines), "returncode": process.returncode}
+
+        async def _collect() -> List[str]:
+            if log_path is not None:
+                lines = await self._tail_playbook_log(log_path, process, progress_callback)
+            else:
+                lines = await self._stream_playbook_output(process, progress_callback)
+            await process.wait()
+            return lines
+
+        if timeout_s is None:
+            output_lines = await _collect()
+            return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+
+        try:
+            output_lines = await asyncio.wait_for(_collect(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            return await self._handle_playbook_timeout(process, effective_cmd, timeout_s)
+
+        return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+
+    async def _handle_playbook_timeout(
+        self, process: asyncio.subprocess.Process, cmd: List[str], timeout_s: float
+    ) -> Dict[str, any]:
+        """Kill a wedged playbook run and report it as a FAILURE, not a success (#14524).
+
+        Helper for _run_subprocess. ``returncode=-9`` (never 0) and
+        ``timed_out=True`` let every caller's existing success check
+        (``execute_playbook``: ``success = returncode == 0``) treat this
+        exactly like any other failed run -- so, for the remediation restart
+        path, ``_restart_service_via_ansible`` returns False and the
+        escalation counter advances instead of being silently reset. A
+        timeout that read as success would be the exact silent-failure shape
+        this repo keeps finding.
+        """
+        logger.error(
+            "Playbook subprocess exceeded %.0fs wall-clock timeout -- killing process group (#14524): %s",
+            timeout_s,
+            " ".join(cmd[:3]),
+        )
+        await self._kill_process_group(process)
+        return {
+            "output": (
+                f"[TIMEOUT] ansible-playbook killed after exceeding {timeout_s:.0f}s wall-clock timeout (#14524)"
+            ),
+            "returncode": -9,
+            "timed_out": True,
+        }
+
+    async def _kill_process_group(self, process: asyncio.subprocess.Process) -> None:
+        """SIGTERM then SIGKILL the WHOLE process group of a timed-out run (#14524).
+
+        ``ansible-playbook`` forks per-host workers (``forks=5``, ansible.cfg)
+        and ssh children; killing only the direct PID leaves those running as
+        orphans. ``start_new_session=True`` (_run_subprocess) makes the
+        spawned pid its own process group id, so ``pgid = process.pid`` needs
+        no ``os.getpgid()`` lookup -- review round 2, Case B: that lookup
+        raised ``ProcessLookupError`` and returned, signalling NOTHING, the
+        moment the direct child was already reaped while a SIBLING (e.g. a
+        leader that exits on its own after backgrounding one) was still
+        alive -- the only way an ATTACHED run wedges after ansible itself has
+        exited. And escalation below checks the WHOLE GROUP via
+        `_process_group_is_dead` (signal 0 -- an existence probe, nothing
+        sent), not `await process.wait()`'s one direct pid -- review round 2,
+        Case C: a direct child that dies on SIGTERM while a sibling ignores
+        it used to make the old, pid-only check return early, and SIGKILL was
+        never sent to the survivor. Both fail-open shapes were reproduced
+        against a standalone prototype before this fix, and fixed by it.
+        """
+        pgid = process.pid
+
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(pgid, sig)
+            except ProcessLookupError:
+                return  # whole group already gone -- nothing left to escalate to
+
+            # Reap the direct child promptly: an unreaped zombie still
+            # "belongs" to this pgid and would make the group-liveness probe
+            # below always see something, masking whether a SIBLING is still
+            # alive once the direct child itself is gone.
+            try:
+                await asyncio.wait_for(process.wait(), timeout=PLAYBOOK_KILL_GRACE_S)
+            except asyncio.TimeoutError:
+                pass
+
+            if await self._wait_for_process_group_death(pgid, PLAYBOOK_KILL_GRACE_S):
+                return
+
+        logger.error("Playbook process group %d survived SIGKILL after grace period (#14524)", pgid)
+
+    @staticmethod
+    def _process_group_is_dead(pgid: int) -> bool:
+        """True if no process remains in *pgid*. Signal 0 sends nothing -- existence-only probe."""
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            # A process with this pgid exists but signalling it is refused
+            # (e.g. uid mismatch) -- it still exists, so not dead.
+            return False
+        return False
+
+    async def _wait_for_process_group_death(self, pgid: int, timeout_s: float) -> bool:
+        """Poll `_process_group_is_dead` for up to *timeout_s* (#14524).
+
+        Helper for _kill_process_group. Checking the GROUP, not the one pid
+        `asyncio` tracks, is what makes the SIGTERM/SIGKILL escalation
+        decision correct when a sibling -- not the direct child -- is the
+        one still alive (review round 2, Case C).
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        poll_s = min(0.1, timeout_s) if timeout_s > 0 else 0.05
+        while True:
+            if self._process_group_is_dead(pgid):
+                return True
+            if loop.time() >= deadline:
+                return self._process_group_is_dead(pgid)
+            await asyncio.sleep(poll_s)
 
     @staticmethod
     def _stage_dir_for_run(detach: bool) -> str | None:
@@ -956,6 +1168,43 @@ class PlaybookExecutor:
         """
         link_group_vars(inventory_path, self.ansible_dir)
 
+    @staticmethod
+    def _code_source_sync_failure_result(
+        playbook_name: str, detach: bool, code_source_synced: bool
+    ) -> Dict[str, any] | None:
+        """A failed code_source sync's consequence for THIS run. Helper for execute_playbook.
+
+        Returns a ready-to-return failure dict for the DETACHED (self-update)
+        path -- refusing to deploy a possibly-stale revision fleet-wide is a
+        real abort, not a warning (#14524 round 3: the self-update path
+        exists to deploy the LATEST revision; running it anyway on a sync
+        failure would be a SILENT STALE DEPLOY, reporting `success: True`
+        while every node gets whatever code_source already held, invisible
+        until symptoms show up elsewhere). Returns None otherwise -- the
+        ordinary per-role/per-node path (`detach=False`) keeps its original
+        best-effort "never blocks provisioning" behaviour, only logged.
+        """
+        if code_source_synced:
+            return None
+        if detach:
+            logger.error(
+                "execute_playbook: code_source sync failed before a DETACHED (self-update) "
+                "run of %s -- refusing to deploy a possibly-stale revision fleet-wide (#14524)",
+                playbook_name,
+            )
+            return {
+                "success": False,
+                "output": f"code_source sync failed before self-update of {playbook_name} (#14524)",
+                "returncode": -1,
+                "timed_out": False,
+            }
+        logger.warning(
+            "execute_playbook: code_source sync failed for %s -- continuing with "
+            "whatever code_source currently holds (#14524)",
+            playbook_name,
+        )
+        return None
+
     async def execute_playbook(
         self,
         playbook_name: str,
@@ -966,6 +1215,7 @@ class PlaybookExecutor:
         progress_callback: Callable | None = None,
         inventory_path: Path | None = None,
         detach: bool = False,
+        timeout_s: float | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -988,11 +1238,22 @@ class PlaybookExecutor:
                 True for the SLM self-update path (the run that restarts
                 autobot-slm-backend); ordinary per-role/per-node deploys leave
                 this False, since they don't kill their own process.
+            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``
+                (the default) is unbounded, matching the previous behaviour --
+                required for long deployment/provisioning runs. Pass a concrete
+                value only where a caller can safely bound the run (e.g. the
+                reconciler's remediation restart); mutually exclusive with
+                ``detach`` in practice, since a detached run is designed to
+                outlive this coroutine entirely.
 
         Returns:
-            Dict with keys: success (bool), output (str), returncode (int)
+            Dict with keys: success (bool), output (str), returncode (int),
+            timed_out (bool) -- True only when ``timeout_s`` was exceeded.
         """
-        await self._update_code_source()
+        code_source_synced = await self._update_code_source()
+        sync_failure = self._code_source_sync_failure_result(playbook_name, detach, code_source_synced)
+        if sync_failure is not None:
+            return sync_failure
 
         playbook_path = self.ansible_dir / playbook_name
         if not playbook_path.exists():
@@ -1050,16 +1311,19 @@ class PlaybookExecutor:
             # Override ansible.cfg default inventory to prevent merging
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
-            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach)
+            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
+            elif proc_result.get("timed_out"):
+                logger.error(f"Playbook {playbook_name} timed out after {timeout_s}s (#14524)")
             else:
                 logger.error(f"Playbook {playbook_name} failed with code {proc_result['returncode']}")
             return {
                 "success": success,
                 "output": proc_result["output"],
                 "returncode": proc_result["returncode"],
+                "timed_out": proc_result.get("timed_out", False),
             }
 
         except Exception as e:
@@ -1068,6 +1332,7 @@ class PlaybookExecutor:
                 "success": False,
                 "output": f"Error: {str(e)}",
                 "returncode": -1,
+                "timed_out": False,
             }
         finally:
             # Clean up the per-run temp inventory and extra-vars files.
