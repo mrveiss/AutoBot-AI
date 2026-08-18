@@ -161,6 +161,31 @@ def _is_plain_name_arg(call: ast.Call) -> bool:
     return bool(call.args) and isinstance(call.args[0], ast.Name)
 
 
+def _is_gated(call: ast.AST) -> bool:
+    """Whether a registration actually carries a gate, not merely the keyword.
+
+    `dependencies=[]` is present and enforces nothing. Every gating decision in
+    this file used to be keyword *presence*, so an empty list read as gated
+    everywhere — and once the repeat rule compared presence too, a second live
+    mount with `dependencies=[]` matched its gated twin, took the
+    same-declaration path, and vanished from the map entirely rather than being
+    reported. A latent mistake became a hiding place.
+
+    The value is evaluated rather than trusted: an empty list or tuple gates
+    nothing. Anything else — a name, a call, a non-empty literal — is treated as
+    a real gate, because this check cannot evaluate what a name resolves to and
+    must not guess in the permissive direction.
+    """
+    for keyword in getattr(call, "keywords", []):
+        if keyword.arg != "dependencies":
+            continue
+        value = keyword.value
+        if isinstance(value, (ast.List, ast.Tuple)) and not value.elts:
+            return False
+        return True
+    return False
+
+
 def _record(calls: dict, unparseable: list, idiom: str, name: str, node, lineno: int) -> None:
     """Store a public-surface registration, reporting an ambiguous name.
 
@@ -193,7 +218,7 @@ def _record(calls: dict, unparseable: list, idiom: str, name: str, node, lineno:
             f"line {lineno}: {name} registered as both {prior_idiom} and {idiom}; "
             "the registry declares names, so it cannot say which surface it covers"
         )
-    elif ("dependencies" in _keywords(prior_node)) != ("dependencies" in _keywords(node)):
+    elif _is_gated(prior_node) != _is_gated(node):
         unparseable.append(
             f"line {lineno}: {name} registered twice with different gating; "
             "first-match-wins means the ungated registration serves"
@@ -443,11 +468,11 @@ def test_the_app_mounts_the_scrape_router_without_auth_and_the_rest_with_it():
     assert "performance_metrics_router" in calls, "the scrape router is never mounted on the app"
     assert "performance_router" in calls, "the authenticated performance router is not mounted"
 
-    assert "dependencies" not in _keywords(calls["performance_metrics_router"]), (
+    assert not _is_gated(calls["performance_metrics_router"]), (
         "the scrape router is mounted with a router-level dependency; prometheus "
         "cannot authenticate and every scrape will 401 again (#14339)"
     )
-    assert "dependencies" in _keywords(
+    assert _is_gated(
         calls["performance_router"]
     ), "the authenticated performance router lost its service-management dependency"
 
@@ -490,7 +515,7 @@ def test_every_ungated_router_is_named_in_the_registry():
     """
     declared = _registry_block()
 
-    ungated = {name for name, call in _bypass_calls().items() if "dependencies" not in _keywords(call)}
+    ungated = {name for name, call in _bypass_calls().items() if not _is_gated(call)}
     undeclared = sorted(name for name in ungated if not _is_declared(name, declared))
     assert not undeclared, (
         f"reachable without the service-management gate but not declared in the registry: "
@@ -610,7 +635,7 @@ def test_the_registry_check_actually_sees_the_ungated_mounts():
     If the mount matcher stopped matching — a rename, a different idiom — every
     router would look gated and the registry check would pass over all of them.
     """
-    ungated = {name for name, call in _bypass_calls().items() if "dependencies" not in _keywords(call)}
+    ungated = {name for name, call in _bypass_calls().items() if not _is_gated(call)}
     assert "performance_metrics_router" in ungated
     assert "root" in ungated, "the @app.get('/') banner route is not seen as an ungated bypass"
     assert "prometheus_registry_metrics" in ungated, "the @app.get('/metrics') route is not seen as an ungated bypass"
@@ -636,7 +661,7 @@ def test_a_bare_app_get_route_is_caught_as_an_ungated_bypass():
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
     assert "sneaky_list" in calls, "a bare @app.get(...) route was not caught by the decorator matcher"
-    assert "dependencies" not in _keywords(calls["sneaky_list"])
+    assert not _is_gated(calls["sneaky_list"])
 
 
 def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
@@ -647,7 +672,7 @@ def test_a_gated_app_get_route_is_still_found_but_not_flagged_ungated():
     calls, unparseable = _decorator_calls(tree, frozenset())
     assert not unparseable
     assert "reports" in calls
-    assert "dependencies" in _keywords(calls["reports"])
+    assert _is_gated(calls["reports"])
 
 
 def test_an_add_api_route_call_is_caught_as_an_ungated_bypass():
@@ -657,7 +682,7 @@ def test_an_add_api_route_call_is_caught_as_an_ungated_bypass():
     calls, unparseable = _add_api_route_calls(tree, frozenset())
     assert not unparseable
     assert "sneaky" in calls, "app.add_api_route(...) was not caught"
-    assert "dependencies" not in _keywords(calls["sneaky"])
+    assert not _is_gated(calls["sneaky"])
 
 
 def test_an_alias_of_app_is_resolved_before_receiver_matching():
