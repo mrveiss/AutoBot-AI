@@ -9137,6 +9137,23 @@
       "agent": "Aģents",
       "user": "Lietotājs",
       "contact": "Kontaktpersona"
-    }
+    },
+    "grant": "Piešķirt",
+    "revoke": "Atsaukt",
+    "attach": "Pievienot",
+    "detach": "Noņemt",
+    "assign": "Piešķirt lomu",
+    "endTenure": "Beigt pilnvaras",
+    "holderIdPlaceholder": "Izpildītāja ID",
+    "permissionPlaceholder": "piem., knowledge.read",
+    "workflowPlaceholder": "Darbplūsmas ID",
+    "toolPlaceholder": "Rīka nosaukums",
+    "credentialPlaceholder": "Noslēpuma ID",
+    "errorAssign": "Neizdevās piešķirt izpildītāju.",
+    "errorEndTenure": "Neizdevās beigt pilnvaras.",
+    "errorGrant": "Neizdevās piešķirt atļauju.",
+    "errorRevoke": "Neizdevās atsaukt atļauju.",
+    "errorAttach": "Neizdevās pievienot.",
+    "errorDetach": "Neizdevās noņemt."
   }
 }

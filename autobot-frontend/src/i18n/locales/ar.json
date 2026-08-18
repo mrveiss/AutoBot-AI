@@ -9137,6 +9137,23 @@
       "agent": "وكيل",
       "user": "مستخدم",
       "contact": "جهة اتصال"
-    }
+    },
+    "grant": "منح",
+    "revoke": "سحب",
+    "attach": "إرفاق",
+    "detach": "إزالة",
+    "assign": "تعيين",
+    "endTenure": "إنهاء التعيين",
+    "holderIdPlaceholder": "معرّف الشاغل",
+    "permissionPlaceholder": "مثل knowledge.read",
+    "workflowPlaceholder": "معرّف سير العمل",
+    "toolPlaceholder": "اسم الأداة",
+    "credentialPlaceholder": "معرّف السر",
+    "errorAssign": "تعذّر تعيين الشاغل.",
+    "errorEndTenure": "تعذّر إنهاء التعيين.",
+    "errorGrant": "تعذّر منح الصلاحية.",
+    "errorRevoke": "تعذّر سحب الصلاحية.",
+    "errorAttach": "تعذّر الإرفاق.",
+    "errorDetach": "تعذّرت الإزالة."
   }
 }
