@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "Übergabe gilt nur für Agenten."
       },
       "processNodeLabel": "Prozess",
-      "processOpensWorkflow": "Öffnet den Workflow dieser Rolle"
+      "processOpensWorkflow": "Öffnet den Workflow dieser Rolle",
+      "attach": "Zuordnen",
+      "attachRoleLabel": "Rolle",
+      "attachRolePlaceholder": "Rolle auswählen…",
+      "attachWorkflowLabel": "Workflow-ID",
+      "attachWorkflowPlaceholder": "Workflow-ID",
+      "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
+      "detachError": "Dieser Workflow konnte nicht entfernt werden.",
+      "processDetach": "{workflow} von {role} entfernen",
+      "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig."
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "keine Rolle",
+      "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit"
     }
   },
   "code": {

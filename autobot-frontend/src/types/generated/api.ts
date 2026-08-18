@@ -49863,6 +49863,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/contacts/{company_id}/involved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Involved Contacts
+         * @description Contacts on this department's org chart (#13998).
+         *
+         *     Two groups rather than one list: people whose presence a role explains, and
+         *     people carrying the legacy per-company stamp with no role yet. Merging them
+         *     would assert involvement nobody recorded; hiding the second group would make
+         *     people vanish from a department already using them.
+         */
+        get: operations["list_involved_contacts_api_llc_contacts__company_id__involved_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/contacts/{company_id}": {
         parameters: {
             query?: never;
@@ -70152,6 +70177,18 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DepartmentContacts
+         * @description A department's people, split by whether a role explains their presence.
+         */
+        DepartmentContacts: {
+            /** With Role */
+            with_role: components["schemas"]["ContactResponse"][];
+            /** Unassigned */
+            unassigned: components["schemas"]["ContactResponse"][];
         } & {
             [key: string]: unknown;
         };
@@ -168809,6 +168846,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_involved_contacts_api_llc_contacts__company_id__involved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentContacts"];
+                };
             };
             /** @description Validation Error */
             422: {

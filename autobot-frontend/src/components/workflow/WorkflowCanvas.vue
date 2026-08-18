@@ -194,6 +194,19 @@
               >{{ nodeText(node, 'workflow_id') }}</p>
               <div class="org-meta">
                 <span class="process-role">{{ nodeText(node, 'role_name') }}</span>
+                <!-- #14549: the canvas shows the attachment but could not
+                     change it. `.stop` keeps the click from also selecting the
+                     node, which would navigate to the workflow builder — the
+                     mutation itself is OrgChart.vue's job, reached by event. -->
+                <button
+                  type="button"
+                  class="process-detach-btn"
+                  data-testid="process-detach-btn"
+                  :aria-label="processDetachLabel(node)"
+                  @click.stop="emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id'))"
+                >
+                  <Icon name="times" />
+                </button>
               </div>
             </template>
             <!-- GH#13939: Company OS org nodes are read-only descriptors -->
@@ -311,6 +324,10 @@ const emit = defineEmits<{
   (e: 'nodes-connected', src: string, tgt: string): void;
   (e: 'save-workflow', name: string, desc: string): void;
   (e: 'tab-selected', tabId: string): void;
+  // #14549: an org-process node's own detach control. Emitted rather than
+  // called against the API directly — this component is shared with real
+  // workflow editing and must stay ignorant of the LLC endpoints.
+  (e: 'process-detached', roleId: string, workflowId: string): void;
 }>();
 
 const showVisionDropdown = ref(false);
@@ -372,6 +389,20 @@ function nodeText(node: CanvasNode, key: string): string {
  *  flag read through it is always falsy and can never gate anything (GH#13936). */
 function nodeFlag(node: CanvasNode, key: string): boolean {
   return (node.data as Record<string, unknown>)[key] === true;
+}
+
+/**
+ * Accessible name for the detach control (#14549).
+ *
+ * The node's only visible text is a bare workflow id and role name — a
+ * screen reader landing on a bare "×" button would not know what it detaches.
+ * Mirrors the `processOpensWorkflow` description pattern already on this node.
+ */
+function processDetachLabel(node: CanvasNode): string {
+  return t('llc.orgChart.processDetach', {
+    workflow: nodeText(node, 'workflow_id'),
+    role: nodeText(node, 'role_name'),
+  });
 }
 
 /**
@@ -796,5 +827,23 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
   font-size: 0.75rem;
   color: var(--color-text-secondary);
   font-family: var(--font-family-mono, monospace);
+}
+.process-detach-btn {
+  margin-inline-start: auto;
+  padding: var(--spacing-1);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-default);
+  line-height: 1;
+}
+.process-detach-btn:hover {
+  color: var(--color-error);
+  background: var(--bg-hover);
+}
+.process-detach-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 </style>
