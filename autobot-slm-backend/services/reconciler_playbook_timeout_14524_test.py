@@ -98,6 +98,16 @@ def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
     Pre-#14524 no `timeout_s` kwarg was passed at all, so the captured kwargs
     dict never contains one and this assertion fails on a `None` (`.get`
     default), not merely on a wrong number.
+
+    `timeout_s` is now a REQUIRED parameter of `_restart_service_via_ansible`
+    itself (review, round 2): reusing one bound for both call paths meant the
+    slm-agent-sized `REMEDIATION_PLAYBOOK_TIMEOUT_S` also bounded
+    `_remediate_failed_service`'s restart of an arbitrary
+    `ServiceCategory.AUTOBOT` unit, which can be a `Type=oneshot` job with a
+    multi-minute `TimeoutStartSec`. This test passes
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S` explicitly, exactly as `_remediate_node`
+    does; the sibling test below covers `_remediate_failed_service`'s own,
+    much larger budget.
     """
     captured: dict = {}
 
@@ -114,7 +124,11 @@ def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
     real_playbook_executor_module.get_playbook_executor = lambda: fake_executor
     try:
         service = reconciler.ReconcilerService()
-        result = asyncio.run(service._restart_service_via_ansible("node-14524", "slm-agent"))
+        result = asyncio.run(
+            service._restart_service_via_ansible(
+                "node-14524", "slm-agent", timeout_s=reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+            )
+        )
     finally:
         real_playbook_executor_module.get_playbook_executor = original_getter
 
@@ -122,6 +136,54 @@ def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
     assert captured.get("timeout_s") == reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S, (
         f"expected timeout_s={reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S} to reach execute_playbook, "
         f"got {captured.get('timeout_s')!r} (captured kwargs: {sorted(captured)})"
+    )
+
+
+def test_remediate_failed_service_uses_its_own_much_larger_playbook_timeout():
+    """High-severity review finding, round 2: the two callers of
+    `_restart_service_via_ansible` restart very different shapes of unit.
+    `_remediate_node` always restarts the lightweight `slm-agent`; but
+    `_remediate_failed_service` restarts an arbitrary `ServiceCategory.AUTOBOT`
+    unit, which `AUTOBOT_SERVICE_PATTERNS` (service_categorizer.py) matches by
+    NAME PREFIX (postgresql*, redis*, docker*, ...) -- an open-ended set that
+    includes `Type=oneshot` jobs with a multi-minute `TimeoutStartSec`
+    (`autobot-pg-backup.service.j2` declares 1800s). Reusing the slm-agent
+    budget (180s) here would SIGKILL a legitimate long-running restart.
+
+    Discriminates: before this fix both call paths shared ONE hardcoded
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S`, so this assertion would see 180, not
+    `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` (2100 by default) -- a real,
+    order-of-magnitude difference, not a coincidental match.
+    """
+    captured: dict = {}
+
+    async def _fake_execute_playbook(**kwargs):
+        captured.update(kwargs)
+        return {"success": True, "output": "ok", "returncode": 0, "timed_out": False}
+
+    fake_executor = MagicMock()
+    fake_executor.execute_playbook = _fake_execute_playbook
+
+    real_playbook_executor_module = sys.modules.get("services.playbook_executor")
+    original_getter = real_playbook_executor_module.get_playbook_executor
+    real_playbook_executor_module.get_playbook_executor = lambda: fake_executor
+    try:
+        service = reconciler.ReconcilerService()
+        node = SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
+        service_row = SimpleNamespace(service_name="autobot-pg-backup")
+        db = _FakeSession()
+        result = asyncio.run(service._remediate_failed_service(db, node, service_row))
+    finally:
+        real_playbook_executor_module.get_playbook_executor = original_getter
+
+    assert result is True
+    assert reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S > reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S, (
+        "the service-restart budget must be the LARGER of the two for this test to mean anything"
+    )
+    assert captured.get("timeout_s") == reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S, (
+        f"expected the service-restart path to use SERVICE_RESTART_PLAYBOOK_TIMEOUT_S="
+        f"{reconciler.SERVICE_RESTART_PLAYBOOK_TIMEOUT_S}, got {captured.get('timeout_s')!r} "
+        f"(captured kwargs: {sorted(captured)})"
     )
 
 
@@ -151,7 +213,11 @@ def test_restart_service_via_ansible_returns_false_on_a_timed_out_run():
     real_playbook_executor_module.get_playbook_executor = lambda: fake_executor
     try:
         service = reconciler.ReconcilerService()
-        result = asyncio.run(service._restart_service_via_ansible("node-14524", "slm-agent"))
+        result = asyncio.run(
+            service._restart_service_via_ansible(
+                "node-14524", "slm-agent", timeout_s=reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+            )
+        )
     finally:
         real_playbook_executor_module.get_playbook_executor = original_getter
 
@@ -189,45 +255,54 @@ def _degraded_node() -> SimpleNamespace:
     return SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
 
 
-def test_escalation_reachable_at_the_new_bounded_worst_case_playbook_duration():
-    """Ties the floor change to real behaviour, at the worst case #14524 itself now allows.
+def _gap_after_one_attempt(work_duration_s: int) -> int:
+    """The REAL wall-clock gap one `_remediate_node` attempt leaves before the
+    next real attempt can fire, given `work_duration_s` of simulated work.
 
-    Simulates a node whose every restart consumes the FULL
-    `REMEDIATION_PLAYBOOK_TIMEOUT_S` (a run that always hits the new bound)
-    and then never heartbeats -- the worst-case single-attempt duration the
-    new floor formula is sized for. `REMEDIATION_TRACKER_EXPIRY_S` is forced
-    pathologically low (as the #14465 sibling test does) so the FLOOR, not
-    the generous 1800s default, is what is actually exercised.
+    `last_attempt` is stamped at attempt START (`now`, captured before any
+    restart/heartbeat work runs) -- review, round 2: an earlier version of
+    this test advanced the clock by a full extra `REMEDIATION_COOLDOWN` AFTER
+    every cycle, DOUBLE-COUNTING the cooldown against the work already
+    elapsed inside the SAME attempt (real gap ~330-360s, not the ~485s that
+    version computed). The correct model: cooldown only needs whatever is
+    LEFT after `work_duration_s` has already elapsed against it
+    (`max(0, REMEDIATION_COOLDOWN - work_duration_s)`), plus one
+    reconcile-interval poll's worth of slack for the loop to notice.
+    """
+    remaining_cooldown = max(0, reconciler.REMEDIATION_COOLDOWN - work_duration_s)
+    return work_duration_s + remaining_cooldown + 60  # 60 == reconcile_interval fallback (getattr default)
 
-    Per cycle this model advances the clock by
-    `REMEDIATION_PLAYBOOK_TIMEOUT_S` (180, inside the stubbed restart) plus
-    `REMEDIATION_COOLDOWN + 5` (305, modelling the reconcile loop noticing
-    the cooldown cleared) = 485s between one `last_attempt` and the next.
 
-    Discriminates cleanly against the pre-#14524 margin
-    (`max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)`, floor 391 at
-    the module defaults): 391 < 485, so the OLD floor forgives every cycle --
-    count resets to 0 each time and escalation is UNREACHABLE, the exact "56
-    restarts / 0 escalations" shape #14524 reports. The NEW floor (571,
-    391 + REMEDIATION_PLAYBOOK_TIMEOUT_S) exceeds 485, so it does not.
+def test_escalation_reachable_at_the_shipped_default_because_the_timeout_bounds_the_run():
+    """The actual fix for the reported "56 restarts / 0 escalations" shape, at
+    the SHIPPED default (review, round 2 -- correcting an earlier version of
+    this test's over-stated claim).
+
+    At `REMEDIATION_PLAYBOOK_TIMEOUT_S=180`, `work_duration =
+    REMEDIATION_PLAYBOOK_TIMEOUT_S + REMEDIATION_HEARTBEAT_WAIT_S = 270s`,
+    which is UNDER `REMEDIATION_COOLDOWN` (300s) -- so the resulting real gap
+    (`_gap_after_one_attempt(270)` = 360s) is already covered by the
+    PRE-#14524 margin too (floor 391s > 360s). What actually closes the
+    reported bug at these defaults is bounding `execute_playbook` AT ALL: pre-
+    #14524 that run was UNBOUNDED, so `work_duration` (and therefore the real
+    gap) could grow arbitrarily large and eventually exceed ANY finite floor,
+    no matter how it was computed. The floor formula change is a separate,
+    defensive improvement -- see the sibling test below for the scenario
+    where IT, specifically, is what matters.
     """
     service = reconciler.ReconcilerService()
     clock = _Clock(datetime.now(timezone.utc))
 
-    async def _slow_restart(*_args, **_kwargs):
-        # Models the newly-BOUNDED worst case: the playbook consumes exactly
-        # its ceiling before failing.
+    async def _bounded_but_successful_restart(*_args, **_kwargs):
         clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
-        return False  # a timed-out run always reports failure (this issue's #3)
+        return True  # the run itself succeeds -- heartbeat is what never verifies
 
-    service._restart_service_via_ansible = _slow_restart
-    heartbeat_calls = {"count": 0}
-
-    async def _unreachable_heartbeat(*_args, **_kwargs):
-        heartbeat_calls["count"] += 1
+    async def _never_verifies(*_args, **_kwargs):
+        clock.advance(reconciler.REMEDIATION_HEARTBEAT_WAIT_S)
         return False
 
-    service._heartbeat_returned = _unreachable_heartbeat
+    service._restart_service_via_ansible = _bounded_but_successful_restart
+    service._heartbeat_returned = _never_verifies
 
     reconciler.datetime = clock
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
@@ -235,18 +310,71 @@ def test_escalation_reachable_at_the_new_bounded_worst_case_playbook_duration():
     try:
         db = _FakeSession()
         node = _degraded_node()
+        work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        outer_advance = _gap_after_one_attempt(work_duration) - work_duration
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
             asyncio.run(service._remediate_node(db, node))
-            # Models the reconcile loop noticing the cooldown cleared.
-            clock.advance(reconciler.REMEDIATION_COOLDOWN + 5)
+            clock.advance(outer_advance)
     finally:
         reconciler.datetime = datetime
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
     tracker = service._remediation_tracker[node.node_id]
     assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
-    assert tracker.get("exhausted") is True, f"escalation failed even at the new bounded worst case -- got {tracker}"
-    # `_restart_service_via_ansible` returning False short-circuits `restarted
-    # and await self._heartbeat_returned(...)` -- the heartbeat wait must
-    # never even be reached for a failed restart.
-    assert heartbeat_calls["count"] == 0, "_heartbeat_returned must not be polled when the restart itself failed"
+    assert tracker.get("exhausted") is True, f"escalation failed at the shipped default -- got {tracker}"
+
+
+def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
+    """The scenario where the #14524 floor extension, specifically, is load-bearing.
+
+    Review, round 2: "the bump is harmless and future-proofs a raised
+    timeout, but it is not what fixes the 56/0 repro -- the timeout is."
+    Honoured here by finding the scenario where the bump DOES matter and
+    testing that one directly, instead of letting the default-value test
+    above imply credit it cannot support.
+
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S` is raised (in-test only) to 280 --
+    `work_duration = 280 + 90 = 370s`, over `REMEDIATION_COOLDOWN` (300s), so
+    the real gap (`_gap_after_one_attempt(370)` = 430s) exceeds the OLD
+    margin's floor (391s, `REMEDIATION_HEARTBEAT_WAIT_S` alone) -- forgiven
+    every cycle, escalation unreachable. The NEW margin folds in the raised
+    timeout too (floor 671s) and does not forgive.
+    """
+    service = reconciler.ReconcilerService()
+    clock = _Clock(datetime.now(timezone.utc))
+
+    original_playbook_timeout = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+    reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = 280
+    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
+    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
+
+    async def _slow_but_successful_restart(*_args, **_kwargs):
+        clock.advance(reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S)
+        return True
+
+    async def _never_verifies(*_args, **_kwargs):
+        clock.advance(reconciler.REMEDIATION_HEARTBEAT_WAIT_S)
+        return False
+
+    service._restart_service_via_ansible = _slow_but_successful_restart
+    service._heartbeat_returned = _never_verifies
+
+    reconciler.datetime = clock
+    try:
+        db = _FakeSession()
+        node = _degraded_node()
+        work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
+        outer_advance = _gap_after_one_attempt(work_duration) - work_duration
+        for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
+            asyncio.run(service._remediate_node(db, node))
+            clock.advance(outer_advance)
+    finally:
+        reconciler.datetime = datetime
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
+        reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = original_playbook_timeout
+
+    tracker = service._remediation_tracker[node.node_id]
+    assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
+    assert tracker.get("exhausted") is True, (
+        f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
+    )

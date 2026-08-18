@@ -5,29 +5,47 @@
 """`execute_playbook` had no wall-clock timeout at all (#14524).
 
 `PlaybookExecutor._run_subprocess` used to `await process.wait()` unwrapped by
-any deadline -- the only timeouts anywhere in this file were on the
-`_update_code_source` git helper, unrelated to the playbook run itself. A
-single hung `ansible-playbook` (a genuinely stuck SSH connection or remote
-task) blocked the caller -- for the reconciler's remediation path,
-`_remediate_node` and therefore that node's slot in `_attempt_remediation`'s
-serial pass -- indefinitely.
+any deadline -- originally the only timeouts anywhere in this file were on
+the `_update_code_source` git helper (30s/10s per command), unrelated to the
+playbook run itself. A single hung `ansible-playbook` (a genuinely stuck SSH
+connection or remote task) blocked the caller -- for the reconciler's
+remediation path, `_remediate_node` and therefore that node's slot in
+`_attempt_remediation`'s serial pass -- indefinitely.
+
+Round 2 review found `_update_code_source`'s OWN existing timeouts shared the
+same underlying flaw one level down (a lone `proc.kill()`/un-wrapped retry
+`communicate()` reaches only git's own pid, not a surviving ssh/credential-
+helper child) -- `_run_git`/`_log_updated_head_commit` now route through the
+same `_kill_process_group` these tests cover directly.
 
 These tests drive the REAL `_run_subprocess`/`_kill_process_group` against
 REAL (harmless, short-lived) subprocesses -- a mock subprocess cannot prove a
-process group actually dies, only that a mock's methods were called. Per
-test, what discriminates pre-#14524 code from this fix:
+process group actually dies, only that a mock's methods were called. Three
+process-tree shapes, all found to matter by review round 2 (Cases A/B/C
+below are its own naming):
 
-  - `_run_subprocess` takes no `timeout_s` parameter at all pre-fix, so every
-    test below that passes it raises `TypeError` immediately, not merely
-    "hangs" (a test that hangs is bad CI citizenship; this fails fast).
-  - The process-group-kill mechanism itself was verified against a standalone
-    (non-repo) prototype before being trusted here: a plain
-    `process.send_signal(SIGTERM)` at the child's own PID -- the closest a
-    naive first-pass fix might do without the `start_new_session=True` +
-    `os.killpg` insight -- left BOTH the direct child and its backgrounded
-    grandchild running; only the process-group kill implemented here reliably
-    reaped both. That is the literal "orphaned ansible-playbook or SSH
-    session" shape this fix exists to close.
+  - Case A: the direct child ignores SIGTERM and backgrounds a sibling that
+    does not trap anything itself, reachable only via a process-group signal.
+    Verified against a standalone (non-repo) prototype before being trusted
+    here: a plain `process.send_signal(SIGTERM)` at the child's own PID --
+    the closest a naive first-pass fix might do without the
+    `start_new_session=True` + `os.killpg` insight -- left BOTH processes
+    running; the process-group kill reliably reaped both.
+  - Case B: the direct pid is ALREADY REAPED (the leader exited on its own)
+    while a sibling is still alive -- the only way an ATTACHED run wedges
+    AFTER ansible itself has exited. The original `os.getpgid(process.pid)`
+    lookup here raised `ProcessLookupError` and returned, killing nothing.
+  - Case C: the direct child dies on the FIRST SIGTERM while a sibling
+    ignores it. The original SIGTERM/SIGKILL escalation loop awaited the
+    direct pid only, saw it reaped, and returned -- SIGKILL was never sent to
+    the survivor (3/3 in review's own reproduction).
+
+Per test, what discriminates pre-#14524 code from this fix: `_run_subprocess`
+takes no `timeout_s` parameter at all pre-fix, so every test below that
+passes it raises `TypeError` immediately, not merely "hangs" (a test that
+hangs is bad CI citizenship; this fails fast). Cases B and C additionally
+discriminate against the FIRST (round 1) version of `_kill_process_group`
+itself, which fixed Case A but not B or C.
 
 The module is loaded from disk, like its `reconciler.py` siblings: the
 package conftest stubs `services.*`, and a plain `import services.
@@ -124,7 +142,9 @@ def test_run_subprocess_without_timeout_is_unaffected():
 
 
 def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failure():
-    """The core fix, exercised behaviourally (#14524).
+    """The core fix, exercised behaviourally (#14524). Case A of three (see
+    `_kill_process_group`'s two siblings below for Case B and C -- review,
+    round 2, found and fixed fail-open shapes in those, not this one).
 
     Spawns a process that (a) ignores SIGTERM and (b) backgrounds a `sleep`
     grandchild -- the shape of a real stuck ansible-playbook run with a
@@ -207,7 +227,204 @@ def test_kill_process_group_is_a_noop_on_an_already_exited_process():
             start_new_session=True,
         )
         await process.wait()
-        # Already reaped -- os.getpgid(process.pid) now raises ProcessLookupError.
+        # Already reaped -- os.killpg(process.pid, sig) now raises ProcessLookupError
+        # on the very first signal, since pgid == pid (start_new_session=True) needs
+        # no separate lookup that could itself go stale (review round 2, Case B).
         await executor._kill_process_group(process)
 
     asyncio.run(_go())  # must not raise
+
+
+def _spawn_group(executor, script: str, pid_dir: Path):
+    """Spawn *script* via `_run_subprocess`'s own spawn path and return (process, pid_dir).
+
+    Shared by the Case B/C tests below. Uses `asyncio.create_subprocess_exec`
+    directly with `start_new_session=True` -- the same flag `_run_subprocess`
+    passes -- so `_kill_process_group` is exercised exactly as it runs in
+    production, without also going through the timeout/streaming machinery
+    Case A already covers.
+    """
+    for stale in ("leader.pid", "sibling.pid"):
+        (pid_dir / stale).unlink(missing_ok=True)
+    return asyncio.create_subprocess_exec(
+        "/bin/bash",
+        "-c",
+        script,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+async def _read_group_pids(pid_dir: Path) -> tuple[int, int]:
+    for _ in range(100):
+        if (pid_dir / "leader.pid").exists() and (pid_dir / "sibling.pid").exists():
+            break
+        await asyncio.sleep(0.03)
+    leader_pid = int((pid_dir / "leader.pid").read_text().strip())
+    sibling_pid = int((pid_dir / "sibling.pid").read_text().strip())
+    return leader_pid, sibling_pid
+
+
+def test_kill_process_group_handles_a_leader_already_reaped_before_a_sibling_dies():
+    """Case B (#14524 review, round 2): the direct pid is ALREADY GONE when
+    `_kill_process_group` is called, while a SIBLING in the same group is
+    still alive -- the only way an ATTACHED run wedges after ansible itself
+    has exited: a surviving group member still holding the inherited stdout
+    pipe open, so `_run_subprocess`'s read side never sees EOF.
+
+    Reproduced deterministically (not raced) by explicitly awaiting
+    `process.wait()` -- reaping the leader -- BEFORE calling
+    `_kill_process_group`, forcing the exact precondition the old
+    `os.getpgid(process.pid)` lookup failed on: it raised
+    `ProcessLookupError` and returned, signalling NOTHING, while the sibling
+    (`$BASHPID` of the backgrounded subshell -- NOT `$$`, which bash does not
+    change inside a subshell) kept running. `pgid = process.pid` (no lookup)
+    fixes this: the pgid is known from spawn time regardless of whether the
+    leader itself still exists.
+    """
+    executor = playbook_executor.PlaybookExecutor()
+    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
+    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+
+    pid_dir = Path(f"/tmp/playbook_executor_14524_caseb_{os.getpid()}")
+    pid_dir.mkdir(exist_ok=True)
+    # Leader backgrounds a TERM-ignoring subshell, then exits immediately --
+    # reaped almost instantly, well before any signal is ever sent to it.
+    script = (
+        f"echo $$ > {pid_dir}/leader.pid\n"
+        f"(trap '' TERM; echo $BASHPID > {pid_dir}/sibling.pid; sleep 30) &\n"
+        "disown\n"
+        "exit 0\n"
+    )
+
+    async def _go():
+        process = await _spawn_group(executor, script, pid_dir)
+        leader_pid, sibling_pid = await _read_group_pids(pid_dir)
+        await process.wait()  # force-reap the leader BEFORE the kill call
+        await executor._kill_process_group(process)
+        return leader_pid, sibling_pid
+
+    try:
+        leader_pid, sibling_pid = asyncio.run(_go())
+        assert _wait_until_dead(leader_pid, timeout_s=2), "leader was expected to already be reaped"
+        assert _wait_until_dead(
+            sibling_pid, timeout_s=3
+        ), "Case B: a sibling surviving the leader's own exit must still be killed"
+    finally:
+        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
+        for f in ("leader.pid", "sibling.pid"):
+            (pid_dir / f).unlink(missing_ok=True)
+        pid_dir.rmdir()
+
+
+def test_kill_process_group_handles_a_leader_dying_on_sigterm_before_a_sibling_does():
+    """Case C (#14524 review, round 2): the direct child dies on the FIRST
+    SIGTERM (it does not trap it) while a sibling in the same group ignores
+    that same signal and keeps running.
+
+    The OLD SIGTERM/SIGKILL escalation loop awaited `process.wait()` --
+    reaping the leader succeeded almost immediately -- and returned believing
+    cleanup was done, so SIGKILL was never sent to the survivor (verified
+    3/3 in review's own reproduction). The escalation decision now checks the
+    WHOLE GROUP (`_process_group_is_dead`, a signal-0 existence probe) after
+    reaping the leader, not the one pid `asyncio` tracks.
+    """
+    executor = playbook_executor.PlaybookExecutor()
+    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
+    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+
+    pid_dir = Path(f"/tmp/playbook_executor_14524_casec_{os.getpid()}")
+    pid_dir.mkdir(exist_ok=True)
+    # Leader does NOT trap TERM (dies on the first signal); its backgrounded
+    # subshell DOES, and keeps running until SIGKILL reaches the group.
+    script = (
+        f"echo $$ > {pid_dir}/leader.pid\n"
+        f"(trap '' TERM; echo $BASHPID > {pid_dir}/sibling.pid; sleep 30) &\n"
+        "wait\n"
+    )
+
+    async def _go():
+        process = await _spawn_group(executor, script, pid_dir)
+        leader_pid, sibling_pid = await _read_group_pids(pid_dir)
+        await executor._kill_process_group(process)
+        return leader_pid, sibling_pid
+
+    try:
+        leader_pid, sibling_pid = asyncio.run(_go())
+        assert _wait_until_dead(leader_pid, timeout_s=2)
+        assert _wait_until_dead(
+            sibling_pid, timeout_s=3
+        ), "Case C: a sibling outliving the leader's own SIGTERM death must still get SIGKILL"
+    finally:
+        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
+        for f in ("leader.pid", "sibling.pid"):
+            (pid_dir / f).unlink(missing_ok=True)
+        pid_dir.rmdir()
+
+
+def test_run_git_kills_a_hung_git_via_the_process_group(tmp_path):
+    """`_update_code_source`'s own git subcommands, hardened the same way (#14524 round 2).
+
+    A lone `proc.kill()` (the pre-fix shape) reaches only git's own pid; a
+    surviving ssh/credential-helper child holding the pipes open would leave
+    the un-wrapped retry `communicate()` blocked forever. `_run_git` is
+    exercised here against a FAKE `git` on `PATH` (a shell script that
+    ignores SIGTERM and backgrounds a sibling) rather than the real binary,
+    so the test is deterministic and fast instead of depending on real git's
+    own timing -- `_run_git`'s hardcoded target name ("git") is still what
+    resolves, only where it resolves TO changes.
+
+    Discriminates: pre-#14524 round 2, `_run_git` had no `start_new_session`
+    and killed only the direct pid on timeout -- the fake git's sibling
+    would survive. Post-fix both die and `_run_git` returns -1 promptly.
+    """
+    executor = playbook_executor.PlaybookExecutor()
+    original_grace = playbook_executor.PLAYBOOK_KILL_GRACE_S
+    original_git_timeout = playbook_executor.GIT_COMMAND_TIMEOUT_S
+    playbook_executor.PLAYBOOK_KILL_GRACE_S = 0.3
+    playbook_executor.GIT_COMMAND_TIMEOUT_S = 0.3
+
+    fake_bin_dir = tmp_path / "fakebin"
+    fake_bin_dir.mkdir()
+    leader_pid_file = tmp_path / "leader.pid"
+    sibling_pid_file = tmp_path / "sibling.pid"
+    fake_git = fake_bin_dir / "git"
+    fake_git.write_text(
+        "#!/bin/bash\n"
+        "trap '' TERM\n"
+        f"echo $$ > {leader_pid_file}\n"
+        f"(trap '' TERM; echo $BASHPID > {sibling_pid_file}; sleep 30) &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    original_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{fake_bin_dir}:{original_path}"
+
+    async def _go():
+        return await executor._run_git(tmp_path, "fetch", "origin")
+
+    try:
+        started = time.monotonic()
+        returncode = asyncio.run(_go())
+        elapsed = time.monotonic() - started
+
+        assert returncode == -1, "a killed git command must report a non-zero, non-crash returncode"
+        assert elapsed < 5, f"a timed-out git command must return promptly, took {elapsed:.1f}s"
+
+        for _ in range(100):
+            if leader_pid_file.exists() and sibling_pid_file.exists():
+                break
+            time.sleep(0.02)
+        leader_pid = int(leader_pid_file.read_text().strip())
+        sibling_pid = int(sibling_pid_file.read_text().strip())
+        assert _wait_until_dead(leader_pid, timeout_s=2), "the fake git process itself survived its own timeout"
+        assert _wait_until_dead(
+            sibling_pid, timeout_s=3
+        ), "a surviving child of a killed git command is exactly the orphan this fix exists to prevent"
+    finally:
+        os.environ["PATH"] = original_path
+        playbook_executor.PLAYBOOK_KILL_GRACE_S = original_grace
+        playbook_executor.GIT_COMMAND_TIMEOUT_S = original_git_timeout
