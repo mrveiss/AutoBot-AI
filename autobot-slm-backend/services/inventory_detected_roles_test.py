@@ -103,9 +103,9 @@ def test_detection_still_adds_ordinary_groups():
     node = _node(["backend"], ["redis"])
     groups = _groups(node)
 
-    assert "backend" in groups and "redis" in groups, (
-        "detection no longer contributes ordinary groups — this fix was over-broad"
-    )
+    assert (
+        "backend" in groups and "redis" in groups
+    ), "detection no longer contributes ordinary groups — this fix was over-broad"
 
 
 def test_a_node_that_declares_nothing_still_gets_groups_from_detection():
