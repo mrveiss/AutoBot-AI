@@ -114,6 +114,40 @@ class TestAgentToHuman:
                 company_id=str(item.company_id),
             )
 
+    async def test_raises_for_a_human_assigned_item_no_human_to_human_verb(self, service, mock_session):
+        """#14192: pins the guard clause the org-chart sidebar's frontend
+        predicate (`canHandoffAssignedItems`, `orgNodeSidebar.ts`) relies on
+        to keep the "Hand Off" action agent-only. A work item genuinely
+        assigned to a PERSON — `assignee_user_id` set, `assignee_agent_id`
+        NULL — can never be handed off through `agent_to_human`, because
+        there is no `human_to_human` handoff verb in Company OS. If this
+        guard ever stopped raising here, the frontend would either keep
+        hiding a control that had silently become usable, or a
+        human-sourced handoff would start succeeding through a codepath
+        never designed for it.
+
+        `assignee_type` is deliberately left at `_make_item`'s stale
+        "agent" default (mismatched with the real assignment) rather than
+        corrected to "user": the guard this test pins
+        (`item.assignee_agent_id is None or ...`) must reject the handoff
+        on the assignment column itself, not on `assignee_type` — a refactor
+        that checked `assignee_type` instead would wrongly pass this
+        scenario whenever that column drifted, which is exactly the
+        regression this test exists to catch.
+        """
+        human_assignee = uuid.uuid4()
+        item = _make_item(assignee_agent_id=None, assignee_user_id=human_assignee)
+        mock_session._db_result.scalar_one_or_none.return_value = item
+
+        with pytest.raises(HandoffNotAllowed, match="does not hold checkout"):
+            await service.agent_to_human(
+                mock_session,
+                work_item_id=str(item.id),
+                agent_id=str(uuid.uuid4()),
+                reviewer_user_id=str(uuid.uuid4()),
+                company_id=str(item.company_id),
+            )
+
     async def test_sets_status_in_review_and_reviewer(self, service, mock_session):
         agent_id = uuid.uuid4()
         reviewer_id = uuid.uuid4()

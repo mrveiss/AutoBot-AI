@@ -49769,6 +49769,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/contacts/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Directory
+         * @description The shared people directory (#13998).
+         *
+         *     Company OS companies are departments of one real company, and people belong
+         *     to the business rather than to a department — so this takes no company id.
+         *     Authentication is still required; a shared directory is not a public one.
+         */
+        get: operations["list_directory_api_llc_contacts_directory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/directory/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicate Candidates
+         * @description Groups of contacts sharing a mailbox — suggestions for a human to review.
+         *
+         *     Ids only, and nothing is changed: two people can legitimately share
+         *     ``info@supplier``, so merging is always an explicit act (see below).
+         */
+        get: operations["list_duplicate_candidates_api_llc_contacts_directory_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Contacts
+         * @description Fold one contact into another, moving its role tenures.
+         *
+         *     Company-scoped because the *authority* to merge is a department admin's,
+         *     even though the directory itself is shared.
+         */
+        post: operations["merge_contacts_api_llc_contacts__company_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/directory/{contact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete From Directory
+         * @description Remove a person from the shared directory.
+         *
+         *     409, not 400, when they still hold a role: the request is valid and the
+         *     caller is authorised — the obstacle is state elsewhere, and the response
+         *     names which departments still depend on them.
+         */
+        delete: operations["delete_from_directory_api_llc_contacts__company_id__directory__contact_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/contacts/{company_id}": {
         parameters: {
             query?: never;
@@ -49801,6 +49895,13 @@ export interface paths {
         /**
          * Delete Contact
          * @description Permanently delete the contact — its PII no longer exists at rest afterward.
+         *
+         *     Delegates to :meth:`ContactDirectoryService.delete` (#14464 review) rather
+         *     than ``ContactService.delete``. The directory is shared across companies, so
+         *     a delete here is global — routing it through the same guard as
+         *     ``/{company_id}/directory/{contact_id}`` is what stops a plain member of the
+         *     contact's legacy company from hard-deleting someone who still holds a role
+         *     (and therefore permissions) in a company they were never a member of.
          */
         delete: operations["delete_contact_api_llc_contacts__company_id___contact_id__delete"];
         options?: never;
@@ -64376,6 +64477,24 @@ export interface components {
             role_title?: string | null;
             /** Notes */
             notes?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ContactMergeRequest
+         * @description Which duplicate folds into which survivor. Both named explicitly.
+         */
+        ContactMergeRequest: {
+            /**
+             * Keep Id
+             * Format: uuid
+             */
+            keep_id: string;
+            /**
+             * Merge Id
+             * Format: uuid
+             */
+            merge_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -168597,6 +168716,111 @@ export interface operations {
             };
         };
     };
+    list_directory_api_llc_contacts_directory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"][];
+                };
+            };
+        };
+    };
+    list_duplicate_candidates_api_llc_contacts_directory_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[][];
+                };
+            };
+        };
+    };
+    merge_contacts_api_llc_contacts__company_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_from_directory_api_llc_contacts__company_id__directory__contact_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_contacts_api_llc_contacts__company_id__get: {
         parameters: {
             query?: never;
@@ -171196,6 +171420,7 @@ export interface operations {
                 type?: components["schemas"]["WorkItemType"] | null;
                 status?: components["schemas"]["WorkItemStatus"] | null;
                 assignee?: string | null;
+                assignee_user_id?: string | null;
                 reviewer?: string | null;
                 sprint_id?: string | null;
                 parent_id?: string | null;

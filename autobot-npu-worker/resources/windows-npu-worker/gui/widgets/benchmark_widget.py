@@ -11,7 +11,7 @@ and displaying performance metrics.
 
 import logging
 import time
-from typing import Dict, List
+from typing import Dict
 
 from PySide6.QtWidgets import (
     QWidget,

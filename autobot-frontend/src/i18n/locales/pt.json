@@ -8283,7 +8283,7 @@
         "railHandoff": "Transferência",
         "itemsUnavailable": "Não foi possível carregar os itens. É um problema de carregamento, não uma lista vazia.",
         "itemsEmpty": "Nenhum item ativo.",
-        "itemsNotApplicableHuman": "Listas de itens por pessoa ainda não estão disponíveis — apenas agentes podem ser filtrados por responsável.",
+        "itemsNotApplicable": "As listas de itens exigem um id de atribuição que este nó não possui.",
         "outputEmpty": "Ainda não há itens concluídos.",
         "costTotalTokens": "Tokens totais",
         "costUsd": "Custo (USD)",

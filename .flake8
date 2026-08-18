@@ -16,41 +16,110 @@ max-line-length = 120
 #       - Async lock patterns (asyncio.Lock() before dependent imports)
 extend-ignore = E203,W503,E704,E402
 
-# Exclude directories from linting
+# Exclude directories from linting.
+#
+# #14419 — HOW FLAKE8 READS THIS LIST, and why every source entry below carries
+# a trailing slash. flake8 normalises an entry that contains a path separator
+# into an absolute path rooted at *this file's* directory and matches it against
+# the absolute path of each candidate; an entry with no separator is matched
+# against the **basename** instead, so a bare name prunes every directory of
+# that name at ANY depth.
+#
+# Written as bare names, this list silently pruned 973 tracked *.py files that
+# no entry was written for — among them three production packages named
+# `monitoring` (`autobot_shared/`, `autobot-backend/`, `autobot-slm-backend/`),
+# the `autobot-backend/tools/` tool-registry subsystem, and the SDK's
+# `autobot_sdk/resources/`. Eleven entries were dropped because anchoring them
+# would have excluded no Python: ten (`tests`, `monitoring`, `analysis`,
+# `resources`, `code_analysis`, `mcp-tools`, `code-analysis-suite`,
+# `slm-server`, `slm-admin`, `infrastructure`) name no tracked repo-root
+# directory at all, and `docker` names a real one holding 19 tracked files but
+# no `.py`. Those ten only ever "worked" through the depth bug, so the intended
+# exclusion and the accidental one were the same entry. Counted against the git
+# index, not the filesystem — an untracked directory of the same name can exist
+# locally, which is why the guard measures with `git ls-files`.
+#
+# The rule this list now follows, enforced by
+# repo_tests/flake8_exclude_anchoring_test.py:
+#   * a bare (separator-free) entry is allowed ONLY for a build/runtime artifact
+#     directory that holds no tracked Python — matching it at any depth is then
+#     the intent and prunes no source;
+#   * every other entry is anchored with a trailing slash and must name a
+#     directory that exists, so an entry stranded by a rename goes red instead
+#     of quietly exempting nothing.
+#
+# Cross-tool agreement (#14419 AC5): pre-commit's flake8 hook adds
+# `^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)`, all three
+# of which are also excluded here. black and isort each carry `exclude:
+# ^autobot-infrastructure/` on their own pre-commit hook, and declare nothing
+# further — `[tool.black]` and `[tool.isort]` in pyproject.toml define no
+# exclusion, and in CI both take explicit directory arguments with none either.
+# So the two formatters lint a strict superset of what flake8 lints, agreeing
+# with it only on `autobot-infrastructure/`. That is deliberate, and it is what
+# kept the pruned trees safe: black alone caught a syntax error under
+# `autobot_shared/monitoring/` for as long as this list hid it from flake8. A
+# formatter disagreeing loudly is the cheaper failure. No ruff config exists.
+#
+# COMMENTS BELOW MUST BE ON THEIR OWN LINE. configparser strips a full-line
+# `#` from inside a multi-line value, so the section markers below are safe;
+# a *trailing* comment is not, because flake8 then splits what is left on
+# commas AND whitespace and every word becomes its own exclude pattern
+# (`.git,  # vcs` yields `.git`, `#`, `vcs`). Verified both ways in
+# repo_tests/flake8_exclude_anchoring_test.py, which flags a leaked word
+# through the same check that flags a bare directory name.
 exclude =
-    node_modules,
-    .venv,
-    venv,
-    __pycache__,
+    # Build, VCS and runtime artifact directories. Deliberately depth-agnostic:
+    # none of them holds tracked Python, so matching by name prunes artifacts
+    # and never source. A name added here that DOES cover tracked Python fails
+    # the guard, so this list cannot become the new hiding place.
     .git,
+    .tox,
+    __pycache__,
+    node_modules,
+    venv,
+    .venv,
+    build,
+    dist,
+    *.egg-info,
     temp,
     logs,
     reports,
     archive,
     archives,
     backups,
-    tests,
-    tools,
-    scripts,
-    monitoring,
-    mcp-tools,
-    .tox,
-    build,
-    dist,
-    *.egg-info,
-    # Auxiliary directories (not production code)
-    debug,
-    docker,
-    code-analysis-suite,
-    code_analysis,
-    resources,
-    analysis,
-    # Separate deployable components with own standards
-    slm-server,
-    slm-admin,
-    # Infrastructure contains tests, analysis, tools (not production code)
-    infrastructure,
-    autobot-infrastructure
+    # Repo-root auxiliary trees (not production code).
+    tools/,
+    scripts/,
+    debug/,
+    # Infrastructure carries its own tests, analysis and tools.
+    autobot-infrastructure/,
+    # Standalone analysis tool with its own setup.py. Also excluded by
+    # pre-commit and by mypy (pyproject.toml, GH#7105).
+    autobot-backend/code_analysis/,
+    # Test trees. Production lint standards deliberately do not apply to test
+    # packages; colocated *_test.py files keep their own relief under
+    # per-file-ignores below. Enumerated rather than matched by name so that a
+    # NEW directory called tests is linted until it is listed here - failing
+    # closed rather than silently.
+    autobot-backend/agent_loop/extractors/tests/,
+    autobot-backend/agent_loop/tests/,
+    autobot-backend/api/tests/,
+    autobot-backend/context_aware_decision/tests/,
+    autobot-backend/eval/tests/,
+    autobot-backend/knowledge/connectors/tests/,
+    autobot-backend/llc/adapters/tests/,
+    autobot-backend/llc/tests/,
+    autobot-backend/llm_shared/tests/,
+    autobot-backend/tests/,
+    autobot-backend/transcriber/tests/,
+    autobot-frontend/tests/,
+    autobot-npu-worker/resources/windows-npu-worker/tests/,
+    autobot-npu-worker/tests/,
+    autobot-slm-backend/ansible/tests/,
+    autobot-slm-backend/tests/,
+    autobot-tts-worker/tests/,
+    autobot_shared/tests/,
+    libs/autobot-sdk-python/tests/
 
 # Per-file ignores for intentional patterns
 per-file-ignores =

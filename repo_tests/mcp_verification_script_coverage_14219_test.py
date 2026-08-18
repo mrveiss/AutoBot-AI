@@ -26,15 +26,16 @@ down in a pull request that nobody will read again:
   so a syntax error fails black with exit 123, and `.github/workflows/code-quality.yml`
   runs it over `autobot-backend/` and `autobot_shared/` with no exclusions.
 
-  `flake8` does **not** cover three of the four. Its `.flake8` `exclude =` list
-  carries the bare name `monitoring`, and flake8 prunes a bare name at *any*
-  depth rather than only at the repository root, so everything under
-  `autobot_shared/monitoring/` is skipped silently — in CI and in pre-commit
-  alike, since both read the same config. The first draft of this module claimed
-  otherwise and asserted only that the tool name and the tree name appear on one
-  line of the workflow, which is true and proves nothing. The wider problem
-  (1328 of 4938 tracked `.py` files pruned this way, including three production
-  packages named `monitoring`) is #14419 and is not fixed here.
+  `flake8` did **not** cover three of the four until #14419. Its `.flake8`
+  `exclude =` list carried the bare name `monitoring`, and flake8 prunes a bare
+  name at *any* depth rather than only at the repository root, so everything
+  under `autobot_shared/monitoring/` was skipped silently — in CI and in
+  pre-commit alike, since both read the same config. The first draft of this
+  module claimed otherwise and asserted only that the tool name and the tree
+  name appear on one line of the workflow, which is true and proves nothing.
+  #14419 anchored every source entry in that list, so flake8 now reaches all
+  four and `_MEASURED_REACH` below records the wider coverage. The map is the
+  reason that change could not land unnoticed.
 
   So the assertions below measure *reach*: for each file, which linters actually
   arrive at it after their own exclude rules are applied. Reach must be
@@ -69,14 +70,16 @@ _GUARDED_FILES = (
     "autobot-backend/services/mcp_isolated_runtime.py",
 )
 
-#: Which CI linters reach each file, as measured rather than as assumed. black
-#: reaches all four; flake8 reaches only the last, because `.flake8` prunes the
-#: bare component `monitoring` at any depth (#14419). Update this map when that
-#: is fixed — a change here is a real change in what guards these files.
+#: Which CI linters reach each file, as measured rather than as assumed. Both
+#: reach all four since #14419 anchored `.flake8`'s exclude entries; before
+#: that, flake8 reached only the last, because the bare component `monitoring`
+#: pruned the other three at any depth. Re-measure before editing this map — a
+#: change here is a real change in what guards these files, and the direction
+#: that matters is coverage *shrinking*.
 _MEASURED_REACH: dict[str, set[str]] = {
-    "autobot_shared/monitoring/metrics/mcp_worker.py": {"black"},
-    "autobot_shared/monitoring/metrics/__init__.py": {"black"},
-    "autobot_shared/monitoring/prometheus_metrics.py": {"black"},
+    "autobot_shared/monitoring/metrics/mcp_worker.py": {"black", "flake8"},
+    "autobot_shared/monitoring/metrics/__init__.py": {"black", "flake8"},
+    "autobot_shared/monitoring/prometheus_metrics.py": {"black", "flake8"},
     "autobot-backend/services/mcp_isolated_runtime.py": {"black", "flake8"},
 }
 
@@ -138,17 +141,36 @@ def test_the_removed_scripts_have_not_returned_unwired():
 
 
 def _flake8_exclude_patterns(config_text: str | None = None) -> list[str]:
-    """`.flake8`'s `exclude =` entries, as fnmatch patterns.
+    """`.flake8`'s `exclude =` entries, verbatim.
 
-    flake8 matches each entry against every *component* of a path it walks, not
-    against the path as a whole, which is what makes a bare `monitoring` prune
-    `autobot_shared/monitoring/` (#14419).
+    Two shapes, matched differently by flake8 and therefore by
+    :func:`_flake8_prunes` below: an entry with no path separator is compared
+    against a path's *basename*, so it prunes at any depth — that is what made
+    a bare `monitoring` prune `autobot_shared/monitoring/`. An entry containing
+    a separator is normalised to an absolute path rooted at the config file and
+    prunes only there (#14419).
     """
     parser = configparser.ConfigParser()
     parser.read_string(config_text if config_text is not None else (_REPO / ".flake8").read_text(encoding="utf-8"))
     raw = parser["flake8"].get("exclude", "")
     entries = (entry.strip() for line in raw.splitlines() for entry in line.split(","))
     return [entry for entry in entries if entry and not entry.startswith("#")]
+
+
+def _flake8_prunes(rel: str, patterns: list[str]) -> bool:
+    """Whether `.flake8`'s exclude list keeps flake8 away from *rel*.
+
+    Reading only the bare-name half would report the anchored entries as
+    excluding nothing, and a reach measurement that overstates reach is the
+    failure this module exists to prevent.
+    """
+    for pattern in patterns:
+        if "/" in pattern:
+            if (rel + "/").startswith(pattern.rstrip("/") + "/"):
+                return True
+        elif any(fnmatch.fnmatch(part, pattern) for part in Path(rel).parts):
+            return True
+    return False
 
 
 def _invocation(workflow_text: str, tool: str) -> str | None:
@@ -179,9 +201,7 @@ def _reach(rel: str, workflow_text: str | None = None, flake8_text: str | None =
 
     flake8 = _invocation(workflow, "flake8")
     if flake8 and any(rel.startswith(tree) for tree in re.findall(r"\S+/", flake8)):
-        patterns = _flake8_exclude_patterns(flake8_text)
-        pruned = any(fnmatch.fnmatch(part, pattern) for part in Path(rel).parts for pattern in patterns)
-        if not pruned:
+        if not _flake8_prunes(rel, _flake8_exclude_patterns(flake8_text)):
             reaching.add("flake8")
 
     return reaching
