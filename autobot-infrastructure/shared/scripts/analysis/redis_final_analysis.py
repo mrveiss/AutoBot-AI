@@ -14,6 +14,8 @@ import os
 import sys
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.paths import project_root
+
 sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 from constants import ServiceURLs
 from constants.network_constants import NetworkConstants
@@ -23,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 # DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
 _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+
+#: Where the final report lands, relative to the project root. One constant so the
+#: writer and the message that tells the operator where to look cannot drift.
+_REPORT_REL = "reports/vector_store_final_analysis.json"
 
 
 def _build_fix_llamaindex_recommendation(data_analysis, llamaindex_fixes):
@@ -484,7 +490,10 @@ class AutoBotVectorStoreAnalysis:
             "recommendation": recommendation,
         }
 
-        output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/vector_store_final_analysis.json"
+        # #14517: was a shell placeholder in a plain string literal, so this wrote
+        # the report into a junk tree literally named ``${AUTOBOT_PROJECT_ROOT:-``
+        # under the working directory instead of the project's reports/ (#13149).
+        output_file = str(project_root() / _REPORT_REL)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(full_report, f, indent=2)
@@ -652,10 +661,7 @@ async def main():
     analyzer = AutoBotVectorStoreAnalysis()
     await analyzer.run_final_analysis()
 
-    logger.info(
-        "\nComplete analysis saved to:"
-        " ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/vector_store_final_analysis.json"
-    )
+    logger.info("\nComplete analysis saved to: %s", project_root() / _REPORT_REL)
 
 
 if __name__ == "__main__":

@@ -32,11 +32,12 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, List, Optional
 
 import requests
 import websockets
+
+from autobot_shared.paths import project_root
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -94,9 +95,12 @@ class ComprehensiveTestSuite:
         self.session = requests.Session()
         self.session.timeout = self.config.timeout
 
-        # Create results directory
-        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
-        self.results_dir.mkdir(exist_ok=True)
+        # #14517: was a shell placeholder in a plain string literal, so mkdir either
+        # failed on the missing parent or created a junk tree literally named
+        # ``${AUTOBOT_PROJECT_ROOT:-`` under the working directory. ``parents=True``
+        # because the resolved path now has a real parent a fresh checkout lacks.
+        self.results_dir = project_root() / "tests" / "results"
+        self.results_dir.mkdir(parents=True, exist_ok=True)
 
         # Test execution timestamp
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
