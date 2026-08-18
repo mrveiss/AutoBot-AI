@@ -50,7 +50,8 @@ setup(
             "mypy>=0.991",
         ],
         "npu": [
-            "openvino>=2023.0.0",
+            # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt).
+            "openvino>=2026.3.0",
             "onnxruntime>=1.12.0",
         ],
         "web": [

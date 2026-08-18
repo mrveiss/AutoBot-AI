@@ -86,9 +86,10 @@ class Archive:
         """Weighted-random selection; uniform fallback when all weights are 0."""
         weights = [max(e.score, 0.0) for e in candidates]
         total = sum(weights)
+        # QD-archive parent selection, not a cryptographic or security context.
         if total == 0.0:
-            return random.choice(candidates)
-        return random.choices(candidates, weights=weights, k=1)[0]
+            return random.choice(candidates)  # nosec B311
+        return random.choices(candidates, weights=weights, k=1)[0]  # nosec B311
 
     # ------------------------------------------------------------------
     # Properties

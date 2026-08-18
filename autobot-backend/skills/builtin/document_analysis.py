@@ -78,6 +78,10 @@ class DocumentAnalysisSkill(BaseSkill):
             tags=["document", "pdf", "ocr", "extraction", "analysis"],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind the declared trigger to the action that handles it (#14406)."""
+        return {"document_uploaded": "analyze_document"}
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute document analysis action."""
         handlers = {

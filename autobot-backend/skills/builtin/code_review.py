@@ -63,6 +63,17 @@ class CodeReviewSkill(BaseSkill):
             ],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind each declared trigger to the action that handles it (#14406).
+
+        Both events deliver changed code, so both resolve to ``review_diff``;
+        the emitter is responsible for supplying the ``diff`` param.
+        """
+        return {
+            "pull_request_opened": "review_diff",
+            "code_pushed": "review_diff",
+        }
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute code review action."""
         handlers = {

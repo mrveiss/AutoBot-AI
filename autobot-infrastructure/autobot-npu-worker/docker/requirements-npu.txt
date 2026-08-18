@@ -7,8 +7,11 @@ uvicorn[standard]>=0.52.1
 pydantic>=2.13.4
 
 # Intel OpenVINO for NPU acceleration
+# #14453: openvino-dev dropped -- it is a deprecated meta-package frozen at
+# 2024.6.0 with no release compatible with openvino 2026.x, so a resolve
+# against this file backtracked into a numpy with no cp314 wheel and died in
+# an sdist build (the same defect fixed in the npu-worker role by #14449).
 openvino>=2026.3.0
-openvino-dev>=2024.6.0
 
 # Model and Tokenization (lightweight)
 tokenizers>=0.22.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
