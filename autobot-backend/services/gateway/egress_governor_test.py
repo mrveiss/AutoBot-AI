@@ -90,6 +90,28 @@ class TestApprovalRequiredFailsClosed:
         assert verdict.allowed is False
 
     @pytest.mark.asyncio
+    async def test_an_approver_exception_reaches_the_audit_sink_but_not_the_verdicts_safe_reason(self, governor):
+        """#14539: an approver's exception can carry a credential file path or an
+        internal hostname. The audit record needs the real cause; a caller
+        reading `safe_reason` must never see it."""
+        exception_text = (
+            "auth rejected for host internal-db-01.svc.cluster.local using key file /etc/autobot/approver.pem"
+        )
+        governor.register_approver("slack", AsyncMock(side_effect=RuntimeError(exception_text)))
+
+        with patch("services.gateway.egress_governor.get_audit_logger") as mock_get:
+            audit = AsyncMock()
+            mock_get.return_value = audit
+            verdict = await governor.evaluate(
+                platform="slack", channel_id="c1", message_id="m1", require_approval=True
+            )
+
+        assert verdict.allowed is False
+        assert exception_text not in verdict.safe_reason
+        assert exception_text in verdict.reason
+        assert exception_text in audit.log.await_args.kwargs["details"]["reason"]
+
+    @pytest.mark.asyncio
     async def test_an_approver_registered_for_another_platform_does_not_apply(self, governor):
         governor.register_approver("discord", AsyncMock(return_value=True))
         verdict = await governor.evaluate(platform="slack", channel_id="c1", message_id="m1", require_approval=True)

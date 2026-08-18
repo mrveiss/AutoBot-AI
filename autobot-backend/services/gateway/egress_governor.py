@@ -24,6 +24,41 @@ a caller — while the delivery path that makes a synchronous human gate usable 
 built (#14068). With ``require_approval`` on, the stage fails **closed**: no
 registered approver, an approver that denies, and an approver that raises all
 deny. An unreachable approver is not consent.
+
+Audience split (#14539)
+------------------------
+``EgressVerdict.reason`` is for the **audit record**: an operator debugging a
+denial needs the real cause, including whatever an approver's exception said.
+``EgressVerdict.safe_reason`` is for **callers** — anything that might end up
+in an API response. It defaults to ``reason`` for every branch whose text is
+already a fixed string or built only from caller-supplied arguments (platform,
+rule name). The one branch that is not — an approver raising — sets it
+explicitly to a fixed message, because the exception text can carry whatever
+the approver touched: a connection string, a hostname, a credential path.
+Never widen a caller-facing payload back to ``reason``.
+
+Channel-identity rule (#14540)
+-------------------------------
+``channel_id`` becomes part of the audit ``resource`` field and of any denial
+log line a caller writes. Two existing precedents in the calling modules
+answer "how much of it" from what the raw value IS, not which platform sends
+it:
+
+* A value that is directly usable **outside** this system on its own — a
+  dialable phone number, a URL whose path embeds a bearer token — is reduced
+  before it reaches :meth:`EgressGovernor.evaluate`
+  (``whatsapp_integration._mask_phone``,
+  ``notification_service._send_webhook``'s ``urlparse(url).hostname``).
+  Recording it whole would hand PII or a credential to anyone who can read
+  the audit trail or the logs.
+* A value that is an **opaque identifier scoped to this system's own
+  platform credential** — a Telegram ``chat_id``, a Slack/Discord
+  ``channel_id`` — is recorded as-is. It resolves to a person only through
+  the bot token that already gates access to the channel, so masking it buys
+  no confidentiality and only makes the record useless for locating which
+  conversation was blocked. Telegram's ``chat_id`` is this case, deliberately
+  unmasked — pinned by ``TestChannelIdentityRule`` in
+  ``services/gateway/live_egress_seams_test.py``.
 """
 
 from __future__ import annotations
@@ -62,11 +97,22 @@ class EgressVerdict:
     ``reason`` and ``rule`` are carried on the verdict rather than logged
     separately, so the audit trail is a by-product of the decision instead of a
     second thing a caller has to remember to do.
+
+    ``reason`` is the audit-facing text — always the full detail. ``safe_reason``
+    is the caller-facing text; it defaults to ``reason`` and is only ever
+    overridden explicitly, by the one branch whose ``reason`` can carry raw
+    exception text (#14539). A caller building a denial response must read
+    ``safe_reason``, never ``reason``.
     """
 
     allowed: bool
     reason: str = ""
     rule: str = ""
+    safe_reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.safe_reason:
+            object.__setattr__(self, "safe_reason", self.reason)
 
 
 class EgressGovernor:
@@ -96,7 +142,15 @@ class EgressGovernor:
             approved = await approver(platform=platform, channel_id=channel_id, message_id=message_id)
         except Exception as exc:  # noqa: BLE001 - an unreachable approver is not consent
             logger.warning("Egress approver for %s failed, denying: %s", platform, exc)
-            return EgressVerdict(allowed=False, reason=f"approver failed: {exc}", rule="fail-closed")
+            # #14539: `exc` may embed whatever the approver touched — a connection
+            # string, a hostname, a credential path. `reason` keeps it for the
+            # audit record; `safe_reason` is the fixed text a caller may return.
+            return EgressVerdict(
+                allowed=False,
+                reason=f"approver failed: {exc}",
+                rule="fail-closed",
+                safe_reason="approver failed",
+            )
 
         if approved:
             return EgressVerdict(allowed=True, reason="approved", rule="approver")
