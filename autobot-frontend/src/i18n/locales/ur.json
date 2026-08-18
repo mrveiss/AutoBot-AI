@@ -8003,7 +8003,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "اخراجات کو ہر ایجنٹ کے مجموعے کے طور پر ریکارڈ کیا جاتا ہے، تاریخ والے واقعات کے طور پر نہیں، اس لیے ابھی روزانہ کی تاریخ موجود نہیں۔"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

@@ -154,8 +154,15 @@
     <!-- Bar chart: daily spend -->
     <div class="chart-section">
       <h3 class="section-title">{{ $t('llc.cost.dailySpend') }}</h3>
-      <div v-if="dailyBars.length === 0" class="state-msg">{{ $t('llc.cost.noSpendData') }}</div>
-      <div v-else class="bar-chart">
+      <!-- #13617: gated on rows actually carrying dates. `dailyBars` always
+           returns thirty entries, so the old `length === 0` branch could never
+           fire and undated rows drew thirty empty bars — which states "no spend
+           in thirty days" when the truth is that spend is not dated at all. -->
+      <div v-if="!hasDatedEvents" class="state-msg" data-testid="cost-no-dated-events">
+        {{ $t('llc.cost.noDatedEvents') }}
+      </div>
+      <div v-else-if="dailyBars.length === 0" class="state-msg">{{ $t('llc.cost.noSpendData') }}</div>
+      <div v-else class="bar-chart" data-testid="cost-bar-chart">
         <div
           v-for="bar in dailyBars"
           :key="bar.date"
@@ -174,9 +181,13 @@
         <option value="">{{ $t('llc.cost.allAgents') }}</option>
         <option v-for="a in agentOptions" :key="a" :value="a">{{ a }}</option>
       </select>
-      <input v-model="filters.dateFrom" type="date" class="filter-date" />
-      <span class="date-sep">{{ $t('llc.cost.to') }}</span>
-      <input v-model="filters.dateTo" type="date" class="filter-date" />
+      <!-- Hidden rather than disabled: a date filter over undated rows can
+           only ever empty the table, which reads as "no data". -->
+      <template v-if="hasDatedEvents">
+        <input v-model="filters.dateFrom" type="date" class="filter-date" data-testid="cost-date-from" />
+        <span class="date-sep">{{ $t('llc.cost.to') }}</span>
+        <input v-model="filters.dateTo" type="date" class="filter-date" data-testid="cost-date-to" />
+      </template>
     </div>
 
     <!-- Cost events table -->
@@ -205,14 +216,14 @@
             <td colspan="8" class="state-msg">{{ $t('llc.cost.noEvents') }}</td>
           </tr>
           <tr v-for="ev in filteredEvents" :key="ev.id">
-            <td>{{ formatDate(ev.created_at) }}</td>
+            <td>{{ formatDate(ev.created_at) || '—' }}</td>
             <td>{{ ev.agent_id }}</td>
             <td>{{ ev.work_item_id ?? '—' }}</td>
-            <td>{{ ev.model }}</td>
-            <td>{{ ev.provider }}</td>
-            <td class="num-cell">{{ ev.input_tokens.toLocaleString() }}</td>
-            <td class="num-cell">{{ ev.output_tokens.toLocaleString() }}</td>
-            <td class="num-cell">${{ ev.cost.toFixed(6) }}</td>
+            <td>{{ ev.model ?? '—' }}</td>
+            <td>{{ ev.provider ?? '—' }}</td>
+            <td class="num-cell">{{ tokenCell(ev.input_tokens) }}</td>
+            <td class="num-cell">{{ tokenCell(ev.output_tokens) }}</td>
+            <td class="num-cell">${{ costOf(ev).toFixed(6) }}</td>
           </tr>
         </tbody>
       </table>
@@ -252,16 +263,28 @@ interface BudgetEntry {
   alert_threshold: number
 }
 
+/**
+ * A row from `/api/llc/cost-events` (#13617).
+ *
+ * Nullable where the server genuinely has nothing to send: today these rows
+ * are per-agent budget *totals*, not a per-event log, so there is no date, no
+ * single model, and no input/output split. Declaring those non-null is what
+ * let the view read `undefined` off every field and crash on the first row.
+ */
 interface CostEvent {
   id: string
   agent_id: string
-  work_item_id?: string
-  model: string
-  provider: string
-  input_tokens: number
-  output_tokens: number
+  work_item_id?: string | null
+  model?: string | null
+  provider?: string | null
+  input_tokens?: number | null
+  output_tokens?: number | null
+  /** Total tokens against the budget, when the in/out split is unknown. */
+  tokens_spent?: number | null
   cost: number
-  created_at: string
+  created_at?: string | null
+  /** What this row is — `budget_summary` means a running total, not an event. */
+  source?: string | null
 }
 
 const budgets = ref<BudgetEntry[]>([])
@@ -308,22 +331,40 @@ const tokenModeAgents = computed(() =>
   budgets.value.filter(b => b.budget_mode === 'tokens').length
 )
 
+/** A row's cost as a number, or 0 — never NaN leaking into a total. */
+function costOf(ev: CostEvent): number {
+  const n = typeof ev.cost === 'number' ? ev.cost : Number(ev.cost)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Whether any row carries a date (#13617).
+ *
+ * False for budget summaries, which have no timestamp. The 30-day chart and
+ * the date filters are gated on this: rendering them against undated rows
+ * draws thirty empty bars, and "no spend for thirty days" is a different
+ * claim from "spend is not dated", which is the one that is true.
+ */
+const hasDatedEvents = computed(() => costEvents.value.some(ev => Boolean(ev.created_at)))
+
 const totalThisMonth = computed(() => {
   const now = new Date()
   return costEvents.value
     .filter(ev => {
+      if (!ev.created_at) return false
       const d = new Date(ev.created_at)
+      if (Number.isNaN(d.getTime())) return false
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     })
-    .reduce((s, ev) => s + ev.cost, 0)
+    .reduce((s, ev) => s + costOf(ev), 0)
 })
 
-const totalByCompany = computed(() => costEvents.value.reduce((s, ev) => s + ev.cost, 0))
+const totalByCompany = computed(() => costEvents.value.reduce((s, ev) => s + costOf(ev), 0))
 
 const agentTotals = computed(() => {
   const map: Record<string, number> = {}
   for (const ev of costEvents.value) {
-    map[ev.agent_id] = (map[ev.agent_id] ?? 0) + ev.cost
+    map[ev.agent_id] = (map[ev.agent_id] ?? 0) + costOf(ev)
   }
   return map
 })
@@ -340,8 +381,13 @@ const agentOptions = computed(() => [...new Set(costEvents.value.map(ev => ev.ag
 const filteredEvents = computed(() => {
   return costEvents.value.filter(ev => {
     if (filters.value.agent && ev.agent_id !== filters.value.agent) return false
-    if (filters.value.dateFrom && ev.created_at < filters.value.dateFrom) return false
-    if (filters.value.dateTo && ev.created_at > filters.value.dateTo + 'T23:59:59') return false
+    // An undated row cannot satisfy a date bound. It is kept rather than
+    // dropped: the filters are hidden when nothing is dated, so a hidden
+    // filter must never silently empty the table.
+    if (ev.created_at) {
+      if (filters.value.dateFrom && ev.created_at < filters.value.dateFrom) return false
+      if (filters.value.dateTo && ev.created_at > filters.value.dateTo + 'T23:59:59') return false
+    }
     return true
   })
 })
@@ -356,8 +402,9 @@ const dailyBars = computed(() => {
     map[key] = 0
   }
   for (const ev of costEvents.value) {
+    if (!ev.created_at) continue
     const key = ev.created_at.slice(0, 10)
-    if (key in map) map[key] += ev.cost
+    if (key in map) map[key] += costOf(ev)
   }
   const entries = Object.entries(map)
   const max = Math.max(...entries.map(([, v]) => v), 0.0001)
@@ -369,8 +416,13 @@ const dailyBars = computed(() => {
   }))
 })
 
-function formatDate(iso: string) {
-  return fmtDate(iso)
+function formatDate(iso: string | null | undefined): string {
+  return iso ? fmtDate(iso) : ''
+}
+
+/** A token count for display, or an em dash when the split is not recorded. */
+function tokenCell(value: number | null | undefined): string {
+  return typeof value === 'number' ? formatTokens(value) : '—'
 }
 
 function exportCsv() {
@@ -380,11 +432,11 @@ function exportCsv() {
       formatDate(ev.created_at),
       ev.agent_id,
       ev.work_item_id ?? '',
-      ev.model,
-      ev.provider,
-      String(ev.input_tokens),
-      String(ev.output_tokens),
-      ev.cost.toFixed(6),
+      ev.model ?? '',
+      ev.provider ?? '',
+      ev.input_tokens == null ? '' : String(ev.input_tokens),
+      ev.output_tokens == null ? '' : String(ev.output_tokens),
+      costOf(ev).toFixed(6),
     ]),
   ]
   const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')

@@ -7991,7 +7991,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "Spend is recorded as per-agent totals, not dated events, so there is no daily history yet."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
