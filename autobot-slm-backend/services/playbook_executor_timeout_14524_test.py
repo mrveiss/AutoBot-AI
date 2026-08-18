@@ -120,13 +120,19 @@ def test_the_real_module_was_loaded_not_a_stub():
     assert "timeout_s" in sig.parameters, "execute_playbook must accept a timeout_s parameter (#14524)"
 
 
-def test_run_subprocess_without_timeout_is_unaffected():
+def test_run_subprocess_without_timeout_is_unaffected(tmp_path):
     """`timeout_s=None` (the default) must behave exactly as before -- deployment
     and provisioning runs (site.yml, update-all-nodes.yml) are legitimately
     long and explicitly out of this issue's scope; only a caller that opts in
     gets bounded.
+
+    `ansible_dir=tmp_path` (CI finding): a bare `PlaybookExecutor()` resolves
+    `ansible_dir` to `/opt/autobot/...`, which does not exist on a CI runner
+    -- `_run_subprocess`'s `cwd=str(self.ansible_dir)` then fails the spawn
+    itself with `FileNotFoundError`, before `timeout_s` is ever reached. A
+    real, existing directory is what this test needs, not a specific one.
     """
-    executor = playbook_executor.PlaybookExecutor()
+    executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
 
     async def _go():
         return await executor._run_subprocess(
@@ -155,8 +161,13 @@ def test_run_subprocess_timeout_kills_the_whole_process_group_and_reports_failur
     Discriminates: pre-#14524, `_run_subprocess` has no `timeout_s`
     parameter at all, so this call raises `TypeError` immediately (this test
     fails, fast, not by hanging). Post-fix it passes.
+
+    `ansible_dir=tmp_path` (CI finding): see `test_run_subprocess_without_
+    timeout_is_unaffected`'s docstring -- a bare `PlaybookExecutor()`'s
+    default `ansible_dir` does not exist on a CI runner, and `cwd=` at spawn
+    fails before `timeout_s` is ever reached.
     """
-    executor = playbook_executor.PlaybookExecutor()
+    executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
     # Short grace period so a SIGTERM-ignoring child escalates to SIGKILL
     # quickly -- this test must not itself take anywhere near the real
     # AUTOBOT_PLAYBOOK_KILL_GRACE_S default (5s) times two signal rounds.
