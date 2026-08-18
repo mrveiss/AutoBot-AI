@@ -42,3 +42,30 @@ def test_node_roles_unions_detected_roles():
     inv = build_registry_inventory([node], local_ip_check=lambda ip: False)
     roles = inv["all"]["hosts"]["00-SLM-Manager"]["node_roles"]
     assert "backend" in roles and "redis" in roles
+
+
+def test_node_roles_declared_excludes_detected_only_roles():
+    """#14560: node_roles_declared must NOT union in detected_roles.
+
+    role_active_facts.yml's five privileged facts (backend, frontend,
+    ai_stack, npu_worker, browser) read node_roles_declared instead of
+    node_roles precisely so a role that was only DETECTED never activates
+    their deploy tasks. If this hostvar ever unioned detected_roles back in,
+    that gate would be silently defeated again.
+    """
+    node = _node(roles=["backend"], detected=["frontend"])
+    inv = build_registry_inventory([node], local_ip_check=lambda ip: False)
+    hostvars = inv["all"]["hosts"]["00-SLM-Manager"]
+    assert "node_roles_declared" in hostvars, "node_roles_declared must be stamped for the privileged facts"
+    assert hostvars["node_roles_declared"] == ["backend"]
+    assert "frontend" not in hostvars["node_roles_declared"]
+    # node_roles (the union) is unaffected -- other tests pin this stays the union.
+    assert "frontend" in hostvars["node_roles"]
+
+
+def test_node_roles_declared_matches_roles_only():
+    node = _node(roles=["ai-stack", "tts-worker"], detected=["ai-stack", "npu-worker", "tts-worker"])
+    inv = build_registry_inventory([node], local_ip_check=lambda ip: True)
+    hostvars = inv["all"]["hosts"]["00-SLM-Manager"]
+    assert sorted(hostvars["node_roles_declared"]) == ["ai-stack", "tts-worker"]
+    assert "npu-worker" not in hostvars["node_roles_declared"]

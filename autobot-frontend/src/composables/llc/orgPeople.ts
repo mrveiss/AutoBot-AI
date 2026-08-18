@@ -58,6 +58,12 @@ export interface OrgChartPersonSource {
   name: string
   title: string
   is_human: boolean
+  /**
+   * Whether this person can still be given work (#13956). Absent for agents,
+   * and absent from a server that predates the field — which is why every
+   * reader tests `=== false` rather than falsiness.
+   */
+  is_active?: boolean | null
   children?: OrgChartPersonSource[]
 }
 
@@ -91,6 +97,14 @@ export interface OrgPerson {
   userId: string | null
   /** The org-chart node id, so a click can open the same drawer the tree opens. */
   orgNodeId: string | null
+  /**
+   * Deactivated or soft-deleted, and so no longer assignable (#13956).
+   *
+   * Shown rather than filtered out: their work items stay behind when they
+   * leave, and so does the role they held, so a chart that omits them cannot
+   * explain who those items belong to.
+   */
+  isInactive: boolean
 }
 
 /** A team's people, or the honest "not in a team" bucket. */
@@ -134,6 +148,10 @@ function collectOrgPeople(nodes: OrgChartPersonSource[], out: OrgPerson[]): void
       channel: null,
       userId: userIdOf(node),
       orgNodeId: node.id,
+      // `=== false` and not falsiness: agents omit the field entirely, and so
+      // does a server that predates it. Treating absent as inactive would mark
+      // every agent and every person during a rolling update.
+      isInactive: node.is_active === false,
     })
     if (node.children?.length) collectOrgPeople(node.children, out)
   }
@@ -162,6 +180,8 @@ export function buildOrgPeople(
       userId: null,
       // Not a hierarchy member — there is no org-chart node to open a drawer on.
       orgNodeId: null,
+      // A contact has no account, so there is no account to deactivate.
+      isInactive: false,
     })
   }
   return people
