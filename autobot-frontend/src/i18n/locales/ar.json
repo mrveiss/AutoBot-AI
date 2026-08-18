@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "يُطبَّق التسليم على الوكلاء فقط."
       },
       "processNodeLabel": "عملية",
-      "processOpensWorkflow": "يفتح سير العمل الذي يشغّله هذا الدور"
+      "processOpensWorkflow": "يفتح سير العمل الذي يشغّله هذا الدور",
+      "attach": "إرفاق",
+      "attachRoleLabel": "الدور",
+      "attachRolePlaceholder": "اختر دورًا…",
+      "attachWorkflowLabel": "معرّف سير العمل",
+      "attachWorkflowPlaceholder": "معرّف سير العمل",
+      "attachError": "تعذّر إرفاق سير العمل هذا.",
+      "detachError": "تعذّرت إزالة سير العمل هذا.",
+      "processDetach": "إزالة {workflow} من {role}",
+      "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة."
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
