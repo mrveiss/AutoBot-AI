@@ -814,6 +814,27 @@ class PlaybookExecutor:
         logger.info("Self-update run detached into transient systemd service, output -> %s", log_path)
         return self._wrap_with_systemd_unit(cmd, env, log_path), log_path
 
+    def _resolve_stdio_targets(
+        self, cmd: List[str], env: Dict[str, str], detach: bool
+    ) -> tuple[List[str], Path | None, int, int]:
+        """Resolve the effective argv and stdout/stderr targets for a run.
+
+        Helper for _run_subprocess. Returns
+        ``(effective_cmd, log_path, stdout_target, stderr_target)``. For an
+        attached run (the common case) this is just ``(cmd, None, PIPE,
+        STDOUT)``; for a detached one, output is redirected to a file (see
+        _wrap_with_systemd_unit) -- leaving the outer pipe PIPE-but-unread
+        risks the wrapper deadlocking once the OS pipe buffer fills, so it is
+        DEVNULL instead.
+        """
+        if not detach:
+            return cmd, None, asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT
+
+        effective_cmd, log_path = self._prepare_detached_run(cmd, env)
+        if log_path is None:
+            return effective_cmd, None, asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT
+        return effective_cmd, log_path, asyncio.subprocess.DEVNULL, asyncio.subprocess.DEVNULL
+
     async def _run_subprocess(
         self,
         cmd: List[str],
@@ -825,41 +846,13 @@ class PlaybookExecutor:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
 
-        Helper for execute_playbook.
-
-        Args:
-            detach: When True AND the runtime supports it (#11492), wrap the
-                command in a ``systemd-run`` transient service with file-backed
-                stdout/stderr so it survives a same-process ``systemctl
-                restart autobot-slm-backend`` mid-run (the self-update path)
-                without a dead backend's pipe crashing it. Falls back to the
-                unchanged direct exec + pipe when systemd-run/systemd-service
-                context or the log file is unavailable (dev mode, tests,
-                containers).
-            timeout_s: Wall-clock ceiling on the whole run (#14524). ``None``
-                (the default) preserves the previous, unbounded behaviour --
-                deployment/provisioning playbooks legitimately run for many
-                minutes (package installs, model pulls) and are out of this
-                issue's scope. Only a caller that wants a bounded run (the
-                reconciler's remediation restart) passes a concrete value. On
-                expiry the WHOLE process group is killed (_kill_process_group)
-                and a failed, non-zero-returncode result comes back -- never a
-                silent success.
+        Helper for execute_playbook -- see its docstring for what ``detach``
+        and ``timeout_s`` (#14524) each mean; both are passed through
+        unchanged. ``start_new_session=True`` below gives the child its own
+        process group so a ``timeout_s`` expiry can kill the WHOLE tree
+        (_kill_process_group), not just this one PID.
         """
-        effective_cmd = cmd
-        log_path: Path | None = None
-        stdout_target: int = asyncio.subprocess.PIPE
-        stderr_target: int = asyncio.subprocess.STDOUT
-
-        if detach:
-            effective_cmd, log_path = self._prepare_detached_run(cmd, env)
-            if log_path is not None:
-                # Real output goes to the file (see _wrap_with_systemd_unit);
-                # nothing meaningful is expected on this outer pipe, and
-                # leaving it as PIPE-but-unread risks the wrapper deadlocking
-                # once the OS pipe buffer fills.
-                stdout_target = asyncio.subprocess.DEVNULL
-                stderr_target = asyncio.subprocess.DEVNULL
+        effective_cmd, log_path, stdout_target, stderr_target = self._resolve_stdio_targets(cmd, env, detach)
 
         process = await asyncio.create_subprocess_exec(
             *effective_cmd,
