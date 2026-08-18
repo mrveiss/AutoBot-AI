@@ -106,33 +106,23 @@ def test_the_real_module_was_loaded_not_a_stub():
     ), "the streak dict from the superseded dwell-window mechanism must not still be tracked"
 
 
-def test_the_effective_expiry_floor_clears_the_cooldown_by_more_than_a_reconcile_tick():
-    """Review: `min_v=REMEDIATION_COOLDOWN` alone let the floor itself BE the
-    degenerate value -- every operator setting in {-1, 0, 1, 60, 299, 300}
-    clamped to exactly 300, at which point forgive and cooldown fired at the
-    identical elapsed time and forgive always won: count could never exceed 1
-    no matter how many attempts failed. The floor must be strictly above
-    `REMEDIATION_COOLDOWN` plus a reconcile-tick margin, structurally, not by
-    the module's chosen default happening to clear it.
-
-    Asserted on `_effective_tracker_expiry_s()`, the value `_forgive_if_
-    expired` actually enforces -- NOT on the raw `REMEDIATION_TRACKER_
-    EXPIRY_S` module constant, which a second review round moved this floor
-    off of entirely (reading `settings.reconcile_interval` at import time
-    crashed collection for a module whose config stub is a bare
-    `SimpleNamespace`; see `test_effective_expiry_survives_a_settings_stub_
-    missing_reconcile_interval` below).
-    """
-    assert reconciler._effective_tracker_expiry_s() > reconciler.REMEDIATION_COOLDOWN + 1, (
-        "the expiry floor must clear the cooldown by more than a reconcile-tick margin, "
-        "or forgive and cooldown fire at the same elapsed time and forgive always wins"
-    )
-
-
 def test_effective_expiry_ignores_a_pathologically_low_raw_constant():
-    """The runtime floor, not the module constant, is what protects against the
-    degenerate case now -- so it must rescue ANY value the raw constant could
-    be set to, not just the ones review happened to list.
+    """Review, twice over: `min_v=REMEDIATION_COOLDOWN` alone let the floor
+    itself BE the degenerate value -- every operator setting in
+    {-1, 0, 1, 60, 299, 300} clamped to exactly 300, at which point forgive
+    and cooldown fired at the identical elapsed time and forgive always won:
+    count could never exceed 1 no matter how many attempts failed.
+
+    An earlier version of this test asserted `_effective_tracker_expiry_s()
+    > REMEDIATION_COOLDOWN + 1` using the module's DEFAULT
+    `REMEDIATION_TRACKER_EXPIRY_S` (1800) -- true, but not discriminating: it
+    passes identically whether or not `_effective_tracker_expiry_s` computes
+    a floor at all, since 1800 alone already clears 301 with no help from
+    that logic. Forcing the raw constant down to a value the floor logic
+    MUST rescue is what actually exercises it -- the runtime floor, not the
+    module constant, is what protects against the degenerate case now, and
+    must rescue ANY value the raw constant could be set to, not just the
+    ones review happened to list.
     """
     original = reconciler.REMEDIATION_TRACKER_EXPIRY_S
     reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
@@ -171,7 +161,9 @@ def test_effective_expiry_survives_a_settings_stub_missing_reconcile_interval():
 
 def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
     """Confirms this genuinely reads the LIVE setting, not just falling back
-    to the pydantic default every time.
+    to the pydantic default every time. `reconcile_interval=120` here is
+    larger than the default `REMEDIATION_HEARTBEAT_WAIT_S` (90), so it is the
+    winning term in the margin's `max()`.
     """
     from types import SimpleNamespace as _SimpleNamespace
 
@@ -187,6 +179,33 @@ def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
 
     assert effective == reconciler.REMEDIATION_COOLDOWN + 120 + 1, (
         f"expected the floor to be derived from reconcile_interval=120, got {effective}"
+    )
+
+
+def test_effective_expiry_margin_uses_heartbeat_wait_when_it_exceeds_reconcile_interval():
+    """Review, round 6: a margin of `reconcile_interval` alone does not bound
+    the REAL source of pass-duration variance -- `_heartbeat_returned`
+    blocking `_attempt_remediation`'s per-node loop for up to
+    `REMEDIATION_HEARTBEAT_WAIT_S`. With a short `reconcile_interval` (e.g.
+    30s) against the 90s default wait, the margin must be the LARGER of the
+    two, not the reconcile tick alone.
+    """
+    from types import SimpleNamespace as _SimpleNamespace
+
+    original_settings = reconciler.settings
+    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
+    reconciler.settings = _SimpleNamespace(reconcile_interval=30)
+    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
+    try:
+        effective = reconciler._effective_tracker_expiry_s()
+    finally:
+        reconciler.settings = original_settings
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
+
+    expected = reconciler.REMEDIATION_COOLDOWN + reconciler.REMEDIATION_HEARTBEAT_WAIT_S + 1
+    assert effective == expected, (
+        f"expected the margin to fall back to REMEDIATION_HEARTBEAT_WAIT_S "
+        f"({reconciler.REMEDIATION_HEARTBEAT_WAIT_S}) when it exceeds reconcile_interval (30), got {effective}"
     )
 
 
@@ -568,20 +587,30 @@ def test_an_exhausted_tracker_never_auto_expires():
     ), "an exhausted tracker must stay exhausted no matter how much time passes"
 
 
-def test_an_exhausted_node_broadcasts_on_every_subsequent_refusal():
-    """Review: base's clear dropped `exhausted` whenever it fired, so a
-    recovered node became remediable again -- rarely reachable per this
-    issue's own root-cause finding, but a real path base had.
-    `_forgive_if_expired` excludes `exhausted` trackers entirely (by design,
-    see its docstring), so with no automatic path back the lockout must at
-    least be visible: `_handle_max_attempts_refusal` broadcasts on every
-    refusal after the first, not only the one DB-persisted event.
+def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
+    """Review, two findings on the same test:
+
+    1. It seeded `last_attempt = datetime.now()` -- RECENT -- so `_check_
+       remediation_limits`'s cooldown check (which runs BEFORE the max
+       -attempts check) returned `skip_reason == "cooldown"`, and
+       `_handle_max_attempts_refusal` never ran at all. `last_attempt`
+       freezes once exhausted (nothing advances it), so an exhausted
+       tracker's `last_attempt` is always old by the time this matters in
+       production; seeded that way here too.
+    2. An unthrottled broadcast on every refusal is a flood: once exhausted,
+       this branch runs on EVERY reconcile pass forever (~1400/day at the
+       default 60s reconcile interval). Also, `FleetOverview.vue`'s
+       `onRemediationEvent` handler calls `fleetStore.refreshNode(nodeId)`
+       -- a real API request -- specifically for `event_type == "completed"`;
+       broadcasting that type unthrottled would have turned "make the
+       lockout visible" into a refresh storm.
     """
     service = reconciler.ReconcilerService()
     node = _degraded_node()
+    old_last_attempt = datetime.now(timezone.utc) - timedelta(seconds=reconciler.REMEDIATION_COOLDOWN + 10)
     service._remediation_tracker[node.node_id] = {
         "count": reconciler.MAX_REMEDIATION_ATTEMPTS,
-        "last_attempt": datetime.now(timezone.utc),
+        "last_attempt": old_last_attempt,
         "exhausted": True,
     }
 
@@ -603,12 +632,32 @@ def test_an_exhausted_node_broadcasts_on_every_subsequent_refusal():
 
     service._create_max_attempts_event = _spy_create_event.__get__(service)
 
+    clock = _Clock(datetime.now(timezone.utc))
+    reconciler.datetime = clock
     db = _FakeSession()
-    for _ in range(3):
+    try:
+        # 5 reconcile-tick-scale passes, all inside one broadcast-throttle window.
+        for _ in range(5):
+            asyncio.run(service._remediate_node(db, node))
+            clock.advance(60)
+        assert len(broadcasts) == 1, (
+            f"expected exactly one broadcast across 5 refusals inside the throttle window, got {len(broadcasts)}"
+        )
+
+        # Past the throttle window: the next refusal must broadcast again.
+        clock.advance(reconciler.MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S + 10)
         asyncio.run(service._remediate_node(db, node))
+        assert len(broadcasts) == 2, (
+            f"expected a second broadcast once the throttle window elapsed, got {len(broadcasts)}"
+        )
+    finally:
+        reconciler.datetime = datetime
 
     assert len(events_created) == 0, "an already-exhausted tracker must not create a second DB-persisted event"
-    assert len(broadcasts) == 3, f"expected a broadcast on every one of 3 refusals, got {len(broadcasts)}"
+    assert all(event_type != "completed" for (_, event_type, _, _) in broadcasts), (
+        "must never broadcast event_type='completed' for a mere refusal -- FleetOverview.vue "
+        "triggers a real fleetStore.refreshNode() API call for exactly that type"
+    )
 
 
 def test_cooldown_still_paces_attempts_even_with_frequent_reconcile_ticks():
@@ -690,4 +739,43 @@ def test_the_tracker_write_survives_a_failed_result_commit():
     assert tracker is not None and tracker["count"] == 1, (
         "the tracker write must happen before the result commit -- a failed commit must not leave "
         "the attempt unrecorded, or the next pass has no cooldown to pace against at all"
+    )
+
+
+class _FailingFirstCommitSession:
+    """`add` is a no-op; the FIRST `commit()` (the max-attempts event's) raises."""
+
+    def add(self, _obj):
+        pass
+
+    async def commit(self):
+        raise RuntimeError("simulated DB commit failure")
+
+
+def test_exhausted_flag_survives_a_failed_max_attempts_event_commit():
+    """The inverse principle from the tracker-write test above: for a WRITE
+    that only needs to happen ONCE (the max-attempts DB event), the `exhausted`
+    flag must be set and stored BEFORE that commit is even attempted -- not
+    after. `last_attempt` is frozen for good once exhausted, so if the flag
+    itself were left unset by a failed commit, EVERY future reconcile pass
+    would retry the same event-creation commit forever, for as long as the
+    node stays selected DEGRADED: unbounded new DB write attempts from a
+    single transient failure.
+    """
+    service = reconciler.ReconcilerService()
+    node = _degraded_node()
+    tracker = {"count": reconciler.MAX_REMEDIATION_ATTEMPTS, "last_attempt": datetime.now(timezone.utc)}
+    service._remediation_tracker[node.node_id] = tracker
+    db = _FailingFirstCommitSession()
+
+    raised = False
+    try:
+        asyncio.run(service._handle_max_attempts_refusal(db, node, tracker))
+    except RuntimeError:
+        raised = True
+
+    assert raised, "sanity: the simulated commit failure must actually propagate"
+    assert service._remediation_tracker[node.node_id].get("exhausted") is True, (
+        "exhausted must be set before the event commit is attempted -- otherwise a failed commit "
+        "leaves it unset and every future pass retries the same write, unbounded"
     )
