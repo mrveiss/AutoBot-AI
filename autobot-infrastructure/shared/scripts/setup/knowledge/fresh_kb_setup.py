@@ -8,18 +8,26 @@ Fresh knowledge base setup - let llama_index create everything from scratch.
 """
 
 import asyncio
-import logging
-import os
 import sys
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+logger = get_logger(__name__)
+
+# #14507: this used to insert the script's own parent (``scripts/setup``) and
+# then import ``knowledge_base``, which lives in ``autobot-backend`` -- a
+# directory that was never on the path -- so the KB step died with
+# ModuleNotFoundError. Same defect as ``populate_knowledge_base.py``, which
+# this script's success message tells the operator to run next. Add the
+# directory the way the other operator entry points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[5] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 # Import centralized Redis client
-from autobot_shared.redis_client import get_redis_client
-from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
+from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.redis_utils import decode_redis_list, decode_redis_value  # noqa: E402
 
 
 def _clean_redis_indexes(r) -> None:
@@ -99,16 +107,19 @@ async def _test_knowledge_base(kb, r) -> bool:
 
     test_file = _create_test_document()
 
-    result = await kb.add_file(
+    # #14507: ``add_file`` is defined nowhere in the KnowledgeBase mixin chain
+    # and ``search`` takes ``top_k``, not ``n_results`` (#10666) -- both calls
+    # raised before this smoke test could report anything.
+    result = await kb.add_document_from_file(
         file_path=test_file,
-        file_type="txt",
-        metadata={"source": "test", "category": "documentation"},
+        category="documentation",
+        metadata={"source": "test"},
     )
 
     logger.info(f"   Add result: {result}")
 
-    if result["status"] == "success":
-        results = await kb.search("AutoBot features", n_results=2)
+    if result.get("status") == "success":
+        results = await kb.search("AutoBot features", top_k=2)
         logger.info(f"\n4. Search test results: {len(results)} found")
         if results:
             logger.info(f"   First result score: {results[0].get('score', 0)}")
@@ -154,7 +165,10 @@ async def fresh_setup():
 
     logger.info("\n2. Initializing fresh knowledge base...")
 
-    from knowledge_base import KnowledgeBase
+    # Deferred: ``knowledge/__init__`` loads the composed class lazily (#1514),
+    # so a module-scope import would pull redis, chromadb and llama_index in
+    # merely to inspect this script.
+    from knowledge import KnowledgeBase
 
     kb = KnowledgeBase()
     logger.info(f"   Will use embedding model: {kb.embedding_model_name}")
