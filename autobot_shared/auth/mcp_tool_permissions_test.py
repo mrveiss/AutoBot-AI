@@ -188,6 +188,14 @@ def test_browser_evaluate_is_not_a_read():
     assert required_permission("evaluate", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
 
 
+def test_browser_select_is_not_a_read():
+    """#14469: `select` changes a dropdown's value, same as click/fill — its name
+    carries none of `_MUTATING`'s verbs, so it silently inherited the bridge's
+    read-level default until declared here explicitly."""
+    assert required_permission("select", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
+    assert required_permission("select_index", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
+
+
 def test_readonly_holds_no_control_grant():
     """The role split has to mean something at the weakest role."""
     readonly = set(ROLE_PERMISSIONS[Role.READONLY])
