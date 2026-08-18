@@ -158,6 +158,12 @@ class TestTheEffectOnAdminOnlyTools:
 
     Exercised against the real `MCPDispatcher` gate rather than a stand-in, since
     the bug was that this gate never saw a role other than "user".
+
+    #14523: the gate itself moved from the `_ADMIN_ONLY_TOOLS` substring
+    blocklist to the canonical `required_permission`/role check, so the
+    fixture now carries the declared permission (`mcp.manage`, admin-only in
+    `ROLE_PERMISSIONS`) a real admin-only tool would have — this AC is about
+    the role plumbing, not the specific gating mechanism underneath it.
     """
 
     @staticmethod
@@ -165,7 +171,14 @@ class TestTheEffectOnAdminOnlyTools:
         from services.mcp_dispatch import MCPDispatcher
 
         d = MCPDispatcher()
-        d._tool_cache = {"redis_flushall": {"name": "redis_flushall", "bridge": "redis", "endpoint": "/x"}}
+        d._tool_cache = {
+            "redis_flushall": {
+                "name": "redis_flushall",
+                "bridge": "redis",
+                "endpoint": "/x",
+                "required_permission": "mcp.manage",
+            }
+        }
 
         async def _fresh():
             return None
@@ -188,4 +201,4 @@ class TestTheEffectOnAdminOnlyTools:
         result = await self._dispatcher().dispatch("redis_flushall", {}, role=DEFAULT_AUTH_ROLE)
 
         assert result["success"] is False
-        assert "admin" in str(result["result"]).lower()
+        assert "permission" in str(result["result"]).lower()

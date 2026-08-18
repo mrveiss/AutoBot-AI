@@ -274,9 +274,10 @@ async def _emit_before_tool_execute(
     Issue #14420: ``tool_permission``/``user_role`` feed
     ``PermissionEnforcementExtension``. Callers that know the tool's
     declared permission requirement (e.g. from the MCP registry) and the
-    caller's RBAC role should pass both; callers that do not are unchanged
-    - the extension treats a missing ``tool_permission`` as an undeclared,
-    legacy tool and allows it through.
+    caller's RBAC role should pass both. #14523: a caller that omits
+    ``tool_permission`` is no longer treated as a legacy tool waved through —
+    the extension refuses a missing declaration outright, so every call site
+    reaching this function must resolve a real permission.
 
     Args:
         tool_name: Name of tool to execute

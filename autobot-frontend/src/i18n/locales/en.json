@@ -8287,7 +8287,16 @@
         "handoffNotApplicableHuman": "Handoff applies to agents only."
       },
       "processNodeLabel": "Process",
-      "processOpensWorkflow": "Opens the workflow this role runs"
+      "processOpensWorkflow": "Opens the workflow this role runs",
+      "attach": "Attach",
+      "attachRoleLabel": "Role",
+      "attachRolePlaceholder": "Choose a role…",
+      "attachWorkflowLabel": "Workflow id",
+      "attachWorkflowPlaceholder": "Workflow id",
+      "attachError": "Could not attach that workflow.",
+      "detachError": "Could not detach that workflow.",
+      "processDetach": "Detach {workflow} from {role}",
+      "attachRolesUnavailable": "Roles could not be loaded, so this list may be incomplete."
     },
     "executorRollup": {
       "title": "Executor Rollup",
