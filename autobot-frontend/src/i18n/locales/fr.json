@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "aucun rôle",
+      "unassignedHint": "Rattaché à ce département, mais aucun rôle n'explique sa présence"
     }
   },
   "code": {

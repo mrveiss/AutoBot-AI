@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "ללא תפקיד",
+      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת"
     }
   },
   "code": {
