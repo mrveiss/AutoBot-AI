@@ -10,20 +10,28 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+# A sweep replaced a hardcoded log directory with the SHELL expansion
+# ``${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}`` and left the f-string
+# prefix in place, so Python read ``{AUTOBOT_PROJECT_ROOT:-/opt/...}`` as a
+# replacement field naming an undefined AUTOBOT_PROJECT_ROOT -- the module could
+# not be imported at all (#14405). Resolve the same variable, with the same
+# unset-or-empty fallback ``:-`` gives, in Python.
+_PROJECT_ROOT = os.environ.get("AUTOBOT_PROJECT_ROOT") or "/opt/autobot/code_source"
+_RUN_STARTED_AT = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
     handlers=[
-        logging.FileHandler(
-            f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/report_processing_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        ),
+        logging.FileHandler(f"{_PROJECT_ROOT}/report_processing_{_RUN_STARTED_AT}.log"),
         logging.StreamHandler(),
     ],
 )
