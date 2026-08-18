@@ -46,6 +46,23 @@ The audit reports how many live tools it reached and fails below a floor,
 because a scan that finds zero tools passes having asserted nothing — the
 exact failure mode #14494 found in ``sequential_thinking_mcp``, whose one tool
 was declared in a source shape the original scanner never matched.
+
+#14523 adds two more checks this module is the natural home for, now that
+runtime resolution denies by default and genuinely relies on this coverage
+being complete:
+
+- PER-BRIDGE DISCOVERY FLOORS. ``DISCOVERY_FLOOR`` is one number over the sum
+  of every bridge's tool count. A bridge whose own scan drops from, say, 25
+  tools to 1 (the parser silently stopped matching that bridge's declaration
+  shape) is invisible to the sum as long as some other bridge's count happens
+  to be healthy — the combined total can still clear the floor. Each bridge in
+  ``PER_BRIDGE_DISCOVERY_FLOOR`` is checked against its own floor so a
+  per-bridge regression cannot hide inside a healthy aggregate.
+- NAME COLLISIONS. ``TOOL_PERMISSIONS`` is keyed by tool name alone, not
+  ``(bridge, tool)``. Two different bridges registering a tool with the same
+  name would have one silently resolve through the other's declared
+  permission. Zero collisions across the 104 tools these eleven bridges
+  register today; this is what would catch a twelfth bridge introducing one.
 """
 
 from __future__ import annotations
@@ -79,10 +96,33 @@ logger = logging.getLogger(__name__)
 #: Repo-relative path of this checker, quoted in the messages that ask for an edit.
 SELF_REL = "tools/lint/check_mcp_tool_permission_coverage.py"
 
-#: Floor for the sweep's own discovery. The eleven governed bridges registered
-#: 104 tools when this landed; a sweep that suddenly reaches a handful has
-#: broken, and a clean result from it would assert nothing.
+#: Floor for the sweep's own discovery, summed over every bridge. The eleven
+#: governed bridges registered 104 tools when this landed; a sweep that
+#: suddenly reaches a handful has broken, and a clean result from it would
+#: assert nothing. Kept as a coarse aggregate sanity net alongside the
+#: per-bridge floors below (#14523) — those catch a single bridge's own count
+#: dropping; this one is the cheap "did the sweep basically work at all" check.
 DISCOVERY_FLOOR = 90
+
+#: Per-bridge floor (#14523): each governed bridge's own tool count today, so
+#: one bridge silently dropping to near-zero cannot hide inside a total the
+#: other ten bridges keep healthy. A legitimate new tool only ever raises a
+#: bridge's count, so raising these is a one-line follow-up when that happens
+#: — a drop is always either a parser regression or a real removal, and either
+#: one deserves a look before it merges.
+PER_BRIDGE_DISCOVERY_FLOOR: dict[str, int] = {
+    "browser_mcp": 17,
+    "database_mcp": 6,
+    "filesystem_mcp": 13,
+    "git_mcp": 6,
+    "http_client_mcp": 6,
+    "knowledge_mcp": 12,
+    "prometheus_mcp": 6,
+    "redis_mcp": 25,
+    "sequential_thinking_mcp": 1,
+    "structured_thinking_mcp": 3,
+    "vnc_mcp": 9,
+}
 
 
 def undeclared_tools(base: pathlib.Path | None = None) -> dict[str, list[str]]:
@@ -98,6 +138,41 @@ def undeclared_tools(base: pathlib.Path | None = None) -> dict[str, list[str]]:
         if missing:
             problems[bridge] = missing
     return problems
+
+
+def bridge_discovery_gaps(base: pathlib.Path | None = None) -> list[str]:
+    """Known bridges whose own scan fell below their own floor (#14523).
+
+    Complements ``DISCOVERY_FLOOR``: that one checks the sum, this checks each
+    bridge in ``PER_BRIDGE_DISCOVERY_FLOOR`` individually, so one bridge's
+    count regressing cannot hide behind a healthy total.
+    """
+    found = all_declared_tools(base)
+    problems: list[str] = []
+    for bridge, floor in PER_BRIDGE_DISCOVERY_FLOOR.items():
+        count = len(found.get(bridge, set()))
+        if count < floor:
+            problems.append(
+                f"{bridge}: scan reached only {count} tool(s), below its own floor of "
+                f"{floor} — either the parser stopped matching this bridge's declaration "
+                "shape, or a real tool was removed without lowering PER_BRIDGE_DISCOVERY_FLOOR."
+            )
+    return problems
+
+
+def tool_name_collisions(base: pathlib.Path | None = None) -> dict[str, list[str]]:
+    """Tool names registered by more than one bridge (#14523).
+
+    ``TOOL_PERMISSIONS`` is keyed by tool name alone. Two bridges registering a
+    tool with the same name would have one silently resolve through the
+    other's declared permission — this is what would catch that before merge.
+    """
+    found = all_declared_tools(base)
+    name_to_bridges: dict[str, list[str]] = {}
+    for bridge, tools in found.items():
+        for tool in tools:
+            name_to_bridges.setdefault(tool, []).append(bridge)
+    return {name: sorted(bridges) for name, bridges in name_to_bridges.items() if len(bridges) > 1}
 
 
 def stale_declarations(base: pathlib.Path | None = None) -> list[str]:
@@ -146,15 +221,24 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
             f"(floor {DISCOVERY_FLOOR}) — the sweep broke, so a clean result below would "
             "assert nothing."
         )
+    problems.extend(bridge_discovery_gaps(base))
 
     undeclared = undeclared_tools(base)
     if undeclared:
         lines = "\n".join(f"  {bridge}: {', '.join(names)}" for bridge, names in sorted(undeclared.items()))
         problems.append(
             "tool(s) a live bridge registers with no exact entry in TOOL_PERMISSIONS "
-            "(autobot_shared/auth/mcp_tool_permissions.py) — each one silently inherits its "
-            f"bridge's read-level default (#14494):\n{lines}\n\nAdd an exact entry for each, at "
-            "the permission the tool actually needs."
+            "(autobot_shared/auth/mcp_tool_permissions.py) — each one is refused outright at "
+            f"runtime rather than inheriting a bridge default (#14523):\n{lines}\n\nAdd an exact "
+            "entry for each, at the permission the tool actually needs."
+        )
+
+    collisions = tool_name_collisions(base)
+    if collisions:
+        problems.append(
+            "tool name(s) registered by more than one bridge — TOOL_PERMISSIONS is keyed by "
+            f"name alone and would resolve one bridge's tool through the other's entry (#14523): "
+            f"{collisions}. Rename one of the tools, or key TOOL_PERMISSIONS by (bridge, tool)."
         )
 
     problems.extend(declared_ahead_of_time_problems(base))
