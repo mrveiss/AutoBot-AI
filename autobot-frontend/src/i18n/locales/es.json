@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Use las teclas de flecha para mover el foco entre los nodos. Presione Enter o Espacio para seleccionar el nodo enfocado. Presione Escape para anular la selección.",
+      "a11yInstructionsMove": "Mantenga presionada la tecla Control y presione una tecla de flecha para mover el nodo seleccionado."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8308,7 +8312,8 @@
       "attachError": "No se pudo adjuntar ese flujo.",
       "detachError": "No se pudo quitar ese flujo.",
       "processDetach": "Quitar {workflow} de {role}",
-      "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta."
+      "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta.",
+      "canvasGroupKind": "Grupo"
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
@@ -8551,7 +8556,9 @@
     },
     "orgPeople": {
       "unassigned": "sin rol",
-      "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia"
+      "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia",
+      "inactive": "Inactivo",
+      "inactiveHint": "Desactivado o eliminado: se sigue mostrando porque sus elementos de trabajo y su rol permanecen, pero no se le puede asignar trabajo nuevo."
     }
   },
   "code": {
