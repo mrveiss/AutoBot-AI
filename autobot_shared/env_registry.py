@@ -1683,6 +1683,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_RESTART_CHURN_WINDOW_S",
+        type=int,
+        default=600,
+        description=(
+            "Seconds a managed autobot/slm-agent service is reported as CURRENTLY churning after "
+            "its last observed n_restarts increase, for node-status degrade purposes. Must clear "
+            "health_collector's own 300s discovery-cache TTL by a comfortable margin — a shorter "
+            "window only fires on the beat that happens to land on a cache refresh "
+            "(services/reconciler.py, #14465)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_FAILURE_TAIL_CHARS",
         type=int,
         default=500,

@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from config import settings
 from models.database import (
     Deployment,
@@ -80,15 +80,45 @@ SERVICE_REMEDIATION_COOLDOWN = 120  # 2 minutes
 # Maximum service restart attempts before requiring human intervention
 MAX_SERVICE_RESTART_ATTEMPTS = 3
 
+# #14465 review: how long a service is reported as CHURNING after its last
+# observed `n_restarts` increase. Must be comfortably larger than health_
+# collector's own `discover_all_services()` cache TTL (300s,
+# `slm/agent/health_collector.py:_SERVICE_DISCOVERY_TTL`) -- against a 30s
+# heartbeat, 9 of every 10 beats otherwise carry a byte-identical cached
+# snapshot, so a bare "did it change since the immediately preceding
+# heartbeat" pulse only fires on the ~1 beat in 10 where the cache actually
+# refreshed (measured: 1 of 20 degraded across continuous churn, vs 20 of 20
+# on the absolute threshold this replaced -- the node flapped ONLINE/DEGRADED
+# every 5 minutes instead of staying DEGRADED). A level -- degrade while
+# `now - last_increase < window` -- reports whether the node is CURRENTLY
+# churning, which is what a status field means, instead of whether THIS
+# SPECIFIC sample happened to land on a cache refresh.
+#
+# Twice the discovery TTL: guarantees the window spans at least one full
+# cache-refresh cycle, so a service that is genuinely still churning re-arms
+# the window (a fresh increase observed within it) before the earlier arming
+# closes, keeping DEGRADED continuous throughout sustained churn. The
+# trade-off this makes explicit: a single benign restart (one OOM kill, one
+# dependency flap) now degrades the node for the whole window and stands a
+# real chance of triggering one ansible restart via remediation, where the
+# absolute threshold it replaced made that same trade unboundedly (forever,
+# once n_restarts crossed 3) rather than for one bounded window.
+RESTART_CHURN_WINDOW_S = env_int_clamped("AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=1)
+
 
 def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
     """Did a managed service's `n_restarts` rise since the last heartbeat?
 
-    Helper for ReconcilerService._update_existing_service (#14465). Compares
-    against the immediately preceding heartbeat's stored value, never an
-    absolute threshold -- `NRestarts` is lifetime-cumulative, so a static gate
-    on it can never self-heal (see `_calculate_node_status`'s docstring).
-    Module-level and pure so it stays testable without a DB or a class instance.
+    Helper for `_restart_churn_active`. Compares against the immediately
+    preceding heartbeat's stored value, never an absolute threshold --
+    `NRestarts` is lifetime-cumulative for as long as a unit keeps failing
+    (systemd resets it on the next clean manual start once a unit settles,
+    not merely with the passage of time), so a static gate on it can never
+    self-heal on its own (see `_calculate_node_status`'s docstring). A
+    decrease (e.g. that reset, or a reboot) is deliberately not itself a
+    signal here -- only a rise arms the churn window; `_update_existing_
+    service` still rewrites the stored baseline to the new, lower value
+    either way, so a later rise compares against the post-reset count.
     """
     if not is_managed_autobot_service(svc_data):
         return False
@@ -99,14 +129,54 @@ def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
     return current > previous
 
 
-def _service_health_degraded(extra_data: dict | None, restart_increase_detected: bool) -> bool:
+def _restart_churn_active(svc_data: dict, previous_extra: dict, now: datetime) -> tuple[bool, str | None]:
+    """Is a managed service CURRENTLY churning, and what timestamp to persist for it?
+
+    Helper for `ReconcilerService._update_existing_service` (#14465 review: a
+    pulse -- "did it change since the immediately preceding heartbeat" -- is
+    the wrong shape for a status field; see `RESTART_CHURN_WINDOW_S`). Tracks
+    the timestamp of the last OBSERVED increase and reports "churning" for
+    `RESTART_CHURN_WINDOW_S` afterward -- a level.
+
+    First-ever observation (no previous `n_restarts` to compare against, the
+    `_create_new_service` path) is honestly `(False, None)`: there is no rate
+    information yet on a service just discovered, or a row `_remove_stale_
+    services` deleted and the agent re-reported. The next observed increase
+    arms the window. Acceptable rather than a regression here specifically
+    because the signal is a level: a service that is GENUINELY still
+    churning will produce that next increase within one heartbeat interval,
+    not eventually -- unlike the absolute threshold this replaced, which had
+    no such excuse for missing an already-churning service on first sight.
+
+    Returns `(is_churning_now, last_increase_iso_to_persist)`.
+    """
+    if not is_managed_autobot_service(svc_data):
+        return False, previous_extra.get("n_restarts_increased_at")
+
+    last_increase_iso = previous_extra.get("n_restarts_increased_at")
+    if _restart_count_increased(svc_data, previous_extra):
+        last_increase_iso = now.isoformat()
+
+    if last_increase_iso is None:
+        return False, None
+
+    try:
+        last_increase_at = parse_utc_iso(last_increase_iso)
+    except (TypeError, ValueError):
+        return False, None
+
+    is_churning = (now - last_increase_at).total_seconds() < RESTART_CHURN_WINDOW_S
+    return is_churning, last_increase_iso
+
+
+def _service_health_degraded(extra_data: dict | None, restart_churn_active: bool) -> bool:
     """The two current-state service signals `_calculate_node_status` acts on.
 
-    Module-level and pure: `restart_increase_detected` is computed elsewhere
+    Module-level and pure: `restart_churn_active` is computed elsewhere
     (against the OLD `Service` row this function does not have); this only
     combines it with the current-heartbeat status scan.
     """
-    if restart_increase_detected:
+    if restart_churn_active:
         return True
     if not extra_data:
         return False
@@ -1230,8 +1300,8 @@ class ReconcilerService:
 
         Helper for update_node_heartbeat (Issue #665).
 
-        Returns whether a managed service's restart count increased since the
-        last heartbeat (#14465), for `_calculate_node_status` to act on.
+        Returns whether a managed service is CURRENTLY churning (#14465), for
+        `_calculate_node_status` to act on.
         """
         node.cpu_percent = cpu_percent
         node.memory_percent = memory_percent
@@ -1334,7 +1404,7 @@ class ReconcilerService:
         if not node:
             return None
 
-        restart_increase_detected = await self._update_node_metrics(
+        restart_churn_active = await self._update_node_metrics(
             db,
             node,
             cpu_percent,
@@ -1347,7 +1417,7 @@ class ReconcilerService:
 
         old_status = node.status
         new_status = self._calculate_node_status(
-            cpu_percent, memory_percent, disk_percent, extra_data, restart_increase_detected
+            cpu_percent, memory_percent, disk_percent, extra_data, restart_churn_active
         )
 
         await self._handle_node_status_change(
@@ -1375,12 +1445,13 @@ class ReconcilerService:
 
         Helper for _upsert_service. Ref: #1088.
 
-        Returns whether THIS heartbeat shows a managed service's restart
-        count higher than the value stored from the previous one (#14465).
-        Computed here, not in `_calculate_node_status`, because only this
-        call site holds the OLD `Service` row before it gets overwritten.
+        Returns whether this managed service is CURRENTLY churning -- its
+        restart count rose within the last `RESTART_CHURN_WINDOW_S` (#14465),
+        a level rather than a pulse. Computed here, not in
+        `_calculate_node_status`, because only this call site holds the OLD
+        `Service` row before it gets overwritten.
         """
-        restart_increased = _restart_count_increased(svc_data, service.extra_data or {})
+        is_churning, last_increase_iso = _restart_churn_active(svc_data, service.extra_data or {}, now)
 
         service.status = status
         service.active_state = svc_data.get("active_state")
@@ -1390,6 +1461,12 @@ class ReconcilerService:
         service.enabled = svc_data.get("enabled", False)
         service.description = svc_data.get("description")
         service.last_checked = now
+        # #14465 review: a genuine COPY, not `service.extra_data or {}` handed
+        # straight back. SQLAlchemy's Column(JSON) does not reliably flag a
+        # reassignment dirty when it is the SAME object mutated in place and
+        # written back to itself -- silently dropping every field this method
+        # sets, `n_restarts`/`n_restarts_increased_at` included. Load-bearing
+        # for the delta: do not "simplify" this back to the old form.
         existing_extra = dict(service.extra_data or {})
         if error_msg:
             existing_extra["error_message"] = error_msg
@@ -1398,8 +1475,9 @@ class ReconcilerService:
         existing_extra.update(engine_degraded_fields(svc_data))
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
+        existing_extra["n_restarts_increased_at"] = last_increase_iso
         service.extra_data = existing_extra
-        return restart_increased
+        return is_churning
 
     def _create_new_service(
         self,
@@ -1415,7 +1493,10 @@ class ReconcilerService:
         Helper for _upsert_service. Ref: #1088.
 
         Stores `n_restarts` so the NEXT heartbeat has something to compare
-        against (#14465) -- a first observation is never itself a delta.
+        against (#14465) -- a first observation genuinely has no rate
+        information yet, so `n_restarts_increased_at` is deliberately left
+        unset here rather than backfilled; the next observed increase arms
+        the churn window (see `_restart_churn_active`).
         """
         category = categorize_service(service_name)
         if "n_restarts" in svc_data:
@@ -1446,8 +1527,8 @@ class ReconcilerService:
 
         Helper for _sync_discovered_services. Ref: #1088.
 
-        Returns whether this service is managed and its restart count
-        increased since the last heartbeat (#14465).
+        Returns whether this service is managed and CURRENTLY churning --
+        see `_restart_churn_active` (#14465).
         """
         service_name = svc_data.get("name")
         if not service_name:
@@ -1519,24 +1600,23 @@ class ReconcilerService:
 
         Related to Issue #728.
 
-        Returns whether ANY managed service's restart count increased since
-        the last heartbeat (#14465).
+        Returns whether ANY managed service is CURRENTLY churning (#14465).
         """
         if not discovered_services:
             return False
 
         now = datetime.now(timezone.utc)
 
-        restart_increase_detected = False
+        any_churning = False
         for svc_data in discovered_services:
             if await self._upsert_service(db, node_id, svc_data, now):
-                restart_increase_detected = True
+                any_churning = True
 
         # Remove stale services no longer reported by the agent (#1018)
         await self._remove_stale_services(db, node_id, discovered_services)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
-        return restart_increase_detected
+        return any_churning
 
     def _calculate_node_status(
         self,
@@ -1544,42 +1624,49 @@ class ReconcilerService:
         memory_percent: float,
         disk_percent: float,
         extra_data: dict | None = None,
-        restart_increase_detected: bool = False,
+        restart_churn_active: bool = False,
     ) -> str:
         """Calculate node status based on health metrics and services.
 
         Issue #1604: Also degrade if any autobot service is crash-looping.
 
         #14465: this used to degrade on `n_restarts > 3` -- systemd's
-        `NRestarts` read as a static absolute threshold. `NRestarts` is
-        lifetime-cumulative (never resets except at reboot or
-        `reset-failed`), so a static gate on it can only ever climb: once any
-        managed service anywhere in the node's uptime crossed 3 restarts --
-        one redeploy, one operator restart, one long-resolved crash-loop --
-        every future heartbeat was forced DEGRADED regardless of current
-        state, with no path back to ONLINE.
+        `NRestarts` read as a static absolute threshold. `NRestarts` climbs
+        for as long as a unit keeps failing (systemd resets it on the next
+        clean manual start once a unit settles, not merely with the passage
+        of time), so a static gate on it can climb past 3 and never come back
+        down on its own: once any managed service anywhere in the node's
+        uptime crossed 3 restarts -- one redeploy, one operator restart, one
+        long-resolved crash-loop -- every future heartbeat was forced
+        DEGRADED regardless of current state, with no path back to ONLINE.
 
         Replaced with two signals over the SAME field, each answering a
         different question a static threshold cannot:
 
-        - `restart_increase_detected` (computed in `_update_existing_service`,
-          against the immediately preceding heartbeat's stored value, not an
-          absolute) catches a service CHURNING -- restarting faster than it
-          settles. `RestartSec` is typically far shorter than the heartbeat
-          interval, so most samples land on `"running"` between restarts; a
-          rising count between two consecutive heartbeats is what actually
-          proves instability there, regardless of what any single sample's
-          status says.
+        - `restart_churn_active` (computed in `_update_existing_service` via
+          `_restart_churn_active`) catches a service CHURNING -- restarting
+          faster than it settles. This is a LEVEL, not a pulse: it reports
+          "an increase was observed within the last `RESTART_CHURN_WINDOW_S`",
+          not "did it increase since the immediately-preceding heartbeat".
+          The latter was tried first and found to regress: health_collector's
+          own service-discovery sweep is cached for 300s
+          (`_SERVICE_DISCOVERY_TTL`) against a 30s heartbeat, so 9 of every 10
+          beats carry a byte-identical cached snapshot and a bare pulse only
+          fires on the ~1 in 10 that lands on a cache refresh -- measured, 1
+          of 20 beats degraded across continuous churn, and the node flapped
+          ONLINE/DEGRADED every 5 minutes instead of staying DEGRADED. See
+          `RESTART_CHURN_WINDOW_S` for the window and its own trade-offs.
         - `status == "failed"` (below) catches a service that has SETTLED --
           every unit template sets `StartLimitBurst`/`StartLimitIntervalSec`
           (#4090), so a real, ongoing crash loop eventually reaches systemd's
-          designed end state and stops restarting altogether. A pure delta
-          goes quiet the moment `NRestarts` stops climbing, so this half
-          would go blind exactly when the first stopped.
+          designed end state and stops restarting altogether. Neither a pulse
+          nor the level above catches this alone: both go quiet once
+          `NRestarts` stops climbing, exactly when a settled service needs
+          catching most.
 
         Both are scoped by `is_managed_autobot_service` (autobot*-prefixed
-        service names, or `slm-agent` itself, that are systemd-`enabled` on
-        THIS node) rather than `extra_data["services"]`
+        service names, or `slm-agent` itself, NOT explicitly disabled in
+        systemd on THIS node) rather than `extra_data["services"]`
         (`slm_services_to_monitor`) -- that operator-declared set is `[]` by
         role default, is `[]` on at least one real inventory node, and never
         contains `slm-agent`, the one unit remediation actually restarts, so
@@ -1589,7 +1676,7 @@ class ReconcilerService:
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
 
-        if _service_health_degraded(extra_data, restart_increase_detected):
+        if _service_health_degraded(extra_data, restart_churn_active):
             return NodeStatus.DEGRADED.value
 
         if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
