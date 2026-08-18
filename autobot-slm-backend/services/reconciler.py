@@ -1182,9 +1182,7 @@ class ReconcilerService:
                 "Restart of %s on %s timed out after %ds -- killed (#14524)", service_name, hostname, timeout_s
             )
             return False
-        logger.warning(
-            "Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error")
-        )
+        logger.warning("Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error"))
         return False
 
     async def _restart_service_via_ansible(
