@@ -18,9 +18,21 @@ autobot_shared/`` — the exact invocation ``code-quality.yml`` and
 ``security.yml`` run — with ``git ls-files`` as ground truth: the pre-fix bare
 entries ``temp``, ``logs``, ``reports``, ``archive`` and ``venv`` silently
 excluded 34 tracked production files that none of them named as a real
-directory anywhere in the repo. Re-including them surfaced 3 real bandit
-findings (B608 x1, B311 x2), both reviewed and suppressed at the call site
-with a specific-ID ``# nosec`` and a reason.
+*tracked* directory anywhere in the repo. Re-including them surfaced 3 real
+bandit findings (B608 x1, B311 x2), both reviewed and suppressed at the call
+site with a specific-ID ``# nosec`` and a reason.
+
+ABSENT FROM ``git ls-files`` IS NOT ABSENT. bandit walks the filesystem, not
+the git index, so a name can be dead weight for the git-tracked measurement
+above and still real on disk. Checked against the filesystem instead: ``venv``
+is a real, gitignored, ~26k-file dependency tree at the repo root, present the
+moment anyone runs ``bandit -c .bandit -r .`` locally instead of naming the
+three CI trees, and ``logs`` is a real, gitignored, ``.gitignore``-documented
+runtime log directory that exists **inside** ``autobot-backend/`` and
+``autobot-slm-backend/`` — the trees CI actually scans. Both are restored,
+anchored. ``temp``, ``reports`` and ``archive`` really are absent everywhere
+on disk (confirmed with ``find``, not just ``git ls-files``), so those three
+stay dropped.
 
 The invariant:
 
@@ -30,15 +42,25 @@ The invariant:
   the divergence from #14419's flake8 guard: ``venv`` passes a
   component-based check (no directory literally named ``venv`` holds tracked
   Python) but FAILS bandit's substring check (2 tracked files carry "venv"
-  only inside their filename, e.g. ``check_venv_producers.py``), so it must
-  be dropped here even though flake8 could keep it;
+  only inside their filename, e.g. ``check_venv_producers.py``), so a bare
+  ``venv`` cannot pass this guard even though flake8's component-based guard
+  could keep it bare — it is restored ANCHORED (``/venv/``) instead;
 * every other entry is anchored by wrapping it in ``/``, requiring a path
   separator on both sides. bandit never rewrites an entry the way flake8
   does (flake8 turns a separator-containing entry into an absolute path
   prefix naming one location) — a bandit entry stays a substring test, so
   ``/tests/`` still matches every ``tests/`` directory at any depth, which is
   the intent, while no longer matching ``repo_tests/`` or
-  ``run_unit_tests.py``.
+  ``run_unit_tests.py``. The same anchored form matches ``./venv/...`` when
+  bandit is invoked as ``-r .`` from the repo root — the realistic
+  local-footgun case ``/venv/`` guards against.
+
+A SECOND DIVERGENCE FROM #14419: an anchored entry here is not required to
+name a directory that currently exists, unlike flake8's
+``missing_anchored_targets`` check. ``/venv/`` and ``/logs/`` name gitignored,
+not-guaranteed-to-exist runtime directories — a CI runner or a fresh clone
+legitimately has neither, and failing the guard for that would be exactly the
+kind of false failure this fix is trying to prevent elsewhere.
 
 WHY THIS IS A SCRIPT AND NOT ONLY A TEST. The guard has to run in a check that
 can block a merge, and the direction of this failure is what makes that

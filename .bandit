@@ -24,11 +24,29 @@
 # Re-including them surfaced exactly 3 real findings (B608 x1, B311 x2), both
 # reviewed and suppressed at the call site with a specific-ID `# nosec` and a
 # reason — see `autobot-backend/llc/services/template.py` and
-# `autobot-backend/services/autoresearch/archive.py`. None of the five named
-# directories exists anywhere under the three scanned trees (confirmed with
-# `find`), so unlike `tests` below they were never anchoring anything —
-# dropped rather than anchored, the same treatment #14419 gave `.flake8`
-# entries naming no tracked directory.
+# `autobot-backend/services/autoresearch/archive.py`.
+#
+# NOT IN `git ls-files` IS NOT "ABSENT" — bandit walks the FILESYSTEM, not the
+# git index. First revision of this fix dropped `venv` and `logs` entirely on
+# exactly that confusion. Checked against the real filesystem instead (`find`,
+# not `git ls-files`): `./venv` is a real, gitignored, 26k-file dependency
+# tree at the repo root (present the moment anyone runs `bandit -c .bandit -r
+# .` locally instead of naming the three CI trees), and `./autobot-backend/
+# logs/` + `./autobot-slm-backend/logs/` are real, gitignored, `.gitignore`
+# line 161/399-documented runtime log directories that exist **inside** the
+# trees CI actually scans. Both are restored, anchored. `temp`, `reports` and
+# `archive` really are absent everywhere on disk — `.gitignore` documents
+# `temp/`, `reports/` and `reports/archives/` as conventional paths, but
+# `find` over the whole checkout (not just the git index) turns up no such
+# directory anywhere, inside or outside the three scanned trees — so those
+# three stay dropped.
+#
+# This is where bandit's fix diverges from #14419's flake8 precedent. There,
+# an entry naming no tracked directory really was inert, because flake8 was
+# invoked over the git-tracked trees it lints. bandit's `-r` walks whatever is
+# on disk, tracked or not — `.gitignore`-only content is exactly the kind of
+# thing `exclude_dirs` exists to prune, so "absent from git ls-files" cannot
+# be read as "absent"; only a filesystem check answers that.
 #
 # The rule this list now follows, enforced by
 # `repo_tests/bandit_exclude_anchoring_test.py`:
@@ -36,9 +54,11 @@
 #     artifact directory name that covers no tracked Python anywhere in the
 #     repo, checked with bandit's own substring test — not a component or
 #     basename test, because bandit does not use either. `venv` fails this
-#     check (2 tracked files carry "venv" only in their *filename*, e.g.
-#     `check_venv_producers.py`) even though no `venv/` directory exists in
-#     the scanned trees, so it is dropped rather than kept;
+#     check on its own (2 tracked files carry "venv" only in their
+#     *filename*, e.g. `check_venv_producers.py`), which is exactly why it is
+#     restored ANCHORED (`/venv/`) below rather than bare: anchoring is what
+#     lets the guard and this file agree that a real `venv/` directory is
+#     excluded while `check_venv_producers.py` is not;
 #   * every other entry is anchored by wrapping it in `/`, requiring a path
 #     separator on both sides. That is bandit's own anchoring form, distinct
 #     from flake8's: flake8 turns a separator-containing entry into an
@@ -46,7 +66,9 @@
 #     entry, so `/tests/` stays a substring test — it still matches every
 #     `tests/` directory at any depth (which is the intent: 786 files across
 #     dozens of `tests/` directories), while no longer matching `repo_tests/`
-#     or `run_unit_tests.py`, which the bare `tests` did.
+#     or `run_unit_tests.py`, which the bare `tests` did. The same anchored
+#     form matches `./venv/...` when bandit is invoked as `-r .` from the
+#     repo root, which is the realistic local-footgun case this guards.
 exclude_dirs:
   # Build, VCS and runtime artifact directories. Deliberately depth-agnostic:
   # none of them holds tracked Python anywhere in the repo (verified with
@@ -57,6 +79,13 @@ exclude_dirs:
   - node_modules
   - .venv
   - __pycache__
+  # Real, gitignored directories confirmed present on disk (not just absent
+  # from `git ls-files`) — a local dependency tree and runtime log dirs
+  # inside the actively-scanned trees. Anchored on both sides: bandit never
+  # rewrites an entry into a path prefix, so an unanchored `venv` would (and
+  # did) also match `check_venv_producers.py` through its filename alone.
+  - /venv/
+  - /logs/
   # Test trees, at any depth. Wrapped in `/` so this is a component match,
   # not the bare `tests` substring that also matched `repo_tests/` and any
   # `*tests*` filename.

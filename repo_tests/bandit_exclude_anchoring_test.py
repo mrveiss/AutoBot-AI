@@ -13,10 +13,22 @@ which at least compares against ``os.path.basename()``.
 
 Written bare, ``temp``, ``logs``, ``reports``, ``archive`` and ``venv`` silently
 excluded 34 tracked production files that none of them named as a real
-directory anywhere in the repo — every file under
+*tracked* directory anywhere in the repo — every file under
 ``autobot-backend/workflow_templates/`` among them, via ``temp``. Nothing
 reported them as unscanned; a planted hardcoded-password literal in one of
 those paths was silently skipped by the old config and caught by the new one.
+
+ABSENT FROM ``git ls-files`` IS NOT ABSENT: bandit walks the filesystem, not
+the git index. A first pass at this fix dropped ``venv`` and ``logs``
+entirely on that exact confusion. Checked against the real filesystem
+instead: ``venv`` is a real, gitignored, ~26k-file dependency tree at the
+repo root (walked in full by any local ``bandit -c .bandit -r .``), and
+``logs`` is a real, gitignored, ``.gitignore``-documented runtime log
+directory that exists inside ``autobot-backend/`` and
+``autobot-slm-backend/`` — the trees CI actually scans. Both are restored,
+anchored (``/venv/``, ``/logs/``). ``temp``, ``reports`` and ``archive`` are
+confirmed absent everywhere on disk (via ``find``, not ``git ls-files``), so
+those three stay dropped.
 
 The invariant enforced here:
 
@@ -26,12 +38,19 @@ The invariant enforced here:
   because bandit does not use one. This is the point of divergence from
   #14419's flake8 guard: ``venv`` passes a component check (no directory
   named ``venv`` holds tracked Python) but fails bandit's real substring
-  check (``check_venv_producers.py`` carries "venv" in its filename), so it
-  must be dropped here even though flake8 could keep it bare;
+  check (``check_venv_producers.py`` carries "venv" in its filename), so a
+  bare ``venv`` cannot pass this guard even though flake8's guard could keep
+  it bare — hence ``venv`` is restored ANCHORED, not bare;
 * every other entry must be wrapped in ``/`` on both sides — bandit never
   rewrites an entry into an absolute path the way flake8 does, so an entry
   with only a trailing ``/`` (``tests/``) is still an unbounded substring
   test and still matches ``repo_tests/foo.py``.
+
+A second divergence from #14419: an anchored entry is not required to name a
+directory that currently exists. ``/venv/`` and ``/logs/`` name gitignored
+runtime directories that a fresh clone or a CI runner legitimately does not
+have yet — the same "guard cannot demand something CI can never have" reason
+:func:`entries_covering_tracked_python` is not applied to anchored entries.
 
 The discrimination tests at the bottom run the checker against the config as
 it stood before #14489. A guard that has never been shown to reject anything
@@ -161,6 +180,44 @@ def test_the_workflow_templates_package_is_scanned(entries, tracked_py_files):
     bare = set(bare_entries(entries))
     for path in files:
         assert not any(entry in path for entry in bare), f"{path} is excluded by a bare entry"
+
+
+def test_venv_and_logs_are_restored_anchored_not_dropped(entries):
+    """Regression pin: a name real on disk must not be dropped as if absent.
+
+    ``git ls-files`` never sees ``venv/`` or ``logs/`` (both gitignored), but
+    both are real directories on disk — ``venv/`` a ~26k-file dependency tree
+    at the repo root, ``logs/`` a runtime log directory nested inside the
+    trees CI scans. Dropping either (as a first pass at this fix did) reads
+    as clean against the git-tracked measurement while a local
+    ``bandit -c .bandit -r .`` would walk all 26k dependency files. They must
+    be present, anchored on both sides — not bare, because bandit's substring
+    matcher still catches ``venv`` through a filename alone (see
+    ``test_venv_fails_the_bandit_matcher_even_though_no_venv_directory_exists``
+    below).
+    """
+    assert "/venv/" in entries, "venv must be excluded, anchored — it is a real, gitignored dependency tree"
+    assert "/logs/" in entries, "logs must be excluded, anchored — it is a real, gitignored runtime directory"
+    assert "venv" not in bare_entries(entries), "venv must not be bare: it still matches a filename substring"
+    assert "logs" not in bare_entries(entries), "logs must not be bare, for the same reason as venv"
+
+
+def test_guard_and_config_agree_on_venv_and_logs(entries, tracked_py_files):
+    """The guard and ``.bandit`` must not disagree about ``venv``/``logs``.
+
+    The guard fails a BARE ``venv``/``logs`` (they cover tracked Python via
+    bandit's substring rule) but has no opinion on the ANCHORED form used in
+    the live config — ``entries_covering_tracked_python`` only ever inspects
+    :func:`bare_entries`. Pinned explicitly so the two conditions this test
+    name promises are both checked, not just implied by the fixture parsing
+    the live file.
+    """
+    assert unanchored_source_entries(entries) == [], "an anchored venv/logs must not be flagged as unanchored"
+    covered = entries_covering_tracked_python(entries, tracked_py_files)
+    assert "venv" not in covered and "logs" not in covered, (
+        "entries_covering_tracked_python only inspects bare entries, so an anchored "
+        "/venv//logs/ correctly never appears here"
+    )
 
 
 # --------------------------------------------------------------------------
