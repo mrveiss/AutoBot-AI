@@ -110,9 +110,9 @@ def test_a_service_that_restarted_long_ago_but_is_now_running_is_not_degraded():
         ]
     }
 
-    assert _status(extra_data, restart_churn_active=False) == reconciler.NodeStatus.ONLINE.value, (
-        "a service with an old, non-advancing restart count pinned the node DEGRADED forever (#14465)"
-    )
+    assert (
+        _status(extra_data, restart_churn_active=False) == reconciler.NodeStatus.ONLINE.value
+    ), "a service with an old, non-advancing restart count pinned the node DEGRADED forever (#14465)"
 
 
 def test_a_settled_failed_service_still_degrades_with_no_active_churn():
@@ -221,9 +221,7 @@ def test_an_explicitly_disabled_unit_never_false_positives():
 def test_a_non_autobot_service_never_mattered_regardless_of_state():
     """Scope guard: only managed autobot/slm-agent units are in play."""
     extra_data = {
-        "discovered_services": [
-            {"name": "sshd", "status": "failed", "n_restarts": 50, "unit_file_state": "enabled"}
-        ]
+        "discovered_services": [{"name": "sshd", "status": "failed", "n_restarts": 50, "unit_file_state": "enabled"}]
     }
 
     assert _status(extra_data) == reconciler.NodeStatus.ONLINE.value
@@ -437,9 +435,9 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
 
     result = asyncio.run(service.update_node_heartbeat(session, node.node_id, _CPU, _MEM, _DISK, extra_data=this_beat))
 
-    assert result.status == reconciler.NodeStatus.DEGRADED.value, (
-        "n_restarts rising from 44 to 47 against the prior heartbeat's row did not degrade the node"
-    )
+    assert (
+        result.status == reconciler.NodeStatus.DEGRADED.value
+    ), "n_restarts rising from 44 to 47 against the prior heartbeat's row did not degrade the node"
     assert seeded_service.extra_data.get("n_restarts") == 47, "the new count must be persisted for the NEXT heartbeat"
     assert seeded_service.extra_data.get("n_restarts_increased_at") is not None, (
         "the churn-arming timestamp must be persisted so the NEXT heartbeat can still report churning "
