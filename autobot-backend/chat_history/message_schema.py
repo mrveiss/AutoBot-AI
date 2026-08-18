@@ -72,11 +72,6 @@ _RESPONDER_ROLE = "assistant"
 _CONVERSATION_ROLES = frozenset({_CALLER_ROLE, _RESPONDER_ROLE})
 
 
-def _valid_text_value(value: Any) -> Any:
-    """The value if it is a shape a message body can take, else ``None``."""
-    return value if isinstance(value, (str, list)) else None
-
-
 def message_role(message: Dict[str, Any], default: str = _UNKNOWN_ROLE) -> str:
     """The speaker, from either schema.
 
@@ -126,10 +121,20 @@ def message_text(message: Dict[str, Any]) -> str:
     Returns ``""`` when the message carries no text under either key, so callers
     can filter on emptiness without having to know which schema they were handed.
 
-    **An empty part-list falls through to the other key** (#14335). An earlier
-    version of this function did not, on the reasoning that an empty list is a
-    well-formed *"this message has no text parts"* and so nothing needs looking
-    up elsewhere. That reasoning is wrong for a reader whose entire purpose is
+    **A ``content`` that yields no text falls through to the other key**
+    (#14335) — an empty part-list, and equally a list whose parts are all
+    non-text, such as an image-only multimodal message. The fallback is decided
+    on the *resolved* body, not on the raw value, which is what makes those two
+    cases behave alike; an earlier version tested the raw value and so fell
+    through only when ``content`` was absent or an empty string.
+
+    The image-only list is the case that matters in practice — a bare
+    ``content: []`` is barely a real shape, while a message carrying an image
+    and a caption is one a provider can genuinely emit.
+
+    The reasoning that was reversed here: that an empty list is a well-formed
+    *"this message has no text parts"* and so nothing needs looking up
+    elsewhere. That reasoning is wrong for a reader whose entire purpose is
     that either key may hold the body: an empty ``content`` has told us nothing,
     while ``text`` may still hold everything.
 
@@ -141,9 +146,14 @@ def message_text(message: Dict[str, Any]) -> str:
     consumer for which returning ``""`` over an available body is the better
     answer.
 
-    No writer emits ``content: []`` beside a populated ``text`` today, so this
-    changes nothing live; it removes a divergence from
-    ``context_overflow._message_text``, which this function now backs.
+    No writer emits either shape beside a populated ``text`` today — swept in
+    review across the persisted-message writers, the summary builder and the
+    workflow batch builder — so nothing live changes. What it removes is a
+    divergence from ``context_overflow._message_text``, which already fell
+    through and which this function now backs. The behavioural delta therefore
+    lands only on this function's *direct* callers (``as_llm_messages``, the
+    chat context builders, the shared-link viewer), not on the overflow token
+    path, which was already on these semantics.
     """
     return _resolved_body(message.get("content")) or _resolved_body(message.get("text"))
 

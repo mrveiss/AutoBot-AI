@@ -110,6 +110,31 @@ class TestTheApiShapeStillWorks:
         """Falling through must not invent content when there is none to find."""
         assert message_text({"content": []}) == ""
 
+    def test_an_image_only_part_list_falls_back_to_the_caption(self):
+        """The case that actually occurs, and the one the #14335 reasoning
+        originally failed to name.
+
+        A bare `content: []` is barely a real shape. A message carrying an image
+        part and a caption under the other key is one a provider can genuinely
+        emit — and it behaves the same way here only because the fallback is
+        decided on the *resolved* body rather than the raw value. Testing the
+        raw value, as the reverted version did, would return "" here and lose
+        the caption.
+        """
+        msg = {"content": [{"type": "image_url", "image_url": {"url": "data:..."}}], "text": "the caption"}
+
+        assert message_text(msg) == "the caption"
+
+    def test_a_mixed_list_keeps_its_text_and_does_NOT_fall_back(self):
+        """The boundary on the other side: once a list yields any text, that is
+        the body, and a populated `text` must not override it."""
+        msg = {
+            "content": [{"type": "image_url", "image_url": {}}, {"type": "text", "text": "real body"}],
+            "text": "stale",
+        }
+
+        assert message_text(msg) == "real body"
+
     @pytest.mark.parametrize("invalid", [0, False, {"a": 1}], ids=["zero", "false", "dict"])
     def test_an_invalid_content_type_is_treated_as_absent(self, invalid):
         """Neither `str()`-ing it nor trusting it.
