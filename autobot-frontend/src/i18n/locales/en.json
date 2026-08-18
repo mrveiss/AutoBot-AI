@@ -8302,7 +8302,15 @@
       "detachError": "Could not detach that workflow.",
       "processDetach": "Detach {workflow} from {role}",
       "attachRolesUnavailable": "Roles could not be loaded, so this list may be incomplete.",
-      "canvasGroupKind": "Group"
+      "canvasGroupKind": "Group",
+      "toolNodeLabel": "Tool",
+      "attachToolNameLabel": "Tool name",
+      "attachToolNamePlaceholder": "Tool name",
+      "toolAttachError": "Could not attach that tool.",
+      "toolDetachError": "Could not detach that tool.",
+      "toolDetach": "Detach {tool} from {role}",
+      "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
+      "canvasNoToolsDefined": "No tools are attached to any role in this company."
     },
     "executorRollup": {
       "title": "Executor Rollup",
