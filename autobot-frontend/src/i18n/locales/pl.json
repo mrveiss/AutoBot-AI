@@ -9170,6 +9170,23 @@
     "errorGrant": "Nie udało się przyznać uprawnienia.",
     "errorRevoke": "Nie udało się odebrać uprawnienia.",
     "errorAttach": "Nie udało się dołączyć.",
-    "errorDetach": "Nie udało się odłączyć."
+    "errorDetach": "Nie udało się odłączyć.",
+    "rate": "Stawka godzinowa",
+    "rateLabel": "Kwota",
+    "currencyLabel": "Waluta",
+    "saveRate": "Zapisz stawkę",
+    "clearRate": "Wyczyść",
+    "noRate": "Brak stawki — kroków tej roli nie można jeszcze wycenić.",
+    "stepCosts": "Koszty kroków",
+    "minutesLabel": "Minuty na uruchomienie",
+    "runsLabel": "Uruchomienia miesięcznie",
+    "saveStepCost": "Zapisz",
+    "perRun": "na uruchomienie",
+    "perMonth": "miesięcznie",
+    "costNeedsRate": "Ustaw stawkę godzinową dla tej roli, aby wycenić ten krok.",
+    "costNeedsInputs": "Bez wyceny — zapisz, ile trwa ten krok i jak często się wykonuje.",
+    "errorSetRate": "Nie udało się zapisać stawki.",
+    "errorClearRate": "Nie udało się wyczyścić stawki.",
+    "errorSetStepCost": "Nie udało się zapisać danych kosztowych kroku."
   }
 }

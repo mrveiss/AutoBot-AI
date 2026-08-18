@@ -9170,6 +9170,23 @@
     "errorGrant": "Neizdevās piešķirt atļauju.",
     "errorRevoke": "Neizdevās atsaukt atļauju.",
     "errorAttach": "Neizdevās pievienot.",
-    "errorDetach": "Neizdevās noņemt."
+    "errorDetach": "Neizdevās noņemt.",
+    "rate": "Stundas likme",
+    "rateLabel": "Summa",
+    "currencyLabel": "Valūta",
+    "saveRate": "Saglabāt likmi",
+    "clearRate": "Notīrīt",
+    "noRate": "Likme nav iestatīta — šīs lomas soļiem vēl nevar aprēķināt izmaksas.",
+    "stepCosts": "Soļu izmaksas",
+    "minutesLabel": "Minūtes vienā izpildē",
+    "runsLabel": "Izpildes mēnesī",
+    "saveStepCost": "Saglabāt",
+    "perRun": "par izpildi",
+    "perMonth": "mēnesī",
+    "costNeedsRate": "Iestatiet šīs lomas stundas likmi, lai aprēķinātu šī soļa izmaksas.",
+    "costNeedsInputs": "Nav aprēķināts — norādiet, cik ilgs ir šis solis un cik bieži tas notiek.",
+    "errorSetRate": "Likmi neizdevās saglabāt.",
+    "errorClearRate": "Likmi neizdevās notīrīt.",
+    "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
   }
 }

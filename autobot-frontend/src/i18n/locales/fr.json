@@ -9170,6 +9170,23 @@
     "errorGrant": "Impossible d'accorder cette permission.",
     "errorRevoke": "Impossible de révoquer cette permission.",
     "errorAttach": "Association impossible.",
-    "errorDetach": "Détachement impossible."
+    "errorDetach": "Détachement impossible.",
+    "rate": "Taux horaire",
+    "rateLabel": "Montant",
+    "currencyLabel": "Devise",
+    "saveRate": "Enregistrer le taux",
+    "clearRate": "Effacer",
+    "noRate": "Aucun taux défini — les étapes de ce rôle ne peuvent pas encore être chiffrées.",
+    "stepCosts": "Coûts des étapes",
+    "minutesLabel": "Minutes par exécution",
+    "runsLabel": "Exécutions par mois",
+    "saveStepCost": "Enregistrer",
+    "perRun": "par exécution",
+    "perMonth": "par mois",
+    "costNeedsRate": "Définissez un taux horaire pour ce rôle afin de chiffrer cette étape.",
+    "costNeedsInputs": "Non chiffrée — indiquez la durée de cette étape et sa fréquence.",
+    "errorSetRate": "Le taux n'a pas pu être enregistré.",
+    "errorClearRate": "Le taux n'a pas pu être effacé.",
+    "errorSetStepCost": "Les données de coût de l'étape n'ont pas pu être enregistrées."
   }
 }

@@ -9170,6 +9170,23 @@
     "errorGrant": "Berechtigung konnte nicht gewährt werden.",
     "errorRevoke": "Berechtigung konnte nicht entzogen werden.",
     "errorAttach": "Zuordnung fehlgeschlagen.",
-    "errorDetach": "Entfernen fehlgeschlagen."
+    "errorDetach": "Entfernen fehlgeschlagen.",
+    "rate": "Stundensatz",
+    "rateLabel": "Betrag",
+    "currencyLabel": "Währung",
+    "saveRate": "Satz speichern",
+    "clearRate": "Löschen",
+    "noRate": "Kein Satz festgelegt — die Schritte dieser Rolle können noch nicht kalkuliert werden.",
+    "stepCosts": "Schrittkosten",
+    "minutesLabel": "Minuten pro Lauf",
+    "runsLabel": "Läufe pro Monat",
+    "saveStepCost": "Speichern",
+    "perRun": "pro Lauf",
+    "perMonth": "pro Monat",
+    "costNeedsRate": "Legen Sie einen Stundensatz für diese Rolle fest, um diesen Schritt zu kalkulieren.",
+    "costNeedsInputs": "Nicht kalkuliert — erfassen Sie Dauer und Häufigkeit dieses Schritts.",
+    "errorSetRate": "Der Satz konnte nicht gespeichert werden.",
+    "errorClearRate": "Der Satz konnte nicht gelöscht werden.",
+    "errorSetStepCost": "Die Kostenangaben konnten nicht gespeichert werden."
   }
 }

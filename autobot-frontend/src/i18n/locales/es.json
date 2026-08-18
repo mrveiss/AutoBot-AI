@@ -9170,6 +9170,23 @@
     "errorGrant": "No se pudo conceder el permiso.",
     "errorRevoke": "No se pudo revocar el permiso.",
     "errorAttach": "No se pudo adjuntar.",
-    "errorDetach": "No se pudo quitar."
+    "errorDetach": "No se pudo quitar.",
+    "rate": "Tarifa por hora",
+    "rateLabel": "Importe",
+    "currencyLabel": "Moneda",
+    "saveRate": "Guardar tarifa",
+    "clearRate": "Borrar",
+    "noRate": "Sin tarifa — los pasos de esta función aún no pueden costearse.",
+    "stepCosts": "Costes de los pasos",
+    "minutesLabel": "Minutos por ejecución",
+    "runsLabel": "Ejecuciones al mes",
+    "saveStepCost": "Guardar",
+    "perRun": "por ejecución",
+    "perMonth": "al mes",
+    "costNeedsRate": "Defina una tarifa por hora para esta función para costear este paso.",
+    "costNeedsInputs": "Sin coste — registre cuánto dura este paso y con qué frecuencia se ejecuta.",
+    "errorSetRate": "No se pudo guardar la tarifa.",
+    "errorClearRate": "No se pudo borrar la tarifa.",
+    "errorSetStepCost": "No se pudieron guardar los datos de coste del paso."
   }
 }
