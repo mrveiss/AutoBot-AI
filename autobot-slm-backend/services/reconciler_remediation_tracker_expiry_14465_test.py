@@ -337,9 +337,9 @@ def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
     tracker = service._remediation_tracker[node.node_id]
-    assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS and tracker.get("exhausted"), (
-        f"escalation failed even at the expiry floor -- got {tracker}"
-    )
+    assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS and tracker.get(
+        "exhausted"
+    ), f"escalation failed even at the expiry floor -- got {tracker}"
 
 
 def test_a_node_that_verifies_every_time_never_accumulates_by_design():
@@ -542,9 +542,9 @@ def test_ordinary_heartbeat_processing_never_touches_the_remediation_tracker():
             service.update_node_heartbeat(_HeartbeatSession(node), node.node_id, 0.0, 10.0, 10.0, extra_data={})
         )
 
-    assert service._remediation_tracker[node.node_id]["count"] == 1, (
-        "ordinary heartbeat processing must never touch the remediation tracker"
-    )
+    assert (
+        service._remediation_tracker[node.node_id]["count"] == 1
+    ), "ordinary heartbeat processing must never touch the remediation tracker"
 
 
 def test_a_non_exhausted_tracker_forgives_only_after_the_expiry_window():
