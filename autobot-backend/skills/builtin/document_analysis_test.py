@@ -258,23 +258,124 @@ async def test_plain_text_documents_are_supported(skill, tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def _stub_summarizer(monkeypatch, *, summary="a concise summary", raises=None, result=None):
+    """Install a fake SummarizationAgent and capture what it was asked for."""
+    import sys
+    import types
+
+    seen = {}
+
+    class _Agent:
+        async def handle_summarize(self, request):
+            seen["payload"] = dict(request.payload)
+            seen["action"] = request.action
+            if raises:
+                raise raises
+            return result if result is not None else {"summary": summary}
+
+    base = types.ModuleType("agents.base_agent")
+
+    class _AgentRequest:
+        def __init__(self, request_id, agent_type, action, payload, **kw):
+            self.request_id, self.agent_type = request_id, agent_type
+            self.action, self.payload = action, payload
+
+    base.AgentRequest = _AgentRequest
+
+    agent_mod = types.ModuleType("agents.summarization_agent")
+    agent_mod.get_summarization_agent = lambda: _Agent()
+
+    pkg = sys.modules.get("agents") or types.ModuleType("agents")
+    monkeypatch.setitem(sys.modules, "agents", pkg)
+    monkeypatch.setitem(sys.modules, "agents.base_agent", base)
+    monkeypatch.setitem(sys.modules, "agents.summarization_agent", agent_mod)
+    return seen
+
+
 @pytest.mark.asyncio
-async def test_summarize_reports_that_it_is_not_backed(skill, tmp_path):
+async def test_summarize_returns_a_real_summary(skill, tmp_path, monkeypatch):
+    _stub_summarizer(monkeypatch, summary="the document in brief")
     path = _write_pdf(tmp_path, ["document body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert result["success"] is True
+    assert result["summary"] == "the document in brief"
+
+
+@pytest.mark.asyncio
+async def test_summarize_sends_the_extracted_text_not_the_path(skill, tmp_path, monkeypatch):
+    """The backend must receive document content, not a filename."""
+    seen = _stub_summarizer(monkeypatch)
+    path = _write_pdf(tmp_path, ["distinctive body text"])
+
+    await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert "distinctive body text" in seen["payload"]["text"]
+    assert seen["action"] == "summarize"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_length", ["short", "long"])
+async def test_max_length_reaches_the_backend_and_the_result(skill, tmp_path, monkeypatch, max_length):
+    """AC: max_length must change the output observably, not just be accepted."""
+    seen = _stub_summarizer(monkeypatch)
+    path = _write_pdf(tmp_path, ["body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path), "max_length": max_length})
+
+    assert seen["payload"]["max_length"] == max_length
+    assert result["max_length"] == max_length
+
+
+@pytest.mark.asyncio
+async def test_an_unavailable_backend_fails_rather_than_returning_the_text_as_a_summary(skill, tmp_path, monkeypatch):
+    """The #13897 invariant: never success:True for work that did not happen."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "agents.summarization_agent", None)
+    path = _write_pdf(tmp_path, ["document body"])
+
     result = await skill.execute("summarize_document", {"file_path": str(path)})
 
     assert result["success"] is False
-    assert "not wired" in result["error"]
-    # ...but the extraction it *did* do is handed back rather than discarded.
+    assert "summary" not in result, "returning raw text under a 'summary' key would be a lie"
     assert "document body" in result["extracted_text"]
 
 
 @pytest.mark.asyncio
-async def test_summarize_does_not_pass_extracted_text_off_as_a_summary(skill, tmp_path):
-    path = _write_pdf(tmp_path, ["document body"])
+async def test_a_raising_backend_is_reported_not_swallowed(skill, tmp_path, monkeypatch):
+    _stub_summarizer(monkeypatch, raises=RuntimeError("model timeout"))
+    path = _write_pdf(tmp_path, ["body"])
+
     result = await skill.execute("summarize_document", {"file_path": str(path)})
 
-    assert "summary" not in result, "returning the raw text under a 'summary' key would be a lie"
+    assert result["success"] is False
+    assert "model timeout" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_summary_is_a_failure_not_an_empty_success(skill, tmp_path, monkeypatch):
+    """A backend that returns nothing has not summarized anything."""
+    _stub_summarizer(monkeypatch, result={"summary": "   "})
+    path = _write_pdf(tmp_path, ["body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert result["success"] is False
+    assert "no text" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", [{"response": "via response"}, {"result": "via result"}, "a bare string"])
+async def test_summary_is_read_from_the_shapes_the_agent_may_return(skill, tmp_path, monkeypatch, shape):
+    _stub_summarizer(monkeypatch, result=shape)
+    path = _write_pdf(tmp_path, ["body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert result["success"] is True
+    assert result["summary"]
 
 
 # ---------------------------------------------------------------------------

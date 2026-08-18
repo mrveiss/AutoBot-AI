@@ -20,6 +20,7 @@ detection and page structure rather than reimplementing either.
 """
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -236,23 +237,86 @@ class DocumentAnalysisSkill(BaseSkill):
     async def _summarize(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Summarize document content.
 
-        Extraction is real; summarization is not backed yet. Rather than return
-        the extracted text dressed up as a summary — or a fabricated success —
-        this reports exactly what it did and did not do, and hands back the text
-        so the caller can summarize it itself.
+        Extraction is real and so is the summary now (#14258): the text goes to
+        SummarizationAgent, which builds the prompt and calls
+        ``services.llm_service`` — the same backend skill_router already reaches.
+        Going through the agent rather than the service directly keeps prompt
+        construction (style, length) in one place instead of a second copy here.
+
+        When the backend is unreachable this returns ``success: False`` with the
+        extracted text, never a summary that is really just the document. The
+        #13897 invariant holds: no handler reports success for work that did not
+        happen.
         """
         extracted, error = await self._load(params)
         if error:
             return error
 
+        max_length = params.get("max_length", "medium")
+        summary, failure = await self._summarize_text(extracted.text, max_length, params.get("style", "concise"))
+        if failure:
+            return {
+                "success": False,
+                "error": failure,
+                "file_path": params["file_path"],
+                "max_length": max_length,
+                "extracted_text": extracted.text,
+                "char_count": extracted.char_count,
+            }
+
         return {
-            "success": False,
-            "error": (
-                "Summarization is not wired to a backend yet (#14258). The document was "
-                "extracted successfully and its text is returned for the caller to summarize."
-            ),
+            "success": True,
             "file_path": params["file_path"],
-            "max_length": params.get("max_length", 500),
-            "extracted_text": extracted.text,
+            "max_length": max_length,
+            "summary": summary,
             "char_count": extracted.char_count,
         }
+
+    async def _summarize_text(self, text: str, max_length: Any, style: str):
+        """Return ``(summary, None)`` or ``(None, reason)``.
+
+        The agent is imported at call time and guarded: a skill must not fail to
+        load because an optional backend is absent, and the layer waiver below is
+        narrower if it is not evaluated at module import.
+        """
+        try:
+            # The published skill surface has no summarizer. skill_router.py
+            # reaches services.llm_service the same way; SummarizationAgent sits
+            # on top of that identical service, so this is one route to one
+            # backend rather than a second path to the same thing (#14258).
+            from agents.base_agent import AgentRequest  # nosemgrep: extension-no-core-internals
+            from agents.summarization_agent import get_summarization_agent  # nosemgrep: extension-no-core-internals
+        except ImportError as exc:
+            logger.warning("Summarization backend unavailable: %s", exc)
+            return None, f"Summarization backend is unavailable: {exc}"
+
+        request = AgentRequest(
+            request_id=f"document-analysis-{uuid.uuid4()}",
+            agent_type="summarization",
+            action="summarize",
+            payload={"text": text, "max_length": max_length, "style": style},
+        )
+
+        try:
+            result = await get_summarization_agent().handle_summarize(request)
+        except Exception as exc:
+            logger.warning("Summarization failed: %s", exc)
+            return None, f"Summarization failed: {exc}"
+
+        summary = self._summary_text(result)
+        if not summary:
+            # A backend that returned nothing is a failure, not an empty summary.
+            return None, "The summarization backend returned no text"
+        return summary, None
+
+    @staticmethod
+    def _summary_text(result: Any) -> str:
+        """Pull the summary out of the agent result, whatever shape it used."""
+        if isinstance(result, str):
+            return result.strip()
+        if isinstance(result, dict):
+            for key in ("summary", "response", "result", "text", "content"):
+                value = result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return ""
