@@ -13,6 +13,8 @@ import sys
 import os
 from pathlib import Path
 
+from autobot_shared.paths import project_root
+
 # Add project root to Python path
 sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 
@@ -29,7 +31,11 @@ async def test_documentation_browser_logic():
         import hashlib
         import mimetypes
 
-        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+        # #14517: was a shell placeholder in a plain string literal, so every scan
+        # below walked a directory that cannot exist and reported zero docs as a
+        # success. Named ``root`` rather than ``project_root`` because assigning to
+        # the imported name would make it a local and raise UnboundLocalError.
+        root = project_root()
 
         documentation_files = []
         total_size = 0
@@ -107,7 +113,7 @@ async def test_documentation_browser_logic():
                 for item in dir_path.iterdir():
                     if item.is_file() and item.suffix.lower() in doc_extensions:
                         try:
-                            file_info = _process_doc_file(item, project_root, category_prefix)
+                            file_info = _process_doc_file(item, root, category_prefix)
                             files.append(file_info)
                             total_size += file_info["size_bytes"]
                             total_docs += 1
@@ -139,7 +145,7 @@ async def test_documentation_browser_logic():
         all_files = []
 
         for file_path, title, category in root_files:
-            full_path = project_root / file_path
+            full_path = root / file_path
             if full_path.exists() and full_path.is_file():
                 try:
                     stat = full_path.stat()
@@ -174,7 +180,7 @@ async def test_documentation_browser_logic():
 
         # Scan docs directory
         print("\n📁 Scanning docs directory...")
-        docs_path = project_root / "docs"
+        docs_path = root / "docs"
         if docs_path.exists():
             docs_files = scan_directory(docs_path, "docs")
             all_files.extend(docs_files)
@@ -208,7 +214,7 @@ async def test_documentation_browser_logic():
         # Test reading a specific file
         print("\n📖 Testing file reading:")
         test_file = "CLAUDE.md"
-        full_path = project_root / test_file
+        full_path = root / test_file
         if full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
                 content = f.read()

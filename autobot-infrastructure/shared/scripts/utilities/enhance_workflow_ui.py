@@ -11,6 +11,14 @@ NOTE: Long methods (create_workflow_notification_component, create_workflow_prog
 are ACCEPTABLE EXCEPTIONS per Issue #490 - template generators with low cyclomatic complexity.
 """
 
+from autobot_shared.paths import project_root
+
+#: Where the generated single-file components land, relative to the project root.
+#: #14517: both write targets were shell placeholders in plain string literals, so
+#: every run raised FileNotFoundError on ``open`` -- the generator has never once
+#: produced a component.
+_COMPONENTS_REL = "autobot-vue/src/components"
+
 
 def create_workflow_notification_component():
     """Create a workflow notification component for real-time updates."""
@@ -767,7 +775,7 @@ def main():
     notification_component = create_workflow_notification_component()
 
     with open(
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowNotifications.vue",
+        project_root() / _COMPONENTS_REL / "WorkflowNotifications.vue",
         "w",
         encoding="utf-8",
     ) as f:
@@ -783,7 +791,7 @@ def main():
     progress_widget = create_workflow_progress_widget()
 
     with open(
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowProgressWidget.vue",
+        project_root() / _COMPONENTS_REL / "WorkflowProgressWidget.vue",
         "w",
         encoding="utf-8",
     ) as f:

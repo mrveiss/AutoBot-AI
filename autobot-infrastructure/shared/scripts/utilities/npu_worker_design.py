@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.paths import project_root
+
 
 class TaskType(Enum):
     """Types of tasks suitable for NPU processing."""
@@ -324,8 +326,10 @@ if __name__ == "__main__":
     architecture.print_summary()
 
     # Generate full architecture file
+    # #14517: was a shell placeholder in a plain string literal, so this open()
+    # raised FileNotFoundError and the architecture file was never written.
     with open(
-        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/NPU_WORKER_ARCHITECTURE.json",
+        project_root() / "NPU_WORKER_ARCHITECTURE.json",
         "w",
         encoding="utf-8",
     ) as f:

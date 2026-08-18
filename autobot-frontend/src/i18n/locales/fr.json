@@ -9137,6 +9137,23 @@
       "agent": "Agent",
       "user": "Utilisateur",
       "contact": "Contact"
-    }
+    },
+    "grant": "Accorder",
+    "revoke": "Révoquer",
+    "attach": "Associer",
+    "detach": "Détacher",
+    "assign": "Affecter",
+    "endTenure": "Terminer l'affectation",
+    "holderIdPlaceholder": "ID du titulaire",
+    "permissionPlaceholder": "ex. knowledge.read",
+    "workflowPlaceholder": "ID du workflow",
+    "toolPlaceholder": "Nom de l'outil",
+    "credentialPlaceholder": "ID du secret",
+    "errorAssign": "Impossible d'affecter ce titulaire.",
+    "errorEndTenure": "Impossible de terminer l'affectation.",
+    "errorGrant": "Impossible d'accorder cette permission.",
+    "errorRevoke": "Impossible de révoquer cette permission.",
+    "errorAttach": "Association impossible.",
+    "errorDetach": "Détachement impossible."
   }
 }
