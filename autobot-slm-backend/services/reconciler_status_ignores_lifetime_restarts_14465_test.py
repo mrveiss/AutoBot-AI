@@ -25,6 +25,16 @@ deploys a real ``autobot-vnc.service`` unit on such nodes, so the crash-loop bra
 in `_calculate_node_status` is reachable for this node shape without requiring any
 DB read this repo cannot make -- the bug is provable from the function alone.
 
+Review of an earlier version of this fix caught a second, independent gap: every
+unit template sets `StartLimitBurst`/`StartLimitIntervalSec` (#4090), so a real,
+ongoing crash loop reaches systemd's designed end state, `failed` -- and
+`_map_status_from_states` never maps to `crash-loop` for that state. Dropping the
+`n_restarts` branch without a `status == "failed"` signal would go blind to a
+service that has actually given up. `monitored_autobot_service_failed`
+(services/service_extra_data.py) restores that signal, narrowed to
+`extra_data["services"]` (the operator's own `slm_services_to_monitor` set) per
+#1709, so a non-primary autobot unit outside that set cannot false-positive it.
+
 The module is loaded from disk, not imported, because the package conftest stubs
 `services.*` and a plain `import services.reconciler` yields a MagicMock that
 would satisfy every check here while exercising nothing (see
@@ -33,9 +43,11 @@ would satisfy every check here while exercising nothing (see
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import inspect
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -98,7 +110,7 @@ def test_a_presently_crash_looping_service_still_degrades_the_node():
     """Issue #1604's actual intent must survive this fix.
 
     `status == "crash-loop"` reflects systemd's `activating`+`auto-restart`
-    sub-state -- true only while the unit is presently churning -- and is kept
+    sub-state -- true only while a unit is presently churning -- and is kept
     unchanged by this fix.
     """
     extra_data = {"discovered_services": [{"name": "autobot-vnc", "status": "crash-loop", "n_restarts": 1}]}
@@ -127,21 +139,81 @@ def test_high_metrics_still_win_over_a_clean_service_list():
     )
 
 
+def test_a_failed_monitored_autobot_service_still_degrades_the_node():
+    """Review item 3: `n_restarts` was not the only signal dropped by mistake.
+
+    A monitored unit that exhausted systemd's own `StartLimitBurst` (#4090) sits
+    at `status == "failed"`, never `"crash-loop"` -- `_map_status_from_states`
+    has no `failed` -> `crash-loop` mapping. Without this check, a genuinely
+    dead monitored service would report ONLINE forever.
+    """
+    extra_data = {
+        "services": {"autobot-vnc": {"active": False, "status": "failed"}},
+        "discovered_services": [{"name": "autobot-vnc", "status": "failed", "n_restarts": 6}],
+    }
+
+    assert _status(extra_data) == reconciler.NodeStatus.DEGRADED.value, (
+        "a monitored autobot service that has given up (status: failed) did not degrade the node"
+    )
+
+
+def test_a_failed_but_unmonitored_autobot_service_does_not_degrade_the_node():
+    """#1709 scope guard, restated for the restored signal.
+
+    `autobot-vnc` failing OUTSIDE the operator's `slm_services_to_monitor` set
+    (absent from `extra_data["services"]`, present only in the full
+    `discovered_services` sweep) must not false-positive -- the exact false
+    positive #1709 narrowed `_has_failed_autobot_service` to fix.
+    """
+    extra_data = {
+        "services": {},
+        "discovered_services": [{"name": "autobot-vnc", "status": "failed", "n_restarts": 1}],
+    }
+
+    assert _status(extra_data) == reconciler.NodeStatus.ONLINE.value
+
+
+@contextmanager
+def _patched_settings(unhealthy_threshold: int = 3, heartbeat_interval: int = 30):
+    """Give `reconciler.settings` real, comparable numbers for this module only.
+
+    `config.settings` is a `MagicMock` under the root conftest's stubs, and
+    `int >= MagicMock()` raises `TypeError` -- `_track_online_streak`'s dwell
+    comparison needs a genuine int. Patches this loaded module's own `settings`
+    name (not the shared `sys.modules["config"]` singleton other independently
+    -loaded reconciler instances also read), and restores it, so this cannot
+    leak into another test file's assertions.
+    """
+    original = reconciler.settings
+    reconciler.settings = SimpleNamespace(
+        unhealthy_threshold=unhealthy_threshold, heartbeat_interval=heartbeat_interval
+    )
+    try:
+        yield
+    finally:
+        reconciler.settings = original
+
+
 class _FakeSession:
     """Minimal async session for driving the real `update_node_heartbeat`.
 
-    Only what this test's single node/heartbeat needs: one `Node` row returned
-    on the first `select`, no-op `add`/`commit`/`refresh`. `extra_data` in this
-    test carries no "discovered_services"/"services" payload for `_sync_
-    discovered_services` to act on, so no further `Service` selects happen --
-    keeping this fake to exactly what the code path under test executes.
+    The FIRST `execute()` is `_find_node_by_id_or_hostname`'s node lookup.
+    Every later `execute()` -- `_sync_discovered_services`'s per-service upsert
+    and stale-service lookups, reached whenever `extra_data` carries a
+    `discovered_services`/`services` payload -- must resolve to "nothing
+    found" so those helpers take their create/no-op branches instead of
+    mistaking the `Node` fixture for a `Service` row.
     """
 
     def __init__(self, node):
         self._node = node
+        self._reads = 0
 
     async def execute(self, _query):
-        return SimpleNamespace(scalar_one_or_none=lambda: self._node, scalars=lambda: SimpleNamespace(all=lambda: []))
+        self._reads += 1
+        if self._reads == 1:
+            return SimpleNamespace(scalar_one_or_none=lambda: self._node)
+        return SimpleNamespace(scalar_one_or_none=lambda: None, scalars=lambda: SimpleNamespace(all=lambda: []))
 
     def add(self, _obj):
         pass
@@ -173,27 +245,34 @@ def test_a_healthy_heartbeat_against_a_degraded_node_transitions_it_online():
     """AC: drive a healthy heartbeat against a degraded node, assert the transition.
 
     Not `_calculate_node_status` in isolation -- the full `update_node_heartbeat`
-    path, matching the issue's own acceptance criterion verbatim. The service
-    list is empty on THIS heartbeat (the resolved crash-loop is history, not
-    something the current agent report still carries), which is exactly what
-    lets it recompute ONLINE.
+    path, matching the issue's own acceptance criterion verbatim. Review item 4:
+    an empty `extra_data` short-circuits the crash-loop check before it can ever
+    run, so it passes unchanged on base and proves nothing about this fix. This
+    heartbeat carries a REAL `discovered_services` payload reproducing the
+    issue's evidence -- a service with a high lifetime restart count that is now
+    stably running -- so this must fail against the pre-fix branch (n_restarts
+    > 3 -> DEGRADED) and pass only against the fix (status == "running" ->
+    no degrade signal fires).
     """
-    import asyncio
-
     node = _degraded_node_with_resolved_crash_loop()
     session = _FakeSession(node)
-    service = reconciler.ReconcilerService()
+    healthy_but_formerly_restarted = {
+        "discovered_services": [{"name": "autobot-vnc", "status": "running", "n_restarts": 5}],
+        "services": {"autobot-vnc": {"active": True, "status": "active"}},
+    }
 
-    result = asyncio.run(
-        service.update_node_heartbeat(
-            session,
-            node.node_id,
-            _CPU,
-            _MEM,
-            _DISK,
-            extra_data={},
+    with _patched_settings():
+        service = reconciler.ReconcilerService()
+        result = asyncio.run(
+            service.update_node_heartbeat(
+                session,
+                node.node_id,
+                _CPU,
+                _MEM,
+                _DISK,
+                extra_data=healthy_but_formerly_restarted,
+            )
         )
-    )
 
     assert result is not None
     assert result.status == reconciler.NodeStatus.ONLINE.value, (
