@@ -2,21 +2,34 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Every MCP tool declares a permission that exists (#13228).
+"""Every MCP tool declares a permission that exists (#13228, #14494).
 
 The defect was a seven-entry Redis substring blocklist governing all eleven
 bridges, default-allow. The risk in replacing it is a *different* silent failure:
 a declaration that names a permission the enum does not have, or a bridge whose
 tools nobody declared. Both are checked here, offline — the bridge sources are
 parsed rather than a live registry queried, so this runs in CI without a backend.
+
+#14494 retired the guard that used to sit at the bottom of this file
+(``_MUTATING``, a hand-written verb tuple matched against a tool's name). It
+caught an under-grant only when a tool's name happened to contain the right
+verb — ``select`` did not, and inherited MCP_BROWSER_READ despite changing a
+dropdown's value (#14469) — so the coverage it looked like it provided was an
+illusion the moment a bridge added a tool named something else. The guard that
+replaces it, ``tools/lint/check_mcp_tool_permission_coverage.py`` (a required
+check, because the pytest copy of a guard like this gates nothing — #14353),
+requires every live tool to be an *exact* key in ``TOOL_PERMISSIONS``: no verb
+list to dodge, only a missing entry.
 """
 
+import importlib.util
 import pathlib
-import re
 
 import pytest
 
+from autobot_shared.auth.mcp_bridge_scan import bridge_files, bridge_name, declared_tools
 from autobot_shared.auth.mcp_tool_permissions import (
+    _DECLARED_AHEAD_OF_TIME,
     BRIDGE_DEFAULT_PERMISSIONS,
     TOOL_PERMISSIONS,
     required_permission,
@@ -24,36 +37,20 @@ from autobot_shared.auth.mcp_tool_permissions import (
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
 _BRIDGE_DIR = pathlib.Path(__file__).resolve().parents[2] / "autobot-backend" / "api"
-
-# Tool names declared as `("name", "description", {...})` tuples, or `name="..."`.
-_TUPLE_TOOL = re.compile(r'^\s{4}\(\s*\n\s{8}"([a-z0-9_]+)"', re.M)
-_KWARG_TOOL = re.compile(r'name="([a-z0-9_]+)"')
+_CHECKER_PATH = pathlib.Path(__file__).resolve().parents[2] / "tools" / "lint" / "check_mcp_tool_permission_coverage.py"
 
 
-def _bridge_files():
-    """Every bridge's tool-declaring source, module- or package-shaped.
+def _load_coverage_checker():
+    """Import the required-check script by path — tools/lint is not a package.
 
-    #13228: globbing only ``*_mcp.py`` silently omitted ``redis_mcp``, which is a
-    package (``api/redis_mcp/tools.py``). The omission was invisible precisely
-    because these guards iterate over whatever this function returns — a bridge it
-    cannot see is a bridge every coverage test below reports as fine. All 25 redis
-    tools were undeclared and no test said so.
+    The decision that blocks a merge lives in that script, not here. Restating
+    the comparison would give the guard two definitions that could drift; this
+    runs the exact copy CI executes.
     """
-    modules = [p for p in _BRIDGE_DIR.glob("*_mcp.py") if p.stem != "manual_mcp"]
-    packages = [p / "tools.py" for p in _BRIDGE_DIR.glob("*_mcp") if p.is_dir() and (p / "tools.py").is_file()]
-    return sorted(modules + packages)
-
-
-def _bridge_name(path: pathlib.Path) -> str:
-    """The bridge a source file belongs to (``redis_mcp/tools.py`` → ``redis_mcp``)."""
-    return path.parent.name if path.stem == "tools" else path.stem
-
-
-def _declared_tools(path: pathlib.Path) -> set:
-    """Tool names a bridge module declares, minus the bridge's own name."""
-    src = path.read_text(encoding="utf-8")
-    names = set(_TUPLE_TOOL.findall(src)) or set(_KWARG_TOOL.findall(src))
-    return {n for n in names if n != _bridge_name(path)}
+    spec = importlib.util.spec_from_file_location("_mcp_coverage_checker", _CHECKER_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 # ------------------------------------------------------- the declarations
@@ -83,7 +80,7 @@ def test_every_declared_permission_is_granted_to_some_role():
 
 def test_every_bridge_has_a_default():
     """A bridge with no default leaves its whole tool surface undeclared."""
-    bridges = {_bridge_name(p) for p in _bridge_files()}
+    bridges = {bridge_name(p) for p in bridge_files()}
 
     assert not (
         bridges - set(BRIDGE_DEFAULT_PERMISSIONS)
@@ -92,52 +89,25 @@ def test_every_bridge_has_a_default():
 
 def test_the_bridge_sources_are_actually_being_read():
     """Guard the guard: a parser that finds nothing would pass everything."""
-    found = {_bridge_name(p): _declared_tools(p) for p in _bridge_files()}
+    found = {bridge_name(p): declared_tools(p) for p in bridge_files()}
     total = sum(len(v) for v in found.values())
 
     assert total > 50, f"only {total} tool names extracted — the parser stopped matching: {found}"
 
 
-# Verbs that mean a tool changes state, sends a body, or drives input. A tool
-# named with one of these must carry an EXPLICIT entry — inheriting its bridge's
-# read-level baseline is the silent under-grant this issue exists to prevent.
-_MUTATING = (
-    "write",
-    "delete",
-    "remove",
-    "create",
-    "edit",
-    "move",
-    "execute",
-    "set",
-    "post",
-    "put",
-    "patch",
-    "click",
-    "type",
-    "fill",
-    "hover",
-    "evaluate",
-    "flush",
-    "crawl",
-    "add_",
-)
+def test_every_live_tool_carries_an_explicit_declaration():
+    """#14494: the actual required-check guard, run against the real tree.
 
-
-@pytest.mark.parametrize("bridge", [_bridge_name(p) for p in _bridge_files()])
-def test_state_changing_tools_carry_an_explicit_declaration(bridge):
-    """A mutating tool must not silently inherit a read-level bridge default.
-
-    Checking `required_permission(...) is not None` would be tautological — every
-    known bridge has a default, so nothing on one can resolve to None. The real
-    risk is a write tool quietly inheriting read, which is what this catches.
+    No verb list — a mutating tool named something the retired guard never
+    matched (this pass found `intercept_api` and `desktop_special_key`) can no
+    longer inherit its bridge's read-level default silently: an undeclared tool
+    is a failure here, not a fallback.
     """
-    path = next(p for p in _bridge_files() if _bridge_name(p) == bridge)
-    inheriting = [
-        t for t in sorted(_declared_tools(path)) if any(verb in t for verb in _MUTATING) and t not in TOOL_PERMISSIONS
-    ]
+    checker = _load_coverage_checker()
+    reached, problems = checker.audit()
 
-    assert not inheriting, f"{bridge}: mutating tools inheriting a read default: {inheriting}"
+    assert reached >= checker.DISCOVERY_FLOOR, "the bridge scan reached too few tools — see the checker's own floor"
+    assert not problems, "\n\n".join(problems)
 
 
 # -------------------------------------------------------- resolution rules
@@ -155,7 +125,10 @@ def test_an_unknown_bridge_resolves_to_none():
 
 
 def test_an_undeclared_tool_on_a_known_bridge_inherits_the_least_privilege():
-    """A tool added tomorrow under-grants rather than over-grants."""
+    """A tool `required_permission` has never heard of under-grants rather than
+    over-grants. `tools/lint/check_mcp_tool_permission_coverage.py` is what stops
+    a REAL tool from staying in this state (#14494) — this pins the fallback
+    itself, which stays in place as defense-in-depth."""
     assert required_permission("some_future_tool", "browser_mcp") == Permission.MCP_BROWSER_READ
 
 
@@ -170,17 +143,19 @@ def test_the_old_blocklist_tools_still_require_management():
         assert required_permission(name, "redis_mcp") == Permission.MCP_MANAGE, name
 
 
-def test_the_blocklist_patterns_that_name_no_tool_are_still_declared():
-    """``flushall`` and friends match nothing the redis bridge registers today.
+@pytest.mark.parametrize("name,bridge", sorted(_DECLARED_AHEAD_OF_TIME.items()))
+def test_declared_ahead_of_time_tools_still_name_no_live_tool(name, bridge):
+    """Every ``_DECLARED_AHEAD_OF_TIME`` entry matches nothing a real bridge
+    registers today — ``flushall`` and friends match nothing ``redis_mcp``
+    registers, and ``delete_file`` matches nothing ``filesystem_mcp`` registers.
+    Kept declared anyway: if one of these ships, it arrives at its intended
+    permission instead of arriving undeclared. If this fails, the tool now
+    exists — fold it into a real-name test above with its own reasoned entry,
+    the way #14469's `select` and this pass's `intercept_api` were."""
+    path = next(p for p in bridge_files() if bridge_name(p) == bridge)
+    registered = declared_tools(path)
 
-    So the old gate protected nothing. Kept declared anyway: if one is ever added,
-    it arrives admin-only rather than arriving undeclared.
-    """
-    registered = _declared_tools(_BRIDGE_DIR / "redis_mcp" / "tools.py")
-
-    for name in ("config_set", "config_rewrite", "debug", "flushdb", "flushall"):
-        assert name not in registered, f"{name} now exists — fold it into the real-name test above"
-        assert required_permission(name, "redis_mcp") == Permission.MCP_MANAGE, name
+    assert name not in registered, f"{name} now exists on {bridge} — it needs its own declaration, not this exemption"
 
 
 def test_browser_evaluate_is_not_a_read():
@@ -190,10 +165,32 @@ def test_browser_evaluate_is_not_a_read():
 
 def test_browser_select_is_not_a_read():
     """#14469: `select` changes a dropdown's value, same as click/fill — its name
-    carries none of `_MUTATING`'s verbs, so it silently inherited the bridge's
-    read-level default until declared here explicitly."""
+    carried none of the retired name-matching guard's verbs, so it silently
+    inherited the bridge's read-level default until declared here explicitly."""
     assert required_permission("select", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
     assert required_permission("select_index", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
+
+
+def test_browser_intercept_api_is_not_a_read():
+    """#14494: found declared under a name (`intercept_requests`) the bridge does
+    not register — the real tool is `intercept_api`, which injects an
+    interceptor script into the page (`page.add_init_script`), the same category
+    of action as `evaluate`. It had never actually been declared."""
+    assert required_permission("intercept_api", "browser_mcp") == Permission.MCP_BROWSER_CONTROL
+    assert "intercept_requests" not in TOOL_PERMISSIONS
+
+
+def test_desktop_special_key_is_not_a_read():
+    """#14494: sends key combinations (Return, Escape, ctrl+c, alt+tab …) to the
+    desktop — the same category as desktop_keyboard_type — and was undeclared."""
+    assert required_permission("desktop_special_key", "vnc_mcp") == Permission.MCP_DESKTOP_CONTROL
+
+
+def test_knowledge_redis_vector_operations_is_not_a_read():
+    """#14494: `operation` can be "flush", "reindex" or "backup", not only "info"
+    — a tool whose worst case empties the vector store, undeclared and therefore
+    reachable with mere KNOWLEDGE_READ."""
+    assert required_permission("redis_vector_operations", "knowledge_mcp") == Permission.KNOWLEDGE_MANAGE
 
 
 def test_readonly_holds_no_control_grant():
