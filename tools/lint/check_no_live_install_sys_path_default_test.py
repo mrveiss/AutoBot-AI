@@ -11,6 +11,7 @@ The banned literal is assembled from fragments (mirroring
 
 from __future__ import annotations
 
+import logging
 import pathlib
 import textwrap
 
@@ -109,7 +110,12 @@ def test_a_live_install_default_outside_a_sys_path_call_is_not_reported(tmp_path
     assert guard.live_install_default_sites(path) == []
 
 
-def test_main_reports_a_nonzero_exit_and_the_resolver_hint(tmp_path, capsys):
+def test_main_reports_a_nonzero_exit_and_the_resolver_hint(tmp_path, caplog):
+    """Uses ``caplog`` (root-logger propagation), not ``capsys`` -- ``main()``'s own
+    ``StreamHandler`` binds to ``sys.stderr`` only on its first call in the process
+    and stays bound to that reference across every later test in the same pytest
+    session, so a second ``capsys``-based assertion would silently capture nothing.
+    """
     path = _write(
         tmp_path,
         "debug/tool.py",
@@ -121,13 +127,14 @@ def test_main_reports_a_nonzero_exit_and_the_resolver_hint(tmp_path, capsys):
         ''',
     )
 
-    exit_code = guard.main(["check_no_live_install_sys_path_default.py", str(path)])
+    with caplog.at_level(logging.ERROR):
+        exit_code = guard.main(["check_no_live_install_sys_path_default.py", str(path)])
 
     assert exit_code == 1
-    assert guard.RESOLVER in capsys.readouterr().err
+    assert guard.RESOLVER in caplog.text
 
 
-def test_main_is_clean_over_the_fixed_files(tmp_path, capsys):
+def test_main_is_clean_over_the_fixed_files(tmp_path, caplog):
     path = _write(
         tmp_path,
         "debug/tool.py",
@@ -140,8 +147,11 @@ def test_main_is_clean_over_the_fixed_files(tmp_path, capsys):
         """,
     )
 
-    assert guard.main(["check_no_live_install_sys_path_default.py", str(path)]) == 0
-    assert capsys.readouterr().err == ""
+    with caplog.at_level(logging.ERROR):
+        exit_code = guard.main(["check_no_live_install_sys_path_default.py", str(path)])
+
+    assert exit_code == 0
+    assert caplog.text == ""
 
 
 def test_the_guard_does_not_need_an_exemption_for_itself():
@@ -150,17 +160,20 @@ def test_the_guard_does_not_need_an_exemption_for_itself():
     assert guard.live_install_default_sites(self_path) == []
 
 
+def test_this_test_file_does_not_need_an_exemption_either():
+    """The f-string fixtures above never execute a real sys.path call -- they are
+    string arguments to ``_write()``, so no ``ast.Call`` to ``sys.path.insert``/
+    ``.append`` exists in this file's own AST for the guard to find.
+    """
+    this_file = pathlib.Path(__file__)
+    assert guard.live_install_default_sites(this_file) == []
+
+
 def test_the_live_repository_has_no_remaining_sites():
     """#14544 swept all 18; nothing should be left to find at HEAD."""
     repo_root = pathlib.Path(__file__).resolve().parents[2]
     total = 0
     for path in guard.iter_python_files([], repo_root):
-        try:
-            rel = str(path.resolve().relative_to(repo_root)).replace("\\", "/")
-        except ValueError:
-            rel = str(path)
-        if rel in guard.ALLOWLIST:
-            continue
         try:
             total += len(guard.live_install_default_sites(path))
         except (SyntaxError, UnicodeDecodeError, OSError):

@@ -16,19 +16,45 @@ Both Docker images fail this contract out of the box: `COPY autobot_shared/
 /app/autobot_shared/` ships the package with no `.git` and no `.env`, so
 `smoke-test`/`hardened-smoke-test` failed at import with exactly this raise
 (#14575 review). Three native systemd/env deployments have the identical gap
-for the identical reason — `autobot-slm-backend.service.j2`,
-`slm-agent.service.j2` (agent.py imports `ssot_config.get_config` directly)
-and `npu-worker.env.j2` (`npu_integration.py` imports `ssot_constants`, which
-imports `ssot_config`) each set `PYTHONPATH` for `autobot_shared` without
-ever setting `AUTOBOT_PROJECT_ROOT`/`AUTOBOT_BASE_DIR`. Before #14544 this
-was invisible because the guess happened to be `/opt/autobot`, which is
-where all three actually run — a wrong-but-plausible default working by
-coincidence is exactly the failure mode #14544 exists to close.
+for the identical reason:
+
+- `autobot-slm-backend.service.j2` -- sets `PYTHONPATH` for `autobot_shared`
+  but never `AUTOBOT_PROJECT_ROOT`/`AUTOBOT_BASE_DIR`.
+- `slm-agent.service.j2` -- `agent.py` imports `autobot_shared.ssot_config
+  .get_config` directly; same gap.
+- `ai-stack.env.j2` -- `ai_api_server.py` imports `agents.base_agent`, which
+  imports `autobot_shared.ssot_config.config` directly; same gap, and
+  *topology-dependent* on top of it: whether `project_root()`'s walk finds a
+  `.env` for this unit depends on which `backend_install_dir` a given deploy
+  playbook sets, so it silently worked on one topology and would have
+  silently failed on another (#14575 review, round 2).
+
+Before #14544 this was invisible because the guess happened to be
+`/opt/autobot`, which is where all three actually run (or, for the ai-stack
+case, ran by accident on only one of two shipped topologies) — a
+wrong-but-plausible default working by coincidence is exactly the failure
+mode #14544 exists to close.
+
+`npu-worker.env.j2` was considered and deliberately **not** touched:
+`npu-worker.py.j2`, the script this unit actually runs, imports no
+first-party code at all -- not `autobot_shared`, not anything that imports
+it. `core/npu_integration.py` (which does import `autobot_shared
+.ssot_constants`, transitively pulling in `ssot_config`) belongs to a
+different, unwired module under `autobot-npu-worker/core/` that this unit
+never executes -- confirmed by grepping every importer of it, which is only
+its own test file. An earlier version of this fix declared the variable here
+anyway, citing that file; the citation was wrong, so the declaration was
+reverted rather than kept on a false premise (#14575 review, round 2).
 
 This is a static text check against the deployment sources themselves, not a
 container build or a live systemd unit — sufficient to catch a future edit
 that quietly drops the variable, which is the point: the next person editing
-one of these files cannot remove the line without failing here first.
+one of these files cannot remove the line without failing here first. It
+runs under `python-suite`, which `.github/filters/python-paths.yml` gates on
+`**/*.py` by default; the five files this test names are added to that
+filter explicitly, or a PR touching only one of them (no `.py` change) would
+report `python-suite` green without ever running this test (#14575 review,
+round 2).
 """
 
 from __future__ import annotations
@@ -55,8 +81,8 @@ _DECLARATIONS: tuple[tuple[str, str], ...] = (
         "AUTOBOT_PROJECT_ROOT={{ slm_agent_dir | dirname }}",
     ),
     (
-        "autobot-slm-backend/ansible/roles/npu-worker/templates/npu-worker.env.j2",
-        "AUTOBOT_PROJECT_ROOT={{ npu_install_dir | dirname }}",
+        "autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2",
+        "AUTOBOT_PROJECT_ROOT={{ ai_install_dir | dirname }}",
     ),
 )
 

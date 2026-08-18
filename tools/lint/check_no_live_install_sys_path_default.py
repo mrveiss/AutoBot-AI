@@ -23,7 +23,11 @@ This checker inspects the AST of every ``sys.path.insert(...)`` /
 ``os.environ.get``/``os.getenv`` whose default string contains the live
 install path, it is the same defect regrowing. There is no exemption list —
 none of the 18 fixed sites needed to keep the pattern, and a fresh site
-copying it forward is never legitimate.
+copying it forward is never legitimate. Nothing in this checker's own source
+needs one either: the pattern is detected structurally (a real ``ast.Call``
+to ``sys.path.insert``/``.append``), so the prose description of it in this
+docstring, and the string-literal test fixtures in the sibling test file
+that never execute a real ``sys.path`` call, do not parse as one.
 
 Exit code:
   0 — clean
@@ -33,6 +37,7 @@ Exit code:
 from __future__ import annotations
 
 import ast
+import logging
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -42,6 +47,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import iter_python_files  # noqa: E402
 
+# Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
+# lint job, and `autobot_shared.logging_manager` would drag config loading into
+# that path. Same trade as `tools/lint/check_no_shell_placeholder_paths.py`.
+logger = logging.getLogger(__name__)
+
 #: The live-install root, assembled from fragments so this checker's own
 #: source (and its docstring above) does not trip the pattern it detects.
 LIVE_INSTALL_ROOT = "/" + "opt/autobot"
@@ -49,12 +59,18 @@ LIVE_INSTALL_ROOT = "/" + "opt/autobot"
 #: The canonical replacement every finding is told to use.
 RESOLVER = "autobot_shared.paths.project_root()"
 
-ALLOWLIST: frozenset[str] = frozenset(
-    {
-        "tools/lint/check_no_live_install_sys_path_default.py",
-        "tools/lint/check_no_live_install_sys_path_default_test.py",
-    }
-)
+
+def _configure_logging() -> None:
+    """Attach a stderr handler so findings actually reach the developer.
+
+    Run as a bare script the module logger has no handler, and logging's
+    last-resort path drops anything below WARNING.
+    """
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 def _is_sys_path_mutation(func: ast.AST) -> bool:
@@ -110,6 +126,7 @@ def live_install_default_sites(path: Path) -> List[Tuple[int, str]]:
 
 
 def main(argv: List[str]) -> int:
+    _configure_logging()
     repo_root = Path(__file__).resolve().parents[2]
     total = 0
     for path in iter_python_files(argv[1:], repo_root):
@@ -117,24 +134,25 @@ def main(argv: List[str]) -> int:
             rel = str(path.resolve().relative_to(repo_root)).replace("\\", "/")
         except ValueError:
             rel = str(path)
-        if rel in ALLOWLIST:
-            continue
         try:
             hits = live_install_default_sites(path)
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         for line_no, text in hits:
-            print(
-                f"[no-live-install-sys-path-default] {rel}:{line_no}: {text} — "
-                f"defaults to the live deployed install; use {RESOLVER} instead (#14544)",
-                file=sys.stderr,
+            logger.error(
+                "[no-live-install-sys-path-default] %s:%s: %s — "
+                "defaults to the live deployed install; use %s instead (#14544)",
+                rel,
+                line_no,
+                text,
+                RESOLVER,
             )
             total += 1
     if total:
-        print(
-            f"\n[no-live-install-sys-path-default] {total} sys.path bootstrap(s) "
+        logger.error(
+            "\n[no-live-install-sys-path-default] %d sys.path bootstrap(s) "
             "still default to the live install. See per-line fix suggestions above.",
-            file=sys.stderr,
+            total,
         )
         return 1
     return 0
