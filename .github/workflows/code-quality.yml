@@ -32,7 +32,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 
 permissions:
@@ -353,6 +353,18 @@ jobs:
           echo "⚠️ Unused imports/variables detected"
           exit 1
         }
+
+    - name: Audit the .bandit exclude_dirs anchoring (#14489)
+      run: |
+        # bandit tests each exclude_dirs entry as a raw SUBSTRING of the full
+        # path, with no path-component boundary -- broader than #14419's flake8
+        # defect. A bare entry like `temp` or `archive` silently excluded 34
+        # tracked production files (all of autobot-backend/workflow_templates/
+        # among them) that named no real directory anywhere in the repo. This
+        # has to run in a REQUIRED check because of the direction it fails in:
+        # re-adding a bare name excludes MORE files, so bandit reports FEWER
+        # findings and this job goes greener.
+        python3 tools/lint/check_bandit_exclude_anchoring.py --audit-excludes
 
     - name: Security check with bandit
       run: |

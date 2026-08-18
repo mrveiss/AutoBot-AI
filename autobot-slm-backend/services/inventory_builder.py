@@ -242,9 +242,12 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
         # activate roles via node_roles, not group membership alone. Group-based
         # activation silently skips roles whose inventory group isn't the one
         # role_*_active checks (e.g. tts-worker -> npu_worker group, but
-        # role_tts_worker_active checks node_roles only; browser-service ->
-        # browser_automation group, but role_browser_active checks browser/
-        # browser_worker) — so optional assigned roles never deploy.
+        # role_tts_worker_active checks node_roles only) — so optional assigned
+        # roles never deploy.
+        # #14460: browser-service used to be the other example here, mapped to
+        # a `browser_automation` group while role_browser_active reads
+        # browser/browser_worker. That mismatch is fixed at the source in
+        # ROLE_ANSIBLE_GROUPS rather than left for this stamp to paper over.
         "node_roles": _union_roles(node),
     }
     if local_ip_check(node.ip_address):

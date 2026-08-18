@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from skills.builtin.autonomous_skill_development import (  # nosemgrep: skill-no-sibling-import
+    TOOL_TRIGGER_GAP_DEVELOPMENT,
     AutonomousSkillDevelopmentSkill,
     _get_governance_mode,
     _run_development_pipeline,
@@ -41,7 +42,7 @@ class TestExecute:
     @pytest.mark.anyio
     async def test_empty_capability_returns_error(self):
         skill = AutonomousSkillDevelopmentSkill()
-        result = await skill.execute({"capability": ""})
+        result = await skill.execute(TOOL_TRIGGER_GAP_DEVELOPMENT, {"capability": ""})
         assert result["success"] is False
         assert "required" in result["message"]
 
@@ -52,7 +53,7 @@ class TestExecute:
             "skills.builtin.autonomous_skill_development._get_governance_mode",
             new=AsyncMock(return_value="locked"),
         ):
-            result = await skill.execute({"capability": "process audio"})
+            result = await skill.execute(TOOL_TRIGGER_GAP_DEVELOPMENT, {"capability": "process audio"})
         assert result["success"] is False
         assert result["state"] == "locked"
 
@@ -83,7 +84,7 @@ class TestExecute:
                     }
                 ),
             ):
-                result = await skill.execute({"capability": "process audio"})
+                result = await skill.execute(TOOL_TRIGGER_GAP_DEVELOPMENT, {"capability": "process audio"})
         assert result["success"] is True
         assert result["state"] == "pending_approval"
 
@@ -106,7 +107,7 @@ class TestExecute:
                     }
                 ),
             ):
-                result = await skill.execute({"capability": "process audio"})
+                result = await skill.execute(TOOL_TRIGGER_GAP_DEVELOPMENT, {"capability": "process audio"})
         assert result["success"] is True
         assert result["state"] == "promoted"
 
