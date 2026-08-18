@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "El traspaso se aplica solo a agentes."
       },
       "processNodeLabel": "Proceso",
-      "processOpensWorkflow": "Abre el flujo que ejecuta este rol"
+      "processOpensWorkflow": "Abre el flujo que ejecuta este rol",
+      "attach": "Adjuntar",
+      "attachRoleLabel": "Rol",
+      "attachRolePlaceholder": "Elegir un rol…",
+      "attachWorkflowLabel": "ID del flujo",
+      "attachWorkflowPlaceholder": "ID del flujo",
+      "attachError": "No se pudo adjuntar ese flujo.",
+      "detachError": "No se pudo quitar ese flujo.",
+      "processDetach": "Quitar {workflow} de {role}",
+      "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",

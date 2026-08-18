@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "واگذاری فقط برای عامل‌ها اعمال می‌شود."
       },
       "processNodeLabel": "فرایند",
-      "processOpensWorkflow": "گردش‌کار این نقش را باز می‌کند"
+      "processOpensWorkflow": "گردش‌کار این نقش را باز می‌کند",
+      "attach": "پیوست",
+      "attachRoleLabel": "نقش",
+      "attachRolePlaceholder": "یک نقش انتخاب کنید…",
+      "attachWorkflowLabel": "شناسه گردش‌کار",
+      "attachWorkflowPlaceholder": "شناسه گردش‌کار",
+      "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
+      "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
+      "processDetach": "جدا کردن {workflow} از {role}",
+      "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

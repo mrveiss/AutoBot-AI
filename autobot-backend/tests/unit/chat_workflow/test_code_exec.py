@@ -581,6 +581,45 @@ def test_tool_policy_default_classification_unchanged():
     assert tp.CODEEXEC_MUTATING_TOOLS == frozenset()
 
 
+def _mcp_permission_is_write_level(permission) -> bool:
+    """A permission whose action segment is not `read`/`view` can mutate state."""
+    action = permission.value.rsplit(".", 1)[-1]
+    return action not in {"read", "view"}
+
+
+def test_tool_policy_and_mcp_permissions_agree_on_readonly_tools():
+    """#14536: a tool tool_policy.py auto-approves (no human gate, readonly)
+    must never carry a write-level grant in mcp_tool_permissions.py — that
+    combination is exactly what let a compose script call `map_site` (declared
+    KNOWLEDGE_WRITE) without ever hitting the KNOWLEDGE_WRITE gate, because
+    tool_policy.py's readonly default auto-approved it first.
+
+    Scoped to tools both sources name at all — a rename or moved constant on
+    either side must fail loud, not silently pass an empty overlap.
+    """
+    from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
+    from chat_workflow.code_exec import tool_policy as tp
+
+    tool_policy_named = tp.SENSITIVE_TOOLS | tp.CODEEXEC_INJECTABLE_TOOLS
+    assert tool_policy_named, "tool_policy.py names no tools — source resolved empty"
+    assert TOOL_PERMISSIONS, "mcp_tool_permissions.py declares no tools — source resolved empty"
+
+    named_by_both = tool_policy_named & set(TOOL_PERMISSIONS)
+    assert named_by_both, "no overlap between tool_policy.py and mcp_tool_permissions.py — check for a rename"
+
+    disagreements = {
+        name
+        for name in named_by_both
+        if name in tp.CODEEXEC_READONLY_TOOLS and _mcp_permission_is_write_level(TOOL_PERMISSIONS[name])
+    }
+    agreeing = len(named_by_both) - len(disagreements)
+
+    assert not disagreements, (
+        f"{agreeing}/{len(named_by_both)} agree; auto-approved as readonly in tool_policy.py but "
+        f"declared a write-level MCP permission: {sorted(disagreements)}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # MAJOR-1: shim RPC uses per-call ids so concurrent calls correlate
 # ---------------------------------------------------------------------------

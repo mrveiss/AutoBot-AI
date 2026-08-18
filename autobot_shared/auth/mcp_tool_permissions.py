@@ -190,7 +190,12 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
     "extract_structured_data": Permission.KNOWLEDGE_READ,
     "get_knowledge_stats": Permission.KNOWLEDGE_READ,
     "langchain_qa_chain": Permission.KNOWLEDGE_READ,
-    "map_site": Permission.KNOWLEDGE_WRITE,
+    # #14536: map_site only enumerates URLs (sitemap.xml parse, or a BFS crawl
+    # that reads links without fetching bodies for ingestion — see
+    # web_fetch/site_mapper.py). It never calls the knowledge-base write path
+    # crawl_site does, so it takes the read grant tool_policy.py already treats
+    # it as auto-approvable under.
+    "map_site": Permission.KNOWLEDGE_READ,
     # Found by the guard's first run against the real bridges (#13228): mcp_crawl
     # registers a WebCrawlerConnector and ingests, so inheriting KNOWLEDGE_READ
     # would have under-granted it.
