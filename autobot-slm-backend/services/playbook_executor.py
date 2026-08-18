@@ -164,43 +164,19 @@ PLAYBOOK_KILL_GRACE_S = env_float_clamped("AUTOBOT_PLAYBOOK_KILL_GRACE_S", 5.0, 
 # repo's "no hardcoded TTL" convention and so tests can exercise the
 # timeout-kill path (_run_git -> _kill_process_group) at CI speed rather
 # than actually waiting out a 30s git hang.
+#
+# #14524 round 3 added a derived update_code_source_worst_case_s() here so
+# reconciler.py's escalation floor could fold this module's worst case into
+# its own margin -- reverted (review round 3 re-review): folding it in
+# required the service-restart sweep to run off the node pass so its own
+# duration didn't ALSO need bounding by the same floor, and that decoupling
+# was itself unsafe (a singleton PlaybookExecutor with two concurrent
+# callers racing _update_code_source's git operations against the one
+# shared code_source tree; see reconciler.py's SERVICE_RESTART_PLAYBOOK_
+# TIMEOUT_S comment and #14570). These two constants
+# remain -- they still bound _run_git/_kill_process_group directly.
 GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
 GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
-
-# Number of git subcommands _update_code_source runs that are bounded by
-# GIT_COMMAND_TIMEOUT_S (checkout, fetch, reset) vs GIT_REV_PARSE_TIMEOUT_S
-# (the trailing rev-parse) -- named so update_code_source_worst_case_s()
-# below states its formula in terms of _update_code_source's actual shape
-# instead of a bare "3" and "1" that would silently go stale if a step is
-# ever added or removed there.
-_UPDATE_CODE_SOURCE_GIT_TIMEOUT_STEPS = 3
-_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_STEPS = 1
-
-
-def update_code_source_worst_case_s() -> float:
-    """Upper bound on `_update_code_source`'s own wall-clock duration (#14524, round 3).
-
-    `_update_code_source` runs three git subcommands bounded by
-    `GIT_COMMAND_TIMEOUT_S` (checkout, fetch, reset) plus one trailing
-    best-effort rev-parse bounded by `GIT_REV_PARSE_TIMEOUT_S`. On TOP of
-    each of those four, a step that times out pays up to
-    `_kill_process_group`'s own worst case: two signal rounds (SIGTERM,
-    SIGKILL), each paying up to `PLAYBOOK_KILL_GRACE_S` TWICE -- once
-    reaping the direct child, once for the group-death probe
-    (`_wait_for_process_group_death`) -- so `4 * PLAYBOOK_KILL_GRACE_S` per
-    killed subcommand, worst case. Omitting that kill-grace term here (an
-    earlier version of this comment quoted "~100s") undercounted the true
-    worst case by 80s at the shipped defaults (100s vs the correct 180s).
-
-    Exists as one function, not duplicated arithmetic, so
-    `reconciler._effective_tracker_expiry_s()` can fold this into its own
-    margin without a second copy of this formula silently drifting from
-    this one.
-    """
-    kill_worst_case = 4 * PLAYBOOK_KILL_GRACE_S
-    return _UPDATE_CODE_SOURCE_GIT_TIMEOUT_STEPS * (GIT_COMMAND_TIMEOUT_S + kill_worst_case) + (
-        _UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_STEPS * (GIT_REV_PARSE_TIMEOUT_S + kill_worst_case)
-    )
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
