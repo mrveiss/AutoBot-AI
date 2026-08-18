@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}، {state}",
+      "a11yInstructions": "استخدم مفاتيح الأسهم لتحريك التركيز بين العقد. اضغط على Enter أو المسافة لتحديد العقدة التي عليها التركيز. اضغط على Escape لإلغاء التحديد.",
+      "a11yInstructionsMove": "اضغط مطولاً على Control ثم اضغط على مفتاح سهم لتحريك العقدة المحددة."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8308,7 +8312,8 @@
       "attachError": "تعذّر إرفاق سير العمل هذا.",
       "detachError": "تعذّرت إزالة سير العمل هذا.",
       "processDetach": "إزالة {workflow} من {role}",
-      "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة."
+      "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة.",
+      "canvasGroupKind": "مجموعة"
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
