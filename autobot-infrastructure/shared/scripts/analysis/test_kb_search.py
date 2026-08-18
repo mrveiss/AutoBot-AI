@@ -10,10 +10,11 @@ Test Knowledge Base Documentation Search
 import asyncio
 import logging
 import sys
-import os
+
+from autobot_shared.paths import project_root
 
 # Add the project root to the Python path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, str(project_root()))
 
 from chat_workflow import ChatWorkflowManager
 from knowledge_base import KnowledgeBase

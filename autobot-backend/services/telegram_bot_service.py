@@ -95,6 +95,18 @@ class TelegramBotService:
         is a guard the next sender silently omits.
 
         Returns the denial response to hand straight back, or ``None`` to proceed.
+
+        ``chat_id`` is recorded and logged unmasked — deliberately. It is an
+        opaque identifier scoped to this bot's own token, not directly usable
+        outside this system the way a phone number is; masking it would only
+        make the record useless for locating which conversation was blocked.
+        See the channel-identity rule in ``services.gateway.egress_governor``
+        (#14540), pinned by ``TestChannelIdentityRule``.
+
+        The denial response carries ``verdict.safe_reason``, never
+        ``verdict.reason`` — the latter is the audit-facing text and, once a
+        real approver is registered (#14068), can carry raw exception text
+        from whatever the approver touched (#14539).
         """
         verdict = await egress_governor.evaluate(
             platform="telegram",
@@ -104,8 +116,10 @@ class TelegramBotService:
         )
         if verdict.allowed:
             return None
-        logger.warning("Telegram send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
-        return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
+        logger.warning(
+            "Telegram send to chat %s blocked by egress governance (%s): %s", chat_id, verdict.rule, verdict.reason
+        )
+        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
 
     async def send_message(
         self,
