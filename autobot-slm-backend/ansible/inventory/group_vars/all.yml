@@ -18,7 +18,16 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 
-# #14516: ONE definition of the Redis unit name.
+# #14516: the canonical Redis unit name.
+#
+# Reachable where a play runs through PlaybookExecutor, which symlinks this
+# directory beside the dynamic inventory (#11781). Two paths do NOT see it and
+# fall back to the `| default(...)` literal instead: api/tls.py runs
+# enable-tls.yml against a static `inventory.yml` in the ansible dir, and
+# services/replication.py runs with an inline `-i "<ip>,"` host string that has
+# no directory for group_vars at all. Wiring those two through the same
+# group_vars linkage is tracked separately -- until then the default is what
+# actually resolves there, so it must stay correct.
 #
 # The platform installs redis-stack, whose unit is `redis-stack-server`.
 # `redis-server` is the plain Debian package and is never installed here, yet

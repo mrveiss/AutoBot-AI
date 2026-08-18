@@ -59,15 +59,34 @@ def _canonical_name() -> str:
     return name
 
 
+def _unparseable_files() -> list[str]:
+    """Files the scan could not read at all.
+
+    Review of #14516: the first version used `yaml.safe_load`, which raises
+    `ComposerError` on a multi-document file -- `deploy-hybrid-docker.yml` has
+    six `---` markers -- and the exception was swallowed, so the whole file was
+    skipped in silence. A future `systemd: name: redis-server` in such a file
+    would have passed this guard while the suite reported green. A guard that
+    fails open is worse than no guard, so unreadable files are now surfaced.
+    """
+    broken = []
+    for path in sorted(_ANSIBLE.rglob("*.yml")):
+        try:
+            list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+        except (yaml.YAMLError, UnicodeDecodeError):
+            broken.append(str(path.relative_to(_ANSIBLE)))
+    return broken
+
+
 def _service_task_names():
     """(file, unit) for every task managing a Redis-looking systemd unit."""
     for path in sorted(_ANSIBLE.rglob("*.yml")):
         try:
-            docs = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except yaml.YAMLError:
+            documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+        except (yaml.YAMLError, UnicodeDecodeError):
             continue
 
-        stack = [docs]
+        stack = list(documents)
         while stack:
             item = stack.pop()
             if isinstance(item, list):
@@ -119,10 +138,62 @@ def test_no_playbook_manages_a_redis_unit_by_a_conflicting_literal():
     )
 
 
-def test_the_role_handler_and_the_ssot_agree():
-    """The role was already right; pin the two together so neither drifts alone."""
+def test_the_role_handler_reads_the_definition():
+    """The role was already correct, but by coincidence rather than by wiring.
+
+    It carried its own literal, so it agreed with group_vars only as long as
+    nobody edited either. It now reads the variable (with the same default), so
+    a rename moves both together.
+    """
     handlers = (_ANSIBLE / "roles" / "redis" / "handlers" / "main.yml").read_text(encoding="utf-8")
 
-    assert re.search(
-        rf"name:\s*{re.escape(_canonical_name())}\b", handlers
-    ), "the redis role's handler no longer names the canonical unit"
+    assert "redis_service_name" in handlers, "the redis role's handler no longer reads the canonical definition"
+    assert re.search(rf"default\(\s*'{re.escape(_canonical_name())}'\s*\)", handlers), (
+        "the handler's fallback no longer matches the canonical unit name"
+    )
+
+
+def test_every_playbook_is_actually_readable():
+    """The scan must not skip files in silence.
+
+    `deploy-hybrid-docker.yml` (six YAML documents) was invisible to the first
+    version of this rule. If a file genuinely cannot be parsed, that is worth
+    knowing rather than quietly narrowing the guard's reach.
+    """
+    broken = _unparseable_files()
+
+    assert not broken, f"playbook(s) the Redis guard cannot read, so they are never checked: {broken}"
+
+
+def _play_level_definitions():
+    """(file, value) for every play-level `vars:` that redefines the name."""
+    for path in sorted(_ANSIBLE.rglob("*.yml")):
+        try:
+            documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+        except (yaml.YAMLError, UnicodeDecodeError):
+            continue
+        for document in documents:
+            for play in document if isinstance(document, list) else [document]:
+                if not isinstance(play, dict):
+                    continue
+                value = (play.get("vars") or {}).get("redis_service_name") if isinstance(play.get("vars"), dict) else None
+                if isinstance(value, str) and "{{" not in value:
+                    yield path.relative_to(_ANSIBLE), value
+
+
+def test_no_play_redefines_the_name_to_something_else():
+    """A play-level `vars:` outranks group_vars, so it is a second definition.
+
+    `configure-redis-service-management.yml` sets it locally and currently
+    agrees, so nothing is broken today -- but it would keep the old value
+    through a rename while every templated reference moved, and the literal
+    scan cannot see it because the references are templated. Pinned so the two
+    cannot diverge silently.
+    """
+    canonical = _canonical_name()
+
+    offenders = [f"{path} sets {value!r}" for path, value in _play_level_definitions() if value != canonical]
+
+    assert not offenders, (
+        f"play-level redis_service_name disagrees with group_vars ({canonical!r}): " + "; ".join(offenders)
+    )
