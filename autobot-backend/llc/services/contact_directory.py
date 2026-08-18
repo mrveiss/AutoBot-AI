@@ -122,6 +122,51 @@ class ContactDirectoryService(LLCServiceBase):
         )
         return list(result.scalars().all())
 
+    async def list_for_department(self, session: AsyncSession, company_id: uuid.UUID) -> Dict[str, List[LLCContact]]:
+        """Contacts this department shows on its org chart, in two groups.
+
+        ``with_role`` — people holding an open role tenure here. Under the
+        owner's model this is what "part of this department" means.
+
+        ``unassigned`` — people carrying this department's legacy
+        ``company_id`` but holding no role. They exist because contacts were
+        created per company before the directory was shared (#13969).
+
+        Returning them **separately rather than merged** is the point. Merging
+        would assert an involvement nobody recorded; dropping them would make
+        people silently disappear from a department that has been using them.
+        Showing them under their own label states the truth — they are here,
+        and no role explains why — which is the only version that prompts
+        anyone to fix it.
+
+        The group empties itself as roles are assigned, so it disappears when
+        the migration is genuinely complete rather than on a date someone
+        guessed.
+        """
+        held = await session.execute(
+            select(LLCContact)
+            .join(
+                LLCRoleAssignment,
+                LLCRoleAssignment.holder_contact_id == LLCContact.id,
+            )
+            .where(
+                LLCRoleAssignment.company_id == company_id,
+                LLCRoleAssignment.holder_type == RoleHolderType.CONTACT.value,
+                LLCRoleAssignment.ended_at.is_(None),
+            )
+            .order_by(LLCContact.full_name)
+            .distinct()
+        )
+        with_role = list(held.scalars().all())
+        held_ids = {contact.id for contact in with_role}
+
+        legacy = await session.execute(
+            select(LLCContact).where(LLCContact.company_id == company_id).order_by(LLCContact.full_name)
+        )
+        unassigned = [c for c in legacy.scalars().all() if c.id not in held_ids]
+
+        return {"with_role": with_role, "unassigned": unassigned}
+
     async def delete(
         self,
         session: AsyncSession,
@@ -173,15 +218,47 @@ class ContactDirectoryService(LLCServiceBase):
             if found.scalar_one_or_none() is None:
                 raise ValueError(f"contact {contact_id} does not exist")
 
+        # Roles the survivor already holds openly. Two duplicates of one person
+        # usually hold the same role — that is often *why* they are duplicates —
+        # and moving both tenures onto the survivor would leave two open tenures
+        # for the same (role, holder), which the partial unique index
+        # `uq_llc_role_assignments_open_contact` forbids. The merge would fail
+        # with an IntegrityError at the exact moment someone tries to tidy up.
+        already_open = await session.execute(
+            select(LLCRoleAssignment.role_id).where(
+                LLCRoleAssignment.holder_type == RoleHolderType.CONTACT.value,
+                LLCRoleAssignment.holder_contact_id == keep_id,
+                LLCRoleAssignment.ended_at.is_(None),
+            )
+        )
+        survivor_roles = set(already_open.scalars().all())
+
         moved = await session.execute(
             select(LLCRoleAssignment).where(
                 LLCRoleAssignment.holder_type == RoleHolderType.CONTACT.value,
                 LLCRoleAssignment.holder_contact_id == merge_id,
             )
         )
-        tenures = list(moved.scalars().all())
-        for tenure in tenures:
+
+        tenures = []
+        redundant = []
+        for tenure in moved.scalars().all():
+            if tenure.ended_at is None and tenure.role_id in survivor_roles:
+                # The survivor already holds this role, so the duplicate's
+                # tenure adds nothing. It is dropped rather than ended: its
+                # holder is about to be deleted, and an "ended" tenure pointing
+                # at a contact that no longer exists is a dangling record, not
+                # history anyone can read.
+                redundant.append(tenure)
+                continue
             tenure.holder_contact_id = keep_id
+            tenures.append(tenure)
+
+        for tenure in redundant:
+            await session.delete(tenure)
+        # Flush the deletes before the moves land, or the unique index sees both
+        # rows at once even though the final state is legal.
+        await session.flush()
 
         await session.execute(sa_delete(LLCContact).where(LLCContact.id == merge_id))
         await session.flush()
@@ -193,7 +270,11 @@ class ContactDirectoryService(LLCServiceBase):
             keep_id,
             "contact.merged",
             actor_user_id,
-            {"merged_id": str(merge_id), "tenures_moved": len(tenures)},
+            {
+                "merged_id": str(merge_id),
+                "tenures_moved": len(tenures),
+                "tenures_dropped_as_redundant": len(redundant),
+            },
         )
         return survivor.scalar_one()
 

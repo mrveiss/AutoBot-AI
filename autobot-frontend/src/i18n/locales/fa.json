@@ -8538,6 +8538,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "بدون نقش",
+      "unassignedHint": "در این بخش ثبت شده، اما هیچ نقشی حضورش را توضیح نمی‌دهد"
     }
   },
   "code": {
