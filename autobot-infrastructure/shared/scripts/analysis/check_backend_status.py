@@ -13,6 +13,10 @@ import sys
 import time
 from urllib.parse import urljoin
 
+import requests
+
+from autobot_shared.network_constants import ServiceURLs
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,18 +69,21 @@ class BackendStatusChecker:
         except Exception as e:
             return {"endpoint": endpoint, "url": url, "error": str(e), "success": False}
 
-        def _run_comprehensive_check_section_1(self):
-            """Display Section of run_comprehensive_check.
+    @staticmethod
+    def _summarise_comprehensive_check(status, successful, failed, critical_endpoints, results):
+        """Build the result payload for run_comprehensive_check.
 
-            Helper for run_comprehensive_check (Issue #825).
-            """
-            return {
-                "status": status,
-                "successful": successful,
-                "failed": failed,
-                "total": len(critical_endpoints),
-                "results": results,
-            }
+        Helper for run_comprehensive_check (Issue #825). Until #14405 this sat
+        nested inside check_endpoint, after that method's final return, reading
+        five names that only exist in run_comprehensive_check's frame.
+        """
+        return {
+            "status": status,
+            "successful": successful,
+            "failed": failed,
+            "total": len(critical_endpoints),
+            "results": results,
+        }
 
     def run_comprehensive_check(self):
         """Run comprehensive backend status check"""
@@ -100,7 +107,7 @@ class BackendStatusChecker:
         failed = 0
 
         for endpoint in critical_endpoints:
-            logger.info(f"Testing {endpoint}...", end=" ")
+            logger.info(f"Testing {endpoint}...")
             result = self.check_endpoint(endpoint)
             results.append(result)
 
@@ -116,10 +123,13 @@ class BackendStatusChecker:
 
         # Overall assessment
         if successful == len(critical_endpoints):
+            status = "healthy"
             logger.info("🟢 Backend Status: HEALTHY")
         elif successful >= len(critical_endpoints) * 0.7:
+            status = "degraded"
             logger.info("🟡 Backend Status: DEGRADED")
         else:
+            status = "unhealthy"
             logger.info("🔴 Backend Status: UNHEALTHY")
 
         # Generate recommendations
@@ -139,11 +149,11 @@ class BackendStatusChecker:
         if successful > 0:
             logger.info("  • Some endpoints working - partial functionality available")
 
-        self._run_comprehensive_check_section_1()
+        return self._summarise_comprehensive_check(status, successful, failed, critical_endpoints, results)
 
     def quick_health_check(self):
         """Quick health check - just test if backend is running"""
-        logger.info("⚡ Quick health check...", end=" ")
+        logger.info("⚡ Quick health check...")
 
         # Try the simplest endpoint first
         result = self.check_endpoint("/api/hello")
@@ -164,8 +174,6 @@ class BackendStatusChecker:
 def main():
     """Main function for command line usage"""
     import argparse
-
-    from constants import ServiceURLs
 
     parser = argparse.ArgumentParser(description="Check AutoBot backend API status")
     parser.add_argument(
