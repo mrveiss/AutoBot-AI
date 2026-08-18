@@ -14,6 +14,8 @@ import os
 import sys
 from datetime import datetime
 
+from autobot_shared.paths import project_root
+
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path
@@ -166,15 +168,19 @@ async def sync_docs():
     removed_count = await _remove_outdated_entries(kb, all_facts)
 
     # Collect documentation files
-    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
-    filtered_files = _collect_documentation_files(project_root)
+    # #14517: was a shell placeholder in a plain string literal, so the collection
+    # below globbed a directory that cannot exist and the sync reported a clean
+    # zero. Named ``root``: assigning to the imported ``project_root`` would make
+    # it a function-local name and raise UnboundLocalError on the call itself.
+    root = str(project_root())
+    filtered_files = _collect_documentation_files(root)
     logger.info(f"Found {len(filtered_files)} documentation files to sync")
 
     # Sync each file
     success_count = 0
     for file_path in sorted(filtered_files):
         try:
-            if await _sync_single_file(kb, file_path, project_root):
+            if await _sync_single_file(kb, file_path, root):
                 success_count += 1
         except Exception as e:
             logger.error(f"❌ Error syncing {file_path}: {str(e)}")

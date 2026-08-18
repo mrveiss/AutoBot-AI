@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "El traspaso se aplica solo a agentes."
       },
       "processNodeLabel": "Proceso",
-      "processOpensWorkflow": "Abre el flujo que ejecuta este rol"
+      "processOpensWorkflow": "Abre el flujo que ejecuta este rol",
+      "attach": "Adjuntar",
+      "attachRoleLabel": "Rol",
+      "attachRolePlaceholder": "Elegir un rol…",
+      "attachWorkflowLabel": "ID del flujo",
+      "attachWorkflowPlaceholder": "ID del flujo",
+      "attachError": "No se pudo adjuntar ese flujo.",
+      "detachError": "No se pudo quitar ese flujo.",
+      "processDetach": "Quitar {workflow} de {role}",
+      "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "sin rol",
+      "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia"
     }
   },
   "code": {
@@ -9137,6 +9150,23 @@
       "agent": "Agente",
       "user": "Usuario",
       "contact": "Contacto"
-    }
+    },
+    "grant": "Conceder",
+    "revoke": "Revocar",
+    "attach": "Adjuntar",
+    "detach": "Quitar",
+    "assign": "Asignar",
+    "endTenure": "Finalizar asignación",
+    "holderIdPlaceholder": "ID del titular",
+    "permissionPlaceholder": "p. ej. knowledge.read",
+    "workflowPlaceholder": "ID del flujo",
+    "toolPlaceholder": "Nombre de herramienta",
+    "credentialPlaceholder": "ID del secreto",
+    "errorAssign": "No se pudo asignar ese titular.",
+    "errorEndTenure": "No se pudo finalizar la asignación.",
+    "errorGrant": "No se pudo conceder el permiso.",
+    "errorRevoke": "No se pudo revocar el permiso.",
+    "errorAttach": "No se pudo adjuntar.",
+    "errorDetach": "No se pudo quitar."
   }
 }

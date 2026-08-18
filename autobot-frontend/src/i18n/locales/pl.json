@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "Przekazanie dotyczy tylko agentów."
       },
       "processNodeLabel": "Proces",
-      "processOpensWorkflow": "Otwiera przepływ tej roli"
+      "processOpensWorkflow": "Otwiera przepływ tej roli",
+      "attach": "Dołącz",
+      "attachRoleLabel": "Rola",
+      "attachRolePlaceholder": "Wybierz rolę…",
+      "attachWorkflowLabel": "ID przepływu",
+      "attachWorkflowPlaceholder": "ID przepływu",
+      "attachError": "Nie udało się dołączyć tego przepływu.",
+      "detachError": "Nie udało się odłączyć tego przepływu.",
+      "processDetach": "Odłącz {workflow} od {role}",
+      "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna."
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "brak roli",
+      "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia"
     }
   },
   "code": {
@@ -9137,6 +9150,23 @@
       "agent": "Agent",
       "user": "Użytkownik",
       "contact": "Kontakt"
-    }
+    },
+    "grant": "Przyznaj",
+    "revoke": "Odbierz",
+    "attach": "Dołącz",
+    "detach": "Odłącz",
+    "assign": "Przypisz",
+    "endTenure": "Zakończ przypisanie",
+    "holderIdPlaceholder": "ID pełniącego",
+    "permissionPlaceholder": "np. knowledge.read",
+    "workflowPlaceholder": "ID przepływu",
+    "toolPlaceholder": "Nazwa narzędzia",
+    "credentialPlaceholder": "ID poświadczenia",
+    "errorAssign": "Nie udało się przypisać.",
+    "errorEndTenure": "Nie udało się zakończyć przypisania.",
+    "errorGrant": "Nie udało się przyznać uprawnienia.",
+    "errorRevoke": "Nie udało się odebrać uprawnienia.",
+    "errorAttach": "Nie udało się dołączyć.",
+    "errorDetach": "Nie udało się odłączyć."
   }
 }

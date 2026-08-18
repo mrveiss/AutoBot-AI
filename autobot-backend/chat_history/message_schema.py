@@ -72,11 +72,6 @@ _RESPONDER_ROLE = "assistant"
 _CONVERSATION_ROLES = frozenset({_CALLER_ROLE, _RESPONDER_ROLE})
 
 
-def _valid_text_value(value: Any) -> Any:
-    """The value if it is a shape a message body can take, else ``None``."""
-    return value if isinstance(value, (str, list)) else None
-
-
 def message_role(message: Dict[str, Any], default: str = _UNKNOWN_ROLE) -> str:
     """The speaker, from either schema.
 
@@ -99,47 +94,68 @@ def message_type(message: Dict[str, Any], default: str = "default") -> str:
     return str(message.get("messageType") or message.get("type") or default)
 
 
-def message_text(message: Dict[str, Any]) -> str:
-    """The body, from either schema.
+def _resolved_body(value: Any) -> str:
+    """One key's value as a string: joined part-list, plain string, or ``""``.
 
-    Returns ``""`` when the message carries no text under either key, so callers
-    can filter on emptiness without having to know which schema they were handed.
+    Anything that is neither (``None``, ``0``, ``False``, a stray dict) resolves
+    to ``""`` rather than being ``str()``-ed, which would put the literal
+    ``"False"`` in front of the model.
 
-    Only ``str`` and ``list`` are valid content shapes — a string body, or the
-    multimodal part list. Anything else (``None``, ``0``, ``False``, a stray
-    dict) is treated as *absent* and falls through to the other key, rather than
-    being ``str()``-ed into the conversation: a bare ``str(value)`` puts the
-    literal ``"False"`` or ``"0"`` in front of the model, which is worse than
-    reading the other field or returning nothing.
-
-    An **empty** ``str`` also falls through, but an **empty list** does not: a
-    list is a well-formed answer meaning *this message has no text parts*, so
-    there is nothing to look for elsewhere. That distinction is the reason this
-    is not the bare ``content or text`` it replaced, and it is pinned by tests.
+    ``isinstance(part.get("text"), str)`` is load-bearing, not defensive: a part
+    with ``text: None`` is a shape providers genuinely emit, and it 500'd the
+    live chat path once (#14065). Lifted from the version that survived that
+    incident rather than re-derived.
     """
-    value = _valid_text_value(message.get("content"))
-    if value is None or value == "":
-        other = _valid_text_value(message.get("text"))
-        if other is not None:
-            value = other
-    if value is None:
-        return ""
-    # A list is the multimodal content shape (`[{"type": "text", ...}, ...]`);
-    # join its text parts rather than str()-ing the whole structure into the
-    # conversation, which would put JSON punctuation in front of the model.
-    #
-    # `isinstance(part.get("text"), str)` is load-bearing, not defensive: a part
-    # with ``text: None`` is a shape providers genuinely emit, and it 500'd the
-    # live chat path once already (#14065). Lifted verbatim from
-    # `context_overflow._format_messages` rather than re-derived — that version
-    # is the one that survived the incident.
     if isinstance(value, list):
         return " ".join(
             part["text"]
             for part in value
             if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str)
         ).strip()
-    return str(value)
+    return value if isinstance(value, str) else ""
+
+
+def message_text(message: Dict[str, Any]) -> str:
+    """The body, from either schema.
+
+    Returns ``""`` when the message carries no text under either key, so callers
+    can filter on emptiness without having to know which schema they were handed.
+
+    **A ``content`` that yields no text falls through to the other key**
+    (#14335) — an empty part-list, and equally a list whose parts are all
+    non-text, such as an image-only multimodal message. The fallback is decided
+    on the *resolved* body, not on the raw value, which is what makes those two
+    cases behave alike; an earlier version tested the raw value and so fell
+    through only when ``content`` was absent or an empty string.
+
+    The image-only list is the case that matters in practice — a bare
+    ``content: []`` is barely a real shape, while a message carrying an image
+    and a caption is one a provider can genuinely emit.
+
+    The reasoning that was reversed here: that an empty list is a well-formed
+    *"this message has no text parts"* and so nothing needs looking up
+    elsewhere. That reasoning is wrong for a reader whose entire purpose is
+    that either key may hold the body: an empty ``content`` has told us nothing,
+    while ``text`` may still hold everything.
+
+    It is also wrong in the direction that costs data. Every consumer treats an
+    empty result as *absent*, and each loses something different: distillation
+    **drops** the message — precisely the #14259 defect this module exists to
+    fix — the overflow tracker under-counts retained tokens and delays the next
+    compaction, and the chat path sends the model an empty turn. There is no
+    consumer for which returning ``""`` over an available body is the better
+    answer.
+
+    No writer emits either shape beside a populated ``text`` today — swept in
+    review across the persisted-message writers, the summary builder and the
+    workflow batch builder — so nothing live changes. What it removes is a
+    divergence from ``context_overflow._message_text``, which already fell
+    through and which this function now backs. The behavioural delta therefore
+    lands only on this function's *direct* callers (``as_llm_messages``, the
+    chat context builders, the shared-link viewer), not on the overflow token
+    path, which was already on these semantics.
+    """
+    return _resolved_body(message.get("content")) or _resolved_body(message.get("text"))
 
 
 def llm_role(message: Dict[str, Any], default: str = _CALLER_ROLE) -> str:

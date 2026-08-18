@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "واگذاری فقط برای عامل‌ها اعمال می‌شود."
       },
       "processNodeLabel": "فرایند",
-      "processOpensWorkflow": "گردش‌کار این نقش را باز می‌کند"
+      "processOpensWorkflow": "گردش‌کار این نقش را باز می‌کند",
+      "attach": "پیوست",
+      "attachRoleLabel": "نقش",
+      "attachRolePlaceholder": "یک نقش انتخاب کنید…",
+      "attachWorkflowLabel": "شناسه گردش‌کار",
+      "attachWorkflowPlaceholder": "شناسه گردش‌کار",
+      "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
+      "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
+      "processDetach": "جدا کردن {workflow} از {role}",
+      "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "بدون نقش",
+      "unassignedHint": "در این بخش ثبت شده، اما هیچ نقشی حضورش را توضیح نمی‌دهد"
     }
   },
   "code": {
@@ -9137,6 +9150,23 @@
       "agent": "عامل",
       "user": "کاربر",
       "contact": "مخاطب"
-    }
+    },
+    "grant": "اعطا",
+    "revoke": "لغو",
+    "attach": "پیوست",
+    "detach": "جدا کردن",
+    "assign": "انتساب",
+    "endTenure": "پایان تصدی",
+    "holderIdPlaceholder": "شناسه دارنده",
+    "permissionPlaceholder": "مثلاً knowledge.read",
+    "workflowPlaceholder": "شناسه گردش‌کار",
+    "toolPlaceholder": "نام ابزار",
+    "credentialPlaceholder": "شناسه راز",
+    "errorAssign": "انتساب دارنده ممکن نشد.",
+    "errorEndTenure": "پایان تصدی ممکن نشد.",
+    "errorGrant": "اعطای دسترسی ممکن نشد.",
+    "errorRevoke": "لغو دسترسی ممکن نشد.",
+    "errorAttach": "پیوست ممکن نشد.",
+    "errorDetach": "جدا کردن ممکن نشد."
   }
 }

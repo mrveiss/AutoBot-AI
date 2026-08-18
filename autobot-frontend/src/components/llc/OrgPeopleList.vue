@@ -30,9 +30,25 @@ const props = defineProps<{
    */
   teamsFailed?: boolean
   contactsFailed?: boolean
+  /**
+   * Contact ids this department carries with no role to explain them (#13998).
+   *
+   * Labelled rather than merged or hidden: merging asserts an involvement
+   * nobody recorded, hiding makes people vanish from a department already using
+   * them. The label is what prompts someone to assign the role — and the group
+   * empties itself as that happens.
+   */
+  unassignedContactIds?: Set<string>
 }>()
 
 const emit = defineEmits<{ select: [orgNodeId: string] }>()
+
+/** True when no role explains this person's presence in the department. */
+function isUnassigned(person: { key: string; kind: string }): boolean {
+  if (person.kind !== 'contact') return false
+  // Keys are `contact:<id>` (see buildOrgPeople).
+  return props.unassignedContactIds?.has(person.key.slice('contact:'.length)) ?? false
+}
 
 const { t } = useI18n()
 
@@ -160,6 +176,18 @@ function groupLabel(group: OrgPeopleGroup): string {
               </button>
               <span v-else class="block truncate text-sm font-medium text-autobot-text-primary">
                 {{ person.name }}
+              </span>
+              <!-- Outside both name branches: a contact renders through the
+                   v-else above (it has no org-chart node), so a badge nested in
+                   the button branch is unreachable for exactly the people it
+                   describes. -->
+              <span
+                v-if="isUnassigned(person)"
+                class="person-unassigned"
+                :data-testid="`org-person-unassigned-${person.key}`"
+                :title="t('llc.orgPeople.unassignedHint')"
+              >
+                {{ t('llc.orgPeople.unassigned') }}
               </span>
               <span v-if="person.subtitle" class="block truncate text-xs text-autobot-text-muted">
                 {{ person.subtitle }}

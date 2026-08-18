@@ -12,7 +12,8 @@ import glob
 import logging
 import os
 import sys
-from pathlib import Path
+
+from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +57,16 @@ async def populate_directly():
     logger.info(f"  Embedding model: {kb.embedding_model_name}")
 
     # Find documentation files
-    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+    # #14517: was a shell placeholder in a plain string literal, so every glob below
+    # matched nothing and the run reported "Found 0 documentation files" as success.
+    # Named ``root``: assigning to the imported ``project_root`` would make it a
+    # function-local name and raise UnboundLocalError on the call itself.
+    root = project_root()
     doc_patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
 
     all_files = []
     for pattern in doc_patterns:
-        files = glob.glob(str(project_root / pattern), recursive=True)
+        files = glob.glob(str(root / pattern), recursive=True)
         all_files.extend(files)
 
     # Remove duplicates and filter
@@ -76,7 +81,7 @@ async def populate_directly():
     # Add all files directly to vector store
     for file_path in sorted(filtered_files):
         try:
-            rel_path = os.path.relpath(file_path, project_root)
+            rel_path = os.path.relpath(file_path, root)
 
             # Categorize documents
             if "user_guide" in rel_path:

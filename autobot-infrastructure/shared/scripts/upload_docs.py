@@ -16,6 +16,8 @@ from typing import Optional
 
 import requests
 
+from autobot_shared.paths import project_root
+
 
 @dataclass
 class UploadResult:
@@ -63,14 +65,18 @@ def upload_files_batch(files: list, project_root: str, api_url: str, max_workers
 
 def upload_docs():
     """Upload documentation files to knowledge base via file upload API."""
-    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    # #14517: was a shell placeholder in a plain string literal, so every glob below
+    # matched nothing and the upload reported a clean zero. Named ``root``:
+    # assigning to the imported ``project_root`` would shadow it as a local and
+    # raise UnboundLocalError on the call itself.
+    root = str(project_root())
     api_url = "http://localhost:8001"  # Use proper URL from config
 
     # Find documentation files
     doc_files = []
     patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
     for pattern in patterns:
-        files = glob.glob(os.path.join(project_root, pattern), recursive=True)
+        files = glob.glob(os.path.join(root, pattern), recursive=True)
         doc_files.extend(files)
 
     # Remove duplicates and filter
@@ -83,7 +89,7 @@ def upload_docs():
     files_to_upload = filtered_files[:10]
     print(f"Uploading {len(files_to_upload)} files concurrently...")
 
-    results = upload_files_batch(files_to_upload, project_root, api_url)
+    results = upload_files_batch(files_to_upload, root, api_url)
 
     # Display results
     added_count = 0

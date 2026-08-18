@@ -161,52 +161,93 @@ def test_effective_expiry_survives_a_settings_stub_missing_reconcile_interval():
 
 def test_effective_expiry_reads_a_real_reconcile_interval_when_present():
     """Confirms this genuinely reads the LIVE setting, not just falling back
-    to the pydantic default every time. `reconcile_interval=120` here is
-    larger than the default `REMEDIATION_HEARTBEAT_WAIT_S` (90), so it is the
-    winning term in the margin's `max()`.
+    to the pydantic default every time. The sound floor
+    (`max(REMEDIATION_COOLDOWN, ceiling) + reconcile_interval + 1`, review
+    round 3 re-review -- see `_effective_tracker_expiry_s`'s own docstring
+    for why the earlier `REMEDIATION_COOLDOWN + max(reconcile_interval,
+    ceiling) + 1` form was wrong) makes `reconcile_interval` ADDITIVE, not a
+    competing term in a `max()` -- so any `reconcile_interval` this test
+    picks shows up in the result directly, with no "must be larger than the
+    other term" precondition to maintain across review rounds.
     """
     from types import SimpleNamespace as _SimpleNamespace
 
     original_settings = reconciler.settings
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.settings = _SimpleNamespace(reconcile_interval=120)
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
     try:
+        reconciler.settings = _SimpleNamespace(reconcile_interval=500)
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the settings-derived floor to be the binding one
         effective = reconciler._effective_tracker_expiry_s()
     finally:
         reconciler.settings = original_settings
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
     assert (
-        effective == reconciler.REMEDIATION_COOLDOWN + 120 + 1
-    ), f"expected the floor to be derived from reconcile_interval=120, got {effective}"
+        effective == reconciler.REMEDIATION_COOLDOWN + 500 + 1
+    ), f"expected the floor to be derived from reconcile_interval=500, got {effective}"
 
 
-def test_effective_expiry_margin_uses_heartbeat_wait_when_it_exceeds_reconcile_interval():
-    """Review, round 6: a margin of `reconcile_interval` alone does not bound
-    the REAL source of pass-duration variance -- `_heartbeat_returned`
-    blocking `_attempt_remediation`'s per-node loop for up to
-    `REMEDIATION_HEARTBEAT_WAIT_S`. With a short `reconcile_interval` (e.g.
-    30s) against the 90s default wait, the margin must be the LARGER of the
-    two, not the reconcile tick alone.
+def test_effective_expiry_floor_stays_at_cooldown_plus_one_when_reconcile_interval_is_small():
+    """The sound floor's OTHER branch: with a small `reconcile_interval`
+    (e.g. 30s, well under `REMEDIATION_COOLDOWN`), `max(REMEDIATION_COOLDOWN,
+    ceiling)` is what dominates -- at the shipped `ceiling`
+    (`REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S` = 270,
+    below `REMEDIATION_COOLDOWN` = 300), that's `REMEDIATION_COOLDOWN`
+    itself. Replaces a round-8/round-10 version of this test that asserted
+    the OLD, since-reverted `REMEDIATION_COOLDOWN + max(reconcile_interval,
+    ceiling) + 1` shape (review round 3 re-review: that shape is TIGHTER
+    than the sum, not looser, and undercounts once `ceiling` alone exceeds
+    `REMEDIATION_COOLDOWN` -- see `_effective_tracker_expiry_s`'s docstring).
     """
     from types import SimpleNamespace as _SimpleNamespace
 
     original_settings = reconciler.settings
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
-    reconciler.settings = _SimpleNamespace(reconcile_interval=30)
-    reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
     try:
+        reconciler.settings = _SimpleNamespace(reconcile_interval=30)
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
         effective = reconciler._effective_tracker_expiry_s()
     finally:
         reconciler.settings = original_settings
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
 
-    expected = reconciler.REMEDIATION_COOLDOWN + reconciler.REMEDIATION_HEARTBEAT_WAIT_S + 1
-    assert effective == expected, (
-        f"expected the margin to fall back to REMEDIATION_HEARTBEAT_WAIT_S "
-        f"({reconciler.REMEDIATION_HEARTBEAT_WAIT_S}) when it exceeds reconcile_interval (30), got {effective}"
-    )
+    ceiling = reconciler.REMEDIATION_HEARTBEAT_WAIT_S + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+    expected = max(reconciler.REMEDIATION_COOLDOWN, ceiling) + 30 + 1
+    assert (
+        effective == expected
+    ), f"expected {expected} (REMEDIATION_COOLDOWN dominates at ceiling={ceiling}), got {effective}"
+
+
+def test_effective_expiry_floor_uses_ceiling_once_it_exceeds_cooldown():
+    """The sound floor's `max(REMEDIATION_COOLDOWN, ceiling)` picking
+    `ceiling` once it genuinely exceeds `REMEDIATION_COOLDOWN` -- exercised
+    here by raising `REMEDIATION_PLAYBOOK_TIMEOUT_S` (in-test only) past the
+    ~210s threshold where `ceiling` first exceeds the 300s default cooldown,
+    with `reconcile_interval` held small so it cannot be what dominates.
+    """
+    from types import SimpleNamespace as _SimpleNamespace
+
+    original_settings = reconciler.settings
+    original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
+    original_playbook_timeout = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
+    try:
+        reconciler.settings = _SimpleNamespace(reconcile_interval=10)
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
+        reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = 280
+        effective = reconciler._effective_tracker_expiry_s()
+    finally:
+        reconciler.settings = original_settings
+        reconciler.REMEDIATION_TRACKER_EXPIRY_S = original_expiry
+        reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = original_playbook_timeout
+
+    ceiling = reconciler.REMEDIATION_HEARTBEAT_WAIT_S + 280
+    expected = max(reconciler.REMEDIATION_COOLDOWN, ceiling) + 10 + 1
+    assert (
+        effective == expected
+    ), f"expected {expected} (ceiling={ceiling} dominates REMEDIATION_COOLDOWN), got {effective}"
+    assert (
+        ceiling > reconciler.REMEDIATION_COOLDOWN
+    ), "test precondition: ceiling must actually exceed REMEDIATION_COOLDOWN"
 
 
 class _Clock:

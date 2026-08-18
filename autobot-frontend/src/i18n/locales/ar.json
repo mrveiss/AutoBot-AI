@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "يُطبَّق التسليم على الوكلاء فقط."
       },
       "processNodeLabel": "عملية",
-      "processOpensWorkflow": "يفتح سير العمل الذي يشغّله هذا الدور"
+      "processOpensWorkflow": "يفتح سير العمل الذي يشغّله هذا الدور",
+      "attach": "إرفاق",
+      "attachRoleLabel": "الدور",
+      "attachRolePlaceholder": "اختر دورًا…",
+      "attachWorkflowLabel": "معرّف سير العمل",
+      "attachWorkflowPlaceholder": "معرّف سير العمل",
+      "attachError": "تعذّر إرفاق سير العمل هذا.",
+      "detachError": "تعذّرت إزالة سير العمل هذا.",
+      "processDetach": "إزالة {workflow} من {role}",
+      "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة."
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "بلا دور",
+      "unassignedHint": "مُدرج في هذا القسم، لكن لا يوجد دور يفسّر وجوده"
     }
   },
   "code": {
@@ -9137,6 +9150,23 @@
       "agent": "وكيل",
       "user": "مستخدم",
       "contact": "جهة اتصال"
-    }
+    },
+    "grant": "منح",
+    "revoke": "سحب",
+    "attach": "إرفاق",
+    "detach": "إزالة",
+    "assign": "تعيين",
+    "endTenure": "إنهاء التعيين",
+    "holderIdPlaceholder": "معرّف الشاغل",
+    "permissionPlaceholder": "مثل knowledge.read",
+    "workflowPlaceholder": "معرّف سير العمل",
+    "toolPlaceholder": "اسم الأداة",
+    "credentialPlaceholder": "معرّف السر",
+    "errorAssign": "تعذّر تعيين الشاغل.",
+    "errorEndTenure": "تعذّر إنهاء التعيين.",
+    "errorGrant": "تعذّر منح الصلاحية.",
+    "errorRevoke": "تعذّر سحب الصلاحية.",
+    "errorAttach": "تعذّر الإرفاق.",
+    "errorDetach": "تعذّرت الإزالة."
   }
 }

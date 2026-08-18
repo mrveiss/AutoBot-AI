@@ -98,61 +98,101 @@
                   <span v-if="holder.ended_at" class="roles-chip-note">
                     {{ t('llcRoles.pastHolder') }}
                   </span>
+                  <!-- Ending a tenure is an update, never a delete: the row
+                       survives so the history stays readable. Past tenures
+                       therefore carry no control. -->
+                  <button
+                    v-else
+                    type="button"
+                    class="roles-chip-action"
+                    :disabled="isMutating"
+                    :aria-label="`${t('llcRoles.endTenure')}: ${holder.holder_id}`"
+                    @click="endTenure(holder.id)"
+                  >
+                    ×
+                  </button>
                 </li>
               </ul>
+
+              <form class="roles-assign" @submit.prevent="assignHolder">
+                <select v-model="newHolderType" :disabled="isMutating" class="roles-assign-type">
+                  <option v-for="kind in HOLDER_TYPES" :key="kind" :value="kind">
+                    {{ t(`llcRoles.holderType.${kind}`) }}
+                  </option>
+                </select>
+                <input
+                  v-model="newHolderId"
+                  type="text"
+                  :placeholder="t('llcRoles.holderIdPlaceholder')"
+                  :disabled="isMutating"
+                  class="roles-assign-id"
+                />
+                <BaseButton
+                  type="submit"
+                  variant="secondary"
+                  :disabled="isMutating || !newHolderId.trim()"
+                >
+                  {{ t('llcRoles.assign') }}
+                </BaseButton>
+              </form>
               <label class="roles-toggle">
                 <input v-model="includePastHolders" type="checkbox" @change="loadDetail" />
                 {{ t('llcRoles.showPastHolders') }}
               </label>
             </section>
 
-            <section class="roles-section">
-              <h4 class="roles-section-title">{{ t('llcRoles.permissions') }}</h4>
-              <p v-if="permissions.length === 0" class="roles-section-empty">
-                {{ t('llcRoles.noPermissions') }}
-              </p>
-              <ul v-else class="roles-chip-list">
-                <li v-for="permission in permissions" :key="permission" class="roles-chip">
-                  {{ permission }}
-                </li>
-              </ul>
-            </section>
+            <RoleAttachmentPanel
+              panel-key="permissions"
+              :title="t('llcRoles.permissions')"
+              :items="permissions"
+              :add-label="t('llcRoles.grant')"
+              :remove-label="t('llcRoles.revoke')"
+              :empty-label="t('llcRoles.noPermissions')"
+              :placeholder="t('llcRoles.permissionPlaceholder')"
+              :busy="isMutating"
+              @add="grantPermission"
+              @remove="revokePermission"
+            />
 
-            <section class="roles-section">
-              <h4 class="roles-section-title">{{ t('llcRoles.workflows') }}</h4>
-              <p v-if="workflows.length === 0" class="roles-section-empty">
-                {{ t('llcRoles.noWorkflows') }}
-              </p>
-              <ul v-else class="roles-chip-list">
-                <li v-for="workflow in workflows" :key="workflow" class="roles-chip">
-                  {{ workflow }}
-                </li>
-              </ul>
-            </section>
+            <RoleAttachmentPanel
+              panel-key="workflows"
+              :title="t('llcRoles.workflows')"
+              :items="workflows"
+              :add-label="t('llcRoles.attach')"
+              :remove-label="t('llcRoles.detach')"
+              :empty-label="t('llcRoles.noWorkflows')"
+              :placeholder="t('llcRoles.workflowPlaceholder')"
+              :busy="isMutating"
+              @add="attachWorkflow"
+              @remove="detachWorkflow"
+            />
 
-            <section class="roles-section">
-              <h4 class="roles-section-title">{{ t('llcRoles.tools') }}</h4>
-              <p v-if="tools.length === 0" class="roles-section-empty">
-                {{ t('llcRoles.noTools') }}
-              </p>
-              <ul v-else class="roles-chip-list">
-                <li v-for="tool in tools" :key="tool" class="roles-chip">{{ tool }}</li>
-              </ul>
-            </section>
+            <RoleAttachmentPanel
+              panel-key="tools"
+              :title="t('llcRoles.tools')"
+              :items="tools"
+              :add-label="t('llcRoles.attach')"
+              :remove-label="t('llcRoles.detach')"
+              :empty-label="t('llcRoles.noTools')"
+              :placeholder="t('llcRoles.toolPlaceholder')"
+              :busy="isMutating"
+              @add="attachTool"
+              @remove="detachTool"
+            />
 
-            <section class="roles-section">
-              <h4 class="roles-section-title">{{ t('llcRoles.credentials') }}</h4>
-              <!-- Ids only. The backend never exposes a secret's value or name
-                   through this surface. -->
-              <p v-if="credentials.length === 0" class="roles-section-empty">
-                {{ t('llcRoles.noCredentials') }}
-              </p>
-              <ul v-else class="roles-chip-list">
-                <li v-for="secretId in credentials" :key="secretId" class="roles-chip">
-                  {{ secretId }}
-                </li>
-              </ul>
-            </section>
+            <RoleAttachmentPanel
+              panel-key="credentials"
+              :title="t('llcRoles.credentials')"
+              :items="credentials"
+              :add-label="t('llcRoles.attach')"
+              :remove-label="t('llcRoles.detach')"
+              :empty-label="t('llcRoles.noCredentials')"
+              :placeholder="t('llcRoles.credentialPlaceholder')"
+              :busy="isMutating"
+              @add="attachCredential"
+              @remove="detachCredential"
+            />
+
           </template>
         </BaseCard>
       </div>
@@ -195,8 +235,10 @@ import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import BaseBadge from '@/components/base/BaseBadge.vue'
+import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
 import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {
   id: string
@@ -233,6 +275,23 @@ const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const errorMessage = ref('')
 
+// Backend RoleHolderType (llc/models/enums.py). Listed rather than derived so
+// an unknown value from a future backend version renders as an option nobody
+// can select, instead of silently disappearing from the picker.
+const HOLDER_TYPES = ['user', 'agent', 'contact'] as const
+
+const newHolderType = ref<(typeof HOLDER_TYPES)[number]>('user')
+const newHolderId = ref('')
+// One flag for every mutation: the panels disable together, so a second call
+// cannot start against a list the first is about to replace.
+const isMutating = ref(false)
+// Monotonic ticket for detail loads. Two loads can be in flight when a user
+// switches role while a post-mutation reload is still running; without this the
+// slower one wins and writes the previous role's holders and permissions into
+// panels headed by the new role's name — a wrong answer on a screen about who
+// may reach what. Only the newest ticket is allowed to publish.
+let detailRequestId = 0
+
 const isCreateModalOpen = ref(false)
 const newRoleName = ref('')
 const newRoleDescription = ref('')
@@ -242,18 +301,16 @@ const selectedRole = computed(
   () => roles.value.find((role) => role.id === selectedRoleId.value) ?? null,
 )
 
+/**
+ * Surface the server's reason rather than a generic message: a 403 from the
+ * admin gate and a 400 from validation need different actions from the user,
+ * and collapsing them into "something went wrong" hides which one happened.
+ *
+ * The extraction itself lives in `composables/llc/apiErrorMessage.ts` — shared
+ * with `OrgChart.vue` (#14549) rather than forked a second time.
+ */
 function describeError(error: unknown, fallbackKey: string): string {
-  // Surface the server's reason rather than a generic message: a 403 from the
-  // admin gate and a 400 from validation need different actions from the user,
-  // and collapsing them into "something went wrong" hides which one happened.
-  //
-  // ApiClient throws a plain Error whose message is already `HTTP <status>:
-  // <detail>` — it extracts `detail` itself (utils/ApiClient.ts
-  // _extractErrorInfo). It is NOT axios-shaped, so reading
-  // `error.response.data.detail` would silently always miss and this function
-  // would return the generic fallback every time while looking like it worked.
-  const message = error instanceof Error ? error.message : ''
-  return message.length > 0 ? message : t(fallbackKey)
+  return describeApiError(error, t(fallbackKey))
 }
 
 async function loadRoles(): Promise<void> {
@@ -277,6 +334,7 @@ async function loadRoles(): Promise<void> {
 async function loadDetail(): Promise<void> {
   const roleId = selectedRoleId.value
   if (!companyId.value || !roleId) return
+  const ticket = ++detailRequestId
   isDetailLoading.value = true
   errorMessage.value = ''
   const base = `/api/llc/roles/${companyId.value}/${roleId}`
@@ -291,6 +349,9 @@ async function loadDetail(): Promise<void> {
         api.get<string[]>(`${base}/tools`),
         api.get<string[]>(`${base}/credentials`),
       ])
+    // A newer load started while this one was in flight: its answer is the
+    // current one, so this response is discarded rather than published.
+    if (ticket !== detailRequestId) return
     holders.value = Array.isArray(loadedHolders) ? loadedHolders : []
     permissions.value = Array.isArray(loadedPermissions) ? loadedPermissions : []
     workflows.value = Array.isArray(loadedWorkflows) ? loadedWorkflows : []
@@ -300,7 +361,7 @@ async function loadDetail(): Promise<void> {
     logger.error('Failed to load role detail', error)
     errorMessage.value = describeError(error, 'llcRoles.errorLoadDetail')
   } finally {
-    isDetailLoading.value = false
+    if (ticket === detailRequestId) isDetailLoading.value = false
   }
 }
 
@@ -332,6 +393,110 @@ async function createRole(): Promise<void> {
     logger.error('Failed to create role', error)
     errorMessage.value = describeError(error, 'llcRoles.errorCreate')
   }
+}
+
+/**
+ * Run one mutation, then reload from the server (#14221 step 6b).
+ *
+ * Deliberately no optimistic update. These lists describe who may reach what;
+ * a local list that diverges from the server would show access that does not
+ * exist, which is worse than a moment's latency. The reload is the assertion
+ * that the change actually happened.
+ */
+async function mutate(call: () => Promise<unknown>, fallbackKey: string): Promise<void> {
+  if (isMutating.value) return
+  isMutating.value = true
+  errorMessage.value = ''
+  try {
+    await call()
+    await loadDetail()
+  } catch (error) {
+    logger.error('Role mutation failed', error)
+    errorMessage.value = describeError(error, fallbackKey)
+  } finally {
+    isMutating.value = false
+  }
+}
+
+function detailBase(): string {
+  return `/api/llc/roles/${companyId.value}/${selectedRoleId.value}`
+}
+
+async function assignHolder(): Promise<void> {
+  const holderId = newHolderId.value.trim()
+  if (!holderId) return
+  await mutate(
+    () =>
+      api.post(`${detailBase()}/holders`, {
+        holder_type: newHolderType.value,
+        holder_id: holderId,
+      }),
+    'llcRoles.errorAssign',
+  )
+  newHolderId.value = ''
+}
+
+async function endTenure(assignmentId: string): Promise<void> {
+  await mutate(
+    () => api.delete(`${detailBase()}/holders/${encodeURIComponent(assignmentId)}`),
+    'llcRoles.errorEndTenure',
+  )
+}
+
+async function grantPermission(permission: string): Promise<void> {
+  await mutate(
+    () => api.post(`${detailBase()}/permissions`, { permission }),
+    'llcRoles.errorGrant',
+  )
+}
+
+async function revokePermission(permission: string): Promise<void> {
+  await mutate(
+    () => api.delete(`${detailBase()}/permissions/${encodeURIComponent(permission)}`),
+    'llcRoles.errorRevoke',
+  )
+}
+
+async function attachWorkflow(workflowId: string): Promise<void> {
+  await mutate(
+    () => api.post(`${detailBase()}/workflows`, { workflow_id: workflowId }),
+    'llcRoles.errorAttach',
+  )
+}
+
+async function detachWorkflow(workflowId: string): Promise<void> {
+  await mutate(
+    () => api.delete(`${detailBase()}/workflows/${encodeURIComponent(workflowId)}`),
+    'llcRoles.errorDetach',
+  )
+}
+
+async function attachTool(toolName: string): Promise<void> {
+  await mutate(
+    () => api.post(`${detailBase()}/tools`, { tool_name: toolName }),
+    'llcRoles.errorAttach',
+  )
+}
+
+async function detachTool(toolName: string): Promise<void> {
+  await mutate(
+    () => api.delete(`${detailBase()}/tools/${encodeURIComponent(toolName)}`),
+    'llcRoles.errorDetach',
+  )
+}
+
+async function attachCredential(secretId: string): Promise<void> {
+  await mutate(
+    () => api.post(`${detailBase()}/credentials`, { secret_id: secretId }),
+    'llcRoles.errorAttach',
+  )
+}
+
+async function detachCredential(secretId: string): Promise<void> {
+  await mutate(
+    () => api.delete(`${detailBase()}/credentials/${encodeURIComponent(secretId)}`),
+    'llcRoles.errorDetach',
+  )
 }
 
 async function removeRole(roleId: string): Promise<void> {
@@ -488,6 +653,38 @@ onMounted(loadRoles)
   flex-direction: column;
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-md);
+}
+
+.roles-chip-action {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  line-height: 1;
+  padding: 0;
+}
+
+.roles-chip-action:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.roles-chip-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.roles-assign {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.roles-assign-id {
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 
 @media (max-width: 48rem) {

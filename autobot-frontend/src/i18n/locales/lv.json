@@ -8298,7 +8298,16 @@
         "handoffNotApplicableHuman": "Nodošana attiecas tikai uz aģentiem."
       },
       "processNodeLabel": "Process",
-      "processOpensWorkflow": "Atver šīs lomas darbplūsmu"
+      "processOpensWorkflow": "Atver šīs lomas darbplūsmu",
+      "attach": "Pievienot",
+      "attachRoleLabel": "Loma",
+      "attachRolePlaceholder": "Izvēlieties lomu…",
+      "attachWorkflowLabel": "Darbplūsmas ID",
+      "attachWorkflowPlaceholder": "Darbplūsmas ID",
+      "attachError": "Neizdevās pievienot šo darbplūsmu.",
+      "detachError": "Neizdevās noņemt šo darbplūsmu.",
+      "processDetach": "Noņemt {workflow} no {role}",
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8538,6 +8547,10 @@
       "pageInfo": "Page {page} · {total} events",
       "prev": "Previous",
       "next": "Next"
+    },
+    "orgPeople": {
+      "unassigned": "nav lomas",
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
     }
   },
   "code": {
@@ -9137,6 +9150,23 @@
       "agent": "Aģents",
       "user": "Lietotājs",
       "contact": "Kontaktpersona"
-    }
+    },
+    "grant": "Piešķirt",
+    "revoke": "Atsaukt",
+    "attach": "Pievienot",
+    "detach": "Noņemt",
+    "assign": "Piešķirt lomu",
+    "endTenure": "Beigt pilnvaras",
+    "holderIdPlaceholder": "Izpildītāja ID",
+    "permissionPlaceholder": "piem., knowledge.read",
+    "workflowPlaceholder": "Darbplūsmas ID",
+    "toolPlaceholder": "Rīka nosaukums",
+    "credentialPlaceholder": "Noslēpuma ID",
+    "errorAssign": "Neizdevās piešķirt izpildītāju.",
+    "errorEndTenure": "Neizdevās beigt pilnvaras.",
+    "errorGrant": "Neizdevās piešķirt atļauju.",
+    "errorRevoke": "Neizdevās atsaukt atļauju.",
+    "errorAttach": "Neizdevās pievienot.",
+    "errorDetach": "Neizdevās noņemt."
   }
 }
