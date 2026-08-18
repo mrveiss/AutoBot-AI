@@ -14,13 +14,14 @@ import os
 import sys
 import time
 
+from autobot_shared.paths import project_root
 from constants import ServiceURLs
 
 # DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
 _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 # Add the project root to the Python path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, str(project_root()))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

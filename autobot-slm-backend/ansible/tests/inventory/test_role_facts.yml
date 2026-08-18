@@ -138,6 +138,43 @@ all:
       expected_role_llm_active: false
       expected_role_tts_worker_active: false
 
+    # 10. #14560 reproduction: privileged roles DETECTED but never DECLARED
+    #     (node_roles carries them, node_roles_declared does not — this is
+    #     what inventory_builder.py stamps for a node whose heartbeat
+    #     reports a role the operator never assigned). The five privileged
+    #     facts must stay false; tts-worker (deliberately-union, #9965) must
+    #     still activate off the raw node_roles branch.
+    test-detected-only-privileged:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - frontend
+        - backend
+        - ai-stack
+        - npu-worker
+        - browser-service
+        - tts-worker
+      node_roles_declared: []
+      expected_role_backend_active: false
+      expected_role_frontend_active: false
+      expected_role_ai_stack_active: false
+      expected_role_npu_worker_active: false
+      expected_role_browser_active: false
+      expected_role_tts_worker_active: true
+
+    # 11. #14560 over-tight check: a role the operator actually DECLARED
+    #     (present in both node_roles and node_roles_declared) must keep
+    #     activating — mirrors #14552's test_ordinary_groups_are_not_swept_in.
+    test-declared-frontend-still-activates:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - frontend
+      node_roles_declared:
+        - frontend
+      expected_role_frontend_active: true
+      expected_role_backend_active: false
+
   children:
     # Group-membership-only test for #8 (test-empty-roles-via-group).
     main:

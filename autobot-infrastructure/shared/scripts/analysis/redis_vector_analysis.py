@@ -12,14 +12,13 @@ import asyncio
 import json
 import logging
 import sys
-import os
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.paths import project_root
 from constants import ServiceURLs
 
 # Add project root to path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, str(project_root()))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

@@ -49214,11 +49214,33 @@ export interface paths {
         };
         /**
          * List Cost Events
-         * @description Return per-agent budget spend summary as cost events (GH#8551).
+         * @description Return per-agent budget spend summaries (GH#8551, GH#13617).
          *
-         *     Returns one entry per agent with non-zero spend in the given company.
-         *     A dedicated cost-event store is not yet implemented; this derives the
-         *     data from LLCAgentBudget rows.
+         *     Returns one entry per agent in the given company. A dedicated cost-event
+         *     store is not yet implemented, so this derives from ``LLCAgentBudget``
+         *     rows — which are running totals, not a per-event log.
+         *
+         *     The field names are the ones the client's ``CostEvent`` already declares.
+         *     They previously were not (``ts`` vs ``created_at``, ``cost_usd`` vs
+         *     ``cost``, ``tokens_in``/``tokens_out`` vs ``input_tokens``/
+         *     ``output_tokens``), so every field the dashboard read came back
+         *     ``undefined`` and the view crashed on the first row (GH#13617).
+         *
+         *     What has no source is sent as ``None`` rather than a plausible-looking
+         *     stand-in:
+         *
+         *     * ``created_at`` — ``LLCAgentBudget`` carries no timestamp at all, so
+         *       there is no date to report. Sending "now" would turn a running total
+         *       into a fake event dated today.
+         *     * ``model`` / ``provider`` — a total spans every model an agent used;
+         *       naming one would be wrong. The previous literal ``"unknown"`` read as
+         *       a real model name in the table.
+         *     * ``input_tokens`` / ``output_tokens`` — the split is not stored. The
+         *       previous hardcoded ``0`` claimed an agent had used no tokens; the
+         *       total that *is* known is sent as ``tokens_spent`` instead.
+         *
+         *     ``source`` names what each row actually is, so the client can say so
+         *     rather than presenting totals as a per-event history.
          */
         get: operations["list_cost_events_api_llc_cost_events_get"];
         put?: never;
@@ -84982,6 +85004,8 @@ export interface components {
             adapter_type: string;
             /** Is Human */
             is_human: boolean;
+            /** Is Active */
+            is_active?: boolean | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */

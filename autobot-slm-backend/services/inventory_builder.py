@@ -230,6 +230,28 @@ def _union_roles(node: Any) -> list[str]:
     return result
 
 
+def _declared_roles(node: Any) -> list[str]:
+    """Return node.roles alone, deduped -- the operator's declared intent.
+
+    Unlike ``_union_roles``, detection never contributes here. Stamped as the
+    ``node_roles_declared`` hostvar so role_active_facts.yml's PRIVILEGED
+    facts (backend, frontend, ai_stack, npu_worker, browser -- the ones that
+    unpack a tree, see ``_DECLARED_ONLY_GROUPS``) can gate their node_roles
+    branch the same way ``_strip_undeclared_privileged_groups`` already gates
+    their group branch (#14560). ``node_roles`` itself is left untouched:
+    ``test_node_roles_unions_detected_roles`` pins it as the union, and the
+    deliberately-union facts (role_tts_worker_active and friends, see the
+    #9965 comment on the ``node_roles`` hostvar below) still need it.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for r in list(node.roles or []):
+        if r not in seen:
+            seen.add(r)
+            result.append(r)
+    return result
+
+
 # Groups whose plays DEPLOY a component's tree onto the host. Detection must
 # never add a node to one of these: the whole failure mode is a node being
 # handed software it does not run.
@@ -303,6 +325,13 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
         # browser/browser_worker. That mismatch is fixed at the source in
         # ROLE_ANSIBLE_GROUPS rather than left for this stamp to paper over.
         "node_roles": _union_roles(node),
+        # #14560: declared-only counterpart. role_active_facts.yml's five
+        # PRIVILEGED facts (backend, frontend, ai_stack, npu_worker, browser)
+        # read this instead of node_roles, so a role that only DETECTED
+        # (never declared) no longer activates that fact's deploy tasks --
+        # matching the group-side fix already applied by
+        # ``_strip_undeclared_privileged_groups``. See ``_declared_roles``.
+        "node_roles_declared": _declared_roles(node),
     }
     if local_ip_check(node.ip_address):
         hostvars["ansible_connection"] = "local"
