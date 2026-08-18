@@ -80,17 +80,13 @@ def test_the_model_is_registered_in_metadata() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_role_with_no_rate_reads_as_none_not_zero(
-    session: AsyncSession, service: RoleRateService
-) -> None:
+async def test_a_role_with_no_rate_reads_as_none_not_zero(session: AsyncSession, service: RoleRateService) -> None:
     """The distinction the whole costing chain rests on."""
     assert await service.get(session, uuid.uuid4(), uuid.uuid4()) is None
 
 
 @pytest.mark.asyncio
-async def test_currency_must_be_a_three_letter_code(
-    session: AsyncSession, service: RoleRateService
-) -> None:
+async def test_currency_must_be_a_three_letter_code(session: AsyncSession, service: RoleRateService) -> None:
     """A free-text unit must never reach a figure people read as money."""
     for bad in ("", "US", "DOLLAR", "12$"):
         with pytest.raises(ValueError):
@@ -136,9 +132,7 @@ async def test_a_non_admin_cannot_set_a_rate(session: AsyncSession, service: Rol
 
 
 @pytest.mark.asyncio
-async def test_an_absent_actor_cannot_set_a_rate(
-    session: AsyncSession, service: RoleRateService
-) -> None:
+async def test_an_absent_actor_cannot_set_a_rate(session: AsyncSession, service: RoleRateService) -> None:
     with pytest.raises(NotAuthorisedError):
         await service.set_rate(
             session,

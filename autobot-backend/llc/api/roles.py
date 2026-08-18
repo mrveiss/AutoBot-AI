@@ -48,10 +48,10 @@ from ..services.role import RoleService
 from ..services.role_assignment import RoleAssignmentService
 from ..services.role_credential import RoleCredentialService
 from ..services.role_permission import RolePermissionService
-from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_rate import RoleRateService
-from ..services.step_cost import derive_step_cost
+from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_workflow import RoleWorkflowService
+from ..services.step_cost import derive_step_cost
 
 router = APIRouter(prefix="/roles", tags=["llc-roles"])
 

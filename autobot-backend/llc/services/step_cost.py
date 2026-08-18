@@ -109,9 +109,7 @@ def derive_step_cost(
         # rounded first and the error was then tripled. These figures are
         # summed into totals people are asked to trust, so the compounding
         # matters more than the single value does.
-        per_month = (
-            Decimal(estimated_minutes) * Decimal(runs_per_month) * Decimal(hourly_rate)
-        ) / MINUTES_PER_HOUR
+        per_month = (Decimal(estimated_minutes) * Decimal(runs_per_month) * Decimal(hourly_rate)) / MINUTES_PER_HOUR
         per_year = per_month * MONTHS_PER_YEAR
 
     return StepCost(
