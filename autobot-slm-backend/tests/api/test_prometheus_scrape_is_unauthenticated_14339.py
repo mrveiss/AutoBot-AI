@@ -775,3 +775,43 @@ def test_the_repeat_check_does_not_fire_on_distinct_names():
     calls, unparseable = _all_bypass_calls(tree)
     assert not unparseable, f"distinct names were reported as repeats: {unparseable}"
     assert set(calls) == {"alpha_router", "beta_router"}
+
+
+def test_a_name_registered_by_two_idioms_is_reported():
+    """An endpoint function named after a router borrows the router's entry.
+
+    The registry declares names, and a name is not a unique identity for a
+    route surface. `performance_metrics_router` is legitimately on the open
+    list as a router; an `@app.get` endpoint function of the same name is a
+    different surface that inherits the declaration.
+
+    Both registrations here are ungated, so a rule comparing only gating lets
+    this through — which is exactly how it survived the first fix.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(performance_metrics_router, prefix="/api")\n'
+        '@app.get("/api/services/admin-dump")\n'
+        "async def performance_metrics_router():\n"
+        "    return {}\n"
+    )
+    _, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "a name registered by two different idioms was collapsed"
+    assert any("performance_metrics_router" in item for item in unparseable)
+
+
+def test_one_router_under_two_prefixes_with_equal_gating_is_allowed():
+    """A legitimate FastAPI pattern must not be forbidden to close the hole.
+
+    An earlier revision failed on any repeat at all, which would have rejected
+    this with no way to declare an exception. The registrations agree on both
+    idiom and gating, so they are the same declaration seen twice.
+    """
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies=_SM)\n'
+    )
+    calls, unparseable = _all_bypass_calls(tree)
+    assert not unparseable, f"a legitimate two-prefix mount was reported: {unparseable}"
+    assert "widgets_router" in calls
