@@ -172,7 +172,7 @@ def _is_empty_constructor(value: ast.expr) -> bool:
     return (
         isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
-        and value.func.id in {"list", "tuple", "set"}
+        and value.func.id in {"list", "tuple", "set", "dict"}
         and not value.args
         and not value.keywords
     )
@@ -190,9 +190,11 @@ def _is_gated(call: ast.AST) -> bool:
 
     * **Any constant is ungated.** `None`, `False`, `0`, `""` — no constant is
       a sequence of dependencies, so none of them can gate anything.
-    * **An empty collection is ungated** — the `[]` and `()` literals, and a
-      no-argument `list()` / `tuple()` / `set()`, which parse as calls rather
-      than literals but construct exactly the same nothing.
+    * **An empty collection is ungated** — the `[]`, `()` and `{}` literals,
+      and a no-argument `list()` / `tuple()` / `set()` / `dict()`, which parse
+      as calls rather than literals but construct exactly the same nothing.
+      `{}` belongs here for the same reason as the rest: FastAPI stores
+      `list(dependencies or [])`, and an empty dict is falsy.
     * **Everything else is gated** — a name, an attribute, a call, a
       non-empty collection.
 
@@ -210,6 +212,8 @@ def _is_gated(call: ast.AST) -> bool:
         if isinstance(value, ast.Constant):
             return False
         if isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts:
+            return False
+        if isinstance(value, ast.Dict) and not value.keys:
             return False
         if _is_empty_constructor(value):
             return False
@@ -940,4 +944,30 @@ def test_a_none_dependency_cannot_hide_a_second_mount():
     )
     calls, unparseable = _all_bypass_calls(tree)
     assert unparseable, "an ungated repeat with dependencies=None was swallowed"
+    assert any("widgets_router" in item for item in unparseable)
+
+
+def test_an_empty_dict_is_not_a_gate():
+    """`{}` and `dict()` are the dict spellings of the empty collection.
+
+    FastAPI stores `list(dependencies or [])`, so an empty dict is falsy and
+    enforces exactly nothing — the same runtime outcome as `[]`, `()`, `set()`
+    and `None`, all of which were already handled. Reaching for "the empty
+    version of a collection" and typing the dict spelling is an ordinary slip,
+    which is why this belongs in the rule rather than in the residual.
+    """
+    for literal in ("{}", "dict()"):
+        call = ast.parse(f"app.include_router(r, dependencies={literal})").body[0].value
+        assert not _is_gated(call), f"dependencies={literal} was treated as a gate"
+
+
+def test_an_empty_dict_cannot_hide_a_second_mount():
+    """The masking case, through `{}`."""
+    tree = ast.parse(
+        "app = FastAPI()\n"
+        'app.include_router(widgets_router, prefix="/v1", dependencies=_SM)\n'
+        'app.include_router(widgets_router, prefix="/v2", dependencies={})\n'
+    )
+    _, unparseable = _all_bypass_calls(tree)
+    assert unparseable, "an ungated repeat with dependencies={} was swallowed"
     assert any("widgets_router" in item for item in unparseable)
