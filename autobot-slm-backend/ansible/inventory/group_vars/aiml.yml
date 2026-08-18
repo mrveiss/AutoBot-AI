@@ -225,8 +225,15 @@ packages:
     - anthropic>=0.7.0
 
     # Intel OpenVINO Python API
-    - openvino>=2024.4.0
-    - openvino-dev>=2024.4.0
+    # #14476: openvino-dev dropped -- it is a deprecated meta-package frozen at
+    # 2024.6.0 with no release compatible with openvino 2026.x (#14447). Floor
+    # raised to match the SSOT (autobot-npu-worker/requirements.txt). Currently
+    # dormant: no playbook reads packages.python from this file (verified via
+    # grep -- deploy-aiml.yml references neither `packages` nor `openvino`), so
+    # this list installs nothing today, but it reproduces #14447 the moment
+    # anything is wired to read it. Left in place per the never-delete-code
+    # rule rather than removed.
+    - openvino>=2026.3.0
 
     # Computer vision
     - opencv-python>=4.8.0

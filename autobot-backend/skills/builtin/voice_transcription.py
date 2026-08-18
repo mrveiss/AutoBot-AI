@@ -47,6 +47,13 @@ class VoiceTranscriptionSkill(BaseSkill):
             tags=["audio", "transcription", "whisper", "speech-to-text"],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind each declared trigger to the action that handles it (#14406)."""
+        return {
+            "audio_received": "transcribe_audio",
+            "video_received": "transcribe_video",
+        }
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute transcription action."""
         if action == "transcribe_audio":
