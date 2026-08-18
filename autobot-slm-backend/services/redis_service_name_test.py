@@ -148,9 +148,9 @@ def test_the_role_handler_reads_the_definition():
     handlers = (_ANSIBLE / "roles" / "redis" / "handlers" / "main.yml").read_text(encoding="utf-8")
 
     assert "redis_service_name" in handlers, "the redis role's handler no longer reads the canonical definition"
-    assert re.search(rf"default\(\s*'{re.escape(_canonical_name())}'\s*\)", handlers), (
-        "the handler's fallback no longer matches the canonical unit name"
-    )
+    assert re.search(
+        rf"default\(\s*'{re.escape(_canonical_name())}'\s*\)", handlers
+    ), "the handler's fallback no longer matches the canonical unit name"
 
 
 def test_every_playbook_is_actually_readable():
@@ -176,7 +176,9 @@ def _play_level_definitions():
             for play in document if isinstance(document, list) else [document]:
                 if not isinstance(play, dict):
                     continue
-                value = (play.get("vars") or {}).get("redis_service_name") if isinstance(play.get("vars"), dict) else None
+                value = (
+                    (play.get("vars") or {}).get("redis_service_name") if isinstance(play.get("vars"), dict) else None
+                )
                 if isinstance(value, str) and "{{" not in value:
                     yield path.relative_to(_ANSIBLE), value
 
@@ -194,6 +196,6 @@ def test_no_play_redefines_the_name_to_something_else():
 
     offenders = [f"{path} sets {value!r}" for path, value in _play_level_definitions() if value != canonical]
 
-    assert not offenders, (
-        f"play-level redis_service_name disagrees with group_vars ({canonical!r}): " + "; ".join(offenders)
+    assert not offenders, f"play-level redis_service_name disagrees with group_vars ({canonical!r}): " + "; ".join(
+        offenders
     )
