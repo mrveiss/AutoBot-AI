@@ -44,6 +44,21 @@ class LLCRoleWorkflow(Base):
     role_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     workflow_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
 
+    # --- What this step costs to run (#14598) ---------------------------------
+    #
+    # Both nullable, and nullable means *not recorded* — never zero. A step
+    # nobody has measured must not total as free, which is the failure this
+    # module's neighbours have already produced three times (#14064, #13617,
+    # #14556). Any rollup counts an unset step in its coverage figure instead
+    # of summing it as nothing.
+    #
+    # Cost itself is deliberately absent: it is derived from these two and the
+    # role's hourly rate (#14607), never stored. A stored cost silently goes
+    # stale the moment a rate changes, and there is no way to tell a stale
+    # number from a current one by looking at it.
+    estimated_minutes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    runs_per_month: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )

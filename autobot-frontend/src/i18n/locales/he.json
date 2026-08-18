@@ -9176,6 +9176,23 @@
     "errorGrant": "לא ניתן להעניק הרשאה.",
     "errorRevoke": "לא ניתן לבטל הרשאה.",
     "errorAttach": "לא ניתן לצרף.",
-    "errorDetach": "לא ניתן להסיר."
+    "errorDetach": "לא ניתן להסיר.",
+    "rate": "תעריף שעתי",
+    "rateLabel": "סכום",
+    "currencyLabel": "מטבע",
+    "saveRate": "שמירת תעריף",
+    "clearRate": "ניקוי",
+    "noRate": "לא הוגדר תעריף — עדיין לא ניתן לתמחר את שלבי התפקיד הזה.",
+    "stepCosts": "עלויות השלבים",
+    "minutesLabel": "דקות להרצה",
+    "runsLabel": "הרצות בחודש",
+    "saveStepCost": "שמירה",
+    "perRun": "להרצה",
+    "perMonth": "לחודש",
+    "costNeedsRate": "הגדירו תעריף שעתי לתפקיד כדי לתמחר את השלב הזה.",
+    "costNeedsInputs": "לא מתומחר — רשמו כמה זמן אורך השלב וכמה פעמים הוא רץ.",
+    "errorSetRate": "לא ניתן היה לשמור את התעריף.",
+    "errorClearRate": "לא ניתן היה לנקות את התעריף.",
+    "errorSetStepCost": "לא ניתן היה לשמור את נתוני עלות השלב."
   }
 }

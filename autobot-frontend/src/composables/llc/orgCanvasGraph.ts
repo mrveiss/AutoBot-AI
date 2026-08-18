@@ -47,6 +47,18 @@ const GROUP_GAP = 60
  */
 const UNGROUPED_COLUMNS = 4
 /** Id prefix that keeps container ids from colliding with agent ids. */
+/**
+ * What a container node stands for (#14596).
+ *
+ * Carried in `data` rather than as a new `CanvasNodeType`: the renderer's
+ * `nodeIcons` / `nodeLabels` are `Record<CanvasNodeType, ...>` literals, so a
+ * new member is a compile error until both gain entries — and neither an icon
+ * nor a type label is what distinguishes these. What differs is how the box is
+ * drawn, which is a styling concern.
+ */
+export const GROUP_KIND_UNIT = 'unit'
+export const GROUP_KIND_TEAM = 'team'
+
 export const ORG_GROUP_PREFIX = 'org-group:'
 
 interface PlacedNode {
@@ -113,6 +125,11 @@ function toGroupNode(
     position: { x: 0, y: topOffset },
     data: {
       label: unitLabel(root.name),
+      // #14596: which kind of container this is, so the renderer can draw them
+      // differently. A team and a reporting unit answer different questions —
+      // "who works together" and "who reports to whom" — and until this
+      // existed they were the same box with different words in it.
+      kind: GROUP_KIND_UNIT,
       width: 2 * GROUP_PADDING + (depth + 1) * CANVAS_NODE_WIDTH + depth * COLUMN_GAP,
       height: GROUP_HEADER + 2 * GROUP_PADDING + rows * ROW_HEIGHT,
     },
@@ -405,6 +422,7 @@ function layoutTeamGroup(
     position: { x: 0, y: topOffset },
     data: {
       label,
+      kind: GROUP_KIND_TEAM,
       width: 2 * GROUP_PADDING + columns * CANVAS_NODE_WIDTH + (columns - 1) * COLUMN_GAP,
       height: GROUP_HEADER + 2 * GROUP_PADDING + rows * ROW_HEIGHT,
     },

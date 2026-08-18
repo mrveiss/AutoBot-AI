@@ -38,6 +38,12 @@ _EXPECTED = {
     ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials"),
     ("POST", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials"),
     ("DELETE", f"{_PREFIX}/{{company_id}}/{{role_id}}/credentials/{{secret_id}}"),
+    # Step cost inputs and the role rate they derive from (#14598, #14607).
+    ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/workflows/{{workflow_id}}/cost"),
+    ("PUT", f"{_PREFIX}/{{company_id}}/{{role_id}}/workflows/{{workflow_id}}/cost"),
+    ("GET", f"{_PREFIX}/{{company_id}}/{{role_id}}/rate"),
+    ("PUT", f"{_PREFIX}/{{company_id}}/{{role_id}}/rate"),
+    ("DELETE", f"{_PREFIX}/{{company_id}}/{{role_id}}/rate"),
 }
 
 

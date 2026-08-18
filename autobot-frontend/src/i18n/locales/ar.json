@@ -9176,6 +9176,23 @@
     "errorGrant": "تعذّر منح الصلاحية.",
     "errorRevoke": "تعذّر سحب الصلاحية.",
     "errorAttach": "تعذّر الإرفاق.",
-    "errorDetach": "تعذّرت الإزالة."
+    "errorDetach": "تعذّرت الإزالة.",
+    "rate": "الأجر بالساعة",
+    "rateLabel": "المبلغ",
+    "currencyLabel": "العملة",
+    "saveRate": "حفظ الأجر",
+    "clearRate": "مسح",
+    "noRate": "لم يُحدَّد أجر — لا يمكن بعد حساب تكلفة خطوات هذا الدور.",
+    "stepCosts": "تكاليف الخطوات",
+    "minutesLabel": "الدقائق لكل تشغيل",
+    "runsLabel": "مرات التشغيل شهريًا",
+    "saveStepCost": "حفظ",
+    "perRun": "لكل تشغيل",
+    "perMonth": "شهريًا",
+    "costNeedsRate": "حدِّد أجرًا بالساعة لهذا الدور لحساب تكلفة هذه الخطوة.",
+    "costNeedsInputs": "غير محسوبة — سجّل مدة هذه الخطوة وعدد مرات تشغيلها.",
+    "errorSetRate": "تعذّر حفظ الأجر.",
+    "errorClearRate": "تعذّر مسح الأجر.",
+    "errorSetStepCost": "تعذّر حفظ بيانات تكلفة الخطوة."
   }
 }

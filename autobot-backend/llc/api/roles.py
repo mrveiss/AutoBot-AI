@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -47,8 +48,10 @@ from ..services.role import RoleService
 from ..services.role_assignment import RoleAssignmentService
 from ..services.role_credential import RoleCredentialService
 from ..services.role_permission import RolePermissionService
+from ..services.role_rate import RoleRateService
 from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_workflow import RoleWorkflowService
+from ..services.step_cost import derive_step_cost
 
 router = APIRouter(prefix="/roles", tags=["llc-roles"])
 
@@ -56,6 +59,7 @@ _get_roles = lazy_singleton(RoleService)
 _get_holders = lazy_singleton(RoleAssignmentService)
 _get_permissions = lazy_singleton(RolePermissionService)
 _get_workflows = lazy_singleton(RoleWorkflowService)
+_get_rates = lazy_singleton(RoleRateService)
 _get_tools = lazy_singleton(RoleToolService)
 _get_credentials = lazy_singleton(RoleCredentialService)
 
@@ -107,6 +111,50 @@ class PermissionCreate(BaseModel):
 
 class WorkflowAttach(BaseModel):
     workflow_id: str = Field(..., min_length=1, max_length=255)
+
+
+class StepCostInputs(BaseModel):
+    """How long a step takes and how often it runs (#14598).
+
+    Both optional and both meaning *not recorded* when absent — never zero, and
+    never "leave unchanged". Sending ``null`` clears a number someone entered
+    by mistake, which a partial-update idiom would make impossible.
+    """
+
+    estimated_minutes: Optional[int] = Field(None, ge=0)
+    runs_per_month: Optional[int] = Field(None, ge=0)
+
+
+class RoleRateSet(BaseModel):
+    """The hourly cost of a role, with its unit (#14607)."""
+
+    hourly_rate: Decimal = Field(..., ge=0)
+    currency: str = Field(..., min_length=3, max_length=3)
+
+
+class RoleRateResponse(BaseModel):
+    role_id: uuid.UUID
+    hourly_rate: Decimal
+    currency: str
+
+
+class StepCostResponse(BaseModel):
+    """A step's recorded inputs and the cost derived from them (#14598, #14607).
+
+    The derived figures are nullable and accompanied by ``missing``: a step
+    nobody measured, or a role with no rate, is *not costable* rather than
+    free. A zero here would understate every total it feeds and would be
+    indistinguishable from a genuinely free step.
+    """
+
+    workflow_id: str
+    estimated_minutes: Optional[int]
+    runs_per_month: Optional[int]
+    per_run: Optional[Decimal]
+    per_month: Optional[Decimal]
+    per_year: Optional[Decimal]
+    currency: Optional[str]
+    missing: List[str]
 
 
 def _as_role(role) -> RoleResponse:  # noqa: ANN001
@@ -553,4 +601,141 @@ async def detach_credential(
         raise _forbidden(exc) from exc
     if not detached:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Step cost inputs and the rate they are costed against (#14598, #14607)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{company_id}/{role_id}/workflows/{workflow_id}/cost", response_model=StepCostResponse)
+async def get_step_cost(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    workflow_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> StepCostResponse:
+    """What this step costs to run, or why it cannot be costed."""
+    assert_company_access(ctx, company_id)
+    attachment = await _get_workflows().get(session, company_id, role_id, workflow_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    rate = await _get_rates().get(session, company_id, role_id)
+    cost = derive_step_cost(
+        estimated_minutes=attachment.estimated_minutes,
+        runs_per_month=attachment.runs_per_month,
+        hourly_rate=rate.hourly_rate if rate else None,
+        currency=rate.currency if rate else None,
+    )
+    return StepCostResponse(
+        workflow_id=workflow_id,
+        estimated_minutes=attachment.estimated_minutes,
+        runs_per_month=attachment.runs_per_month,
+        per_run=cost.per_run,
+        per_month=cost.per_month,
+        per_year=cost.per_year,
+        currency=cost.currency,
+        missing=[reason.value for reason in cost.missing],
+    )
+
+
+@router.put("/{company_id}/{role_id}/workflows/{workflow_id}/cost", response_model=StepCostResponse)
+async def set_step_cost_inputs(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    workflow_id: str,
+    payload: StepCostInputs,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> StepCostResponse:
+    """Record how long the step takes and how often it runs."""
+    assert_company_access(ctx, company_id)
+    try:
+        await _get_workflows().set_cost_inputs(
+            session,
+            company_id=company_id,
+            role_id=role_id,
+            workflow_id=workflow_id,
+            estimated_minutes=payload.estimated_minutes,
+            runs_per_month=payload.runs_per_month,
+            actor_user_id=_actor_id(current_user),
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    await session.commit()
+    return await get_step_cost(company_id, role_id, workflow_id, session, current_user, ctx)
+
+
+@router.get("/{company_id}/{role_id}/rate", response_model=Optional[RoleRateResponse])
+async def get_role_rate(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> Optional[RoleRateResponse]:
+    """The role's hourly rate, or ``null`` when nobody has set one.
+
+    ``null`` rather than a zero-rate object: a role with no rate cannot have
+    its steps costed, which is not the same as its work being free.
+    """
+    assert_company_access(ctx, company_id)
+    rate = await _get_rates().get(session, company_id, role_id)
+    if rate is None:
+        return None
+    return RoleRateResponse(role_id=role_id, hourly_rate=rate.hourly_rate, currency=rate.currency)
+
+
+@router.put("/{company_id}/{role_id}/rate", response_model=RoleRateResponse)
+async def set_role_rate(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    payload: RoleRateSet,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> RoleRateResponse:
+    assert_company_access(ctx, company_id)
+    try:
+        rate = await _get_rates().set_rate(
+            session,
+            company_id=company_id,
+            role_id=role_id,
+            hourly_rate=payload.hourly_rate,
+            currency=payload.currency,
+            actor_user_id=_actor_id(current_user),
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    await session.commit()
+    return RoleRateResponse(role_id=role_id, hourly_rate=rate.hourly_rate, currency=rate.currency)
+
+
+@router.delete("/{company_id}/{role_id}/rate", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_role_rate(
+    company_id: uuid.UUID,
+    role_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Remove the rate. Every step of this role becomes not costable again."""
+    assert_company_access(ctx, company_id)
+    try:
+        cleared = await _get_rates().clear(
+            session, company_id=company_id, role_id=role_id, actor_user_id=_actor_id(current_user)
+        )
+    except NotAuthorisedError as exc:
+        raise _forbidden(exc) from exc
+    if not cleared:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rate not found")
     await session.commit()
