@@ -1714,6 +1714,87 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S",
+        type=int,
+        default=180,
+        description=(
+            "Wall-clock ceiling on the ansible-playbook subprocess _restart_service_via_ansible "
+            "launches. Previously unbounded — a hung SSH connection or stuck remote task blocked "
+            "remediation for a node indefinitely. manage-service.yml (the only playbook this call "
+            "path runs) is a single-host, single-service restart that normally completes in "
+            "seconds; 180s stays comfortably below REMEDIATION_COOLDOWN (300s) while giving "
+            "generous headroom (services/reconciler.py, services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "Per-command timeout for the git checkout/fetch/reset subcommands "
+            "PlaybookExecutor._update_code_source runs before every playbook. On expiry the "
+            "WHOLE process group is killed (not just git's own pid), since git can leave an "
+            "ssh/credential-helper child holding the output pipes open "
+            "(services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S",
+        type=int,
+        default=10,
+        description=(
+            "Timeout for the best-effort 'git rev-parse --short HEAD' traceability log "
+            "PlaybookExecutor._update_code_source runs after a successful sync "
+            "(services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S",
+        type=int,
+        default=2100,
+        description=(
+            "Wall-clock ceiling on _restart_service_via_ansible when it restarts an arbitrary "
+            "ServiceCategory.AUTOBOT unit (_remediate_failed_service), as opposed to the "
+            "lightweight slm-agent restart (AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S). That "
+            "category is populated by unit-name pattern match (postgresql*, redis*, docker*, "
+            "...), an open-ended set that includes Type=oneshot units with a multi-minute "
+            "TimeoutStartSec (autobot-pg-backup.service.j2 declares 1800s) -- reusing the "
+            "slm-agent budget here would SIGKILL a legitimate long-running restart "
+            "(services/reconciler.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAYBOOK_KILL_GRACE_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Grace period between SIGTERM and SIGKILL when killing a timed-out playbook "
+            "subprocess's whole process group. Long enough for ansible-playbook / a forked ssh "
+            "child to unwind cleanly; short enough that a wedged process does not itself become "
+            "an unbounded second wait (services/playbook_executor.py, #14524)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S",
         type=int,
         default=3600,
