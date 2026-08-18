@@ -100,9 +100,9 @@ def test_effective_expiry_floor_sums_heartbeat_wait_and_playbook_timeout():
     ceiling = reconciler.REMEDIATION_HEARTBEAT_WAIT_S + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
     expected = max(reconciler.REMEDIATION_COOLDOWN, ceiling) + 60 + 1  # 60 == reconcile_interval fallback
     assert effective == expected, f"expected {expected}, got {effective}"
-    assert expected == 361, (
-        f"expected the floor to still resolve to the documented 361 at these defaults, got {expected}"
-    )
+    assert (
+        expected == 361
+    ), f"expected the floor to still resolve to the documented 361 at these defaults, got {expected}"
 
 
 def test_restart_service_via_ansible_passes_the_playbook_timeout_through():
@@ -296,7 +296,6 @@ def _gap_after_one_attempt(work_duration_s: int) -> int:
     return work_duration_s + remaining_cooldown + 60  # 60 == reconcile_interval fallback (getattr default)
 
 
-
 def test_escalation_reachable_at_the_shipped_default():
     """The actual fix for the reported "56 restarts / 0 escalations" shape, at
     the SHIPPED default (review round 2, reconfirmed round 3 re-review after
@@ -412,6 +411,6 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
 
     tracker = service._remediation_tracker[node.node_id]
     assert tracker["count"] >= reconciler.MAX_REMEDIATION_ATTEMPTS
-    assert tracker.get("exhausted") is True, (
-        f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"
-    )
+    assert (
+        tracker.get("exhausted") is True
+    ), f"escalation failed once the playbook timeout was raised past the pre-#14524 margin -- got {tracker}"

@@ -213,9 +213,9 @@ def test_effective_expiry_floor_stays_at_cooldown_plus_one_when_reconcile_interv
 
     ceiling = reconciler.REMEDIATION_HEARTBEAT_WAIT_S + reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S
     expected = max(reconciler.REMEDIATION_COOLDOWN, ceiling) + 30 + 1
-    assert effective == expected, (
-        f"expected {expected} (REMEDIATION_COOLDOWN dominates at ceiling={ceiling}), got {effective}"
-    )
+    assert (
+        effective == expected
+    ), f"expected {expected} (REMEDIATION_COOLDOWN dominates at ceiling={ceiling}), got {effective}"
 
 
 def test_effective_expiry_floor_uses_ceiling_once_it_exceeds_cooldown():
@@ -242,12 +242,12 @@ def test_effective_expiry_floor_uses_ceiling_once_it_exceeds_cooldown():
 
     ceiling = reconciler.REMEDIATION_HEARTBEAT_WAIT_S + 280
     expected = max(reconciler.REMEDIATION_COOLDOWN, ceiling) + 10 + 1
-    assert effective == expected, (
-        f"expected {expected} (ceiling={ceiling} dominates REMEDIATION_COOLDOWN), got {effective}"
-    )
-    assert ceiling > reconciler.REMEDIATION_COOLDOWN, (
-        "test precondition: ceiling must actually exceed REMEDIATION_COOLDOWN"
-    )
+    assert (
+        effective == expected
+    ), f"expected {expected} (ceiling={ceiling} dominates REMEDIATION_COOLDOWN), got {effective}"
+    assert (
+        ceiling > reconciler.REMEDIATION_COOLDOWN
+    ), "test precondition: ceiling must actually exceed REMEDIATION_COOLDOWN"
 
 
 class _Clock:
