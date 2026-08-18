@@ -55,6 +55,24 @@ def test_parse_extracts_create_task_from_board_output():
 
 @pytest.mark.asyncio
 async def test_handle_llc_tool_dispatches_company_scoped():
+    """Company-id threading through _handle_llc_tool — deliberately narrow.
+
+    #14491 review: this calls _handle_llc_tool directly (skipping
+    _dispatch_tool_call and its guard chain) on purpose — its job is
+    isolating whether company_id/user_id thread correctly from ctx.context,
+    per this file's own module docstring ("(2) fails -> the dispatch/context
+    is [the break]"), not proving RBAC or routing. No
+    PermissionEnforcementExtension is registered here, so this test's result
+    does not depend on role at all; `role="operator"` is passed explicitly
+    (rather than left on the "user" default) purely so a reader does not
+    mistake this for evidence that "user" is allowed to create_task — it
+    is not, since #14491 gates this tool on WORKFLOW_CREATE. That RBAC
+    behaviour is proven at the real dispatch seam by
+    test_ceo_dispatch_routing.py's
+    test_role_lacking_workflow_create_is_denied_through_dispatch and at the
+    handler seam by test_permission_enforcement_builtin_surfaces.py's
+    TestLLCToolDenial.
+    """
     m = _mixin_instance()
     ctx = SimpleNamespace(context={"company_id": "co-1", "user_id": "u-1"}, consecutive_invalid_tool_calls=0)
     tool_call = {"name": "create_task", "params": {"title": "X", "priority": "high"}}
@@ -63,7 +81,10 @@ async def test_handle_llc_tool_dispatches_company_scoped():
         "chat_workflow.tool_handler.dispatch_llc_tool",
         new=AsyncMock(return_value={"status": "success", "entity_type": "work_item", "entity_id": "wi-1"}),
     ) as disp:
-        msgs = [msg async for msg in m._handle_llc_tool("create_task", tool_call, exec_results, ctx)]
+        msgs = [
+            msg
+            async for msg in m._handle_llc_tool("create_task", tool_call, exec_results, ctx, role="operator")
+        ]
     disp.assert_awaited_once()
     args = disp.await_args.args
     # dispatch_llc_tool(tool_name, params, company_id, user_id)
