@@ -119,9 +119,11 @@ class DocumentPipeline(BasePipeline):
         from media.document.extraction import PageText, render_pages
 
         pages = tuple(
-            PageText(number=page.number, text=result.pages.get(page.number, "") or page.text)
-            if not page.text.strip()
-            else page
+            (
+                PageText(number=page.number, text=result.pages.get(page.number, "") or page.text)
+                if not page.text.strip()
+                else page
+            )
             for page in extracted.pages
         )
         return replace(extracted, pages=pages, text=render_pages(pages))
