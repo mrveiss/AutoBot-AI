@@ -257,18 +257,28 @@ class WhatsAppIntegration(BaseIntegration):
         armed approval policy silently stop acknowledging inbound messages. That
         exclusion is pinned by a test so it stays a decision rather than drift.
 
-        The recipient is masked in the audit record — a phone number is PII and
-        the record outlives the send.
+        The recipient is masked before it reaches the governor — a phone number
+        is directly usable outside this system, so it is reduced the same way
+        in the audit record and in this log line (see the channel-identity
+        rule in ``services.gateway.egress_governor``, #14540).
+
+        The denial response carries ``verdict.safe_reason``, never
+        ``verdict.reason`` — the latter is the audit-facing text and, once a
+        real approver is registered (#14068), can carry raw exception text
+        from whatever the approver touched (#14539).
         """
+        masked_to = _mask_phone(to)
         verdict = await egress_governor.evaluate(
             platform="whatsapp",
-            channel_id=_mask_phone(to),
+            channel_id=masked_to,
             message_id="",
         )
         if verdict.allowed:
             return None
-        logger.warning("WhatsApp send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
-        return {"ok": False, "error": "egress_denied", "reason": verdict.reason}
+        logger.warning(
+            "WhatsApp send to %s blocked by egress governance (%s): %s", masked_to, verdict.rule, verdict.reason
+        )
+        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
 
     async def send_text_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send text message to WhatsApp number.
