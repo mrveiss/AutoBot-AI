@@ -74,6 +74,138 @@ REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WA
 # Clamped, not bare: env_int accepts 0 and negatives, and a 0 here turns the
 # verification poll into a tight open/close-session loop for the whole window.
 REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
+# #14465 review: this does NOT read any heartbeat/streak signal, which closes
+# the specific way the prior two designs were fakeable by a flap -- but it is
+# not, on its own, a general fix for escalation reachability. The dominant
+# gate for a node whose agent keeps heartbeating is `_heartbeat_returned`'s
+# own success semantics a few lines below in `_remediate_node`: ANY beat that
+# lands within `REMEDIATION_HEARTBEAT_WAIT_S` of a restart resets `count` to 0
+# through that path, every attempt, regardless of this mechanism. This is
+# genuinely inert for that shape -- it only matters once `_heartbeat_returned`
+# has ALREADY failed repeatedly (an ansible restart that cannot run, or one
+# that runs but never gets a heartbeat accepted), where it stops those
+# failures from being silently forgiven by nothing at all. Whether/how to
+# widen "recovered" beyond that is a posted, unresolved decision on #14465 --
+# out of scope here.
+#
+# How long a non-exhausted tracker may sit with no NEW attempt before its
+# count is forgiven, in the cases above where it does apply. `last_attempt`
+# only advances when `_remediate_node` actually runs an attempt, which
+# happens every `REMEDIATION_COOLDOWN` for as long as the node keeps being
+# selected DEGRADED -- so it can only go this stale if the reconciler
+# genuinely stopped re-selecting the node for the whole window.
+#
+# This value alone is NOT what `_forgive_if_expired` enforces -- see
+# `_effective_tracker_expiry_s()`. It must be strictly greater than
+# REMEDIATION_COOLDOWN plus a reconcile-tick margin, not merely >=: at exactly
+# REMEDIATION_COOLDOWN, the cooldown check and the forgive check flip at the
+# identical elapsed time, and forgive runs first -- so a tracker is forgiven
+# back to 0 in the same instant an attempt becomes due, every time, and count
+# can never exceed 1. That reconcile-tick margin depends on `settings.
+# reconcile_interval`, a per-process pydantic setting -- deliberately NOT read
+# here at import time. A review-caught regression: one test module stubs
+# `config.settings` as a bare `SimpleNamespace` lacking `reconcile_interval`,
+# and reading it here raised `AttributeError` at module-exec time, which
+# aborted collection for that entire file, not just this constant. `min_v=1`
+# is a cheap sanity floor only; the real, reconcile-interval-aware floor is
+# computed fresh on every call, from the LIVE `settings` object, exactly where
+# it is used.
+REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped("AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=1)
+
+# #14465 review: how often `_handle_max_attempts_refusal` re-broadcasts "still
+# exhausted" for a node parked at MAX_REMEDIATION_ATTEMPTS. Once exhausted,
+# `last_attempt` freezes, so this branch runs on every reconcile pass for as
+# long as the node stays selected DEGRADED -- unthrottled, that is once per
+# `reconcile_interval` forever (~1400/day at the 60s default). An hour is
+# frequent enough that a human watching the UI sees the node is still stuck
+# without needing to have caught the one original event, and infrequent
+# enough not to be noise.
+MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
+    "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
+)
+
+# #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
+# two "log once, not every call" warnings -- that function runs on every
+# _forgive_if_expired, up to once per reconcile pass per degraded node.
+_expiry_floor_override_logged = False
+_reconcile_interval_type_warning_logged = False
+
+
+def _effective_tracker_expiry_s() -> int:
+    """The expiry window actually enforced by `_forgive_if_expired` (#14465 review).
+
+    Reads `settings.reconcile_interval` fresh on every call rather than once
+    at import time -- see `REMEDIATION_TRACKER_EXPIRY_S` for why. `getattr`
+    with a default cannot raise for a genuinely missing attribute, unlike a
+    `try/except` around a narrower guess at which exception a stub might
+    raise; the `isinstance` check below additionally covers a stub where the
+    attribute IS present but is not a real int (e.g. an auto-vivified
+    `MagicMock` child under the root conftest's `config.settings = MagicMock()`
+    stub) -- `int + MagicMock` does not raise either, it silently produces
+    another `MagicMock`, which `max()` against would raise `TypeError` one
+    call later instead of never.
+
+    The margin is NOT `reconcile_interval` alone (review, round 6):
+    `_attempt_remediation` processes every currently-degraded node SERIALLY
+    within one pass, and `_heartbeat_returned` blocks that pass for up to
+    `REMEDIATION_HEARTBEAT_WAIT_S` for EACH node that gets an actual attempt.
+    With more than one such node in the same pass, the real gap between two
+    `_remediate_node` calls for a GIVEN node can run well beyond `reconcile_
+    interval` -- a margin of `reconcile_interval` alone was measured
+    defeated for realistic real-world pass durations. `REMEDIATION_
+    HEARTBEAT_WAIT_S` upper-bounds the dominant source of that variance for
+    ONE node; this does NOT bound the case of many nodes degraded
+    simultaneously, which needs either a known fleet-size ceiling or
+    restructuring `_attempt_remediation` to process nodes concurrently (each
+    with its own DB session -- sharing one `AsyncSession` across concurrent
+    coroutines is unsafe, so that is a real change, not a one-line fix).
+    Tracked as #14515. Nor does it bound `execute_playbook`'s own runtime,
+    which has no wall-clock timeout at all -- tracked separately as #14524,
+    since that is a single-node gap, not a many-nodes one.
+
+    Two conditions are logged once (not on every call -- this runs on every
+    `_forgive_if_expired`, up to once per reconcile pass per degraded node)
+    rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
+    EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
+    a short window silently gets 391+ instead, which is ALSO shorter than
+    the 1800s default, so the operator ends up less protected than doing
+    nothing while believing they configured something specific), and
+    `settings.reconcile_interval` being present but not a real int (an
+    auto-vivified `MagicMock` child, dormant today but would otherwise
+    silently collapse a legitimately large configured interval down to the
+    60s fallback with no warning).
+    """
+    global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
+
+    reconcile_interval = getattr(settings, "reconcile_interval", 60)
+    if not isinstance(reconcile_interval, int):
+        if not _reconcile_interval_type_warning_logged:
+            logger.warning(
+                "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
+                "remediation-tracker expiry floor margin",
+                reconcile_interval,
+            )
+            _reconcile_interval_type_warning_logged = True
+        reconcile_interval = 60
+
+    margin = max(reconcile_interval, REMEDIATION_HEARTBEAT_WAIT_S)
+    floor = REMEDIATION_COOLDOWN + margin + 1
+    effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
+
+    if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
+        logger.warning(
+            "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
+            "(REMEDIATION_COOLDOWN=%ds + margin=%ds + 1)",
+            REMEDIATION_TRACKER_EXPIRY_S,
+            effective,
+            REMEDIATION_COOLDOWN,
+            margin,
+        )
+        _expiry_floor_override_logged = True
+
+    return effective
+
+
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 # Service remediation cooldown (shorter than node remediation)
@@ -435,6 +567,37 @@ class ReconcilerService:
 
                 await self._remediate_node(db, node)
 
+    def _forgive_if_expired(self, node_id: str, tracker: dict, now: datetime) -> dict:
+        """Reset a stale, non-exhausted tracker's count to zero, once genuinely idle (#14465).
+
+        Helper for _check_remediation_limits; see REMEDIATION_TRACKER_EXPIRY_S
+        and `_effective_tracker_expiry_s` for what this does and does not fix
+        -- it is scoped to time since the last ATTEMPT, not any heartbeat-side
+        signal, but it is not the gate that decides whether count accumulates
+        in the first place for a node whose agent keeps heartbeating;
+        `_heartbeat_returned`, below, is.
+
+        `exhausted` trackers are deliberately excluded: that flag means human
+        intervention was already required, and forgiving it on a timer alone
+        would be a silent, unbounded auto-retry -- a scope change this issue
+        does not ask for, not a bug fix.
+        """
+        if tracker.get("exhausted") or not tracker.get("count"):
+            return tracker
+        last_attempt = tracker.get("last_attempt")
+        effective_expiry_s = _effective_tracker_expiry_s()
+        if last_attempt is None or (now - last_attempt).total_seconds() < effective_expiry_s:
+            return tracker
+
+        forgiven = {"count": 0, "last_attempt": last_attempt}
+        self._remediation_tracker[node_id] = forgiven
+        logger.info(
+            "Node %s remediation history expired after %ds with no further attempts - forgiving",
+            node_id,
+            effective_expiry_s,
+        )
+        return forgiven
+
     def _check_remediation_limits(self, node_id: str, now: datetime) -> tuple[bool, str | None, dict]:
         """Check if remediation can proceed based on cooldown and attempt limits.
 
@@ -447,6 +610,7 @@ class ReconcilerService:
             - tracker: The remediation tracker dict for this node
         """
         tracker = self._remediation_tracker.get(node_id, {"count": 0, "last_attempt": None})
+        tracker = self._forgive_if_expired(node_id, tracker, now)
 
         # Check cooldown
         if tracker["last_attempt"]:
@@ -487,6 +651,102 @@ class ReconcilerService:
             details={
                 "attempts": tracker["count"],
                 "action_required": "manual_review",
+            },
+        )
+        db.add(event)
+        await db.commit()
+
+    async def _handle_max_attempts_refusal(self, db: AsyncSession, node: Node, tracker: dict) -> None:
+        """React to a DEGRADED node being refused a remediation attempt at the limit.
+
+        Helper for _remediate_node (#14465 review). Base's recovery reset
+        dropped `exhausted` whenever it fired, so a recovered node became
+        remediable again -- rarely reachable, per this issue's own root-cause
+        finding, but a real path. `_forgive_if_expired` deliberately excludes
+        `exhausted` trackers (see its docstring), so with no other path back
+        this refusal now repeats silently: `_create_max_attempts_event` fired
+        once and every later pass was only a `logger.warning` inside
+        `_check_remediation_limits` -- no event, no broadcast, no UI signal
+        that the node is still stuck. An automatic un-exhaust path is a
+        design decision, tracked on #14465, not built here.
+
+        `exhausted` is set and stored BEFORE `_create_max_attempts_event`'s
+        `db.commit()` is even attempted, not after: `last_attempt` is now
+        frozen (nothing advances it once exhausted), so this branch runs on
+        EVERY future reconcile pass for as long as the node stays selected
+        DEGRADED. If the flag were only set after a successful commit, a
+        commit failure would leave it unset and every subsequent pass would
+        retry the same DB write -- unbounded for a sustained outage. Setting
+        it first means at worst one informational event is lost to a
+        transient failure, never a retry loop.
+
+        The follow-up visibility fix is throttled
+        (`MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S`) and does two things,
+        not one (#14465 review round 7 -- a live-only broadcast reaches
+        nobody who is not watching at that exact moment, and was found
+        emitted onto a wire nothing renders):
+
+        - Persists a throttled `NodeEvent` (`_create_still_exhausted_event`)
+          so the DB-backed timeline shows the node is STILL stuck, not just
+          the one original exhaustion event -- reusing the same generic,
+          already-rendered `EventType.REMEDIATION_COMPLETED` shape rather
+          than inventing a new one, so this needs no new frontend work.
+        - Broadcasts over the websocket for anyone watching live, with
+          `event_type="still_exhausted"` -- deliberately NOT `"completed"`:
+          `FleetOverview.vue`'s `onRemediationEvent` handler calls
+          `fleetStore.refreshNode(nodeId)`, a real API request, for exactly
+          that `event_type`. Broadcasting `"completed"` on every refusal
+          would have turned "make the lockout visible" into a refresh storm
+          once per reconcile tick, forever, for every exhausted node.
+        """
+        if not tracker.get("exhausted"):
+            tracker["exhausted"] = True
+            self._remediation_tracker[node.node_id] = tracker
+            await self._create_max_attempts_event(db, node, tracker)
+            return
+
+        now = datetime.now(timezone.utc)
+        last_broadcast = tracker.get("last_refusal_broadcast")
+        if last_broadcast is not None and (now - last_broadcast).total_seconds() < (
+            MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S
+        ):
+            return
+
+        tracker["last_refusal_broadcast"] = now
+        self._remediation_tracker[node.node_id] = tracker
+        await self._create_still_exhausted_event(db, node, tracker)
+        await self._broadcast_remediation_event(
+            node.node_id,
+            "still_exhausted",
+            success=False,
+            message=f"Node {node.hostname} remains at max remediation attempts - human intervention required",
+        )
+
+    async def _create_still_exhausted_event(self, db: AsyncSession, node: Node, tracker: dict) -> None:
+        """Persist a throttled record of an ONGOING refusal, distinct from the first (#14465).
+
+        Helper for _handle_max_attempts_refusal. Reusing `_create_max_attempts_
+        event`'s exact message would misrepresent every later refusal as a
+        fresh exhaustion; this is the same `event_type`/`severity` (so the
+        existing generic events timeline, which renders by message and
+        severity rather than a fixed per-event_type template, shows it with
+        no new frontend work) with wording that says "still", and the
+        attempt count is unchanged from the first event by design -- it is
+        frozen along with `last_attempt` once exhausted.
+        """
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=(
+                f"Node {node.hostname} still requires human intervention "
+                f"({tracker['count']} failed remediation attempts)"
+            ),
+            details={
+                "attempts": tracker["count"],
+                "action_required": "manual_review",
+                "still_exhausted": True,
             },
         )
         db.add(event)
@@ -574,18 +834,28 @@ class ReconcilerService:
         # refused remediation for the life of the process on every future
         # degradation, until someone called the manual reset endpoint.
         #
-        # A heartbeat newer than our last attempt IS the recovery signal, and it
-        # is already on the row we were handed.
-        self._clear_tracker_if_recovered(node)
+        # #14465: the recovery reset formerly lived here (a heartbeat newer
+        # than the last attempt), then inside update_node_heartbeat's ONLINE
+        # transition, then behind a dwell window there. All three cleared on a
+        # POSITIVE observation of health that a later flap does not retract,
+        # which made each one fakeable by a flap in a different way. Replaced
+        # with `_forgive_if_expired`, inside `_check_remediation_limits` --
+        # gated on elapsed time since the last ATTEMPT rather than any
+        # heartbeat/streak signal, but NOT a complete fix on its own: see
+        # `_effective_tracker_expiry_s` for what its margin does and does not
+        # bound (it does not bound `execute_playbook`'s own runtime, which has
+        # no wall-clock timeout at all -- #14524; the margin's own N=5
+        # coverage gap at this floor is #14515). It is also not the reason
+        # `count` stays low for a node whose agent keeps heartbeating;
+        # `success = restarted and await self._heartbeat_returned(...)`, a
+        # few lines below, is.
 
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
 
         if not can_proceed:
-            if skip_reason == "max_attempts" and not tracker.get("exhausted"):
-                await self._create_max_attempts_event(db, node, tracker)
-                tracker["exhausted"] = True
-                self._remediation_tracker[node_id] = tracker
+            if skip_reason == "max_attempts":
+                await self._handle_max_attempts_refusal(db, node, tracker)
             return False
 
         # Log remediation attempt
@@ -712,58 +982,6 @@ class ReconcilerService:
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
             return False
-
-    def _clear_tracker_if_recovered(self, node: Node) -> None:
-        """Forget past attempts once the node is heartbeating again for real.
-
-        Guards against a node being permanently locked out of remediation after
-        recovering by some route the reconciler never observes (#14344 review).
-
-        #14454: "newer than the last attempt" was too weak a test, and the
-        reason is structural. `_attempt_remediation` only reaches nodes that are
-        currently DEGRADED, and any heartbeat flips a node out of DEGRADED --
-        so a node that genuinely recovers never arrives here at all, it simply
-        stops matching the query. The only node that DOES arrive here with a
-        newer beat is one that flapped: a single heartbeat landed, then it went
-        stale again and was re-degraded.
-
-        That is exactly the shape of a #14350 auth-rejected agent -- restart,
-        one heartbeat, rejected, silence, repeat. Clearing on that reset the
-        counter every cycle, so MAX_REMEDIATION_ATTEMPTS was never reached and
-        escalation never fired: the #14344 defect rebuilt inside its own fix.
-
-        So recovery now requires the beat to still be CURRENT, and the reset
-        keeps `last_attempt` so the cooldown continues to apply.
-
-        KNOWN GAP (#14465), not closed here: a node degraded for a reason other
-        than staleness -- resource pressure, or a crash-looping service --
-        heartbeats on schedule while staying DEGRADED, so it reaches this
-        function with a current beat every pass and has its count cleared every
-        pass. For that node a current beat does not mean recovery, and it never
-        escalates. That shape predates this fix and is unchanged by it; closing
-        it means clearing on the ONLINE transition rather than inside the
-        DEGRADED remediation path.
-        """
-        tracker = self._remediation_tracker.get(node.node_id)
-        if not tracker:
-            return
-
-        last_attempt = tracker.get("last_attempt")
-        beat = node.last_heartbeat
-        if last_attempt is None or beat is None or beat <= last_attempt:
-            return
-
-        # A beat older than the staleness cutoff is not a recovery -- it is the
-        # flap that put this node back in the degraded set to begin with.
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._heartbeat_timeout)
-        if beat < cutoff:
-            return
-
-        self._remediation_tracker[node.node_id] = {"count": 0, "last_attempt": last_attempt}
-        logger.info(
-            "Node %s is heartbeating again - clearing attempt history (cooldown preserved)",
-            node.node_id,
-        )
 
     def reset_remediation_tracker(self, node_id: str) -> None:
         """Reset remediation tracker for a node (e.g., after manual intervention)."""
