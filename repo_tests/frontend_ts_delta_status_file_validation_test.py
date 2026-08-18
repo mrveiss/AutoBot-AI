@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""check-ts-delta.sh must not read an empty TSC_STATUS_FILE as exit 0 (#14503).
+"""check-ts-delta.sh must not read a malformed TSC_STATUS_FILE as exit 0 (#14503).
 
 `scripts/check-ts-delta.sh` reuses a caller's prior vue-tsc run via
 `TSC_OUTPUT_FILE`/`TSC_STATUS_FILE` (#14481). Bash arithmetic reads an empty
@@ -13,18 +13,36 @@ documented discriminator: "a count alone is not a measurement... the exit
 status is what separates [a compiler that never ran] from a genuine clean
 compile." An empty status file silently supplied a fake clean one.
 
+The first fix (`^[0-9]+$` plus `(( TSC_STATUS > 255 ))`) covered exactly the
+shapes the issue named — empty, whitespace, multi-line, non-numeric — but not
+the input *space*: bash's `(( ))` is fixed-width (64-bit) and NOT
+decimal-only, so a value the pattern accepts can still defeat the range check
+below it. `2**64` matches the pattern, then WRAPS to `0` in fixed-width
+arithmetic (same bug, one layer down); a leading zero (`"008"`) matches the
+pattern too, but bash parses it as octal, `8`/`9` are not valid octal digits,
+`(( ))` throws, and because that arithmetic sits in a *tested* `if (( ... ))`
+context the throw is swallowed as false rather than propagating — the guard's
+own error path silently reads a malformed value as clean, the exact defect
+being fixed, one layer up. The current fix rejects both by shape (length +
+no leading zero) before arithmetic ever sees them, and forces base-10 parsing
+(`10#`) on whatever does reach `(( ))`.
+
 `autobot-frontend/` is in no `testpaths` entry (see pytest.ini), so this test
 lives in `repo_tests/` and drives the real script via `subprocess`, in an
 isolated sandbox tree (its own `docs/developer/audits/typescript-baseline.md`
 and no `node_modules/`) so the always-reachable reuse path never depends on
 `vue-tsc` being installed and no test here runs `npm`/`vue-tsc` for real.
 
-Discrimination: every ``*_is_rejected`` test below FAILS against the
-pre-#14503 script (it printed ``PASS: 0 errors`` / exit 0 for the malformed
-shapes, or leaked bash's raw ``unbound variable`` message for the non-numeric
-one) and PASSES against the fixed one. The three fail-safe controls at the
-bottom prove the fix does not touch: a genuinely clean status of 0, a
-genuinely detected crash status, and the missing-file fallback to recompile.
+Discrimination: every ``*_is_rejected``/``*_rejected`` test below FAILS
+against the pre-#14503 script (empty/whitespace/multiline/overflow/octal all
+printed ``PASS: 0 errors`` / exit 0; non-numeric leaked bash's raw
+``unbound variable`` message) and PASSES against the fixed one — the overflow
+and octal cases specifically discriminate the *first* #14503 patch
+(`^[0-9]+$` + `(( TSC_STATUS > 255 ))`, no length bound, no `10#`) from the
+current one, since the first patch still passed both through. The fail-safe
+controls at the bottom prove the fix does not touch: a genuinely clean status
+of 0, a genuinely detected crash status, the missing-file fallback to
+recompile, and the standalone no-env local path.
 """
 
 from __future__ import annotations
@@ -145,6 +163,42 @@ def test_non_numeric_status_file_reports_through_the_scripts_own_error(
         "non-numeric TSC_STATUS_FILE content must be refused through the "
         f"script's own error handling, not bash's raw message. stderr:\n{result.stderr}"
     )
+    assert "valid exit status" in result.stderr
+
+
+def test_overflow_beyond_64bit_wraps_but_is_still_rejected(sandbox: Path) -> None:
+    """2**64 matches a naive `^[0-9]+$` pattern, then WRAPS to 0 under bash's
+    fixed-width `(( ))` arithmetic — so a length/range-blind check would read
+    it right back as `(( 0 > 255 ))`: false, accepted, PASS. Pre-fix (the
+    first #14503 patch, `^[0-9]+$` + `(( TSC_STATUS > 255 ))` with no `10#`
+    and no length bound) this value sailed straight through both this check
+    and the pre-existing crash discriminator at line ~115, printing
+    `PASS: 0 errors` / exit 0 — reproduced against that shape before this test
+    was written. The shape check must reject it purely on digit count, before
+    arithmetic ever sees it.
+    """
+    result = _run(sandbox, status_content="18446744073709551616")  # 2**64
+    assert result.returncode != 0, f"stdout:\n{result.stdout}"
+    assert "PASS" not in result.stdout
+    assert "valid exit status" in result.stderr
+
+
+def test_leading_zero_octal_invalid_value_is_rejected(sandbox: Path) -> None:
+    """A leading zero makes bash's `(( ))` parse the numeral as OCTAL, and `8`/
+    `9` are not valid octal digits, so `(( ))` throws. Because that arithmetic
+    sits in a *tested* context (an `if (( ... ))` condition), `set -e` does not
+    propagate the throw — it is silently read as boolean false. Pre-fix (the
+    first #14503 patch) "008" passed `^[0-9]+$`, then threw on both `(( TSC_STATUS
+    > 255 ))` here and the pre-existing crash check, each throw swallowed as
+    "false" — so the guard neither rejected nor errored, and the script fell
+    through to `PASS: 0 errors` / exit 0 exactly like the empty-file case this
+    whole fix exists to close. This is the guard's own error path being
+    swallowed by the construct it is written inside — reject the shape before
+    arithmetic, and force base 10 (`10#`) on whatever does reach it.
+    """
+    result = _run(sandbox, status_content="008")
+    assert result.returncode != 0, f"stdout:\n{result.stdout}"
+    assert "PASS" not in result.stdout
     assert "valid exit status" in result.stderr
 
 
