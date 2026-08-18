@@ -142,6 +142,7 @@
             </section>
 
             <RoleAttachmentPanel
+              panel-key="permissions"
               :title="t('llcRoles.permissions')"
               :items="permissions"
               :add-label="t('llcRoles.grant')"
@@ -154,6 +155,7 @@
             />
 
             <RoleAttachmentPanel
+              panel-key="workflows"
               :title="t('llcRoles.workflows')"
               :items="workflows"
               :add-label="t('llcRoles.attach')"
@@ -166,6 +168,7 @@
             />
 
             <RoleAttachmentPanel
+              panel-key="tools"
               :title="t('llcRoles.tools')"
               :items="tools"
               :add-label="t('llcRoles.attach')"
@@ -178,6 +181,7 @@
             />
 
             <RoleAttachmentPanel
+              panel-key="credentials"
               :title="t('llcRoles.credentials')"
               :items="credentials"
               :add-label="t('llcRoles.attach')"
@@ -280,6 +284,12 @@ const newHolderId = ref('')
 // One flag for every mutation: the panels disable together, so a second call
 // cannot start against a list the first is about to replace.
 const isMutating = ref(false)
+// Monotonic ticket for detail loads. Two loads can be in flight when a user
+// switches role while a post-mutation reload is still running; without this the
+// slower one wins and writes the previous role's holders and permissions into
+// panels headed by the new role's name — a wrong answer on a screen about who
+// may reach what. Only the newest ticket is allowed to publish.
+let detailRequestId = 0
 
 const isCreateModalOpen = ref(false)
 const newRoleName = ref('')
@@ -325,6 +335,7 @@ async function loadRoles(): Promise<void> {
 async function loadDetail(): Promise<void> {
   const roleId = selectedRoleId.value
   if (!companyId.value || !roleId) return
+  const ticket = ++detailRequestId
   isDetailLoading.value = true
   errorMessage.value = ''
   const base = `/api/llc/roles/${companyId.value}/${roleId}`
@@ -339,6 +350,9 @@ async function loadDetail(): Promise<void> {
         api.get<string[]>(`${base}/tools`),
         api.get<string[]>(`${base}/credentials`),
       ])
+    // A newer load started while this one was in flight: its answer is the
+    // current one, so this response is discarded rather than published.
+    if (ticket !== detailRequestId) return
     holders.value = Array.isArray(loadedHolders) ? loadedHolders : []
     permissions.value = Array.isArray(loadedPermissions) ? loadedPermissions : []
     workflows.value = Array.isArray(loadedWorkflows) ? loadedWorkflows : []
@@ -348,7 +362,7 @@ async function loadDetail(): Promise<void> {
     logger.error('Failed to load role detail', error)
     errorMessage.value = describeError(error, 'llcRoles.errorLoadDetail')
   } finally {
-    isDetailLoading.value = false
+    if (ticket === detailRequestId) isDetailLoading.value = false
   }
 }
 
@@ -425,7 +439,7 @@ async function assignHolder(): Promise<void> {
 
 async function endTenure(assignmentId: string): Promise<void> {
   await mutate(
-    () => api.delete(`${detailBase()}/holders/${assignmentId}`),
+    () => api.delete(`${detailBase()}/holders/${encodeURIComponent(assignmentId)}`),
     'llcRoles.errorEndTenure',
   )
 }

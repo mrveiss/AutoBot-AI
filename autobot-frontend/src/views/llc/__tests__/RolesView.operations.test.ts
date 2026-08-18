@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import ar from '@/i18n/locales/ar.json'
 
 const get = vi.fn()
 const post = vi.fn()
@@ -33,6 +34,7 @@ import RolesView from '../RolesView.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
 
 const ROLE = { id: 'r1', company_id: 'c1', name: 'Head of Sales', is_system: false }
+const OTHER_ROLE = { id: 'r2', company_id: 'c1', name: 'SRE', is_system: false }
 const HOLDER = { id: 'a1', role_id: 'r1', holder_type: 'user', holder_id: 'u-9', ended_at: null }
 
 function respond(): void {
@@ -46,8 +48,8 @@ function respond(): void {
   })
 }
 
-async function mountView() {
-  const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+async function mountView(locale: 'en' | 'ar' = 'en') {
+  const i18n = createI18n({ legacy: false, locale, messages: { en, ar } })
   const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { BaseModal: true } } })
   await flushPromises()
   return wrapper
@@ -201,5 +203,56 @@ describe('RolesView operations (#14221 step 6b)', () => {
 
     expect(post).toHaveBeenCalledTimes(1)
     release?.()
+  })
+
+  it.each(['en', 'ar'] as const)(
+    'gives every panel a distinct DOM id in %s',
+    async (locale) => {
+      // Asserted in a non-Latin locale on purpose. The id used to be derived
+      // from the translated title, and the slug regex keeps only [a-z0-9] — so
+      // Arabic, Hebrew, Farsi and Urdu collapsed all four panels to the same
+      // id, breaking every <label for>. An English-only assertion passes
+      // against that bug, which is how it shipped in the first place.
+      respond()
+      const wrapper = await mountView(locale)
+
+      const ids = wrapper.findAll('input[id^="attachment-"]').map((i) => i.attributes('id'))
+      expect(ids).toEqual([
+        'attachment-permissions',
+        'attachment-workflows',
+        'attachment-tools',
+        'attachment-credentials',
+      ])
+      expect(new Set(ids).size).toBe(ids.length)
+    },
+  )
+
+  it('discards a reload that a role switch has already superseded', async () => {
+    // Switching role while a post-mutation reload is in flight must not let the
+    // slower response publish the previous role's data under the new role's
+    // name — a wrong answer on a screen about who may reach what.
+    const gate: Array<() => void> = []
+    get.mockImplementation((url: string) => {
+      if (url.endsWith('/roles/c1')) return Promise.resolve([ROLE, OTHER_ROLE])
+      if (url.includes('/r1/permissions')) {
+        // Hold r1's answer open until after r2 has loaded.
+        return new Promise((resolve) => gate.push(() => resolve(['stale.permission'])))
+      }
+      if (url.includes('/permissions')) return Promise.resolve(['fresh.permission'])
+      return Promise.resolve([])
+    })
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { selectRole: (id: string) => Promise<void> }
+
+    await vm.selectRole('r2')
+    await flushPromises()
+
+    // r1's held response now arrives, late.
+    gate.forEach((release) => release())
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('fresh.permission')
+    expect(wrapper.text()).not.toContain('stale.permission')
   })
 })

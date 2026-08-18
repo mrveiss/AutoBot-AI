@@ -62,6 +62,18 @@ import { ref, computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 const props = defineProps<{
+  /**
+   * Locale-invariant identity for this panel, e.g. "permissions".
+   *
+   * The DOM id was previously derived from `title`, which is translated. The
+   * slug regex keeps only `a-z0-9`, so every non-Latin script collapsed to the
+   * empty string and all four panels rendered the identical id
+   * `attachment--` in Arabic, Hebrew, Farsi and Urdu — duplicate ids on one
+   * page, and every `<label for>` pointing at the first panel's input.
+   *
+   * A DOM id must never depend on the display language.
+   */
+  panelKey: string
   title: string
   items: string[]
   addLabel: string
@@ -79,11 +91,9 @@ const emit = defineEmits<{
 
 const draft = ref('')
 
-// Unique per panel so the label/input pair stays associated when five of these
-// are on one page — a duplicated id silently breaks the label for all but one.
-const inputId = computed(
-  () => `attachment-${props.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-)
+// Unique per panel so the label/input pair stays associated when several are on
+// one page. Built from `panelKey`, never from the translated title.
+const inputId = computed(() => `attachment-${props.panelKey}`)
 
 function submit(): void {
   const value = draft.value.trim()
