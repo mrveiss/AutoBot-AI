@@ -40,7 +40,14 @@ router = APIRouter(prefix="/memory", tags=["memory-lifecycle"])
 _NODE_URL = os.getenv("AUTOBOT_BACKEND_URL", "") or settings.authority_base_url  # noqa: ssot-fallback
 _INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
 _TIMEOUT = float(os.getenv("AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS", "15"))
-_VERIFY_TLS = os.getenv("AUTOBOT_NODE_PROXY_VERIFY_TLS", "false").lower() == "true"
+# Verify by DEFAULT, opt out explicitly — the same variable and polarity as
+# api/voice_proxy.py. An earlier revision here read
+# AUTOBOT_NODE_PROXY_VERIFY_TLS with a "false" default, which shipped
+# verification OFF unless an operator opted in: the inverse of the pattern
+# this module claims to follow, on a channel that carries the internal API
+# key. Reusing the existing variable also means one switch for all node
+# proxies rather than a second one only this module reads.
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 _EMPTY_SECTIONS: Dict[str, Any] = {
     "reinforcement": {"hot": [], "cold": []},

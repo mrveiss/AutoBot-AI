@@ -19,6 +19,7 @@ the second fails silently.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict
 
 import pytest
@@ -148,3 +149,51 @@ async def test_the_payload_nests_per_node(monkeypatch):
 
     assert isinstance(body["nodes"], list)
     assert body["nodes"][0]["node"] == "https://node"
+
+
+def test_tls_verification_is_on_unless_explicitly_disabled(monkeypatch):
+    """Verify by default, opt out explicitly.
+
+    An earlier revision read its own `AUTOBOT_NODE_PROXY_VERIFY_TLS` with a
+    "false" default, shipping verification OFF unless an operator opted in — the
+    inverse of the `voice_proxy` pattern this module cites, on the channel that
+    carries the internal API key. Pinned by reloading the module under both env
+    states, because the value is captured at import.
+    """
+    import importlib
+
+    monkeypatch.delenv("AUTOBOT_SKIP_TLS_VERIFY", raising=False)
+    assert importlib.reload(proxy)._VERIFY_TLS is True, "TLS verification is off by default"
+
+    monkeypatch.setenv("AUTOBOT_SKIP_TLS_VERIFY", "true")
+    assert importlib.reload(proxy)._VERIFY_TLS is False, "the documented opt-out no longer works"
+
+    monkeypatch.delenv("AUTOBOT_SKIP_TLS_VERIFY", raising=False)
+    importlib.reload(proxy)
+
+
+def test_the_same_opt_out_variable_as_the_sibling_proxies(monkeypatch):
+    """One switch for every node proxy, not a second one only this module reads.
+
+    A per-module variable means an operator disabling verification for a
+    self-signed dev node silently leaves this proxy verifying, or vice versa.
+    """
+    import ast
+
+    source = (Path(__file__).resolve().parents[2] / "api" / "memory_lifecycle_proxy.py").read_text(encoding="utf-8")
+    # Read from the AST, not the text: the module's own comment names the rejected
+    # variable to explain why it is gone, and a substring check would trip on that
+    # explanation rather than on any code.
+    read_vars = {
+        node.args[0].value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"getenv", "get"}
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    }
+    assert "AUTOBOT_SKIP_TLS_VERIFY" in read_vars, f"the shared opt-out is not read; found {sorted(read_vars)}"
+    private = {v for v in read_vars if "VERIFY_TLS" in v and v != "AUTOBOT_SKIP_TLS_VERIFY"}
+    assert not private, f"a private TLS switch was reintroduced: {sorted(private)}"

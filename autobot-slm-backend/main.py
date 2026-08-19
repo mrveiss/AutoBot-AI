@@ -65,11 +65,11 @@ from api import (
     websocket_router,
 )
 from api.code_source import router as code_source_router
+from api.memory_lifecycle_proxy import router as memory_lifecycle_router
 from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
-from api.memory_lifecycle_proxy import router as memory_lifecycle_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from autobot_shared.stream_logging import (
