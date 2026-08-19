@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from autobot_shared.paths import (
+    BASE_DIR_ENV,
     PROJECT_ROOT_ENV,
+    ProjectRootUndeterminable,
     is_checkout_root,
     project_root,
     resolve_project_root,
@@ -86,14 +90,49 @@ class TestDeployedInstall:
         assert resolve_project_root(inner / "pkg" / "mod.py") == inner
         assert inner != outer
 
-    def test_falls_back_to_the_install_location(self, tmp_path, monkeypatch) -> None:
+    def test_honours_an_explicit_base_dir_override(self, tmp_path, monkeypatch) -> None:
         monkeypatch.delenv(PROJECT_ROOT_ENV, raising=False)
-        monkeypatch.setenv("AUTOBOT_BASE_DIR", "/srv/autobot-test")
+        monkeypatch.setenv(BASE_DIR_ENV, "/srv/autobot-test")
 
         bare = tmp_path / "bare"
         bare.mkdir()
 
         assert resolve_project_root(bare / "mod.py") == Path("/srv/autobot-test")
+
+
+class TestUndeterminableRoot:
+    """#14544: no silent guess — an unplaceable root is a raise, not a path.
+
+    The pre-#14544 last resort returned a hardcoded ``/opt/autobot`` here,
+    which is exactly the "defaults to the live install" defect this module
+    exists to close one layer up in every ``sys.path`` bootstrap that calls
+    it. On a real checkout or a real install this branch is never reached —
+    step 1 or step 2 always resolves first — so raising costs nothing there.
+    """
+
+    def test_raises_when_nothing_identifies_the_root(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv(PROJECT_ROOT_ENV, raising=False)
+        monkeypatch.delenv(BASE_DIR_ENV, raising=False)
+
+        bare = tmp_path / "bare"
+        bare.mkdir()
+
+        with pytest.raises(ProjectRootUndeterminable):
+            resolve_project_root(bare / "mod.py")
+
+    def test_the_raise_names_both_overrides(self, tmp_path, monkeypatch) -> None:
+        """The message must tell the caller what to set, not just that it failed."""
+        monkeypatch.delenv(PROJECT_ROOT_ENV, raising=False)
+        monkeypatch.delenv(BASE_DIR_ENV, raising=False)
+
+        bare = tmp_path / "bare"
+        bare.mkdir()
+
+        with pytest.raises(ProjectRootUndeterminable) as excinfo:
+            resolve_project_root(bare / "mod.py")
+
+        assert PROJECT_ROOT_ENV in str(excinfo.value)
+        assert BASE_DIR_ENV in str(excinfo.value)
 
 
 class TestCheckoutMarkers:

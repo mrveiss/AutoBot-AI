@@ -5,6 +5,7 @@
 Simple performance analysis focusing on critical patterns
 """
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List
@@ -219,6 +220,20 @@ def _print_issues_and_recommendations(results: dict) -> None:
     print("Replace: for...+=string → ''.join(list)")  # noqa: print
 
 
+def _save_report(results: dict) -> Path:
+    """Write ``results`` to a JSON report file in the current directory.
+
+    #14587: this analyzer previously emitted no structured output at all --
+    only human-readable ``print()`` -- so an orchestrating caller had nothing
+    to read back. Matches the file-report convention its sibling analyzers
+    already use.
+    """
+    report_path = Path("performance_simple_analysis_report.json")
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, default=str)
+    return report_path
+
+
 def main():
     """Run simple performance analysis"""
     print("🚀 Running simple performance analysis...")  # noqa: print
@@ -229,6 +244,8 @@ def main():
     print(f"Total issues found: {results['total_issues']}")  # noqa: print
     _print_severity_and_category(results)
     _print_issues_and_recommendations(results)
+    report_path = _save_report(results)
+    print(f"📋 Detailed report saved to: {report_path}")  # noqa: print
 
 
 if __name__ == "__main__":

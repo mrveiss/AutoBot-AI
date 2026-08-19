@@ -3815,7 +3815,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "השתמשו במקשי החצים כדי להזיז את המיקוד בין הצמתים. הקישו Enter או Space כדי לבחור בצומת הממוקד. הקישו Escape כדי לבטל את הבחירה.",
+      "a11yInstructionsMove": "החזיקו את מקש Control ולחצו על מקש חץ כדי להזיז את הצומת הנבחרת."
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8003,7 +8007,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "ההוצאות נרשמות כסכומים לכל סוכן ולא כאירועים מתוארכים, ולכן אין עדיין היסטוריה יומית."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8239,6 +8244,7 @@
       "viewCanvas": "קנבס",
       "canvasTabAll": "כל היחידות",
       "canvasUnit": "יחידת {name}",
+      "canvasTeam": "צוות {name}",
       "canvasHint": "Shift+גרירה להזזה, גלילה לשינוי מרחק התצוגה, לחיצה על צומת לפרטים.",
       "viewPeople": "אנשים",
       "peopleLegend": "סוגי אנשים",
@@ -8307,7 +8313,16 @@
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
-      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית."
+      "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית.",
+      "canvasGroupKind": "קבוצה",
+      "toolNodeLabel": "כלי",
+      "attachToolNameLabel": "שם הכלי",
+      "attachToolNamePlaceholder": "שם הכלי",
+      "toolAttachError": "לא ניתן היה לצרף כלי זה.",
+      "toolDetachError": "לא ניתן היה להסיר כלי זה.",
+      "toolDetach": "הסר את {tool} מ-{role}",
+      "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
+      "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו."
     },
     "executorRollup": {
       "title": "סיכום מבצעים",
@@ -8550,7 +8565,9 @@
     },
     "orgPeople": {
       "unassigned": "ללא תפקיד",
-      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת"
+      "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת",
+      "inactive": "לא פעיל",
+      "inactiveHint": "הושבת או הוסר — עדיין מוצג משום שפריטי העבודה והתפקיד שלו נותרים, אך לא ניתן להקצות לו עבודה חדשה."
     }
   },
   "code": {
@@ -9167,6 +9184,23 @@
     "errorGrant": "לא ניתן להעניק הרשאה.",
     "errorRevoke": "לא ניתן לבטל הרשאה.",
     "errorAttach": "לא ניתן לצרף.",
-    "errorDetach": "לא ניתן להסיר."
+    "errorDetach": "לא ניתן להסיר.",
+    "rate": "תעריף שעתי",
+    "rateLabel": "סכום",
+    "currencyLabel": "מטבע",
+    "saveRate": "שמירת תעריף",
+    "clearRate": "ניקוי",
+    "noRate": "לא הוגדר תעריף — עדיין לא ניתן לתמחר את שלבי התפקיד הזה.",
+    "stepCosts": "עלויות השלבים",
+    "minutesLabel": "דקות להרצה",
+    "runsLabel": "הרצות בחודש",
+    "saveStepCost": "שמירה",
+    "perRun": "להרצה",
+    "perMonth": "לחודש",
+    "costNeedsRate": "הגדירו תעריף שעתי לתפקיד כדי לתמחר את השלב הזה.",
+    "costNeedsInputs": "לא מתומחר — רשמו כמה זמן אורך השלב וכמה פעמים הוא רץ.",
+    "errorSetRate": "לא ניתן היה לשמור את התעריף.",
+    "errorClearRate": "לא ניתן היה לנקות את התעריף.",
+    "errorSetStepCost": "לא ניתן היה לשמור את נתוני עלות השלב."
   }
 }

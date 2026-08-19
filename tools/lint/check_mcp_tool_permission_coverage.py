@@ -97,16 +97,17 @@ logger = logging.getLogger(__name__)
 SELF_REL = "tools/lint/check_mcp_tool_permission_coverage.py"
 
 #: Floor for the sweep's own discovery, summed over every bridge. The eleven
-#: governed bridges registered 104 tools when this landed; a sweep that
-#: suddenly reaches a handful has broken, and a clean result from it would
-#: assert nothing. Kept as a coarse aggregate sanity net alongside the
-#: per-bridge floors below (#14523) — those catch a single bridge's own count
-#: dropping; this one is the cheap "did the sweep basically work at all" check.
-DISCOVERY_FLOOR = 90
+#: governed bridges registered 104 tools when this landed; #14586 added
+#: manual_mcp's 3, so 107 today. A sweep that suddenly reaches a handful has
+#: broken, and a clean result from it would assert nothing. Kept as a coarse
+#: aggregate sanity net alongside the per-bridge floors below (#14523) — those
+#: catch a single bridge's own count dropping; this one is the cheap "did the
+#: sweep basically work at all" check.
+DISCOVERY_FLOOR = 93
 
 #: Per-bridge floor (#14523): each governed bridge's own tool count today, so
 #: one bridge silently dropping to near-zero cannot hide inside a total the
-#: other ten bridges keep healthy. A legitimate new tool only ever raises a
+#: other bridges keep healthy. A legitimate new tool only ever raises a
 #: bridge's count, so raising these is a one-line follow-up when that happens
 #: — a drop is always either a parser regression or a real removal, and either
 #: one deserves a look before it merges.
@@ -117,6 +118,8 @@ PER_BRIDGE_DISCOVERY_FLOOR: dict[str, int] = {
     "git_mcp": 6,
     "http_client_mcp": 6,
     "knowledge_mcp": 12,
+    # #14586: the twelfth bridge — lookup_man_page, search_man_pages, get_doc_index.
+    "manual_mcp": 3,
     "prometheus_mcp": 6,
     "redis_mcp": 25,
     "sequential_thinking_mcp": 1,

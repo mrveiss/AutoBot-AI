@@ -345,6 +345,14 @@ _BRIDGE_MODULE_REGISTRY: List[Tuple[str, str, str, List[str]]] = [
         "/api/redis/mcp/tools",
         ["data_access", "vector_search", "hybrid_search", "ops_intelligence", "stream_health", "rbac_filtering"],
     ),
+    # #14586: was reachable via the router but absent here, so its tools never
+    # entered MCPDispatcher._tool_cache and required_permission() never saw them.
+    (
+        "api.manual_mcp",
+        "manual_mcp",
+        "/api/manual/mcp/tools",
+        ["man_pages", "documentation_index"],
+    ),
 ]
 
 # Registry mapping name -> (manifest, module_path) for hot-reload support

@@ -141,6 +141,12 @@ USER autobot
 
 # Environment
 ENV PYTHONPATH=/app:/app/autobot-backend:/app/autobot_shared
+# #14544/#14575: the image has no .git and no .env, so
+# autobot_shared.paths.project_root() cannot infer the root by walking up
+# from /app/autobot_shared/paths.py and raises ProjectRootUndeterminable
+# rather than silently guessing /opt/autobot (the live install this image is
+# NOT). Tell it explicitly instead of letting it guess.
+ENV AUTOBOT_PROJECT_ROOT=/app
 ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 ENV AUTOBOT_DEPLOYMENT_MODE=local

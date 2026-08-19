@@ -39,17 +39,34 @@ _MODULE_TUPLE_TOOL = re.compile(r'^[A-Z_][A-Z0-9_]*\s*=\s*\(\s*\n\s{4}"([a-z0-9_
 _KWARG_TOOL = re.compile(r'name="([a-z0-9_]+)"')
 
 
+#: Bridge module stems intentionally excluded from governance, keyed to the
+#: reason they are excluded. #14586: this used to be a bare
+#: ``if p.stem != "manual_mcp"`` filter with no comment explaining why -- an
+#: exclusion that could grow with no review trail, and did (manual_mcp was
+#: added here with no declared permissions and no test pinning the choice).
+#: Empty today: manual_mcp was un-excluded and governed as the twelfth
+#: bridge (#14586). A future exclusion must add a reasoned entry here, not a
+#: second inline stem check -- ``mcp_bridge_scan_test.py`` asserts every
+#: ``*_mcp.py``/``*_mcp`` source not in ``all_declared_tools()`` is named here.
+EXCLUDED_BRIDGE_STEMS: dict[str, str] = {}
+
+
 def bridge_files(base: pathlib.Path | None = None) -> list[pathlib.Path]:
     """Every bridge's tool-declaring source, module- or package-shaped.
 
     #13228: globbing only ``*_mcp.py`` silently omitted ``redis_mcp``, which is
-    a package (``api/redis_mcp/tools.py``). ``manual_mcp`` is excluded on
-    purpose -- man-page lookup is not one of the eleven bridges this system
-    governs (#14494's issue enumerates them).
+    a package (``api/redis_mcp/tools.py``). #14586: any stem in
+    ``EXCLUDED_BRIDGE_STEMS`` is skipped -- an auditable table instead of an
+    inline name check, so a new exclusion cannot land without a reason next
+    to it.
     """
     directory = base or BRIDGE_DIR
-    modules = [p for p in directory.glob("*_mcp.py") if p.stem != "manual_mcp"]
-    packages = [p / "tools.py" for p in directory.glob("*_mcp") if p.is_dir() and (p / "tools.py").is_file()]
+    modules = [p for p in directory.glob("*_mcp.py") if p.stem not in EXCLUDED_BRIDGE_STEMS]
+    packages = [
+        p / "tools.py"
+        for p in directory.glob("*_mcp")
+        if p.is_dir() and p.stem not in EXCLUDED_BRIDGE_STEMS and (p / "tools.py").is_file()
+    ]
     return sorted(modules + packages)
 
 
@@ -73,6 +90,7 @@ def all_declared_tools(base: pathlib.Path | None = None) -> dict[str, set[str]]:
 
 __all__ = [
     "BRIDGE_DIR",
+    "EXCLUDED_BRIDGE_STEMS",
     "all_declared_tools",
     "bridge_files",
     "bridge_name",

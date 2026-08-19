@@ -20,6 +20,7 @@ import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
 import { buildOrgCanvasGraph } from '@/composables/llc/orgCanvasGraph'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
+import { firePointer } from './pointerTestUtils'
 
 const ORG_NODES: CanvasNode[] = [
   {
@@ -65,6 +66,10 @@ function mountCanvas(props: Record<string, unknown>, locale: 'en' | 'ar' = 'en')
  * an `org-group` container covers the whole drawing area, so a gesture that
  * only ever starts in the gutter cannot see the pan being swallowed.
  */
+// #14610: the component now listens for Pointer Events, not
+// `mousedown`/`mousemove`/`mouseup` — one input path for mouse and touch.
+// `PointerEvent` carries the same `clientX`/`clientY`/`shiftKey`/`button`
+// used below, so only the triggered event names changed.
 async function panFrom(
   wrapper: ReturnType<typeof mountCanvas>,
   selector: string,
@@ -73,9 +78,9 @@ async function panFrom(
   modifiers: Record<string, unknown> = { shiftKey: true, button: 0 },
 ) {
   const area = wrapper.get('.canvas-area')
-  await wrapper.get(selector).trigger('mousedown', { clientX: 100, clientY: 100, ...modifiers })
-  await area.trigger('mousemove', { clientX: 100 + dx, clientY: 100 + dy })
-  await area.trigger('mouseup', { clientX: 100 + dx, clientY: 100 + dy })
+  await firePointer(wrapper.get(selector).element, 'pointerdown', { clientX: 100, clientY: 100, ...modifiers })
+  await firePointer(area.element, 'pointermove', { clientX: 100 + dx, clientY: 100 + dy })
+  await firePointer(area.element, 'pointerup', { clientX: 100 + dx, clientY: 100 + dy })
   return wrapper.get('.canvas-content').attributes('style')
 }
 
