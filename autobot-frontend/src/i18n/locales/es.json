@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Use las teclas de flecha para mover el foco entre los nodos. Presione Enter o Espacio para seleccionar el nodo enfocado. Presione Escape para anular la selección.",
-      "a11yInstructionsMove": "Mantenga presionada la tecla Control y presione una tecla de flecha para mover el nodo seleccionado."
+      "a11yInstructionsMove": "Mantenga presionada la tecla Control y presione una tecla de flecha para mover el nodo seleccionado.",
+      "searchLabel": "Buscar nodos",
+      "searchPlaceholder": "Buscar por nombre",
+      "searchClear": "Borrar búsqueda",
+      "searchResultsStatus": "{count} resultados para \"{query}\"",
+      "searchNoResults": "Sin coincidencias para \"{query}\"",
+      "fitToSelection": "Ajustar a la selección o al filtro",
+      "minimapLabel": "Vista general del lienzo"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8322,7 +8329,8 @@
       "toolDetachError": "No se pudo quitar esa herramienta.",
       "toolDetach": "Quitar {tool} de {role}",
       "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
-      "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa."
+      "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa.",
+      "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",

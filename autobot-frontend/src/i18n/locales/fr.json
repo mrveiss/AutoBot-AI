@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind} : {name}",
       "nodeAriaLabelWithState": "{kind} : {name}, {state}",
       "a11yInstructions": "Utilisez les touches fléchées pour déplacer le focus entre les nœuds. Appuyez sur Entrée ou Espace pour sélectionner le nœud ciblé. Appuyez sur Échap pour désélectionner.",
-      "a11yInstructionsMove": "Maintenez Ctrl enfoncé et appuyez sur une touche fléchée pour déplacer le nœud sélectionné."
+      "a11yInstructionsMove": "Maintenez Ctrl enfoncé et appuyez sur une touche fléchée pour déplacer le nœud sélectionné.",
+      "searchLabel": "Rechercher des nœuds",
+      "searchPlaceholder": "Rechercher par nom",
+      "searchClear": "Effacer la recherche",
+      "searchResultsStatus": "{count} résultats pour « {query} »",
+      "searchNoResults": "Aucun résultat pour « {query} »",
+      "fitToSelection": "Ajuster à la sélection ou au filtre",
+      "minimapLabel": "Aperçu du canevas"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8322,7 +8329,8 @@
       "toolDetachError": "Impossible de détacher cet outil.",
       "toolDetach": "Détacher {tool} de {role}",
       "canvasToolsUnavailable": "Les informations sur les outils sont indisponibles pour le moment — cette liste peut être incomplète.",
-      "canvasNoToolsDefined": "Aucun outil n'est associé à un rôle dans cette entreprise."
+      "canvasNoToolsDefined": "Aucun outil n'est associé à un rôle dans cette entreprise.",
+      "deepLinkNodeNotFound": "Ce lien pointe vers un nœud introuvable ici. Il a peut-être été supprimé, ou vous n'y avez pas accès."
     },
     "executorRollup": {
       "title": "Récapitulatif des exécutants",
