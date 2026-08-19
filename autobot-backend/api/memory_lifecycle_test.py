@@ -221,3 +221,33 @@ async def _decay_with(kb, monkeypatch) -> Dict[str, Any]:
 async def _reinforcement_with(kb, monkeypatch, limit: int) -> Dict[str, Any]:
     monkeypatch.setattr("knowledge.get_knowledge_base", lambda: _async(kb), raising=False)
     return await memory_lifecycle._reinforcement_section(limit)
+
+
+@pytest.mark.asyncio
+async def test_a_last_run_failure_does_not_blank_the_rest_of_the_section(seeded, monkeypatch):
+    """Independent degradation applies WITHIN the decay section too.
+
+    Review found this section claimed independent degradation in its docstring
+    while a Redis blip on the last-run key discarded the already-computed config
+    and the not-yet-attempted preview — the coupling the top-level split exists
+    to avoid, one level down.
+    """
+    monkeypatch.setattr("knowledge.get_knowledge_base", lambda: _async(seeded), raising=False)
+
+    def _explode(**_k):
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", _explode, raising=False)
+    monkeypatch.setenv("AUTOBOT_FACTS_PRUNE_EPOCH", _EPOCH.isoformat())
+    import importlib
+
+    import knowledge.facts as facts_mod
+
+    importlib.reload(facts_mod)
+
+    section = await memory_lifecycle._decay_section(limit=10)
+
+    assert section["last_run"] is None
+    assert section.get("last_run_unavailable") is True
+    assert section["config"], "the config snapshot was discarded by an unrelated failure"
+    assert {c["fact_id"] for c in section["prune_preview"]} == {"prunable"}

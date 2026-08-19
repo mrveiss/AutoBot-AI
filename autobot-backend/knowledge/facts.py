@@ -1644,7 +1644,13 @@ class FactsMixin:
         # that already reads this summary (#12554), and the enforcing path has no
         # reader for the detail.
         if dry_run:
-            summary["candidate_details"] = candidate_details
+            # Capped at what a single run could act on. The nightly task defaults
+            # to dry_run, so an uncapped list meant up to _FACTS_PRUNE_SCAN_LIMIT
+            # entries with three reason strings each landing in the log every
+            # night — detail beyond max-per-run describes facts no run would
+            # reach. Truncation is reported rather than silent.
+            summary["candidate_details"] = candidate_details[:_FACTS_PRUNE_MAX_PER_RUN]
+            summary["candidate_details_truncated"] = len(candidate_details) > _FACTS_PRUNE_MAX_PER_RUN
         logger.info(
             "consolidate_facts: scanned=%d candidates=%d pruned=%d dry_run=%s",
             len(facts),

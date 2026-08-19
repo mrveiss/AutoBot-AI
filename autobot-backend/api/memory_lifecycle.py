@@ -86,6 +86,11 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
     # The last-run key is read separately from the preview: its absence means the
     # scheduled task has never completed, which is a different fault from the
     # preview being empty, and collapsing the two would hide it.
+    # Caught locally, not re-raised. Review found this section claimed independent
+    # degradation in its own docstring while a Redis blip on the last-run key threw
+    # away the already-computed config AND the not-yet-attempted preview — the
+    # coupling the top-level split exists to avoid, reproduced one level down.
+    # `last_run: None` is the honest answer to "could not read it".
     try:
         from autobot_shared.redis_client import get_async_redis_client
 
@@ -95,7 +100,7 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
             section["last_run"] = raw.decode() if isinstance(raw, bytes) else raw
     except Exception:
         logger.exception("memory lifecycle: last-run lookup failed")
-        raise
+        section["last_run_unavailable"] = True
 
     preview = await kb.consolidate_facts(dry_run=True)
     section["prune_preview"] = (preview.get("candidate_details") or [])[:_MAX_LIMIT]
