@@ -98,9 +98,7 @@ def is_install_root(path: Path) -> bool:
     if not (path / "autobot_shared").exists():
         return False
     try:
-        return any(
-            child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir()
-        )
+        return any(child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir())
     except OSError:
         # An unreadable directory is not an install root; let the walk continue
         # rather than turning a permissions problem into a resolution failure.
