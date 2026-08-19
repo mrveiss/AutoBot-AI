@@ -15,6 +15,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_ci_system_package_provisioning.py"
 
@@ -226,6 +228,37 @@ def test_audit_is_clean_on_the_real_tree():
     reached, problems = checker.audit_provisioning()
     assert reached >= 1, "no shutil.which(...) skip-gate found on the live tree"
     assert problems == [], problems
+
+
+def test_ci_installed_packages_ignores_apt_install_mentioned_in_a_comment(tmp_path):
+    """#14550 incident: a comment EXPLAINING an apt-get command must not be
+    tokenized as one. The action file's own docstring-style comment about
+    this very bug contains the literal substring "apt-get install" in prose,
+    and used to leak words from that sentence into the installed-package set."""
+    action_dir = tmp_path / ".github" / "actions" / "setup-python-suite"
+    action_dir.mkdir(parents=True)
+    fixture = """runs:
+  using: composite
+  steps:
+    # a bare `apt-get install` hung one shard for the full timeout
+    - shell: bash
+      run: |
+        sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=60 ffmpeg
+"""
+    (action_dir / "action.yml").write_text(fixture, encoding="utf-8")
+    assert checker.ci_installed_packages(tmp_path) == {"ffmpeg"}
+
+
+def test_setup_python_suite_apt_step_waits_for_the_dpkg_lock_and_cannot_hang_the_job():
+    """#14550 post-merge incident: an unbounded apt-get install hung one shard
+    for the job's full 60-minute timeout, taking every test in it down too.
+    Both the apt-level lock-wait and the step-level timeout must be present."""
+    action = (REPO_ROOT / ".github" / "actions" / "setup-python-suite" / "action.yml").read_text(encoding="utf-8")
+    assert "DPkg::Lock::Timeout" in action, "apt-get must bound its wait for the dpkg lock, not hang indefinitely"
+    parsed = yaml.safe_load(action)
+    apt_steps = [s for s in parsed["runs"]["steps"] if "apt-get install" in s.get("run", "")]
+    assert apt_steps, "no step installs system packages — did the step get renamed?"
+    assert apt_steps[0].get("timeout-minutes"), "the apt-get step must have its own short timeout-minutes"
 
 
 # --------------------------------------------------------------------------

@@ -164,22 +164,38 @@ def ansible_feature_packages(root: pathlib.Path | None = None) -> set[str]:
     return packages - TOOLCHAIN_PACKAGES
 
 
+def _strip_comment_lines(text: str) -> str:
+    """Drop every full-line YAML/shell comment before scanning for apt commands.
+
+    `_APT_INSTALL_LINE_RE` matches "apt(-get)? install" anywhere in the file,
+    including inside a comment that is EXPLAINING an apt-get command in
+    prose — this checker's own docstring-style comments have done exactly
+    that. Without this, words from the comment's sentence get tokenized
+    alongside the real package names.
+    """
+    return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
+
+
 def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
     """Packages installed by an `apt-get install` / `apt install` line in the CI action.
 
-    Excludes anything starting with `-` generically (an apt flag), rather
-    than an explicit allowlist of known flags — a flag this parser has not
-    seen before (`--no-install-recommends`, `-qq`, ...) must never be
-    reported as an installed "package".
+    Excludes anything starting with `-` generically (an apt flag) or
+    containing `=`/`::` (an apt `-o Key::Path=value` option's VALUE, which
+    follows a `-o` token but is not itself flagged by the leading-`-` check),
+    rather than an explicit allowlist of known flags — a flag this parser has
+    not seen before must never be reported as an installed "package".
     """
     base = root if root is not None else repo_root()
     path = base / _SETUP_ACTION
     if not path.is_file():
         return set()
+    text = _strip_comment_lines(path.read_text(encoding="utf-8"))
     packages: set[str] = set()
-    for install_line in _APT_INSTALL_LINE_RE.findall(path.read_text(encoding="utf-8")):
+    for install_line in _APT_INSTALL_LINE_RE.findall(text):
         for token in install_line.split():
-            if token in ("apt", "apt-get", "install", "sudo") or token.startswith("-"):
+            if token in ("apt", "apt-get", "install", "sudo"):
+                continue
+            if token.startswith("-") or "=" in token or "::" in token:
                 continue
             packages.add(token)
     return packages

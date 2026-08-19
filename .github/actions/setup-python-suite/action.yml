@@ -39,12 +39,26 @@ runs:
     # binary must have its package added here too, or code-quality fails.
     # Unconditional (not gated on the venv cache hit below): apt state is not
     # part of that cache and must be present on every run regardless.
+    #
+    # #14550 (post-merge incident): a bare `apt-get install` here hung one
+    # shard for the full 60-minute job timeout (ci.yml's python-suite
+    # `timeout-minutes: 60`), taking every test in that shard down with it —
+    # almost certainly the background apt-daily/unattended-upgrades timer on
+    # that runner holding the dpkg lock, the same class of flakiness
+    # documented for ansible's own apt-get update at roles/nginx/tasks/main.yml
+    # (#6719). `-o DPkg::Lock::Timeout=60` makes apt WAIT up to 60s for the
+    # lock instead of an unbounded hang; the step-level `timeout-minutes`
+    # below is the second line of defense — if the lock is still held, THIS
+    # step fails in 3 minutes with a clear error instead of silently
+    # consuming the whole job's budget.
     - name: Install CI system packages (#14550)
       shell: bash
+      timeout-minutes: 3
       run: |
         set -euo pipefail
-        sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends ffmpeg
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update -qq -o DPkg::Lock::Timeout=60
+        sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=60 ffmpeg
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
