@@ -34,6 +34,16 @@ from pathlib import Path
 #: this repository's whole workflow runs from worktrees.
 CHECKOUT_MARKERS = (".git", "autobot_shared")
 
+#: Component directories a deployed install places beside ``autobot_shared``.
+#: Used only by :func:`is_install_root`; any one of them is enough, because a
+#: node deploys only the components its roles carry (#14624).
+INSTALL_COMPONENT_MARKERS = (
+    "autobot-slm-backend",
+    "autobot-backend",
+    "autobot-frontend",
+    "autobot-slm-frontend",
+)
+
 #: Environment variable naming an explicit project root. This is the same name
 #: the shell scripts honour, so exporting it once governs both languages.
 PROJECT_ROOT_ENV = "AUTOBOT_PROJECT_ROOT"
@@ -61,6 +71,33 @@ class ProjectRootUndeterminable(RuntimeError):
 def is_checkout_root(path: Path) -> bool:
     """True when *path* looks like the root of a source checkout."""
     return all((path / marker).exists() for marker in CHECKOUT_MARKERS)
+
+
+def is_install_root(path: Path) -> bool:
+    """True when *path* looks like a deployed install root (#14624).
+
+    A deployed install satisfies none of the other arms, which took down a live
+    SLM backend: `/opt/autobot` has no `.git` (so `is_checkout_root` is False,
+    correctly — it is not a checkout) and no top-level `.env` either, because
+    the per-component files live one level down (`autobot-backend/.env`,
+    `autobot-ai-stack/.env`, ...). `resolve_project_root` therefore raised on
+    import and uvicorn exited 1 in a restart loop.
+
+    The deployment does normally set ``AUTOBOT_PROJECT_ROOT`` — the unit
+    template renders it — but the raise then depends on every host's systemd
+    unit being current, and the host this was found on had one from two months
+    earlier. A resolution that only works where deployed state is fresh is not
+    a resolution; this arm makes the layout recognisable on its own terms.
+
+    Deliberately narrow, and NOT a relaxation of ``CHECKOUT_MARKERS``: those
+    require both markers for reasons that still hold (see their comment). An
+    install is identified by `autobot_shared` sitting beside at least one
+    deployed component directory — a shape a package's own parent does not
+    have, and one that never appears above a checkout or worktree root.
+    """
+    if not (path / "autobot_shared").exists():
+        return False
+    return any((path / component).is_dir() for component in INSTALL_COMPONENT_MARKERS)
 
 
 def project_root() -> Path:
@@ -117,7 +154,7 @@ def resolve_project_root(start: Path) -> Path:
         return Path(configured).resolve()
 
     for parent in [start] + list(start.parents):
-        if (parent / ".env").exists() or is_checkout_root(parent):
+        if (parent / ".env").exists() or is_checkout_root(parent) or is_install_root(parent):
             return parent
 
     # ssot-config-exempt: bootstrap self-reference (carried from the
