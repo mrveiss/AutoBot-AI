@@ -19,6 +19,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from api.schemas_code import (
+    MCPTool,
     ManPageRequest,
     ManPageSearchRequest,
     ManualMCPToolItem,
@@ -29,6 +30,17 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
+from services.mcp_bridge_manifest import MCPBridgeManifest
+
+# #14586: MANIFEST makes this bridge discoverable by mcp_registry.discover_bridges()
+# module-scan fallback, the same mechanism every other governed bridge uses.
+MANIFEST = MCPBridgeManifest(
+    name="manual_mcp",
+    version="1.0.0",
+    description="Man page and documentation lookup (issue #3287)",
+    features=["man_pages", "documentation_index"],
+    endpoint="/api/manual/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -219,14 +231,14 @@ async def _query_doc_index(query: str, max_results: int) -> List[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _man_page_tool_schema() -> dict:
-    return {
-        "name": "lookup_man_page",
-        "description": (
+def _man_page_tool_schema() -> MCPTool:
+    return MCPTool(
+        name="lookup_man_page",
+        description=(
             "Fetch a Linux/Unix man page for a command. "
             "Returns structured sections: synopsis, description, options, examples, see-also."
         ),
-        "input_schema": {
+        input_schema={
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "Command name (e.g. 'ls')"},
@@ -237,17 +249,17 @@ def _man_page_tool_schema() -> dict:
             },
             "required": ["command"],
         },
-    }
+    )
 
 
-def _search_docs_tool_schema() -> dict:
-    return {
-        "name": "search_man_pages",
-        "description": (
+def _search_docs_tool_schema() -> MCPTool:
+    return MCPTool(
+        name="search_man_pages",
+        description=(
             "Search the system documentation index (man -k) for commands "
             "matching a keyword. Returns a ranked list of command names and brief summaries."
         ),
-        "input_schema": {
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search keyword"},
@@ -259,17 +271,17 @@ def _search_docs_tool_schema() -> dict:
             },
             "required": ["query"],
         },
-    }
+    )
 
 
-def _doc_index_tool_schema() -> dict:
-    return {
-        "name": "get_doc_index",
-        "description": (
+def _doc_index_tool_schema() -> MCPTool:
+    return MCPTool(
+        name="get_doc_index",
+        description=(
             "Query the cached documentation index. Similar to search_man_pages "
             "but queries against a pre-warmed Redis cache for lower latency."
         ),
-        "input_schema": {
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search keyword"},
@@ -281,7 +293,7 @@ def _doc_index_tool_schema() -> dict:
             },
             "required": ["query"],
         },
-    }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -301,12 +313,16 @@ async def get_manual_mcp_tools(
     """List available MCP tools provided by the manual bridge.
 
     Issue #3287: Man page and documentation lookup tools.
+    Issue #14586: schemas are ``MCPTool`` instances (the shape every other
+    governed bridge uses) so ``mcp_bridge_scan`` can parse them; ``.model_dump()``
+    keeps the wire response an unchanged list of dicts.
     """
-    return [
+    tools = [
         _man_page_tool_schema(),
         _search_docs_tool_schema(),
         _doc_index_tool_schema(),
     ]
+    return [tool.model_dump() for tool in tools]
 
 
 @router.post("/mcp/lookup_man_page", response_model=ManPageLookupData)
