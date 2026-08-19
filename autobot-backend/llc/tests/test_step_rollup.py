@@ -92,9 +92,7 @@ async def _seed(session: AsyncSession, company_id: uuid.UUID) -> uuid.UUID:
             runs_per_month=None,
         )
     )
-    session.add(
-        LLCRoleTool(id=uuid.uuid4(), company_id=company_id, role_id=role_id, tool_name="crm")
-    )
+    session.add(LLCRoleTool(id=uuid.uuid4(), company_id=company_id, role_id=role_id, tool_name="crm"))
     await session.flush()
     return role_id
 
