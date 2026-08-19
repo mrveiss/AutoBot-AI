@@ -33,7 +33,7 @@ on:
       # -- a required check reporting skipped reads as satisfied to branch protection,
       # so the guard could not fire on the change it exists to catch.
       - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
-      - '.github/actions/setup-python-suite/**'
+      - '.github/actions/**'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
@@ -88,7 +88,7 @@ jobs:
               - 'autobot-backend/config/permission_rules.yaml'
               - 'autobot-backend/static/error_messages.yaml'
               - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
-              - '.github/actions/setup-python-suite/**'
+              - '.github/actions/**'
               - 'docs/developer/**'
               - '.github/workflows/code-quality.yml'
 
@@ -565,6 +565,20 @@ jobs:
         # in the job summary. This fails on any such gate whose package is not
         # installed in .github/actions/setup-python-suite/action.yml.
         python3 tools/lint/check_ci_system_package_provisioning.py --audit
+
+    - name: Audit composite-action step keys against GitHub's own schema (#14550)
+      run: |
+        # A composite action's own steps accept only run/shell/working-directory/
+        # env/id/if/name(/uses/with) -- `timeout-minutes` looked plausible on a
+        # step but is job/workflow-step-only, and adding it here made GitHub's
+        # template validator reject the WHOLE action.yml before a single step
+        # ran, breaking every shard that used it (#14550 post-merge incident).
+        # code-quality installs no YAML-schema validator for GitHub's own
+        # template engine (and neither does actionlint, scoped to
+        # .github/workflows/** only, per #14632) -- this re-implements the
+        # small, stable allowed-key set directly so a push never reaches a
+        # runner with an invalid composite action again.
+        python3 tools/lint/check_composite_action_step_keys.py --audit
 
     - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
       run: |

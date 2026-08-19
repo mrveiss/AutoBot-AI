@@ -55,6 +55,7 @@ _WORKFLOW = ".github/workflows/code-quality.yml"
 _GUARDED_CHECKERS = (
     "tools/lint/check_requirements_ci_drift.py",
     "tools/lint/check_ci_system_package_provisioning.py",
+    "tools/lint/check_composite_action_step_keys.py",
 )
 
 _FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*$")

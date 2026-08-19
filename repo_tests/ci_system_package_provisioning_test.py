@@ -250,15 +250,48 @@ def test_ci_installed_packages_ignores_apt_install_mentioned_in_a_comment(tmp_pa
 
 
 def test_setup_python_suite_apt_step_waits_for_the_dpkg_lock_and_cannot_hang_the_job():
-    """#14550 post-merge incident: an unbounded apt-get install hung one shard
-    for the job's full 60-minute timeout, taking every test in it down too.
-    Both the apt-level lock-wait and the step-level timeout must be present."""
+    """#14550 post-merge incident 1: an unbounded apt-get install hung one
+    shard for the job's full 60-minute timeout, taking every test in it down
+    too. `-o DPkg::Lock::Timeout` bounds the wait for the dpkg lock, and
+    coreutils `timeout` around each COMMAND bounds the whole invocation.
+
+    NOT `timeout-minutes` on the step -- that is incident 2: that key does
+    not exist on a composite action's own steps (only `run`, `shell`,
+    `working-directory`, `env`, `id`, `if`, `name` do), and setting it broke
+    GitHub's template validation for the WHOLE action, on every shard, not
+    just the one with a stuck lock. This test pins the working shape,
+    including the negative half.
+    """
     action = (REPO_ROOT / ".github" / "actions" / "setup-python-suite" / "action.yml").read_text(encoding="utf-8")
     assert "DPkg::Lock::Timeout" in action, "apt-get must bound its wait for the dpkg lock, not hang indefinitely"
     parsed = yaml.safe_load(action)
     apt_steps = [s for s in parsed["runs"]["steps"] if "apt-get install" in s.get("run", "")]
     assert apt_steps, "no step installs system packages — did the step get renamed?"
-    assert apt_steps[0].get("timeout-minutes"), "the apt-get step must have its own short timeout-minutes"
+    step = apt_steps[0]
+    assert "timeout " in step["run"], "the apt-get command itself must be wrapped in coreutils `timeout`"
+
+
+def test_setup_python_suite_steps_use_only_composite_action_keys():
+    """#14550 post-merge incident 2, generalised: not just the apt step.
+
+    A composite action's OWN steps accept only `run`, `shell`,
+    `working-directory`, `env`, `id`, `if`, `name` -- `timeout-minutes` (job-
+    and workflow-step-only) made GitHub's template validator reject the
+    WHOLE action.yml before a single step ran, on every shard. Checks every
+    step, not only the one that caused the incident, since the next
+    workflow-only key added to any step here fails the same way.
+    """
+    action = (REPO_ROOT / ".github" / "actions" / "setup-python-suite" / "action.yml").read_text(encoding="utf-8")
+    parsed = yaml.safe_load(action)
+    steps = parsed["runs"]["steps"]
+    assert steps, "no steps found — did the action structure change?"
+    allowed = {"name", "run", "shell", "working-directory", "env", "id", "if", "uses", "with"}
+    for step in steps:
+        offending = set(step) - allowed
+        assert not offending, (
+            f"step {step.get('name')!r} uses key(s) {offending} that a composite action's own steps do not "
+            "support -- GitHub's template validator rejects the WHOLE file for this, not just the one step"
+        )
 
 
 # --------------------------------------------------------------------------

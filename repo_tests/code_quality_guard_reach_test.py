@@ -156,7 +156,7 @@ def test_backend_filter_finds_the_real_filters_block_not_the_outputs_key():
     patterns = checker.backend_filter_patterns()
     assert "**/*.py" in patterns
     assert "autobot-slm-backend/ansible/roles/backend/tasks/**" in patterns
-    assert ".github/actions/setup-python-suite/**" in patterns
+    assert ".github/actions/**" in patterns
 
 
 # --------------------------------------------------------------------------

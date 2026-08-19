@@ -47,18 +47,26 @@ runs:
     # that runner holding the dpkg lock, the same class of flakiness
     # documented for ansible's own apt-get update at roles/nginx/tasks/main.yml
     # (#6719). `-o DPkg::Lock::Timeout=60` makes apt WAIT up to 60s for the
-    # lock instead of an unbounded hang; the step-level `timeout-minutes`
-    # below is the second line of defense — if the lock is still held, THIS
-    # step fails in 3 minutes with a clear error instead of silently
-    # consuming the whole job's budget.
+    # lock instead of an unbounded hang.
+    #
+    # #14550 (second incident): `timeout-minutes` on THIS step does not exist
+    # -- that key is valid on a job, and on a step in a workflow, but a
+    # composite action's own steps accept only `run`, `shell`,
+    # `working-directory`, `env`, `id`, `if` and `name`. Setting it here made
+    # the whole action fail GitHub's template validation before a single step
+    # ran, on every shard, not just the one with a stuck lock. Bounding the
+    # coreutils `timeout` around each COMMAND instead achieves the same
+    # "fail fast, not silently" goal without needing a step-level key that
+    # composite actions cannot have. A timeout (exit 124) is a real failure
+    # here, deliberately: a wedged apt means the toolchain this PR exists to
+    # provision is absent, and the test it gates would pass vacuously again.
     - name: Install CI system packages (#14550)
       shell: bash
-      timeout-minutes: 3
       run: |
         set -euo pipefail
         export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update -qq -o DPkg::Lock::Timeout=60
-        sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=60 ffmpeg
+        timeout 180 sudo apt-get update -qq -o DPkg::Lock::Timeout=60
+        timeout 180 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=60 ffmpeg
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
