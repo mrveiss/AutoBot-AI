@@ -13599,12 +13599,31 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Manual Mcp Tools
-         * @description List available MCP tools provided by the manual bridge.
+         * List All Mcp Tools
+         * @description List all available MCP tools from all bridges (with caching)
          *
-         *     Issue #3287: Man page and documentation lookup tools.
+         *     Returns aggregated list of tools from:
+         *     - knowledge_mcp (knowledge base operations)
+         *     - vnc_mcp (VNC observation)
+         *     - sequential_thinking_mcp (dynamic problem-solving)
+         *     - structured_thinking_mcp (5-stage cognitive framework)
+         *     - filesystem_mcp (secure file operations)
+         *
+         *     Caching (Issue #50):
+         *     - First request fetches from all bridges (~5 HTTP calls)
+         *     - Subsequent requests return cached data (0 HTTP calls)
+         *     - Cache expires after TTL (default: 60 seconds)
+         *
+         *     Response format:
+         *     {
+         *         "total_tools": 25,
+         *         "bridges": 5,
+         *         "tools": [...],
+         *         "cached": true/false,
+         *         "last_updated": "..."
+         *     }
          */
-        get: operations["get_manual_mcp_tools_api_mcp_tools_get"];
+        get: operations["list_all_mcp_tools_api_mcp_tools_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15849,6 +15868,9 @@ export interface paths {
          * @description List available MCP tools provided by the manual bridge.
          *
          *     Issue #3287: Man page and documentation lookup tools.
+         *     Issue #14586: schemas are ``MCPTool`` instances (the shape every other
+         *     governed bridge uses) so ``mcp_bridge_scan`` can parse them; ``.model_dump()``
+         *     keeps the wire response an unchanged list of dicts.
          */
         get: operations["get_manual_mcp_tools_api_manual_mcp_tools_get"];
         put?: never;
@@ -53001,81 +53023,6 @@ export interface paths {
         get: operations["export_memory_api_memory_privacy_export_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/lookup_man_page": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Lookup Man Page
-         * @description MCP tool: Fetch a man page for a command.
-         *
-         *     Results are cached in Redis (knowledge database) with a 24-hour TTL.
-         *     When MCP / man is unavailable the response includes success=False and
-         *     a human-readable error rather than raising HTTP 500.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_lookup_man_page_api_mcp_lookup_man_page_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/search_man_pages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Search Man Pages
-         * @description MCP tool: Search the system documentation index.
-         *
-         *     Delegates to `man -k <query>` and returns structured results.
-         *     Gracefully returns an empty list when `man` is not available.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_search_man_pages_api_mcp_search_man_pages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/get_doc_index": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Get Doc Index
-         * @description MCP tool: Query the cached documentation index.
-         *
-         *     First checks Redis; falls back to man -k when cache is cold.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_get_doc_index_api_mcp_get_doc_index_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -120738,7 +120685,7 @@ export interface operations {
             };
         };
     };
-    get_manual_mcp_tools_api_mcp_tools_get: {
+    list_all_mcp_tools_api_mcp_tools_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -120753,7 +120700,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManualMCPToolItem"][];
+                    "application/json": components["schemas"]["MCPRegistryToolsResponse"];
                 };
             };
         };
@@ -175873,105 +175820,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_lookup_man_page_api_mcp_lookup_man_page_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageLookupData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_search_man_pages_api_mcp_search_man_pages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageSearchData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_get_doc_index_api_mcp_get_doc_index_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */

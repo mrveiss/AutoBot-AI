@@ -70,12 +70,13 @@ from typing import Dict, Optional
 
 from autobot_shared.auth.permissions import Permission
 
-# The eleven bridges this system governs, and the least-privileged operation
-# each offers. #14523: no longer consulted by ``required_permission()`` as a
-# runtime fallback grant — an undeclared tool is refused regardless of bridge.
-# Retained as the registry ``test_every_bridge_has_a_default`` requires a new
-# bridge to join before any of its tools can be declared, and as the source
-# for the coverage checker's per-bridge discovery floors
+# The twelve bridges this system governs (#14586 added manual_mcp), and the
+# least-privileged operation each offers. #14523: no longer consulted by
+# ``required_permission()`` as a runtime fallback grant — an undeclared tool
+# is refused regardless of bridge. Retained as the registry
+# ``test_every_bridge_has_a_default`` requires a new bridge to join before
+# any of its tools can be declared, and as the source for the coverage
+# checker's per-bridge discovery floors
 # (``tools/lint/check_mcp_tool_permission_coverage.py``).
 BRIDGE_DEFAULT_PERMISSIONS: Dict[str, Permission] = {
     "browser_mcp": Permission.MCP_BROWSER_READ,
@@ -84,6 +85,9 @@ BRIDGE_DEFAULT_PERMISSIONS: Dict[str, Permission] = {
     "git_mcp": Permission.MCP_GIT_READ,
     "http_client_mcp": Permission.MCP_HTTP_READ,
     "knowledge_mcp": Permission.KNOWLEDGE_READ,
+    # #14586: the twelfth bridge -- man page / doc-index lookup is read-only,
+    # so MCP_READ (held by every role above READONLY) is the correct baseline.
+    "manual_mcp": Permission.MCP_READ,
     "prometheus_mcp": Permission.MCP_METRICS_READ,
     # #13228: missed on the first pass, which made all 25 redis tools resolve to
     # "undeclared" — including the seven the blocklist already knew about.
@@ -281,6 +285,15 @@ TOOL_PERMISSIONS: Dict[str, Permission] = {
     "clear_history": Permission.AGENT_EXECUTE,
     "generate_summary": Permission.AGENT_EXECUTE,
     "process_thought": Permission.AGENT_EXECUTE,
+    # --- manual: single-tier, read-only bridge (#14586) ---
+    # All three tools read local man pages / a cached doc index via a fixed
+    # argument-list subprocess (no shell=True) -- nothing here writes state or
+    # leaves the host, so none needs more than the bridge's own baseline.
+    # Declared explicitly (not left to the default) so the coverage guard has
+    # an exact entry for every live tool, matching every other governed bridge.
+    "lookup_man_page": Permission.MCP_READ,
+    "search_man_pages": Permission.MCP_READ,
+    "get_doc_index": Permission.MCP_READ,
 }
 
 
@@ -289,7 +302,7 @@ def required_permission(tool_name: str, bridge_name: str = "") -> Optional[Permi
 
     Deny-by-default: an exact ``TOOL_PERMISSIONS`` entry is the only way a tool
     resolves to a permission. Everything else returns ``None`` — a tool on one
-    of the eleven governed bridges with no exact entry included, not only a
+    of the twelve governed bridges with no exact entry included, not only a
     tool on a bridge this module has never heard of. Before #14523 the known-
     bridge case fell through to ``BRIDGE_DEFAULT_PERMISSIONS`` and granted a
     real read permission instead of refusing; that fallback is retired here.
