@@ -19,10 +19,10 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from api.schemas_code import (
-    MCPTool,
     ManPageRequest,
     ManPageSearchRequest,
     ManualMCPToolItem,
+    MCPTool,
 )
 from api.schemas_workflows import ManPageLookupData, ManPageSearchData
 from auth_middleware import get_current_user

@@ -34,7 +34,9 @@ from autobot_shared.auth.mcp_bridge_scan import (
     bridge_name,
 )
 
-_ROUTER_REGISTRY_DIR = pathlib.Path(__file__).resolve().parents[2] / "autobot-backend" / "initialization" / "router_registry"
+_ROUTER_REGISTRY_DIR = (
+    pathlib.Path(__file__).resolve().parents[2] / "autobot-backend" / "initialization" / "router_registry"
+)
 _CORE_ROUTERS = _ROUTER_REGISTRY_DIR / "core_routers.py"
 _MCP_ROUTERS = _ROUTER_REGISTRY_DIR / "mcp_routers.py"
 
