@@ -318,6 +318,93 @@ export function canvasBottom(nodes: CanvasNode[]): number {
   return nodes.reduce((lowest, node) => Math.max(lowest, node.position.y + ROW_HEIGHT), 0)
 }
 
+/** A tool a role carries, as returned by ``GET .../tool-nodes`` (#14597). */
+export interface ToolNodeSource {
+  role_id: string
+  role_name: string
+  tool_name: string
+}
+
+/** Prefix that marks a canvas node as a tool. */
+export const TOOL_NODE_PREFIX = 'tool:'
+
+/** One role's identity, as carried inside a tool node's `data.roles`. */
+export interface ToolNodeRole {
+  role_id: string
+  role_name: string
+}
+
+/**
+ * Lay out tool nodes below the process grid (#14597).
+ *
+ * `tools` is a flat (role, tool) attachment list — the same shape
+ * `get_tool_nodes` returns, mirroring `ProcessNodeSource` for its sibling
+ * endpoint. This is where "one tool used by several roles is one node, not
+ * one per role" actually happens: attachments are grouped by `tool_name`
+ * first, so a tool three roles carry produces exactly one canvas node,
+ * carrying all three roles in `data.roles`.
+ *
+ * A tool node's relationship to a *process* is drawn as a real graph edge
+ * (`connections`), because a process already has its own canvas node
+ * (`buildProcessCanvasNodes`) to point at: the edge connects a tool to every
+ * process node whose role is one of the tool's roles. A tool's relationship
+ * to a *role* has no such target — a role is not itself a canvas node — so it
+ * is carried as data or displayed directly on the node instead of as an edge
+ * that would have nowhere to land.
+ *
+ * Placed *below* the process grid rather than interleaved with it, for the
+ * same reason processes are placed below the reporting hierarchy: a tool is
+ * not a person and does not report to anyone.
+ */
+export function buildToolCanvasNodes(
+  tools: ToolNodeSource[],
+  processes: ProcessNodeSource[],
+  topOffset: number,
+): CanvasNode[] {
+  const rolesByTool = new Map<string, Map<string, string>>()
+  for (const row of tools) {
+    let roles = rolesByTool.get(row.tool_name)
+    if (!roles) {
+      roles = new Map()
+      rolesByTool.set(row.tool_name, roles)
+    }
+    roles.set(row.role_id, row.role_name)
+  }
+  const toolNames = [...rolesByTool.keys()].sort()
+  return toolNames.map((toolName, index) => {
+    const roles = rolesByTool.get(toolName)
+    const roleRefs: ToolNodeRole[] = roles
+      ? [...roles.entries()]
+          .map(([role_id, role_name]) => ({ role_id, role_name }))
+          .sort((a, b) => a.role_name.localeCompare(b.role_name))
+      : []
+    const roleIds = new Set(roleRefs.map((role) => role.role_id))
+    const connections = processes
+      .filter((process) => roleIds.has(process.role_id))
+      .map((process) => `${PROCESS_NODE_PREFIX}${process.role_id}:${process.workflow_id}`)
+    return {
+      id: `${TOOL_NODE_PREFIX}${toolName}`,
+      type: 'org-tool',
+      position: {
+        x: (index % UNGROUPED_COLUMNS) * (CANVAS_NODE_WIDTH + COLUMN_GAP),
+        y: topOffset + Math.floor(index / UNGROUPED_COLUMNS) * ROW_HEIGHT,
+      },
+      data: {
+        tool_name: toolName,
+        roles: roleRefs,
+      },
+      connections,
+    }
+  })
+}
+
+/** The tool name behind a tool node's id, or `null` when `nodeId` does not name one. */
+export function toolNameFromNode(nodeId: string): string | null {
+  if (!nodeId.startsWith(TOOL_NODE_PREFIX)) return null
+  const toolName = nodeId.slice(TOOL_NODE_PREFIX.length)
+  return toolName.length > 0 ? toolName : null
+}
+
 /**
  * Teams on the canvas (GH#14596, parent #13938).
  *

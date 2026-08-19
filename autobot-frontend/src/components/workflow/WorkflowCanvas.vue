@@ -234,6 +234,35 @@
                 </button>
               </div>
             </template>
+            <!-- #14597: a tool one or more roles carry. `roles` is empty
+                 for the moment a node exists with zero roles left, which
+                 cannot happen from the API today (a tool node is only ever
+                 built from at least one attachment) but is handled the same
+                 defensive way `org-group`'s size guard is: no crash, just an
+                 empty list. -->
+            <template v-else-if="node.type === 'org-tool'">
+              <p class="org-title">{{ nodeText(node, 'tool_name') }}</p>
+              <ul v-if="toolRoles(node).length > 0" class="tool-roles">
+                <li
+                  v-for="role in toolRoles(node)"
+                  :key="role.role_id"
+                  class="tool-role-chip"
+                >
+                  <span class="tool-role-name">{{ role.role_name }}</span>
+                  <!-- #14597: mirrors the org-process detach control — `.stop`
+                       keeps the click from also selecting the tool node. -->
+                  <button
+                    type="button"
+                    class="tool-detach-btn"
+                    data-testid="tool-detach-btn"
+                    :aria-label="toolDetachLabel(node, role)"
+                    @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
+                  >
+                    <Icon name="times" />
+                  </button>
+                </li>
+              </ul>
+            </template>
             <!-- GH#13939: Company OS org nodes are read-only descriptors -->
             <template v-else-if="node.type === 'org-person'">
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
@@ -356,6 +385,9 @@ const emit = defineEmits<{
   // called against the API directly — this component is shared with real
   // workflow editing and must stay ignorant of the LLC endpoints.
   (e: 'process-detached', roleId: string, workflowId: string): void;
+  // #14597: an org-tool node's own per-role detach control, same reasoning —
+  // this component only ever emits the LLC mutation, never performs it.
+  (e: 'tool-detached', roleId: string, toolName: string): void;
 }>();
 
 const showVisionDropdown = ref(false);
@@ -379,9 +411,14 @@ const nodeIcons: Record<CanvasNodeType, IconName> = {
   'org-person': 'user',
   'org-group': 'sitemap',
   'org-process': 'project-diagram',
+  // #14597: distinct from 'project-diagram' (org-process) — colour is never
+  // the only signal a node type carries (#13941), so a tool also gets its
+  // own icon rather than only a caption.
+  'org-tool': 'wrench',
 };
 const nodeLabels = computed(() => ({
   'org-process': t('llc.orgChart.processNodeLabel'),
+  'org-tool': t('llc.orgChart.toolNodeLabel'),
   step: t('workflow.canvas.stepLabel'),
   condition: t('workflow.canvas.conditionLabel'),
   switch: t('workflow.canvas.switchLabel'),
@@ -464,6 +501,32 @@ function processDetachLabel(node: CanvasNode): string {
   return t('llc.orgChart.processDetach', {
     workflow: nodeText(node, 'workflow_id'),
     role: nodeText(node, 'role_name'),
+  });
+}
+
+/** An org-tool node's roles, off its untyped `data` bag (#14597). */
+function toolRoles(node: CanvasNode): { role_id: string; role_name: string }[] {
+  const roles = (node.data as Record<string, unknown>).roles;
+  return Array.isArray(roles)
+    ? roles.filter(
+        (role): role is { role_id: string; role_name: string } =>
+          typeof role?.role_id === 'string' && typeof role?.role_name === 'string',
+      )
+    : [];
+}
+
+/**
+ * Accessible name for a tool node's per-role detach control (#14597).
+ *
+ * Mirrors `processDetachLabel`: the visible chip carries only a role name, so
+ * a screen reader landing on its bare "×" would not know what it detaches or
+ * from which tool — this node can list several roles, so the role has to be
+ * named explicitly rather than assumed from context.
+ */
+function toolDetachLabel(node: CanvasNode, role: { role_name: string }): string {
+  return t('llc.orgChart.toolDetach', {
+    tool: nodeText(node, 'tool_name'),
+    role: role.role_name,
   });
 }
 
@@ -1320,6 +1383,56 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
   background: var(--bg-hover);
 }
 .process-detach-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+/* #14597: a tool node must not read as "another process node" — colour is
+   never the only signal (#13941), so the header background AND the border
+   style both differ from every other org node type (solid info for
+   org-person, dashed/solid info-warning for org-group, unstyled default for
+   org-process). The dotted inline-start border pairs with the distinct
+   'wrench' icon and 'Tool' caption set in nodeIcons/nodeLabels above. */
+.workflow-node.org-tool {
+  border-inline-start-width: 6px;
+  border-inline-start-style: dotted;
+  border-inline-start-color: var(--color-secondary);
+}
+.workflow-node.org-tool .node-header {
+  background: var(--color-secondary);
+}
+.tool-roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
+  list-style: none;
+}
+.tool-role-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.tool-role-name {
+  flex: 1;
+  font-family: var(--font-family-mono, monospace);
+}
+.tool-detach-btn {
+  padding: var(--spacing-1);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-default);
+  line-height: 1;
+}
+.tool-detach-btn:hover {
+  color: var(--color-error);
+  background: var(--bg-hover);
+}
+.tool-detach-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }

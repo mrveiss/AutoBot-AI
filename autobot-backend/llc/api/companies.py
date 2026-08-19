@@ -1537,6 +1537,75 @@ async def get_process_nodes(
     )
 
 
+# ------------------------------------------------------------------
+# Tool nodes (#14597) — which tools this company's roles depend on
+# ------------------------------------------------------------------
+
+
+class ToolNode(BaseModel):
+    """One tool made available to one role, as an org-chart-adjacent node.
+
+    Derived read-only from ``llc_role_tools`` (#14221 step 4) — the same
+    projection shape ``ProcessNode`` above uses for ``llc_role_workflows``. A
+    tool attached to several roles produces one row per role here; the canvas
+    (``buildToolCanvasNodes``) folds the rows that share a ``tool_name`` into
+    a single node, so "one tool used by several roles" stays one node rather
+    than one per role.
+
+    ``role_id``/``role_name`` are included so the canvas can draw which roles
+    a tool belongs to; ``tool_name`` is the tool's registry identity.
+    """
+
+    role_id: str
+    role_name: str
+    tool_name: str
+
+
+class ToolNodesResponse(BaseModel):
+    nodes: List[ToolNode]
+
+
+@router.get("/{company_id}/tool-nodes", response_model=ToolNodesResponse)
+async def get_tool_nodes(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ToolNodesResponse:
+    """Return the tools this company's roles carry (#14597).
+
+    Company-scoped through the same shared :func:`assert_company_access` guard
+    the rest of this router uses, and pinned again in the query itself — the
+    role must belong to this company *and* the attachment must, so losing
+    either predicate cannot widen the result. Mirrors ``get_process_nodes``
+    above exactly, for the sibling attachment (tools rather than workflows).
+
+    Read-only: this composes existing rows and creates nothing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from llc.models.role_tool import LLCRoleTool  # noqa: PLC0415
+    from user_management.models.role import Role  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    result = await session.execute(
+        select(Role.id, Role.name, LLCRoleTool.tool_name)
+        .join(LLCRoleTool, LLCRoleTool.role_id == Role.id)
+        .where(
+            Role.org_id == company_id,
+            LLCRoleTool.company_id == company_id,
+        )
+        .order_by(Role.name, LLCRoleTool.tool_name)
+    )
+    return ToolNodesResponse(
+        nodes=[
+            ToolNode(role_id=str(role_id), role_name=name, tool_name=tool_name)
+            for role_id, name, tool_name in result.all()
+        ]
+    )
+
+
 @router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
 async def get_company_teams(
     company_id: uuid.UUID,

@@ -8314,7 +8314,15 @@
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
       "processDetach": "جدا کردن {workflow} از {role}",
       "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد.",
-      "canvasGroupKind": "گروه"
+      "canvasGroupKind": "گروه",
+      "toolNodeLabel": "ابزار",
+      "attachToolNameLabel": "نام ابزار",
+      "attachToolNamePlaceholder": "نام ابزار",
+      "toolAttachError": "پیوست کردن این ابزار ممکن نشد.",
+      "toolDetachError": "جدا کردن این ابزار ممکن نشد.",
+      "toolDetach": "جدا کردن {tool} از {role}",
+      "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
+      "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",
