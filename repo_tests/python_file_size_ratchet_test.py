@@ -5,11 +5,11 @@
 """#14236 — the file-size hook's grandfather list must only ever shrink.
 
 ``scripts/check_python_file_size.py`` caps Python files at 600 lines and exempts
-three that were already over it. The exemption used to be a bare set of names
+those that were already over it. The exemption used to be a bare set of names
 with a comment claiming the files were "under active decomposition". Nothing
-checked the claim, so the three exempted modules grew to 1114, 4068 and 4063
-lines — up to 6.8x the limit — while the hook reported them clean. A guard that
-cannot lose its exemptions stops guarding without ever going red.
+checked the claim, so the first three exempted modules grew to 1114, 4068 and
+4063 lines — up to 6.8x the limit — while the hook reported them clean. A guard
+that cannot lose its exemptions stops guarding without ever going red.
 
 These tests pin the ratchet in **both** directions, because only one of them is
 obvious:
@@ -21,6 +21,16 @@ obvious:
 A shrink also has to be locked in, not merely recorded (#14498). ``RATCHET_BASELINE``
 below is re-lowered with every shrink and pinned to the files themselves, so the
 lines a decomposition removed cannot be spent back inside a stale tolerance.
+
+#14547 found the second half of the same defect: ``audit_ceilings`` re-checked
+every entry already in the dict, but had no way to discover a file that had
+grown past the limit and was never added — ``reconciler.py`` reached 2000+
+lines this way, invisible to every audit run that only ever iterated
+``KNOWN_LARGE.items()``. The fix walks the tracked-file tree instead, which is
+why ``RATCHET_BASELINE`` below grew from 3 entries to hundreds: the walk found
+every other file already over the limit with no entry at all, and grandfathering
+all of them at their measured size is what makes turning the walk on possible
+without also triaging 505 files in the same change (that is #5060's campaign).
 
 The last test is the reach self-check. It runs the hook's own matcher over a
 tracked-file enumeration produced by ``git ls-files`` rather than by anything in
@@ -40,27 +50,25 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
+_BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
 
-# The ratchet's second reference point: every entry's size, re-measured on the
-# tree, held outside the hook it constrains. It is deliberately a second copy —
-# a list only ever compared against itself can drift anywhere — and neither copy
-# is derived from the other. The hook's ceilings are anchored to the files by
-# ``audit_ceilings``; this dict is anchored to them by
-# ``test_the_baseline_is_relowered_by_every_shrink``. So no ceiling can be
-# raised by editing one file alone: a bump here alone exceeds the file it names,
-# a bump in the hook alone exceeds this dict.
-#
-# It re-baselines on every shrink (#14498): a file that gets smaller lowers BOTH
-# this dict and ``KNOWN_LARGE`` to the count just achieved, which is what locks
-# the gain in. Left high, the gap between it and the new ceiling is regrowth the
-# ratchet would wave through one compliant-looking raise at a time — 344 lines
-# of it on ``tool_handler.py`` alone. Sync this dict DOWN with every shrink;
-# never up to make a test pass.
-RATCHET_BASELINE = {
-    "autobot-backend/orchestrator.py": 1114,
-    "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3694,
-}
+
+def _load_ratchet_baseline() -> dict[str, int]:
+    """Load RATCHET_BASELINE from its sibling data module, by path.
+
+    Split out (#14547) so this test file stays well under MAX_LINES: 505
+    entries inline here would put the guard's own test over the limit it
+    enforces on everything else. See that module's docstring for why the
+    dict is deliberately a second copy, not read out of the hook.
+    """
+    spec = importlib.util.spec_from_file_location("python_file_size_ratchet_baseline", _BASELINE_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.RATCHET_BASELINE
+
+
+RATCHET_BASELINE = _load_ratchet_baseline()
+
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
 # An enumeration that returns nothing must not read as "nothing to check".
@@ -115,10 +123,74 @@ def test_every_entry_carries_a_ceiling(hook):
 
 
 def test_recorded_ceilings_match_the_files_today(hook):
-    """The audit is clean on the tree as committed, or the numbers are fiction."""
+    """The audit is clean on the tree as committed, or the numbers are fiction.
+
+    ``reached`` now counts the whole tracked-file walk (#14547), not
+    ``len(KNOWN_LARGE)`` — the walk is meant to cover the tree, so it is
+    checked against the same floor ``run_audit`` uses rather than against the
+    grandfather list's own size.
+    """
     reached, problems = hook.audit_ceilings()
     assert problems == []
-    assert reached == len(hook.KNOWN_LARGE)
+    assert reached >= hook.MIN_TRACKED_PY_FILES
+
+
+# --------------------------------------------------------------------------
+# Discovery — the walk finds files KNOWN_LARGE never named (#14547)
+# --------------------------------------------------------------------------
+
+
+def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch):
+    """The exact defect #14547 is for: a file over MAX_LINES with no entry.
+
+    ``audit_ceilings`` used to iterate ``KNOWN_LARGE.items()``, so a file like
+    this one — over the limit but never added because nobody noticed it grow
+    — was invisible to every audit run forever. Walking the tracked-file list
+    instead of the dict is what makes this fail.
+    """
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
+    unlisted = "autobot-slm-backend/services/never_added.py"
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [unlisted])
+    target = tmp_path / unlisted
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x\n" * (hook.MAX_LINES + 50), encoding="utf-8")
+
+    reached, problems = hook.audit_ceilings()
+    assert reached == 1
+    assert len(problems) == 1
+    assert unlisted in problems[0]
+    assert hook.run_audit() == 1
+
+
+def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path, monkeypatch):
+    """A file the walk reaches but that was never over the limit stays silent."""
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
+    compliant = "autobot-slm-backend/services/small.py"
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [compliant])
+    target = tmp_path / compliant
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x\n" * 10, encoding="utf-8")
+
+    reached, problems = hook.audit_ceilings()
+    assert reached == 1
+    assert problems == []
+
+
+def test_the_discovery_walk_respects_excluded_prefixes(hook):
+    """The audit's scope matches pre-commit's own exclude (#14547).
+
+    Without this, the tree walk would flag files under directories the hook
+    was deliberately never configured to gate — widening the guard's reach
+    beyond what ``.pre-commit-config.yaml`` actually enforces at commit time.
+    """
+    assert hook.EXCLUDED_PREFIXES
+    root = hook.repo_root()
+    tracked = hook.tracked_python_files(root)
+    assert tracked, "the real tree walk reached nothing"
+    for rel in tracked:
+        assert not rel.startswith(hook.EXCLUDED_PREFIXES), rel
 
 
 # --------------------------------------------------------------------------
@@ -197,11 +269,21 @@ def test_the_baseline_is_relowered_by_every_shrink():
 
 
 def test_a_shrunk_file_must_lower_its_ceiling(hook):
-    """Otherwise the ceiling re-licenses every line that was just removed."""
+    """Otherwise the ceiling re-licenses every line that was just removed.
+
+    A ceiling of MAX_LINES + 1 shrinking by one lands exactly on MAX_LINES —
+    compliant, not merely lower — so that boundary gets the "delete the
+    entry" message instead of "lower the ceiling"; every other entry keeps
+    the original expectation.
+    """
     for rel, ceiling in hook.KNOWN_LARGE.items():
-        message = hook.verdict(rel, ceiling - 1)
+        shrunk = ceiling - 1
+        message = hook.verdict(rel, shrunk)
         assert message is not None, f"{rel} keeps ceiling {ceiling} after shrinking"
-        assert f"Lower the ceiling to {ceiling - 1}" in message
+        if shrunk <= hook.MAX_LINES:
+            assert "Delete its KNOWN_LARGE entry" in message
+        else:
+            assert f"Lower the ceiling to {shrunk}" in message
 
 
 def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path, monkeypatch):
@@ -211,6 +293,7 @@ def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path, monkeypatch):
     "no violations" from "violations discarded". This stages a real breach.
     """
     monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: list(hook.KNOWN_LARGE))
     for rel, ceiling in hook.KNOWN_LARGE.items():
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -232,6 +315,7 @@ def test_run_audit_fails_when_the_scan_reached_nothing(hook, monkeypatch):
 def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
     """A renamed or deleted file must be a hard error, not a silent no-op."""
     monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [])
     reached, problems = hook.audit_ceilings()
     assert reached == 0
     assert len(problems) == len(hook.KNOWN_LARGE)
