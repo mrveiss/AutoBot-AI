@@ -8314,7 +8314,15 @@
       "detachError": "No se pudo quitar ese flujo.",
       "processDetach": "Quitar {workflow} de {role}",
       "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta.",
-      "canvasGroupKind": "Grupo"
+      "canvasGroupKind": "Grupo",
+      "toolNodeLabel": "Herramienta",
+      "attachToolNameLabel": "Nombre de la herramienta",
+      "attachToolNamePlaceholder": "Nombre de la herramienta",
+      "toolAttachError": "No se pudo adjuntar esa herramienta.",
+      "toolDetachError": "No se pudo quitar esa herramienta.",
+      "toolDetach": "Quitar {tool} de {role}",
+      "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
+      "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
@@ -9176,6 +9184,23 @@
     "errorGrant": "No se pudo conceder el permiso.",
     "errorRevoke": "No se pudo revocar el permiso.",
     "errorAttach": "No se pudo adjuntar.",
-    "errorDetach": "No se pudo quitar."
+    "errorDetach": "No se pudo quitar.",
+    "rate": "Tarifa por hora",
+    "rateLabel": "Importe",
+    "currencyLabel": "Moneda",
+    "saveRate": "Guardar tarifa",
+    "clearRate": "Borrar",
+    "noRate": "Sin tarifa — los pasos de esta función aún no pueden costearse.",
+    "stepCosts": "Costes de los pasos",
+    "minutesLabel": "Minutos por ejecución",
+    "runsLabel": "Ejecuciones al mes",
+    "saveStepCost": "Guardar",
+    "perRun": "por ejecución",
+    "perMonth": "al mes",
+    "costNeedsRate": "Defina una tarifa por hora para esta función para costear este paso.",
+    "costNeedsInputs": "Sin coste — registre cuánto dura este paso y con qué frecuencia se ejecuta.",
+    "errorSetRate": "No se pudo guardar la tarifa.",
+    "errorClearRate": "No se pudo borrar la tarifa.",
+    "errorSetStepCost": "No se pudieron guardar los datos de coste del paso."
   }
 }

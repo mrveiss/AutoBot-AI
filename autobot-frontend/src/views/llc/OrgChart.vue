@@ -18,6 +18,7 @@ import {
   buildOrgCanvasGraph,
   buildProcessCanvasNodes,
   buildTeamCanvasNodes,
+  buildToolCanvasNodes,
   canvasBottom,
   flattenOrgNodes,
   orgLayoutKey,
@@ -26,7 +27,7 @@ import {
   workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
-import type { ProcessNodeSource } from '@/composables/llc/orgCanvasGraph'
+import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCanvasGraph'
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
@@ -132,6 +133,20 @@ const canvasNodes = ref<CanvasNode[]>([])
 const processNodes = ref<ProcessNodeSource[]>([])
 const processNodesLoaded = ref(false)
 
+// #14597: the tools this company's roles carry — the sibling of
+// `processNodes` above, same reasoning: its own ref so a failed fetch cannot
+// blank anything else, and its own loaded guard so the canvas fetches once
+// per visit.
+const toolNodes = ref<ToolNodeSource[]>([])
+const toolNodesLoaded = ref(false)
+/** The tool-nodes request did not answer — distinct from answering "none"
+ *  (#14064, #13617, #14556: this exact conflation has been a real defect
+ *  three times in this area already). */
+const toolNodesFailed = ref(false)
+/** Whether the tool-nodes request has been tried at all, so the "no tools"
+ *  banner cannot appear before there is anything to report. */
+const toolNodesAttempted = ref(false)
+
 // #14549: the canvas can now change the attachment it displays, not just show
 // it. `roles` backs the "choose a role" picker for attach; fetched lazily like
 // `processNodes`, on the same canvas-open trigger, since neither is needed in
@@ -150,6 +165,15 @@ const attachWorkflowId = ref('')
 // second attach/detach cannot fire while the first is still in flight.
 const processMutationInFlight = ref(false)
 const processMutationError = ref<string | null>(null)
+
+// #14597: the tool attach form's own state, mirroring the process attach
+// form above exactly (same `attachableRoles` picker, a name field instead of
+// a workflow-id field) and its own in-flight/error pair — a tool mutation and
+// a process mutation are independent actions and must not block each other.
+const attachToolRoleId = ref('')
+const attachToolName = ref('')
+const toolMutationInFlight = ref(false)
+const toolMutationError = ref<string | null>(null)
 
 /**
  * Explicit, shallow layout source (#13996): ids, nesting and labels — never
@@ -236,6 +260,19 @@ const teamCanvasNodes = computed<CanvasNode[]>(() =>
   ),
 )
 
+/**
+ * Tool nodes, laid out below every other section (#14597) — same derived-not-
+ * stored reasoning as `processCanvasNodes`/`teamCanvasNodes`: nothing here is
+ * ever dragged, so recomputing on every render loses nothing.
+ */
+const toolCanvasNodes = computed<CanvasNode[]>(() =>
+  buildToolCanvasNodes(
+    toolNodes.value,
+    processNodes.value,
+    canvasBottom([...canvasNodes.value, ...processCanvasNodes.value, ...teamCanvasNodes.value]),
+  ),
+)
+
 const lensedCanvasNodes = computed<CanvasNode[]>(() => [
   ...applyRoleLens(canvasNodes.value, roleLens.value || null),
   // Not lensed: the role lens filters *people* by role, and a process is not a
@@ -247,6 +284,8 @@ const lensedCanvasNodes = computed<CanvasNode[]>(() => [
   // (they are always still on the reporting-hierarchy canvas too), so it is
   // left unlensed for the same reason process nodes are.
   ...teamCanvasNodes.value,
+  // #14597: a tool is not a person either, same reasoning as processes.
+  ...toolCanvasNodes.value,
 ])
 const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
 
@@ -320,6 +359,8 @@ function setViewMode(mode: OrgViewMode) {
     // and the same guard the People list already uses — a second entry into
     // canvas mode does not re-request them.
     void loadPeopleSources()
+    // #14597: tools render on the canvas too, same lazy-on-canvas-open trigger.
+    void fetchToolNodes()
   }
 }
 
@@ -507,6 +548,100 @@ async function onProcessDetached(roleId: string, workflowId: string): Promise<vo
     processMutationError.value = describeError(err, 'llc.orgChart.detachError')
   } finally {
     processMutationInFlight.value = false
+  }
+}
+
+/**
+ * Load the tools this company's roles carry (#14597).
+ *
+ * Mirrors `fetchProcessNodes`, but — unlike that one — distinguishes a failed
+ * fetch from an empty answer via `toolNodesFailed`/`toolNodesAttempted`,
+ * because this exact conflation ("failed" reading as "this company has
+ * none") has been a real defect three times in this area (#14064, #13617,
+ * #14556) and the issue that added this surface calls it out by name.
+ */
+async function fetchToolNodes() {
+  if (toolNodesLoaded.value) return
+  try {
+    const cid = await resolveCompanyIdOnce()
+    if (!cid) {
+      toolNodes.value = []
+      return
+    }
+    const resp = await api.get<{ nodes: ToolNodeSource[] }>(`/api/llc/companies/${cid}/tool-nodes`)
+    // Accept only rows that actually carry the three strings a tool node is
+    // made of — same defensive filter `fetchProcessNodes` applies, so a
+    // misrouted mock or a changed contract renders as nothing rather than as
+    // nonsense nodes on the canvas.
+    const rows = Array.isArray(resp?.nodes) ? resp.nodes : []
+    toolNodes.value = rows.filter(
+      (row): row is ToolNodeSource =>
+        typeof row?.role_id === 'string' &&
+        typeof row?.role_name === 'string' &&
+        typeof row?.tool_name === 'string',
+    )
+    toolNodesFailed.value = false
+    toolNodesLoaded.value = true
+  } catch (err: unknown) {
+    logger.error('Failed to fetch tool nodes:', err instanceof Error ? err.message : String(err))
+    toolNodes.value = []
+    toolNodesFailed.value = true
+  } finally {
+    toolNodesAttempted.value = true
+  }
+}
+
+/**
+ * Force the lazy tool-node fetch to actually re-run (#14597).
+ *
+ * Mirrors `reloadProcessNodes` — `toolNodesLoaded` guards the lazy fetch, so a
+ * mutation has to clear it first or the "refetch" would hit the guard and
+ * silently keep showing the pre-mutation list.
+ */
+async function reloadToolNodes(): Promise<void> {
+  toolNodesLoaded.value = false
+  await fetchToolNodes()
+}
+
+/** Attach a tool to a role from the canvas (#14597). */
+async function onToolAttach(): Promise<void> {
+  const roleId = attachToolRoleId.value
+  const toolName = attachToolName.value.trim()
+  if (!companyId.value || !roleId || !toolName || toolMutationInFlight.value) return
+  toolMutationInFlight.value = true
+  toolMutationError.value = null
+  try {
+    await api.post(`/api/llc/roles/${companyId.value}/${roleId}/tools`, { tool_name: toolName })
+    attachToolName.value = ''
+    // The canvas is the confirmation, same as the process attach form: a
+    // successful attach must be visible on it, not just accepted by the
+    // server (no optimistic update — the reload IS the confirmation).
+    await reloadToolNodes()
+  } catch (err: unknown) {
+    logger.error('Failed to attach tool:', err)
+    toolMutationError.value = describeError(err, 'llc.orgChart.toolAttachError')
+  } finally {
+    toolMutationInFlight.value = false
+  }
+}
+
+/**
+ * Detach a tool from a role, reached from the tool node's own per-role
+ * control on the canvas (#14597). No optimistic update: a failed call leaves
+ * `toolNodes` — and so the graph — exactly as it was.
+ */
+async function onToolDetached(roleId: string, toolName: string): Promise<void> {
+  if (!companyId.value || toolMutationInFlight.value) return
+  toolMutationInFlight.value = true
+  toolMutationError.value = null
+  try {
+    await api.delete(`/api/llc/roles/${companyId.value}/${roleId}/tools/${encodeURIComponent(toolName)}`)
+    await reloadToolNodes()
+  } catch (err: unknown) {
+    logger.error('Failed to detach tool:', err)
+    toolMutationError.value = describeError(err, 'llc.orgChart.toolDetachError')
+  } finally {
+    toolMutationInFlight.value = false
   }
 }
 
@@ -828,6 +963,92 @@ onMounted(() => {
         {{ processMutationError }}
       </div>
 
+      <!-- #14597: the tool sibling of the process-attach form above — a role
+           picker (reusing `attachableRoles`) plus a tool-name field. Attach
+           reaches from here; detach reaches from each role chip on the tool
+           node itself (WorkflowCanvas.vue). Always shown in canvas mode,
+           independent of the role lens, for the same reason the process form
+           is: it is a mutation control, not a view filter. -->
+      <div
+        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
+        data-testid="tool-attach-form"
+      >
+        <div class="flex flex-col gap-1">
+          <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
+            {{ t('llc.orgChart.attachRoleLabel') }}
+          </label>
+          <select
+            id="tool-attach-role"
+            v-model="attachToolRoleId"
+            :disabled="toolMutationInFlight"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="tool-attach-role-select"
+          >
+            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
+            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
+              {{ role.name }}
+            </option>
+          </select>
+          <p
+            v-if="attachRolesFailed"
+            class="text-xs text-autobot-text-muted"
+            data-testid="tool-attach-roles-unavailable"
+          >
+            {{ t('llc.orgChart.attachRolesUnavailable') }}
+          </p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label for="tool-attach-name" class="text-xs text-autobot-text-secondary">
+            {{ t('llc.orgChart.attachToolNameLabel') }}
+          </label>
+          <input
+            id="tool-attach-name"
+            v-model="attachToolName"
+            type="text"
+            :disabled="toolMutationInFlight"
+            :placeholder="t('llc.orgChart.attachToolNamePlaceholder')"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="tool-attach-name-input"
+          />
+        </div>
+        <BaseButton
+          variant="primary"
+          data-testid="tool-attach-submit"
+          :disabled="!attachToolRoleId || !attachToolName.trim() || toolMutationInFlight"
+          @click="onToolAttach"
+        >
+          {{ t('llc.orgChart.attach') }}
+        </BaseButton>
+      </div>
+      <div
+        v-if="toolMutationError"
+        class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
+        role="alert"
+        data-testid="tool-mutation-error"
+      >
+        {{ toolMutationError }}
+      </div>
+
+      <!-- #14597: a failed tool-nodes fetch must read as "could not load",
+           never as "this company uses no tools" — the exact conflation
+           named in the issue as a repeat defect (#14064, #13617, #14556).
+           Shown only once the request has actually answered (or failed), so
+           the banner cannot appear before there is anything to report. -->
+      <p
+        v-if="toolNodesFailed"
+        class="border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-xs text-autobot-text-muted"
+        data-testid="canvas-tools-unavailable"
+      >
+        {{ t('llc.orgChart.canvasToolsUnavailable') }}
+      </p>
+      <p
+        v-else-if="toolNodesAttempted && toolNodes.length === 0"
+        class="border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-xs text-autobot-text-muted"
+        data-testid="canvas-no-tools"
+      >
+        {{ t('llc.orgChart.canvasNoToolsDefined') }}
+      </p>
+
       <!-- #14596: teams on the canvas carry the same honest-failure distinction
            the People list already makes (#14064, #13617, #14556) — a request
            that failed must never read as "this company has no teams". Shown
@@ -899,6 +1120,7 @@ onMounted(() => {
         @node-moved="onCanvasNodeMoved"
         @tab-selected="activeTabId = $event"
         @process-detached="onProcessDetached"
+        @tool-detached="onToolDetached"
       />
     </div>
     <p v-if="viewMode === 'canvas' && !isLoading && tree.length > 0" class="mt-2 text-xs text-autobot-text-muted">

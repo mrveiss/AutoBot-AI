@@ -8314,7 +8314,15 @@
       "detachError": "تعذّرت إزالة سير العمل هذا.",
       "processDetach": "إزالة {workflow} من {role}",
       "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة.",
-      "canvasGroupKind": "مجموعة"
+      "canvasGroupKind": "مجموعة",
+      "toolNodeLabel": "أداة",
+      "attachToolNameLabel": "اسم الأداة",
+      "attachToolNamePlaceholder": "اسم الأداة",
+      "toolAttachError": "تعذّر إرفاق هذه الأداة.",
+      "toolDetachError": "تعذّرت إزالة هذه الأداة.",
+      "toolDetach": "إزالة {tool} من {role}",
+      "canvasToolsUnavailable": "معلومات الأدوات غير متاحة حاليًا — قد تكون هذه القائمة غير مكتملة.",
+      "canvasNoToolsDefined": "لا توجد أدوات مرفقة بأي دور في هذه الشركة."
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
@@ -9176,6 +9184,23 @@
     "errorGrant": "تعذّر منح الصلاحية.",
     "errorRevoke": "تعذّر سحب الصلاحية.",
     "errorAttach": "تعذّر الإرفاق.",
-    "errorDetach": "تعذّرت الإزالة."
+    "errorDetach": "تعذّرت الإزالة.",
+    "rate": "الأجر بالساعة",
+    "rateLabel": "المبلغ",
+    "currencyLabel": "العملة",
+    "saveRate": "حفظ الأجر",
+    "clearRate": "مسح",
+    "noRate": "لم يُحدَّد أجر — لا يمكن بعد حساب تكلفة خطوات هذا الدور.",
+    "stepCosts": "تكاليف الخطوات",
+    "minutesLabel": "الدقائق لكل تشغيل",
+    "runsLabel": "مرات التشغيل شهريًا",
+    "saveStepCost": "حفظ",
+    "perRun": "لكل تشغيل",
+    "perMonth": "شهريًا",
+    "costNeedsRate": "حدِّد أجرًا بالساعة لهذا الدور لحساب تكلفة هذه الخطوة.",
+    "costNeedsInputs": "غير محسوبة — سجّل مدة هذه الخطوة وعدد مرات تشغيلها.",
+    "errorSetRate": "تعذّر حفظ الأجر.",
+    "errorClearRate": "تعذّر مسح الأجر.",
+    "errorSetStepCost": "تعذّر حفظ بيانات تكلفة الخطوة."
   }
 }

@@ -8302,7 +8302,15 @@
       "detachError": "Could not detach that workflow.",
       "processDetach": "Detach {workflow} from {role}",
       "attachRolesUnavailable": "Roles could not be loaded, so this list may be incomplete.",
-      "canvasGroupKind": "Group"
+      "canvasGroupKind": "Group",
+      "toolNodeLabel": "Tool",
+      "attachToolNameLabel": "Tool name",
+      "attachToolNamePlaceholder": "Tool name",
+      "toolAttachError": "Could not attach that tool.",
+      "toolDetachError": "Could not detach that tool.",
+      "toolDetach": "Detach {tool} from {role}",
+      "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
+      "canvasNoToolsDefined": "No tools are attached to any role in this company."
     },
     "executorRollup": {
       "title": "Executor Rollup",
@@ -9176,6 +9184,23 @@
     "errorGrant": "Could not grant that permission.",
     "errorRevoke": "Could not revoke that permission.",
     "errorAttach": "Could not attach that.",
-    "errorDetach": "Could not detach that."
+    "errorDetach": "Could not detach that.",
+    "rate": "Hourly rate",
+    "rateLabel": "Amount",
+    "currencyLabel": "Currency",
+    "saveRate": "Save rate",
+    "clearRate": "Clear",
+    "noRate": "No rate set — this role's steps cannot be costed yet.",
+    "stepCosts": "Step costs",
+    "minutesLabel": "Minutes per run",
+    "runsLabel": "Runs per month",
+    "saveStepCost": "Save",
+    "perRun": "per run",
+    "perMonth": "per month",
+    "costNeedsRate": "Set an hourly rate for this role to cost this step.",
+    "costNeedsInputs": "Not costed — record how long this step takes and how often it runs.",
+    "errorSetRate": "Could not save the rate.",
+    "errorClearRate": "Could not clear the rate.",
+    "errorSetStepCost": "Could not save this step's cost inputs."
   }
 }

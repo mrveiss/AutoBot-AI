@@ -8314,7 +8314,15 @@
       "detachError": "Não foi possível remover esse fluxo.",
       "processDetach": "Remover {workflow} de {role}",
       "attachRolesUnavailable": "Não foi possível carregar as funções, portanto esta lista pode estar incompleta.",
-      "canvasGroupKind": "Grupo"
+      "canvasGroupKind": "Grupo",
+      "toolNodeLabel": "Ferramenta",
+      "attachToolNameLabel": "Nome da ferramenta",
+      "attachToolNamePlaceholder": "Nome da ferramenta",
+      "toolAttachError": "Não foi possível anexar essa ferramenta.",
+      "toolDetachError": "Não foi possível remover essa ferramenta.",
+      "toolDetach": "Remover {tool} de {role}",
+      "canvasToolsUnavailable": "As informações de ferramentas estão indisponíveis neste momento — esta lista pode estar incompleta.",
+      "canvasNoToolsDefined": "Nenhuma ferramenta está anexada a nenhuma função nesta empresa."
     },
     "executorRollup": {
       "title": "Resumo de executores",
@@ -9176,6 +9184,23 @@
     "errorGrant": "Não foi possível conceder a permissão.",
     "errorRevoke": "Não foi possível revogar a permissão.",
     "errorAttach": "Não foi possível anexar.",
-    "errorDetach": "Não foi possível remover."
+    "errorDetach": "Não foi possível remover.",
+    "rate": "Valor por hora",
+    "rateLabel": "Montante",
+    "currencyLabel": "Moeda",
+    "saveRate": "Guardar valor",
+    "clearRate": "Limpar",
+    "noRate": "Sem valor definido — os passos desta função ainda não podem ser custeados.",
+    "stepCosts": "Custos dos passos",
+    "minutesLabel": "Minutos por execução",
+    "runsLabel": "Execuções por mês",
+    "saveStepCost": "Guardar",
+    "perRun": "por execução",
+    "perMonth": "por mês",
+    "costNeedsRate": "Defina um valor por hora para esta função para custear este passo.",
+    "costNeedsInputs": "Sem custo — registe a duração deste passo e a frequência com que corre.",
+    "errorSetRate": "Não foi possível guardar o valor.",
+    "errorClearRate": "Não foi possível limpar o valor.",
+    "errorSetStepCost": "Não foi possível guardar os dados de custo do passo."
   }
 }
