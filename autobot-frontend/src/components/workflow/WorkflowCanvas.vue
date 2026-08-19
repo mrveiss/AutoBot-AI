@@ -234,6 +234,35 @@
                 </button>
               </div>
             </template>
+            <!-- #14597: a tool one or more roles carry. `roles` is empty
+                 for the moment a node exists with zero roles left, which
+                 cannot happen from the API today (a tool node is only ever
+                 built from at least one attachment) but is handled the same
+                 defensive way `org-group`'s size guard is: no crash, just an
+                 empty list. -->
+            <template v-else-if="node.type === 'org-tool'">
+              <p class="org-title">{{ nodeText(node, 'tool_name') }}</p>
+              <ul v-if="toolRoles(node).length > 0" class="tool-roles">
+                <li
+                  v-for="role in toolRoles(node)"
+                  :key="role.role_id"
+                  class="tool-role-chip"
+                >
+                  <span class="tool-role-name">{{ role.role_name }}</span>
+                  <!-- #14597: mirrors the org-process detach control — `.stop`
+                       keeps the click from also selecting the tool node. -->
+                  <button
+                    type="button"
+                    class="tool-detach-btn"
+                    data-testid="tool-detach-btn"
+                    :aria-label="toolDetachLabel(node, role)"
+                    @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
+                  >
+                    <Icon name="times" />
+                  </button>
+                </li>
+              </ul>
+            </template>
             <!-- GH#13939: Company OS org nodes are read-only descriptors -->
             <template v-else-if="node.type === 'org-person'">
               <p class="org-title">{{ nodeText(node, 'title') }}</p>
@@ -356,6 +385,9 @@ const emit = defineEmits<{
   // called against the API directly — this component is shared with real
   // workflow editing and must stay ignorant of the LLC endpoints.
   (e: 'process-detached', roleId: string, workflowId: string): void;
+  // #14597: an org-tool node's own per-role detach control, same reasoning —
+  // this component only ever emits the LLC mutation, never performs it.
+  (e: 'tool-detached', roleId: string, toolName: string): void;
 }>();
 
 const showVisionDropdown = ref(false);
@@ -379,9 +411,14 @@ const nodeIcons: Record<CanvasNodeType, IconName> = {
   'org-person': 'user',
   'org-group': 'sitemap',
   'org-process': 'project-diagram',
+  // #14597: distinct from 'project-diagram' (org-process) — colour is never
+  // the only signal a node type carries (#13941), so a tool also gets its
+  // own icon rather than only a caption.
+  'org-tool': 'wrench',
 };
 const nodeLabels = computed(() => ({
   'org-process': t('llc.orgChart.processNodeLabel'),
+  'org-tool': t('llc.orgChart.toolNodeLabel'),
   step: t('workflow.canvas.stepLabel'),
   condition: t('workflow.canvas.conditionLabel'),
   switch: t('workflow.canvas.switchLabel'),
@@ -464,6 +501,32 @@ function processDetachLabel(node: CanvasNode): string {
   return t('llc.orgChart.processDetach', {
     workflow: nodeText(node, 'workflow_id'),
     role: nodeText(node, 'role_name'),
+  });
+}
+
+/** An org-tool node's roles, off its untyped `data` bag (#14597). */
+function toolRoles(node: CanvasNode): { role_id: string; role_name: string }[] {
+  const roles = (node.data as Record<string, unknown>).roles;
+  return Array.isArray(roles)
+    ? roles.filter(
+        (role): role is { role_id: string; role_name: string } =>
+          typeof role?.role_id === 'string' && typeof role?.role_name === 'string',
+      )
+    : [];
+}
+
+/**
+ * Accessible name for a tool node's per-role detach control (#14597).
+ *
+ * Mirrors `processDetachLabel`: the visible chip carries only a role name, so
+ * a screen reader landing on its bare "×" would not know what it detaches or
+ * from which tool — this node can list several roles, so the role has to be
+ * named explicitly rather than assumed from context.
+ */
+function toolDetachLabel(node: CanvasNode, role: { role_name: string }): string {
+  return t('llc.orgChart.toolDetach', {
+    tool: nodeText(node, 'tool_name'),
+    role: role.role_name,
   });
 }
 
@@ -584,6 +647,48 @@ const isPanning = ref(false);
  * genuine click/tap on a node.
  */
 const movedThisGesture = ref(false);
+
+/**
+ * Client-space position and pointer type recorded at the start of the
+ * current gesture (#14625) — the fixed baseline `onPointerMove` measures
+ * against to decide whether the gesture has become a pan/drag, rather than
+ * a click/tap that merely jittered.
+ *
+ * Comparing against this fixed start point on every move (not the previous
+ * `pointermove`, and not setting the flag on any single move) is what makes
+ * a slow drag built from many 1px steps still count as a drag, while a
+ * jittery click that never leaves a small radius around its start does not.
+ */
+const gestureStart = reactive({ x: 0, y: 0, pointerType: 'mouse' as PointerEvent['pointerType'] });
+
+/**
+ * Minimum on-screen movement, in CSS px, before a mouse/pen gesture counts
+ * as a pan/drag rather than a click/tap (#14625). 4px matches the drag-start
+ * "slop" browsers themselves use before turning a press into a native drag
+ * (e.g. Chromium/Firefox default to a small handful of px) — big enough to
+ * absorb the jitter of an unsteady hand or a noisy optical mouse, small
+ * enough that a deliberate pan is never mistaken for a click.
+ */
+const MOVE_THRESHOLD_MOUSE_PX = 4;
+
+/**
+ * Touch tolerance (#14625): a fingertip covers a far larger contact area
+ * than a mouse cursor and drifts more for the same intended tap, so touch
+ * (and pen) gestures get a taller threshold than mouse — otherwise the same
+ * false-drag bug this issue fixes for mouse just reappears, at a smaller
+ * radius, for touch.
+ */
+const MOVE_THRESHOLD_TOUCH_PX = 10;
+
+/**
+ * Whether `e` has moved far enough from `gestureStart` to count as a
+ * pan/drag rather than a click/tap that merely jittered (#14625).
+ */
+function exceedsMoveThreshold(e: PointerEvent): boolean {
+  const threshold = gestureStart.pointerType === 'touch' ? MOVE_THRESHOLD_TOUCH_PX : MOVE_THRESHOLD_MOUSE_PX;
+  return Math.hypot(e.clientX - gestureStart.x, e.clientY - gestureStart.y) > threshold;
+}
+
 const panStart = reactive({ x: 0, y: 0 });
 const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
@@ -971,6 +1076,9 @@ function applyPinchZoom(): void {
 
 function startPan(e: PointerEvent) {
   movedThisGesture.value = false;
+  gestureStart.x = e.clientX;
+  gestureStart.y = e.clientY;
+  gestureStart.pointerType = e.pointerType;
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   capturePointer(e);
   if (activePointers.size >= 2) { beginPinch(); return; }
@@ -997,6 +1105,9 @@ function onNodePointerDown(node: CanvasNode, e: PointerEvent) {
   // Reset here too: a plain press on a node stops propagation below, so
   // `startPan` never runs and would never clear the flag.
   movedThisGesture.value = false;
+  gestureStart.x = e.clientX;
+  gestureStart.y = e.clientY;
+  gestureStart.pointerType = e.pointerType;
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   capturePointer(e);
   if (activePointers.size >= 2) { beginPinch(); e.stopPropagation(); return; }
@@ -1054,18 +1165,21 @@ function onPointerMove(e: PointerEvent) {
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   if (isPanning.value) {
     pan.x = e.clientX - panStart.x; pan.y = e.clientY - panStart.y;
-    // Set on movement, not on press: a shift-click/tap that never moves is
-    // still a selection, and suppressing it would break selecting with shift
-    // held (mouse) or a plain tap (touch).
-    movedThisGesture.value = true;
+    // Set once the gesture has moved past the threshold from its start
+    // point, not on the first pointermove (#14625) — a shift-click/tap that
+    // never leaves that small radius is still a selection, and suppressing
+    // it on any single move would break selecting with shift held (mouse)
+    // or a plain tap (touch).
+    if (exceedsMoveThreshold(e)) movedThisGesture.value = true;
   }
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;
     emit('node-moved', dragNode.value.id, { x: Math.max(0, x), y: Math.max(0, y) });
-    // #14610: a drag that actually moved the node must not also select it
-    // when the gesture ends — the drag counterpart of the pan case above.
-    movedThisGesture.value = true;
+    // #14610/#14625: a drag that actually moved the node past the threshold
+    // must not also select it when the gesture ends — the drag counterpart
+    // of the pan case above.
+    if (exceedsMoveThreshold(e)) movedThisGesture.value = true;
   }
 }
 
@@ -1320,6 +1434,56 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
   background: var(--bg-hover);
 }
 .process-detach-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+/* #14597: a tool node must not read as "another process node" — colour is
+   never the only signal (#13941), so the header background AND the border
+   style both differ from every other org node type (solid info for
+   org-person, dashed/solid info-warning for org-group, unstyled default for
+   org-process). The dotted inline-start border pairs with the distinct
+   'wrench' icon and 'Tool' caption set in nodeIcons/nodeLabels above. */
+.workflow-node.org-tool {
+  border-inline-start-width: 6px;
+  border-inline-start-style: dotted;
+  border-inline-start-color: var(--color-secondary);
+}
+.workflow-node.org-tool .node-header {
+  background: var(--color-secondary);
+}
+.tool-roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  margin: var(--spacing-0);
+  padding: var(--spacing-0);
+  list-style: none;
+}
+.tool-role-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.tool-role-name {
+  flex: 1;
+  font-family: var(--font-family-mono, monospace);
+}
+.tool-detach-btn {
+  padding: var(--spacing-1);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-default);
+  line-height: 1;
+}
+.tool-detach-btn:hover {
+  color: var(--color-error);
+  background: var(--bg-hover);
+}
+.tool-detach-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }

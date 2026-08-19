@@ -8326,7 +8326,15 @@
       "detachError": "No se pudo quitar ese flujo.",
       "processDetach": "Quitar {workflow} de {role}",
       "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta.",
-      "canvasGroupKind": "Grupo"
+      "canvasGroupKind": "Grupo",
+      "toolNodeLabel": "Herramienta",
+      "attachToolNameLabel": "Nombre de la herramienta",
+      "attachToolNamePlaceholder": "Nombre de la herramienta",
+      "toolAttachError": "No se pudo adjuntar esa herramienta.",
+      "toolDetachError": "No se pudo quitar esa herramienta.",
+      "toolDetach": "Quitar {tool} de {role}",
+      "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
+      "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa."
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",

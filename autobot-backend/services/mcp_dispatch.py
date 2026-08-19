@@ -151,7 +151,7 @@ class MCPDispatcher:
         Stage 2 (#13228) used this for shadow logging only — the caller never
         acted on it. Stage 3 (#14523) promotes it to the actual decision
         ``dispatch()`` enforces, now that #14494 has proven the precondition
-        this needs: every tool the eleven governed bridges register carries an
+        this needs: every tool the twelve governed bridges register carries an
         exact ``TOOL_PERMISSIONS`` entry, so "undeclared" here means a tool
         that should not have reached production, not a working call about to
         break.

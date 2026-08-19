@@ -8326,7 +8326,15 @@
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
       "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית.",
-      "canvasGroupKind": "קבוצה"
+      "canvasGroupKind": "קבוצה",
+      "toolNodeLabel": "כלי",
+      "attachToolNameLabel": "שם הכלי",
+      "attachToolNamePlaceholder": "שם הכלי",
+      "toolAttachError": "לא ניתן היה לצרף כלי זה.",
+      "toolDetachError": "לא ניתן היה להסיר כלי זה.",
+      "toolDetach": "הסר את {tool} מ-{role}",
+      "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
+      "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו."
     },
     "executorRollup": {
       "title": "סיכום מבצעים",
