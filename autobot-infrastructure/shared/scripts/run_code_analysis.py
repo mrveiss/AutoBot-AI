@@ -113,7 +113,10 @@ def _read_report_file(target_path: str, script_name: str, label: str) -> Dict[st
 
     #14587: the sub-scripts write their report to a file in their ``cwd``
     (pinned to ``target_path``), not to stdout -- this is the read half of
-    that contract.
+    that contract. A missing file, an unreadable one (permissions, race), one
+    that isn't valid JSON, and one whose top level isn't a JSON object all
+    degrade to the same ``error`` shape rather than propagating or being
+    treated as a result dict.
     """
     output_name = _ANALYSIS_OUTPUT_FILES.get(script_name)
     if output_name is None:
@@ -125,9 +128,15 @@ def _read_report_file(target_path: str, script_name: str, label: str) -> Dict[st
 
     try:
         with open(report_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            parsed = json.load(f)
     except json.JSONDecodeError:
         return {"error": f"{label} analysis wrote {output_name} but it was not valid JSON"}
+    except OSError as e:
+        return {"error": f"{label} analysis wrote {output_name} but it could not be read: {e}"}
+
+    if not isinstance(parsed, dict):
+        return {"error": f"{label} analysis wrote {output_name} but its top level was not a JSON object"}
+    return parsed
 
 
 def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict[str, Any]:
@@ -140,7 +149,9 @@ def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict
     """
     script_path = _ANALYSIS_SCRIPTS_DIR / script_name
     if not script_path.exists():
-        return {"error": f"Script not found: {script_path}"}
+        # #14587: no full filesystem path in a result that could reach a
+        # caller -- the script's own name identifies it just as well.
+        return {"error": f"Script not found: {script_name}"}
 
     result, error = _invoke_subprocess(script_path, target_path, label)
     if error is not None:

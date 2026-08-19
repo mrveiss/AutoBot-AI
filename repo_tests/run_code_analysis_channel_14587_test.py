@@ -24,6 +24,15 @@ of the five real script files, and add an end-to-end test that copies and
 runs the real, unmodified ``analyze_performance_simple.py`` -- the lightest of
 the five sub-scripts (stdlib plus one repo utility, no Redis/sklearn) -- to
 prove a real invocation reaches ``status: "success"``.
+
+Lives under ``repo_tests/`` rather than beside the module it tests: this file
+was originally created (#14543/#14583) at
+``autobot-infrastructure/shared/scripts/run_code_analysis_test.py``, but
+``autobot-infrastructure/`` is in no pytest ``testpaths`` entry and in no CI
+pytest invocation -- it was never collected, so its guarantees, including the
+both-sides contract check added here, never actually ran. Same defect class,
+same fix, as ``infra_scripts_live_defects_14507_test.py`` and #14131 (the
+broader collection-gap tracking issue; this file's move does not close it).
 """
 
 import importlib.util
@@ -35,7 +44,8 @@ import sys
 
 import pytest
 
-_MODULE_PATH = pathlib.Path(__file__).with_name("run_code_analysis.py")
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_MODULE_PATH = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "run_code_analysis.py"
 
 
 def _load_module():
@@ -155,6 +165,45 @@ def test_malformed_report_file_reports_error_not_fabricated_defaults(scripts_dir
     assert "error" in result
     assert "complexity" not in result
     assert "test_coverage" not in result
+
+
+def test_missing_script_error_has_no_filesystem_path(scripts_dir, target_dir):
+    """#14587: a result that could reach a caller must not carry an absolute
+    filesystem path -- the script's own name identifies it just as well.
+    """
+    result = rca.run_code_quality_analysis(str(target_dir))
+
+    assert result["error"] == "Script not found: analyze_code_quality.py"
+    assert str(scripts_dir) not in result["error"]
+
+
+def test_report_directory_instead_of_file_reports_error_not_crash(scripts_dir, target_dir):
+    """A report path that exists but is a directory (e.g. a permissions
+    problem or a race with another writer) must degrade to an error, not
+    propagate an ``OSError`` out of the orchestrator.
+    """
+    _write_script(scripts_dir, "analyze_code_quality.py", "import os\nos.mkdir('comprehensive_quality_report.json')\n")
+
+    result = rca.run_code_quality_analysis(str(target_dir))
+
+    assert "error" in result
+    assert "could not be read" in result["error"]
+
+
+def test_report_file_with_non_dict_top_level_reports_error(scripts_dir, target_dir):
+    """A report file whose JSON top level is an array must not flow through
+    as a result -- downstream code calls ``.get("error")`` on it.
+    """
+    _write_script(
+        scripts_dir,
+        "analyze_code_quality.py",
+        "import json\njson.dump([1, 2, 3], open('comprehensive_quality_report.json', 'w', encoding='utf-8'))\n",
+    )
+
+    result = rca.run_code_quality_analysis(str(target_dir))
+
+    assert isinstance(result, dict)
+    assert "error" in result
 
 
 def test_valid_report_file_is_returned_verbatim(scripts_dir, target_dir):
