@@ -1,0 +1,137 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Every live producer of the ``node_roles`` hostvar must also stamp
+``node_roles_declared`` (#14594).
+
+#14589 gated role_active_facts.yml's five PRIVILEGED facts on
+``node_roles_declared | default(node_roles | default([]))``. The fallback
+means any producer that stamps ``node_roles`` without ``node_roles_declared``
+keeps the original #14560 defect alive for hosts it builds -- a
+detected-only node activating a privileged deploy fact. #14589 only fixed
+``services/inventory_builder.py``; ``api/setup_wizard.py`` was safe only by
+the coincidence that its ``node_roles`` source (the ``NodeRole`` table)
+happened to always be declared-only, which nothing enforced.
+
+Rather than hand-list "the producers are inventory_builder.py and
+setup_wizard.py" (the exact defect shape #14555 already showed for a
+hand-maintained regex derivation, see
+``inventory_privileged_node_roles_test.py``), this module DERIVES the
+producer set with an AST walk: any ``.py`` file under ``autobot-slm-backend``
+(excluding test files) that assigns the literal string key ``"node_roles"``
+as a dict key or a subscript-assignment target is a producer, and must also
+assign ``"node_roles_declared"`` somewhere in the same file. A future
+producer that forgets the declared-only stamp fails this test by name,
+without anyone updating a list here.
+
+AST parsing only -- files are never imported or executed (that would be
+"running code from the codebase", never the agent's job; CI runs the tests).
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import pytest
+
+_SLM_ROOT = Path(__file__).resolve().parent.parent
+
+# Static (hand-authored / operator-edited) inventories are explicitly exempt --
+# see test_static_inventory_still_needs_the_fallback below for why the
+# fallback must stay for them. Excluded here so this module only derives
+# LIVE (code) producers.
+_EXCLUDE_DIR_PARTS = frozenset({"ansible", "tests", "__pycache__", "node_modules", ".git", "migrations"})
+
+
+def _is_test_file(path: Path) -> bool:
+    stem = path.stem
+    return stem.startswith("test_") or stem.endswith("_test") or stem.endswith("_tests")
+
+
+def _files_to_scan(root: Path) -> list[Path]:
+    files = []
+    for path in root.rglob("*.py"):
+        rel_parts = path.relative_to(root).parts
+        if any(part in _EXCLUDE_DIR_PARTS for part in rel_parts[:-1]):
+            continue
+        if _is_test_file(path):
+            continue
+        files.append(path)
+    return files
+
+
+def _assigns_string_key(tree: ast.AST, key: str) -> bool:
+    """True if *tree* assigns dict-literal key ``key`` or does ``x[key] = ...``."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for k in node.keys:
+                if isinstance(k, ast.Constant) and k.value == key:
+                    return True
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Store):
+            sl = node.slice
+            # Python 3.9+: node.slice is the index expression directly.
+            if isinstance(sl, ast.Constant) and sl.value == key:
+                return True
+    return False
+
+
+def _node_roles_producers(root: Path) -> list[Path]:
+    producers = []
+    for path in _files_to_scan(root):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue
+        if _assigns_string_key(tree, "node_roles"):
+            producers.append(path)
+    return producers
+
+
+def test_derivation_is_not_vacuous_and_finds_the_known_producers():
+    """Sanity check on the derivation itself, not the invariant it guards."""
+    producers = {p.relative_to(_SLM_ROOT) for p in _node_roles_producers(_SLM_ROOT)}
+
+    assert producers, "derivation found zero node_roles producers -- the guard below would be vacuous"
+    assert Path("services/inventory_builder.py") in producers
+    assert Path("api/setup_wizard.py") in producers
+
+
+def test_every_node_roles_producer_also_stamps_node_roles_declared():
+    producers = _node_roles_producers(_SLM_ROOT)
+    assert producers, "derivation found zero node_roles producers -- the guard below would be vacuous"
+
+    missing = []
+    for path in producers:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        if not _assigns_string_key(tree, "node_roles_declared"):
+            missing.append(path.relative_to(_SLM_ROOT))
+
+    assert not missing, (
+        f"{sorted(str(p) for p in missing)} stamp node_roles but never node_roles_declared -- "
+        "a producer like this reopens #14560 through the node_roles_declared fallback (#14594)"
+    )
+
+
+def test_static_inventory_still_needs_the_fallback():
+    """Evidence for the fallback decision: it is NOT dead code.
+
+    ``slm-nodes.yml`` is the legacy static fallback inventory (#10110) --
+    hand-authored, not generated by either Python producer above. Its
+    05-LLM-CPU host stamps node_roles but (correctly, by the file's own
+    "Do not add new nodes here" convention) never node_roles_declared. As
+    long as a file like this is in the repo, the
+    ``node_roles_declared | default(node_roles | default([]))`` fallback in
+    role_active_facts.yml is load-bearing and must not be removed.
+    """
+    yaml = pytest.importorskip("yaml")
+    path = _SLM_ROOT / "ansible" / "inventory" / "slm-nodes.yml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    llm_host = data["all"]["children"]["slm_nodes"]["hosts"]["05-LLM-CPU"]
+
+    assert "node_roles" in llm_host, "fixture drifted -- this file no longer demonstrates the static case"
+    assert "node_roles_declared" not in llm_host, (
+        "slm-nodes.yml now stamps node_roles_declared -- if every static inventory does this too, "
+        "the role_active_facts.yml fallback may be removable; re-evaluate #14594's decision to keep it"
+    )
