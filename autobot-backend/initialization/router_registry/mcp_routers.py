@@ -34,11 +34,16 @@ def load_mcp_routers():
     # - database_mcp
     # - git_mcp
     # - prometheus_mcp
+    # - redis_mcp
+    # - manual_mcp
     # - mcp_registry
+    #
+    # #14586: manual_mcp used to be listed again below, mounting the same
+    # router twice (once here at prefix "", once in core_routers.py at
+    # prefix "/manual") -- resolved to the single core registration above.
 
     # Optional MCP routers
     optional_mcp_configs = [
-        ("api.manual_mcp", "", ["manual_mcp", "mcp"], "manual_mcp"),
         # Issue #5072: AutoBot MCP server HTTP transport (POST /api/mcp/tool)
         ("api.autobot_mcp_router", "", ["mcp", "autobot-mcp"], "autobot_mcp_server"),
         # Issue #6453: Admin endpoints to generate/revoke scoped MCP client tokens

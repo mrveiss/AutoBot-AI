@@ -14,7 +14,7 @@ missing ``tool_permission`` was read as "legacy tool, no schema declared" and
 waved through unconditionally; that was the runtime half of the default-allow
 #14521's security review flagged in
 ``autobot_shared.auth.mcp_tool_permissions.required_permission``. #14494 made
-every tool the eleven governed bridges register today carry an exact
+every tool the twelve governed bridges register today carry an exact
 declaration (measured at #14523 time: 104 live tools, 0 undeclared), which is
 what makes refusing ``None`` safe rather than breaking a working agent flow.
 
@@ -67,7 +67,7 @@ class PermissionEnforcementExtension(Extension):
     undeclared tool, per ``mcp_tool_permissions.required_permission`` — is
     refused, not allowed through. Before #14523 this was read as "legacy,
     no schema declared" and waved through unconditionally; #14494 proved
-    every tool the eleven governed bridges register today carries a real
+    every tool the twelve governed bridges register today carries a real
     declaration, so refusing the undeclared case no longer breaks a working
     call — it refuses exactly the tool that reached production without one.
 
