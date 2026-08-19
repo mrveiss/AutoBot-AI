@@ -261,8 +261,11 @@ def test_main_exits_nonzero_when_every_analysis_fails(scripts_dir, target_dir, c
 
 
 def test_main_exits_zero_when_analysis_succeeds(scripts_dir, target_dir, capsys, monkeypatch):
+    # #14635: shaped like the real code_quality_dashboard.py report -- scores
+    # nest under "quality_metrics", not at the top level.
+    payload = {"status": "success", "quality_metrics": {"maintainability_index": 82.5, "test_coverage_score": 91.0}}
     _write_report_writing_script(
-        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", {"complexity": 1}
+        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload
     )
     argv = ["run_code_analysis.py", "--target", str(target_dir), "--analysis-type", "quality"]
     monkeypatch.setattr(sys, "argv", argv)
@@ -271,6 +274,7 @@ def test_main_exits_zero_when_analysis_succeeds(scripts_dir, target_dir, capsys,
 
     printed = json.loads(capsys.readouterr().out)
     assert printed["status"] == "success"
+    assert printed["codebase_metrics"] == {"maintainability": 82.5, "test_coverage": 91.0}
 
 
 def test_output_file_map_matches_what_each_real_script_writes():
