@@ -1,22 +1,36 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for run_code_analysis's silent-failure fix (#14543).
+"""Tests for run_code_analysis's silent-failure fix (#14543) and its
+output-channel fix (#14587).
 
 Every one of the five sub-scripts this orchestrator shells out to used to be
 addressed under ``tools/code-analysis-suite/scripts/``, a directory that does
-not exist in this repository. A missing script, a non-zero exit, and stdout
-that fails to parse as JSON were all folded into an ``error`` key nested three
-levels deep, while the *top-level* ``status`` stayed hardcoded to ``"success"``
-and ``main()`` exited 0 -- a run that found nothing read as a completed one.
+not exist in this repository (#14543). Fixing that path revealed a second,
+deeper defect (#14587): the orchestrator parsed the subprocess's *stdout* as
+JSON, but all five real sub-scripts write their report to a *file* in their
+``cwd`` (four via ``json.dump``, printing only human-readable text; the fifth,
+``analyze_performance_simple.py``, wrote no structured output at all) -- so a
+real invocation always hit the "no parseable JSON" branch and a run could
+never report ``status: "success"``.
 
-These drive the real orchestration functions against a scratch directory of
-fake sub-scripts rather than the real (heavy, Redis-dependent) analyzers, so
-a missing, failing, or malformed sub-script can be simulated deterministically.
+#14583's own tests for #14543 drove the orchestrator against hand-written fake
+sub-scripts that printed JSON to stdout -- a shape no real producer emits, and
+exactly the gap that let #14587 through unnoticed. The tests below keep the
+channel-agnostic failure-mode cases (missing script, non-zero exit -- these
+don't depend on which channel carries the payload), rewrite the success-path
+cases to use the file channel the real scripts actually use, add a test that
+derives the orchestrator/analyzer contract from both sides by reading it out
+of the five real script files, and add an end-to-end test that copies and
+runs the real, unmodified ``analyze_performance_simple.py`` -- the lightest of
+the five sub-scripts (stdlib plus one repo utility, no Redis/sklearn) -- to
+prove a real invocation reaches ``status: "success"``.
 """
 
 import importlib.util
 import json
 import pathlib
+import re
+import shutil
 import sys
 
 import pytest
@@ -35,11 +49,33 @@ def _load_module():
 
 rca = _load_module()
 
+# Captured before any test monkeypatches ``rca._ANALYSIS_SCRIPTS_DIR`` --
+# this is the orchestrator's own resolution of where the real sub-scripts
+# live, so the real-script tests below stay correct if that resolution ever
+# changes rather than restating the path independently.
+_REAL_SCRIPTS_DIR = rca._ANALYSIS_SCRIPTS_DIR
+_REAL_PERFORMANCE_SIMPLE = _REAL_SCRIPTS_DIR / "analyze_performance_simple.py"
+
 _ALL_ANALYSIS_KEYS = ("code_quality", "duplicates", "performance", "architecture")
+
+# Matches the ``report_path = Path("...")`` assignment each real sub-script
+# uses right before its ``json.dump`` call.
+_REPORT_PATH_RE = re.compile(r'report_path\s*=\s*Path\("([^"]+\.json)"\)')
 
 
 def _write_script(scripts_dir: pathlib.Path, name: str, body: str) -> None:
     (scripts_dir / name).write_text(body, encoding="utf-8")
+
+
+def _write_report_writing_script(scripts_dir: pathlib.Path, name: str, output_name: str, payload: dict) -> None:
+    """A fake sub-script that writes ``payload`` to ``output_name`` in its cwd.
+
+    Used for the failure-mode and contract tests below, which exercise
+    orchestrator behaviour (missing file, malformed file, cwd pinning) that
+    does not depend on any particular analyzer's real logic.
+    """
+    body = f"import json\njson.dump({payload!r}, open({output_name!r}, 'w', encoding='utf-8'))\n"
+    _write_script(scripts_dir, name, body)
 
 
 @pytest.fixture
@@ -85,13 +121,34 @@ def test_nonzero_exit_reports_error_not_success(scripts_dir, target_dir):
     assert "complexity" not in result
 
 
-def test_malformed_output_reports_error_not_fabricated_defaults(scripts_dir, target_dir):
-    """A returncode-0 script that prints non-JSON must not synthesize metrics.
+def test_missing_report_file_reports_error_not_success(scripts_dir, target_dir):
+    """A script that exits 0 without writing its report file is not success.
+
+    #14587: this is the file-channel analogue of the old "malformed stdout"
+    case -- a returncode-0 run whose payload never showed up on the channel
+    the orchestrator actually reads must not be folded into success.
+    """
+    _write_script(scripts_dir, "analyze_code_quality.py", "print('ran, but wrote nothing')\n")
+
+    result = rca.run_code_quality_analysis(str(target_dir))
+
+    assert "error" in result
+    assert "did not write" in result["error"]
+    assert "complexity" not in result
+
+
+def test_malformed_report_file_reports_error_not_fabricated_defaults(scripts_dir, target_dir):
+    """A report file that exists but is not valid JSON must not synthesize metrics.
 
     This used to return ``{"complexity": 5, "test_coverage": 70, ...}`` on a
-    ``JSONDecodeError`` -- numbers invented by the orchestrator, not measured.
+    ``JSONDecodeError`` reading stdout -- numbers invented by the
+    orchestrator, not measured. Same guarantee, now against the file channel.
     """
-    _write_script(scripts_dir, "analyze_code_quality.py", "print('not json, just log lines')\n")
+    _write_script(
+        scripts_dir,
+        "analyze_code_quality.py",
+        "open('comprehensive_quality_report.json', 'w', encoding='utf-8').write('not json')\n",
+    )
 
     result = rca.run_code_quality_analysis(str(target_dir))
 
@@ -100,12 +157,11 @@ def test_malformed_output_reports_error_not_fabricated_defaults(scripts_dir, tar
     assert "test_coverage" not in result
 
 
-def test_valid_json_output_is_returned_verbatim(scripts_dir, target_dir):
+def test_valid_report_file_is_returned_verbatim(scripts_dir, target_dir):
+    """#14587: the orchestrator reads the file the analyzer writes, not stdout."""
     payload = {"status": "success", "complexity": 3, "maintainability": "excellent"}
-    _write_script(
-        scripts_dir,
-        "analyze_code_quality.py",
-        f"import json\nprint(json.dumps({payload!r}))\n",
+    _write_report_writing_script(
+        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload
     )
 
     result = rca.run_code_quality_analysis(str(target_dir))
@@ -114,13 +170,29 @@ def test_valid_json_output_is_returned_verbatim(scripts_dir, target_dir):
     assert "error" not in result
 
 
+def test_stdout_json_is_ignored_in_favour_of_the_file(scripts_dir, target_dir):
+    """A script that prints JSON to stdout but writes a *different* payload to
+    its file must be read from the file -- proves the channel switch, not
+    just that a file-writing fixture happens to also work.
+    """
+    stdout_payload = {"complexity": 999}
+    file_payload = {"complexity": 1, "source": "file"}
+    body = (
+        "import json\n"
+        f"print(json.dumps({stdout_payload!r}))\n"
+        f"json.dump({file_payload!r}, open('comprehensive_quality_report.json', 'w', encoding='utf-8'))\n"
+    )
+    _write_script(scripts_dir, "analyze_code_quality.py", body)
+
+    result = rca.run_code_quality_analysis(str(target_dir))
+
+    assert result == file_payload
+
+
 def test_subprocess_cwd_is_pinned_to_target_path(scripts_dir, target_dir):
     """The sub-scripts resolve their own analysis root from cwd, not argv."""
-    _write_script(
-        scripts_dir,
-        "analyze_architecture.py",
-        "import json, os\nprint(json.dumps({'cwd': os.getcwd()}))\n",
-    )
+    body = "import json, os\njson.dump({'cwd': os.getcwd()}, open('architectural_analysis_report.json', 'w'))\n"
+    _write_script(scripts_dir, "analyze_architecture.py", body)
 
     result = rca.run_architecture_analysis(str(target_dir))
 
@@ -140,10 +212,8 @@ def test_main_exits_nonzero_when_every_analysis_fails(scripts_dir, target_dir, c
 
 
 def test_main_exits_zero_when_analysis_succeeds(scripts_dir, target_dir, capsys, monkeypatch):
-    _write_script(
-        scripts_dir,
-        "analyze_code_quality.py",
-        "import json\nprint(json.dumps({'status': 'success', 'complexity': 1}))\n",
+    _write_report_writing_script(
+        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", {"complexity": 1}
     )
     argv = ["run_code_analysis.py", "--target", str(target_dir), "--analysis-type", "quality"]
     monkeypatch.setattr(sys, "argv", argv)
@@ -152,3 +222,55 @@ def test_main_exits_zero_when_analysis_succeeds(scripts_dir, target_dir, capsys,
 
     printed = json.loads(capsys.readouterr().out)
     assert printed["status"] == "success"
+
+
+def test_output_file_map_matches_what_each_real_script_writes():
+    """Derive the channel contract from BOTH sides.
+
+    #14587: the failure this whole test file exists to catch is the
+    orchestrator and the analyzers *each* being internally self-consistent
+    while disagreeing with each other. Read the report filename directly out
+    of each real sub-script's own ``report_path = Path(...)`` line, and
+    assert it equals what ``_ANALYSIS_OUTPUT_FILES`` says the orchestrator
+    will read back for that same script -- rather than restating either side
+    by hand.
+    """
+    for script_name, expected_output in rca._ANALYSIS_OUTPUT_FILES.items():
+        script_path = _REAL_SCRIPTS_DIR / script_name
+        assert script_path.exists(), f"real sub-script missing at {script_path}"
+        source = script_path.read_text(encoding="utf-8")
+        match = _REPORT_PATH_RE.search(source)
+        assert match is not None, f"{script_name} has no report_path = Path(...) assignment"
+        assert match.group(1) == expected_output, (
+            f"{script_name} writes {match.group(1)!r} but the orchestrator reads "
+            f"{expected_output!r} back for it"
+        )
+
+
+@pytest.mark.skipif(
+    not _REAL_PERFORMANCE_SIMPLE.exists(),
+    reason="real analyze_performance_simple.py not present in this checkout",
+)
+def test_real_performance_simple_script_reaches_success(tmp_path, monkeypatch):
+    """#14587: drive the orchestrator against the REAL, unmodified
+    ``analyze_performance_simple.py`` -- not a fixture that prints a shape no
+    real producer emits. This is the exact defect #14583's tests repeated.
+    """
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    shutil.copy(_REAL_PERFORMANCE_SIMPLE, scripts_dir / "analyze_performance_simple.py")
+    monkeypatch.setattr(rca, "_ANALYSIS_SCRIPTS_DIR", scripts_dir)
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "sample.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+
+    result = rca.run_performance_analysis(str(target_dir))
+
+    assert "error" not in result, result
+    assert result["files_analyzed"] == 1
+    assert "total_issues" in result
+
+    report_file = target_dir / "performance_simple_analysis_report.json"
+    assert report_file.exists()
+    assert json.loads(report_file.read_text(encoding="utf-8")) == result
