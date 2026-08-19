@@ -47,10 +47,12 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 _BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
+_PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 
 
 def _load_ratchet_baseline() -> dict[str, int]:
@@ -68,6 +70,16 @@ def _load_ratchet_baseline() -> dict[str, int]:
 
 
 RATCHET_BASELINE = _load_ratchet_baseline()
+
+# Cardinality ceiling on KNOWN_LARGE itself (#14547 review). The per-file
+# ratchet stops any ONE entry from regrowing, but nothing stopped a NEW entry
+# appearing in both KNOWN_LARGE and RATCHET_BASELINE together — a two-sided
+# addition passes every other test here, which is how this PR added 502
+# entries in one change. At 3 entries a 4th was visible in a code review
+# diff; at 505 a 506th is not. Lower this by hand whenever KNOWN_LARGE loses
+# an entry; never raise it to let a new one in without that being the point
+# of the diff.
+MAX_KNOWN_LARGE_ENTRIES = 505
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
@@ -178,14 +190,49 @@ def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path, monkeypat
     assert problems == []
 
 
-def test_the_discovery_walk_respects_excluded_prefixes(hook):
+def _pre_commit_python_file_size_excludes() -> set[str]:
+    """The ``python-file-size`` hook's own ``exclude:`` prefixes, from the YAML.
+
+    Parsed independently of ``EXCLUDED_PREFIXES`` — building the expectation
+    from the same constant the test is meant to check would be true by
+    construction and catch nothing.
+    """
+    config = yaml.safe_load(_PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
+    hooks = [
+        hook_cfg
+        for repo_cfg in config["repos"]
+        for hook_cfg in repo_cfg.get("hooks", [])
+        if hook_cfg.get("id") == "python-file-size"
+    ]
+    assert len(hooks) == 1, f"expected exactly one python-file-size hook, found {len(hooks)}"
+    pattern = hooks[0]["exclude"]
+    assert pattern.startswith("^(") and pattern.endswith(")"), f"unexpected exclude shape: {pattern}"
+    return {prefix.replace("\\.", ".") for prefix in pattern[2:-1].split("|")}
+
+
+def test_excluded_prefixes_mirror_the_pre_commit_config(hook):
     """The audit's scope matches pre-commit's own exclude (#14547).
 
-    Without this, the tree walk would flag files under directories the hook
-    was deliberately never configured to gate — widening the guard's reach
-    beyond what ``.pre-commit-config.yaml`` actually enforces at commit time.
+    Without this, ``EXCLUDED_PREFIXES`` can drift from
+    ``.pre-commit-config.yaml`` silently — three docstrings claiming they
+    mirror each other is not a check. Widening or narrowing either without
+    the other means the tree walk and the staged-file path stop covering the
+    same set of files.
     """
-    assert hook.EXCLUDED_PREFIXES
+    from_yaml = _pre_commit_python_file_size_excludes()
+    assert from_yaml == set(hook.EXCLUDED_PREFIXES), (
+        f".pre-commit-config.yaml excludes {sorted(from_yaml)}, "
+        f"EXCLUDED_PREFIXES has {sorted(hook.EXCLUDED_PREFIXES)} — keep both in sync."
+    )
+
+
+def test_the_discovery_walk_respects_excluded_prefixes(hook):
+    """Behavioural companion to the YAML cross-check above.
+
+    The real walk is exercised too, not just the constant it is built from,
+    so a filtering bug inside ``tracked_python_files`` (not just a drifted
+    constant) would still be caught.
+    """
     root = hook.repo_root()
     tracked = hook.tracked_python_files(root)
     assert tracked, "the real tree walk reached nothing"
@@ -203,6 +250,22 @@ def test_no_entry_may_be_added(hook):
     assert added == set(), (
         f"new grandfathered files {sorted(added)} — the exemption list only "
         "shrinks (#14236). Split the file instead of exempting it."
+    )
+
+
+def test_known_large_entry_count_may_not_grow(hook):
+    """Catches a two-sided addition ``test_no_entry_may_be_added`` cannot.
+
+    That test only compares KNOWN_LARGE against RATCHET_BASELINE, so an entry
+    added to both together — the actual shape of how this PR added 502 —
+    passes it. This pins the count itself against a recorded ceiling that
+    only ever moves down.
+    """
+    count = len(hook.KNOWN_LARGE)
+    assert count <= MAX_KNOWN_LARGE_ENTRIES, (
+        f"KNOWN_LARGE grew to {count} entries, over the recorded ceiling of "
+        f"{MAX_KNOWN_LARGE_ENTRIES} — lower MAX_KNOWN_LARGE_ENTRIES when entries "
+        "leave, never raise it to let a new one in."
     )
 
 

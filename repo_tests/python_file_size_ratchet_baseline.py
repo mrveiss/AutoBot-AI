@@ -205,6 +205,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/precommit_analyzer.py": 741,
     "autobot-backend/code_intelligence/precommit_analyzer_test.py": 631,
     "autobot-backend/code_intelligence/redis_optimizer.py": 1097,
+    # Not legacy debt: created after this guard existed (#14413). Tracked as a
+    # live violation, not #5060 backlog -- see #14630.
     "autobot-backend/code_intelligence/testing_pattern_analyzer.py": 1162,
     "autobot-backend/code_intelligence/typescript_analyzer.py": 609,
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
@@ -492,6 +494,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1403,
     "autobot-slm-backend/services/playbook_executor.py": 1372,
     "autobot-slm-backend/services/reconciler.py": 2222,
+    # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
+    # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 843,
     "autobot-slm-backend/services/replication.py": 886,
     "autobot-slm-backend/services/role_registry.py": 715,

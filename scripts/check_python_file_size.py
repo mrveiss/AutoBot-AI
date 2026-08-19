@@ -77,13 +77,20 @@ SELF_REL = "scripts/check_python_file_size.py"
 RATCHET_REL = "repo_tests/python_file_size_ratchet_test.py"
 
 #: Repo-relative path prefixes the guard does not cover, mirrored from this
-#: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``). The
-#: tree walk in ``audit_ceilings`` runs independently of pre-commit — it is
-#: the ``--audit-ceilings`` / CI path, not the staged-file path through
+#: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``,
+#: currently ``^(\.worktrees/|autobot-infrastructure/|autobot-backend/code_analysis/)``).
+#: The tree walk in ``audit_ceilings`` runs independently of pre-commit — it
+#: is the ``--audit-ceilings`` / CI path, not the staged-file path through
 #: ``main`` — so without this it would flag files pre-commit was never
 #: configured to gate. Widening or narrowing this hook's scope means editing
-#: both in the same commit, or the two disagree about what "in scope" means.
-EXCLUDED_PREFIXES = ("autobot-infrastructure/", "autobot-backend/code_analysis/")
+#: both in the same commit, or the two disagree about what "in scope" means;
+#: ``test_excluded_prefixes_mirror_the_pre_commit_config`` in the ratchet
+#: test parses the YAML independently to catch exactly that drift.
+EXCLUDED_PREFIXES = (
+    ".worktrees/",
+    "autobot-infrastructure/",
+    "autobot-backend/code_analysis/",
+)
 
 #: Floor for the tree walk in ``audit_ceilings``, the production analogue of
 #: the ratchet test's own floor over its independent enumeration (#14547): a
@@ -133,11 +140,16 @@ def normalise(path: str) -> str:
 
 
 def count_lines(path: pathlib.Path) -> int | None:
-    """Line count for *path*, or None when it cannot be read."""
+    """Line count for *path*, or None when it cannot be read.
+
+    ``UnicodeDecodeError`` is not an ``OSError``, and is raised lazily while
+    the generator below is consumed, still inside this ``try`` — a non-UTF-8
+    ``.py`` file must not crash the whole audit over one unrelated file.
+    """
     try:
         with path.open(encoding="utf-8") as handle:
             return sum(1 for _ in handle)
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
 
 
@@ -206,32 +218,45 @@ def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
     )
 
 
-def audit_ceilings() -> tuple[int, list[str]]:
-    """Rule on every in-scope tracked Python file, not just KNOWN_LARGE's keys.
+def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, set[str], list[str]]:
+    """Rule on every readable file in *tracked*. Returns (reached, seen, problems).
 
-    Returns ``(files_reached, problems)``. Walking the tree (#14547) instead
-    of ``KNOWN_LARGE.items()`` is the actual fix: a dict-only scan can only
-    ever re-check a file someone already added to it, so a file that grows
-    past MAX_LINES without ever being added stays invisible to every audit
-    run forever — which is exactly how ``reconciler.py`` reached 2000+ lines
-    unnoticed. Entries the walk never reaches are still reported, the same as
-    before a rename or deletion left them stranded.
+    ``reached`` counts files actually read off disk, not ``len(tracked)`` —
+    one this hook that cannot be opened (see ``count_lines``: OSError or a
+    non-UTF-8 decode failure) must not inflate the floor check in
+    ``run_audit`` without ever having been ruled on.
     """
-    root = repo_root()
-    tracked = tracked_python_files(root)
     seen: set[str] = set()
     problems: list[str] = []
+    reached = 0
     for rel in sorted(tracked):
         line_count = count_lines(root / rel)
         if line_count is None:
             continue
+        reached += 1
         seen.add(normalise(rel))
         message = verdict(rel, line_count)
         if message is not None:
             problems.append(message)
+    return reached, seen, problems
+
+
+def audit_ceilings() -> tuple[int, list[str]]:
+    """Rule on every in-scope tracked Python file, not just KNOWN_LARGE's keys.
+
+    Walking the tree (#14547) instead of ``KNOWN_LARGE.items()`` is the
+    actual fix: a dict-only scan can only ever re-check a file someone
+    already added to it, so a file that grows past MAX_LINES without ever
+    being added stays invisible to every audit run forever — which is
+    exactly how ``reconciler.py`` reached 2000+ lines unnoticed. Entries the
+    walk never reaches are still reported, the same as before a rename or
+    deletion left them stranded.
+    """
+    root = repo_root()
+    reached, seen, problems = _scan_tracked_files(root, tracked_python_files(root))
     for rel in sorted(set(KNOWN_LARGE) - seen):
         problems.append(_vanished_entry_problem(rel, root))
-    return len(tracked), problems
+    return reached, problems
 
 
 def configure_logging() -> None:
