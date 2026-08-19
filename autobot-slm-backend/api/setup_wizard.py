@@ -31,7 +31,7 @@ from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
-from services.inventory_builder import groups_for_role_tokens
+from services.inventory_builder import _declared_roles, groups_for_role_tokens
 from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
 from services.role_registry import ROLE_ANSIBLE_GROUPS
 
@@ -299,11 +299,23 @@ def _apply_role_host_vars(
     db_nodes: list,
     all_node_roles: list,
 ) -> None:
-    """Stamp node_roles, node_dependencies, and pending_dep_removals onto hosts (#2823).
+    """Stamp node_roles, node_roles_declared, node_dependencies, and
+    pending_dep_removals onto hosts (#2823).
 
     Sets node_roles so provision-fleet-roles.yml conditions work, resolves
     shared-dependency names for Phase 0 (#2747), and propagates any pending
     dependency removals recorded in node.extra_data.
+
+    #14594: node_roles_declared is stamped from ``node.roles`` directly (the
+    same source ``inventory_builder._declared_roles`` reads for the dynamic
+    inventory path), NOT from the NodeRole assignment table that node_roles
+    itself is built from. #14552's ``_declare_role_on_node`` already
+    established ``Node.roles`` as the sole record of operator intent for
+    privileged-group gating; this makes the node_roles_declared hostvar rest
+    on that same guarantee instead of on the incidental fact that every
+    current NodeRole writer happens to keep the table declared-only. If a
+    future writer ever stamps a NodeRole row the node never declared, this
+    hostvar is unaffected -- it never reads that table.
     """
     from services.role_registry import ROLE_DEPENDENCIES
 
@@ -320,6 +332,7 @@ def _apply_role_host_vars(
             continue
         if node.node_id in node_id_to_roles:
             hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
+        hosts[inv_name]["node_roles_declared"] = _declared_roles(node)
         roles = hosts[inv_name].get("node_roles", [])
         deps: set[str] = set()
         for role in roles:
@@ -418,6 +431,14 @@ def _inject_co_located_ai_stack(
         if _ai_stack_roles & set(roles):
             continue
         hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        # #14594: also inject into node_roles_declared. This is a deliberate
+        # system decision to run ai-stack here (#3461), equivalent to an
+        # operator declaring it -- role_ai_stack_active is one of the five
+        # PRIVILEGED facts that read node_roles_declared instead of the raw
+        # union, so without this the co-location convenience silently stops
+        # deploying ChromaDB the moment node_roles_declared exists.
+        declared = hosts[inv_name].get("node_roles_declared", [])
+        hosts[inv_name]["node_roles_declared"] = list(declared) + ["ai-stack"]
         # Note: ai-stack role now defaults to autobot:autobot (not autobot-ai)
         # per unified service account model (#4091). No override needed.
         injected.append(inv_name)
