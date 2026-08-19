@@ -4,6 +4,7 @@
 # Author: mrveiss
 """Unit tests for HealthCollector state-change pub/sub logic (#3404)."""
 
+import importlib.machinery
 import importlib.util
 import json
 import logging
@@ -204,9 +205,25 @@ _ABSENT = object()
 
 
 def _stub_module(name: str):
+    """Build a synthetic module stub that survives CPython's OWN import
+    machinery, not just the one exec() call that needed it.
+
+    ``_find_and_load_unlocked`` reads ``parent_module.__spec__`` directly
+    (unguarded — only the ``__path__`` read next to it is wrapped in a
+    try/except) whenever this stub later serves as the PARENT of a further
+    lookup, e.g. resolving ``services.gateway.egress_governor`` once
+    ``services.gateway`` is already one of these stubs.  A ``MagicMock``
+    raises ``AttributeError`` for any dunder-shaped attribute nobody set
+    explicitly (``unittest.mock``'s own ``_is_magic`` guard), so a stub
+    missing ``__spec__`` fails CLOSED with an opaque ``AttributeError:
+    __spec__`` instead of the clean ``ModuleNotFoundError`` a genuinely
+    absent module produces — reproduced on Python 3.14 (this repo's CI
+    interpreter) though not on 3.10 (#14538 CI follow-up)."""
     stub = MagicMock(name=f"autostub:{name}", unsafe=True)
     stub.__name__ = name
     stub.__path__ = []
+    stub.__spec__ = importlib.machinery.ModuleSpec(name, loader=None, is_package=True)
+    stub.__loader__ = None
     return stub
 
 
@@ -278,7 +295,7 @@ def _exec_retrying(source_path, private_name: str, forbidden: tuple[str, ...], p
 def _exec_with_auto_stub(
     source_path,
     private_name: str,
-    forbidden: tuple[str, ...] = (),
+    forbidden: tuple[str, ...],
     preseed: dict | None = None,
     max_attempts: int = 25,
 ):
@@ -287,9 +304,12 @@ def _exec_with_auto_stub(
     (#14538) — a new top-level import added over there does not require
     editing this test.  *preseed* installs fixed stubs unconditionally
     before the first attempt, for the rare case that is not a missing
-    module at all (see ``_load_backend_notification_service``).  Returns
-    ``(module, stubbed_names)``; every touched key — preseeded or
-    discovered — is restored to its exact prior state before returning."""
+    module at all (see ``_load_backend_notification_service``).  *forbidden*
+    is required rather than defaulting to ``()``: a caller that forgets it
+    gets no protection against this loader silently stubbing its own
+    subject under test.  Returns ``(module, stubbed_names)``; every touched
+    key — preseeded or discovered — is restored to its exact prior state
+    before returning."""
     previous: dict = {}
     for name, stub in (preseed or {}).items():
         _install(name, stub, previous)
@@ -366,7 +386,7 @@ class TestCrossTreeAutoStub:
             encoding="utf-8",
         )
 
-        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_new_import")
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_new_import", forbidden=())
 
         assert mod.VALUE == 42
         assert "services.totally_new_unstubbed_module" in stubbed
@@ -379,7 +399,7 @@ class TestCrossTreeAutoStub:
         throwaway = tmp_path / "throwaway_constants_import.py"
         throwaway.write_text("import constants.made_up_ttl_14538\n", encoding="utf-8")
 
-        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_constants_import")
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_constants_import", forbidden=())
 
         assert "constants.made_up_ttl_14538" in stubbed
         assert "constants.made_up_ttl_14538" not in sys.modules
@@ -403,4 +423,28 @@ class TestCrossTreeAutoStub:
         throwaway.write_text("import definitely_not_a_real_package_14538\n", encoding="utf-8")
 
         with pytest.raises(ModuleNotFoundError):
-            _exec_with_auto_stub(throwaway, "_throwaway_out_of_scope_import")
+            _exec_with_auto_stub(throwaway, "_throwaway_out_of_scope_import", forbidden=())
+
+    def test_a_stub_serving_as_parent_for_a_further_lookup_still_loads(self, tmp_path):
+        """CI follow-up (Python 3.14, this repo's CI interpreter): once
+        ``services.<x>`` is one of our stubs, resolving
+        ``services.<x>.<y>`` makes it the PARENT of a further lookup.
+        CPython's ``_find_and_load_unlocked`` reads ``parent.__spec__``
+        directly there — unguarded, unlike the ``__path__`` read next to
+        it — and a stub missing ``__spec__`` fails CLOSED with
+        ``AttributeError: __spec__`` instead of the clean
+        ``ModuleNotFoundError`` a genuinely absent module produces. This
+        is exactly the shape ``services.gateway.egress_governor`` hits in
+        ``_load_backend_notification_service`` — reproduced directly here
+        so it does not depend on that file existing on disk."""
+        throwaway = tmp_path / "throwaway_two_level_import.py"
+        throwaway.write_text(
+            "from services.fake_parent_14538.fake_child_14538 import whatever\nVALUE = 99\n",
+            encoding="utf-8",
+        )
+
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_two_level_import", forbidden=())
+
+        assert mod.VALUE == 99
+        assert "services.fake_parent_14538" in stubbed
+        assert "services.fake_parent_14538.fake_child_14538" in stubbed
