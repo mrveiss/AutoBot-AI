@@ -203,6 +203,26 @@ def test_bcrypt_and_pydantic_settings_are_mirrored_not_allowlisted():
         assert name not in allowlist, f"{name} must not be allowlisted — collection-critical, not a soft omission"
 
 
+def test_tree_sitter_core_is_mirrored_alongside_tree_sitter_python():
+    """A real CI run (not a local audit) caught the third false rationale.
+
+    tree-sitter-python was mirrored assuming it pulled in the base
+    `tree-sitter` package transitively -- it does not, and 4 shards went red
+    on the real runner with "No module named 'tree_sitter'" before this was
+    fixed. Pin both packages present and neither allowlisted, so a future
+    edit cannot quietly re-introduce the same unverified-transitive-resolution
+    mistake for this specific pair.
+    """
+    ci = checker.ci_requirement_names()
+    allowlist = checker.load_allowlist()
+    for name in ("tree-sitter", "tree-sitter-python"):
+        assert name in ci, f"{name} must be declared in requirements-ci/*.txt (#14551)"
+        assert name not in allowlist, f"{name} must not be allowlisted — verified missing on the real CI runner"
+    # tree-sitter-javascript is the deliberate exception: no CI-scoped test
+    # gates on it directly, so it stays allowlisted.
+    assert "tree-sitter-javascript" in allowlist
+
+
 # --------------------------------------------------------------------------
 # The audit entrypoint, and the check that actually runs it
 # --------------------------------------------------------------------------

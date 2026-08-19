@@ -19,7 +19,12 @@ trafilatura>=2.2.0
 # code_indexer_extensions_test.py, code_indexer_shape_test.py and
 # code_intelligence/fingerprinting/shared_identity_test.py all gate on
 # `tree_sitter_python` being importable — 5 files silently skipping code
-# indexing coverage without this. Pulls in the base `tree-sitter` package as
-# its own transitive dependency (tree-sitter itself stays out of this file
-# deliberately, the same shape as torch/sentence-transformers in ai-ml.txt).
+# indexing coverage without this.
 tree-sitter-python>=0.25.0
+# #14551 CI incident: mirroring tree-sitter-python ALONE was not enough —
+# it does NOT declare `tree-sitter` as a runtime dependency (verified by the
+# real CI failure it caused: "No module named 'tree_sitter'" from
+# code_indexer.py's `from tree_sitter import Language, Parser`, once
+# tree-sitter-python itself imported fine). The two ship as siblings, not a
+# dependency pair; both must be declared explicitly here.
+tree-sitter>=0.26.0

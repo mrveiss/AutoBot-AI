@@ -27,13 +27,24 @@
 # also mirrored rather than baselined, since collection of nearly the whole
 # suite depends on them.
 #
+# A THIRD round (real CI run, not local audit) found the `tree-sitter`
+# entry below was ALSO a false rationale: mirroring `tree-sitter-python`
+# alone was assumed to pull in the base `tree-sitter` package transitively —
+# it does not, and code_indexer.py's `from tree_sitter import Language,
+# Parser` failed on the real runner with 4 shards red
+# ("No module named 'tree_sitter'") until `tree-sitter` was mirrored
+# explicitly too. Lesson: an assumption about transitive resolution is not
+# verified until CI actually runs — this file no longer asserts one without
+# citing where it was checked.
+#
 # Do NOT add an entry here to silence a new failure without checking first
 # whether the omission is a genuine bug (mirror it into requirements-ci/) or
 # a deliberate one (document why here). In particular: grep the package's
 # real *import* name (not its pip distribution name) for
 # `pytest.importorskip`, `importlib.util.find_spec(...) is None`, and an
 # unguarded top-level `import`/`from` inside `autobot_shared/` before
-# assuming "no test needs it".
+# assuming "no test needs it" — and do not assume transitive resolution
+# without verifying the dependency actually declares it.
 
 # --- Tracked elsewhere, not a silent omission -----------------------------
 # pytesseract is the exact #13885 incident this guard exists to catch, and
@@ -82,24 +93,24 @@ opentelemetry-instrumentation-aiohttp-client
 opentelemetry-propagator-b3
 protobuf
 
-# --- Torch / heavy ML, resolved transitively ------------------------------
+# --- Torch, resolved transitively (unlike tree-sitter above) --------------
 # #13316: requirements-ci.txt deliberately never names torch — it arrives
 # transitively via sentence-transformers (already declared in
 # requirements-ci/ai-ml.txt), resolved against the PyTorch CPU wheel index so
-# the ~3GB CUDA closure is never pulled. Declaring it again here would only
-# risk a second, conflicting resolution.
+# the ~3GB CUDA closure is never pulled. This one IS verified: the CI run
+# that caught the tree-sitter gap above installed torch fine via this path
+# (see the "Installing CI-safe requirements" step's ~3GB-vs-10-package-closure
+# comment in setup-python-suite/action.yml, and the completion_trainer_test.py
+# 17 tests that import torch directly and pass in CI).
 torch
 torchvision
 
-# --- tree-sitter core, resolved transitively ------------------------------
-# tree-sitter-python (mirrored into requirements-ci/document.txt, #14551)
-# depends on the base `tree-sitter` package itself, the same transitive
-# pattern as torch above — declaring it again here would only risk a
-# conflicting resolution.
-tree-sitter
 # tree-sitter-javascript has no CI-scoped test gating on it directly (only
 # services/knowledge/code_indexer.py imports it, lazily, inside a method) —
-# genuinely no coverage today, unlike its sibling tree-sitter-python.
+# genuinely no coverage today, unlike tree-sitter-python (mirrored into
+# requirements-ci/document.txt alongside the base tree-sitter package itself,
+# #14551 — see that file's comment for why both, not just the language
+# binding, had to be explicit).
 tree-sitter-javascript
 
 # --- LangChain / LlamaIndex / MCP extras ----------------------------------
