@@ -69,6 +69,7 @@ from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
+from api.memory_lifecycle_proxy import router as memory_lifecycle_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from autobot_shared.stream_logging import (
@@ -696,6 +697,10 @@ app.include_router(roles_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(code_source_router, prefix="/api", dependencies=_SM)
 app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
 app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
+# #12632: memory lifecycle aggregator. Admin-gated like the rest of the node
+# proxies — it exposes what the nightly decay would delete, which is operator
+# information, not user information.
+app.include_router(memory_lifecycle_router, prefix="/api", dependencies=_SM)
 app.include_router(orchestration_router, prefix="/api", dependencies=_SM)
 app.include_router(discovery_router, prefix="/api", dependencies=_SM)
 app.include_router(config_router, prefix="/api", dependencies=_SM)
