@@ -96,9 +96,9 @@ def test_detected_only_node_does_not_activate_privileged_facts_via_wizard():
     result = _render_all(facts, context)
 
     still_active = {name for name in _PRIVILEGED_FACTS if result[name]}
-    assert not still_active, (
-        f"privileged fact(s) activated for a wizard-built detected-only node: {sorted(still_active)}"
-    )
+    assert (
+        not still_active
+    ), f"privileged fact(s) activated for a wizard-built detected-only node: {sorted(still_active)}"
     assert result["role_tts_worker_active"] is True, "deliberately-union fact must still activate off node_roles"
 
 
