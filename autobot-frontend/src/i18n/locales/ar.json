@@ -8019,7 +8019,8 @@
       "coveragePartial": "حُسبت {costed} من {total} خطوة",
       "stepRollupEmpty": "لا توجد خطوات عملية مرسومة بعد، لذا لا شيء لجمعه.",
       "stepRollupUnavailable": "تعذّر تحميل الإجماليات.",
-      "stepRollupToolNote": "تُحتسب الخطوة لكل أداة يحملها دورها، لذا لا تساوي إجماليات الأدوات إجماليات الأدوار."
+      "stepRollupToolNote": "تُحتسب الخطوة لكل أداة يحملها دورها، لذا لا تساوي إجماليات الأدوات إجماليات الأدوار.",
+      "perMonth": "شهريًا"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

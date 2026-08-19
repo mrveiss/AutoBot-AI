@@ -8007,7 +8007,8 @@
       "coveragePartial": "{costed} of {total} steps costed",
       "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
       "stepRollupUnavailable": "The totals could not be loaded.",
-      "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals."
+      "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
+      "perMonth": "per month"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

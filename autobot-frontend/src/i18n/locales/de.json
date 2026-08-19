@@ -8019,7 +8019,8 @@
       "coveragePartial": "{costed} von {total} Schritten kalkuliert",
       "stepRollupEmpty": "Es sind noch keine Prozessschritte abgebildet, daher gibt es nichts zu summieren.",
       "stepRollupUnavailable": "Die Summen konnten nicht geladen werden.",
-      "stepRollupToolNote": "Ein Schritt zählt für jedes Werkzeug seiner Rolle; die Werkzeugsummen ergeben daher nicht die Rollensummen."
+      "stepRollupToolNote": "Ein Schritt zählt für jedes Werkzeug seiner Rolle; die Werkzeugsummen ergeben daher nicht die Rollensummen.",
+      "perMonth": "pro Monat"
     },
     "heartbeat": {
       "title": "Heartbeat-Monitor",

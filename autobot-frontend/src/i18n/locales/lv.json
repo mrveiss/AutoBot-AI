@@ -8019,7 +8019,8 @@
       "coveragePartial": "Aprēķināti {costed} no {total} soļiem",
       "stepRollupEmpty": "Procesa soļi vēl nav kartēti, tāpēc nav ko summēt.",
       "stepRollupUnavailable": "Kopsummas neizdevās ielādēt.",
-      "stepRollupToolNote": "Solis tiek ieskaitīts katram tā lomas rīkam, tāpēc rīku kopsummas nesakrīt ar lomu kopsummām."
+      "stepRollupToolNote": "Solis tiek ieskaitīts katram tā lomas rīkam, tāpēc rīku kopsummas nesakrīt ar lomu kopsummām.",
+      "perMonth": "mēnesī"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

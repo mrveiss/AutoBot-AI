@@ -8019,7 +8019,8 @@
       "coveragePartial": "Wyceniono {costed} z {total} kroków",
       "stepRollupEmpty": "Nie zmapowano jeszcze żadnych kroków procesu, więc nie ma czego sumować.",
       "stepRollupUnavailable": "Nie udało się wczytać sum.",
-      "stepRollupToolNote": "Krok liczy się do każdego narzędzia swojej roli, więc sumy narzędzi nie składają się na sumy ról."
+      "stepRollupToolNote": "Krok liczy się do każdego narzędzia swojej roli, więc sumy narzędzi nie składają się na sumy ról.",
+      "perMonth": "miesięcznie"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

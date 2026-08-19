@@ -8019,7 +8019,8 @@
       "coveragePartial": "תומחרו {costed} מתוך {total} שלבים",
       "stepRollupEmpty": "עדיין לא מופו שלבי תהליך, ולכן אין מה לסכם.",
       "stepRollupUnavailable": "לא ניתן היה לטעון את הסכומים.",
-      "stepRollupToolNote": "שלב נספר לכל כלי של התפקיד שלו, ולכן סכומי הכלים אינם מצטברים לסכומי התפקידים."
+      "stepRollupToolNote": "שלב נספר לכל כלי של התפקיד שלו, ולכן סכומי הכלים אינם מצטברים לסכומי התפקידים.",
+      "perMonth": "לחודש"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
