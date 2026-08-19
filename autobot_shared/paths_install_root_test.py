@@ -154,3 +154,38 @@ def test_an_unresolvable_tree_still_raises(tmp_path):
 
     with pytest.raises(paths.ProjectRootUndeterminable):
         paths.resolve_project_root(nothing / "paths.py")
+
+
+@pytest.mark.parametrize(
+    "component",
+    ["autobot-npu-worker", "autobot-tts-worker", "autobot-ai-stack", "autobot-browser-worker", "autobot-slm-agent"],
+)
+def test_a_minimal_node_resolves_whatever_single_component_it_carries(tmp_path, component):
+    """A fleet node deploys only the components its roles carry.
+
+    The first version of this fix enumerated four component names and would
+    have left a node carrying only npu-worker (or tts-worker, or ai-stack)
+    raising exactly as before — and those minimal nodes are the ones most
+    likely to be affected, because a fleet update unpacks the shared tree and
+    restarts their services in the same pass.
+    """
+    node = tmp_path / "autobot"
+    (node / "autobot_shared").mkdir(parents=True)
+    (node / component).mkdir()
+
+    assert paths.is_install_root(node), f"a node carrying only {component} cannot resolve its root"
+    assert paths.resolve_project_root(node / "autobot_shared" / "paths.py") == node
+
+
+def test_a_non_component_sibling_is_not_enough(tmp_path):
+    """The prefix must still mean something.
+
+    `autobot_shared` next to an unrelated directory is not an install; treating
+    it as one would drift back toward the silent guess #14544 removed.
+    """
+    lone = tmp_path / "somewhere"
+    (lone / "autobot_shared").mkdir(parents=True)
+    (lone / "unrelated").mkdir()
+    (lone / "autobot_docs").mkdir()  # underscore, not the component prefix
+
+    assert not paths.is_install_root(lone)

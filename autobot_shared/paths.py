@@ -34,15 +34,15 @@ from pathlib import Path
 #: this repository's whole workflow runs from worktrees.
 CHECKOUT_MARKERS = (".git", "autobot_shared")
 
-#: Component directories a deployed install places beside ``autobot_shared``.
-#: Used only by :func:`is_install_root`; any one of them is enough, because a
-#: node deploys only the components its roles carry (#14624).
-INSTALL_COMPONENT_MARKERS = (
-    "autobot-slm-backend",
-    "autobot-backend",
-    "autobot-frontend",
-    "autobot-slm-frontend",
-)
+#: Prefix of the component directories a deployed install places beside
+#: ``autobot_shared`` (``autobot-backend``, ``autobot-npu-worker``, ...).
+#:
+#: A PREFIX, not a list of names. The first version of this enumerated four
+#: components and would have left a node carrying only, say, ``autobot-npu-worker``
+#: unable to resolve — precisely the minimal fleet nodes most likely to hit it.
+#: This install alone has twelve such directories, and the set grows with every
+#: new component (#14624).
+INSTALL_COMPONENT_PREFIX = "autobot-"
 
 #: Environment variable naming an explicit project root. This is the same name
 #: the shell scripts honour, so exporting it once governs both languages.
@@ -97,7 +97,14 @@ def is_install_root(path: Path) -> bool:
     """
     if not (path / "autobot_shared").exists():
         return False
-    return any((path / component).is_dir() for component in INSTALL_COMPONENT_MARKERS)
+    try:
+        return any(
+            child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir()
+        )
+    except OSError:
+        # An unreadable directory is not an install root; let the walk continue
+        # rather than turning a permissions problem into a resolution failure.
+        return False
 
 
 def project_root() -> Path:
