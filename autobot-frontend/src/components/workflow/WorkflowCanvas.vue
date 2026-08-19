@@ -647,6 +647,48 @@ const isPanning = ref(false);
  * genuine click/tap on a node.
  */
 const movedThisGesture = ref(false);
+
+/**
+ * Client-space position and pointer type recorded at the start of the
+ * current gesture (#14625) — the fixed baseline `onPointerMove` measures
+ * against to decide whether the gesture has become a pan/drag, rather than
+ * a click/tap that merely jittered.
+ *
+ * Comparing against this fixed start point on every move (not the previous
+ * `pointermove`, and not setting the flag on any single move) is what makes
+ * a slow drag built from many 1px steps still count as a drag, while a
+ * jittery click that never leaves a small radius around its start does not.
+ */
+const gestureStart = reactive({ x: 0, y: 0, pointerType: 'mouse' as PointerEvent['pointerType'] });
+
+/**
+ * Minimum on-screen movement, in CSS px, before a mouse/pen gesture counts
+ * as a pan/drag rather than a click/tap (#14625). 4px matches the drag-start
+ * "slop" browsers themselves use before turning a press into a native drag
+ * (e.g. Chromium/Firefox default to a small handful of px) — big enough to
+ * absorb the jitter of an unsteady hand or a noisy optical mouse, small
+ * enough that a deliberate pan is never mistaken for a click.
+ */
+const MOVE_THRESHOLD_MOUSE_PX = 4;
+
+/**
+ * Touch tolerance (#14625): a fingertip covers a far larger contact area
+ * than a mouse cursor and drifts more for the same intended tap, so touch
+ * (and pen) gestures get a taller threshold than mouse — otherwise the same
+ * false-drag bug this issue fixes for mouse just reappears, at a smaller
+ * radius, for touch.
+ */
+const MOVE_THRESHOLD_TOUCH_PX = 10;
+
+/**
+ * Whether `e` has moved far enough from `gestureStart` to count as a
+ * pan/drag rather than a click/tap that merely jittered (#14625).
+ */
+function exceedsMoveThreshold(e: PointerEvent): boolean {
+  const threshold = gestureStart.pointerType === 'touch' ? MOVE_THRESHOLD_TOUCH_PX : MOVE_THRESHOLD_MOUSE_PX;
+  return Math.hypot(e.clientX - gestureStart.x, e.clientY - gestureStart.y) > threshold;
+}
+
 const panStart = reactive({ x: 0, y: 0 });
 const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
@@ -1034,6 +1076,9 @@ function applyPinchZoom(): void {
 
 function startPan(e: PointerEvent) {
   movedThisGesture.value = false;
+  gestureStart.x = e.clientX;
+  gestureStart.y = e.clientY;
+  gestureStart.pointerType = e.pointerType;
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   capturePointer(e);
   if (activePointers.size >= 2) { beginPinch(); return; }
@@ -1060,6 +1105,9 @@ function onNodePointerDown(node: CanvasNode, e: PointerEvent) {
   // Reset here too: a plain press on a node stops propagation below, so
   // `startPan` never runs and would never clear the flag.
   movedThisGesture.value = false;
+  gestureStart.x = e.clientX;
+  gestureStart.y = e.clientY;
+  gestureStart.pointerType = e.pointerType;
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   capturePointer(e);
   if (activePointers.size >= 2) { beginPinch(); e.stopPropagation(); return; }
@@ -1117,18 +1165,21 @@ function onPointerMove(e: PointerEvent) {
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   if (isPanning.value) {
     pan.x = e.clientX - panStart.x; pan.y = e.clientY - panStart.y;
-    // Set on movement, not on press: a shift-click/tap that never moves is
-    // still a selection, and suppressing it would break selecting with shift
-    // held (mouse) or a plain tap (touch).
-    movedThisGesture.value = true;
+    // Set once the gesture has moved past the threshold from its start
+    // point, not on the first pointermove (#14625) — a shift-click/tap that
+    // never leaves that small radius is still a selection, and suppressing
+    // it on any single move would break selecting with shift held (mouse)
+    // or a plain tap (touch).
+    if (exceedsMoveThreshold(e)) movedThisGesture.value = true;
   }
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;
     emit('node-moved', dragNode.value.id, { x: Math.max(0, x), y: Math.max(0, y) });
-    // #14610: a drag that actually moved the node must not also select it
-    // when the gesture ends — the drag counterpart of the pan case above.
-    movedThisGesture.value = true;
+    // #14610/#14625: a drag that actually moved the node past the threshold
+    // must not also select it when the gesture ends — the drag counterpart
+    // of the pan case above.
+    if (exceedsMoveThreshold(e)) movedThisGesture.value = true;
   }
 }
 
