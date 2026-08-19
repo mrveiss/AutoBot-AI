@@ -139,8 +139,8 @@
     url: "http://127.0.0.1:{{ prometheus_port }}/api/v1/rules"
     return_content: true
   register: _prometheus_loaded_rules
-  retries: 12
-  delay: 5
+  retries: "{{ prometheus_rules_check_retries | default(12) }}"
+  delay: "{{ prometheus_rules_check_delay | default(5) }}"
   until: _prometheus_loaded_rules.status | default(0) == 200
   changed_when: false
 
@@ -152,7 +152,7 @@
     that:
       - >-
         (_prometheus_loaded_rules.json.data.groups | default([])
-         | map(attribute='rules') | map('length') | sum) > 0
+         | map(attribute='rules', default=[]) | map('length') | sum) > 0
     fail_msg: >-
       Prometheus is running but has loaded 0 alert rules. The files under
       {{ prometheus_config_dir }}/rules were installed and rule_files points at
@@ -163,6 +163,6 @@
     success_msg: >-
       Prometheus loaded
       {{ _prometheus_loaded_rules.json.data.groups | default([])
-         | map(attribute='rules') | map('length') | sum }} alert rule(s)
+         | map(attribute='rules', default=[]) | map('length') | sum }} alert rule(s)
       in {{ _prometheus_loaded_rules.json.data.groups | default([]) | length }} group(s).
   when: prometheus_alert_rules_required | bool

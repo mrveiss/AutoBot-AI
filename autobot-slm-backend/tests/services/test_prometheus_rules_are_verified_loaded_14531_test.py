@@ -104,8 +104,31 @@ def test_the_verification_is_gated_by_the_same_flag_as_the_source_check():
 
 def test_the_query_retries_rather_than_racing_the_restart():
     """Prometheus takes a moment to serve after a restart; a single attempt
-    would fail for timing rather than for the condition under test."""
+    would fail for timing rather than for the condition under test.
+
+    The count is var-backed (`prometheus_rules_check_retries`) rather than a
+    literal, matching `backend_health_check_retries` — a large WAL replay can
+    outlast a fixed minute. So this asserts a retry budget exists and is
+    tunable, not that it equals a particular number.
+    """
     _, uri = _rules_query()
-    task = next(t for t in _tasks() if _module(t, "uri") is uri or _module(t, "uri") == uri)
-    assert int(task.get("retries", 0)) > 1, "the query does not retry"
+    task = next(t for t in _tasks() if _module(t, "uri") == uri)
+
+    retries = str(task.get("retries", ""))
+    assert retries, "the query does not retry"
+    if retries.isdigit():
+        assert int(retries) > 1
+    else:
+        assert "prometheus_rules_check_retries" in retries, f"unrecognised retry budget: {retries!r}"
     assert task.get("until"), "the query has retries but no success condition"
+
+
+def test_the_retry_budget_has_a_default_so_an_unset_var_cannot_disable_it():
+    """A bare `{{ prometheus_rules_check_retries }}` would render empty on a
+    host that never set it, turning the poll into a single attempt."""
+    _, uri = _rules_query()
+    task = next(t for t in _tasks() if _module(t, "uri") == uri)
+    for field in ("retries", "delay"):
+        value = str(task.get(field, ""))
+        if not value.isdigit():
+            assert "default(" in value, f"{field} is templated without a default: {value!r}"
