@@ -223,6 +223,12 @@ def test_knowledge_redis_vector_operations_is_not_a_read():
     assert required_permission("redis_vector_operations", "knowledge_mcp") == Permission.KNOWLEDGE_MANAGE
 
 
+def test_manual_mcp_tools_resolve_to_mcp_read():
+    """#14586: the twelfth bridge — all three tools are read-only lookups."""
+    for name in ("lookup_man_page", "search_man_pages", "get_doc_index"):
+        assert required_permission(name, "manual_mcp") == Permission.MCP_READ, name
+
+
 def test_readonly_holds_no_control_grant():
     """The role split has to mean something at the weakest role."""
     readonly = set(ROLE_PERMISSIONS[Role.READONLY])

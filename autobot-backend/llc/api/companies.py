@@ -584,12 +584,31 @@ async def list_members(
     # Resolve display names so the assignee/reviewer pickers show people, not UUIDs.
     user_ids = [m.user_id for m in members]
     names: Dict[uuid.UUID, str] = {}
+    # #13956: whether each member may still be given work. Carried, not
+    # filtered -- see `_person_is_active`. The picker needs both facts: who is
+    # a member, and which of them can take an assignment.
+    active: Dict[uuid.UUID, bool] = {}
     if user_ids:
         rows = (
-            await session.execute(select(User.id, User.display_name, User.username).where(User.id.in_(user_ids)))
+            await session.execute(
+                select(User.id, User.display_name, User.username, User.is_active, User.deleted_at).where(
+                    User.id.in_(user_ids)
+                )
+            )
         ).all()
-        names = {uid: (dn or un) for uid, dn, un in rows}
-    return [{**_to_member_read(m), "display_name": names.get(m.user_id)} for m in members]
+        names = {uid: (dn or un) for uid, dn, un, _ia, _da in rows}
+        active = {uid: _person_is_active(ia, da) for uid, _dn, _un, ia, da in rows}
+    return [
+        {
+            **_to_member_read(m),
+            "display_name": names.get(m.user_id),
+            # A membership whose user row is missing entirely resolves to
+            # False: nothing is known about them, and unknown must not read as
+            # available.
+            "is_active": active.get(m.user_id, False),
+        }
+        for m in members
+    ]
 
 
 @router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
@@ -857,6 +876,11 @@ class OrgChartNode(BaseModel):
     status: str  # active | idle | error | paused | terminated
     adapter_type: str
     is_human: bool
+    # #13956: whether this person can still be given work. `None` for agents,
+    # which have their own liveness in `status` and are not deactivated by the
+    # user-management lifecycle at all -- so a bare `False` default would
+    # quietly assert every agent is inactive.
+    is_active: Optional[bool] = None
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -867,6 +891,33 @@ class OrgChartNode(BaseModel):
 
 class OrgChartResponse(BaseModel):
     nodes: List[OrgChartNode]
+
+
+def _person_is_active(is_active: Optional[bool], deleted_at: Optional[Any]) -> bool:
+    """Whether a person may still be given work (#13956).
+
+    Both the members picker and the org chart ask this, and the issue is
+    explicit that they must not diverge -- so neither computes it inline.
+
+    Deliberately *not* a filter. The org chart is where a company reads its own
+    structure, and dropping someone who has left rewrites that structure
+    silently: their work items stay behind (they are only reassigned
+    explicitly), the role they held stays behind, and a chart that omits them
+    cannot explain who those items belong to. Precedent in this module already
+    chose the same way -- ``_compose_human_nodes`` uses an outer join
+    specifically so "a membership whose user row is gone still yields a node
+    instead of vanishing silently".
+
+    So the answer is rendered, not applied: the surfaces show the person and
+    mark them, and the picker refuses them as an assignee.
+
+    A user row that is missing entirely (outer join miss) is inactive: nothing
+    is known about them, and "unknown" must never read as "available".
+    """
+    if deleted_at is not None:
+        return False
+    # `None` reaches here from an outer-join miss, not from a real column value.
+    return bool(is_active)
 
 
 def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
@@ -946,6 +997,8 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 LLCCompanyMembership.role,
                 User.display_name,
                 User.username,
+                User.is_active,
+                User.deleted_at,
             )
             .outerjoin(User, User.id == LLCCompanyMembership.user_id)
             .where(LLCCompanyMembership.company_id == company_id)
@@ -973,7 +1026,7 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
     human_counts: Dict[uuid.UUID, int] = {row.assignee_user_id: row.cnt for row in count_rows}
 
     nodes: List[OrgChartNode] = []
-    for user_id, role, display_name, username in member_rows:
+    for user_id, role, display_name, username, is_active, deleted_at in member_rows:
         # ``role`` is mapped through sa.Enum, so the ORM hands back the enum
         # member — str() on it yields "MembershipRole.LEAD", not "lead". Take
         # .value when present so the wire format stays the lowercase label.
@@ -994,6 +1047,7 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 status="idle",
                 adapter_type=_HUMAN_ADAPTER_TYPE,
                 is_human=True,
+                is_active=_person_is_active(is_active, deleted_at),
                 last_heartbeat=None,
                 budget_spent=0.0,
                 budget_total=0.0,
@@ -1479,6 +1533,75 @@ async def get_process_nodes(
         nodes=[
             ProcessNode(role_id=str(role_id), role_name=name, workflow_id=workflow_id)
             for role_id, name, workflow_id in result.all()
+        ]
+    )
+
+
+# ------------------------------------------------------------------
+# Tool nodes (#14597) — which tools this company's roles depend on
+# ------------------------------------------------------------------
+
+
+class ToolNode(BaseModel):
+    """One tool made available to one role, as an org-chart-adjacent node.
+
+    Derived read-only from ``llc_role_tools`` (#14221 step 4) — the same
+    projection shape ``ProcessNode`` above uses for ``llc_role_workflows``. A
+    tool attached to several roles produces one row per role here; the canvas
+    (``buildToolCanvasNodes``) folds the rows that share a ``tool_name`` into
+    a single node, so "one tool used by several roles" stays one node rather
+    than one per role.
+
+    ``role_id``/``role_name`` are included so the canvas can draw which roles
+    a tool belongs to; ``tool_name`` is the tool's registry identity.
+    """
+
+    role_id: str
+    role_name: str
+    tool_name: str
+
+
+class ToolNodesResponse(BaseModel):
+    nodes: List[ToolNode]
+
+
+@router.get("/{company_id}/tool-nodes", response_model=ToolNodesResponse)
+async def get_tool_nodes(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ToolNodesResponse:
+    """Return the tools this company's roles carry (#14597).
+
+    Company-scoped through the same shared :func:`assert_company_access` guard
+    the rest of this router uses, and pinned again in the query itself — the
+    role must belong to this company *and* the attachment must, so losing
+    either predicate cannot widen the result. Mirrors ``get_process_nodes``
+    above exactly, for the sibling attachment (tools rather than workflows).
+
+    Read-only: this composes existing rows and creates nothing.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from llc.models.role_tool import LLCRoleTool  # noqa: PLC0415
+    from user_management.models.role import Role  # noqa: PLC0415
+
+    assert_company_access(ctx, company_id)
+
+    result = await session.execute(
+        select(Role.id, Role.name, LLCRoleTool.tool_name)
+        .join(LLCRoleTool, LLCRoleTool.role_id == Role.id)
+        .where(
+            Role.org_id == company_id,
+            LLCRoleTool.company_id == company_id,
+        )
+        .order_by(Role.name, LLCRoleTool.tool_name)
+    )
+    return ToolNodesResponse(
+        nodes=[
+            ToolNode(role_id=str(role_id), role_name=name, tool_name=tool_name)
+            for role_id, name, tool_name in result.all()
         ]
     )
 

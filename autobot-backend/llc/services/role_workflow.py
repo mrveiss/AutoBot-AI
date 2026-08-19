@@ -179,6 +179,56 @@ class RoleWorkflowService(LLCServiceBase):
         )
         return result.scalar_one_or_none()
 
+    async def set_cost_inputs(
+        self,
+        session: AsyncSession,
+        *,
+        company_id: uuid.UUID,
+        role_id: uuid.UUID,
+        workflow_id: str,
+        estimated_minutes: Optional[int],
+        runs_per_month: Optional[int],
+        actor_user_id: uuid.UUID,
+    ) -> LLCRoleWorkflow:
+        """Record how long this step takes and how often it runs (#14598).
+
+        Same admin gate as :meth:`attach`: these numbers feed a cost figure the
+        company is asked to trust, so who may change them is the same question
+        as who may change what the role runs.
+
+        ``None`` is a meaningful value here and clears the field back to *not
+        recorded* — it is not "leave unchanged". A partial update idiom would
+        make it impossible to un-record a number someone entered by mistake,
+        and a wrong measurement is worse than an absent one because it is
+        silently summed.
+        """
+        if estimated_minutes is not None and estimated_minutes < 0:
+            raise ValueError("estimated_minutes cannot be negative")
+        if runs_per_month is not None and runs_per_month < 0:
+            raise ValueError("runs_per_month cannot be negative")
+
+        await require_company_admin(session, company_id, actor_user_id)
+        attachment = await self.get(session, company_id, role_id, workflow_id)
+        if attachment is None:
+            raise ValueError(f"workflow {workflow_id!r} is not attached to role {role_id}")
+
+        attachment.estimated_minutes = estimated_minutes
+        attachment.runs_per_month = runs_per_month
+        await session.flush()
+        await self._record(
+            session,
+            attachment,
+            "role_workflow.cost_inputs_set",
+            str(actor_user_id),
+            {
+                "role_id": str(role_id),
+                "workflow_id": workflow_id,
+                "estimated_minutes": estimated_minutes,
+                "runs_per_month": runs_per_month,
+            },
+        )
+        return attachment
+
     async def list_for_role(
         self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
     ) -> List[LLCRoleWorkflow]:
