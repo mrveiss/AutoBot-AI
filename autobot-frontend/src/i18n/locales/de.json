@@ -8314,7 +8314,15 @@
       "detachError": "Dieser Workflow konnte nicht entfernt werden.",
       "processDetach": "{workflow} von {role} entfernen",
       "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig.",
-      "canvasGroupKind": "Gruppe"
+      "canvasGroupKind": "Gruppe",
+      "toolNodeLabel": "Werkzeug",
+      "attachToolNameLabel": "Werkzeugname",
+      "attachToolNamePlaceholder": "Werkzeugname",
+      "toolAttachError": "Dieses Werkzeug konnte nicht zugeordnet werden.",
+      "toolDetachError": "Dieses Werkzeug konnte nicht entfernt werden.",
+      "toolDetach": "{tool} von {role} entfernen",
+      "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
+      "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet."
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
