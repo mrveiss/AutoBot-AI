@@ -10,6 +10,7 @@ Runs various code analysis tools and outputs results in JSON format
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,11 +34,51 @@ sys.path.insert(0, str(_SHARED_DIR))
 # working directory differs.
 _ANALYSIS_SCRIPTS_DIR = project_root() / "autobot-backend" / "code_analysis" / "scripts"
 
+# #14587: none of the five sub-scripts add their own dependencies to
+# ``sys.path`` -- they import bare names (``code_quality_dashboard``,
+# ``utils.line_index``, ``constants.ttl_constants``, ``autobot_shared...``)
+# that only resolve when the *caller* puts these three directories on
+# ``PYTHONPATH``, the same way the live backend service's own systemd units
+# do. Launched as a bare ``[sys.executable, script_path]`` subprocess with no
+# ``env``, every one of the five raises ``ModuleNotFoundError`` on its first
+# import line -- a launch failure, not an analysis result.
+_ANALYSIS_PYTHONPATH_DIRS = (
+    project_root(),
+    project_root() / "autobot-backend",
+    _ANALYSIS_SCRIPTS_DIR.parent / "src",
+)
+
 # Ceiling on a single sub-script's wall-clock time, in seconds.
 _SUBPROCESS_TIMEOUT_SECONDS = 60
 
 # Result keys whose value is checked for a per-analysis failure.
 _ANALYSIS_RESULT_KEYS = ("code_quality", "duplicates", "performance", "architecture")
+
+# #14587: each sub-script `json.dump()`s its report to a file in its `cwd`
+# (pinned to `target_path` by `_invoke_subprocess`) and prints only
+# human-readable text -- there is nothing to parse on stdout. This maps the
+# script this orchestrator invokes to the file that same script writes, so
+# both sides read from the one channel that actually carries data.
+_ANALYSIS_OUTPUT_FILES = {
+    "analyze_code_quality.py": "comprehensive_quality_report.json",
+    "analyze_duplicates.py": "code_analysis_report.json",
+    "analyze_performance.py": "performance_analysis_report.json",
+    "analyze_performance_simple.py": "performance_simple_analysis_report.json",
+    "analyze_architecture.py": "architectural_analysis_report.json",
+}
+
+
+def _analysis_subprocess_env() -> Dict[str, str]:
+    """Environment for a sub-script subprocess, with its import path resolved.
+
+    #14587: prepends the three directories the five sub-scripts' bare imports
+    need onto the inherited ``PYTHONPATH`` -- see ``_ANALYSIS_PYTHONPATH_DIRS``.
+    """
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    new_entries = os.pathsep.join(str(p) for p in _ANALYSIS_PYTHONPATH_DIRS)
+    env["PYTHONPATH"] = f"{new_entries}{os.pathsep}{existing}" if existing else new_entries
+    return env
 
 
 def _invoke_subprocess(
@@ -47,12 +88,14 @@ def _invoke_subprocess(
 
     Exactly one of the pair is ``None``. ``cwd`` is pinned to ``target_path``
     because these scripts resolve their own analysis root relative to the
-    process's working directory, not from argv.
+    process's working directory, not from argv. ``env`` carries the
+    ``PYTHONPATH`` these scripts need to import their own dependencies.
     """
     try:
         result = subprocess.run(
             [sys.executable, str(script_path)],
             cwd=target_path,
+            env=_analysis_subprocess_env(),
             capture_output=True,
             text=True,
             timeout=_SUBPROCESS_TIMEOUT_SECONDS,
@@ -65,12 +108,35 @@ def _invoke_subprocess(
         return None, f"{label} analysis could not start: {e}"
 
 
-def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict[str, Any]:
-    """Run one sub-script under ``_ANALYSIS_SCRIPTS_DIR`` and parse its JSON stdout.
+def _read_report_file(target_path: str, script_name: str, label: str) -> Dict[str, Any]:
+    """Parse the JSON report ``script_name`` writes into ``target_path``.
 
-    #14543: a missing script, a non-zero exit, and stdout that fails to parse as
-    JSON are all reported as an ``error`` -- none of them may be folded into a
-    fabricated "success" the way this used to synthesize placeholder metrics.
+    #14587: the sub-scripts write their report to a file in their ``cwd``
+    (pinned to ``target_path``), not to stdout -- this is the read half of
+    that contract.
+    """
+    output_name = _ANALYSIS_OUTPUT_FILES.get(script_name)
+    if output_name is None:
+        return {"error": f"{label} analysis: no known report file for {script_name}"}
+
+    report_path = Path(target_path) / output_name
+    if not report_path.exists():
+        return {"error": f"{label} analysis did not write {output_name}"}
+
+    try:
+        with open(report_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return {"error": f"{label} analysis wrote {output_name} but it was not valid JSON"}
+
+
+def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict[str, Any]:
+    """Run one sub-script under ``_ANALYSIS_SCRIPTS_DIR`` and read its JSON report file.
+
+    #14543: a missing script, a non-zero exit, a launch failure, and a missing
+    or malformed report file are all reported as an ``error`` -- none of them
+    may be folded into a fabricated "success" the way this used to synthesize
+    placeholder metrics.
     """
     script_path = _ANALYSIS_SCRIPTS_DIR / script_name
     if not script_path.exists():
@@ -83,10 +149,7 @@ def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict
     if result.returncode != 0:
         return {"error": (result.stderr or "").strip() or f"{label} analysis exited {result.returncode}"}
 
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {"error": f"{label} analysis produced no parseable JSON output"}
+    return _read_report_file(target_path, script_name, label)
 
 
 def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
