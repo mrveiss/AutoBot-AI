@@ -86,6 +86,8 @@ def test_discover_bridges_known_names():
         "git_mcp",
         "prometheus_mcp",
         "redis_mcp",
+        # #14586: the twelfth governed bridge.
+        "manual_mcp",
     }
     assert names == expected
 
@@ -94,7 +96,7 @@ def test_discover_bridges_manifest_registry_populated():
     from api.mcp_registry import _MANIFEST_REGISTRY, discover_bridges
 
     discover_bridges()
-    assert len(_MANIFEST_REGISTRY) >= 11
+    assert len(_MANIFEST_REGISTRY) >= 12  # #14586: manual_mcp is the twelfth
     for name, (manifest, module_path) in _MANIFEST_REGISTRY.items():
         assert isinstance(manifest, MCPBridgeManifest)
         assert manifest.name == name
