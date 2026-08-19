@@ -122,3 +122,47 @@
     state: started
     enabled: true
     daemon_reload: true
+
+# #14531: everything above proves the rule FILES were found, copied and pointed
+# at by the config. None of it proves the running Prometheus read any of them.
+# The deployed host carried `rule_files: []` and 0 loaded rules for four months
+# while every task here reported changed/ok — so no alert could fire, and an
+# alerting stack with no rules is indistinguishable from a fleet in perfect
+# health. Both produce silence.
+#
+# Ask the server what it actually loaded, after the restart it needed.
+- name: "Prometheus | Apply the pending restart before verifying what loaded (#14531)"
+  ansible.builtin.meta: flush_handlers
+
+- name: "Prometheus | Ask the running server which rules it loaded (#14531)"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ prometheus_port }}/api/v1/rules"
+    return_content: true
+  register: _prometheus_loaded_rules
+  retries: 12
+  delay: 5
+  until: _prometheus_loaded_rules.status | default(0) == 200
+  changed_when: false
+
+- name: "Prometheus | Assert the rules reached the server, not just the disk (#14531)"
+  # Counts RULES, not groups. A group that parsed but contained nothing would
+  # satisfy a groups-only check while alerting on nothing — the same shape as
+  # the rule files existing on disk and never being read.
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_prometheus_loaded_rules.json.data.groups | default([])
+         | map(attribute='rules') | map('length') | sum) > 0
+    fail_msg: >-
+      Prometheus is running but has loaded 0 alert rules. The files under
+      {{ prometheus_config_dir }}/rules were installed and rule_files points at
+      them, so the gap is between the config and the server — check that
+      rule_files is not [] in the rendered prometheus.yml, and that the server
+      restarted after the config changed. Until this passes, no alert on this
+      host can fire and nothing else reports that (#14531).
+    success_msg: >-
+      Prometheus loaded
+      {{ _prometheus_loaded_rules.json.data.groups | default([])
+         | map(attribute='rules') | map('length') | sum }} alert rule(s)
+      in {{ _prometheus_loaded_rules.json.data.groups | default([]) | length }} group(s).
+  when: prometheus_alert_rules_required | bool
