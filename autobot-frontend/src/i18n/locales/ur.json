@@ -8314,7 +8314,15 @@
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
       "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔",
-      "canvasGroupKind": "گروپ"
+      "canvasGroupKind": "گروپ",
+      "toolNodeLabel": "ٹول",
+      "attachToolNameLabel": "ٹول کا نام",
+      "attachToolNamePlaceholder": "ٹول کا نام",
+      "toolAttachError": "یہ ٹول منسلک نہیں ہو سکا۔",
+      "toolDetachError": "یہ ٹول الگ نہیں ہو سکا۔",
+      "toolDetach": "{tool} کو {role} سے الگ کریں",
+      "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
+      "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",

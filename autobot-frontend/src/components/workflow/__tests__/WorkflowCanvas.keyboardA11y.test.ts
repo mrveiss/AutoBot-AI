@@ -8,7 +8,8 @@
  *   - roving tabindex (one Tab stop; the rest -1) and its `@focus` sync
  *   - Enter/Space selects (same effect as `@click`), Escape deselects
  *   - arrow keys move focus in visual order, RTL-aware for left/right
- *   - a Ctrl/Cmd+arrow moves the focused node (readonly disables this)
+ *   - a Ctrl/Cmd+arrow moves the focused node (allowed on readonly too: it
+ *     rearranges the view and persists nothing — see #14610)
  *   - a keypress bubbling from a node's own input/select/button is left
  *     alone, never hijacked as a node-level shortcut
  *   - the accessible name states kind, name and (for org-person) state
@@ -237,11 +238,17 @@ describe('WorkflowCanvas Ctrl+Arrow moves the focused node (#14609)', () => {
     expect(wrapper.emitted('node-moved')).toEqual([['a', { x: 20, y: 0 }]])
   })
 
-  it('never moves the node when readonly — dragging is a mutation the read-only canvas must not offer', async () => {
+  it('moves the node on a readonly canvas too — rearranging the view is not a mutation', async () => {
+    // #14610 corrected the premise this test was written under. `readonly`
+    // means "cannot author the workflow"; moving a node persists nothing
+    // (`OrgChart.onCanvasNodeMoved` writes an in-memory position), and a mouse
+    // has always been able to drag on this canvas. Refusing the keyboard here
+    // left keyboard users able to do strictly less than mouse users on the
+    // same surface.
     const wrapper = mountCanvas({ nodes: grid(), readonly: true })
     await keydown(wrapper, 'a', 'ArrowRight', { ctrlKey: true })
 
-    expect(wrapper.emitted('node-moved')).toBeUndefined()
+    expect(wrapper.emitted('node-moved')).toEqual([['a', { x: 20, y: 0 }]])
   })
 
   it('clamps to zero rather than moving off-canvas', async () => {

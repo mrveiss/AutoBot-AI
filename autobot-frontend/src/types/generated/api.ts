@@ -49683,6 +49683,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/tool-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tool Nodes
+         * @description Return the tools this company's roles carry (#14597).
+         *
+         *     Company-scoped through the same shared :func:`assert_company_access` guard
+         *     the rest of this router uses, and pinned again in the query itself — the
+         *     role must belong to this company *and* the attachment must, so losing
+         *     either predicate cannot widen the result. Mirrors ``get_process_nodes``
+         *     above exactly, for the sibling attachment (tools rather than workflows).
+         *
+         *     Read-only: this composes existing rows and creates nothing.
+         */
+        get: operations["get_tool_nodes_api_llc_companies__company_id__tool_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/teams": {
         parameters: {
             query?: never;
@@ -97887,6 +97915,37 @@ export interface components {
              * @default true
              */
             update_first: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolNode
+         * @description One tool made available to one role, as an org-chart-adjacent node.
+         *
+         *     Derived read-only from ``llc_role_tools`` (#14221 step 4) — the same
+         *     projection shape ``ProcessNode`` above uses for ``llc_role_workflows``. A
+         *     tool attached to several roles produces one row per role here; the canvas
+         *     (``buildToolCanvasNodes``) folds the rows that share a ``tool_name`` into
+         *     a single node, so "one tool used by several roles" stays one node rather
+         *     than one per role.
+         *
+         *     ``role_id``/``role_name`` are included so the canvas can draw which roles
+         *     a tool belongs to; ``tool_name`` is the tool's registry identity.
+         */
+        ToolNode: {
+            /** Role Id */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
+            /** Tool Name */
+            tool_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ToolNodesResponse */
+        ToolNodesResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["ToolNode"][];
         } & {
             [key: string]: unknown;
         };
@@ -168756,6 +168815,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessNodesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tool_nodes_api_llc_companies__company_id__tool_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolNodesResponse"];
                 };
             };
             /** @description Validation Error */

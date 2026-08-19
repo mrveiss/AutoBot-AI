@@ -8314,7 +8314,15 @@
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
       "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
-      "canvasGroupKind": "Grupa"
+      "canvasGroupKind": "Grupa",
+      "toolNodeLabel": "Rīks",
+      "attachToolNameLabel": "Rīka nosaukums",
+      "attachToolNamePlaceholder": "Rīka nosaukums",
+      "toolAttachError": "Neizdevās pievienot šo rīku.",
+      "toolDetachError": "Neizdevās noņemt šo rīku.",
+      "toolDetach": "Noņemt {tool} no {role}",
+      "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
+      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
