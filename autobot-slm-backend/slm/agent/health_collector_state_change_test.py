@@ -4,7 +4,10 @@
 # Author: mrveiss
 """Unit tests for HealthCollector state-change pub/sub logic (#3404)."""
 
+import importlib.machinery
+import importlib.util
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,6 +15,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
+
+# stdlib logging, not autobot_shared.logging_manager: the root conftest stubs
+# "config" as a MagicMock for the whole session, and LoggingManager reads
+# numeric handler settings from it — get_logger() would blow up at collection
+# time here (see autobot_shared/user_management/password_epoch.py for the
+# same, already-documented exception).
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,8 +168,7 @@ class TestPublishStateChange:
 # The consumer of the published event is autobot-backend's NotificationService
 # (the OTHER backend) — "services.notification_service" does not exist in the
 # slm-backend tree, so the bare import could never resolve here (#11798).
-# Spec-load the real module from the repo checkout under a private name, with
-# its environment-bound deps stubbed (ssot_config reads /etc/autobot).  Skip
+# Spec-load the real module from the repo checkout under a private name.  Skip
 # when the sibling checkout is not present (deployment layouts).  Resolved by
 # upward search so the slm/agent and ansible copies (drift-checked identical)
 # both find the repo root from their different depths.
@@ -175,30 +184,161 @@ def _find_backend_notif_path():
 
 _BACKEND_NOTIF_PATH = _find_backend_notif_path()
 
+# #14538: "services" and "constants" are the only two first-party roots that
+# collide across the two backends — each tree has its own, different package
+# by that name.  The root conftest also replaces "services" with a
+# session-wide MagicMock for every OTHER test file's sake, so a plain
+# sys.meta_path fallback finder never even gets consulted here: Python's own
+# import machinery rejects a MagicMock parent as "not a package" before any
+# finder runs.  Discover exactly what is missing from the real
+# ModuleNotFoundError instead — one level at a time, exactly the way the
+# hand-maintained stub dict this replaces did implicitly (pre-populating
+# sys.modules bypasses the parent-package check entirely) — rather than from
+# a list that has to be kept in sync by hand.
+_AUTO_STUB_ROOTS = ("services", "constants")
+
+
+# Sentinel: the key was absent from sys.modules before we touched it — the
+# other value a real key could legitimately hold, ``None``, blocks an import
+# on purpose and must not be confused with "nothing was here" (#14538).
+_ABSENT = object()
+
+
+def _stub_module(name: str):
+    """Build a synthetic module stub that survives CPython's OWN import
+    machinery, not just the one exec() call that needed it.
+
+    ``_find_and_load_unlocked`` reads ``parent_module.__spec__`` directly
+    (unguarded — only the ``__path__`` read next to it is wrapped in a
+    try/except) whenever this stub later serves as the PARENT of a further
+    lookup, e.g. resolving ``services.gateway.egress_governor`` once
+    ``services.gateway`` is already one of these stubs.  A ``MagicMock``
+    raises ``AttributeError`` for any dunder-shaped attribute nobody set
+    explicitly (``unittest.mock``'s own ``_is_magic`` guard), so a stub
+    missing ``__spec__`` fails CLOSED with an opaque ``AttributeError:
+    __spec__`` instead of the clean ``ModuleNotFoundError`` a genuinely
+    absent module produces — reproduced on Python 3.14 (this repo's CI
+    interpreter) though not on 3.10 (#14538 CI follow-up)."""
+    stub = MagicMock(name=f"autostub:{name}", unsafe=True)
+    stub.__name__ = name
+    stub.__path__ = []
+    stub.__spec__ = importlib.machinery.ModuleSpec(name, loader=None, is_package=True)
+    stub.__loader__ = None
+    return stub
+
+
+def _install(name: str, module, previous: dict) -> None:
+    """Install *module* at ``sys.modules[name]``, remembering the FIRST prior
+    value so ``_restore_all`` can put it back exactly.  A bare
+    ``sys.modules.pop()`` on cleanup would evict a REAL, already-imported
+    module the rest of the process still holds — itself the class of
+    ``sys.modules`` leak this repo's shard guard exists to catch."""
+    if name not in previous:
+        previous[name] = sys.modules.get(name, _ABSENT)
+    sys.modules[name] = module
+
+
+def _stub_or_reraise(exc: ModuleNotFoundError, forbidden: tuple[str, ...], previous: dict) -> None:
+    """Narrow-and-loud (#14538): stub *only* a genuinely-missing name rooted
+    at ``_AUTO_STUB_ROOTS`` and not under *forbidden* (the subject under
+    test) — anything else (a real bug, a third-party dep, a typo) is
+    re-raised untouched rather than silently papered over."""
+    missing = exc.name or ""
+    in_scope = missing.split(".", 1)[0] in _AUTO_STUB_ROOTS
+    is_forbidden = any(missing == name or missing.startswith(f"{name}.") for name in forbidden)
+    if not in_scope or is_forbidden:
+        raise exc
+    _install(missing, _stub_module(missing), previous)
+    logger.warning("cross-tree loader auto-stubbed missing module %r (#14538)", missing)
+
+
+def _pop_stub_attr(parent, child: str, stubbed_names: list[str]) -> None:
+    """Undo a parent-package attribute Python's import system may have bound
+    for one of our stubs — never touches an attribute we did not create."""
+    existing = getattr(parent, child, None)
+    if existing is not None and getattr(existing, "__name__", None) in stubbed_names:
+        delattr(parent, child)
+
+
+def _restore_all(previous: dict) -> None:
+    """Put every touched ``sys.modules`` key back exactly as found: deleted
+    if it was genuinely absent, restored if it held something real — so
+    nothing survives past one load (the leak this repo's shard-level import
+    guard exists to catch).  A *real* prior value is put back untouched and
+    its parent is never poked, since we never bound a parent attribute for
+    an already-existing key in the first place."""
+    for name, was in previous.items():
+        if was is not _ABSENT:
+            sys.modules[name] = was
+            continue
+        sys.modules.pop(name, None)
+        parent_name, _, child = name.rpartition(".")
+        if parent_name and parent_name not in previous:
+            parent = sys.modules.get(parent_name)
+            if parent is not None:
+                _pop_stub_attr(parent, child, list(previous))
+
+
+def _exec_retrying(source_path, private_name: str, forbidden: tuple[str, ...], previous: dict, max_attempts: int):
+    for _ in range(max_attempts):
+        spec = importlib.util.spec_from_file_location(private_name, source_path)
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except ModuleNotFoundError as exc:
+            _stub_or_reraise(exc, forbidden, previous)
+            continue
+        return module
+    raise RuntimeError(f"exceeded {max_attempts} auto-stub retries loading {source_path}")
+
+
+def _exec_with_auto_stub(
+    source_path,
+    private_name: str,
+    forbidden: tuple[str, ...],
+    preseed: dict | None = None,
+    max_attempts: int = 25,
+):
+    """Exec *source_path* under *private_name*, auto-stubbing any
+    services.*/constants.* import genuinely absent from this rootdir
+    (#14538) — a new top-level import added over there does not require
+    editing this test.  *preseed* installs fixed stubs unconditionally
+    before the first attempt, for the rare case that is not a missing
+    module at all (see ``_load_backend_notification_service``).  *forbidden*
+    is required rather than defaulting to ``()``: a caller that forgets it
+    gets no protection against this loader silently stubbing its own
+    subject under test.  Returns ``(module, stubbed_names)``; every touched
+    key — preseeded or discovered — is restored to its exact prior state
+    before returning."""
+    previous: dict = {}
+    for name, stub in (preseed or {}).items():
+        _install(name, stub, previous)
+    try:
+        module = _exec_retrying(source_path, private_name, forbidden, previous, max_attempts)
+    finally:
+        stubbed = list(previous)
+        _restore_all(previous)
+    return module, stubbed
+
 
 def _load_backend_notification_service():
-    import importlib.util
-
-    # Every top-level import the backend module makes has to be stubbed: this
-    # loads it by path, so `services` resolves to the *slm* package here and any
-    # `services.*` the backend imports is genuinely absent. A new import over
-    # there fails this test with a bare ModuleNotFoundError naming a module that
-    # exists perfectly well in its own tree — which reads as a broken checkout
-    # rather than a missing stub. #14270 added the egress governor.
-    stubs = {
-        "constants": MagicMock(),
-        "constants.ttl_constants": MagicMock(TTL_7_DAYS=7 * 24 * 3600),
-        "autobot_shared.ssot_config": MagicMock(config=MagicMock()),
-        "autobot_shared.redis_client": MagicMock(),
-        "autobot_shared.logging_manager": MagicMock(get_logger=MagicMock(return_value=MagicMock())),
-        "services.gateway": MagicMock(),
-        "services.gateway.egress_governor": MagicMock(egress_governor=MagicMock()),
-    }
-    with patch.dict(sys.modules, stubs):
-        spec = importlib.util.spec_from_file_location("_backend_notification_service", _BACKEND_NOTIF_PATH)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return mod
+    # autobot_shared.logging_manager resolves for real here, but this
+    # session's root conftest globally replaces "config" with a MagicMock
+    # for every OTHER test file's sake (conftest.py's own documented
+    # reason) — get_logger() reads numeric log-rotation settings through
+    # that same "config" and blows up constructing a real
+    # RotatingFileHandler.  Not a #14538 module-absence case — a
+    # config-mocking test harness conflict, the same class already
+    # documented in autobot_shared/user_management/password_epoch.py — so
+    # it is preseeded rather than left to the missing-module discovery.
+    preseed = {"autobot_shared.logging_manager": MagicMock(get_logger=MagicMock(return_value=MagicMock()))}
+    module, _stubbed = _exec_with_auto_stub(
+        _BACKEND_NOTIF_PATH,
+        "_backend_notification_service",
+        forbidden=("services.notification_service",),
+        preseed=preseed,
+    )
+    return module
 
 
 class TestServiceFailedEvent:
@@ -227,3 +367,84 @@ class TestServiceFailedEvent:
         assert "node-01" in result
         assert "running" in result
         assert "failed" in result
+
+
+# ---------------------------------------------------------------------------
+# Cross-tree loader regression (#14538): a new backend import must not force
+# an edit here, the loader must never touch the subject under test, and it
+# must never leak a synthetic stub past its own scope.
+# ---------------------------------------------------------------------------
+
+
+class TestCrossTreeAutoStub:
+    def test_new_services_import_is_auto_stubbed_not_fatal(self, tmp_path):
+        """The acceptance criterion itself: add a throwaway import to a
+        module loaded this way, confirm the load still succeeds."""
+        throwaway = tmp_path / "throwaway_new_import.py"
+        throwaway.write_text(
+            "from services.totally_new_unstubbed_module import whatever\nVALUE = 42\n",
+            encoding="utf-8",
+        )
+
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_new_import", forbidden=())
+
+        assert mod.VALUE == 42
+        assert "services.totally_new_unstubbed_module" in stubbed
+
+    def test_stub_does_not_leak_into_sys_modules_or_parent_package(self, tmp_path):
+        """Whether "constants" itself needs stubbing depends on whether a
+        real one is on sys.path in this environment (autobot-backend's is,
+        in this repo's pytest.ini) — assert only on the submodule this test
+        owns, never on that environment detail."""
+        throwaway = tmp_path / "throwaway_constants_import.py"
+        throwaway.write_text("import constants.made_up_ttl_14538\n", encoding="utf-8")
+
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_constants_import", forbidden=())
+
+        assert "constants.made_up_ttl_14538" in stubbed
+        assert "constants.made_up_ttl_14538" not in sys.modules
+        assert not hasattr(mod.constants, "made_up_ttl_14538")
+
+    def test_forbidden_subject_under_test_is_never_stubbed(self, tmp_path):
+        """Narrow-and-loud: a forbidden prefix must fail with the real
+        ModuleNotFoundError rather than silently stub the module under
+        test."""
+        throwaway = tmp_path / "throwaway_forbidden_import.py"
+        throwaway.write_text("from services.gateway.egress_governor import egress_governor\n", encoding="utf-8")
+
+        with pytest.raises(ModuleNotFoundError):
+            _exec_with_auto_stub(throwaway, "_throwaway_forbidden_import", forbidden=("services.gateway",))
+
+    def test_third_party_or_stdlib_failures_are_never_auto_stubbed(self, tmp_path):
+        """Scope check: only services.*/constants.* are in-scope, so an
+        absent name outside that (stdlib/third-party) still raises for
+        real — the loader must not become a blanket import-error muter."""
+        throwaway = tmp_path / "throwaway_out_of_scope_import.py"
+        throwaway.write_text("import definitely_not_a_real_package_14538\n", encoding="utf-8")
+
+        with pytest.raises(ModuleNotFoundError):
+            _exec_with_auto_stub(throwaway, "_throwaway_out_of_scope_import", forbidden=())
+
+    def test_a_stub_serving_as_parent_for_a_further_lookup_still_loads(self, tmp_path):
+        """CI follow-up (Python 3.14, this repo's CI interpreter): once
+        ``services.<x>`` is one of our stubs, resolving
+        ``services.<x>.<y>`` makes it the PARENT of a further lookup.
+        CPython's ``_find_and_load_unlocked`` reads ``parent.__spec__``
+        directly there — unguarded, unlike the ``__path__`` read next to
+        it — and a stub missing ``__spec__`` fails CLOSED with
+        ``AttributeError: __spec__`` instead of the clean
+        ``ModuleNotFoundError`` a genuinely absent module produces. This
+        is exactly the shape ``services.gateway.egress_governor`` hits in
+        ``_load_backend_notification_service`` — reproduced directly here
+        so it does not depend on that file existing on disk."""
+        throwaway = tmp_path / "throwaway_two_level_import.py"
+        throwaway.write_text(
+            "from services.fake_parent_14538.fake_child_14538 import whatever\nVALUE = 99\n",
+            encoding="utf-8",
+        )
+
+        mod, stubbed = _exec_with_auto_stub(throwaway, "_throwaway_two_level_import", forbidden=())
+
+        assert mod.VALUE == 99
+        assert "services.fake_parent_14538" in stubbed
+        assert "services.fake_parent_14538.fake_child_14538" in stubbed

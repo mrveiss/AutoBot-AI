@@ -4376,7 +4376,11 @@
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
       "loopLabel": "Loop",
-      "switchOnPlaceholder": "Enter switch on..."
+      "switchOnPlaceholder": "Enter switch on...",
+      "nodeAriaLabel": "{kind}: {name}",
+      "nodeAriaLabelWithState": "{kind}: {name}, {state}",
+      "a11yInstructions": "Izmantojiet bulttaustiņus, lai pārvietotu fokusu starp mezgliem. Nospiediet Enter vai atstarpi, lai atlasītu fokusēto mezglu. Nospiediet Escape, lai atceltu atlasi.",
+      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8003,7 +8007,8 @@
       "colProvider": "Provider",
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
-      "colCost": "Cost"
+      "colCost": "Cost",
+      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav."
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8239,6 +8244,7 @@
       "viewCanvas": "Audekls",
       "canvasTabAll": "Visas vienības",
       "canvasUnit": "Vienība {name}",
+      "canvasTeam": "Komanda {name}",
       "canvasHint": "Shift+vilkšana pārvieto, ritināšana tuvina, uzklikšķini uz mezgla, lai redzētu detaļas.",
       "viewPeople": "Cilvēki",
       "peopleLegend": "Personu veidi",
@@ -8307,7 +8313,16 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
-      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs."
+      "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
+      "canvasGroupKind": "Grupa",
+      "toolNodeLabel": "Rīks",
+      "attachToolNameLabel": "Rīka nosaukums",
+      "attachToolNamePlaceholder": "Rīka nosaukums",
+      "toolAttachError": "Neizdevās pievienot šo rīku.",
+      "toolDetachError": "Neizdevās noņemt šo rīku.",
+      "toolDetach": "Noņemt {tool} no {role}",
+      "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
+      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8550,7 +8565,9 @@
     },
     "orgPeople": {
       "unassigned": "nav lomas",
-      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro"
+      "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro",
+      "inactive": "Neaktīvs",
+      "inactiveHint": "Deaktivizēts vai noņemts — joprojām redzams, jo darba vienības un loma paliek, taču jaunu darbu piešķirt nevar."
     }
   },
   "code": {
@@ -9167,6 +9184,23 @@
     "errorGrant": "Neizdevās piešķirt atļauju.",
     "errorRevoke": "Neizdevās atsaukt atļauju.",
     "errorAttach": "Neizdevās pievienot.",
-    "errorDetach": "Neizdevās noņemt."
+    "errorDetach": "Neizdevās noņemt.",
+    "rate": "Stundas likme",
+    "rateLabel": "Summa",
+    "currencyLabel": "Valūta",
+    "saveRate": "Saglabāt likmi",
+    "clearRate": "Notīrīt",
+    "noRate": "Likme nav iestatīta — šīs lomas soļiem vēl nevar aprēķināt izmaksas.",
+    "stepCosts": "Soļu izmaksas",
+    "minutesLabel": "Minūtes vienā izpildē",
+    "runsLabel": "Izpildes mēnesī",
+    "saveStepCost": "Saglabāt",
+    "perRun": "par izpildi",
+    "perMonth": "mēnesī",
+    "costNeedsRate": "Iestatiet šīs lomas stundas likmi, lai aprēķinātu šī soļa izmaksas.",
+    "costNeedsInputs": "Nav aprēķināts — norādiet, cik ilgs ir šis solis un cik bieži tas notiek.",
+    "errorSetRate": "Likmi neizdevās saglabāt.",
+    "errorClearRate": "Likmi neizdevās notīrīt.",
+    "errorSetStepCost": "Soļa izmaksu datus neizdevās saglabāt."
   }
 }

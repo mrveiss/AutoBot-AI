@@ -22,6 +22,10 @@ export type CanvasNodeType =
   // #13963: a workflow a role runs, drawn on the org canvas as the
   // contextual entrance to the absorbed automation module.
   | 'org-process'
+  // #14597: a tool one or more roles carry. One node per distinct tool name
+  // (never one per role) — `buildToolCanvasNodes` folds the role -> tool
+  // attachments that share a `tool_name` before this type is ever reached.
+  | 'org-tool'
 
 /** A node as the canvas sees it. `WorkflowNode` is assignable to this. */
 export interface CanvasNode extends Omit<WorkflowNode, 'type'> {
