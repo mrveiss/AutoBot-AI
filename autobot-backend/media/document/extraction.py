@@ -328,10 +328,7 @@ def _pdf_tables(raw: bytes) -> Tuple[Tuple[Any, ...], bool]:
     try:
         with pdfplumber.open(io.BytesIO(raw)) as document:
             tables = [
-                _normalize_table(table)
-                for page in document.pages
-                for table in (page.extract_tables() or [])
-                if table
+                _normalize_table(table) for page in document.pages for table in (page.extract_tables() or []) if table
             ]
     except Exception as exc:
         # A text layer that read fine must not be lost because table detection
