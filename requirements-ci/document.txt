@@ -14,3 +14,4 @@ markdownify==1.2.3
 # "Install OCR system packages" step in .github/actions/setup-python-suite.
 pytesseract>=0.3.13
 PyMuPDF>=1.26.0            # import name `fitz`; renders PDF pages for OCR
+pdfplumber>=0.11.0         # PDF table extraction (#14232); see the note above on why both files need it

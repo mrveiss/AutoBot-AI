@@ -294,13 +294,62 @@ def extract_pdf(raw: bytes) -> ExtractedDocument:
     reader = _pdf_reader(raw)
     pages = tuple(PageText(number=n, text=_pdf_page_text(page, n)) for n, page in enumerate(reader.pages, start=1))
     info = reader.metadata or {}
+    tables, tables_attempted = _pdf_tables(raw)
     return ExtractedDocument(
         format="pdf",
         text=render_pages(pages),
         pages=pages,
         page_count=len(pages),
         info=_pdf_info(info),
+        tables=tables,
+        tables_attempted=tables_attempted,
     )
+
+
+def _pdf_tables(raw: bytes) -> Tuple[Tuple[Any, ...], bool]:
+    """Extract tables with pdfplumber, reporting whether it ran (#14232).
+
+    Returns ``(tables, attempted)``. ``attempted`` is the field that keeps an
+    empty result honest: ``([], True)`` means the document has no tables, and
+    ``([], False)`` means nothing looked. #13895 introduced that distinction
+    because PDF returned a bare ``[]`` unconditionally while DOCX did real work.
+
+    pdfplumber is guard-imported. It is a heavier dependency than pypdf and a
+    deployment may not carry it; a missing library degrades to
+    ``attempted: False`` rather than failing an extraction whose text layer is
+    perfectly readable.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        logger.debug("pdfplumber is not installed; PDF table extraction skipped")
+        return (), False
+
+    try:
+        with pdfplumber.open(io.BytesIO(raw)) as document:
+            tables = [
+                _normalize_table(table)
+                for page in document.pages
+                for table in (page.extract_tables() or [])
+                if table
+            ]
+    except Exception as exc:
+        # A text layer that read fine must not be lost because table detection
+        # tripped, so this reports "did not look" rather than raising.
+        logger.warning("PDF table extraction failed: %s", exc)
+        return (), False
+
+    return tuple(tables), True
+
+
+def _normalize_table(table: Sequence[Sequence[Any]]) -> List[List[str]]:
+    """Render one table as rows of cell strings.
+
+    Identical in shape to :func:`_docx_table`, so a consumer needs one parser
+    for both formats rather than branching on where the table came from.
+    pdfplumber yields ``None`` for an empty cell where python-docx yields ``""``.
+    """
+    return [[("" if cell is None else str(cell)).strip() for cell in row] for row in table]
 
 
 def _pdf_reader(raw: bytes) -> Any:
