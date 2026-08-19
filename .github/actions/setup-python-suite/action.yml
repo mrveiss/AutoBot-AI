@@ -60,13 +60,40 @@ runs:
     # composite actions cannot have. A timeout (exit 124) is a real failure
     # here, deliberately: a wedged apt means the toolchain this PR exists to
     # provision is absent, and the test it gates would pass vacuously again.
+    #
+    # #14550 (third incident): 6 of 12 shards hit that timeout, one with
+    # exit 124 -- the command never finished inside 180s. python-shard runs
+    # on `ubuntu-latest` (ci.yml's own comment: "NOT the singleton
+    # [self-hosted, Linux, X64] pool"), so each of the 12 shards is a
+    # SEPARATE, ephemeral GitHub-hosted VM -- there is no dpkg lock shared
+    # BETWEEN shards, and no warm state carried over from a previous run
+    # either way (hosted runners are single-use). What twelve INDEPENDENT
+    # cold VMs share is the same risk profile: each one independently rolls
+    # the dice against its own background apt-daily/unattended-upgrades
+    # timer, and with twelve simultaneous trials several are expected to
+    # land inside that timer's window. 180s was not enough headroom for
+    # that; `command -v ffmpeg` first costs nothing and protects against a
+    # future base image that ships ffmpeg (or a future move to a runner
+    # pool that reuses state), but does NOT fix today's problem by itself --
+    # ffmpeg is absent from ubuntu-latest today, confirmed by this whole
+    # PR's own starting point (shutil.which("ffmpeg") returning None is what
+    # made test_real_audio_extraction skip in the first place), so every
+    # shard still takes the apt path. The actual fix is more headroom on
+    # both the per-command wall-clock bound and the dpkg lock wait, sized to
+    # the well-documented few-minutes duration of apt-daily on a freshly
+    # booted Ubuntu VM, with generous margin against the 60-minute job
+    # budget it draws from.
     - name: Install CI system packages (#14550)
       shell: bash
       run: |
         set -euo pipefail
+        if command -v ffmpeg >/dev/null 2>&1; then
+          echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          exit 0
+        fi
         export DEBIAN_FRONTEND=noninteractive
-        timeout 180 sudo apt-get update -qq -o DPkg::Lock::Timeout=60
-        timeout 180 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=60 ffmpeg
+        timeout 300 sudo apt-get update -qq -o DPkg::Lock::Timeout=120
+        timeout 300 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 ffmpeg
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
