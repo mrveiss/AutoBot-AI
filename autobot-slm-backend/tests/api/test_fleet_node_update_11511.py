@@ -29,7 +29,7 @@ import asyncio
 import contextlib
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -82,6 +82,8 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
 from api.code_sync import (  # noqa: E402
+    _job_is_stale,
+    _UPDATE_ALL_STALE_SECONDS,
     UpdateAllJob,
     _extract_ansible_fatal,
     _is_node_operational,
@@ -578,3 +580,74 @@ def test_run_fleet_stage_skips_degraded_continues_to_healthy() -> None:
     assert job.skipped_fleet_nodes == 1
     assert job.completed_fleet_nodes == 1
     assert job.status == "partial", f"expected 'partial' (1 skip + 1 success), got {job.status!r}"
+
+
+# ---------------------------------------------------------------------------
+# #14703 — a wedged job must not lock out every future update
+# ---------------------------------------------------------------------------
+
+
+def _job_at(progress_at: str | None, created_at: str = "2026-08-21T12:00:00+00:00") -> UpdateAllJob:
+    job = _job_with_fleet_stage()
+    job.status = "running"
+    job.created_at = created_at
+    job.last_progress_at = progress_at
+    return job
+
+
+def test_a_job_that_stopped_advancing_is_stale() -> None:
+    """The defect: this job used to 409 every future update forever."""
+    long_ago = (datetime.now(timezone.utc) - timedelta(seconds=_UPDATE_ALL_STALE_SECONDS + 60)).isoformat()
+    assert _job_is_stale(_job_at(long_ago)) is True
+
+
+def test_a_job_still_making_progress_is_not_stale() -> None:
+    """The dangerous direction: reaping live work would be worse than the lockout."""
+    just_now = datetime.now(timezone.utc).isoformat()
+    assert _job_is_stale(_job_at(just_now)) is False
+
+
+def test_a_long_fleet_update_stays_fresh_while_nodes_progress() -> None:
+    """Staleness is judged on progress, not age.
+
+    A job created hours ago is fine as long as it keeps stamping — otherwise a
+    legitimate update across many nodes would be reaped mid-run.
+    """
+    old_creation = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    recent_progress = datetime.now(timezone.utc).isoformat()
+    assert _job_is_stale(_job_at(recent_progress, created_at=old_creation)) is False
+
+
+def test_falls_back_to_created_at_when_nothing_stamped() -> None:
+    long_ago = (datetime.now(timezone.utc) - timedelta(seconds=_UPDATE_ALL_STALE_SECONDS + 60)).isoformat()
+    assert _job_is_stale(_job_at(None, created_at=long_ago)) is True
+
+
+def test_an_unreadable_timestamp_is_never_stale() -> None:
+    """A bad reading must not retire a job that may be running."""
+    assert _job_is_stale(_job_at("not-a-timestamp")) is False
+    assert _job_is_stale(_job_at(None, created_at="")) is False
+
+
+def test_fleet_stage_stamps_progress_per_node() -> None:
+    """Without this the stamps exist but nothing sets them during the long stage."""
+    job = _job_with_fleet_stage()
+    job.last_progress_at = None
+    stamps = []
+
+    async def _fake_sync(executor, node_id, job, stage, slm_own_ip):
+        stamps.append(job.last_progress_at)
+        job.completed_fleet_nodes += 1
+        return True
+
+    with (
+        patch("api.code_sync._sync_fleet_node", side_effect=_fake_sync),
+        patch("api.code_sync.get_playbook_executor", return_value=MagicMock()),
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._clear_resume_plan", AsyncMock()),
+    ):
+        mock_settings.external_url = "http://10.0.0.1"
+        _run(_run_fleet_stage(job, ["node-a", "node-b"]))
+
+    assert all(s is not None for s in stamps), f"a node ran before any progress was stamped: {stamps}"
+    assert stamps[0] != stamps[1] or job.last_progress_at is not None
