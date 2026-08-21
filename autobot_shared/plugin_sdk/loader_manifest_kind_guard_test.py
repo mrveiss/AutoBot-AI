@@ -69,13 +69,31 @@ _MANIFEST = """{{
 }}"""
 
 
+#: Top-level package names a loaded fixture plugin can install. `plugins*` is
+#: the fixture module itself; `plugin_sdk*` comes from `_BASEPLUGIN_SOURCE`,
+#: which imports the SDK by its top-level name the way a real plugin does — so
+#: loading the fixture aliases the whole package into `sys.modules`.
+_FIXTURE_MODULE_ROOTS = ("plugins", "plugin_sdk")
+
+
 @pytest.fixture(autouse=True)
 def _fresh_plugin_modules():
-    """Drop cached fixture modules between tests (mirrors plugin_load_visibility_test.py)."""
+    """Drop cached fixture modules between tests (mirrors plugin_load_visibility_test.py).
+
+    #14111: this previously dropped only `plugins*`, so the eight `plugin_sdk*`
+    aliases survived the test and tripped the sys.modules leak guard. It went
+    unnoticed because the guard attributes a leak to the file that *first*
+    installs the key in its shard — so whether this file was blamed depended on
+    which other tests happened to share its group. Changing the shard
+    assignment surfaced it; the leak itself is not new.
+
+    Only keys this test added are removed: `before` is captured first, so a
+    genuine pre-existing import is left alone.
+    """
     before = set(sys.modules)
     yield
     for name in set(sys.modules) - before:
-        if name.startswith("plugins"):
+        if name.split(".", 1)[0] in _FIXTURE_MODULE_ROOTS:
             sys.modules.pop(name, None)
 
 
