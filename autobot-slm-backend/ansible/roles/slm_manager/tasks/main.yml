@@ -616,21 +616,13 @@
 # ==========================================================
 # Backend systemd service
 # ==========================================================
-- name: "SLM | Deploy backend systemd service"
-  ansible.builtin.template:
-    src: autobot-slm-backend.service.j2
-    dest: /etc/systemd/system/{{ slm_backend_service }}.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart slm backend
-  tags: ['slm', 'backend', 'systemd']
-
-- name: "SLM | Enable backend service"
-  ansible.builtin.systemd:
-    name: "{{ slm_backend_service }}"
-    enabled: true
-    daemon_reload: true
+# #14624: the unit definition lives in service_units.yml so the self-update
+# path can render it too. Play 1 of update-all-nodes.yml deploys the backend by
+# unarchive and never runs this role, so a unit rendered only here drifted --
+# one host's was two months stale, predating the AUTOBOT_PROJECT_ROOT line, and
+# the service could not start once #14544 began raising.
+- name: "SLM | Deploy and enable the backend systemd unit (#14624)"
+  ansible.builtin.include_tasks: service_units.yml
   tags: ['slm', 'backend', 'systemd']
 
 # ==========================================================
