@@ -14,3 +14,17 @@ pillow==12.3.0
 # sentence-transformers. No nvidia-* wheels — the CPU-only index in
 # .github/actions/setup-python-suite keeps resolving torch, so the ~3GB saving stands.
 torchmetrics>=1.9.0,<2.0.0
+# #14551: production dep (autobot-backend/requirements.txt, RAPTOR clustering).
+# pytest.importorskip("sklearn") gates entity_resolution_test.py,
+# summarizer_raptor_test.py, security/threat_detection_refactor_test.py and
+# security/enterprise/threat_detection/test_learner.py — 4 files silently
+# skipping the real clustering/classification path without this.
+scikit-learn>=1.9.0
+# #14551: production dep (autobot-backend/requirements.txt, vector similarity
+# search). utils/faiss_ivfpq_builder_test.py gates its whole IVFPQ test class on
+# pytest.importorskip("faiss") — silently skipping without this.
+faiss-cpu>=1.15.0
+# #14551: production dep (autobot-backend/requirements.txt, MinHash LSH
+# duplicate detection). Its own test module gates on
+# pytest.importorskip("datasketch") — silently skipping without this.
+datasketch>=2.0.0
