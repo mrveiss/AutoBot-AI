@@ -12833,6 +12833,17 @@
             "title": "Job Id",
             "type": "string"
           },
+          "last_progress_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Progress At"
+          },
           "skipped_fleet_nodes": {
             "default": 0,
             "title": "Skipped Fleet Nodes",
