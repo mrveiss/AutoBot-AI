@@ -163,8 +163,12 @@ class LLMResponseCache:
             structured_output,
         )
 
-        # xxhash is 3-5x faster than MD5 for cache key generation
-        content_hash = xxhash.xxh64(str(key_data)).hexdigest()
+        # xxhash is 3-5x faster than MD5 for cache key generation.
+        # #14731: encode explicitly — xxhash 4 removed str input and raises
+        # "Strings must be encoded before hashing". The digest is unchanged
+        # from what xxhash 3 produced for the same text, since 3 encoded as
+        # UTF-8 internally, so existing cache entries stay addressable.
+        content_hash = xxhash.xxh64(str(key_data).encode("utf-8")).hexdigest()
         return f"llm_cache:{content_hash}"
 
     def _parse_cached_data(self, cached_data: bytes) -> CachedResponse:

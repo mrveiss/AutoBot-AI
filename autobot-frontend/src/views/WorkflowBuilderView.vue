@@ -436,6 +436,7 @@
             @node-moved="handleNodeMoved"
             @node-selected="handleNodeSelected"
             @nodes-connected="handleNodesConnected"
+            @nodes-disconnected="handleNodesDisconnected"
             @save-workflow="handleSaveWorkflow"
           />
         </section>
@@ -807,6 +808,7 @@ const {
   removeNode,
   updateNodePosition,
   connectNodes,
+  disconnectNodes,
   clearCanvas,
   exportCanvasToSteps,
   getWorkflowStatus,
@@ -1059,6 +1061,15 @@ function handleNodeSelected(nodeId: string | null): void {
 
 function handleNodesConnected(sourceId: string, targetId: string): void {
   connectNodes(sourceId, targetId);
+}
+
+/**
+ * #14612: undo's inverse of a connect — `disconnectNodes` already existed in
+ * `useWorkflowBuilder` but was never wired to anything until the canvas
+ * gained undo/redo and needed a real "connect" to reverse.
+ */
+function handleNodesDisconnected(sourceId: string, targetId: string): void {
+  disconnectNodes(sourceId, targetId);
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
