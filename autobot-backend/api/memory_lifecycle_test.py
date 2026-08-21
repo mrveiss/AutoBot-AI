@@ -20,6 +20,8 @@ apart from a system that genuinely has no facts.
 
 from __future__ import annotations
 
+import inspect
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -251,3 +253,59 @@ async def test_a_last_run_failure_does_not_blank_the_rest_of_the_section(seeded,
     assert section.get("last_run_unavailable") is True
     assert section["config"], "the config snapshot was discarded by an unrelated failure"
     assert {c["fact_id"] for c in section["prune_preview"]} == {"prunable"}
+
+
+# ---------------------------------------------------------------------------
+# #12631 review: the reader must read the database the writer writes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_last_run_is_read_from_the_database_the_writer_uses(seeded, monkeypatch):
+    """The reader and the writer must agree on the logical Redis database.
+
+    `memory:consolidate_facts:last_run` is written by
+    `workers/consolidate_tasks.py` with ``database="analytics"``. This endpoint
+    originally read it with ``database="main"`` — a different logical database,
+    so the key was never found and ``last_run`` was permanently ``None``.
+
+    That is a silent failure, not a loud one: the endpoint's own error path
+    already answers ``None`` for "could not read it", so a wrong-database read
+    is indistinguishable from a Redis blip. The whole point of this PR is that
+    the key "had no readers"; a reader pointed at the wrong database is still
+    no reader.
+
+    So the database is asserted at the seam rather than eyeballed: the client
+    factory is captured and its ``database`` argument compared against the
+    writer's own.
+    """
+    requested: List[str] = []
+
+    class _Client:
+        async def get(self, _key):
+            return b"2026-08-21T00:00:00+00:00"
+
+    async def _capture(*_args, **kwargs):
+        requested.append(kwargs.get("database"))
+        return _Client()
+
+    monkeypatch.setattr(
+        "autobot_shared.redis_client.get_async_redis_client", _capture, raising=False
+    )
+
+    section = await _decay_with(seeded, monkeypatch)
+
+    assert requested, "the last-run lookup never asked for a Redis client"
+
+    from workers import consolidate_tasks
+
+    writer_src = inspect.getsource(consolidate_tasks._get_redis)
+    writer_db = re.search(r'database="([a-z_]+)"', writer_src)
+    assert writer_db, "could not determine the writer's database — repoint this test"
+
+    assert requested[0] == writer_db.group(1), (
+        f"the reader asked for database={requested[0]!r} but "
+        f"workers/consolidate_tasks.py writes the key to "
+        f"{writer_db.group(1)!r} — the key will never be found"
+    )
+    assert section.get("last_run"), "a readable last_run must be surfaced, not dropped"

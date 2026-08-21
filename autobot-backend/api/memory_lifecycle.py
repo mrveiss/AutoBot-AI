@@ -94,7 +94,13 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
     try:
         from autobot_shared.redis_client import get_async_redis_client
 
-        client = await get_async_redis_client(database="main")
+        # #12631 review: the WRITER decides which database this key lives in.
+        # `workers/consolidate_tasks.py` writes it with database="analytics";
+        # reading from "main" is a different logical database, so the key is
+        # never found and `last_run` is permanently None — the exact "no
+        # readers" state this endpoint exists to end, reproduced as a reader
+        # that cannot read.
+        client = await get_async_redis_client(database="analytics")
         if client is not None:
             raw = await client.get(_LAST_RUN_KEY)
             section["last_run"] = raw.decode() if isinstance(raw, bytes) else raw
