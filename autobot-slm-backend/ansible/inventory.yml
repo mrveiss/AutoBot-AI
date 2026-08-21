@@ -11,43 +11,48 @@ all:
     slm:
       hosts:
         admin:
-          ansible_host: "{{ lookup('env', 'AUTOBOT_SLM_HOST') | default('127.0.0.1', true) }}"
+          ansible_host: "{{ lookup('env', 'AUTOBOT_SLM_HOST') | default('', true) }}"
           ansible_user: autobot
+          # #14528: never SSH to self. Whether this entry is the local machine
+          # depends on the operator's topology, so decide from the resolved
+          # address rather than assuming either way.
+          ansible_connection: >-
+            {{ 'local' if ansible_host in ['127.0.0.1', 'localhost', '::1'] else 'ssh' }}
 
     autobot:
       children:
         backend:
           hosts:
             main:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('', true) }}"
               ansible_user: autobot
 
         frontend:
           hosts:
             vm1:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('', true) }}"
               ansible_user: autobot
 
         npu:
           hosts:
             vm2:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('', true) }}"
               ansible_user: autobot
 
         redis:
           hosts:
             vm3:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('', true) }}"
               ansible_user: autobot
 
         ai:
           hosts:
             vm4:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('', true) }}"
               ansible_user: autobot
 
         browser:
           hosts:
             vm5:
-              ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('127.0.0.1', true) }}"
+              ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('', true) }}"
               ansible_user: autobot
