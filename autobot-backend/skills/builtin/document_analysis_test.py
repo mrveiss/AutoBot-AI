@@ -483,7 +483,6 @@ async def test_the_real_agent_error_branch_produces_the_shape_this_skill_reads()
     # the real agent, so an environment where it cannot run must fail loudly
     # rather than skip back into the all-stubs state the review found.
     import agents.summarization_agent as agents_pkg
-    from skills.builtin.document_analysis import DocumentAnalysisSkill
 
     agent = agents_pkg.SummarizationAgent.__new__(agents_pkg.SummarizationAgent)
     agent.model_name = "a-model"
