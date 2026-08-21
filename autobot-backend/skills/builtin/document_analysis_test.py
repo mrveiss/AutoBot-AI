@@ -359,8 +359,14 @@ async def test_a_raising_backend_is_reported_not_swallowed(skill, tmp_path, monk
 
 @pytest.mark.asyncio
 async def test_an_empty_summary_is_a_failure_not_an_empty_success(skill, tmp_path, monkeypatch):
-    """A backend that returns nothing has not summarized anything."""
-    _stub_summarizer(monkeypatch, result={"summary": "   "})
+    """A backend that returns nothing has not summarized anything.
+
+    The status says success and the text is blank — so this exercises the
+    empty-text path specifically, rather than being rejected earlier by the
+    discriminator. Without the status the result is unclassifiable and fails
+    for a different reason, which would leave the empty-text branch untested.
+    """
+    _stub_summarizer(monkeypatch, result={"status": "success", "summary": "   "})
     path = _write_pdf(tmp_path, ["body"])
 
     result = await skill.execute("summarize_document", {"file_path": str(path)})
