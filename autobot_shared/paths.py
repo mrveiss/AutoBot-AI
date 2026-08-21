@@ -34,6 +34,16 @@ from pathlib import Path
 #: this repository's whole workflow runs from worktrees.
 CHECKOUT_MARKERS = (".git", "autobot_shared")
 
+#: Prefix of the component directories a deployed install places beside
+#: ``autobot_shared`` (``autobot-backend``, ``autobot-npu-worker``, ...).
+#:
+#: A PREFIX, not a list of names. The first version of this enumerated four
+#: components and would have left a node carrying only, say, ``autobot-npu-worker``
+#: unable to resolve — precisely the minimal fleet nodes most likely to hit it.
+#: This install alone has twelve such directories, and the set grows with every
+#: new component (#14624).
+INSTALL_COMPONENT_PREFIX = "autobot-"
+
 #: Environment variable naming an explicit project root. This is the same name
 #: the shell scripts honour, so exporting it once governs both languages.
 PROJECT_ROOT_ENV = "AUTOBOT_PROJECT_ROOT"
@@ -61,6 +71,33 @@ class ProjectRootUndeterminable(RuntimeError):
 def is_checkout_root(path: Path) -> bool:
     """True when *path* looks like the root of a source checkout."""
     return all((path / marker).exists() for marker in CHECKOUT_MARKERS)
+
+
+def is_install_root(path: Path) -> bool:
+    """True when *path* looks like a deployed install root (#14624).
+
+    A deployed install satisfies none of the other arms, which took down a live
+    SLM backend: `/opt/autobot` has no `.git` (so `is_checkout_root` is False,
+    correctly — it is not a checkout) and no top-level `.env` either, because
+    the per-component files live one level down (`autobot-backend/.env`,
+    `autobot-ai-stack/.env`, ...). `resolve_project_root` therefore raised on
+    import and uvicorn exited 1 in a restart loop.
+
+    The deployment does normally set ``AUTOBOT_PROJECT_ROOT`` — the unit
+    template renders it — but the raise then depends on every host's systemd
+    unit being current, and the host this was found on had one from two months
+    earlier. A resolution that only works where deployed state is fresh is not
+    a resolution; this arm makes the layout recognisable on its own terms.
+
+    Deliberately narrow, and NOT a relaxation of ``CHECKOUT_MARKERS``: those
+    require both markers for reasons that still hold (see their comment). An
+    install is identified by `autobot_shared` sitting beside at least one
+    deployed component directory — a shape a package's own parent does not
+    have, and one that never appears above a checkout or worktree root.
+    """
+    if not (path / "autobot_shared").exists():
+        return False
+    return any(child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir())
 
 
 def project_root() -> Path:
@@ -116,9 +153,20 @@ def resolve_project_root(start: Path) -> Path:
     if configured:
         return Path(configured).resolve()
 
+    # #14640 review: an OSError while inspecting a candidate is remembered rather
+    # than swallowed. Returning False on a permissions failure still fails loud
+    # (nothing else matches, so the raise below fires), but the message would
+    # blame an unrecognised layout when the real cause was an unreadable
+    # directory that IS the right root. This module already cost one long
+    # outage; the diagnosis should not have to be reconstructed twice.
+    inspection_errors: list[str] = []
+
     for parent in [start] + list(start.parents):
-        if (parent / ".env").exists() or is_checkout_root(parent):
-            return parent
+        try:
+            if (parent / ".env").exists() or is_checkout_root(parent) or is_install_root(parent):
+                return parent
+        except OSError as exc:
+            inspection_errors.append(f"{parent}: {exc.__class__.__name__}: {exc}")
 
     # ssot-config-exempt: bootstrap self-reference (carried from the
     # implementation this replaced, landed in #13646).
@@ -132,4 +180,10 @@ def resolve_project_root(start: Path) -> Path:
         "ancestor holds a .env or looks like a source checkout "
         f"({', '.join(CHECKOUT_MARKERS)}). Set one of those two environment "
         "variables — a silent guess is the defect this raise replaces (#14544)."
+        + (
+            "\n\nNote: some candidates could not be inspected, which may be the real "
+            "cause rather than an unrecognised layout: " + "; ".join(inspection_errors)
+            if inspection_errors
+            else ""
+        )
     )

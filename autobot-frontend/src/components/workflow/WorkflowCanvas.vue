@@ -3,6 +3,69 @@
     <!-- Toolbar -->
     <div class="canvas-toolbar">
       <div class="toolbar-left">
+        <!-- #14611: canvas search — reachable by keyboard, screen-reader
+             announced via the live region below, never gated on `readonly`:
+             finding a node is a view concern on every canvas this component
+             draws, not an authoring one. -->
+        <div v-if="nodes.length > 0" class="canvas-search" role="search">
+          <div class="canvas-search-field">
+            <Icon name="search" class="canvas-search-icon" />
+            <input
+              ref="searchInputEl"
+              v-model="searchQuery"
+              type="text"
+              class="canvas-search-input"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-expanded="searchHasQuery"
+              aria-controls="canvas-search-listbox"
+              :aria-activedescendant="searchActiveOptionId"
+              :aria-label="$t('workflow.canvas.searchLabel')"
+              :placeholder="$t('workflow.canvas.searchPlaceholder')"
+              data-testid="canvas-search-input"
+              @keydown="onSearchKeydown"
+            />
+            <button
+              v-if="searchHasQuery"
+              type="button"
+              class="canvas-search-clear"
+              :aria-label="$t('workflow.canvas.searchClear')"
+              data-testid="canvas-search-clear"
+              @click="clearSearch"
+            >
+              <Icon name="times" />
+            </button>
+          </div>
+          <!-- #14611: absence must be stated, never left to read as an empty
+               canvas (#14064/#13617/#14556's repeat conflation) — the live
+               region carries it to a screen reader, `canvas-search-no-results`
+               carries it to a sighted one. -->
+          <p aria-live="polite" class="sr-only" data-testid="canvas-search-status">{{ searchStatusText }}</p>
+          <ul
+            v-if="searchHasQuery"
+            id="canvas-search-listbox"
+            class="canvas-search-results"
+            role="listbox"
+            :aria-label="$t('workflow.canvas.searchLabel')"
+          >
+            <li
+              v-for="(result, index) in searchResults"
+              :id="searchOptionId(index)"
+              :key="result.id"
+              role="option"
+              class="canvas-search-result"
+              :class="{ active: index === searchActiveIndex }"
+              :aria-selected="index === searchActiveIndex"
+              data-testid="canvas-search-result"
+              @click="selectSearchResult(result)"
+            >
+              {{ nodeSearchLabel(result) }}
+            </li>
+            <li v-if="searchResults.length === 0" class="canvas-search-empty" data-testid="canvas-search-no-results">
+              {{ $t('workflow.canvas.searchNoResults', { query: searchQuery.trim() }) }}
+            </li>
+          </ul>
+        </div>
         <!-- GH#13939: tab strip — rendered only when the consumer supplies tabs -->
         <div v-if="tabs.length > 0" class="canvas-tabs" role="tablist">
           <button
@@ -73,6 +136,9 @@
         <button class="tool-btn" @click="zoomIn" :aria-label="$t('common.zoomIn')"><Icon name="search-plus" /></button>
         <button class="tool-btn" @click="zoomOut" :aria-label="$t('common.zoomOut')"><Icon name="search-minus" /></button>
         <button class="tool-btn" @click="resetZoom" :aria-label="$t('common.fitToView')"><Icon name="compress-arrows-alt" /></button>
+        <!-- #14611: "fit to selection or filter" — a *second* control, the
+             fixed-reset button above stays exactly as it was. -->
+        <button class="tool-btn" @click="fitToSelectionOrView" :aria-label="$t('workflow.canvas.fitToSelection')" data-testid="canvas-fit-view"><Icon name="expand-arrows-alt" /></button>
         <template v-if="!readonly">
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
@@ -316,6 +382,37 @@
           </li>
         </ul>
       </div>
+
+      <!-- #14611: overview of a canvas larger than the viewport — sits
+           outside `.canvas-content` like the legend, so panning/zooming the
+           main view never moves it. Decorative (not itself an authoring
+           surface): it never gates on `readonly`, a click pans the main view
+           to the point clicked, and the dots/viewport rect are `aria-hidden`
+           since search + keyboard navigation are the actual way in for a
+           screen-reader user, not this overview. -->
+      <div
+        v-if="minimapGeometry"
+        class="canvas-minimap"
+        role="img"
+        :aria-label="$t('workflow.canvas.minimapLabel')"
+        data-testid="canvas-minimap"
+        @pointerdown="onMinimapPointerDown"
+      >
+        <div
+          v-for="node in nodes"
+          :key="`minimap-${node.id}`"
+          class="canvas-minimap-node"
+          :style="minimapNodeStyle(node)"
+          aria-hidden="true"
+        ></div>
+        <div
+          v-if="minimapViewportStyle"
+          class="canvas-minimap-viewport"
+          :style="minimapViewportStyle"
+          data-testid="canvas-minimap-viewport"
+          aria-hidden="true"
+        ></div>
+      </div>
     </div>
 
     <!-- Save Dialog -->
@@ -335,7 +432,7 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
-import { ref, reactive, computed, nextTick, useId } from 'vue';
+import { ref, reactive, computed, nextTick, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
@@ -370,8 +467,13 @@ const props = withDefaults(
     readonly?: boolean;
     tabs?: CanvasTab[];
     activeTabId?: string | null;
+    // #14611: the inbound deep link's target — `OrgChart.vue` sets this once
+    // it has resolved `?node=<id>` (`canvasNodeDeepLink.ts`) to a node that
+    // actually exists in `nodes`. Optional and defaulted to null so every
+    // existing mount (WorkflowBuilderView included) is unaffected.
+    focusNodeId?: string | null;
   }>(),
-  { readonly: false, tabs: () => [], activeTabId: null },
+  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null },
 );
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
@@ -457,6 +559,21 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
 }
 
 /**
+ * The "{kind}: {name}" text shared by a node's accessible name and the
+ * canvas search result label (#14611) — one construction of it, not two.
+ *
+ * #14657: `name` is `nodeDisplayName`, not `nodeTitle` — for org-process and
+ * org-tool, `nodeTitle` is the generic type caption (the same string `kind`
+ * already carries), which announced e.g. "Process: Process" with nothing
+ * identifying which node it was.
+ */
+function nodeKindAndName(node: CanvasNode): string {
+  const kind = nodeKindLabel(node);
+  const name = nodeDisplayName(node);
+  return kind ? t('workflow.canvas.nodeAriaLabel', { kind, name }) : name;
+}
+
+/**
  * Accessible name for a node (#14609): kind, name and — for an org-person,
  * the only node type carrying a status concept — its current state.
  *
@@ -466,12 +583,13 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
  * legend happens to be colouring by.
  */
 function nodeAriaLabel(node: CanvasNode): string {
-  const kind = nodeKindLabel(node);
-  const name = nodeTitle(node);
   const state = nodeStatusLabel(node);
-  return state
-    ? t('workflow.canvas.nodeAriaLabelWithState', { kind, name, state })
-    : t('workflow.canvas.nodeAriaLabel', { kind, name });
+  if (!state) return nodeKindAndName(node);
+  return t('workflow.canvas.nodeAriaLabelWithState', {
+    kind: nodeKindLabel(node),
+    name: nodeDisplayName(node),
+    state,
+  });
 }
 
 /** The "kind" component of a node's accessible name. */
@@ -1066,6 +1184,358 @@ function zoomOut() { zoom.value = clampZoom(zoom.value - 0.1); }
 function resetZoom() { zoom.value = 1; pan.x = 50; pan.y = 50; }
 function handleWheel(e: WheelEvent) { zoom.value = clampZoom(zoom.value + (e.deltaY > 0 ? -0.05 : 0.05)); }
 
+/* ------------------------------------------------------------------ *
+ * GH#14611: canvas search — a large Company OS canvas has no other way to
+ * find a node than panning until it scrolls into view.
+ *
+ * Never gated on `readonly`: searching persists nothing, the same reasoning
+ * #14610's own doc comment already gives for dragging a node — and gating a
+ * view gesture on it would make the *read-only* canvas, the one this issue is
+ * actually about, the one canvas that cannot use it.
+ * ------------------------------------------------------------------ */
+
+const searchQuery = ref('');
+const searchActiveIndex = ref(-1);
+const searchInputEl = ref<HTMLInputElement | null>(null);
+
+/** A stale highlight from a previous search must not survive into a new one. */
+watch(searchQuery, () => { searchActiveIndex.value = -1; });
+
+/**
+ * A node's own name, independent of its type's generic caption.
+ *
+ * `nodeTitle` returns the *type* label ("Process", "Tool") for an org-process
+ * or org-tool node — correct for the node's header, wrong for search and for
+ * the accessible name (#14657), both of which need something identifying
+ * *which* node this is: the workflow (and role) a process runs, or the tool
+ * name (and the roles carrying it).
+ */
+function nodeDisplayName(node: CanvasNode): string {
+  const label = nodeText(node, 'label');
+  if (label) return label;
+  if (node.type === 'org-process') {
+    const workflow = nodeText(node, 'workflow_id');
+    const role = nodeText(node, 'role_name');
+    return role ? t('llc.orgChart.processDisplayName', { workflow, role }) : workflow;
+  }
+  if (node.type === 'org-tool') {
+    const tool = nodeText(node, 'tool_name');
+    const roles = toolRoles(node).map((role) => role.role_name).join(', ');
+    return roles ? t('llc.orgChart.toolDisplayName', { tool, roles }) : tool;
+  }
+  return nodeTitle(node);
+}
+
+/** Every string a search for `node` should match against. */
+function nodeSearchText(node: CanvasNode): string {
+  const parts = [nodeDisplayName(node), nodeText(node, 'workflow_id')];
+  if (node.type === 'org-tool') {
+    for (const role of toolRoles(node)) parts.push(role.role_name);
+  }
+  return parts.filter(Boolean).join(' ');
+}
+
+/** The result list's visible (and screen-reader-read) label for `node` —
+ *  the same "{kind}: {name}" text as the node's own accessible name (#14657),
+ *  not a second construction of it. */
+function nodeSearchLabel(node: CanvasNode): string {
+  return nodeKindAndName(node);
+}
+
+const searchHasQuery = computed(() => searchQuery.value.trim().length > 0);
+
+/** Nodes matching the current query, across every node kind (#14611
+ *  acceptance: person, group/team, process, tool). Never itself filters what
+ *  the canvas draws, only what the dropdown lists — a search must not be
+ *  confusable with the role lens. */
+const searchResults = computed<CanvasNode[]>(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return [];
+  return props.nodes.filter((node) => nodeSearchText(node).toLowerCase().includes(q));
+});
+
+function searchOptionId(index: number): string {
+  return `${_uid}-search-option-${index}`;
+}
+const searchActiveOptionId = computed<string | undefined>(() =>
+  searchActiveIndex.value >= 0 && searchActiveIndex.value < searchResults.value.length
+    ? searchOptionId(searchActiveIndex.value)
+    : undefined,
+);
+
+/** Announced to a screen reader via the live region, and shown to a sighted
+ *  reader in the dropdown (#14611: absence must read as "no match", never as
+ *  an empty canvas — #14064/#13617/#14556's repeat conflation). */
+const searchStatusText = computed(() => {
+  if (!searchHasQuery.value) return '';
+  const query = searchQuery.value.trim();
+  return searchResults.value.length > 0
+    ? t('workflow.canvas.searchResultsStatus', { count: searchResults.value.length, query })
+    : t('workflow.canvas.searchNoResults', { query });
+});
+
+function clearSearch(): void {
+  searchQuery.value = '';
+  searchActiveIndex.value = -1;
+}
+
+/** Move the viewport to a search hit (#14611 acceptance: "search finds nodes
+ *  and moves the viewport to a hit"). Keeps the query so Up/Down/Enter can
+ *  keep stepping through the remaining hits without retyping. */
+function selectSearchResult(node: CanvasNode): void {
+  zoomToNode(node.id);
+  searchActiveIndex.value = searchResults.value.findIndex((n) => n.id === node.id);
+}
+
+/** Keyboard operation of the results list from the search input itself —
+ *  ArrowUp/ArrowDown cycle the highlight, Enter jumps to it (or to the first
+ *  result when nothing is highlighted yet), Escape clears the search. */
+function onSearchKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    clearSearch();
+    return;
+  }
+  const results = searchResults.value;
+  if (results.length === 0) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchActiveIndex.value = (searchActiveIndex.value + 1) % results.length;
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchActiveIndex.value = searchActiveIndex.value <= 0 ? results.length - 1 : searchActiveIndex.value - 1;
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const index = searchActiveIndex.value >= 0 ? searchActiveIndex.value : 0;
+    selectSearchResult(results[index]);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * GH#14611: zoom-to-node, fit-to-selection/filter, and the inbound deep
+ * link's own viewport jump — all three share the same centring/fitting math.
+ * ------------------------------------------------------------------ */
+
+/** Node footprint the layout builders assume, for a node type that carries no
+ *  size of its own — the same 100px row `endInteraction` below already uses
+ *  for its connection-drop hit test, and `org-group`'s own `data.width`/
+ *  `data.height` (`nodeStyle` above) when the node IS sized. */
+const NODE_APPROX_HEIGHT = 100;
+
+/** A zoom level comfortable for looking at one node up close — fixed, rather
+ *  than a maximal fit, so repeatedly jumping between search hits or deep
+ *  links only recentres the view and never also snaps the zoom level around
+ *  (#14611: "zoom to a node"). */
+const FOCUS_ZOOM = 1;
+
+/** Padding, in canvas px, kept around a fitted bounding box so a fitted node
+ *  or selection is never drawn flush against the canvas edge. */
+const FIT_PADDING = 60;
+
+/** The width/height a node occupies for bounding-box math (fit, minimap) —
+ *  `org-group` carries its own from `data`, every other type is the fixed
+ *  240x100 footprint every layout builder in `orgCanvasGraph.ts` assumes. */
+function nodeExtent(node: CanvasNode): { width: number; height: number } {
+  if (node.type === 'org-group') {
+    const data = node.data as Record<string, unknown>;
+    const width = typeof data.width === 'number' ? data.width : CANVAS_NODE_WIDTH;
+    const height = typeof data.height === 'number' ? data.height : NODE_APPROX_HEIGHT;
+    return { width, height };
+  }
+  return { width: CANVAS_NODE_WIDTH, height: NODE_APPROX_HEIGHT };
+}
+
+/** Move the viewport so `node`'s centre lands in the middle of the visible
+ *  canvas area, without changing zoom. */
+function centerOnNode(node: CanvasNode): void {
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const viewWidth = rect?.width ?? 0;
+  const viewHeight = rect?.height ?? 0;
+  const center = nodeCenter(node);
+  pan.x = viewWidth / 2 - center.x * zoom.value;
+  pan.y = viewHeight / 2 - center.y * zoom.value;
+}
+
+/**
+ * Zoom to a comfortable level and centre on `nodeId` (#14611 "zoom to a
+ * node") — the jump a search hit or the inbound deep link performs. A no-op
+ * when the id names nothing currently drawn, so a stale search result or a
+ * link to a node the active filter hides cannot move the viewport to
+ * nowhere; `zoom`/`pan` are left exactly as they were.
+ */
+function zoomToNode(nodeId: string): void {
+  const node = props.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  zoom.value = clampZoom(FOCUS_ZOOM);
+  centerOnNode(node);
+  // Same roving-tabindex move `focusNodeInDirection` (#14609) already
+  // performs — a jump should leave keyboard focus (and the next Tab stop)
+  // where the viewport now is, not wherever it happened to be before.
+  focusedNodeId.value = nodeId;
+  void nextTick(() => nodeEls.get(nodeId)?.focus());
+}
+
+/**
+ * Zoom + pan so every node in `nodesToFit` is visible (#14611 "fit to the
+ * current selection or filter"). Respects `clampZoom`'s bounds like every
+ * other way of changing zoom on this canvas (buttons, wheel, pinch) — a
+ * selection or filter spanning more of the canvas than `ZOOM_MIN` can show at
+ * once is shown as small as the clamp allows, not zoomed out further. A no-op
+ * on an empty list, leaving the caller's fallback (if any) as the last word.
+ */
+function fitToNodes(nodesToFit: CanvasNode[]): void {
+  if (nodesToFit.length === 0) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const node of nodesToFit) {
+    const { width, height } = nodeExtent(node);
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + width);
+    maxY = Math.max(maxY, node.position.y + height);
+  }
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const viewWidth = rect?.width ?? 0;
+  const viewHeight = rect?.height ?? 0;
+  const boxWidth = Math.max(1, maxX - minX);
+  const boxHeight = Math.max(1, maxY - minY);
+  zoom.value = clampZoom(
+    Math.min((viewWidth - FIT_PADDING * 2) / boxWidth, (viewHeight - FIT_PADDING * 2) / boxHeight),
+  );
+  pan.x = viewWidth / 2 - ((minX + maxX) / 2) * zoom.value;
+  pan.y = viewHeight / 2 - ((minY + maxY) / 2) * zoom.value;
+}
+
+/**
+ * The reset button's sibling for "fit to selection or filter" (#14611) —
+ * deliberately a *second* control, not a change to `resetZoom`: that button's
+ * fixed pan(50,50)/zoom(1) stays exactly as it was.
+ *
+ * Fits the selected node when there is one; otherwise fits every node
+ * `props.nodes` currently carries. That second case IS "fit to the active
+ * filter" for free — a role lens or a unit tab narrows `props.nodes` itself
+ * (`OrgChart.vue`'s `lensedCanvasNodes`/`visibleRoots`), so fitting to
+ * whatever is actually drawn can never disagree with what the filter shows.
+ */
+function fitToSelectionOrView(): void {
+  const selected = props.nodes.filter((n) => n.id === props.selectedNodeId);
+  fitToNodes(selected.length > 0 ? selected : props.nodes);
+}
+
+/**
+ * The inbound counterpart to a search jump: `focusNodeId` names a node to
+ * open the canvas already centred on (#14611's deep link). `OrgChart.vue`
+ * only ever sets it once it has confirmed the id names a node already present
+ * in `nodes` (`lensedCanvasNodes`, the exact array this prop receives), so a
+ * single `zoomToNode` attempt per id — no retry loop watching `nodes` too —
+ * is enough; watching `nodes` as well would re-centre the view every time an
+ * unrelated node moves, fighting whatever the user panned to since.
+ *
+ * `nextTick` defers past the initial mount: an `immediate` watcher runs
+ * during `setup()`, before `canvasRef` is attached to anything, so a
+ * synchronous `zoomToNode` here would measure a null canvas area.
+ */
+watch(
+  () => props.focusNodeId,
+  (nodeId) => {
+    if (!nodeId) return;
+    void nextTick(() => zoomToNode(nodeId));
+  },
+  { immediate: true },
+);
+
+/* ------------------------------------------------------------------ *
+ * GH#14611: minimap — an overview of a canvas larger than the viewport.
+ * ------------------------------------------------------------------ */
+
+/** Minimap panel size, in CSS px — fixed, unlike the canvas itself, since the
+ *  whole point is a stable overview regardless of how far the user has
+ *  zoomed or panned the main view. */
+const MINIMAP_WIDTH = 160;
+const MINIMAP_HEIGHT = 120;
+/** Inner padding so a node at the very edge of the graph is not drawn flush
+ *  against the minimap's own border. */
+const MINIMAP_PADDING = 8;
+
+interface MinimapGeometry {
+  scale: number;
+  minX: number;
+  minY: number;
+}
+
+/** Bounding box of every node currently drawn, scaled to fit the minimap
+ *  panel — `null` when there is nothing to show an overview of. */
+const minimapGeometry = computed<MinimapGeometry | null>(() => {
+  if (props.nodes.length === 0) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const node of props.nodes) {
+    const { width, height } = nodeExtent(node);
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + width);
+    maxY = Math.max(maxY, node.position.y + height);
+  }
+  const boxWidth = Math.max(1, maxX - minX);
+  const boxHeight = Math.max(1, maxY - minY);
+  const scale = Math.min(
+    (MINIMAP_WIDTH - MINIMAP_PADDING * 2) / boxWidth,
+    (MINIMAP_HEIGHT - MINIMAP_PADDING * 2) / boxHeight,
+  );
+  return { scale, minX, minY };
+});
+
+/** A canvas-space point, mapped into the minimap panel's own coordinates. */
+function minimapPoint(x: number, y: number): { left: string; top: string } {
+  const geo = minimapGeometry.value;
+  if (!geo) return { left: '0px', top: '0px' };
+  return {
+    left: `${MINIMAP_PADDING + (x - geo.minX) * geo.scale}px`,
+    top: `${MINIMAP_PADDING + (y - geo.minY) * geo.scale}px`,
+  };
+}
+
+function minimapNodeStyle(node: CanvasNode): Record<string, string> {
+  const { width, height } = nodeExtent(node);
+  return minimapPoint(node.position.x + width / 2, node.position.y + height / 2);
+}
+
+/** The "you are here" rectangle: the visible canvas area's current bounds, in
+ *  canvas-content space, mapped the same way the node dots are. `null` when
+ *  there is no overview to draw it on. */
+const minimapViewportStyle = computed<Record<string, string> | null>(() => {
+  const geo = minimapGeometry.value;
+  if (!geo) return null;
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const viewWidth = rect?.width ?? 0;
+  const viewHeight = rect?.height ?? 0;
+  const point = minimapPoint(-pan.x / zoom.value, -pan.y / zoom.value);
+  return {
+    left: point.left,
+    top: point.top,
+    width: `${Math.max(0, (viewWidth / zoom.value) * geo.scale)}px`,
+    height: `${Math.max(0, (viewHeight / zoom.value) * geo.scale)}px`,
+  };
+});
+
+/**
+ * A click/tap on the minimap pans the main view to that point (#14611) — a
+ * view gesture like the pan/drag/zoom above it, so it is never gated on
+ * `readonly` either. Zoom is left untouched: the minimap only ever answers
+ * "where", never "how close".
+ */
+function onMinimapPointerDown(e: PointerEvent): void {
+  const geo = minimapGeometry.value;
+  const panel = e.currentTarget as HTMLElement | null;
+  if (!geo || !panel) return;
+  const panelRect = panel.getBoundingClientRect();
+  const canvasX = geo.minX + (e.clientX - panelRect.left - MINIMAP_PADDING) / geo.scale;
+  const canvasY = geo.minY + (e.clientY - panelRect.top - MINIMAP_PADDING) / geo.scale;
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const viewWidth = rect?.width ?? 0;
+  const viewHeight = rect?.height ?? 0;
+  pan.x = viewWidth / 2 - canvasX * zoom.value;
+  pan.y = viewHeight / 2 - canvasY * zoom.value;
+}
+
 /** Rescale from the pinch's starting distance/zoom — proportional, like `handleWheel`
  *  and the zoom buttons, none of which anchor around a point either (#14610). */
 function applyPinchZoom(): void {
@@ -1336,6 +1806,29 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .delete-case-btn:hover { color: var(--color-error); }
 .add-case-btn { padding: var(--spacing-1) var(--spacing-2); background: transparent; border: 1px dashed var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); text-align: left; }
 .add-case-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* #14611: canvas search — a text field plus a listbox dropdown, following
+   the same combobox pattern the rest of the toolbar's dropdown already uses
+   (`.dropdown-container`/`.dropdown-menu` below), styled to match. */
+.canvas-search { position: relative; }
+.canvas-search-field { display: flex; align-items: center; gap: var(--spacing-1-5); padding: var(--spacing-1-5) var(--spacing-2); background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.canvas-search-field:focus-within { border-color: var(--color-primary); }
+.canvas-search-icon { color: var(--text-tertiary); flex: none; }
+.canvas-search-input { border: none; background: transparent; color: var(--text-primary); font-size: var(--text-sm); width: 160px; }
+.canvas-search-input:focus { outline: none; }
+.canvas-search-clear { display: flex; align-items: center; padding: var(--spacing-0); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
+.canvas-search-clear:hover { color: var(--text-primary); }
+.canvas-search-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.canvas-search-result { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-primary); cursor: pointer; }
+.canvas-search-result:hover, .canvas-search-result.active { background: var(--bg-tertiary); }
+.canvas-search-empty { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-tertiary); font-style: italic; }
+
+/* #14611: overview panel — fixed size regardless of canvas zoom/pan, opposite
+   corner from `.canvas-legend` so the two never overlap. */
+.canvas-minimap { position: absolute; top: var(--spacing-3); inset-inline-end: var(--spacing-3); width: 160px; height: 120px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); overflow: hidden; cursor: pointer; touch-action: none; }
+.canvas-minimap-node { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); transform: translate(-50%, -50%); pointer-events: none; }
+.canvas-minimap-viewport { position: absolute; border: 1px solid var(--color-primary); background: var(--color-primary-bg); pointer-events: none; }
 
 .dropdown-container { position: relative; display: inline-block; }
 .dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
