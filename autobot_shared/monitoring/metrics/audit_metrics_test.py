@@ -86,10 +86,7 @@ def test_the_manager_records_and_exports_the_counter():
 
     text = manager.get_metrics().decode()
 
-    assert (
-        'autobot_audit_write_failures_total{action="login_success",error_type="ProgrammingError"} 1.0'
-        in text
-    ), (
+    assert 'autobot_audit_write_failures_total{action="login_success",error_type="ProgrammingError"} 1.0' in text, (
         "the counter did not reach the exported registry — either the recorder "
         "is not constructed on the manager's registry, or the manager method "
         "does not delegate to it. Exported text:\n" + text[:2000]
@@ -107,8 +104,7 @@ def test_a_second_failure_increments_rather_than_replaces():
     text = manager.get_metrics().decode()
 
     assert (
-        'autobot_audit_write_failures_total{action="login_success",error_type="OperationalError"} 3.0'
-        in text
+        'autobot_audit_write_failures_total{action="login_success",error_type="OperationalError"} 3.0' in text
     ), "three failures must count as three, not one"
 
 
