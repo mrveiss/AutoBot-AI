@@ -675,7 +675,13 @@ async def update_node_roles(
     await db.refresh(node)
 
     logger.info("Node roles updated: %s -> %s", node_id, roles_data.roles)
-    return NodeResponse.model_validate(node)
+    # #14676: the bulk role editor writes NodeRole rows directly rather than
+    # going through _upsert_node_role, so it needs the advisory attached here
+    # too -- an operator assigning an inert role through this surface would
+    # otherwise get the same unqualified success the single-role path used to.
+    response = NodeResponse.model_validate(node)
+    response.unreachable_roles = _unreachable_roles(list(roles_data.roles or []))
+    return response
 
 
 @router.get("/{node_id}/detected-roles", response_model=NodeRolesResponse)
@@ -856,28 +862,34 @@ async def _declare_role_on_node(db: AsyncSession, node_id: str, role_name: str) 
         logger.info("Declared role on node: %s -> %s", node_id, role_name)
 
 
-def _role_response_with_advisory(record: object, role_name: str) -> NodeRoleResponse:
-    """Attach the #14676 advisory when a role reaches no ansible group.
+def _unreachable_roles(role_names: list[str]) -> list[str]:
+    """Assigned roles that nothing will deploy (#14676).
 
-    Roles are assigned from the fleet nodes page. A role that matches neither
-    `_ROLE_TO_GROUPS` nor the legacy `ROLE_ANSIBLE_GROUPS` is still recorded and
-    still listed on the node -- but it contributes no group to the generated
-    inventory, so no playbook can select it and nothing is ever deployed for it.
-    Without this the operator gets a plain success for an assignment that is
-    permanently inert. The assignment is not rejected: custom roles may be
-    added before their group mapping is, and refusing them would be worse.
+    Roles are assigned from the fleet nodes page. A role that reaches no
+    ansible group AND has no dedicated playbook is still recorded and still
+    listed on the node -- but nothing anywhere acts on it, so the operator gets
+    a plain success for an assignment that is permanently inert.
+
+    The assignment is never rejected: a custom role may legitimately be defined
+    before its deploy path is, and refusing it would be the worse failure.
+
+    Returns role names rather than a message so the UI can localise the wording.
     """
-    response = NodeRoleResponse.model_validate(record)
     try:
         from services.inventory_builder import unmatched_role_tokens
 
-        if unmatched_role_tokens([role_name]):
-            response.advisory = (
-                f"Role '{role_name}' maps to no ansible group, so no playbook targets it "
-                "and nothing will be deployed for it. Add a group mapping for this role."
-            )
-    except Exception as exc:  # pragma: no cover - advisory must never fail an assignment
-        logger.debug("Could not evaluate role advisory for %s: %s", role_name, exc)
+        return sorted(unmatched_role_tokens(list(role_names or [])))
+    except Exception as exc:  # noqa: BLE001 - this must never fail an assignment
+        # Warned, not debug-logged: this code exists to stop a failure being
+        # swallowed silently, so swallowing its own would be the same defect.
+        logger.warning("Could not evaluate role deploy paths for %s: %s", list(role_names or []), exc)
+        return []
+
+
+def _role_response_with_advisory(record: object, role_name: str) -> NodeRoleResponse:
+    """Attach the #14676 deploy-path report to a single-role assignment."""
+    response = NodeRoleResponse.model_validate(record)
+    response.unreachable_roles = _unreachable_roles([role_name])
     return response
 
 

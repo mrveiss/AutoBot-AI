@@ -48,10 +48,32 @@ def test_known_role_is_not_flagged(inventory_builder):
 def test_legacy_map_only_role_is_not_flagged(inventory_builder):
     """`vnc` reaches its group solely via ROLE_ANSIBLE_GROUPS (#14638).
 
-    Checking only `_ROLE_TO_GROUPS` would cry wolf on it, so the report must
-    consult both maps.
+    Checking only `_ROLE_TO_GROUPS` would cry wolf on it.
     """
     assert inventory_builder.unmatched_role_tokens(["vnc"]) == set()
+
+
+def test_role_with_its_own_playbook_is_not_flagged(inventory_builder):
+    """`docker` deploys via deploy-hybrid-docker.yml and joins NO group.
+
+    It is deliberately absent from both group maps, so a report that knows only
+    about groups would call a working role dead -- the exact false alarm this
+    report exists to avoid.
+    """
+    assert "docker" in inventory_builder._registry_deploy_paths()[1]
+    assert inventory_builder.unmatched_role_tokens(["docker"]) == set()
+
+
+def test_unreadable_registry_reports_nothing_rather_than_everything(inventory_builder, monkeypatch):
+    """Being unable to check must not look like having found a problem.
+
+    If an unreadable registry degraded to empty maps, every role outside
+    `_ROLE_TO_GROUPS` -- `vnc` and `docker` included -- would be reported as
+    deploying nothing.
+    """
+    monkeypatch.setattr(inventory_builder, "_registry_deploy_paths", lambda: None)
+    for token in ("docker", "vnc", "backend", "definitely-not-a-real-role"):
+        assert inventory_builder.unmatched_role_tokens([token]) == set(), token
 
 
 def test_blank_and_case_variant_tokens_are_not_flagged(inventory_builder):

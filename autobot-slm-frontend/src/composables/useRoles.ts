@@ -37,6 +37,10 @@ export interface NodeRoleItem {
   current_version: string | null
   last_synced_at: string | null
   last_error: string | null
+  // #14676: roles that reach no ansible group and have no dedicated playbook,
+  // so the assignment succeeded but nothing will ever deploy them. Optional:
+  // older backends do not send it.
+  unreachable_roles?: string[]
 }
 
 // GET /api/nodes/{node_id}/detected-roles -> NodeRolesInfo.listening_ports

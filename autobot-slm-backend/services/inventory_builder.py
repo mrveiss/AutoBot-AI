@@ -194,7 +194,6 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
         Set of ansible group name strings.
     """
     groups: set[str] = set()
-    unmatched: list[str] = []
     for token in role_tokens:
         token = token.strip().lower()
         if not token:
@@ -204,44 +203,70 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
             groups |= _ROLE_TO_GROUPS[token]
             continue
         # Prefix key match (handles "slm-" catching "slm-backend")
-        matched = False
         for key, key_groups in _ROLE_TO_GROUPS.items():
             if key.endswith("-") and token.startswith(key):
                 groups |= key_groups
-                matched = True
             elif not key.endswith("-") and token == key:
                 groups |= key_groups
-                matched = True
-        if not matched:
-            unmatched.append(token)
 
-    # #14676: `unmatched` is deliberately NOT reported here. This function sees
-    # only `_ROLE_TO_GROUPS`; a role like `vnc` reaches its group solely through
-    # the legacy `ROLE_ANSIBLE_GROUPS` (#14638), so warning from here would cry
-    # wolf on roles that resolve perfectly well one layer up. The report belongs
-    # where both maps are known -- see `unmatched_role_tokens()`.
-    del unmatched
+    # #14676: an unmatched token is deliberately NOT reported from here. This
+    # function sees only `_ROLE_TO_GROUPS`, which is one of three ways a role
+    # can reach a deploy path -- see `unmatched_role_tokens()`, which knows all
+    # three. Reporting on this map alone cries wolf on roles that deploy fine.
     return groups
 
 
-def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
-    """Tokens that resolve to no ansible group through EITHER mapping (#14676).
+def _registry_deploy_paths() -> tuple[dict, set[str]] | None:
+    """The registry's two non-group deploy routes, or None if it cannot be read.
 
-    Split out so callers can surface the condition rather than infer it from a
-    log line. A token here is a role that exists as far as the operator is
-    concerned and is invisible to every playbook -- the silent no-op this issue
-    is about.
+    Returns `(ROLE_ANSIBLE_GROUPS, roles_with_a_dedicated_playbook)`.
 
-    Checks the legacy `ROLE_ANSIBLE_GROUPS` too, because a role like `vnc`
-    reaches its group ONLY through that map (#14638); reporting on this
-    module's map alone would produce false alarms.
+    None means "cannot judge", and the caller must then report nothing. This
+    distinction is the difference between a useful report and a harmful one: if
+    an unreadable registry degraded to empty maps, every role that is not in
+    `_ROLE_TO_GROUPS` -- including `vnc` and `docker`, which deploy fine --
+    would be reported as deploying nothing. Being unable to check must never
+    look like having checked and found a problem.
     """
-    # ssot-config-exempt: local import avoids a cycle -- role_registry imports
-    # nothing from here, but the reverse would form one at module scope.
     try:
-        from services.role_registry import ROLE_ANSIBLE_GROUPS
-    except Exception:  # pragma: no cover - registry unavailable in some harnesses
-        ROLE_ANSIBLE_GROUPS = {}
+        # ssot-config-exempt: local import avoids a cycle -- role_registry
+        # imports nothing from here, but the reverse would form one at module
+        # scope.
+        from services.role_registry import DEFAULT_ROLES, ROLE_ANSIBLE_GROUPS
+    except Exception as exc:  # pragma: no cover - registry unavailable in some harnesses
+        logger.debug("role deploy-path report unavailable: registry could not be read (%s)", exc)
+        return None
+
+    with_playbook = {
+        str(role["name"]).strip().lower()
+        for role in DEFAULT_ROLES
+        if isinstance(role, dict) and role.get("name") and str(role.get("ansible_playbook") or "").strip()
+    }
+    return ROLE_ANSIBLE_GROUPS, with_playbook
+
+
+def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Tokens with no deploy path at all (#14676).
+
+    A role reaches deployment three different ways, and a report that knows
+    only one of them is worse than no report: it would flag working roles.
+
+      1. `_ROLE_TO_GROUPS` here, exact or prefix,
+      2. the legacy `ROLE_ANSIBLE_GROUPS`, which is the ONLY route for `vnc`
+         (#14638),
+      3. a dedicated `ansible_playbook` in the registry, which is how `docker`
+         deploys without joining any group.
+
+    What is left is a role that exists as far as the operator is concerned and
+    that nothing anywhere will act on -- the silent no-op this issue is about.
+
+    Returns an empty set when the registry cannot be read: not being able to
+    check must not be reported as having found a problem.
+    """
+    paths = _registry_deploy_paths()
+    if paths is None:
+        return set()
+    role_ansible_groups, with_playbook = paths
 
     unmatched: set[str] = set()
     for token in role_tokens:
@@ -250,7 +275,9 @@ def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
             continue
         if _role_tokens_to_groups([token]):
             continue
-        if ROLE_ANSIBLE_GROUPS.get(token):
+        if role_ansible_groups.get(token):
+            continue
+        if token in with_playbook:
             continue
         unmatched.add(token)
     return unmatched

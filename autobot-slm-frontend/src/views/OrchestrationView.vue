@@ -32,6 +32,8 @@ import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
 import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadges.vue'
 import type { NodeStatus, ServiceStatus } from '@/types/slm'
+import { useToast } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('OrchestrationView')
 
@@ -41,6 +43,8 @@ const router = useRouter()
 const orchestration = useOrchestrationManagement()
 const roles = useRoles()
 const slmApi = useSlmApi()
+const { showToast } = useToast()
+const { t } = useI18n()
 
 // Role ownership map: role_name -> node_id (#1389)
 const roleOwners = ref<Record<string, string>>({})
@@ -334,6 +338,13 @@ function isRoleAssigned(nodeId: string, roleName: string): boolean {
   )
 }
 
+// #14676: a role can be assigned, listed and still deploy nothing. Surface that
+// where the assignment happens rather than leaving it to a log nobody reads.
+function warnIfNothingWillDeploy(unreachable?: string[]): void {
+  if (!unreachable || unreachable.length === 0) return
+  showToast(t('common.roleReachesNoDeployPath', { roles: unreachable.join(', ') }), 'warning')
+}
+
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
   // Warn if role is already assigned to another node (#1389)
   const currentOwner = roleOwners.value[roleName]
@@ -351,6 +362,10 @@ async function assignRoleToNode(nodeId: string, roleName: string): Promise<void>
   }
   const result = await roles.assignRole(nodeId, roleName)
   if (!result) return
+  // #14676: the assignment succeeded, but the role may reach no deploy path at
+  // all -- no ansible group and no dedicated playbook. That used to look
+  // exactly like a working assignment.
+  warnIfNothingWillDeploy(result.unreachable_roles)
   delete nodeRolesCache[nodeId]
   await loadRolesForNode(nodeId)
   fetchRoleOwners()
