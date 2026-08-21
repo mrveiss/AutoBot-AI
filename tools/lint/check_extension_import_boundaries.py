@@ -148,6 +148,61 @@ def _is_waived(line: str, rule_id: str) -> bool:
     return f"nosemgrep: {rule_id}" in line
 
 
+def _module_violations(
+    module: str,
+    path: Path,
+    lineno: int,
+    raw_line: str,
+    layer: str,
+    is_init: bool,
+    core_packages: frozenset[str],
+) -> list[str]:
+    """Apply the three layer rules to one imported module name.
+
+    Split out of _check_file so both import forms run the identical checks
+    (#14742). A rule that lives inside one AST branch is a rule that only
+    applies to one spelling.
+    """
+    violations: list[str] = []
+    if not module:
+        return violations
+
+    top = module.split(".")[0]
+
+    # Rule: no core-backend internals
+    allowed = _ALLOWED_TOP_LEVEL | _OWN_LAYER_PACKAGES | _LAYER_EXTRA_ALLOWED.get(layer, set())
+    if top in core_packages and top not in allowed and not _is_grandfathered(path, top):
+        rule = "extension-no-core-internals"
+        if not _is_waived(raw_line, rule):
+            violations.append(
+                f"{path}:{lineno}: [{rule}] {layer} imports core "
+                f"module '{module}' — use autobot_shared instead  "
+                f"(waiver: # nosemgrep: {rule})"
+            )
+
+    # Rule: no sibling extension imports (skip __init__.py)
+    if not is_init and layer == "extension" and module.startswith("middleware.builtin."):
+        rule = "extension-no-sibling-import"
+        if not _is_waived(raw_line, rule):
+            violations.append(
+                f"{path}:{lineno}: [{rule}] extension imports sibling "
+                f"'{module}' — use ExtensionManager hooks or "
+                f"autobot_shared  (waiver: # nosemgrep: {rule})"
+            )
+
+    # Rule: no sibling skill imports (skip __init__.py)
+    if not is_init and layer == "skill" and module.startswith("skills.builtin."):
+        rule = "skill-no-sibling-import"
+        if not _is_waived(raw_line, rule):
+            violations.append(
+                f"{path}:{lineno}: [{rule}] skill imports sibling "
+                f"'{module}' — share logic via autobot_shared  "
+                f"(waiver: # nosemgrep: {rule})"
+            )
+
+    return violations
+
+
 def _check_file(path: Path, source: str) -> list[str]:
     core_packages = _core_packages()
     violations: list[str] = []
@@ -167,40 +222,24 @@ def _check_file(path: Path, source: str) -> list[str]:
         lineno = getattr(node, "lineno", 0)
         raw_line = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
 
+        # #14742: both import forms, not just `from x import y`.
+        #
+        # This checked ast.ImportFrom only, so `import services.llm_service`
+        # crossed the layer with a green check while the `from` spelling of the
+        # same import was caught. That enforced a *syntax*, not a boundary — and
+        # anyone who happened to write the plain form would never learn the rule
+        # existed.
         if isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            top = module.split(".")[0] if module else ""
+            modules = [node.module or ""]
+        elif isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        else:
+            continue
 
-            # Rule: no core-backend internals
-            allowed = _ALLOWED_TOP_LEVEL | _OWN_LAYER_PACKAGES | _LAYER_EXTRA_ALLOWED.get(layer, set())
-            if top in core_packages and top not in allowed and not _is_grandfathered(path, top):
-                rule = "extension-no-core-internals"
-                if not _is_waived(raw_line, rule):
-                    violations.append(
-                        f"{path}:{lineno}: [{rule}] {layer} imports core "
-                        f"module '{module}' — use autobot_shared instead  "
-                        f"(waiver: # nosemgrep: {rule})"
-                    )
-
-            # Rule: no sibling extension imports (skip __init__.py)
-            if not is_init and layer == "extension" and module.startswith("middleware.builtin."):
-                rule = "extension-no-sibling-import"
-                if not _is_waived(raw_line, rule):
-                    violations.append(
-                        f"{path}:{lineno}: [{rule}] extension imports sibling "
-                        f"'{module}' — use ExtensionManager hooks or "
-                        f"autobot_shared  (waiver: # nosemgrep: {rule})"
-                    )
-
-            # Rule: no sibling skill imports (skip __init__.py)
-            if not is_init and layer == "skill" and module.startswith("skills.builtin."):
-                rule = "skill-no-sibling-import"
-                if not _is_waived(raw_line, rule):
-                    violations.append(
-                        f"{path}:{lineno}: [{rule}] skill imports sibling "
-                        f"'{module}' — share logic via autobot_shared  "
-                        f"(waiver: # nosemgrep: {rule})"
-                    )
+        for module in modules:
+            violations.extend(
+                _module_violations(module, path, lineno, raw_line, layer, is_init, core_packages)
+            )
 
     return violations
 
