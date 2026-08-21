@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Verwenden Sie die Pfeiltasten, um den Fokus zwischen den Knoten zu bewegen. Drücken Sie Eingabe oder Leertaste, um den fokussierten Knoten auszuwählen. Drücken Sie Escape, um die Auswahl aufzuheben.",
-      "a11yInstructionsMove": "Halten Sie Strg gedrückt und drücken Sie eine Pfeiltaste, um den ausgewählten Knoten zu verschieben."
+      "a11yInstructionsMove": "Halten Sie Strg gedrückt und drücken Sie eine Pfeiltaste, um den ausgewählten Knoten zu verschieben.",
+      "searchLabel": "Knoten durchsuchen",
+      "searchPlaceholder": "Nach Namen suchen",
+      "searchClear": "Suche löschen",
+      "searchResultsStatus": "{count} Treffer für „{query}“",
+      "searchNoResults": "Keine Treffer für „{query}“",
+      "fitToSelection": "An Auswahl oder Filter anpassen",
+      "minimapLabel": "Canvas-Übersicht"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8334,7 +8341,8 @@
       "toolDetachError": "Dieses Werkzeug konnte nicht entfernt werden.",
       "toolDetach": "{tool} von {role} entfernen",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
-      "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet."
+      "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
+      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",

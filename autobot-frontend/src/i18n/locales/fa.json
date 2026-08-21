@@ -3819,7 +3819,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "برای انتقال فوکوس بین گره‌ها از کلیدهای جهت‌نما استفاده کنید. برای انتخاب گره فوکوس‌شده، Enter یا Space را فشار دهید. برای لغو انتخاب، Escape را فشار دهید.",
-      "a11yInstructionsMove": "کلید Control را نگه دارید و یک کلید جهت‌نما را فشار دهید تا گره انتخاب‌شده جابه‌جا شود."
+      "a11yInstructionsMove": "کلید Control را نگه دارید و یک کلید جهت‌نما را فشار دهید تا گره انتخاب‌شده جابه‌جا شود.",
+      "searchLabel": "جستجوی گره‌ها",
+      "searchPlaceholder": "جستجو بر اساس نام",
+      "searchClear": "پاک کردن جستجو",
+      "searchResultsStatus": "{count} مورد برای «{query}» یافت شد",
+      "searchNoResults": "هیچ نتیجه‌ای برای «{query}» یافت نشد",
+      "fitToSelection": "تنظیم اندازه بر اساس انتخاب یا فیلتر",
+      "minimapLabel": "نمای کلی بوم"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8334,7 +8341,8 @@
       "toolDetachError": "جدا کردن این ابزار ممکن نشد.",
       "toolDetach": "جدا کردن {tool} از {role}",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
-      "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است."
+      "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
+      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

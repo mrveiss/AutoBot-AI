@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Użyj klawiszy strzałek, aby przenieść fokus między węzłami. Naciśnij Enter lub Spację, aby wybrać zaznaczony węzeł. Naciśnij Escape, aby anulować wybór.",
-      "a11yInstructionsMove": "Przytrzymaj Control i naciśnij klawisz strzałki, aby przenieść wybrany węzeł."
+      "a11yInstructionsMove": "Przytrzymaj Control i naciśnij klawisz strzałki, aby przenieść wybrany węzeł.",
+      "searchLabel": "Szukaj węzłów",
+      "searchPlaceholder": "Szukaj po nazwie",
+      "searchClear": "Wyczyść wyszukiwanie",
+      "searchResultsStatus": "Znaleziono {count} dla „{query}”",
+      "searchNoResults": "Brak wyników dla „{query}”",
+      "fitToSelection": "Dopasuj do zaznaczenia lub filtra",
+      "minimapLabel": "Podgląd całego obszaru roboczego"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8334,7 +8341,8 @@
       "toolDetachError": "Nie udało się odłączyć tego narzędzia.",
       "toolDetach": "Odłącz {tool} od {role}",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
-      "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie."
+      "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
+      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",

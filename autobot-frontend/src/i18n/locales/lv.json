@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Izmantojiet bulttaustiņus, lai pārvietotu fokusu starp mezgliem. Nospiediet Enter vai atstarpi, lai atlasītu fokusēto mezglu. Nospiediet Escape, lai atceltu atlasi.",
-      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu."
+      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu.",
+      "searchLabel": "Meklēt mezglus",
+      "searchPlaceholder": "Meklēt pēc nosaukuma",
+      "searchClear": "Notīrīt meklēšanu",
+      "searchResultsStatus": "Atrasti {count} rezultāti vaicājumam \"{query}\"",
+      "searchNoResults": "Nav atbilstību vaicājumam \"{query}\"",
+      "fitToSelection": "Pielāgot atlasei vai filtram",
+      "minimapLabel": "Audekla pārskats"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8334,7 +8341,8 @@
       "toolDetachError": "Neizdevās noņemt šo rīku.",
       "toolDetach": "Noņemt {tool} no {role}",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
-      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks."
+      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
+      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
