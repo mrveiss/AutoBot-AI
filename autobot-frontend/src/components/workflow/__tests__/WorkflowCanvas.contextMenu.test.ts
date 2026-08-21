@@ -257,3 +257,59 @@ describe('the context menu clamps identically regardless of document direction (
     expect(menu(rtl).attributes('style')).toContain('top: 200px')
   })
 })
+
+describe('a context-menu action actually performs its action (#14612)', () => {
+  // Codecov flagged every `run: () => …` closure as uncovered, and it was
+  // right to: the tests above prove the menu LISTS the correct actions and
+  // that its detach payloads match the card's, but nothing proved that
+  // clicking `select`, `zoom` or `fit-selection` does anything at all. A menu
+  // that names an action it does not perform is the "full surface, no sink"
+  // shape — everything visible, nothing wired.
+
+  it('select emits node-selected for the node the menu was opened on', async () => {
+    const w = mountCanvas({ nodes: [step('n1', 10, 10), step('n2', 300, 10)] })
+
+    await node(w, 'n2').trigger('contextmenu', { clientX: 50, clientY: 50 })
+    // Opening the menu already selects the node it was opened on, so the
+    // emission count is captured HERE. Asserting only on the last emission
+    // would pass with the action neutered — the open would satisfy it.
+    const beforeClick = (w.emitted('node-selected') ?? []).length
+
+    await menuItem(w, 'select').trigger('click')
+
+    const after = w.emitted('node-selected') ?? []
+    expect(after.length).toBeGreaterThan(beforeClick)
+    expect(after.at(-1)).toEqual(['n2'])
+    // And the menu closes behind it, rather than lingering over the canvas.
+    expect(menu(w).exists()).toBe(false)
+  })
+
+  it('zoom moves the viewport onto that node, and does not merely close the menu', async () => {
+    const w = mountCanvas({ nodes: [step('n1', 10, 10), step('n2', 900, 700)] })
+    const before = (w.find('.canvas-content').attributes('style') ?? '')
+
+    await node(w, 'n2').trigger('contextmenu', { clientX: 50, clientY: 50 })
+    await menuItem(w, 'zoom').trigger('click')
+
+    const after = (w.find('.canvas-content').attributes('style') ?? '')
+    expect(after).not.toBe(before)
+    expect(after).toContain('scale(')
+  })
+
+  it('fit-selection frames the whole selection, not just the clicked node', async () => {
+    const nodes = [step('n1', 0, 0), step('n2', 900, 700), step('n3', 1800, 1400)]
+    const w = mountCanvas({ nodes })
+
+    // Build a multi-selection: plain click, then shift-click a distant node.
+    await node(w, 'n1').trigger('click')
+    await node(w, 'n3').trigger('click', { shiftKey: true })
+
+    const before = (w.find('.canvas-content').attributes('style') ?? '')
+    await node(w, 'n3').trigger('contextmenu', { clientX: 50, clientY: 50 })
+    const fit = menuItem(w, 'fit-selection')
+    expect(fit.exists()).toBe(true)
+    await fit.trigger('click')
+
+    expect((w.find('.canvas-content').attributes('style') ?? '')).not.toBe(before)
+  })
+})
