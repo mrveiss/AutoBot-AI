@@ -495,3 +495,78 @@ class TestChannelIdentityRule:
 
         assert "hooks.example.invalid" in caplog.text
         assert "secret-token-path" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_email_is_masked_before_reaching_the_governor(self):
+        """#14573: channel_id used to be "" unconditionally. An email address
+        is directly usable outside this system — reduce it, per the rule."""
+        from services.notification_service import NotificationService
+
+        svc = NotificationService()
+        spy = AsyncMock(side_effect=_allow)
+        with patch("services.notification_service.egress_governor.evaluate", new=spy):
+            with patch("smtplib.SMTP"), patch("smtplib.SMTP_SSL"):
+                try:
+                    await svc._send_email("jane.doe@example.invalid", "subj", "body")
+                except Exception:
+                    pass  # transport is stubbed; the governance call is what matters
+
+        channel_id = spy.await_args.kwargs["channel_id"]
+        assert channel_id != ""
+        assert "jane.doe" not in channel_id
+        assert channel_id.endswith("@example.invalid")
+
+    @pytest.mark.asyncio
+    async def test_email_denial_log_line_masks_the_local_part(self, caplog):
+        from services.notification_service import NotificationService
+
+        svc = NotificationService()
+        with caplog.at_level(logging.WARNING):
+            with patch("services.notification_service.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+                with patch("smtplib.SMTP"), patch("smtplib.SMTP_SSL"):
+                    await svc._send_email("jane.doe@example.invalid", "subj", "body")
+
+        assert "jane.doe" not in caplog.text
+        assert "example.invalid" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_teams_webhook_host_is_passed_to_the_governor(self):
+        """#14573: channel_id used to be "" unconditionally. A Teams webhook
+        URL embeds a bearer token in its path — reduce it to the host, the
+        same precedent notification_service's webhook seam already sets."""
+        from api.integration_communication import send_webhook_message
+
+        integration = MagicMock()
+        integration.execute_action = AsyncMock(return_value={"success": True})
+        spy = AsyncMock(side_effect=_allow)
+        with patch("api.integration_communication.egress_governor.evaluate", new=spy):
+            with patch("api.integration_communication.TeamsIntegration", return_value=integration):
+                await send_webhook_message(
+                    provider="teams",
+                    webhook=MagicMock(
+                        text="hi", title=None, webhook_url="https://example.invalid/webhook/secret-token"
+                    ),
+                )
+
+        channel_id = spy.await_args.kwargs["channel_id"]
+        assert channel_id == "example.invalid"
+        assert "secret-token" not in channel_id
+
+    @pytest.mark.asyncio
+    async def test_teams_denial_log_line_names_the_host_not_the_full_url(self, caplog):
+        from fastapi import HTTPException
+
+        from api.integration_communication import send_webhook_message
+
+        with caplog.at_level(logging.WARNING):
+            with patch("api.integration_communication.egress_governor.evaluate", new=AsyncMock(side_effect=_deny)):
+                with pytest.raises(HTTPException):
+                    await send_webhook_message(
+                        provider="teams",
+                        webhook=MagicMock(
+                            text="hi", title=None, webhook_url="https://example.invalid/webhook/secret-token"
+                        ),
+                    )
+
+        assert "example.invalid" in caplog.text
+        assert "secret-token" not in caplog.text
