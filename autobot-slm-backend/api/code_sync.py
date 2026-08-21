@@ -4572,6 +4572,14 @@ _active_update_all: Dict[str, Any] = {}
 
 # Module-level references to tasks created by the update-all pipeline (M3).
 _update_all_task: Optional[asyncio.Task] = None
+
+# #14703 review: `start_update_all` reads the current job, may retire it, then
+# creates and stores a new one — with awaits in between. Without a lock two
+# concurrent POSTs can both judge the same job stale, both retire it, and both
+# start an orchestration against the same live nodes. That is strictly worse
+# than the lockout this retirement exists to fix, so the whole
+# decide-retire-create sequence is serialised.
+_update_all_start_lock = asyncio.Lock()
 _resume_task: Optional[asyncio.Task] = None
 
 
@@ -5706,24 +5714,59 @@ async def start_update_all(
     exists (self-update in flight) — prevents double-orchestration race (C3-b).
     Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
     """
+    async with _update_all_start_lock:
+        return await _start_update_all_locked()
+
+
+def _retire_stale_job(existing: UpdateAllJob) -> None:
+    """Mark a stalled job failed so a new run can start (#14703).
+
+    #14703: a job that stopped advancing used to 409 forever, disabling the
+    builtin updater until someone restarted the process. Retiring it lets the
+    next request through, so recovering from a stuck update needs no
+    out-of-band action.
+
+    Callers MUST establish that no resume plan is live before calling this —
+    a detached self-update stops stamping progress and is otherwise
+    indistinguishable from a dead job.
+    """
+    logger.warning(
+        "update-all: job %s has made no progress since %s — retiring it as stale so a new run can start",
+        existing.job_id,
+        existing.last_progress_at or existing.created_at,
+    )
+    existing.status = "failed"
+    existing.failure_reason = (
+        f"No progress for over {_UPDATE_ALL_STALE_SECONDS}s — retired so a new update could run (#14703)"
+    )
+    existing.completed_at = utc_timestamp()
+
+
+async def _start_update_all_locked() -> UpdateAllJob:
+    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
     global _update_all_task
 
     existing = _get_update_all_job()
-    if existing and existing.status in ("pending", "running") and _job_is_stale(existing):
-        # #14703: a job that stopped advancing used to 409 forever, disabling the
-        # builtin updater until someone restarted the process. Retire it and let
-        # this request through, so recovering from a stuck update needs no
-        # out-of-band action.
-        logger.warning(
-            "update-all: job %s has made no progress since %s — retiring it as stale so a new run can start",
-            existing.job_id,
-            existing.last_progress_at or existing.created_at,
-        )
-        existing.status = "failed"
-        existing.failure_reason = (
-            f"No progress for over {_UPDATE_ALL_STALE_SECONDS}s — retired so a new update could run (#14703)"
-        )
-        existing.completed_at = utc_timestamp()
+
+    # #14703 review: read the resume plan BEFORE any staleness decision. A
+    # persisted plan means a self-update is genuinely in flight, and the
+    # `slm_self_update` stage detaches the playbook and stops stamping
+    # progress the moment it fires — so a healthy long self-update looks
+    # exactly like a dead job to `_job_is_stale`. Retiring first also called
+    # `_clear_resume_plan()`, which deleted the very evidence the C3-b guard
+    # below reads, letting a second orchestration start against nodes the
+    # first one was still updating.
+    plan_exists = await _check_persisted_plan_exists()
+
+    if (
+        existing
+        and existing.status in ("pending", "running")
+        and not plan_exists
+        and _job_is_stale(existing)
+    ):
+        _retire_stale_job(existing)
+        # No plan exists on this path (checked above), so this only clears
+        # partial residue — it can no longer destroy a live plan.
         await _clear_resume_plan()
         existing = None
 
@@ -5734,7 +5777,7 @@ async def start_update_all(
         )
 
     # C3-b: also block when a persisted resume plan is present (restart in flight)
-    if await _check_persisted_plan_exists():
+    if plan_exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="SLM self-update is in flight (persisted resume plan found) — wait for restart to complete",
