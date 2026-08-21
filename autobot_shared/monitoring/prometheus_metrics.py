@@ -36,6 +36,7 @@ from prometheus_client import (
 # Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
 # Issue #13765: Added CgroupMemoryCollector for cgroup memory-throttling pressure
 from .metrics import (
+    AuditMetricsRecorder,
     ApiRequestsMetricsRecorder,
     CgroupMemoryCollector,
     ChatMetricsRecorder,
@@ -115,6 +116,8 @@ class PrometheusMetricsManager:
         self._system = SystemMetricsRecorder(self.registry)
         self._claude_api = ClaudeAPIMetricsRecorder(self.registry)
         self._service_health = ServiceHealthMetricsRecorder(self.registry)
+        # #14654: audit records lost rather than written
+        self._audit = AuditMetricsRecorder(self.registry)
         # Issue #469: Initialize performance recorder for GPU/NPU metrics
         self._performance = PerformanceMetricsRecorder(self.registry)
         # Issue #470: Initialize new domain-specific recorders
@@ -272,6 +275,15 @@ class PrometheusMetricsManager:
     # =========================================================================
     # Core Infrastructure Metric Recording Methods
     # =========================================================================
+
+    def record_audit_write_failure(self, action: str, error_type: str) -> None:
+        """Count an audit record that could not be persisted (#14654).
+
+        The caller keeps swallowing the exception -- a failing audit must not
+        turn a correct response into a 500. This only makes the loss countable,
+        so it stops being invisible outside an error log.
+        """
+        self._audit.record_write_failure(action=action, error_type=error_type)
 
     def record_executor_cancel_signalled(self, operation: str) -> None:
         """Record that pooled work was signalled to stop cooperatively (#14244)."""

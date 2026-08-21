@@ -432,6 +432,26 @@ async def _emit_permission_denied_audit(
             session.add(entry)
     except Exception as exc:
         logger.error("RBAC: failed to persist permission-denied audit entry: %s", exc)
+        # #14654: keep swallowing -- a failing audit must never convert a clean
+        # 403 into a 500 -- but stop letting the loss be invisible. A live SLM
+        # dropped every audit record for hours behind a 200, with the only
+        # trace in an error log.
+        _record_audit_write_failure(AuditAction.PERMISSION_DENIED, type(exc).__name__)
+
+
+def _record_audit_write_failure(action: str, error_type: str) -> None:
+    """Count a dropped audit record, without ever raising from the attempt.
+
+    Metrics are best-effort here by construction: this runs inside the handler
+    that exists so an audit problem cannot break a request, so it must not
+    become a way for one to do so.
+    """
+    try:
+        from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_audit_write_failure(action=str(action), error_type=error_type)
+    except Exception:  # nosec B110 - see docstring: never raise from the audit path
+        pass
 
 
 def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:
