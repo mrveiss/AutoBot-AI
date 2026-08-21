@@ -17,7 +17,15 @@ on:
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - 'autobot-infrastructure/shared/scripts/**'
-      - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+      # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
+      # a path that never existed (autobot-infrastructure/ has no ansible/
+      # tree at all) -- a stranded entry that matched nothing since it was
+      # added. Corrected to the real mirror path, and widened to the second
+      # canonical/mirror pair detect-agent-code-drift.sh now also checks.
+      - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+      - 'autobot-slm-backend/ansible/roles/backend/files/**'
+      - 'autobot-backend/config/permission_rules.yaml'
+      - 'autobot-backend/static/error_messages.yaml'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
@@ -61,7 +69,15 @@ jobs:
               - 'pipeline-scripts/**'
               - 'tools/lint/**'
               - 'autobot-infrastructure/shared/scripts/**'
-              - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+              # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
+              # a path that never existed (autobot-infrastructure/ has no ansible/
+              # tree at all) -- a stranded entry that matched nothing since it was
+              # added. Corrected to the real mirror path, and widened to the second
+              # canonical/mirror pair detect-agent-code-drift.sh now also checks.
+              - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+              - 'autobot-slm-backend/ansible/roles/backend/files/**'
+              - 'autobot-backend/config/permission_rules.yaml'
+              - 'autobot-backend/static/error_messages.yaml'
               - 'docs/developer/**'
               - '.github/workflows/code-quality.yml'
 
@@ -385,11 +401,17 @@ jobs:
           exit 1
         }
 
-    - name: Check Ansible agent code drift (#1629)
+    - name: Check canonical/Ansible-mirror file pairs stay in sync (#1629, #14584)
       run: |
+        # Byte-diffs every canonical source file (SLM agent modules incl.
+        # their test-file mirrors, backend permission/error-message config)
+        # against its ansible/roles/*/files/ deployment copy. #14584: this
+        # used to blanket-exclude *_test.py, which is exactly how the
+        # health_collector_state_change_test.py mirror silently drifted and
+        # failed 2 tests on base for a full CI cycle before anyone traced it.
         bash pipeline-scripts/detect-agent-code-drift.sh || {
-          echo "Ansible slm_agent role has drifted from canonical source"
-          echo "See Issue #1629 for details"
+          echo "A canonical source file and its Ansible-role mirror have drifted"
+          echo "See Issue #1629 and #14584 for details"
           exit 1
         }
 
