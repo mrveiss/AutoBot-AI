@@ -446,13 +446,31 @@ def test_detection_still_grants_ordinary_groups_through_the_wizard_path():
     assert "redis-detected" in groups.get("database", set())
 
 
-def test_deliberately_union_role_keeps_its_non_privileged_group():
-    """tts-worker's ``npu_worker`` membership (legacy-vocabulary only) is not
-    privileged and must survive detection alone -- mirrors
-    ``role_tts_worker_active``'s deliberate node_roles-only activation
-    (#9965), on the group side."""
+def test_a_declared_tts_worker_keeps_its_npu_group():
+    """tts-worker's ``npu_worker`` membership is semantic: TTS runs on NPU
+    hardware, which is why ``setup-npu-worker.yml`` (``hosts: npu_worker``) can
+    reach it. A DECLARED tts-worker must therefore keep it."""
+    groups = _groups_for("tts-declared", ["tts-worker"], declared_roles=["tts-worker"])
+    assert "tts-declared" in groups.get("npu_worker", set())
+
+
+def test_a_detected_only_tts_worker_is_not_an_npu_deploy_target():
+    """Changed deliberately by owner decision on #14567.
+
+    This previously asserted the opposite -- that a detection-only tts-worker
+    keeps ``npu_worker``. Under the rule established in #14513/#14552 and
+    extended here, detection alone never makes a node a deploy target, and
+    ``npu_worker`` is a deploy target: ``setup-npu-worker.yml`` provisions NPU
+    software against it.
+
+    So a node nobody declared as NPU-capable is no longer reachable by that
+    provisioning. Declaring the role restores it (see the test above).
+    """
     groups = _groups_for("tts-detected", ["tts-worker"], declared_roles=[])
-    assert "tts-detected" in groups.get("npu_worker", set())
+
+    assert "tts-detected" not in groups.get("npu_worker", set()), (
+        "a detection-only tts-worker can still receive NPU provisioning (#14567)"
+    )
     assert "tts-detected" not in groups.get("aiml", set())
 
 
