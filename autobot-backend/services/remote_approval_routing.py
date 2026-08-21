@@ -31,7 +31,6 @@ from typing import Optional, Protocol
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-
 from services.remote_approval import DeliveredApproval, RemoteApprovalStore, embed_token
 
 logger = get_logger(__name__)
