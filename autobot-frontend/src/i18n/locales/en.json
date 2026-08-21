@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} found for \"{query}\"",
       "searchNoResults": "No matches for \"{query}\"",
       "fitToSelection": "Fit to selection or filter",
-      "minimapLabel": "Canvas overview"
+      "minimapLabel": "Canvas overview",
+      "undo": "Undo",
+      "redo": "Redo",
+      "undoScope": "Undo and redo cover moving, adding, removing and connecting nodes on this canvas. Edits inside a node, and anything sent to the server — save, attach, detach — cannot be undone here.",
+      "selectionStatus": "{count} nodes selected",
+      "contextMenuLabel": "Node actions",
+      "contextMenuButtonLabel": "{name} actions",
+      "contextMenuZoomToNode": "Zoom to node",
+      "contextMenuFitSelection": "Fit view to selection",
+      "contextMenuDeleteSelection": "Delete {count} selected nodes",
+      "contextMenuOpenWorkflow": "Open linked workflow"
     },
     "editStep": {
       "title": "Edit Step {step}",
