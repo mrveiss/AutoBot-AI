@@ -279,7 +279,55 @@ def _declared_roles(node: Any) -> list[str]:
 # derivation immediately found three MORE gates I had also missed by reading
 # one range of the file -- `aiml`, `npu` and `browser` -- which is the whole
 # argument against maintaining this list by eye.
-_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
+# #14567: the groups a deploy play NAMES, before closing over the role map below.
+# `update-all-nodes.yml` gates on these; other playbooks target their siblings.
+_DEPLOY_GATED_SEED = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
+
+
+def _close_over_role_groups(seed: frozenset) -> frozenset:
+    """Every group granted by a role whose groups already include a gated one.
+
+    #14567: gating the names a playbook happens to mention leaves the SIBLING
+    names the same role grants. `_ROLE_TO_GROUPS` maps `ai-stack` to
+    ``{ai_stack, aiml, ai, llm_nodes}``, and the seed contains only `aiml` --
+    yet `setup-ai-stack.yml` targets ``hosts: ai_stack`` and
+    `setup-npu-worker.yml` targets ``hosts: npu_worker``, both reachable from
+    the same /infrastructure/execute surface with `limit_hosts` optional. A node
+    that never declared ai-stack kept `ai_stack` and would have received the
+    full provisioning playbook.
+
+    Closing over the role map fixes the class rather than the four names I
+    happened to find. If a role can put a node in a deploy-gated group, then
+    every group that role grants is equally a deploy target and must require
+    the same declaration.
+
+    Derived, because enumerating this by hand is exactly what let #14552 and
+    then this recur.
+    """
+    deploy_groups: set = set(seed)
+    shared_with_non_deploy: set = set()
+
+    for groups in _ROLE_TO_GROUPS.values():
+        if groups & set(seed):
+            deploy_groups |= groups
+        else:
+            # A role that grants none of the seed is not a deploy target, and
+            # any group it shares is therefore broader than "deploy here".
+            shared_with_non_deploy |= groups
+
+    # `slm_nodes`/`slm` are the case this rule exists for. The `slm-` prefix
+    # role grants them ALONGSIDE `slm_server`, so a naive closure gates them --
+    # but `slm-agent` grants them too, and it is not a deploy target. Gating
+    # them would stop `deploy-slm-agent.yml` reaching an agent node, which is
+    # the remedy the agent's own 401 message names (#14350 / #14351): the fix
+    # for a broken agent would have been withheld from broken agents.
+    #
+    # The seed itself is never removed: those names came from deploy gates
+    # directly, not by inference.
+    return frozenset(set(seed) | (deploy_groups - shared_with_non_deploy))
+
+
+_DECLARED_ONLY_GROUPS = _close_over_role_groups(_DEPLOY_GATED_SEED)
 
 
 def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
