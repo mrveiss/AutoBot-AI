@@ -28,6 +28,27 @@ yaml = pytest.importorskip("yaml")
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
 _SERVICE_UNITS = _ANSIBLE / "roles" / "slm_manager" / "tasks" / "service_units.yml"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
+_HANDLERS = _ANSIBLE / "roles" / "slm_manager" / "handlers" / "main.yml"
+
+
+def _walk_tasks(container):
+    """Yield tasks from a play or block, including nested ones.
+
+    `tasks` alone is not enough: this playbook also uses `pre_tasks` and
+    `block`, so a guard that reads only `tasks` reports "not found" when an
+    include is merely moved -- a false alarm that looks exactly like real
+    removal.
+    """
+    if isinstance(container, list):
+        for item in container:
+            yield from _walk_tasks(item)
+        return
+    if not isinstance(container, dict):
+        return
+    yield container
+    for key in ("tasks", "pre_tasks", "post_tasks", "block", "rescue", "always"):
+        if container.get(key):
+            yield from _walk_tasks(container[key])
 
 
 def _load(path: Path):
@@ -60,6 +81,19 @@ def test_the_playbook_still_supplies_no_play_level_become() -> None:
     )
 
 
+def test_every_handler_escalates() -> None:
+    """The handlers these tasks notify need root too.
+
+    `restart slm backend` carries `failed_when: false`, so an unprivileged
+    restart does not fail the play -- the service just never restarts and
+    nothing says so. That is the same silent no-restart the wedge turns on.
+    """
+    handlers = _load(_HANDLERS)
+    assert handlers, "no handlers defined"
+    missing = [h.get("name", "<unnamed>") for h in handlers if h.get("become") is not True]
+    assert not missing, f"these handlers perform privileged operations without escalating: {missing}"
+
+
 def test_play_one_still_includes_the_shared_task_file() -> None:
     """The caller that exposed the defect must stay wired.
 
@@ -69,8 +103,10 @@ def test_play_one_still_includes_the_shared_task_file() -> None:
     plays = _load(_PLAYBOOK)
     includes = [
         task
-        for play in plays
-        for task in (play.get("tasks") or [])
-        if (task.get("ansible.builtin.include_role") or {}).get("tasks_from") == "service_units.yml"
+        for task in _walk_tasks(plays)
+        if (
+            (task.get("ansible.builtin.include_role") or task.get("include_role") or {}).get("tasks_from")
+            == "service_units.yml"
+        )
     ]
     assert includes, "no play includes service_units.yml — the self-update path renders no unit again"
