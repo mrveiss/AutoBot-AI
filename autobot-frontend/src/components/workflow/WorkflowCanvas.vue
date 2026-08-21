@@ -677,6 +677,21 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
 }
 
 /**
+ * The "{kind}: {name}" text shared by a node's accessible name and the
+ * canvas search result label (#14611) — one construction of it, not two.
+ *
+ * #14657: `name` is `nodeDisplayName`, not `nodeTitle` — for org-process and
+ * org-tool, `nodeTitle` is the generic type caption (the same string `kind`
+ * already carries), which announced e.g. "Process: Process" with nothing
+ * identifying which node it was.
+ */
+function nodeKindAndName(node: CanvasNode): string {
+  const kind = nodeKindLabel(node);
+  const name = nodeDisplayName(node);
+  return kind ? t('workflow.canvas.nodeAriaLabel', { kind, name }) : name;
+}
+
+/**
  * Accessible name for a node (#14609): kind, name and — for an org-person,
  * the only node type carrying a status concept — its current state.
  *
@@ -686,12 +701,13 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
  * legend happens to be colouring by.
  */
 function nodeAriaLabel(node: CanvasNode): string {
-  const kind = nodeKindLabel(node);
-  const name = nodeTitle(node);
   const state = nodeStatusLabel(node);
-  return state
-    ? t('workflow.canvas.nodeAriaLabelWithState', { kind, name, state })
-    : t('workflow.canvas.nodeAriaLabel', { kind, name });
+  if (!state) return nodeKindAndName(node);
+  return t('workflow.canvas.nodeAriaLabelWithState', {
+    kind: nodeKindLabel(node),
+    name: nodeDisplayName(node),
+    state,
+  });
 }
 
 /** The "kind" component of a node's accessible name. */
@@ -1629,14 +1645,24 @@ watch(searchQuery, () => { searchActiveIndex.value = -1; });
  * A node's own name, independent of its type's generic caption.
  *
  * `nodeTitle` returns the *type* label ("Process", "Tool") for an org-process
- * or org-tool node — correct for the node's header, wrong for search, which
- * needs the workflow's role or the tool's name to find anything.
+ * or org-tool node — correct for the node's header, wrong for search and for
+ * the accessible name (#14657), both of which need something identifying
+ * *which* node this is: the workflow (and role) a process runs, or the tool
+ * name (and the roles carrying it).
  */
 function nodeDisplayName(node: CanvasNode): string {
   const label = nodeText(node, 'label');
   if (label) return label;
-  if (node.type === 'org-process') return nodeText(node, 'role_name');
-  if (node.type === 'org-tool') return nodeText(node, 'tool_name');
+  if (node.type === 'org-process') {
+    const workflow = nodeText(node, 'workflow_id');
+    const role = nodeText(node, 'role_name');
+    return role ? t('llc.orgChart.processDisplayName', { workflow, role }) : workflow;
+  }
+  if (node.type === 'org-tool') {
+    const tool = nodeText(node, 'tool_name');
+    const roles = toolRoles(node).map((role) => role.role_name).join(', ');
+    return roles ? t('llc.orgChart.toolDisplayName', { tool, roles }) : tool;
+  }
   return nodeTitle(node);
 }
 
@@ -1649,11 +1675,11 @@ function nodeSearchText(node: CanvasNode): string {
   return parts.filter(Boolean).join(' ');
 }
 
-/** The result list's visible (and screen-reader-read) label for `node`. */
+/** The result list's visible (and screen-reader-read) label for `node` —
+ *  the same "{kind}: {name}" text as the node's own accessible name (#14657),
+ *  not a second construction of it. */
 function nodeSearchLabel(node: CanvasNode): string {
-  const kind = nodeKindLabel(node);
-  const name = nodeDisplayName(node);
-  return kind ? `${kind}: ${name}` : name;
+  return nodeKindAndName(node);
 }
 
 const searchHasQuery = computed(() => searchQuery.value.trim().length > 0);

@@ -1,0 +1,34 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The SLM backend systemd unit, in ONE place (#14624).
+#
+# Two callers render it: this role's main.yml on a full provision, and Play 1 of
+# update-all-nodes.yml on the self-update path, which deploys the backend by
+# unarchive and deliberately does not run the whole role. Before this split the
+# unit was rendered only by the role, so the self-update path never refreshed
+# it: a host was found running a unit from two months earlier that predated the
+# `AUTOBOT_PROJECT_ROOT` line, and once #14544 started raising rather than
+# guessing, the backend crash-looped with no in-band way to recover.
+#
+# Kept as a separate file rather than duplicated into the playbook because a
+# second copy is what drifts. The marker-write above it in that play is exactly
+# that mistake, carried since #12223.
+- name: "SLM | Deploy backend systemd service"
+  ansible.builtin.template:
+    src: autobot-slm-backend.service.j2
+    dest: /etc/systemd/system/{{ slm_backend_service }}.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart slm backend
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Enable backend service"
+  ansible.builtin.systemd:
+    name: "{{ slm_backend_service }}"
+    enabled: true
+    daemon_reload: true
+  tags: ['slm', 'backend', 'systemd']

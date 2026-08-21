@@ -8342,6 +8342,7 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
       "canvasGroupKind": "Grupa",
       "toolNodeLabel": "Rīks",
@@ -8350,6 +8351,7 @@
       "toolAttachError": "Neizdevās pievienot šo rīku.",
       "toolDetachError": "Neizdevās noņemt šo rīku.",
       "toolDetach": "Noņemt {tool} no {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
       "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
       "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
