@@ -82,11 +82,11 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
 from api.code_sync import (  # noqa: E402
-    _job_is_stale,
     _UPDATE_ALL_STALE_SECONDS,
     UpdateAllJob,
     _extract_ansible_fatal,
     _is_node_operational,
+    _job_is_stale,
     _make_stage,
     _run_fleet_stage,
     _StageStatus,
