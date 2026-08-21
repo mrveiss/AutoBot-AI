@@ -531,8 +531,19 @@
 
     <!-- Save Dialog -->
     <div v-if="showSaveDialog" class="dialog-overlay" @click.self="showSaveDialog = false">
-      <div class="dialog">
-        <h3><Icon name="save" /> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
+      <!-- #14689: a modal without a focus trap lets Tab walk out of it into
+           the canvas behind. The helpers are the same ones CanvasNodeSidebar
+           uses (#14609) — this is wiring, not a second implementation. -->
+      <div
+        ref="saveDialogRef"
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="saveDialogTitleId"
+        @keydown="onSaveDialogKeydown"
+        @keydown.escape="showSaveDialog = false"
+      >
+        <h3 :id="saveDialogTitleId"><Icon name="save" /> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
         <input v-model="saveName" :placeholder="$t('workflow.canvas.workflowName')" />
         <textarea v-model="saveDesc" :placeholder="$t('workflow.canvas.description')" rows="3"></textarea>
         <div class="dialog-actions">
@@ -551,6 +562,7 @@ import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 import { CANVAS_NODE_WIDTH, CANVAS_NODE_HEIGHT, CANVAS_NODE_PORT_Y } from './canvasNode';
+import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
   SELECTABLE_RULE_DIMENSIONS,
@@ -2208,6 +2220,26 @@ function endInteraction(e: PointerEvent) {
   activePointers.delete(e.pointerId);
   isPanning.value = false; dragNode.value = null; drawingLine.value = false;
 }
+
+/**
+ * Focus management for the save dialog (#14689).
+ *
+ * `useFocusRestore` is given `showSaveDialog` rather than being called bare:
+ * the bare form saves focus on *mount*, and this dialog lives inside an
+ * always-mounted component, so it would have captured whatever was focused
+ * when the canvas appeared instead of what the user was on when they opened
+ * the dialog. The reactive form saves on false→true and restores on
+ * true→false, which is what a `v-if` dialog needs.
+ */
+const saveDialogRef = ref<HTMLElement | null>(null);
+const saveDialogTitleId = useId();
+const { onKeydown: onSaveDialogKeydown } = useFocusTrap(saveDialogRef);
+useFocusRestore(showSaveDialog);
+const { focusFirst: focusSaveDialog } = useInitialFocus(saveDialogRef);
+
+watch(showSaveDialog, (open) => {
+  if (open) void focusSaveDialog();
+});
 
 function saveWorkflow() { showSaveDialog.value = true; }
 function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); showSaveDialog.value = false; saveName.value = ''; saveDesc.value = ''; }
