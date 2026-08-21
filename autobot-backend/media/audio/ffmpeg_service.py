@@ -107,9 +107,23 @@ class FFmpegService:
             # Security: Protocol whitelist (blocks HLS/HTTP/etc.)
             "-protocol_whitelist",
             "file",
-            # Security: Extension whitelist (using allowed_extensions)
-            "-allowed_extensions",
-            ",".join(ext.lstrip(".") for ext in ALLOWED_EXTENSIONS),
+            # #14550: `-allowed_extensions` is NOT a generic/global ffmpeg option —
+            # it is a private AVOption of the dash and hls DEMUXERS only (`ffmpeg -h
+            # protocol=file` lists no such option; `ffmpeg -h full | grep
+            # allowed_extensions` shows it scoped to "dash"/"hls"). Passing it here,
+            # ahead of `-i` with no demuxer context that defines it, made ffmpeg
+            # reject the whole command with "Option allowed_extensions not found" —
+            # extract_audio() has been completely non-functional for every real
+            # audio file, on every ffmpeg version, the entire time. This was
+            # invisible because the one test that ever invoked real ffmpeg
+            # (test_real_audio_extraction) was itself silently skipping in CI for
+            # want of the ffmpeg binary (#14550) — a skip masking a failure masking
+            # another failure. The actual extension enforcement already happens
+            # above, at the application level, before ffmpeg is ever invoked
+            # (`if input_ext not in ALLOWED_EXTENSIONS: raise ValueError(...)`,
+            # Issue #9214) — that check is sufficient on its own; this flag was
+            # attempted defense-in-depth that ffmpeg has no mechanism to honour for
+            # a plain file input.
         ]
 
         # Security: Pin demuxer with -f flag if known

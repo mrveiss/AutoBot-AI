@@ -10,6 +10,7 @@ on:
       - '**/*.py'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
+      - 'repo_tests/**'
       - 'pyproject.toml'
       - '.flake8'
       - '.bandit'
@@ -26,6 +27,13 @@ on:
       - 'autobot-slm-backend/ansible/roles/backend/files/**'
       - 'autobot-backend/config/permission_rules.yaml'
       - 'autobot-backend/static/error_messages.yaml'
+      # #14550/#14551: the ansible role check_ci_system_package_provisioning.py reads,
+      # and the composite action both new guards exist to protect. Neither matched any
+      # prior entry, so a PR touching only one of these skipped `code-quality` entirely
+      # -- a required check reporting skipped reads as satisfied to branch protection,
+      # so the guard could not fire on the change it exists to catch.
+      - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
+      - '.github/actions/**'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
@@ -62,6 +70,7 @@ jobs:
               - '**/*.py'
               - '**/requirements*.txt'
               - 'requirements-ci/**'
+              - 'repo_tests/**'
               - 'pyproject.toml'
               - '.flake8'
               - '.bandit'
@@ -78,6 +87,8 @@ jobs:
               - 'autobot-slm-backend/ansible/roles/backend/files/**'
               - 'autobot-backend/config/permission_rules.yaml'
               - 'autobot-backend/static/error_messages.yaml'
+              - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
+              - '.github/actions/**'
               - 'docs/developer/**'
               - '.github/workflows/code-quality.yml'
 
@@ -532,6 +543,55 @@ jobs:
         # to every entry: over its ceiling, under it, or already compliant all
         # fail, and the run reports how many entries it reached.
         python3 scripts/check_python_file_size.py --audit-ceilings
+
+    - name: Audit requirements-ci for silent drift from production (#14551)
+      run: |
+        # autobot-backend/requirements.txt and autobot-slm-backend/requirements.txt
+        # declare production; requirements-ci.txt is a hand-maintained mirror
+        # setup-python-suite actually installs. A package present in one and not
+        # the other produces no error -- pytesseract sat undeclared in CI for
+        # months this way (#13885) while every OCR test skipped. This compares
+        # the two sets against repo_tests/requirements_ci_drift_baseline.txt,
+        # which only ever shrinks: a new undeclared omission, or a baseline entry
+        # that no longer describes a real one, both fail.
+        python3 tools/lint/check_requirements_ci_drift.py --audit
+
+    - name: Audit CI system-package provisioning against ansible (#14550)
+      run: |
+        # ansible installs apt packages on every backend host (GUI/VNC, audio,
+        # TTS, OCR, pg_dump) that setup-python-suite never provisions. A test
+        # that skip-gates on one of those binaries via shutil.which(...) has
+        # been silently skipping in CI rather than passing -- indistinguishable
+        # in the job summary. This fails on any such gate whose package is not
+        # installed in .github/actions/setup-python-suite/action.yml.
+        python3 tools/lint/check_ci_system_package_provisioning.py --audit
+
+    - name: Audit composite-action step keys against GitHub's own schema (#14550)
+      run: |
+        # A composite action's own steps accept only run/shell/working-directory/
+        # env/id/if/name(/uses/with) -- `timeout-minutes` looked plausible on a
+        # step but is job/workflow-step-only, and adding it here made GitHub's
+        # template validator reject the WHOLE action.yml before a single step
+        # ran, breaking every shard that used it (#14550 post-merge incident).
+        # code-quality installs no YAML-schema validator for GitHub's own
+        # template engine (and neither does actionlint, scoped to
+        # .github/workflows/** only, per #14632) -- this re-implements the
+        # small, stable allowed-key set directly so a push never reaches a
+        # runner with an invalid composite action again.
+        python3 tools/lint/check_composite_action_step_keys.py --audit
+
+    - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
+      run: |
+        # This job only runs at all when the `changes` job's dorny/paths-filter
+        # reports a `backend` path touched -- a job that is SKIPPED satisfies
+        # branch protection the same as one that PASSED. The two audits above
+        # read files (the ansible task list, the setup-python-suite action)
+        # that the filter did not originally cover, so a PR touching only one
+        # of them skipped code-quality entirely and neither audit ever ran.
+        # Re-derives each checker's own GUARD_INPUT_PATHS and asserts the
+        # filter covers all of them, so the next guard input added without a
+        # matching filter entry fails loudly instead of silently going dark.
+        python3 tools/lint/check_code_quality_guard_reach.py --audit
 
     - name: Code quality summary
       if: always()
