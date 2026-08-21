@@ -36,8 +36,8 @@ from prometheus_client import (
 # Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
 # Issue #13765: Added CgroupMemoryCollector for cgroup memory-throttling pressure
 from .metrics import (
-    AuditMetricsRecorder,
     ApiRequestsMetricsRecorder,
+    AuditMetricsRecorder,
     CgroupMemoryCollector,
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
