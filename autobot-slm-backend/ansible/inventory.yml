@@ -11,7 +11,7 @@ all:
     slm:
       hosts:
         admin:
-          ansible_host: ${AUTOBOT_SLM_HOST}
+          ansible_host: "{{ lookup('env', 'AUTOBOT_SLM_HOST') | default('127.0.0.1', true) }}"
           ansible_user: autobot
 
     autobot:
@@ -19,35 +19,35 @@ all:
         backend:
           hosts:
             main:
-              ansible_host: ${AUTOBOT_BACKEND_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
 
         frontend:
           hosts:
             vm1:
-              ansible_host: ${AUTOBOT_FRONTEND_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
 
         npu:
           hosts:
             vm2:
-              ansible_host: ${AUTOBOT_NPU_WORKER_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
 
         redis:
           hosts:
             vm3:
-              ansible_host: ${AUTOBOT_REDIS_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
 
         ai:
           hosts:
             vm4:
-              ansible_host: ${AUTOBOT_AI_STACK_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
 
         browser:
           hosts:
             vm5:
-              ansible_host: ${AUTOBOT_BROWSER_SERVICE_HOST}
+              ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('127.0.0.1', true) }}"
               ansible_user: autobot
