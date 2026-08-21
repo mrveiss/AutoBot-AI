@@ -63,7 +63,7 @@ class DocumentPipeline(BasePipeline):
             logger.warning("Document extraction failed: %s", exc)
             return self._error_result(detect_format(raw_bytes, mime_type), str(exc), media_input.metadata)
 
-        extracted, ocr = self._recover_scanned_pages(extracted, raw_bytes)
+        extracted, ocr = await self._recover_scanned_pages(extracted, raw_bytes)
         return self._to_result(extracted, media_input.metadata, ocr)
 
     # ------------------------------------------------------------------
@@ -87,20 +87,62 @@ class DocumentPipeline(BasePipeline):
     # Result adaptation
     # ------------------------------------------------------------------
 
-    def _recover_scanned_pages(self, extracted: ExtractedDocument, raw_bytes: bytes):
+    async def _recover_scanned_pages(self, extracted: ExtractedDocument, raw_bytes: bytes):
         """OCR the pages that produced no text, when there are any (#13896).
 
         Runs only on pages that came back empty, so a born-digital document
         rasterizes nothing. Returns the (possibly augmented) extraction and the
         OCR outcome, which is reported either way — an attempt that recovered
         nothing and an attempt that never happened are different answers.
+
+        #13896 review: rasterizing and running tesseract are blocking CPU work,
+        and this sits on an ingest path that accepts arbitrary uploads (`.pdf`
+        is an allowed extension). Called inline it would hold the worker's event
+        loop for the whole run — every other coroutine on that worker, health
+        endpoints included, stalls behind one scanned document. So it is
+        offloaded to a thread and bounded by a whole-document deadline.
+
+        The per-page timeout does not cover this: fifty pages each finishing
+        just inside it is still fifty times the budget.
+
+        A deadline breach degrades rather than fails. The upload already
+        produced a text-layer extraction; losing the OCR augmentation is worth
+        far less than losing the document, and `attempted=True` with a reason
+        keeps that distinguishable from "OCR never ran".
+
+        What this does NOT do: `wait_for` abandons the await, it does not kill
+        the thread. Tesseract keeps running until `ocr_page_timeout` bounds the
+        page it is on, so the worker slot is released later than the deadline.
+        The event loop is freed immediately, which is the availability problem
+        being fixed; reclaiming the thread promptly needs a killable subprocess
+        and is tracked separately.
         """
-        from media.document.ocr import OcrResult, ocr_pdf_pages
+        import asyncio
+
+        from media.document.ocr import OcrResult, ocr_pdf_pages, ocr_timeout
 
         if extracted.format != "pdf" or not extracted.empty_page_numbers:
             return extracted, OcrResult(attempted=False, reason="no unreadable pages")
 
-        result = ocr_pdf_pages(raw_bytes, extracted.empty_page_numbers)
+        deadline = ocr_timeout()
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(ocr_pdf_pages, raw_bytes, extracted.empty_page_numbers),
+                timeout=deadline,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "OCR exceeded the %ss document deadline for %d unreadable page(s) — "
+                "returning the text-layer extraction without OCR augmentation",
+                deadline,
+                len(extracted.empty_page_numbers),
+            )
+            return extracted, OcrResult(
+                attempted=True,
+                reason=f"OCR exceeded the {deadline}s document deadline",
+                skipped_pages=tuple(extracted.empty_page_numbers),
+            )
+
         if not result.recovered_any:
             return extracted, result
 

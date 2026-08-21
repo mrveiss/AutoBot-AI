@@ -1591,6 +1591,7 @@ class MiscConfig(RedactedSettings):
     # count, this bounds cost: one page with a pathological MediaBox renders a
     # very large bitmap however few pages were asked for.
     document_ocr_page_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT")
+    document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
     # #13896: master switch for the OCR fallback. Default on where the toolchain
     # is present, since it only runs on pages that produced no text at all — a
     # born-digital document never rasterizes. Set to "false" to trade scanned
