@@ -345,6 +345,51 @@ class TestIntegration:
 
 
 # Performance Benchmarks
+async def _count_executor_round_trips(manager, target: str, content: str) -> int:
+    """How many executor hand-offs one ``_atomic_write`` actually makes.
+
+    Measured from the implementation rather than hardcoded: every offload in
+    ``_atomic_write`` goes through the single ``_run_in_io_executor`` seam, so
+    wrapping it and running one write counts them. Add or remove a round-trip
+    and the control built from this moves with it, instead of the assertion
+    silently changing meaning.
+
+    The wrapper is an instance-attribute swap and is restored in ``finally`` —
+    a leaked wrapper would keep counting into whatever ran next.
+    """
+    trips = 0
+    original = manager._run_in_io_executor
+
+    async def counting(func, *args, **kwargs):
+        nonlocal trips
+        trips += 1
+        return await original(func, *args, **kwargs)
+
+    manager._run_in_io_executor = counting
+    try:
+        await manager._atomic_write(target, content)
+    finally:
+        manager._run_in_io_executor = original
+    return trips
+
+
+def _make_control_write(manager, trips: int, target: str, content: str):
+    """A coroutine with the same hand-off count as ``_atomic_write``.
+
+    Same number of executor round-trips plus one aiofiles write, doing minimal
+    work inside each. Contention is paid per hand-off, so matching the count is
+    what makes load cancel between the two sides.
+    """
+
+    async def control_write() -> None:
+        for _ in range(trips):
+            await manager._run_in_io_executor(os.path.exists, target)
+        async with aiofiles.open(target, "w", encoding="utf-8") as handle:
+            await handle.write(content)
+
+    return control_write
+
+
 class TestPerformance:
     """Performance tests for overhead measurements"""
 
@@ -375,30 +420,31 @@ class TestPerformance:
         """Atomic write must not cost more than its own executor round-trips.
 
         #13162 replaced a fixed wall-clock budget with a ratio against a plain
-        write, on the reasoning that load inflates both sides and cancels.
-        #14691: it does not cancel, because the two sides are not the same
-        shape. ``_atomic_write`` makes five executor round-trips (mkstemp,
-        flock, replace, exists, unlink) plus one aiofiles write; a plain write
-        makes one. Contention is paid per hand-off, so it lands on the atomic
-        side five times and on the denominator once. The ratio therefore grows
-        with load instead of holding steady, and a shard running twelve ways
-        pushed it to 17.4x against a 15.0x bound while nothing about the write
-        had changed.
+        write, reasoning that load inflates both sides and cancels. #14691: it
+        does not, because the two sides are not the same shape. ``_atomic_write``
+        makes four executor round-trips on the success path (mkstemp, flock,
+        replace, and the ``os.path.exists`` cleanup probe — ``unlink`` only runs
+        when that probe finds a leftover, which a successful ``os.replace``
+        leaves behind) plus one aiofiles write. A plain write makes one.
+        Contention is paid per hand-off, so it lands on the atomic side four
+        times and on the denominator once, and the ratio grows with load. A
+        twelve-way shard pushed it to 17.4x against a 15.0x bound while nothing
+        about the write had changed.
 
-        Modelling that: with the denominator making one round-trip, the median
-        ratio ranged 2.4x-40x across load levels for identical code. With the
-        denominator making the SAME number of round-trips, it ranged 0.43x-2.70x
-        — because the contention now cancels for real.
+        So the control below is structurally identical: the same number of
+        round-trips, counted from the implementation, plus one aiofiles write.
+        Modelling the two designs across contention levels, same code on both
+        sides: a one-round-trip denominator ranged 1.9x-2.9x and hit 17.4x on a
+        real runner, while a matched denominator held 0.95x-1.36x.
 
-        So the control below is structurally identical to ``_atomic_write``:
-        the same number of executor round-trips, plus one aiofiles write. The
-        count is measured from the implementation rather than hardcoded, so
-        adding or removing a round-trip moves the control with it instead of
-        silently changing what the assertion means.
-
-        What still fails: a regression that adds *work* rather than a
-        hand-off — a synchronous call, an fsync per chunk, a lost executor —
-        moves the atomic side only, and the ratio moves with it.
+        What this catches: a regression that adds *work* — a synchronous call,
+        an fsync per chunk, a lost executor — moves the atomic side only.
+        What it does NOT reliably catch: a small fixed regression under heavy
+        contention. Once queueing delay dominates total time, a 0.5ms blocking
+        call is proportionally invisible and the ratio stays near 1.0. That is
+        a false negative, not a false positive, so it costs a missed catch on a
+        busy runner rather than reintroducing the #14691 flake — and the next
+        quiet run still fails.
         """
         from chat_history import ChatHistoryManager
 
@@ -414,34 +460,13 @@ class TestPerformance:
             control_target = os.path.join(tmpdir, "control.json")
             atomic_target = os.path.join(tmpdir, "atomic.json")
 
-            # Count the executor round-trips _atomic_write actually makes, by
-            # wrapping the one seam every offload goes through.
-            trips = 0
-            original_executor = manager._run_in_io_executor
-
-            async def counting_executor(func, *args, **kwargs):
-                nonlocal trips
-                trips += 1
-                return await original_executor(func, *args, **kwargs)
-
-            manager._run_in_io_executor = counting_executor
-            try:
-                await manager._atomic_write(probe_target, content)
-            finally:
-                manager._run_in_io_executor = original_executor
-
+            trips = await _count_executor_round_trips(manager, probe_target, content)
             assert trips > 0, (
                 "no executor round-trips were observed — _atomic_write no longer "
                 "offloads through _run_in_io_executor, so this control cannot "
                 "mirror its shape and the comparison below is meaningless"
             )
-
-            async def control_write():
-                """The same hand-off count as _atomic_write, minimal work."""
-                for _ in range(trips):
-                    await manager._run_in_io_executor(os.path.exists, control_target)
-                async with aiofiles.open(control_target, "w", encoding="utf-8") as handle:
-                    await handle.write(content)
+            control_write = _make_control_write(manager, trips, control_target, content)
 
             # Warm both paths so first-time executor start-up is excluded
             await control_write()
@@ -466,11 +491,11 @@ class TestPerformance:
         control = statistics.median(control_samples)
         atomic = statistics.median(atomic_samples)
 
-        # Both sides now make `trips` executor round-trips and one aiofiles
-        # write, so the expected ratio is ~1.0 and the headroom absorbs the
-        # real work _atomic_write does inside its hand-offs. Modelling put a
-        # healthy ratio under 2.7x even at heavy contention; 4.0 leaves room
-        # above that without leaving room for a newly added blocking call.
+        # Both sides make `trips` round-trips and one aiofiles write, so the
+        # expected ratio is ~1.0 and the headroom absorbs the real work
+        # _atomic_write does inside its hand-offs. Modelling put a healthy ratio
+        # under 1.4x even at heavy contention; 4.0 leaves room above that
+        # without leaving room for a newly added blocking call on a quiet run.
         max_overhead_ratio = 4.0
         assert atomic <= control * max_overhead_ratio, (
             f"Atomic write {atomic*1000:.2f}ms is {atomic / control:.1f}x a "
