@@ -632,7 +632,7 @@ _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS"
 # play to report a completion before giving up on it. Generous: the play covers
 # every deployed role on the box. The poll floor is 1s so a misconfigured
 # interval cannot turn the wait into a busy loop.
-_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600"))
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
 _SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
@@ -5471,6 +5471,25 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
+def _completion_is_from_a_rotated_log() -> bool:
+    """True when the last verdict was read from the rotated log, not the live one.
+
+    logrotate uses copytruncate here, so after a rotation the live log is empty
+    and its mtime dates the truncation — recent enough to pass the freshness
+    check above while describing no play at all. The verdict then comes from the
+    rotated file, i.e. an OLDER run. Treating that as our completion would
+    resolve this stage against someone else's outcome.
+    """
+    try:
+        from services.playbook_executor import SELF_UPDATE_LOG_PATH
+        from services.self_update_log_reader import read_self_update_verdict
+
+        return bool(getattr(read_self_update_verdict(SELF_UPDATE_LOG_PATH), "from_rotated_log", False))
+    except Exception as exc:  # pragma: no cover - must never break the wait
+        logger.debug("update-all: could not tell whether the verdict came from a rotated log (%s)", exc)
+        return False
+
+
 async def _await_self_update_completion(since: Optional[str]) -> Optional[str]:
     """Wait for the fired self-update play to finish. Returns its completion time.
 
@@ -5479,14 +5498,24 @@ async def _await_self_update_completion(since: Optional[str]) -> Optional[str]:
     the process and the startup resume hook takes over, exactly as before.
     """
     deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
+    while True:
         await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
         activity = await read_deploy_activity()
         # in_progress is None means the unit could not be queried — unknown is
         # not "finished", so keep waiting rather than resolving on a guess.
         if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
-            return activity.last_completed_play_at
-    return None
+            if _completion_is_from_a_rotated_log():
+                # The live log was rotated out from under us. Its mtime now
+                # dates the truncation, not a play, so the "completion" above
+                # describes a run we cannot see. Waiting is the honest move:
+                # this is precisely the reading that must not be trusted.
+                logger.warning("update-all: self-update verdict came from a rotated log — not treating it as ours")
+            else:
+                return activity.last_completed_play_at
+        # Checked after polling, never before: a misconfigured timeout must not
+        # produce a verdict from zero observations.
+        if time.monotonic() >= deadline:
+            return None
 
 
 async def _reconcile_self_update_stage(
@@ -5542,8 +5571,19 @@ async def _reconcile_self_update_stage(
         await _clear_resume_plan()
         return
 
+    # The completion signal is box-global: the log path and the systemd unit are
+    # shared by every self-update trigger (POST /self-update, the fleet sync
+    # job), none of which check for an update-all in flight. A play that is not
+    # ours can therefore satisfy the wait above. Verifying the deployed commit
+    # is what makes the outcome ours, and it is the same check the restart path
+    # already performs via _resume_verify_slm_stage before touching the fleet.
+    if not await _resume_verify_slm_stage(job, remote_commit):
+        await _clear_resume_plan()
+        return
+
     _stage_log(stage, "Self-update play completed without restarting this service — continuing")
     stage.status = _StageStatus.SUCCESS
+    stage.sha = _short_sha(remote_commit)
     stage.message = f"SLM self-update completed at {_short_sha(remote_commit)} (no restart required)"
     stage.completed_at = utc_timestamp()
     await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
