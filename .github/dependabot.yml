@@ -110,6 +110,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic-settings"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "websockets"
+        # #14727: this block reaches a file pinning websockets, so the
+        # /autobot-backend hard-exclude does not cover it. langgraph-sdk
+        # requires websockets >=14,<16 (#10474).
+        versions: [">=16.0.0"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-frontend"
@@ -430,6 +435,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "protobuf"
+        # #14727: this block reaches a file pinning protobuf, so the
+        # /autobot-backend hard-exclude does not cover it. opentelemetry-proto
+        # requires protobuf<7.0 (#10474).
+        versions: [">=7.0.0"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-infrastructure/autobot-npu-worker/docker"
@@ -494,10 +504,30 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "protobuf"
         # #10474: cap <7.0 — opentelemetry-proto (otel 1.42) requires protobuf<7.0.
+        # #14727: update-types alone does NOT stop the grouped all-dependencies
+        # bump (#14431 recorded this for openai). This block reaches protobuf
+        # through its own -r chain, so it needs the same hard range the
+        # /autobot-backend block carries.
         update-types: ["version-update:semver-major"]
+        versions: [">=7.0.0"]
       - dependency-name: "websockets"
         # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
+        # #14727: same reason as protobuf above — a grouped bump ignores
+        # update-types, and this block reaches the pin.
         update-types: ["version-update:semver-major"]
+        versions: [">=16.0.0"]
+      - dependency-name: "openai"
+        # #14727: the SAME hard-exclude as the /autobot-backend block above.
+        # It must be repeated here because an `ignore` entry protects one
+        # block, while dependabot follows `-r` includes across block
+        # boundaries — this root block reaches both files that pin openai:
+        #   requirements-dev.txt:6 -r autobot-backend/requirements.txt
+        #   requirements-ci.txt:14 -r requirements-ci/ai-ml.txt
+        # So #14722 bumped openai to 3.2.0 from here, bypassing the
+        # /autobot-backend exclusion on /autobot-backend's own file, and
+        # smoke-test died on ResolutionImpossible against llama-index.
+        # Keep the two entries in step; pip_ignore_scope_test.py enforces it.
+        versions: [">=3.0.0"]
 
   # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
   # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
