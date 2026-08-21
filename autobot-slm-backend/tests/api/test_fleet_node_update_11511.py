@@ -772,9 +772,7 @@ def test_concurrent_starts_only_create_one_orchestration() -> None:
 
     async def _drive():
         _set_update_all_job(_stale_job())
-        results = await asyncio.gather(
-            start_update_all({}), start_update_all({}), return_exceptions=True
-        )
+        results = await asyncio.gather(start_update_all({}), start_update_all({}), return_exceptions=True)
         await asyncio.sleep(0)
         return results
 
@@ -788,8 +786,6 @@ def test_concurrent_starts_only_create_one_orchestration() -> None:
         accepted = [r for r in results if isinstance(r, UpdateAllJob)]
         rejected = [r for r in results if isinstance(r, HTTPException)]
 
-        assert len(accepted) == 1, (
-            f"exactly one caller may start a run, got {len(accepted)}: {results}"
-        )
+        assert len(accepted) == 1, f"exactly one caller may start a run, got {len(accepted)}: {results}"
         assert len(rejected) == 1 and rejected[0].status_code == 409
         assert len(started) <= 1, f"double orchestration: {started}"

@@ -5758,12 +5758,7 @@ async def _start_update_all_locked() -> UpdateAllJob:
     # first one was still updating.
     plan_exists = await _check_persisted_plan_exists()
 
-    if (
-        existing
-        and existing.status in ("pending", "running")
-        and not plan_exists
-        and _job_is_stale(existing)
-    ):
+    if existing and existing.status in ("pending", "running") and not plan_exists and _job_is_stale(existing):
         _retire_stale_job(existing)
         # No plan exists on this path (checked above), so this only clears
         # partial residue — it can no longer destroy a live plan.
