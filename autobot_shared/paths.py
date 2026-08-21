@@ -97,12 +97,7 @@ def is_install_root(path: Path) -> bool:
     """
     if not (path / "autobot_shared").exists():
         return False
-    try:
-        return any(child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir())
-    except OSError:
-        # An unreadable directory is not an install root; let the walk continue
-        # rather than turning a permissions problem into a resolution failure.
-        return False
+    return any(child.is_dir() and child.name.startswith(INSTALL_COMPONENT_PREFIX) for child in path.iterdir())
 
 
 def project_root() -> Path:
@@ -158,9 +153,20 @@ def resolve_project_root(start: Path) -> Path:
     if configured:
         return Path(configured).resolve()
 
+    # #14640 review: an OSError while inspecting a candidate is remembered rather
+    # than swallowed. Returning False on a permissions failure still fails loud
+    # (nothing else matches, so the raise below fires), but the message would
+    # blame an unrecognised layout when the real cause was an unreadable
+    # directory that IS the right root. This module already cost one long
+    # outage; the diagnosis should not have to be reconstructed twice.
+    inspection_errors: list[str] = []
+
     for parent in [start] + list(start.parents):
-        if (parent / ".env").exists() or is_checkout_root(parent) or is_install_root(parent):
-            return parent
+        try:
+            if (parent / ".env").exists() or is_checkout_root(parent) or is_install_root(parent):
+                return parent
+        except OSError as exc:
+            inspection_errors.append(f"{parent}: {exc.__class__.__name__}: {exc}")
 
     # ssot-config-exempt: bootstrap self-reference (carried from the
     # implementation this replaced, landed in #13646).
@@ -174,4 +180,10 @@ def resolve_project_root(start: Path) -> Path:
         "ancestor holds a .env or looks like a source checkout "
         f"({', '.join(CHECKOUT_MARKERS)}). Set one of those two environment "
         "variables — a silent guess is the defect this raise replaces (#14544)."
+        + (
+            "\n\nNote: some candidates could not be inspected, which may be the real "
+            "cause rather than an unrecognised layout: " + "; ".join(inspection_errors)
+            if inspection_errors
+            else ""
+        )
     )

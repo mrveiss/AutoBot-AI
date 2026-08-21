@@ -189,3 +189,44 @@ def test_a_non_component_sibling_is_not_enough(tmp_path):
     (lone / "autobot_docs").mkdir()  # underscore, not the component prefix
 
     assert not paths.is_install_root(lone)
+
+
+def test_an_unreadable_candidate_is_named_in_the_error(tmp_path, monkeypatch):
+    """#14640 review: a permissions failure must not read as "unknown layout".
+
+    Swallowing the OSError still failed loudly — nothing else matches, so the
+    raise fires — but it blamed an unrecognised layout while the real cause was
+    an unreadable directory that IS the correct root. This module already cost
+    one long outage; the diagnosis should not have to be reconstructed twice.
+    """
+    root = tmp_path / "autobot"
+    (root / "autobot_shared").mkdir(parents=True)
+    (root / "autobot-backend").mkdir()
+
+    real_iterdir = Path.iterdir
+
+    def _refuse(self):
+        if self == root:
+            raise PermissionError(13, "Permission denied")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", _refuse)
+
+    with pytest.raises(paths.ProjectRootUndeterminable) as excinfo:
+        paths.resolve_project_root(root / "autobot_shared" / "paths.py")
+
+    message = str(excinfo.value)
+    assert "could not be inspected" in message, "the error does not mention that a candidate was unreadable"
+    assert "PermissionError" in message, "the underlying OSError type is not surfaced"
+    assert str(root) in message, "the unreadable directory is not named"
+
+
+def test_a_readable_tree_carries_no_inspection_note(tmp_path):
+    """The note must not appear when nothing failed — it would be noise on every raise."""
+    nothing = tmp_path / "empty" / "deep"
+    nothing.mkdir(parents=True)
+
+    with pytest.raises(paths.ProjectRootUndeterminable) as excinfo:
+        paths.resolve_project_root(nothing / "paths.py")
+
+    assert "could not be inspected" not in str(excinfo.value)
