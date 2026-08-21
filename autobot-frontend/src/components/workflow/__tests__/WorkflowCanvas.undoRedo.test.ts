@@ -96,19 +96,35 @@ describe('adding a node is undoable/redoable (#14612)', () => {
   })
 })
 
-// NOTE: undo of ADD / REMOVE / CONNECT is implemented in the component but is
-// NOT covered here, and this file must not pretend otherwise.
-//
-// Those three are workflow-*authoring* actions. The Company OS canvas mounts
-// `readonly`, where add, delete and connect do not exist at all — so what this
-// programme needs from undo is the move case, which is covered below and
-// mutation-proven.
-//
-// The authoring cases were written and did not pass: after a delete the undo
-// button is correctly enabled (so the history entry IS recorded) and the click
-// fires, yet `node-added` never reaches the parent. Diagnosis was not
-// completed. Tracked in its own issue rather than left as failing or, worse,
-// weakened until green.
+describe('removing a node is undoable (#14612)', () => {
+  it('undo re-adds the exact node that was deleted, including its data', async () => {
+    const n1 = step('n1', 40, 60)
+    ;(n1.data as Record<string, unknown>).description = 'do the thing'
+    const w = mountCanvas({ nodes: [n1] })
+
+    await w.get('.delete-btn').trigger('click')
+    expect(w.emitted('node-removed')).toEqual([['n1']])
+
+    await undoBtn(w).trigger('click')
+    const readded = (w.emitted('node-added') as unknown as [CanvasNode][]).at(-1)![0]
+    expect(readded).toEqual(n1)
+  })
+
+  it('a later in-place edit to the (still-mounted) node never leaks into the stored snapshot', async () => {
+    // The node this component receives via props is mutated in place by its
+    // own v-model bindings, so the history entry must have cloned it at delete
+    // time rather than kept a live reference.
+    const n1 = step('n1', 0, 0)
+    const w = mountCanvas({ nodes: [n1] })
+
+    await w.get('.delete-btn').trigger('click')
+    ;(n1.data as Record<string, unknown>).description = 'mutated after delete'
+
+    await undoBtn(w).trigger('click')
+    const readded = (w.emitted('node-added') as unknown as [CanvasNode][]).at(-1)![0]
+    expect((readded.data as Record<string, unknown>).description).toBe('')
+  })
+})
 
 describe('moving a node by drag is undoable as ONE step, not one per tick (#14612)', () => {
   async function drag(w: ReturnType<typeof mountCanvas>) {

@@ -1274,14 +1274,31 @@ function pushHistory(actions: CanvasAtomicAction[]): void {
   redoStack.value = [];
 }
 
+/**
+ * A fresh plain copy of a node held in the history stack (#14612).
+ *
+ * `toRaw` first, and that is the whole point. The stacks are plain `ref`s, so
+ * Vue deeply proxies whatever is pushed into them — the plain object cloned at
+ * record time comes back out as a reactive Proxy, and `structuredClone`
+ * refuses a Proxy with `DataCloneError`. Thrown inside a click handler, that
+ * exception swallowed the emit: undo appeared to do nothing, while the history
+ * entry itself was correctly recorded and the button correctly enabled.
+ *
+ * Cloning (rather than handing back the raw object) keeps the stored snapshot
+ * independent of whatever the parent does to the node it receives.
+ */
+function cloneStoredNode(node: CanvasNode): WorkflowNode {
+  return structuredClone(toRaw(node)) as unknown as WorkflowNode;
+}
+
 function applyAtomicAction(action: CanvasAtomicAction, direction: 'undo' | 'redo'): void {
   if (action.kind === 'move') {
     emit('node-moved', action.nodeId, direction === 'undo' ? action.before : action.after);
   } else if (action.kind === 'add') {
     if (direction === 'undo') emit('node-removed', action.node.id);
-    else emit('node-added', structuredClone(action.node) as unknown as WorkflowNode);
+    else emit('node-added', cloneStoredNode(action.node));
   } else if (action.kind === 'remove') {
-    if (direction === 'undo') emit('node-added', structuredClone(action.node) as unknown as WorkflowNode);
+    if (direction === 'undo') emit('node-added', cloneStoredNode(action.node));
     else emit('node-removed', action.node.id);
   } else {
     if (direction === 'undo') emit('nodes-disconnected', action.sourceId, action.targetId);
