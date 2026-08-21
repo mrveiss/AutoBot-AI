@@ -6920,6 +6920,13 @@
             "title": "Status",
             "type": "string"
           },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -6963,17 +6970,6 @@
       "NodeRoleResponse": {
         "description": "Node role assignment with status (Issue #779).",
         "properties": {
-          "advisory": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Advisory"
-          },
           "assignment_type": {
             "default": "auto",
             "title": "Assignment Type",
@@ -7021,6 +7017,13 @@
             "default": "not_installed",
             "title": "Status",
             "type": "string"
+          },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
           }
         },
         "required": [
