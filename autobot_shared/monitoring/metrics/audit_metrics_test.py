@@ -64,32 +64,52 @@ def test_error_type_is_a_label_so_a_schema_fault_is_distinguishable():
     assert _sample(recorder.audit_write_failures, "permission_denied", "OperationalError") == 1
 
 
-def test_the_recorder_is_constructed_by_the_manager():
-    """Defined-and-exported but never constructed would emit nothing, forever.
+def test_the_manager_records_and_exports_the_counter():
+    """Drive the real manager end to end, not its source text.
 
-    Asserted on the manager's source rather than by importing it: the manager
-    pulls in the whole monitoring stack, and what matters here is that the
-    construction line exists.
+    #14674 review: the first version of this file asserted with `ast.parse`
+    and substring checks that `record_audit_write_failure` existed and was
+    called. Those pass whether or not the method does anything — make it a
+    no-op and every one of them stays green, which is the failure mode this
+    whole PR is about (a counter that reports zero).
+
+    So this constructs the real `PrometheusMetricsManager`, calls the method
+    the middleware calls, and asserts the **sample** appears in the exported
+    text. Following `cgroup_memory_test.py:391-405`, which records the same
+    lesson: `# HELP` alone proves nothing, because prometheus_client emits it
+    for empty families too — the assertion has to be on a value.
     """
-    tree = ast.parse(_MANAGER.read_text(encoding="utf-8"))
+    from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
 
-    constructed = any(
-        isinstance(node, ast.Call) and getattr(node.func, "id", None) == "AuditMetricsRecorder"
-        for node in ast.walk(tree)
+    manager = PrometheusMetricsManager()
+    manager.record_audit_write_failure(action="login_success", error_type="ProgrammingError")
+
+    text = manager.get_metrics().decode()
+
+    assert (
+        'autobot_audit_write_failures_total{action="login_success",error_type="ProgrammingError"} 1.0'
+        in text
+    ), (
+        "the counter did not reach the exported registry — either the recorder "
+        "is not constructed on the manager's registry, or the manager method "
+        "does not delegate to it. Exported text:\n" + text[:2000]
     )
 
-    assert constructed, "AuditMetricsRecorder is never instantiated — the metric would never appear"
 
+def test_a_second_failure_increments_rather_than_replaces():
+    """A counter that resets would under-report exactly when it matters."""
+    from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
 
-def test_the_manager_exposes_a_record_method():
-    """The seam the caller uses. Without it the recorder is unreachable."""
-    tree = ast.parse(_MANAGER.read_text(encoding="utf-8"))
+    manager = PrometheusMetricsManager()
+    for _ in range(3):
+        manager.record_audit_write_failure(action="login_success", error_type="OperationalError")
 
-    named = [
-        n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "record_audit_write_failure"
-    ]
+    text = manager.get_metrics().decode()
 
-    assert named, "PrometheusMetricsManager.record_audit_write_failure is gone"
+    assert (
+        'autobot_audit_write_failures_total{action="login_success",error_type="OperationalError"} 3.0'
+        in text
+    ), "three failures must count as three, not one"
 
 
 def test_the_swallowing_path_emits_the_counter():

@@ -450,8 +450,12 @@ def _record_audit_write_failure(action: str, error_type: str) -> None:
         from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_audit_write_failure(action=str(action), error_type=error_type)
-    except Exception:  # nosec B110  # see docstring: never raise from the audit path
-        pass
+    except Exception as exc:  # nosec B110  # see docstring: never raise from the audit path
+        # #14674 review: without this the counter's own failure is both
+        # unrecorded AND uncounted — a failure counter reporting zero, which is
+        # worse than no counter. Debug-level keeps it out of normal operation
+        # while leaving a trace when the metric is inexplicably flat.
+        logger.debug("audit write-failure metric could not be recorded: %s", exc)
 
 
 def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:
