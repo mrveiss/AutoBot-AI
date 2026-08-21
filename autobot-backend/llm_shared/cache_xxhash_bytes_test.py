@@ -27,6 +27,8 @@ would otherwise turn this test back into the thing it exists to replace.
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -37,7 +39,35 @@ import pytest
 # all-mocks state that let #14731 through.
 import xxhash
 
-from llm_shared.cache import LLMResponseCache
+_CACHE_PATH = Path(__file__).resolve().parent / "cache.py"
+
+
+def _real_cache_module():
+    """Load ``cache.py`` from disk, bypassing conftest's package stub.
+
+    #14731 review: ``autobot-backend/conftest.py`` puts ``llm_shared.cache``
+    into ``sys.modules`` as a bare stub and then assigns
+    ``LLMResponseCache = MagicMock()`` on it, for the benefit of
+    ``services.llm_service``. A plain ``from llm_shared.cache import
+    LLMResponseCache`` therefore binds that MagicMock — so the first version of
+    this file asserted against a mock and passed identically with or without
+    the fix it was written to protect. The test guarded ``xxhash`` against
+    being a stand-in and never checked the class under test.
+
+    Loading the file under its own module name leaves the shared stub alone —
+    other tests still get the MagicMock they expect — while this file gets the
+    real class.
+    """
+    spec = importlib.util.spec_from_file_location("llm_shared_cache_real_14731", _CACHE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not build an import spec for {_CACHE_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_CACHE = _real_cache_module()
+LLMResponseCache = _CACHE.LLMResponseCache
 
 _MESSAGES = [{"role": "user", "content": "summarise this document"}]
 
@@ -58,14 +88,28 @@ def _key(**overrides) -> str:
     return LLMResponseCache.generate_cache_key(None, **params)
 
 
-def test_xxhash_is_the_real_library_here() -> None:
-    """Guard the guard: a leaked stub would make everything below vacuous."""
-    assert not isinstance(xxhash.xxh64, MagicMock), (
-        "xxhash.xxh64 is a MagicMock — something replaced the module in "
-        "sys.modules. This test only means anything against the real library; "
-        "a mock accepts str input and would hide exactly the #14731 break."
+def test_the_code_under_test_is_real_not_a_stand_in() -> None:
+    """Guard the guard — and check what the CODE binds, not what this file did.
+
+    The first version of this test checked only that ``xxhash`` was real. It
+    was; the *class* was a MagicMock from conftest, so every assertion below
+    passed against a mock and the file proved nothing. Both bindings are
+    checked now, and the xxhash one is read off the loaded module rather than
+    off this file's own import — that is the object ``generate_cache_key``
+    actually calls.
+    """
+    assert not isinstance(LLMResponseCache, MagicMock), (
+        "LLMResponseCache is a MagicMock — the real module did not load, so "
+        "everything below would assert against a stand-in that accepts "
+        "anything. This is the exact failure that let #14731 ship."
     )
-    assert hasattr(xxhash, "VERSION"), "xxhash does not look like the real module"
+    assert hasattr(LLMResponseCache, "generate_cache_key")
+
+    assert not isinstance(_CACHE.xxhash.xxh64, MagicMock), (
+        "the loaded module's xxhash is a MagicMock — a mock accepts str input "
+        "and would hide the #14731 break entirely."
+    )
+    assert hasattr(_CACHE.xxhash, "VERSION"), "xxhash does not look like the real module"
 
 
 def test_the_real_library_rejects_str_input() -> None:
