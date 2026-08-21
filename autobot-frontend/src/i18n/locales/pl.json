@@ -8332,6 +8332,7 @@
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
       "processDetach": "Odłącz {workflow} od {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna.",
       "canvasGroupKind": "Grupa",
       "toolNodeLabel": "Narzędzie",
@@ -8340,6 +8341,7 @@
       "toolAttachError": "Nie udało się dołączyć tego narzędzia.",
       "toolDetachError": "Nie udało się odłączyć tego narzędzia.",
       "toolDetach": "Odłącz {tool} od {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
       "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
       "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
