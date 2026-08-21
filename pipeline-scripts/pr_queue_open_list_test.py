@@ -23,6 +23,7 @@ YAML:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -194,29 +195,30 @@ def test_the_gate_never_fails_the_check(
     )
 
 
-def test_the_threshold_branch_is_actually_reached(tmp_path: Path) -> None:
-    """Guard the guard: 30 stubbed PRs must trip the runaway branch.
+def test_the_stub_stays_above_the_workflow_threshold() -> None:
+    """Tie the stub's size to the gate's own threshold, not to a guess.
 
-    If the stub ever fell below the threshold the tests above would pass by
-    running the quiet path and would prove nothing about the failure mode.
+    The parametrised cases above already assert which branch each one took, so
+    a stub that silently stopped tripping the runaway branch would be caught —
+    but caught as three confusing failures that all look like the gate broke.
+
+    The real hazard is drift in one direction: raise ``RUNAWAY_THRESHOLD`` in
+    the workflow and the stub's PR count quietly stops exceeding it. Reading
+    the threshold out of the workflow and comparing it here turns that into one
+    failure that names the actual cause.
     """
-    _write_gh_stub(tmp_path)
-    script = tmp_path / "gate.sh"
-    script.write_text(_gate_run_block(), encoding="utf-8")
-    result = subprocess.run(
-        # GitHub Actions runs a `run:` block as `bash -e {0}`. Invoking plain
-        # `bash` here would let a failed command slide and under-reproduce the
-        # very failure this test exists for.
-        ["bash", "-eo", "pipefail", str(script)],
-        capture_output=True,
-        text=True,
-        env=_env_with_stub(tmp_path),
-        cwd=_REPO_ROOT,
-        check=False,
+    match = re.search(r"RUNAWAY_THRESHOLD=(\d+)", _gate_run_block())
+    assert match, (
+        "could not find RUNAWAY_THRESHOLD in the gate's run block — if it was "
+        "renamed, repoint this test rather than dropping the check"
     )
-    assert "Runaway threshold reached" in result.stdout, (
-        "the stub no longer trips the threshold, so the warn-only tests are "
-        f"exercising the quiet path and prove nothing.\nstdout:\n{result.stdout}"
+    threshold = int(match.group(1))
+
+    assert len(_OPEN_PRS) > threshold, (
+        f"the stub builds {len(_OPEN_PRS)} open PRs but the gate's threshold is "
+        f"{threshold}. The runaway branch can no longer be reached, so every "
+        f"case that expects it would fail for a reason that looks like the gate "
+        f"is broken. Raise the stub above the threshold."
     )
 
 
