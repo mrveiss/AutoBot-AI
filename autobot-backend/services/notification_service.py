@@ -58,6 +58,25 @@ _NOTIFICATIONS_REDIS_DB = "main"
 _NOTIFICATION_TTL_SECONDS = TTL_7_DAYS
 
 
+def _mask_email(email: str) -> str:
+    """Mask a recipient address for the egress audit record and log line.
+
+    An email address is directly usable outside this system on its own — more
+    identifying than the phone number the WhatsApp seam already masks via
+    ``whatsapp_integration._mask_phone`` (channel-identity rule, #14540, see
+    ``services.gateway.egress_governor``). The local part is redacted; the
+    domain is kept, since "which mailbox" plus "which domain" is enough for
+    an operator to locate the blocked send without a plaintext address
+    sitting in every audit row (#14573).
+    """
+    if not email or "@" not in email:
+        return "<none>"
+    local, _, domain = email.rpartition("@")
+    if not local:
+        return f"***@{domain}"
+    return f"{local[0]}***@{domain}"
+
+
 class NotificationChannel(str, Enum):
     """Supported delivery channels for notifications."""
 
@@ -451,14 +470,25 @@ class NotificationService:
         # for a reason other than approval (a blocklist, a kill switch) would
         # otherwise be silently ignored here, and nothing in this file would say
         # so. Two reviews flagged the discarded verdict as a fail-open gate.
+        #
+        # channel_id used to be passed as "" unconditionally, so a blocked send
+        # left an audit row that identified nothing (#14573). An email address
+        # is directly usable outside this system — reduce it (channel-identity
+        # rule, #14540) before it reaches evaluate() and the denial log line.
+        masked_to = _mask_email(to)
         verdict = await egress_governor.evaluate(
             platform="email",
-            channel_id="",
+            channel_id=masked_to,
             message_id="",
             require_approval=False,
         )
         if not verdict.allowed:
-            logger.warning("email notification blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+            logger.warning(
+                "email notification to %s blocked by egress governance (%s): %s",
+                masked_to,
+                verdict.rule,
+                verdict.reason,
+            )
             return
 
         try:

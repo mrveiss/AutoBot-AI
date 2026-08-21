@@ -155,6 +155,20 @@ class TestBuildOrLoad:
 
 class TestPersistence:
     def test_index_file_written_after_train(self, tmp_index_dir):
+        """#14550/#14551 CI incident: this test itself computed the wrong path.
+
+        FAISSIVFPQBuilder._index_path() embeds the live module-level
+        IVFPQ_NLIST in the filename, and it is a bare global read at CALL
+        time, not captured once at __init__. The assertion used to sit
+        AFTER the `with patch(...)` block had already exited, so it computed
+        a path using the real IVFPQ_NLIST=1024 while training (inside the
+        block) wrote the file under the patched IVFPQ_NLIST=8 -- two
+        different filenames, so `.exists()` was checking a file that was
+        never written. Never caught locally because pytest.importorskip("faiss")
+        always skipped this test until #14551 mirrored faiss-cpu into CI, and
+        this was the first real run against the actual library. Fixed by
+        keeping the assertions inside the same patch scope as the write.
+        """
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
 
         with (
@@ -168,8 +182,8 @@ class TestPersistence:
             vectors = _make_vectors(600, 64)
             asyncio.run(b.train_and_build(vectors))
 
-        assert b._index_path().exists()
-        assert b._index_path().stat().st_size > 0
+            assert b._index_path().exists()
+            assert b._index_path().stat().st_size > 0
 
     def test_load_returns_none_when_file_missing(self, tmp_index_dir):
         from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder

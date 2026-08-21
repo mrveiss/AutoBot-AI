@@ -151,6 +151,58 @@
         </template>
     </BaseModal>
 
+    <!-- #14599: what the mapped operation costs to run. A sum over the steps
+         the canvas shows, from the same derivation the per-step panel uses. -->
+    <div class="chart-section" data-testid="step-rollup">
+      <h3 class="section-title">{{ $t('llc.cost.stepRollup') }}</h3>
+
+      <p v-if="rollupFailed" class="state-msg" data-testid="step-rollup-unavailable">
+        {{ $t('llc.cost.stepRollupUnavailable') }}
+      </p>
+      <p
+        v-else-if="rollupByRole.length === 0"
+        class="state-msg"
+        data-testid="step-rollup-empty"
+      >
+        {{ $t('llc.cost.stepRollupEmpty') }}
+      </p>
+
+      <template v-else>
+        <div v-for="group in rollupGroups" :key="group.key" :data-testid="`step-rollup-${group.key}`">
+          <h4 class="rollup-heading">{{ group.title }}</h4>
+          <table class="cost-table">
+            <thead>
+              <tr>
+                <th>{{ group.columnLabel }}</th>
+                <th>{{ $t('llc.cost.perMonth') }}</th>
+                <th>{{ $t('llc.cost.coverage') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="bucket in group.buckets" :key="bucket.key">
+                <td>{{ bucket.label }}</td>
+                <td class="num-cell">
+                  {{ bucket.per_month }}
+                  <span v-if="bucket.currencies.length">{{ bucket.currencies.join(' / ') }}</span>
+                </td>
+                <!-- Coverage sits beside every total, never behind a tooltip: a
+                     partial figure presented alone reads as a complete one. -->
+                <td :data-testid="`rollup-coverage-${group.key}-${bucket.key}`">
+                  <span v-if="bucket.is_complete">{{ $t('llc.cost.coverageComplete') }}</span>
+                  <span v-else>
+                    {{ $t('llc.cost.coveragePartial', { costed: bucket.costed, total: bucket.total_steps }) }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="state-msg" data-testid="step-rollup-tool-note">
+          {{ $t('llc.cost.stepRollupToolNote') }}
+        </p>
+      </template>
+    </div>
+
     <!-- Bar chart: daily spend -->
     <div class="chart-section">
       <h3 class="section-title">{{ $t('llc.cost.dailySpend') }}</h3>
@@ -289,6 +341,34 @@ interface CostEvent {
 
 const budgets = ref<BudgetEntry[]>([])
 const costEvents = ref<CostEvent[]>([])
+
+/**
+ * What the mapped operation costs to run, by role and by tool (#14599).
+ *
+ * Every bucket reports its coverage next to its total. A step nobody measured
+ * is excluded from the sum and counted in `not_costable` — never folded in as
+ * zero, which would make a partial total indistinguishable from a complete one.
+ */
+interface RollupBucket {
+  key: string
+  label: string
+  per_month: string
+  costed: number
+  not_costable: number
+  total_steps: number
+  is_complete: boolean
+  currencies: string[]
+}
+const rollupByRole = ref<RollupBucket[]>([])
+const rollupByTool = ref<RollupBucket[]>([])
+/** The request did not answer — distinct from answering "nothing is mapped". */
+const rollupFailed = ref(false)
+
+/** The two groupings, so the table markup is written once rather than twice. */
+const rollupGroups = computed(() => [
+  { key: 'role', title: t('llc.cost.byRole'), columnLabel: t('llc.cost.role'), buckets: rollupByRole.value },
+  { key: 'tool', title: t('llc.cost.byTool'), columnLabel: t('llc.cost.tool'), buckets: rollupByTool.value },
+])
 const isLoading = ref(false)
 const costEventsUnavailable = ref(false)
 const filters = ref({ agent: '', dateFrom: '', dateTo: '' })
@@ -503,6 +583,26 @@ async function fetchBudgets() {
   }
 }
 
+async function fetchStepRollup() {
+  if (!companyId.value) return
+  rollupFailed.value = false
+  try {
+    const data = await api.get<{ by_role?: RollupBucket[]; by_tool?: RollupBucket[] }>(
+      `/api/llc/costs/step-rollup?company_id=${companyId.value}`,
+    )
+    // Validated before it is rendered: a payload of the wrong shape reaching
+    // the template is what took the whole role detail down in #14598, and the
+    // dashboard down in #13617.
+    rollupByRole.value = Array.isArray(data?.by_role) ? data.by_role : []
+    rollupByTool.value = Array.isArray(data?.by_tool) ? data.by_tool : []
+  } catch (err) {
+    logger.error('Step rollup fetch failed', err)
+    rollupByRole.value = []
+    rollupByTool.value = []
+    rollupFailed.value = true
+  }
+}
+
 async function fetchCostEvents() {
   if (!companyId.value) return
   isLoading.value = true
@@ -524,7 +624,7 @@ async function fetchCostEvents() {
 
 onMounted(async () => {
   if (!companyId.value) return
-  await Promise.all([fetchBudgets(), fetchCostEvents()])
+  await Promise.all([fetchBudgets(), fetchCostEvents(), fetchStepRollup()])
 })
 </script>
 
