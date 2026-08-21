@@ -210,11 +210,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Deps | Install nginx"
@@ -308,11 +312,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Data | Deploy Redis role"
@@ -330,11 +338,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "App | Deploy backend role"
@@ -372,11 +384,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "App | Deploy frontend role"
@@ -529,11 +545,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy AI stack role"
@@ -562,11 +582,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy NPU worker role"
@@ -586,11 +610,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "AI | Deploy TTS worker role"
@@ -610,11 +638,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
@@ -634,11 +666,15 @@
   become: true
   gather_facts: true
 
-  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
   # for why this is needed (SLM-triggered provision uses temp inventory
   # without sibling group_vars/, so this loads the facts directly).
-  vars_files:
-    - vars/role_active_facts.yml
+  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
+  # single tracked definition. They used to be loaded here by vars_files as
+  # well, because SLM-triggered runs wrote a temp inventory with no sibling
+  # group_vars/ (#7094). Every inventory builder now links the real group_vars
+  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
+  # and setup_wizard._write_wizard_inventory), so that shape is no longer
+  # produced and the second copy was pure duplication.
 
   tasks:
     - name: "Auto | Deploy browser role"
