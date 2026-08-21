@@ -86,16 +86,20 @@ jobs:
           sudo apt-get install -y ansible-core
 
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
-      # It was a tracked copy kept byte-equal by a diff guard; the guard caught
-      # real drift but enforcing three copies is not a fix. Copied rather than
-      # symlinked on purpose -- #14149: core.symlinks=false checkouts (WSL2)
-      # materialise a tracked symlink as a plain-text path string, and the
-      # playbook then silently resolves zero variables.
+      # It was a third tracked copy of the role-active facts kept byte-equal by
+      # a diff guard. Copied rather than symlinked: #14149 -- a tracked symlink
+      # is materialised as a plain-text path string on core.symlinks=false
+      # checkouts, and the playbook then resolves zero variables.
       - name: "Generate the test inventory's group_vars from the single source (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
           mkdir -p tests/inventory/group_vars
           cp inventory/group_vars/all.yml tests/inventory/group_vars/all.yml
+
+      - name: "Assert that copy is fresh and is a real file (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_test_inventory_is_generated.py
 
       - name: Run role_*_active facts test (group_vars codepath)
         working-directory: autobot-slm-backend/ansible
@@ -107,16 +111,24 @@ jobs:
       # core.symlinks=true, so the playbook run above passed here even while it
       # silently resolved to zero variables on core.symlinks=false checkouts.
       # This asserts the test inventory actually resolves a known group_vars key.
-      - name: "Assert the test group_vars is a fresh copy of the single source (#14678)"
-        working-directory: autobot-slm-backend/ansible
-        run: |
-          python3 tests/check_test_inventory_is_generated.py
-
       - name: "Assert test inventory resolves group_vars (#14149)"
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_test_inventory_group_vars.py
 
+      - name: Run role_*_active facts test (vars_files codepath, #7094)
+        working-directory: autobot-slm-backend/ansible
+        # #7094: tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT
+        # the group_vars/all.yml symlink. Mimics the SLM-triggered provision
+        # path where the temp inventory in /tmp/ has no sibling group_vars/.
+        # The playbook MUST succeed loading facts via vars_files alone.
+        run: |
+          ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
+
+      - name: "Diff guard: the two tracked role_*_active copies stay in sync (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_role_facts_synced.py
 
       # #13746: three producers built /opt/autobot/venv with two interpreters.
       # Co-location puts them on one host, and the loser's site-packages

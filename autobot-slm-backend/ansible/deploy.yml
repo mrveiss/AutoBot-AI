@@ -15,6 +15,7 @@
   vars:
     target_roles: "{{ target_roles | default('slm-agent') }}"
 
+  # #7050/#7051 shared role-active facts — see playbooks/vars/role_active_facts.yml
   # for why this is needed (this play can run against a temp inventory with no
   # sibling group_vars/, e.g. the SLM wizard path).
   #
@@ -25,13 +26,8 @@
   # from target_roles meant a `target_roles=ai-stack` redeploy against an
   # already-combined host reclaimed the unit from redis on every run, even though
   # redis was never touched (#4090).
-  # #14678: the role-active facts come from inventory/group_vars/all.yml, the
-  # single tracked definition. They used to be loaded here by vars_files as
-  # well, because SLM-triggered runs wrote a temp inventory with no sibling
-  # group_vars/ (#7094). Every inventory builder now links the real group_vars
-  # beside the temp file (#11781, #14286 -- playbook_executor._link_group_vars
-  # and setup_wizard._write_wizard_inventory), so that shape is no longer
-  # produced and the second copy was pure duplication.
+  vars_files:
+    - playbooks/vars/role_active_facts.yml
 
   tasks:
     - name: Parse target roles

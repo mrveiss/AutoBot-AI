@@ -1,0 +1,151 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Test inventory for role_*_active facts (#7056)
+#
+# Synthetic hosts covering every code path in the shared facts
+# (group_vars/all.yml). Each host defines the (node_roles, group membership)
+# inputs and the EXPECTED role_*_active output. The test playbook asserts
+# input → output matches the fact definition.
+#
+# This catches:
+#   - Forgotten autobot-X variant when adding a new role
+#   - Forgotten group-membership check
+#   - Drift between provision-fleet-roles.yml gates and group_vars facts
+---
+all:
+  hosts:
+    # 1. Single-host install layout written by install.sh (#6600):
+    #    SLM Manager hosts the SLM stack AND co-hosts backend + vnc.
+    #    Was the failure mode of #7031 — cleanup wiped autobot-backend
+    #    because 'backend' was not in node_roles (only 'autobot-backend').
+    test-single-host-slm-and-backend:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - autobot-backend
+        - vnc
+      expected_role_backend_active: true
+      expected_role_vnc_active: true
+      expected_role_frontend_active: false
+      expected_role_slm_active: true
+      expected_role_redis_active: false
+      expected_role_ai_stack_active: false
+      expected_role_npu_worker_active: false
+      expected_role_browser_active: false
+      expected_role_llm_active: false
+      expected_role_tts_worker_active: false
+
+    # 2. Dedicated SLM Manager (multi-host fleet — seed-fleet-nodes.yml).
+    #    No backend, no frontend.
+    test-dedicated-slm-manager:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - autobot-slm-agent
+        - autobot-slm-database
+        - autobot-monitoring
+      expected_role_backend_active: false
+      expected_role_vnc_active: false
+      expected_role_frontend_active: false
+      expected_role_slm_active: true
+      expected_role_redis_active: false
+      expected_role_ai_stack_active: false
+      expected_role_npu_worker_active: false
+      expected_role_browser_active: false
+      expected_role_llm_active: false
+      expected_role_tts_worker_active: false
+
+    # 3. Backend host using SHORT role name (no prefix). Provision gates and
+    #    cleanup gates must both treat this as "backend is active".
+    test-backend-short-name:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - backend
+      expected_role_backend_active: true
+      expected_role_vnc_active: false
+      expected_role_slm_active: false
+
+    # 4. Frontend host with autobot-prefixed name.
+    test-frontend-prefixed:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - autobot-frontend
+      expected_role_backend_active: false
+      expected_role_frontend_active: true
+      expected_role_slm_active: false
+
+    # 5. AI Stack + LLM (co-located).
+    test-ai-stack-and-llm:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - ai-stack
+        - llm
+      expected_role_ai_stack_active: true
+      expected_role_llm_active: true
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
+    # 6. NPU + TTS worker (co-located convention).
+    test-npu-and-tts:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - autobot-npu-worker
+        - tts-worker
+      expected_role_npu_worker_active: true
+      expected_role_tts_worker_active: true
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
+    # 7. Browser worker — variant naming (browser-service legacy).
+    test-browser-legacy-name:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - browser-service
+      expected_role_browser_active: true
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
+    # 8. Empty node_roles + group membership (legacy multi-host inventory).
+    #    Backend role should still gate-on via groups['main'] membership.
+    test-empty-roles-via-group:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles: []
+      expected_role_backend_active: true   # via groups['main']
+      # #13060: VNC is NOT implied by groups['main'] — activation is explicit.
+      expected_role_vnc_active: false
+      expected_role_frontend_active: false
+      expected_role_slm_active: false
+
+    # 9. No node_roles defined at all (truly empty host).
+    #    All facts should evaluate to false.
+    test-no-roles-defined:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      expected_role_backend_active: false
+      expected_role_vnc_active: false
+      expected_role_frontend_active: false
+      expected_role_slm_active: false
+      expected_role_redis_active: false
+      expected_role_ai_stack_active: false
+      expected_role_npu_worker_active: false
+      expected_role_browser_active: false
+      expected_role_llm_active: false
+      expected_role_tts_worker_active: false
+
+  children:
+    # Group-membership-only test for #8 (test-empty-roles-via-group).
+    main:
+      hosts:
+        test-empty-roles-via-group: {}
+    # SLM Manager hosts must be in slm_server group (matches install.sh
+    # localhost.yml + seed-fleet-nodes.yml inventory layout).
+    slm_server:
+      hosts:
+        test-single-host-slm-and-backend: {}
+        test-dedicated-slm-manager: {}

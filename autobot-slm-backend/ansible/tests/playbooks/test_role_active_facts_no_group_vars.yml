@@ -1,0 +1,102 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Test playbook: role_*_active facts via vars_files (#7094)
+#
+# Mirrors test_role_active_facts.yml but loads the facts via vars_files
+# instead of group_vars. Mimics the SLM-triggered provision codepath
+# where the temp inventory has NO sibling group_vars/ directory.
+#
+# Without this test, drift between inventory/group_vars/all.yml and
+# playbooks/vars/role_active_facts.yml goes undetected (the regression
+# that #7093 had to fix retroactively).
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i tests/inventory/test_role_facts.yml \
+#                    tests/playbooks/test_role_active_facts_no_group_vars.yml
+---
+- name: "Test: role_*_active facts via vars_files (#7094 dynamic-inventory codepath)"
+  hosts: all
+  gather_facts: false
+  any_errors_fatal: true
+
+  # Critical: load via vars_files (NOT group_vars symlink).
+  # Path is relative to this playbook file:
+  #   tests/playbooks/test_role_active_facts_no_group_vars.yml
+  #     ../../playbooks/vars/role_active_facts.yml
+  vars_files:
+    - ../../playbooks/vars/role_active_facts.yml
+
+  tasks:
+    - name: "role_backend_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_backend_active | bool) == (expected_role_backend_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }} (vars_files path):
+          role_backend_active={{ role_backend_active }},
+          expected={{ expected_role_backend_active }}
+      when: expected_role_backend_active is defined
+
+    - name: "role_frontend_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_frontend_active | bool) == (expected_role_frontend_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_frontend_active mismatch (vars_files path)"
+      when: expected_role_frontend_active is defined
+
+    - name: "role_slm_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_slm_active | bool) == (expected_role_slm_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_slm_active mismatch (vars_files path)"
+      when: expected_role_slm_active is defined
+
+    - name: "role_ai_stack_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_ai_stack_active | bool) == (expected_role_ai_stack_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_ai_stack_active mismatch (vars_files path)"
+      when: expected_role_ai_stack_active is defined
+
+    - name: "role_npu_worker_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_npu_worker_active | bool) == (expected_role_npu_worker_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_npu_worker_active mismatch (vars_files path)"
+      when: expected_role_npu_worker_active is defined
+
+    - name: "role_browser_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_browser_active | bool) == (expected_role_browser_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_browser_active mismatch (vars_files path)"
+      when: expected_role_browser_active is defined
+
+    - name: "role_redis_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_redis_active | bool) == (expected_role_redis_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_redis_active mismatch (vars_files path)"
+      when: expected_role_redis_active is defined
+
+    - name: "role_vnc_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_vnc_active | bool) == (expected_role_vnc_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_vnc_active mismatch (vars_files path)"
+      when: expected_role_vnc_active is defined
+
+    - name: "role_llm_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_llm_active | bool) == (expected_role_llm_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_llm_active mismatch (vars_files path)"
+      when: expected_role_llm_active is defined
+
+    - name: "role_tts_worker_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_tts_worker_active | bool) == (expected_role_tts_worker_active | bool)
+        fail_msg: "{{ inventory_hostname }}: role_tts_worker_active mismatch (vars_files path)"
+      when: expected_role_tts_worker_active is defined
