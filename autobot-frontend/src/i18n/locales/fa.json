@@ -3819,7 +3819,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "برای انتقال فوکوس بین گره‌ها از کلیدهای جهت‌نما استفاده کنید. برای انتخاب گره فوکوس‌شده، Enter یا Space را فشار دهید. برای لغو انتخاب، Escape را فشار دهید.",
-      "a11yInstructionsMove": "کلید Control را نگه دارید و یک کلید جهت‌نما را فشار دهید تا گره انتخاب‌شده جابه‌جا شود."
+      "a11yInstructionsMove": "کلید Control را نگه دارید و یک کلید جهت‌نما را فشار دهید تا گره انتخاب‌شده جابه‌جا شود.",
+      "searchLabel": "جستجوی گره‌ها",
+      "searchPlaceholder": "جستجو بر اساس نام",
+      "searchClear": "پاک کردن جستجو",
+      "searchResultsStatus": "{count} مورد برای «{query}» یافت شد",
+      "searchNoResults": "هیچ نتیجه‌ای برای «{query}» یافت نشد",
+      "fitToSelection": "تنظیم اندازه بر اساس انتخاب یا فیلتر",
+      "minimapLabel": "نمای کلی بوم"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8008,7 +8015,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "هزینه به‌صورت مجموع برای هر عامل ثبت می‌شود، نه رویدادهای تاریخ‌دار؛ بنابراین هنوز تاریخچهٔ روزانه وجود ندارد."
+      "noDatedEvents": "هزینه به‌صورت مجموع برای هر عامل ثبت می‌شود، نه رویدادهای تاریخ‌دار؛ بنابراین هنوز تاریخچهٔ روزانه وجود ندارد.",
+      "stepRollup": "هزینهٔ عملیات ترسیم‌شده",
+      "byRole": "بر پایهٔ نقش",
+      "byTool": "بر پایهٔ ابزار",
+      "role": "نقش",
+      "tool": "ابزار",
+      "coverage": "پوشش",
+      "coverageComplete": "همهٔ گام‌ها محاسبه شد",
+      "coveragePartial": "{costed} از {total} گام محاسبه شد",
+      "stepRollupEmpty": "هنوز گامی از فرایند ترسیم نشده است، پس چیزی برای جمع‌زدن نیست.",
+      "stepRollupUnavailable": "بارگیری مجموع‌ها ممکن نشد.",
+      "stepRollupToolNote": "هر گام برای همهٔ ابزارهای نقش خود شمرده می‌شود، بنابراین مجموع ابزارها با مجموع نقش‌ها برابر نیست.",
+      "perMonth": "در ماه"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8313,6 +8332,7 @@
       "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
       "processDetach": "جدا کردن {workflow} از {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد.",
       "canvasGroupKind": "گروه",
       "toolNodeLabel": "ابزار",
@@ -8321,8 +8341,10 @@
       "toolAttachError": "پیوست کردن این ابزار ممکن نشد.",
       "toolDetachError": "جدا کردن این ابزار ممکن نشد.",
       "toolDetach": "جدا کردن {tool} از {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
-      "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است."
+      "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
+      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
     },
     "executorRollup": {
       "title": "خلاصه مجریان",

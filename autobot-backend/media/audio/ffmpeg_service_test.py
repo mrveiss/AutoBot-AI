@@ -167,6 +167,28 @@ class TestFFmpegService:
         assert service1 is service2
 
 
+def test_ci_actually_has_the_ffmpeg_toolchain():
+    """#14550: fail loudly in CI, rather than silently skip, if ffmpeg regresses.
+
+    ansible installs ffmpeg on every backend host (#14550) for exactly the
+    capability test_real_audio_extraction below exercises; setup-python-suite
+    now mirrors that install so the test genuinely runs instead of skipping
+    "FFmpeg not installed". Applies the same principle
+    tools/lint/check_ci_system_package_provisioning.py enforces structurally:
+    an always-closed gate must fail loudly, not pass quietly, if provisioning
+    ever regresses. Outside CI (e.g. a contributor's machine without ffmpeg)
+    the capability is legitimately unavailable, so this only asserts when CI
+    is set.
+    """
+    if os.environ.get("CI", "").lower() not in ("1", "true"):
+        pytest.skip("not running in CI — ffmpeg is optional on a local machine")
+    assert shutil.which("ffmpeg") is not None, (
+        "ffmpeg missing on the CI runner: .github/actions/setup-python-suite/action.yml "
+        "should have installed it (#14550). Without it, test_real_audio_extraction "
+        "silently skips and proves nothing about real audio extraction."
+    )
+
+
 class TestFFmpegServiceIntegration:
     """Integration tests with real FFmpeg (requires FFmpeg installed)."""
 

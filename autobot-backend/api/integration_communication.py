@@ -11,6 +11,7 @@ listing channels/guilds.
 """
 
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -196,6 +197,11 @@ async def send_message(
     # `message.channel_id` (see `SendMessageRequest`) — read whichever the
     # request populated, or the audit record silently records an empty
     # identifier for every Slack send.
+    # Teams has no channel target in this schema at all — `SendMessageRequest`
+    # carries no webhook field, so `raw_channel_id` is "" for it by
+    # construction, not a bug (#14573). The Teams identifier that IS
+    # reachable lives in `send_webhook_message` below, which reduces the
+    # webhook URL to its host.
     # The HTTPException below carries a fixed message, never verdict.reason —
     # that field is audit-facing only and can carry raw approver-exception text
     # once #14068 registers real approvers (#14539).
@@ -300,9 +306,19 @@ async def send_webhook_message(
     # says nothing about this one, which reaches the same Teams webhook by its
     # own route — so governing that function left this bypass wide open, reading
     # as covered because the governor appears elsewhere in the module.
-    verdict = await egress_governor.evaluate(platform="teams", channel_id="", message_id="")
+    #
+    # channel_id used to be passed as "" unconditionally (#14573). A Teams
+    # webhook URL embeds a bearer token in its path
+    # (https://.../webhook/<token>/IncomingWebhook/<token>/...) — directly
+    # usable outside this system, the same shape notification_service's
+    # webhook seam already reduces to hostname. Applied here to the audit
+    # record and the denial log line alike (channel-identity rule, #14540).
+    host = urlparse(webhook.webhook_url).hostname or "unknown"
+    verdict = await egress_governor.evaluate(platform="teams", channel_id=host, message_id="")
     if not verdict.allowed:
-        logger.warning("teams webhook send blocked by egress governance (%s): %s", verdict.rule, verdict.reason)
+        logger.warning(
+            "teams webhook send to %s blocked by egress governance (%s): %s", host, verdict.rule, verdict.reason
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
 
     try:
