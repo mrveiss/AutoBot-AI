@@ -8332,6 +8332,7 @@
       "attachError": "No se pudo adjuntar ese flujo.",
       "detachError": "No se pudo quitar ese flujo.",
       "processDetach": "Quitar {workflow} de {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta.",
       "canvasGroupKind": "Grupo",
       "toolNodeLabel": "Herramienta",
@@ -8340,6 +8341,7 @@
       "toolAttachError": "No se pudo adjuntar esa herramienta.",
       "toolDetachError": "No se pudo quitar esa herramienta.",
       "toolDetach": "Quitar {tool} de {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
       "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa.",
       "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él."

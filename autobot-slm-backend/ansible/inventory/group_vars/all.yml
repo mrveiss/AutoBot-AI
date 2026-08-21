@@ -412,9 +412,12 @@ role_xrdp_active: >-
      (inventory_hostname in (groups.get('rdp_nodes', []) | default([]))) }}
 
 # #14567: `ai_stack`/`llm_nodes` are declaration-gated deploy targets, so this
-# fact reads node_roles_declared (#14560). Kept byte-identical to the copy in
-# playbooks/vars/role_active_facts.yml -- tests/check_role_facts_synced.py
-# enforces that, and it caught this file being missed.
+# fact reads node_roles_declared (#14560).
+#
+# #14678: this file is now the ONLY tracked definition of the role-active facts.
+# It previously had two byte-identical siblings kept in step by a diff guard;
+# the guard worked but enforcing three copies was never the fix #7095 asked for.
+# The test inventory's copy is generated from this file at CI time.
 role_llm_active: >-
   {{ ('llm' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
