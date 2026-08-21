@@ -30,6 +30,14 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #14431: cap <3.0 — every published llama-index-llms-openai release pins
+        # openai<3, so a grouped bump to 3.x is unsatisfiable and dies with
+        # ResolutionImpossible at the Docker pip layer, taking smoke-test with it.
+        # semver-major ignore alone does NOT stop the grouped all-dependencies bump
+        # from re-proposing it (same lesson as protobuf above). Hard-exclude so it
+        # stops. Unblock when llama-index-llms-openai supports 3.x.
+        versions: [">=3.0.0"]
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic"
@@ -406,6 +414,16 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "tokenizers"
+        # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
+        # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
+        # 0.24.0. The requirements files' <0.24 is a looser safety bound; keying
+        # the exclusion to it (as this entry first did) still let dependabot
+        # propose 0.23.1 — which is exactly what #14441 and #14442 carry.
+        # scripts/tokenizers_transformers_range_test.py pins the real cap at
+        # (0, 23, 0). Raise this only alongside a transformers bump that raises
+        # _TRANSFORMERS_CAP there.
+        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -432,6 +450,16 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "tokenizers"
+        # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
+        # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
+        # 0.24.0. The requirements files' <0.24 is a looser safety bound; keying
+        # the exclusion to it (as this entry first did) still let dependabot
+        # propose 0.23.1 — which is exactly what #14441 and #14442 carry.
+        # scripts/tokenizers_transformers_range_test.py pins the real cap at
+        # (0, 23, 0). Raise this only alongside a transformers bump that raises
+        # _TRANSFORMERS_CAP there.
+        versions: [">=0.23.1"]
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic"
