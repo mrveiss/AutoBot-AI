@@ -36,7 +36,7 @@ reportlab>=5.0.0    # PDF export for transcripts
 # loosens the constraint and the OneDrive connector's parsers still install (#14228, GH#9004).
 
 # AI/ML
-openai>=3.0.0
+openai>=2.53.0
 anthropic>=0.122.0
 boto3>=1.43.71                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
