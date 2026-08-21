@@ -83,6 +83,34 @@ runs:
     # the well-documented few-minutes duration of apt-daily on a freshly
     # booted Ubuntu VM, with generous margin against the 60-minute job
     # budget it draws from.
+    #
+    # #14550 (fourth incident): 11 of 12 shards passed after that increase;
+    # one still hit exit 124. A single failed attempt says nothing about
+    # whether a second would succeed against a background timer that clears
+    # on its own schedule -- that is what a retry is for, and doubling the
+    # timeout again would be guessing rather than reasoning about the actual
+    # failure mode (transient lock contention, not an undersized budget).
+    # Considered making the install lazy instead -- only the one shard whose
+    # pytest-split group actually contains ffmpeg_service_test.py would
+    # install it, cutting exposure from twelve VMs to one. Rejected: which
+    # shard gets that file is decided dynamically by pytest-split's duration
+    # balancing (not knowable statically), so determining it here would mean
+    # running a `--collect-only` dry pass with the SAME --splits/--group
+    # pytest-split sees later, matched exactly or a mismatch silently
+    # re-introduces the vacuous-skip bug this PR exists to close -- and
+    # tools/lint/check_ci_system_package_provisioning.py already generalises
+    # this pairing across every ansible-installed binary, not just ffmpeg;
+    # a per-test lazy-install path would only cover this one case and need
+    # its own maintenance again for the next one. Three attempts with a
+    # short, deliberately modest backoff (the lock holder finishes on its
+    # own schedule -- waiting is the point, not a longer single wait)
+    # converts a roughly 1-in-12 per-shard race into something far smaller,
+    # without pretending to know the right single-attempt budget. Exhausting
+    # all three still fails the step: the retry loop's own exit status IS
+    # the last attempt's exit status, propagated by `set -e` because the
+    # function call is a bare statement, not wrapped in an `if`/`&&` that
+    # would swallow it -- a genuinely unavailable toolchain must still
+    # redden the run.
     - name: Install CI system packages (#14550)
       shell: bash
       run: |
@@ -92,8 +120,20 @@ runs:
           exit 0
         fi
         export DEBIAN_FRONTEND=noninteractive
-        timeout 300 sudo apt-get update -qq -o DPkg::Lock::Timeout=120
-        timeout 300 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 ffmpeg
+
+        apt_retry() {
+          local attempt
+          for attempt in 1 2 3; do
+            "$@" && return 0
+            echo "apt attempt ${attempt}/3 failed (exit $?) — retrying" >&2
+            sleep $((attempt * 15))
+          done
+          echo "::error::apt did not succeed after 3 attempts — toolchain provisioning failed" >&2
+          return 1
+        }
+
+        apt_retry timeout 300 sudo apt-get update -qq -o DPkg::Lock::Timeout=120
+        apt_retry timeout 300 sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=120 ffmpeg
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
     # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
