@@ -11,7 +11,7 @@ split into two groups on purpose:
   the toolchain is absent — degrade with a reason, never raise, never claim an
   attempt that did not happen. This is the half that protects hosts like the ones
   #13885 found, where the binary shipped and the binding did not.
-- End-to-end tests, which need ``pytesseract``, ``PyMuPDF`` and a working
+- End-to-end tests, which need ``pytesseract``, ``pypdfium2`` and a working
   tesseract binary. They ``skip`` where those are missing rather than passing
   vacuously, so a green run in a stripped environment never reads as proof that
   OCR works.
