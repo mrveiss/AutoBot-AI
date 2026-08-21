@@ -49,11 +49,16 @@ updates:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "protobuf"
-        # #10474/#10615/#10616: cap <7.0 — opentelemetry-proto (otel 1.42) requires
-        # protobuf<7.0. semver-major ignore alone did NOT stop the grouped
-        # all-dependencies bump from re-proposing 7.x (unsatisfiable → ResolutionImpossible
-        # on every PR). Hard-exclude >=7.0.0 so it stops. Unblock when otel supports 7.x.
-        versions: [">=7.0.0"]
+        # #10474/#10615/#10616 hard-excluded >=7.0.0 because opentelemetry-proto
+        # (otel 1.42) required protobuf<7.0 and a grouped bump kept re-proposing
+        # 7.x. That is no longer the state of the tree: the manifest now pins
+        # `protobuf>=7.35.1,<8.0.0` and the Docker images build green, so 7.x is
+        # demonstrably installable here.
+        # #14727: an exclusion at or below a manifest's own floor leaves
+        # dependabot nothing it may propose — protobuf was FROZEN in this block,
+        # not capped. The range now mirrors the manifest's real ceiling, <8.0.0.
+        # The stale <7.0 rationale is raised separately for confirmation.
+        versions: [">=8.0.0"]
       - dependency-name: "websockets"
         # #10474/#10386: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
         # semver-major ignore alone did not stop the grouped bump from re-proposing 16.x.
@@ -501,11 +506,34 @@ updates:
       - dependency-name: "starlette"
         update-types: ["version-update:semver-major"]
       - dependency-name: "protobuf"
-        # #10474: cap <7.0 — opentelemetry-proto (otel 1.42) requires protobuf<7.0.
+        # #14727: the range mirrors the manifest's own cap, `<8.0.0`.
+        # It previously read `>=7.0.0`, carried over from the #10474 note about
+        # opentelemetry-proto needing protobuf<7.0 — but the pin has since moved
+        # to `protobuf>=7.35.1,<8.0.0`. An exclusion at or below a manifest's own
+        # floor offers dependabot nothing it is allowed to propose, so protobuf
+        # was frozen in this block rather than capped.
+        # update-types alone does NOT stop a grouped all-dependencies bump
+        # (#14431 recorded that for openai), so the range is what holds.
         update-types: ["version-update:semver-major"]
+        versions: [">=8.0.0"]
       - dependency-name: "websockets"
         # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
+        # #14727: same reason as protobuf above — a grouped bump ignores
+        # update-types, and this block reaches the pin.
         update-types: ["version-update:semver-major"]
+        versions: [">=16.0.0"]
+      - dependency-name: "openai"
+        # #14727: the SAME hard-exclude as the /autobot-backend block above.
+        # It must be repeated here because an `ignore` entry protects one
+        # block, while dependabot follows `-r` includes across block
+        # boundaries — this root block reaches both files that pin openai:
+        #   requirements-dev.txt:6 -r autobot-backend/requirements.txt
+        #   requirements-ci.txt:14 -r requirements-ci/ai-ml.txt
+        # So #14722 bumped openai to 3.2.0 from here, bypassing the
+        # /autobot-backend exclusion on /autobot-backend's own file, and
+        # smoke-test died on ResolutionImpossible against llama-index.
+        # Keep the two entries in step; pip_ignore_scope_test.py enforces it.
+        versions: [">=3.0.0"]
 
   # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
   # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.

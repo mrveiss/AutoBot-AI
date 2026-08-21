@@ -14,14 +14,14 @@ pydantic>=2.13.4
 openvino>=2026.3.0
 
 # Model and Tokenization (lightweight)
-tokenizers>=0.22.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
+tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
 transformers>=5.15.0
-huggingface-hub>=1.27.0
+huggingface-hub>=1.28.0
 
 # Tensor Operations (NPU optimized)
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
@@ -32,7 +32,7 @@ httpx>=0.28.1
 requests>=2.34.2
 
 # Utilities
-python-dotenv>=1.2.2
+python-dotenv>=1.2.3
 structlog>=26.1.0
 tenacity>=9.1.4
 async-timeout>=5.0.1
