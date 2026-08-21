@@ -38,8 +38,19 @@ _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "pr-queue-gate.yml"
 _OPEN_PRS = [{"number": 100 + i, "title": f"pr number {100 + i}"} for i in range(30)]
 
 
-def _write_gh_stub(directory: Path, *, list_rc: int = 0, comment_rc: int = 0) -> None:
-    """Put a fake `gh` on PATH that mimics the two calls the gate makes."""
+def _write_gh_stub(
+    directory: Path, *, count_rc: int = 0, list_rc: int = 0, comment_rc: int = 0
+) -> None:
+    """Put a fake `gh` on PATH that mimics the three calls the gate makes.
+
+    The gate calls `gh pr list` TWICE and they must be controllable
+    separately. The first asks jq for `length` to get the count; the second
+    (inside `pr-queue-open-list.sh`) fetches the list itself and only happens
+    on the runaway branch. A single failure switch for both made the count
+    fail first, which sent the gate down the quiet path — so the case meant to
+    exercise the list fallback never reached it, and passed for the wrong
+    reason.
+    """
     payload = "".join(
         f'{{"number": {p["number"]}, "title": "{p["title"]}"}},' for p in _OPEN_PRS
     ).rstrip(",")
@@ -53,9 +64,13 @@ def _write_gh_stub(directory: Path, *, list_rc: int = 0, comment_rc: int = 0) ->
         '  echo "unknown arguments; please quote all values that have spaces" >&2\n'
         "  exit 1; }; done\n"
         'for a in "$@"; do [ "$a" = "comment" ] && exit %d; done\n'
-        "if [ %d -ne 0 ]; then echo 'stub: gh failed' >&2; exit %d; fi\n"
-        'for a in "$@"; do [ "$a" = "length" ] && { echo %d; exit 0; }; done\n'
-        "echo '[%s]'\n" % (comment_rc, list_rc, list_rc, len(_OPEN_PRS), payload),
+        # `--jq length` identifies the count call and nothing else.
+        'for a in "$@"; do [ "$a" = "length" ] && {\n'
+        "  if [ %d -ne 0 ]; then echo 'stub: gh count failed' >&2; exit %d; fi\n"
+        "  echo %d; exit 0; }; done\n"
+        "if [ %d -ne 0 ]; then echo 'stub: gh list failed' >&2; exit %d; fi\n"
+        "echo '[%s]'\n"
+        % (comment_rc, count_rc, count_rc, len(_OPEN_PRS), list_rc, list_rc, payload),
         encoding="utf-8",
     )
     stub.chmod(0o755)
@@ -132,29 +147,33 @@ def _gate_run_block() -> str:
 
 
 @pytest.mark.parametrize(
-    ("label", "kwargs"),
+    ("label", "kwargs", "reaches_runaway"),
     [
-        ("everything works", {}),
-        ("posting the notice fails", {"comment_rc": 1}),
-        ("listing the PRs fails", {"list_rc": 1}),
+        ("everything works", {}, True),
+        ("posting the notice fails", {"comment_rc": 1}, True),
+        ("listing the PRs fails", {"list_rc": 1}, True),
+        ("counting the PRs fails", {"count_rc": 1}, False),
     ],
 )
 def test_the_gate_never_fails_the_check(
-    tmp_path: Path, label: str, kwargs: dict[str, int]
+    tmp_path: Path, label: str, kwargs: dict[str, int], reaches_runaway: bool
 ) -> None:
     """Warn-only, enforced by running it — this is the #14718 regression.
 
-    Before the fix the third case exited non-zero, turning a detector into a
-    blocker on every PR opened above the threshold.
+    `reaches_runaway` is asserted, not assumed. Without it a case can fail its
+    way onto the quiet path and pass for the wrong reason: when a single switch
+    failed both `gh pr list` calls, the count died first, the gate skipped the
+    runaway branch entirely, and the case nominally covering the open-list
+    fallback exercised none of it. Deleting that fallback left the suite green.
     """
     _write_gh_stub(tmp_path, **kwargs)
     script = tmp_path / "gate.sh"
     script.write_text(_gate_run_block(), encoding="utf-8")
     result = subprocess.run(
-        # GitHub Actions runs a `run:` block as `bash -e {0}`. Invoking plain
-        # `bash` here would let a failed command slide and under-reproduce the
+        # Actions runs a `run:` block as `bash --noprofile --norc -eo pipefail`.
+        # Plain `bash` would let a failed command slide and under-reproduce the
         # very failure this test exists for.
-        ["bash", "-e", str(script)],
+        ["bash", "-eo", "pipefail", str(script)],
         capture_output=True,
         text=True,
         env=_env_with_stub(tmp_path),
@@ -165,6 +184,13 @@ def test_the_gate_never_fails_the_check(
         f"the runaway gate exited {result.returncode} when {label}. It is "
         f"documented warn-only and must never fail a check.\n"
         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    reached = "Runaway threshold reached" in result.stdout
+    assert reached is reaches_runaway, (
+        f"when {label} the gate {'reached' if reached else 'did not reach'} the "
+        f"runaway branch, expected the opposite. A case that silently takes the "
+        f"quiet path proves nothing about the branch it is meant to cover.\n"
+        f"stdout:\n{result.stdout}"
     )
 
 
@@ -181,7 +207,7 @@ def test_the_threshold_branch_is_actually_reached(tmp_path: Path) -> None:
         # GitHub Actions runs a `run:` block as `bash -e {0}`. Invoking plain
         # `bash` here would let a failed command slide and under-reproduce the
         # very failure this test exists for.
-        ["bash", "-e", str(script)],
+        ["bash", "-eo", "pipefail", str(script)],
         capture_output=True,
         text=True,
         env=_env_with_stub(tmp_path),
@@ -192,3 +218,42 @@ def test_the_threshold_branch_is_actually_reached(tmp_path: Path) -> None:
         "the stub no longer trips the threshold, so the warn-only tests are "
         f"exercising the quiet path and prove nothing.\nstdout:\n{result.stdout}"
     )
+
+
+def test_every_step_outside_the_run_block_tolerates_failure() -> None:
+    """Steps around the `run:` block must not be able to redden the check.
+
+    The tests above execute the `run:` block and prove it swallows its own
+    failures. They cannot reach the other steps in the job, and a job fails if
+    *any* step fails — so a checkout blip would reproduce the exact "warn-only
+    job goes red" failure this gate was fixed for, from a step no execution
+    test touches. Structure is the only place left to assert it.
+    """
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["check-pr-limit"]
+
+    unguarded = [
+        step.get("name") or step.get("uses")
+        for step in job["steps"]
+        if "run" not in step and step.get("continue-on-error") is not True
+    ]
+    assert not unguarded, (
+        f"these steps can fail the warn-only gate: {unguarded}. Give each "
+        f"`continue-on-error: true`, or move its work into the run block where "
+        f"the tests above can prove it degrades instead of failing."
+    )
+
+
+def test_the_job_declares_the_scopes_its_steps_need() -> None:
+    """Naming any permission sets every unnamed scope to `none`."""
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["check-pr-limit"]
+    permissions = job.get("permissions", {})
+
+    if any("uses" in step and "checkout" in step["uses"] for step in job["steps"]):
+        assert permissions.get("contents") == "read", (
+            "the job checks out the repository but does not declare "
+            "`contents: read`; declaring any permission drops every unlisted "
+            "scope to `none`"
+        )
+    assert permissions.get("pull-requests") == "write", "the gate posts a comment"

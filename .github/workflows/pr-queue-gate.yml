@@ -23,6 +23,9 @@ jobs:
   check-pr-limit:
     runs-on: ubuntu-latest
     permissions:
+      # Declaring any `permissions:` sets every unlisted scope to `none`, so the
+      # checkout below needs `contents` named explicitly (#14718).
+      contents: read
       pull-requests: write
     steps:
       # #14718: the notice's open-PR list is built by a script in the repo, so
@@ -30,6 +33,11 @@ jobs:
       # fallback fires, and the notice degrades silently — the exact fail-open
       # shape this fix exists to remove.
       - uses: actions/checkout@v7
+        # A warn-only job must not go red because a checkout blipped. The run
+        # block below already degrades gracefully when the script is absent,
+        # so tolerating this step keeps the never-blocks contract whole
+        # (#14718) — same idiom as ssot-coverage.yml and trajectory-eval.yml.
+        continue-on-error: true
 
       - name: Warn only on a runaway PR queue
         env:
