@@ -506,6 +506,18 @@ updates:
       - dependency-name: "websockets"
         # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
         update-types: ["version-update:semver-major"]
+      - dependency-name: "openai"
+        # #14727: the SAME hard-exclude as the /autobot-backend block above.
+        # It must be repeated here because an `ignore` entry protects one
+        # block, while dependabot follows `-r` includes across block
+        # boundaries — this root block reaches both files that pin openai:
+        #   requirements-dev.txt:6 -r autobot-backend/requirements.txt
+        #   requirements-ci.txt:14 -r requirements-ci/ai-ml.txt
+        # So #14722 bumped openai to 3.2.0 from here, bypassing the
+        # /autobot-backend exclusion on /autobot-backend's own file, and
+        # smoke-test died on ResolutionImpossible against llama-index.
+        # Keep the two entries in step; pip_ignore_scope_test.py enforces it.
+        versions: [">=3.0.0"]
 
   # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
   # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
