@@ -450,7 +450,7 @@ def _record_audit_write_failure(action: str, error_type: str) -> None:
         from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_audit_write_failure(action=str(action), error_type=error_type)
-    except Exception:  # nosec B110 - see docstring: never raise from the audit path
+    except Exception:  # nosec B110  # see docstring: never raise from the audit path
         pass
 
 
