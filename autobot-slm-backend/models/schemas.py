@@ -127,6 +127,12 @@ class NodeRoleResponse(BaseModel):
     current_version: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
+    #: #14676: set when the assigned role maps to no ansible group, so no
+    #: playbook can ever act on it. The assignment still succeeds -- the role is
+    #: recorded and shown -- but without this the operator assigning it at
+    #: /slm/fleet/nodes gets a success response for something that will deploy
+    #: nothing. Optional so existing clients are unaffected.
+    advisory: str | None = None
 
     model_config = {"from_attributes": True}
 

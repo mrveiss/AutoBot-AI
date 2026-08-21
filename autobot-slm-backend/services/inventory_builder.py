@@ -194,6 +194,7 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
         Set of ansible group name strings.
     """
     groups: set[str] = set()
+    unmatched: list[str] = []
     for token in role_tokens:
         token = token.strip().lower()
         if not token:
@@ -203,12 +204,56 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
             groups |= _ROLE_TO_GROUPS[token]
             continue
         # Prefix key match (handles "slm-" catching "slm-backend")
+        matched = False
         for key, key_groups in _ROLE_TO_GROUPS.items():
             if key.endswith("-") and token.startswith(key):
                 groups |= key_groups
+                matched = True
             elif not key.endswith("-") and token == key:
                 groups |= key_groups
+                matched = True
+        if not matched:
+            unmatched.append(token)
+
+    # #14676: `unmatched` is deliberately NOT reported here. This function sees
+    # only `_ROLE_TO_GROUPS`; a role like `vnc` reaches its group solely through
+    # the legacy `ROLE_ANSIBLE_GROUPS` (#14638), so warning from here would cry
+    # wolf on roles that resolve perfectly well one layer up. The report belongs
+    # where both maps are known -- see `unmatched_role_tokens()`.
+    del unmatched
     return groups
+
+
+def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Tokens that resolve to no ansible group through EITHER mapping (#14676).
+
+    Split out so callers can surface the condition rather than infer it from a
+    log line. A token here is a role that exists as far as the operator is
+    concerned and is invisible to every playbook -- the silent no-op this issue
+    is about.
+
+    Checks the legacy `ROLE_ANSIBLE_GROUPS` too, because a role like `vnc`
+    reaches its group ONLY through that map (#14638); reporting on this
+    module's map alone would produce false alarms.
+    """
+    # ssot-config-exempt: local import avoids a cycle -- role_registry imports
+    # nothing from here, but the reverse would form one at module scope.
+    try:
+        from services.role_registry import ROLE_ANSIBLE_GROUPS
+    except Exception:  # pragma: no cover - registry unavailable in some harnesses
+        ROLE_ANSIBLE_GROUPS = {}
+
+    unmatched: set[str] = set()
+    for token in role_tokens:
+        token = token.strip().lower()
+        if not token:
+            continue
+        if _role_tokens_to_groups([token]):
+            continue
+        if ROLE_ANSIBLE_GROUPS.get(token):
+            continue
+        unmatched.add(token)
+    return unmatched
 
 
 def _union_roles(node: Any) -> list[str]:

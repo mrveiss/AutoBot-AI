@@ -856,6 +856,31 @@ async def _declare_role_on_node(db: AsyncSession, node_id: str, role_name: str) 
         logger.info("Declared role on node: %s -> %s", node_id, role_name)
 
 
+def _role_response_with_advisory(record: object, role_name: str) -> NodeRoleResponse:
+    """Attach the #14676 advisory when a role reaches no ansible group.
+
+    Roles are assigned from the fleet nodes page. A role that matches neither
+    `_ROLE_TO_GROUPS` nor the legacy `ROLE_ANSIBLE_GROUPS` is still recorded and
+    still listed on the node -- but it contributes no group to the generated
+    inventory, so no playbook can select it and nothing is ever deployed for it.
+    Without this the operator gets a plain success for an assignment that is
+    permanently inert. The assignment is not rejected: custom roles may be
+    added before their group mapping is, and refusing them would be worse.
+    """
+    response = NodeRoleResponse.model_validate(record)
+    try:
+        from services.inventory_builder import unmatched_role_tokens
+
+        if unmatched_role_tokens([role_name]):
+            response.advisory = (
+                f"Role '{role_name}' maps to no ansible group, so no playbook targets it "
+                "and nothing will be deployed for it. Add a group mapping for this role."
+            )
+    except Exception as exc:  # pragma: no cover - advisory must never fail an assignment
+        logger.debug("Could not evaluate role advisory for %s: %s", role_name, exc)
+    return response
+
+
 async def _upsert_node_role(
     db: AsyncSession,
     node_id: str,
@@ -881,7 +906,7 @@ async def _upsert_node_role(
             role_request.role_name,
             role_request.assignment_type,
         )
-        return NodeRoleResponse.model_validate(existing)
+        return _role_response_with_advisory(existing, role_request.role_name)
 
     node_role = NodeRole(
         node_id=node_id,
@@ -899,7 +924,7 @@ async def _upsert_node_role(
         role_request.role_name,
         role_request.assignment_type,
     )
-    return NodeRoleResponse.model_validate(node_role)
+    return _role_response_with_advisory(node_role, role_request.role_name)
 
 
 @router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
