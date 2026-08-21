@@ -8008,7 +8008,19 @@
       "colInputTokens": "Jetons d'entrée",
       "colOutputTokens": "Jetons de sortie",
       "colCost": "Coût",
-      "noDatedEvents": "Les dépenses sont enregistrées en totaux par agent, non en événements datés : il n'y a donc pas encore d'historique quotidien."
+      "noDatedEvents": "Les dépenses sont enregistrées en totaux par agent, non en événements datés : il n'y a donc pas encore d'historique quotidien.",
+      "stepRollup": "Coût de l'opération cartographiée",
+      "byRole": "Par rôle",
+      "byTool": "Par outil",
+      "role": "Rôle",
+      "tool": "Outil",
+      "coverage": "Couverture",
+      "coverageComplete": "Toutes les étapes chiffrées",
+      "coveragePartial": "{costed} étapes chiffrées sur {total}",
+      "stepRollupEmpty": "Aucune étape de processus n'est encore cartographiée, il n'y a donc rien à totaliser.",
+      "stepRollupUnavailable": "Les totaux n'ont pas pu être chargés.",
+      "stepRollupToolNote": "Une étape compte pour chaque outil de son rôle : les totaux par outil ne s'additionnent donc pas aux totaux par rôle.",
+      "perMonth": "par mois"
     },
     "heartbeat": {
       "title": "Moniteur de heartbeat",

@@ -8008,7 +8008,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav."
+      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav.",
+      "stepRollup": "Kartētās darbības izmaksas",
+      "byRole": "Pēc lomas",
+      "byTool": "Pēc rīka",
+      "role": "Loma",
+      "tool": "Rīks",
+      "coverage": "Aptvērums",
+      "coverageComplete": "Visi soļi aprēķināti",
+      "coveragePartial": "Aprēķināti {costed} no {total} soļiem",
+      "stepRollupEmpty": "Procesa soļi vēl nav kartēti, tāpēc nav ko summēt.",
+      "stepRollupUnavailable": "Kopsummas neizdevās ielādēt.",
+      "stepRollupToolNote": "Solis tiek ieskaitīts katram tā lomas rīkam, tāpēc rīku kopsummas nesakrīt ar lomu kopsummām.",
+      "perMonth": "mēnesī"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

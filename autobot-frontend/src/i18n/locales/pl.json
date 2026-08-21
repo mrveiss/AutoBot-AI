@@ -8008,7 +8008,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "Wydatki są zapisywane jako sumy na agenta, a nie datowane zdarzenia, więc nie ma jeszcze historii dziennej."
+      "noDatedEvents": "Wydatki są zapisywane jako sumy na agenta, a nie datowane zdarzenia, więc nie ma jeszcze historii dziennej.",
+      "stepRollup": "Koszt zmapowanej operacji",
+      "byRole": "Wg roli",
+      "byTool": "Wg narzędzia",
+      "role": "Rola",
+      "tool": "Narzędzie",
+      "coverage": "Pokrycie",
+      "coverageComplete": "Wszystkie kroki wycenione",
+      "coveragePartial": "Wyceniono {costed} z {total} kroków",
+      "stepRollupEmpty": "Nie zmapowano jeszcze żadnych kroków procesu, więc nie ma czego sumować.",
+      "stepRollupUnavailable": "Nie udało się wczytać sum.",
+      "stepRollupToolNote": "Krok liczy się do każdego narzędzia swojej roli, więc sumy narzędzi nie składają się na sumy ról.",
+      "perMonth": "miesięcznie"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",

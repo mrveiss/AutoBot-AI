@@ -8008,7 +8008,19 @@
       "colInputTokens": "Tokens de entrada",
       "colOutputTokens": "Tokens de salida",
       "colCost": "Coste",
-      "noDatedEvents": "El gasto se registra como totales por agente, no como eventos con fecha, por lo que aún no hay historial diario."
+      "noDatedEvents": "El gasto se registra como totales por agente, no como eventos con fecha, por lo que aún no hay historial diario.",
+      "stepRollup": "Coste de la operación mapeada",
+      "byRole": "Por función",
+      "byTool": "Por herramienta",
+      "role": "Función",
+      "tool": "Herramienta",
+      "coverage": "Cobertura",
+      "coverageComplete": "Todos los pasos costeados",
+      "coveragePartial": "{costed} de {total} pasos costeados",
+      "stepRollupEmpty": "Aún no hay pasos de proceso mapeados, por lo que no hay nada que sumar.",
+      "stepRollupUnavailable": "No se pudieron cargar los totales.",
+      "stepRollupToolNote": "Un paso cuenta para cada herramienta de su función, por lo que los totales por herramienta no suman los de función.",
+      "perMonth": "al mes"
     },
     "heartbeat": {
       "title": "Monitor de heartbeat",
