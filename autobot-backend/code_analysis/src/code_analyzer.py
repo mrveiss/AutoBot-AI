@@ -63,7 +63,11 @@ class CodeAnalyzer:
     def __init__(self, redis_client=None, use_npu: bool = True):
         self.redis_client = redis_client  # Lazy init if None (#2725)
         self.use_npu = use_npu
-        self.config = config
+        # #14634: this used to read `self.config = config`, referencing a name
+        # never imported or defined anywhere in this module -- a guaranteed
+        # NameError on every construction. Grepped for `self.config` call
+        # sites (in this module and across the repo): none. Dead assignment,
+        # removed rather than importing an unused symbol.
 
         # Caching keys
         self.FUNCTION_KEY = "code_analysis:function:{}"

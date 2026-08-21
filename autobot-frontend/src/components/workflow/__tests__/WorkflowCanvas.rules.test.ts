@@ -270,11 +270,12 @@ describe('workflow authoring is untouched by the rule layer (#13941)', () => {
     expect(step.classes().some((cls) => cls.startsWith('rule-'))).toBe(false)
   })
 
-  it('keeps the three pan/zoom buttons the org canvas relies on', () => {
+  it('keeps the four pan/zoom/fit buttons the org canvas relies on', () => {
     // The colour-by control lives in the left half deliberately: #13939 pins
-    // the right half at exactly three buttons in read-only mode.
+    // the right half at exactly three buttons in read-only mode — #14611
+    // added a fourth (fit to selection/filter), still gated the same way.
     const wrapper = mountCanvas({ nodes: ORG_NODES })
 
-    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(3)
+    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(4)
   })
 })

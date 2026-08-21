@@ -125,11 +125,13 @@ describe('WorkflowCanvas read-only org mode (#13939)', () => {
     expect(wrapper.find('.delete-btn').exists()).toBe(false)
   })
 
-  it('keeps pan/zoom controls available', () => {
+  it('keeps pan/zoom/fit controls available', () => {
     const wrapper = mountCanvas({ nodes: ORG_NODES, readonly: true })
 
     expect(wrapper.find('.canvas-area').exists()).toBe(true)
-    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(3)
+    // #14611 added a fourth button (fit to selection/filter) alongside the
+    // three #13939 originally pinned.
+    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(4)
   })
 
   it('labels org nodes from their data and sizes the container', () => {

@@ -32,7 +32,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 GROUP_VARS = REPO / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"
 PLAYBOOK_VARS = REPO / "autobot-slm-backend/ansible/playbooks/vars/role_active_facts.yml"
-TEST_GROUP_VARS = REPO / "autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml"
 
 
 #: Keys that must stay identical across the copies but are NOT `role_*_active`
@@ -97,10 +96,19 @@ def compare(label_a: str, a: dict, label_b: str, b: dict) -> bool:
 #: "these definitions are kept identical" is accurate and must NOT trip this.
 _BYTE_IDENTITY_CLAIM = re.compile(r"byte[- ]identical", re.IGNORECASE)
 
+# #14678: down to the two TRACKED copies. The test inventory's copy is now
+# generated from `inventory/group_vars/all.yml` at CI time and gitignored, so
+# it cannot drift by hand -- `check_test_inventory_is_generated.py` asserts the
+# copy is present, is a real file (not a symlink, #14149) and matches.
+#
+# The remaining pair cannot be collapsed yet: `services/deployment.py` invokes
+# deploy.yml with a bare `-i "<host>,"` inventory string, which gives Ansible no
+# directory to discover group_vars in, so deploy.yml's `vars_files` load is
+# load-bearing on that path (#14289). Removing it needs that caller to write a
+# real inventory first -- tracked on #14678.
 _ROLE_FACTS_FILES = {
     "inventory/group_vars/all.yml": GROUP_VARS,
     "playbooks/vars/role_active_facts.yml": PLAYBOOK_VARS,
-    "tests/inventory/group_vars/all.yml": TEST_GROUP_VARS,
 }
 
 
@@ -149,17 +157,15 @@ def check_no_false_byte_identity_claims() -> bool:
 def main() -> int:
     canonical = extract_facts(GROUP_VARS)
     playbook = extract_facts(PLAYBOOK_VARS)
-    test_inventory = extract_facts(TEST_GROUP_VARS)
 
     diverged = False
     diverged |= compare("inventory/group_vars", canonical, "playbooks/vars", playbook)
-    diverged |= compare("inventory/group_vars", canonical, "tests/inventory/group_vars", test_inventory)
     diverged |= check_no_false_byte_identity_claims()
 
     if diverged:
         return 1
 
-    print(f"OK — {len(canonical)} shared facts identical across all three files")
+    print(f"OK — {len(canonical)} shared facts identical across both tracked copies")
     return 0
 
 
