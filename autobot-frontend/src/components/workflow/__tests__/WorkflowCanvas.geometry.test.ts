@@ -27,10 +27,10 @@ const NODES: CanvasNode[] = [
   { id: 'b', type: 'step', position: { ...TARGET }, data: { label: 'B' }, connections: [] },
 ]
 
-function mountCanvas() {
+function mountCanvas(readonly = true) {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(WorkflowCanvas, {
-    props: { nodes: NODES, selectedNodeId: null, readonly: true },
+    props: { nodes: NODES, selectedNodeId: null, readonly },
     global: { plugins: [i18n] },
   })
 }
@@ -56,5 +56,31 @@ describe('canvas edge geometry derives from the shared constants (#14690)', () =
     // someone reintroduces a standalone 50, this is what catches the drift
     // the moment the height changes.
     expect(CANVAS_NODE_PORT_Y).toBe(CANVAS_NODE_HEIGHT / 2)
+  })
+
+  it('starts the drag line at the source node trailing edge, not a literal', async () => {
+    // #14690 review: this anchor kept a bare 240 while the line directly below
+    // it was converted, and nothing exercised `startConnect`, so the gap was
+    // invisible. The drag line and the rendered edge must leave the node at
+    // the same place — that is the property, and it is what breaks when only
+    // one of the two reads the constant.
+    const wrapper = mountCanvas(false)
+
+    await wrapper.findAll('.port-out')[0].trigger('pointerdown')
+
+    const path = wrapper.find('path.drawing-line').attributes('d') ?? ''
+    expect(path).toContain(`M${SOURCE.x + CANVAS_NODE_WIDTH},${SOURCE.y + CANVAS_NODE_PORT_Y}`)
+  })
+
+  it('starts the drag line at the node leading edge for an inbound port', async () => {
+    // The `port === 'out'` branch offsets by the width; the other branch must
+    // stay at the node's own x, so the width constant applies to exactly one
+    // of the two.
+    const wrapper = mountCanvas(false)
+
+    await wrapper.findAll('.port-in')[0].trigger('pointerdown')
+
+    const path = wrapper.find('path.drawing-line').attributes('d') ?? ''
+    expect(path).toContain(`M${SOURCE.x},${SOURCE.y + CANVAS_NODE_PORT_Y}`)
   })
 })

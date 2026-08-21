@@ -1317,10 +1317,14 @@ function onSearchKeydown(e: KeyboardEvent): void {
  * ------------------------------------------------------------------ */
 
 /** Node footprint the layout builders assume, for a node type that carries no
- *  size of its own — the same 100px row `endInteraction` below already uses
+ *  size of its own — the same row height `endInteraction` below already uses
  *  for its connection-drop hit test, and `org-group`'s own `data.width`/
- *  `data.height` (`nodeStyle` above) when the node IS sized. */
-const NODE_APPROX_HEIGHT = 100;
+ *  `data.height` (`nodeStyle` above) when the node IS sized.
+ *
+ *  #14690: this was a second, independent `100`. The comment already said it
+ *  was "the same" height as the hit test, which is exactly the claim a shared
+ *  constant should be making instead of prose. */
+const NODE_APPROX_HEIGHT = CANVAS_NODE_HEIGHT;
 
 /** A zoom level comfortable for looking at one node up close — fixed, rather
  *  than a maximal fit, so repeatedly jumping between search hits or deep
@@ -1621,7 +1625,7 @@ function startConnect(nodeId: string, port: string, e: PointerEvent) {
   const node = props.nodes.find(n => n.id === nodeId);
   if (node) {
     lineStart.nodeId = nodeId;
-    lineStart.x = node.position.x + (port === 'out' ? 240 : 0);
+    lineStart.x = node.position.x + (port === 'out' ? CANVAS_NODE_WIDTH : 0);
     lineStart.y = node.position.y + CANVAS_NODE_PORT_Y;
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
