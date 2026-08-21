@@ -110,9 +110,7 @@ def test_the_role_still_reaches_the_shared_file():
     main = _ROLE_TASKS / "main.yml"
 
     including = [
-        t
-        for t in _tasks(main)
-        if str(t.get("ansible.builtin.include_tasks", "")).endswith("service_units.yml")
+        t for t in _tasks(main) if str(t.get("ansible.builtin.include_tasks", "")).endswith("service_units.yml")
     ]
 
     assert including, "slm_manager/main.yml no longer includes service_units.yml — a full provision would skip the unit"
