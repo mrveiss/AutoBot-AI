@@ -119,3 +119,42 @@ def test_env_backed_hosts_degrade_to_localhost():
         "env-backed ansible_host without a default — an all-in-one install would "
         "resolve it to nothing (#14528): " + "; ".join(missing_default)
     )
+
+
+def test_the_live_inventory_does_not_default_to_localhost():
+    """`ansible/inventory.yml` is the sole inventory for POST /api/tls/enable.
+
+    That endpoint writes `.env`, opens firewall ports and restarts services. A
+    `default('127.0.0.1', true)` here would point all of that at the SLM manager
+    whenever an AUTOBOT_*_HOST is unset on a distributed install — and return
+    200. A wrong host is worse than no host.
+
+    `inventory/slm-nodes.yml` does default to localhost, and that is fine: it
+    documents itself as a legacy static fallback behind the registry-driven
+    inventory. This rule is deliberately scoped to the primary file.
+    """
+    live = _ANSIBLE / "inventory.yml"
+    if not live.is_file():
+        pytest.skip("ansible/inventory.yml is gone; nothing to constrain")
+
+    offenders = [
+        f"{name}: {value!r}"
+        for name, value in _host_values(live)
+        if isinstance(value, str) and "127.0.0.1" in value
+    ]
+
+    assert not offenders, (
+        "ansible/inventory.yml defaults a host to localhost — an unset env var would "
+        "silently target the SLM manager for a mutating TLS run (#14528): " + "; ".join(offenders)
+    )
+
+
+def test_the_tls_playbook_asserts_its_hosts_resolved():
+    """The counterpart: empty is only safe because the play refuses to proceed."""
+    playbook = _ANSIBLE / "enable-tls.yml"
+    text = playbook.read_text(encoding="utf-8")
+
+    assert "Verify inventory hosts resolved" in text, (
+        "enable-tls.yml no longer asserts that ansible_host resolved; with the empty default "
+        "it would run against an unresolved host instead of failing (#14528)"
+    )
