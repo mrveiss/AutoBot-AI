@@ -37,9 +37,6 @@ function step(id: string, x: number, y: number): CanvasNode {
   }
 }
 
-function orgNode(id: string, x = 0, y = 0): CanvasNode {
-  return { id, type: 'org-person', position: { x, y }, data: { label: id, title: 'role' }, connections: [] }
-}
 
 function mountCanvas(props: Record<string, unknown> = {}) {
   return mount(WorkflowCanvas, {
