@@ -2101,7 +2101,17 @@ function onPointerMove(e: PointerEvent) {
     marqueeCurrent.x = e.clientX;
     marqueeCurrent.y = e.clientY;
     if (!marqueeActive.value && exceedsMoveThreshold(e)) marqueeActive.value = true;
-    if (marqueeActive.value) applyMarqueeSelection();
+    if (marqueeActive.value) {
+      applyMarqueeSelection();
+      // #14612: mirrors the pan/drag suppression above (#14079/#14610/#14625)
+      // — `capturePointer` retargets `pointerup` to `.canvas-area`, but not
+      // the browser's synthesized `click`, which still hit-tests normally
+      // and can land on whichever node the marquee happened to end over.
+      // Without this, that click reached `selectNode` with `movedThisGesture`
+      // still false and collapsed the whole marquee selection down to just
+      // that one node.
+      movedThisGesture.value = true;
+    }
   }
 }
 
