@@ -303,6 +303,10 @@ class DocumentAnalysisSkill(BaseSkill):
             logger.warning("Summarization failed: %s", exc)
             return None, f"Summarization failed: {exc}"
 
+        failure = self._agent_failure(result)
+        if failure:
+            return None, failure
+
         summary = self._summary_text(result)
         if not summary:
             # A backend that returned nothing is a failure, not an empty summary.
@@ -310,10 +314,42 @@ class DocumentAnalysisSkill(BaseSkill):
         return summary, None
 
     @staticmethod
+    def _agent_failure(result: Any) -> str:
+        """Return why *result* is not a successful summary, or ``""`` if it is.
+
+        ``BaseModalityAgent.process_query`` does not re-raise: on any error it
+        returns ``{"status": "error", "response": QUERY_ERROR_MESSAGE, ...}``.
+        For SummarizationAgent that message is the human-readable string
+        "Error generating summary. Please try again." — a perfectly non-empty
+        value under a key ``_summary_text`` happily accepts. Reading the text
+        without first reading the status therefore reports ``success: True``
+        with an error notice presented as the document's summary, which is the
+        exact outcome the #13897 invariant exists to prevent.
+
+        So the status is checked first, and an unrecognised shape is a failure
+        rather than a fall-through: a result this function cannot classify is
+        one it cannot vouch for.
+        """
+        if not isinstance(result, dict):
+            return f"The summarization backend returned an unrecognised result type: {type(result).__name__}"
+
+        status = result.get("status")
+        if status is None:
+            return "The summarization backend returned no status field"
+        if status != "success":
+            # `response_text` carries the underlying exception; `response` is
+            # the user-facing notice. Prefer the specific one.
+            detail = result.get("response_text") or result.get("response") or status
+            return f"Summarization failed: {detail}"
+        return ""
+
+    @staticmethod
     def _summary_text(result: Any) -> str:
-        """Pull the summary out of the agent result, whatever shape it used."""
-        if isinstance(result, str):
-            return result.strip()
+        """Pull the summary out of an agent result already known to be a success.
+
+        Only reached after :meth:`_agent_failure` has cleared the status, so the
+        key-priority walk below can no longer pick up an error notice.
+        """
         if isinstance(result, dict):
             for key in ("summary", "response", "result", "text", "content"):
                 value = result.get(key)

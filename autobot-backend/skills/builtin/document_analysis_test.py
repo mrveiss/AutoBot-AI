@@ -271,7 +271,10 @@ def _stub_summarizer(monkeypatch, *, summary="a concise summary", raises=None, r
             seen["action"] = request.action
             if raises:
                 raise raises
-            return result if result is not None else {"summary": summary}
+            # #14541 review: the real `handle_summarize` always returns a
+            # `status` discriminator. A stub that omits it agrees with the
+            # reader and with nothing else, which is how both defects hid.
+            return result if result is not None else {"status": "success", "summary": summary}
 
     base = types.ModuleType("agents.base_agent")
 
@@ -367,7 +370,14 @@ async def test_an_empty_summary_is_a_failure_not_an_empty_success(skill, tmp_pat
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("shape", [{"response": "via response"}, {"result": "via result"}, "a bare string"])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        {"status": "success", "response": "via response"},
+        {"status": "success", "result": "via result"},
+        {"status": "success", "text": "via text"},
+    ],
+)
 async def test_summary_is_read_from_the_shapes_the_agent_may_return(skill, tmp_path, monkeypatch, shape):
     _stub_summarizer(monkeypatch, result=shape)
     path = _write_pdf(tmp_path, ["body"])
@@ -390,3 +400,109 @@ def test_skill_is_discoverable_by_the_registry():
     registry = SkillRegistry()
     registry.discover_builtin_skills()
     assert "document-analysis" in registry._skills
+
+
+# ---------------------------------------------------------------------------
+# #14541 review: the status discriminator, and a test that meets the real agent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_agent_error_is_a_failure_not_a_summary(skill, tmp_path, monkeypatch):
+    """The exact dict `BaseModalityAgent.process_query` returns on error.
+
+    `process_query` does not re-raise — it returns `status: "error"` with the
+    user-facing notice under `response`. That notice is a non-empty string, so
+    a reader that walks the key-priority list without checking the status
+    reports `success: True` with "Error generating summary. Please try again."
+    presented as the document's summary. That is the #13897 failure mode.
+    """
+    notice = "Error generating summary. Please try again."
+    _stub_summarizer(
+        monkeypatch,
+        result={
+            "status": "error",
+            "response": notice,
+            "response_text": "connection refused",
+            "agent_type": "summarization",
+            "model_used": "a-model",
+        },
+    )
+    path = _write_pdf(tmp_path, ["body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert result["success"] is False
+    assert notice not in str(result.get("summary", "")), "the error notice must never be the summary"
+    assert "summary" not in result, "a failed summarization must not report a summary at all"
+    assert "connection refused" in result["error"], "the underlying cause belongs in the error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("shape", "because"),
+    [
+        ({"summary": "no discriminator"}, "no status field"),
+        ("a bare string", "unrecognised result type"),
+        ({"status": "partial", "summary": "half done"}, "Summarization failed"),
+    ],
+)
+async def test_a_result_that_cannot_be_classified_is_a_failure(skill, tmp_path, monkeypatch, shape, because):
+    """An unrecognised shape is a failure, never a fall-through.
+
+    A result this skill cannot classify is one it cannot vouch for. Accepting
+    it because it happens to carry a plausible string is how the previous
+    version turned an error into a summary.
+    """
+    _stub_summarizer(monkeypatch, result=shape)
+    path = _write_pdf(tmp_path, ["body"])
+
+    result = await skill.execute("summarize_document", {"file_path": str(path)})
+
+    assert result["success"] is False
+    assert because.lower() in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_the_real_agent_error_branch_produces_the_shape_this_skill_reads():
+    """Drive the REAL `process_query`, mocking only the LLM boundary.
+
+    Every other test here talks to a hand-written stub, so they can only prove
+    the reader agrees with the stub. This one imports the real
+    `SummarizationAgent` and runs the real `BaseModalityAgent.process_query`
+    error path, then feeds its actual output through the skill's own
+    classifier. If the agent's error contract ever changes shape, this fails
+    here rather than silently downgrading a failure into a summary in
+    production.
+
+    `__new__` skips `__init__` deliberately: constructing the agent for real
+    would pull in provider/endpoint/model config this test has no business
+    depending on. The method under test is inherited and untouched by that.
+    """
+    # Imported directly, NOT via importorskip: this is the one test that meets
+    # the real agent, so an environment where it cannot run must fail loudly
+    # rather than skip back into the all-stubs state the review found.
+    import agents.summarization_agent as agents_pkg
+
+    from skills.builtin.document_analysis import DocumentAnalysisSkill
+
+    agent = agents_pkg.SummarizationAgent.__new__(agents_pkg.SummarizationAgent)
+    agent.model_name = "a-model"
+
+    class _Boom:
+        async def chat_optimized(self, *a, **kw):
+            raise RuntimeError("connection refused")
+
+    agent.llm_interface = _Boom()
+
+    result = await agent.process_query("some document text")
+
+    # The real contract, asserted rather than assumed.
+    assert result["status"] == "error"
+    assert result["response"] == agents_pkg.SummarizationAgent.QUERY_ERROR_MESSAGE
+    assert result["response"].strip(), "the notice is non-empty, which is why status must be read first"
+
+    # And the skill classifies that real output as a failure.
+    failure = DocumentAnalysisSkill._agent_failure(result)
+    assert failure, "the real agent's error result must be classified as a failure"
+    assert "connection refused" in failure
