@@ -45,12 +45,18 @@ answer "how much of it" from what the raw value IS, not which platform sends
 it:
 
 * A value that is directly usable **outside** this system on its own — a
-  dialable phone number, a URL whose path embeds a bearer token — is reduced
-  before it reaches :meth:`EgressGovernor.evaluate`
+  dialable phone number, a URL whose path embeds a bearer token, an email
+  address — is reduced before it reaches :meth:`EgressGovernor.evaluate`
   (``whatsapp_integration._mask_phone``,
-  ``notification_service._send_webhook``'s ``urlparse(url).hostname``).
-  Recording it whole would hand PII or a credential to anyone who can read
-  the audit trail or the logs.
+  ``notification_service._send_webhook``'s ``urlparse(url).hostname``,
+  ``notification_service._mask_email``,
+  ``integration_communication.send_webhook_message``'s
+  ``urlparse(webhook_url).hostname`` for Teams). Recording it whole would
+  hand PII or a credential to anyone who can read the audit trail or the
+  logs. #14573: an *absent* identifier is the same failure in miniature — a
+  caller must never pass ``""`` as a stand-in for "no reduction needed"; if a
+  call site genuinely has no channel identifier available, that is a
+  documented decision at the call site, not a silent default.
 * A value that is an **opaque identifier scoped to this system's own
   platform credential** — a Telegram ``chat_id``, a Slack/Discord
   ``channel_id`` — is recorded as-is. It resolves to a person only through

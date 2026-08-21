@@ -209,17 +209,49 @@ def _run_requested_analyses(results: Dict[str, Any], target_path: str, analysis_
             results["communication_patterns"] = architecture["communication_patterns"]
 
 
+# #14635: the real producer (code_quality_dashboard.py's
+# generate_comprehensive_report, written verbatim to comprehensive_quality_
+# report.json by analyze_code_quality.py) nests its scores under a
+# "quality_metrics" object, not at the report's top level, and has no
+# "complexity" or "doc_coverage" field anywhere. Reading top-level
+# "complexity"/"maintainability"/"test_coverage"/"doc_coverage" keys used to
+# always miss and fall back to these four hardcoded numbers -- fabricated
+# telemetry on every run, including a genuinely successful one. Maps only the
+# fields the real "quality_metrics" object actually carries.
+_QUALITY_METRICS_FIELD_MAP = {
+    "maintainability": "maintainability_index",
+    "test_coverage": "test_coverage_score",
+}
+
+
 def _extract_codebase_metrics(results: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Roll up headline metrics from the quality analysis, when it succeeded."""
+    """Roll up headline metrics the quality analysis actually computed.
+
+    Returns ``None`` when the quality analysis itself didn't run or failed --
+    same as before. A quality analysis that *succeeded* but is missing the
+    "quality_metrics" block it always writes is a producer/consumer shape
+    mismatch, not something to paper over with a default, so that raises
+    instead of returning fabricated numbers.
+
+    "complexity" and "doc_coverage" have no equivalent in the real report
+    (#14635) -- they are simply not included, rather than invented.
+    """
     quality = results.get("code_quality")
     if not isinstance(quality, dict) or quality.get("error"):
         return None
-    return {
-        "complexity": quality.get("complexity", 5),
-        "maintainability": quality.get("maintainability", "good"),
-        "test_coverage": quality.get("test_coverage", 70),
-        "doc_coverage": quality.get("doc_coverage", 65),
-    }
+
+    metrics = quality.get("quality_metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError(
+            "code_quality analysis succeeded but its report has no "
+            "'quality_metrics' object -- producer/consumer shape mismatch"
+        )
+
+    missing = [src for src in _QUALITY_METRICS_FIELD_MAP.values() if src not in metrics]
+    if missing:
+        raise ValueError(f"code_quality report's 'quality_metrics' is missing expected keys: {missing}")
+
+    return {dest: metrics[src] for dest, src in _QUALITY_METRICS_FIELD_MAP.items()}
 
 
 def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str, Any]:
