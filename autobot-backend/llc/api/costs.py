@@ -32,6 +32,8 @@ hit counts (OpenAI, Google, Mistral, Groq).
 
 from __future__ import annotations
 
+import uuid
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -44,6 +46,7 @@ from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
+from llc.services.step_rollup import StepRollupService
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -239,3 +242,72 @@ async def quota_windows(
         for p in sorted(all_providers)
         if p in _PROVIDER_QUOTA_STRUCTURE or p in tier_map
     ]
+
+
+# ---------------------------------------------------------------------------
+# What the mapped operation costs to run (#14599)
+# ---------------------------------------------------------------------------
+
+
+class RollupBucketOut(BaseModel):
+    """One grouping's monthly total, with the coverage behind it.
+
+    ``per_month`` is the sum of the steps that could be costed. It is reported
+    beside ``costed`` / ``not_costable`` rather than alone, because a partial
+    total presented as a complete one is indistinguishable from a complete one
+    by looking at it — the arithmetic form of the failure #14064, #13617 and
+    #14556 each produced in this area.
+    """
+
+    key: str
+    label: str
+    per_month: Decimal
+    costed: int
+    not_costable: int
+    total_steps: int
+    is_complete: bool
+    currencies: List[str]
+
+
+class StepRollupResponse(BaseModel):
+    by_role: List[RollupBucketOut]
+    by_tool: List[RollupBucketOut]
+
+
+def _bucket_out(bucket) -> RollupBucketOut:  # noqa: ANN001
+    return RollupBucketOut(
+        key=bucket.key,
+        label=bucket.label,
+        per_month=bucket.per_month,
+        costed=bucket.costed,
+        not_costable=bucket.not_costable,
+        total_steps=bucket.total_steps,
+        is_complete=bucket.is_complete,
+        currencies=sorted(bucket.currencies),
+    )
+
+
+@router.get("/step-rollup", response_model=StepRollupResponse)
+async def step_rollup(
+    company_id: str = Query(..., description="Company UUID"),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> StepRollupResponse:
+    """Monthly cost of the company's process steps, by role and by tool.
+
+    A sum over what the canvas already shows, from the same
+    ``derive_step_cost`` the per-step panel uses — so the two can never
+    disagree. Read-only; composes existing rows and creates nothing.
+
+    A step whose role carries several tools contributes its full cost to each
+    of those tools, because "what does this tool cost us to operate" is the
+    question being answered. The tool totals therefore do not sum to the role
+    totals, by design.
+    """
+    assert_company_access(ctx, company_id)
+    buckets = await StepRollupService().rollup(session, uuid.UUID(str(company_id)))
+    return StepRollupResponse(
+        by_role=[_bucket_out(b) for b in buckets["by_role"]],
+        by_tool=[_bucket_out(b) for b in buckets["by_tool"]],
+    )
