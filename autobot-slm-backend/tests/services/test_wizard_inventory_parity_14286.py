@@ -127,12 +127,19 @@ _build_inventory_children = _wiz._build_inventory_children
 
 
 def _children_for(roles_by_node: dict[str, list[str]]) -> dict[str, dict]:
-    """Run the wizard's real children builder over a fleet."""
+    """Run the wizard's real children builder over a fleet.
+
+    #14638: every role here is treated as DECLARED (db_nodes.roles mirrors
+    roles_by_node) -- this module tests vocabulary parity between the two
+    group builders, not the declared/detected distinction, which has its own
+    coverage in ``setup_wizard_group_privileged_test.py``.
+    """
     hosts = {n: {} for n in roles_by_node}
     node_roles = [
         SimpleNamespace(node_id=node, role_name=role) for node, roles in roles_by_node.items() for role in roles
     ]
-    children, _groups = _build_inventory_children(hosts, node_roles, {n: n for n in roles_by_node})
+    db_nodes = [SimpleNamespace(node_id=node, roles=list(roles)) for node, roles in roles_by_node.items()]
+    children, _groups = _build_inventory_children(hosts, node_roles, {n: n for n in roles_by_node}, db_nodes)
     return children
 
 
@@ -372,3 +379,101 @@ def test_the_wizard_path_links_group_vars():
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert "link_group_vars" in called, "the wizard inventory still has no group_vars sibling"
+
+
+# --------------------------------------------------------------------------
+# 5. #14638 -- a detected-but-undeclared role must not join a privileged GROUP
+#    through this path either. Mirrors services/inventory_detected_roles_test.py
+#    (#14513, the dynamic-inventory builder's own group gate) for the wizard's
+#    independent group builder, and setup_wizard_privileged_node_roles_test.py
+#    (#14594, the node_roles/node_roles_declared hostvar branch) for the
+#    sibling activation path this issue closes on the GROUP side.
+# --------------------------------------------------------------------------
+
+_ansible_groups_for_nodes = _wiz._ansible_groups_for_nodes
+_DECLARED_ONLY_GROUPS = _ib._DECLARED_ONLY_GROUPS
+
+
+def _groups_for(node_id: str, node_role_names: list, declared_roles: list) -> dict:
+    """Run the wizard's real GROUP builder for one node.
+
+    ``node_role_names`` is every ``NodeRole`` row's ``role_name`` (the
+    assignment table) for the node; ``declared_roles`` is ``Node.roles`` --
+    deliberately allowed to diverge, to prove group membership follows
+    Node.roles and not the NodeRole table (#14638).
+    """
+    node_roles = [SimpleNamespace(node_id=node_id, role_name=r) for r in node_role_names]
+    db_nodes = [SimpleNamespace(node_id=node_id, roles=list(declared_roles))]
+    return _ansible_groups_for_nodes(node_roles, {node_id: node_id}, db_nodes)
+
+
+def test_detected_only_node_does_not_join_any_privileged_group():
+    """The #14638 reproduction: a NodeRole row exists for every privileged
+    role, but Node.roles is empty -- nothing was declared."""
+    detected = ["frontend", "backend", "ai-stack", "npu-worker", "browser-service", "vnc"]
+    groups = _groups_for("detected-only-node", detected, declared_roles=[])
+
+    joined = {g for g in _DECLARED_ONLY_GROUPS if "detected-only-node" in groups.get(g, set())}
+    assert not joined, f"detected-only node joined privileged group(s) via the wizard path: {sorted(joined)}"
+
+
+def test_declared_node_still_joins_its_privileged_group():
+    """Over-tight check, mirrors #14552's test_ordinary_groups_are_not_swept_in."""
+    groups = _groups_for("declared-frontend-node", ["frontend"], declared_roles=["frontend"])
+    assert "declared-frontend-node" in groups.get("frontend", set())
+
+    backend_groups = _groups_for("declared-backend-node", ["backend"], declared_roles=["backend"])
+    assert "declared-backend-node" in backend_groups.get("main", set())
+
+
+def test_a_role_reached_only_through_the_legacy_vocabulary_still_gates_correctly():
+    """``vnc`` maps to ``backend`` ONLY through ``ROLE_ANSIBLE_GROUPS`` --
+    absent from ``inventory_builder._ROLE_TO_GROUPS`` entirely. Proves the
+    declared-side check uses the same union of vocabularies as the raw side,
+    not the canonical map alone (a bug this PR's own first draft had)."""
+    detected_only = _groups_for("vnc-detected", ["vnc"], declared_roles=[])
+    assert "vnc-detected" not in detected_only.get("backend", set())
+
+    declared = _groups_for("vnc-declared", ["vnc"], declared_roles=["vnc"])
+    assert "vnc-declared" in declared.get("backend", set())
+
+
+def test_detection_still_grants_ordinary_groups_through_the_wizard_path():
+    """Non-regression: the #14513 carve-out holds here too -- an undeclared
+    but detected redis role still joins redis/database."""
+    groups = _groups_for("redis-detected", ["redis"], declared_roles=[])
+    assert "redis-detected" in groups.get("redis", set())
+    assert "redis-detected" in groups.get("database", set())
+
+
+def test_deliberately_union_role_keeps_its_non_privileged_group():
+    """tts-worker's ``npu_worker`` membership (legacy-vocabulary only) is not
+    privileged and must survive detection alone -- mirrors
+    ``role_tts_worker_active``'s deliberate node_roles-only activation
+    (#9965), on the group side."""
+    groups = _groups_for("tts-detected", ["tts-worker"], declared_roles=[])
+    assert "tts-detected" in groups.get("npu_worker", set())
+    assert "tts-detected" not in groups.get("aiml", set())
+
+
+def test_an_unresolved_node_fails_closed():
+    """A NodeRole row whose node_id has no matching db_nodes entry must not
+    default to open -- its privileged groups strip to nothing rather than
+    passing through unfiltered."""
+    node_roles = [SimpleNamespace(node_id="ghost-node", role_name="backend")]
+    groups = _ansible_groups_for_nodes(node_roles, {"ghost-node": "ghost-node"}, db_nodes=[])
+    assert "ghost-node" not in groups.get("backend", set())
+
+
+def test_the_wizard_inventory_path_end_to_end_via_build_inventory_children():
+    """Drives the real caller, not just the inner helper -- proves the
+    wiring, not only the function in isolation."""
+    hosts = {"detected-only-node": {}}
+    node_roles = [SimpleNamespace(node_id="detected-only-node", role_name="frontend")]
+    db_nodes = [SimpleNamespace(node_id="detected-only-node", roles=[])]
+    children, groups = _build_inventory_children(
+        hosts, node_roles, {"detected-only-node": "detected-only-node"}, db_nodes
+    )
+
+    assert "detected-only-node" not in groups.get("frontend", set())
+    assert "frontend" not in children or "detected-only-node" not in children["frontend"]["hosts"]

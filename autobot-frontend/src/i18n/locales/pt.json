@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Use as teclas de seta para mover o foco entre os nós. Pressione Enter ou Espaço para selecionar o nó focado. Pressione Escape para desmarcar.",
-      "a11yInstructionsMove": "Mantenha pressionado Control e pressione uma tecla de seta para mover o nó selecionado."
+      "a11yInstructionsMove": "Mantenha pressionado Control e pressione uma tecla de seta para mover o nó selecionado.",
+      "searchLabel": "Pesquisar nós",
+      "searchPlaceholder": "Pesquisar por nome",
+      "searchClear": "Limpar pesquisa",
+      "searchResultsStatus": "{count} resultados para \"{query}\"",
+      "searchNoResults": "Nenhum resultado para \"{query}\"",
+      "fitToSelection": "Ajustar à seleção ou ao filtro",
+      "minimapLabel": "Visão geral da tela"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8008,7 +8015,19 @@
       "colInputTokens": "Tokens de entrada",
       "colOutputTokens": "Tokens de saída",
       "colCost": "Custo",
-      "noDatedEvents": "Os gastos são registados como totais por agente, não como eventos datados, portanto ainda não há histórico diário."
+      "noDatedEvents": "Os gastos são registados como totais por agente, não como eventos datados, portanto ainda não há histórico diário.",
+      "stepRollup": "Custo da operação mapeada",
+      "byRole": "Por função",
+      "byTool": "Por ferramenta",
+      "role": "Função",
+      "tool": "Ferramenta",
+      "coverage": "Cobertura",
+      "coverageComplete": "Todos os passos custeados",
+      "coveragePartial": "{costed} de {total} passos custeados",
+      "stepRollupEmpty": "Ainda não há passos de processo mapeados, portanto não há nada a totalizar.",
+      "stepRollupUnavailable": "Não foi possível carregar os totais.",
+      "stepRollupToolNote": "Um passo conta para cada ferramenta da sua função, pelo que os totais por ferramenta não somam os totais por função.",
+      "perMonth": "por mês"
     },
     "heartbeat": {
       "title": "Monitor de heartbeat",
@@ -8322,7 +8341,8 @@
       "toolDetachError": "Não foi possível remover essa ferramenta.",
       "toolDetach": "Remover {tool} de {role}",
       "canvasToolsUnavailable": "As informações de ferramentas estão indisponíveis neste momento — esta lista pode estar incompleta.",
-      "canvasNoToolsDefined": "Nenhuma ferramenta está anexada a nenhuma função nesta empresa."
+      "canvasNoToolsDefined": "Nenhuma ferramenta está anexada a nenhuma função nesta empresa.",
+      "deepLinkNodeNotFound": "Este link aponta para um nó que não foi encontrado aqui. Ele pode ter sido removido ou você pode não ter acesso a ele."
     },
     "executorRollup": {
       "title": "Resumo de executores",

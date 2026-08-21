@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Verwenden Sie die Pfeiltasten, um den Fokus zwischen den Knoten zu bewegen. Drücken Sie Eingabe oder Leertaste, um den fokussierten Knoten auszuwählen. Drücken Sie Escape, um die Auswahl aufzuheben.",
-      "a11yInstructionsMove": "Halten Sie Strg gedrückt und drücken Sie eine Pfeiltaste, um den ausgewählten Knoten zu verschieben."
+      "a11yInstructionsMove": "Halten Sie Strg gedrückt und drücken Sie eine Pfeiltaste, um den ausgewählten Knoten zu verschieben.",
+      "searchLabel": "Knoten durchsuchen",
+      "searchPlaceholder": "Nach Namen suchen",
+      "searchClear": "Suche löschen",
+      "searchResultsStatus": "{count} Treffer für „{query}“",
+      "searchNoResults": "Keine Treffer für „{query}“",
+      "fitToSelection": "An Auswahl oder Filter anpassen",
+      "minimapLabel": "Canvas-Übersicht"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8008,7 +8015,19 @@
       "colInputTokens": "Eingabe-Token",
       "colOutputTokens": "Ausgabe-Token",
       "colCost": "Kosten",
-      "noDatedEvents": "Ausgaben werden als Summen je Agent erfasst, nicht als datierte Ereignisse — daher gibt es noch keinen Tagesverlauf."
+      "noDatedEvents": "Ausgaben werden als Summen je Agent erfasst, nicht als datierte Ereignisse — daher gibt es noch keinen Tagesverlauf.",
+      "stepRollup": "Kosten des abgebildeten Betriebs",
+      "byRole": "Nach Rolle",
+      "byTool": "Nach Werkzeug",
+      "role": "Rolle",
+      "tool": "Werkzeug",
+      "coverage": "Abdeckung",
+      "coverageComplete": "Alle Schritte kalkuliert",
+      "coveragePartial": "{costed} von {total} Schritten kalkuliert",
+      "stepRollupEmpty": "Es sind noch keine Prozessschritte abgebildet, daher gibt es nichts zu summieren.",
+      "stepRollupUnavailable": "Die Summen konnten nicht geladen werden.",
+      "stepRollupToolNote": "Ein Schritt zählt für jedes Werkzeug seiner Rolle; die Werkzeugsummen ergeben daher nicht die Rollensummen.",
+      "perMonth": "pro Monat"
     },
     "heartbeat": {
       "title": "Heartbeat-Monitor",
@@ -8322,7 +8341,8 @@
       "toolDetachError": "Dieses Werkzeug konnte nicht entfernt werden.",
       "toolDetach": "{tool} von {role} entfernen",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
-      "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet."
+      "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
+      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
