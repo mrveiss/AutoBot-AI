@@ -17,7 +17,7 @@ sentence-transformers>=5.7.0
 
 # Model and Tokenization
 transformers>=5.15.0
-tokenizers>=0.23.1,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
+tokenizers>=0.22.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
                           # ai-stack + npu-worker installs have failed to resolve ever since.
