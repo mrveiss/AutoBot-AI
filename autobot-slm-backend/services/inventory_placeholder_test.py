@@ -138,9 +138,7 @@ def test_the_live_inventory_does_not_default_to_localhost():
         pytest.skip("ansible/inventory.yml is gone; nothing to constrain")
 
     offenders = [
-        f"{name}: {value!r}"
-        for name, value in _host_values(live)
-        if isinstance(value, str) and "127.0.0.1" in value
+        f"{name}: {value!r}" for name, value in _host_values(live) if isinstance(value, str) and "127.0.0.1" in value
     ]
 
     assert not offenders, (
@@ -193,9 +191,7 @@ def test_a_loopback_host_does_not_ssh_to_itself():
     neither should be required to configure the machine you are already on.
     """
     offenders = [
-        f"{name} in {file} (ansible_connection={conn!r})"
-        for file, name, conn in _loopback_hosts()
-        if conn != "local"
+        f"{name} in {file} (ansible_connection={conn!r})" for file, name, conn in _loopback_hosts() if conn != "local"
     ]
 
     assert not offenders, (
