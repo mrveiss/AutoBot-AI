@@ -75,9 +75,9 @@ def test_the_scan_finds_the_templates():
     templates = _python_service_templates()
 
     assert templates, "no Python service unit templates found — this rule is pinned to the wrong path"
-    assert "slm_manager/autobot-slm-backend.service.j2" in templates, (
-        "the SLM backend unit is not being scanned, and it is the one that crash-looped"
-    )
+    assert (
+        "slm_manager/autobot-slm-backend.service.j2" in templates
+    ), "the SLM backend unit is not being scanned, and it is the one that crash-looped"
 
 
 def test_every_python_unit_is_accounted_for():
@@ -98,9 +98,7 @@ def test_the_explicit_set_never_shrinks():
     """Removing an override is a regression toward the outage."""
     templates = _python_service_templates()
 
-    lost = sorted(
-        name for name in _SETS_OVERRIDE_EXPLICITLY if "AUTOBOT_PROJECT_ROOT" not in templates.get(name, "")
-    )
+    lost = sorted(name for name in _SETS_OVERRIDE_EXPLICITLY if "AUTOBOT_PROJECT_ROOT" not in templates.get(name, ""))
 
     assert not lost, f"template(s) stopped setting AUTOBOT_PROJECT_ROOT: {lost}"
 
