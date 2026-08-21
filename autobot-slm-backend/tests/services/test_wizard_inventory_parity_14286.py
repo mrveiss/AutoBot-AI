@@ -468,9 +468,9 @@ def test_a_detected_only_tts_worker_is_not_an_npu_deploy_target():
     """
     groups = _groups_for("tts-detected", ["tts-worker"], declared_roles=[])
 
-    assert "tts-detected" not in groups.get("npu_worker", set()), (
-        "a detection-only tts-worker can still receive NPU provisioning (#14567)"
-    )
+    assert "tts-detected" not in groups.get(
+        "npu_worker", set()
+    ), "a detection-only tts-worker can still receive NPU provisioning (#14567)"
     assert "tts-detected" not in groups.get("aiml", set())
 
 
