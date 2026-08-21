@@ -8342,6 +8342,7 @@
       "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
       "processDetach": "جدا کردن {workflow} از {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد.",
       "canvasGroupKind": "گروه",
       "toolNodeLabel": "ابزار",
@@ -8350,6 +8351,7 @@
       "toolAttachError": "پیوست کردن این ابزار ممکن نشد.",
       "toolDetachError": "جدا کردن این ابزار ممکن نشد.",
       "toolDetach": "جدا کردن {tool} از {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
       "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
       "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."

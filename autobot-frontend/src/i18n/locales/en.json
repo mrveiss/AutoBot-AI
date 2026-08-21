@@ -8330,6 +8330,7 @@
       "attachError": "Could not attach that workflow.",
       "detachError": "Could not detach that workflow.",
       "processDetach": "Detach {workflow} from {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Roles could not be loaded, so this list may be incomplete.",
       "canvasGroupKind": "Group",
       "toolNodeLabel": "Tool",
@@ -8338,6 +8339,7 @@
       "toolAttachError": "Could not attach that tool.",
       "toolDetachError": "Could not detach that tool.",
       "toolDetach": "Detach {tool} from {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
       "canvasNoToolsDefined": "No tools are attached to any role in this company.",
       "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it."

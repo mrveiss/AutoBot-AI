@@ -8342,6 +8342,7 @@
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasGroupKind": "گروپ",
       "toolNodeLabel": "ٹول",
@@ -8350,6 +8351,7 @@
       "toolAttachError": "یہ ٹول منسلک نہیں ہو سکا۔",
       "toolDetachError": "یہ ٹول الگ نہیں ہو سکا۔",
       "toolDetach": "{tool} کو {role} سے الگ کریں",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔",
       "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔"

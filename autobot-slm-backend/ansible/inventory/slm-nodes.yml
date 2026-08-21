@@ -35,6 +35,13 @@ all:
         # SLM Manager - main admin machine
         00-SLM-Manager:
           ansible_host: 127.0.0.1
+          # #14528: the manager IS the machine running the play. Without this,
+          # ansible SSHes to its own loopback -- which works only while sshd is
+          # reachable there and the autobot key is installed, and fails for no
+          # good reason when either is not. The registry-driven builder already
+          # sets this via local_ip_check (#10095); the static fallback did not,
+          # so the two paths disagreed about the same host.
+          ansible_connection: local
           slm_node_id: "00-SLM-Manager"
           slm_node_role: "slm-manager"
           slm_services_to_monitor:

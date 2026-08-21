@@ -996,6 +996,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long a remotely delivered approval stays correlatable with its reply. "
+            "After this the reply can no longer be tied to a request and resolves nothing."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
         type=int,
         default=86400,
