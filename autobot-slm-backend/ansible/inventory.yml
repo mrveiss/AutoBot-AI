@@ -13,6 +13,11 @@ all:
         admin:
           ansible_host: "{{ lookup('env', 'AUTOBOT_SLM_HOST') | default('', true) }}"
           ansible_user: autobot
+          # #14528: never SSH to self. Whether this entry is the local machine
+          # depends on the operator's topology, so decide from the resolved
+          # address rather than assuming either way.
+          ansible_connection: >-
+            {{ 'local' if ansible_host in ['127.0.0.1', 'localhost', '::1'] else 'ssh' }}
 
     autobot:
       children:

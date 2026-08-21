@@ -158,3 +158,47 @@ def test_the_tls_playbook_asserts_its_hosts_resolved():
         "enable-tls.yml no longer asserts that ansible_host resolved; with the empty default "
         "it would run against an unresolved host instead of failing (#14528)"
     )
+
+
+def _loopback_hosts():
+    """(file, host_name, connection) for entries pinned to a loopback address."""
+    loopback = {"127.0.0.1", "localhost", "::1"}
+    for path in _inventory_files():
+        for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
+            stack = [document]
+            while stack:
+                item = stack.pop()
+                if isinstance(item, list):
+                    stack.extend(item)
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                for key, value in item.items():
+                    if isinstance(value, dict) and str(value.get("ansible_host", "")) in loopback:
+                        yield path.name, key, value.get("ansible_connection")
+                    if isinstance(value, (dict, list)):
+                        stack.append(value)
+
+
+def test_a_loopback_host_does_not_ssh_to_itself():
+    """The machine running the play must not be reached over its own sshd (#14528).
+
+    `services/inventory_builder.py::_build_hostvars` already sets
+    `ansible_connection: local` when the address is local (#10095), but the
+    static inventories did not — so the registry path and the fallback path
+    disagreed about the same host.
+
+    SSH-to-self works only while sshd happens to listen on loopback and the
+    autobot key happens to be installed there. Neither is guaranteed, and
+    neither should be required to configure the machine you are already on.
+    """
+    offenders = [
+        f"{name} in {file} (ansible_connection={conn!r})"
+        for file, name, conn in _loopback_hosts()
+        if conn != "local"
+    ]
+
+    assert not offenders, (
+        "inventory entry pinned to loopback without `ansible_connection: local` — "
+        "ansible would SSH to the local machine (#14528): " + "; ".join(offenders)
+    )
