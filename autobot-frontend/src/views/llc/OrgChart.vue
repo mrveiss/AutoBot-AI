@@ -11,7 +11,7 @@ import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
@@ -29,6 +29,7 @@ import {
 } from '@/composables/llc/orgCanvasGraph'
 import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCanvasGraph'
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
+import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
@@ -48,6 +49,11 @@ const logger = createLogger('OrgChart')
 const api = useApiClient()
 const { t, locale } = useI18n()
 const router = useRouter()
+// #14611: cast to allow `undefined` — several existing tests mount this view
+// with no router plugin installed at all, and `useRoute()` (like `useRouter()`
+// above) simply returns `undefined` there rather than throwing; `route?.query`
+// below must tolerate that exactly the same way.
+const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -753,10 +759,91 @@ function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   if (node) node.position = position
 }
 
+/* ------------------------------------------------------------------ *
+ * #14611: the inbound deep link — the counterpart to #13963's outbound
+ * `?workflow=<id>` link. A `?node=<id>` query names a canvas node to open the
+ * canvas already focused on, so a colleague can be sent a link to what the
+ * sender is looking at rather than told to pan until they find it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Read once via a computed rather than copied into plain state: only its
+ * value at mount matters here (`deepLinkHandled` below claims the request
+ * exactly once), so a later unrelated query change can never re-trigger a
+ * jump the user has since panned away from.
+ */
+const deepLinkTargetId = computed<string | null>(() => canvasNodeIdFromQuery(route?.query))
+
+/**
+ * Every lazy source a deep-linked node could live in has answered (or
+ * failed) — the tree itself, processes, tools, teams. Only once all four are
+ * settled can "not found" be told apart from "not loaded yet"
+ * (#14064/#13617/#14556's repeat conflation, the same reasoning every other
+ * "unavailable" banner on this view already follows).
+ */
+const deepLinkSourcesReady = computed(
+  () => !isLoading.value && processNodesLoaded.value && toolNodesLoaded.value && teamsAttempted.value,
+)
+
+/** The canvas node `deepLinkTargetId` names among the nodes the canvas is
+ *  actually about to draw (`lensedCanvasNodes`) — including a team-roster
+ *  alias of a real org-chart member, the same lookup `onCanvasNodeSelected`
+ *  already performs for a click. */
+const deepLinkResolvedNode = computed<CanvasNode | null>(() => {
+  const targetId = deepLinkTargetId.value
+  if (!targetId) return null
+  return (
+    lensedCanvasNodes.value.find(
+      (node) => node.id === targetId || teamMemberOrgNodeId(node.id) === targetId,
+    ) ?? null
+  )
+})
+
+/** The id actually handed to `WorkflowCanvas`'s `focus-node-id` prop — only
+ *  once resolution has confirmed the node is really drawn, so the canvas is
+ *  never asked to jump to something it does not have. */
+const canvasFocusNodeId = ref<string | null>(null)
+/** A link that names a node this company does not have (removed, or the
+ *  reader lacks access) must read as "not found", never as an empty or
+ *  unresponsive canvas (#14611 acceptance; #14064/#13617/#14556's repeat
+ *  defect). */
+const deepLinkNodeNotFound = ref(false)
+
+/** One attempt per link, not a retry loop re-firing on every unrelated
+ *  reactive change once the sources are ready (mirrors `WorkflowCanvas.vue`'s
+ *  own `focusNodeId` prop watcher, which makes the same one-shot choice for
+ *  the same reason: a fixed jump must not fight a pan the user made since). */
+let deepLinkHandled = false
+
+watch(deepLinkSourcesReady, (ready) => {
+  const targetId = deepLinkTargetId.value
+  if (!ready || !targetId || deepLinkHandled) return
+  deepLinkHandled = true
+  const match = deepLinkResolvedNode.value
+  if (!match) {
+    deepLinkNodeNotFound.value = true
+    return
+  }
+  canvasFocusNodeId.value = match.id
+  // A process/tool node's "focus" is the pan/zoom alone — auto-opening the
+  // sidebar, or (for a process node) navigating straight to the workflow
+  // builder via `onCanvasNodeSelected`, would hijack a shared link before the
+  // reader has looked at anything. A real org-chart member (bare, or a team-
+  // roster alias of one) DOES open the same drawer a click on it would: for a
+  // person, "focused on it" reasonably includes the detail a click shows.
+  const realId = teamMemberOrgNodeId(match.id) ?? match.id
+  const orgNode = flattenOrgNodes(tree.value).get(realId)
+  if (orgNode) openDrawer(orgNode)
+})
+
 onMounted(() => {
   void fetchTree()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
+  // #14611: a deep link opens straight onto the canvas, triggering the same
+  // lazy fetches a manual click into it already does (`setViewMode`) — the
+  // sources `deepLinkSourcesReady` above waits on would otherwise never load.
+  if (deepLinkTargetId.value) setViewMode('canvas')
 })
 </script>
 
@@ -1069,6 +1156,19 @@ onMounted(() => {
         {{ t('llc.orgChart.peopleNoTeamsDefined') }}
       </p>
 
+      <!-- #14611: a `?node=` link that names a node this company does not
+           have (removed, or the reader lacks access) must say so — never
+           read as an unresponsive or empty canvas
+           (#14064/#13617/#14556's repeat conflation). -->
+      <div
+        v-if="deepLinkNodeNotFound"
+        class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
+        role="alert"
+        data-testid="canvas-deeplink-not-found"
+      >
+        {{ t('llc.orgChart.deepLinkNodeNotFound') }}
+      </div>
+
       <!-- GH#13943: the lens's own affordance. Shown whenever a role is
            selected, independent of whether it still matches anything, so a
            reduced (or emptied) canvas reads as "filtered by view", never as
@@ -1116,6 +1216,7 @@ onMounted(() => {
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
         :active-tab-id="effectiveTabId"
+        :focus-node-id="canvasFocusNodeId"
         @node-selected="onCanvasNodeSelected"
         @node-moved="onCanvasNodeMoved"
         @tab-selected="activeTabId = $event"

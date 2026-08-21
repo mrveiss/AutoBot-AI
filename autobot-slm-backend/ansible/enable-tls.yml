@@ -26,6 +26,22 @@
   hosts: frontend
   become: true
   gather_facts: true
+  pre_tasks:
+    # #14528: fail rather than silently targeting whatever ansible_host resolved
+    # to. This playbook writes .env, opens firewall ports and restarts services;
+    # running it against the wrong machine is worse than not running it. An
+    # unset AUTOBOT_*_HOST leaves ansible_host empty by design -- see the header
+    # of ansible/inventory.yml for why it is not defaulted to localhost.
+    - name: "Verify inventory hosts resolved (#14528)"
+      ansible.builtin.assert:
+        that:
+          - ansible_host is defined
+          - ansible_host | length > 0
+        fail_msg: >-
+          {{ inventory_hostname }} has no ansible_host. Export the matching
+          AUTOBOT_*_HOST for this node (or run against the registry inventory
+          via the SLM API) before enabling TLS.
+        success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
     tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
@@ -120,6 +136,22 @@
   hosts: backend
   become: true
   gather_facts: true
+  pre_tasks:
+    # #14528: fail rather than silently targeting whatever ansible_host resolved
+    # to. This playbook writes .env, opens firewall ports and restarts services;
+    # running it against the wrong machine is worse than not running it. An
+    # unset AUTOBOT_*_HOST leaves ansible_host empty by design -- see the header
+    # of ansible/inventory.yml for why it is not defaulted to localhost.
+    - name: "Verify inventory hosts resolved (#14528)"
+      ansible.builtin.assert:
+        that:
+          - ansible_host is defined
+          - ansible_host | length > 0
+        fail_msg: >-
+          {{ inventory_hostname }} has no ansible_host. Export the matching
+          AUTOBOT_*_HOST for this node (or run against the registry inventory
+          via the SLM API) before enabling TLS.
+        success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
     tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
@@ -179,6 +211,22 @@
   hosts: redis
   become: true
   gather_facts: true
+  pre_tasks:
+    # #14528: fail rather than silently targeting whatever ansible_host resolved
+    # to. This playbook writes .env, opens firewall ports and restarts services;
+    # running it against the wrong machine is worse than not running it. An
+    # unset AUTOBOT_*_HOST leaves ansible_host empty by design -- see the header
+    # of ansible/inventory.yml for why it is not defaulted to localhost.
+    - name: "Verify inventory hosts resolved (#14528)"
+      ansible.builtin.assert:
+        that:
+          - ansible_host is defined
+          - ansible_host | length > 0
+        fail_msg: >-
+          {{ inventory_hostname }} has no ansible_host. Export the matching
+          AUTOBOT_*_HOST for this node (or run against the registry inventory
+          via the SLM API) before enabling TLS.
+        success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
     tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"

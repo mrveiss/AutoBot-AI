@@ -8,3 +8,14 @@ cryptography==50.0.0
 # installs these files, not that package, so it was only ever satisfied transitively.
 # The [crypto] extra is required: jwks.py uses jwt.algorithms.RSAAlgorithm.
 PyJWT[crypto]>=2.8.0
+# #14551: same shape as PyJWT[crypto] above — autobot_shared/auth/jwt_core.py:61
+# does an unconditional `import bcrypt` (both backends' auth systems import this
+# module), and it is declared in autobot_shared/pyproject.toml but NOT installed
+# from there by CI. Absent here, importing jwt_core — and therefore
+# auth_middleware.py and everything that imports it — fails collection outright.
+bcrypt>=5.0.0
+# #14551: production dep of autobot-slm-backend/tests/api/*sso*.py's SSO/LDAP
+# auth path — sso_e2e_test.py skip-gates 2 tests on
+# `importlib.util.find_spec("ldap3") is None`, so without this they have been
+# silently skipping rather than exercising the real LDAP bind.
+ldap3>=2.9.1
