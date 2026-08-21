@@ -4380,7 +4380,14 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Use the arrow keys to move focus between nodes. Press Enter or Space to select the focused node. Press Escape to deselect.",
-      "a11yInstructionsMove": "Hold Control and press an arrow key to move the selected node."
+      "a11yInstructionsMove": "Hold Control and press an arrow key to move the selected node.",
+      "searchLabel": "Search nodes",
+      "searchPlaceholder": "Search by name",
+      "searchClear": "Clear search",
+      "searchResultsStatus": "{count} found for \"{query}\"",
+      "searchNoResults": "No matches for \"{query}\"",
+      "fitToSelection": "Fit to selection or filter",
+      "minimapLabel": "Canvas overview"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -7996,7 +8003,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "Spend is recorded as per-agent totals, not dated events, so there is no daily history yet."
+      "noDatedEvents": "Spend is recorded as per-agent totals, not dated events, so there is no daily history yet.",
+      "stepRollup": "What the mapped operation costs",
+      "byRole": "By role",
+      "byTool": "By tool",
+      "role": "Role",
+      "tool": "Tool",
+      "coverage": "Coverage",
+      "coverageComplete": "All steps costed",
+      "coveragePartial": "{costed} of {total} steps costed",
+      "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
+      "stepRollupUnavailable": "The totals could not be loaded.",
+      "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
+      "perMonth": "per month"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8310,7 +8329,8 @@
       "toolDetachError": "Could not detach that tool.",
       "toolDetach": "Detach {tool} from {role}",
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
-      "canvasNoToolsDefined": "No tools are attached to any role in this company."
+      "canvasNoToolsDefined": "No tools are attached to any role in this company.",
+      "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it."
     },
     "executorRollup": {
       "title": "Executor Rollup",
