@@ -627,6 +627,13 @@ async def _get_tracker_for_db(db: AsyncSession):
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
+
+# #14683: how long the update-all orchestration waits for a fired self-update
+# play to report a completion before giving up on it. Generous: the play covers
+# every deployed role on the box. The poll floor is 1s so a misconfigured
+# interval cannot turn the wait into a busy loop.
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600"))
+_SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 
@@ -5440,6 +5447,109 @@ async def _run_fleet_stage_or_already_current(
     job.completed_at = utc_timestamp()
 
 
+def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str]) -> bool:
+    """True when *completed_at* dates a play that finished after *since*.
+
+    The comparison is the whole point (#14683): "no play is running" is also
+    true a moment after firing, before the detached play has started, so a bare
+    not-running reading would report an instant, false completion. Only a
+    completion strictly newer than the moment we fired proves our play ended.
+
+    An unparseable or absent timestamp is NOT a completion.
+    """
+    if not completed_at or not since:
+        return False
+    try:
+        done = datetime.fromisoformat(completed_at)
+        fired = datetime.fromisoformat(since)
+    except (ValueError, TypeError):
+        return False
+    if done.tzinfo is None:
+        done = done.replace(tzinfo=timezone.utc)
+    if fired.tzinfo is None:
+        fired = fired.replace(tzinfo=timezone.utc)
+    return done > fired
+
+
+async def _await_self_update_completion(since: Optional[str]) -> Optional[str]:
+    """Wait for the fired self-update play to finish. Returns its completion time.
+
+    Returns None on timeout. If the play restarts this service — the case the
+    orchestration was originally written for — this coroutine simply dies with
+    the process and the startup resume hook takes over, exactly as before.
+    """
+    deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
+        activity = await read_deploy_activity()
+        # in_progress is None means the unit could not be queried — unknown is
+        # not "finished", so keep waiting rather than resolving on a guess.
+        if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
+            return activity.last_completed_play_at
+    return None
+
+
+async def _reconcile_self_update_stage(
+    job: UpdateAllJob,
+    remote_commit: str,
+    outdated_node_ids: List[str],
+) -> None:
+    """Resolve a fired self-update stage when this process was NOT restarted.
+
+    #14683: the stage used to have no completion path in this process at all.
+    It fired the play, returned, and relied on the restart killing us so the
+    startup resume hook would continue the fleet stage. When the play finished
+    without replacing the service, nothing ever ran again: the stage stayed
+    RUNNING and the fleet stage stayed PENDING forever, so no node was updated
+    and the job could neither complete nor fail.
+    """
+    stage = _get_stage(job, "slm_self_update")
+    completed_at = await _await_self_update_completion(stage.started_at)
+
+    if completed_at is None:
+        reason = (
+            f"self-update play reported no completion within {_SELF_UPDATE_WATCH_TIMEOUT_SECONDS}s — "
+            "not continuing to the fleet stage"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    from services.playbook_executor import SELF_UPDATE_LOG_PATH
+    from services.self_update_log_reader import read_self_update_verdict
+
+    verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+    if verdict.failed_hosts or verdict.unreachable_hosts:
+        # Carry the reason into the stage: the count alone gave an operator
+        # nothing to act on.
+        reason = (
+            f"self-update play finished with {verdict.failed_hosts} failed and "
+            f"{verdict.unreachable_hosts} unreachable host(s)"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    _stage_log(stage, "Self-update play completed without restarting this service — continuing")
+    stage.status = _StageStatus.SUCCESS
+    stage.message = f"SLM self-update completed at {_short_sha(remote_commit)} (no restart required)"
+    stage.completed_at = utc_timestamp()
+    await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
+    await _clear_resume_plan()
+
+
 async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> None:
     """Background task: run the 4-stage one-click update pipeline (M4).
 
@@ -5468,7 +5578,14 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
     if job.status == "failed":
         return
     if slm_fired:
-        return  # process restarts; resume hook handles fleet stage
+        # #14683: previously an unconditional return, on the assumption that the
+        # restart would kill this process and the startup resume hook would pick
+        # the fleet stage up. That holds only when the play actually replaces the
+        # service. If we are still alive when the play finishes, nothing else will
+        # ever advance the job, so reconcile it here. When the restart DOES happen
+        # this coroutine dies mid-wait and the resume hook runs exactly as before.
+        await _reconcile_self_update_stage(job, remote_commit, outdated_node_ids)
+        return
 
     await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
 
