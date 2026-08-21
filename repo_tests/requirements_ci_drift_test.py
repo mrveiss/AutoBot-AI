@@ -167,7 +167,12 @@ def test_pytesseract_is_mirrored_now_that_this_pr_landed_it():
     was steering toward — and this one has an end worth pinning: declared in
     CI, and NOT carrying an exemption that would let it drift back out.
     """
+    ci = checker.ci_requirement_names()
     allowlist = checker.load_allowlist()
+    assert "pytesseract" in ci, (
+        "pytesseract must be declared where CI installs from — an absent exemption "
+        "proves nothing on its own if the mirror it was waiting for went away."
+    )
     assert "pytesseract" not in allowlist, (
         "pytesseract is declared in requirements-ci now, so an allowlist entry "
         "is a stale exemption — the drift audit fails on exactly this."
