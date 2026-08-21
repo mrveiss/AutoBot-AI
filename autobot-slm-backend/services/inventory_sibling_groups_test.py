@@ -66,15 +66,14 @@ def test_the_closure_actually_widened_the_seed():
     assert gated - seed, "the closure added nothing; _ROLE_TO_GROUPS or the seed changed shape"
 
 
-def test_sibling_deploy_groups_are_gated_too(
-):
+def test_sibling_deploy_groups_are_gated_too():
     """The #14567 gap: the names other playbooks target by `hosts:`."""
     gated = set(inventory_builder._DECLARED_ONLY_GROUPS)
 
     for sibling in ("ai_stack", "npu_worker", "npu_workers", "browser_worker"):
-        assert sibling in gated, (
-            f"{sibling} is targeted by a setup playbook via `hosts:` but detection can still grant it"
-        )
+        assert (
+            sibling in gated
+        ), f"{sibling} is targeted by a setup playbook via `hosts:` but detection can still grant it"
 
 
 def test_agent_membership_groups_are_NOT_gated():
@@ -106,11 +105,32 @@ def test_a_contaminated_node_leaks_no_deploy_group():
     """The live shape: a vnc node whose detection reports the whole catalogue."""
     node = _node(
         ["vnc", "slm-agent"],
-        ["ai-stack", "npu-worker", "browser-service", "frontend", "backend", "slm-backend", "redis", "vnc", "slm-agent"],
+        [
+            "ai-stack",
+            "npu-worker",
+            "browser-service",
+            "frontend",
+            "backend",
+            "slm-backend",
+            "redis",
+            "vnc",
+            "slm-agent",
+        ],
     )
     groups = _groups(node)
 
-    for leaked in ("ai_stack", "npu_worker", "npu_workers", "browser_worker", "aiml", "npu", "browser", "frontend", "backend", "slm_server"):
+    for leaked in (
+        "ai_stack",
+        "npu_worker",
+        "npu_workers",
+        "browser_worker",
+        "aiml",
+        "npu",
+        "browser",
+        "frontend",
+        "backend",
+        "slm_server",
+    ):
         assert leaked not in groups, f"{leaked} still granted by detection alone"
 
     assert "redis" in groups, "ordinary groups must still come from detection"
