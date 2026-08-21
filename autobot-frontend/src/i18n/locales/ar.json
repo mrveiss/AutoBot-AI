@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "تم العثور على {count} لِـ \"{query}\"",
       "searchNoResults": "لا توجد نتائج مطابقة لـ \"{query}\"",
       "fitToSelection": "احتواء التحديد أو التصفية",
-      "minimapLabel": "نظرة عامة على اللوحة"
+      "minimapLabel": "نظرة عامة على اللوحة",
+      "undo": "تراجع",
+      "redo": "إعادة",
+      "undoScope": "يشمل التراجع والإعادة نقل العقد وإضافتها وإزالتها وربطها في هذه اللوحة. لا يمكن التراجع هنا عن التعديلات داخل العقدة، ولا عن أي إجراء يُرسل إلى الخادم — مثل الحفظ أو الإرفاق أو الإزالة.",
+      "selectionStatus": "تم تحديد {count} من العقد",
+      "contextMenuLabel": "إجراءات العقدة",
+      "contextMenuButtonLabel": "إجراءات {name}",
+      "contextMenuZoomToNode": "تكبير إلى العقدة",
+      "contextMenuFitSelection": "احتواء العرض ضمن التحديد",
+      "contextMenuDeleteSelection": "حذف {count} من العقد المحددة",
+      "contextMenuOpenWorkflow": "فتح سير العمل المرتبط"
     },
     "editStep": {
       "title": "Edit Step {step}",

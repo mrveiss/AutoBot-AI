@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "{count} مورد برای «{query}» یافت شد",
       "searchNoResults": "هیچ نتیجه‌ای برای «{query}» یافت نشد",
       "fitToSelection": "تنظیم اندازه بر اساس انتخاب یا فیلتر",
-      "minimapLabel": "نمای کلی بوم"
+      "minimapLabel": "نمای کلی بوم",
+      "undo": "واگرد",
+      "redo": "انجام دوباره",
+      "undoScope": "واگرد و انجام دوباره شامل جابه‌جایی، افزودن، حذف و اتصال گره‌ها در این بوم می‌شود. ویرایش‌های داخل یک گره، و هر اقدامی که به سرور ارسال می‌شود — ذخیره، پیوست، جدا کردن — در اینجا قابل واگرد نیست.",
+      "selectionStatus": "{count} گره انتخاب شد",
+      "contextMenuLabel": "کنش‌های گره",
+      "contextMenuButtonLabel": "کنش‌های {name}",
+      "contextMenuZoomToNode": "بزرگ‌نمایی به گره",
+      "contextMenuFitSelection": "تنظیم نما بر اساس انتخاب",
+      "contextMenuDeleteSelection": "حذف {count} گره انتخاب‌شده",
+      "contextMenuOpenWorkflow": "باز کردن گردش‌کار پیوندشده"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
