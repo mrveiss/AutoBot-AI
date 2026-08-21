@@ -8332,6 +8332,7 @@
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית.",
       "canvasGroupKind": "קבוצה",
       "toolNodeLabel": "כלי",
@@ -8340,6 +8341,7 @@
       "toolAttachError": "לא ניתן היה לצרף כלי זה.",
       "toolDetachError": "לא ניתן היה להסיר כלי זה.",
       "toolDetach": "הסר את {tool} מ-{role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
       "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו.",
       "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו."

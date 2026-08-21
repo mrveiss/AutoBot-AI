@@ -537,3 +537,6 @@ MagicMock/
 # after a test run would otherwise commit however many have accumulated.
 autobot-backend/tests/results/
 autobot-backend/data/scheduled_workflows.json
+
+# #14678: generated at CI time from inventory/group_vars/all.yml, never tracked
+autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml
