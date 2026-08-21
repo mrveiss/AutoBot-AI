@@ -52,6 +52,36 @@ def test_pattern_regex_handles_a_trailing_double_star():
     assert not rx.search("requirements-ci.txt")
 
 
+def test_backend_filter_patterns_survives_a_comment_mid_list(tmp_path):
+    """#14550/#14551 rebase incident: a comment BETWEEN two bullets truncated
+    the parse. #14650 landed a multi-line comment inside this exact block for
+    the first time; the original parser treated any non-bullet line as the
+    end of the list once it had collected at least one bullet, so every entry
+    after the comment -- including this checker's own guarded paths -- read
+    as uncovered. dorny/paths-filter itself parses this as real YAML and is
+    unaffected by comments; this mirror must not diverge from that."""
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "code-quality.yml").write_text(
+        "jobs:\n"
+        "  changes:\n"
+        "    outputs:\n"
+        "      backend: ${{ steps.filter.outputs.backend }}\n"
+        "    steps:\n"
+        "      - uses: dorny/paths-filter@x\n"
+        "        id: filter\n"
+        "        with:\n"
+        "          filters: |\n"
+        "            backend:\n"
+        "              - 'before/**'\n"
+        "              # a comment sitting between two bullets, mid-list\n"
+        "              - 'after/**'\n",
+        encoding="utf-8",
+    )
+    patterns = checker.backend_filter_patterns(tmp_path)
+    assert patterns == ["before/**", "after/**"]
+
+
 def test_uncovered_paths_flags_a_guarded_path_no_pattern_reaches():
     guarded = {"tools/lint/fake_checker.py": ("some/new/input.yml",)}
     patterns = ["**/*.py", "requirements-ci/**"]
@@ -147,7 +177,7 @@ def test_audit_fails_on_zero_guard_input_paths(tmp_path):
 
 def test_audit_is_clean_on_the_real_tree():
     reached, problems = checker.audit_reach()
-    assert reached >= 7, f"only {reached} guarded paths reached — a checker lost its GUARD_INPUT_PATHS"
+    assert reached >= 8, f"only {reached} guarded paths reached — a checker lost its GUARD_INPUT_PATHS"
     assert problems == [], problems
 
 

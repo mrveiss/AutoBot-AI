@@ -59,6 +59,7 @@ _GUARDED_CHECKERS = (
 )
 
 _FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*$")
+_FILTER_COMMENT_RE = re.compile(r"^\s*#")
 
 
 def repo_root() -> pathlib.Path:
@@ -93,6 +94,16 @@ def backend_filter_patterns(root: pathlib.Path | None = None) -> list[str]:
     literal ``filters: |`` block by locating it explicitly rather than
     trusting the first ``backend:`` in the file — ``outputs: backend: ...``
     two lines above the real filter list would otherwise match first.
+
+    Skips blank lines and full-line ``#`` comments WITHOUT ending the block --
+    #14650 (landed the same week as this checker) added a multi-line comment
+    INSIDE the filters list for the first time, between two bullets. The
+    original version treated any non-bullet line as the end of the list, so
+    it silently truncated at that comment and read every entry after it,
+    including this checker's own guarded paths, as uncovered -- caught by
+    rebasing #14550/#14551 onto that change, not by design. dorny/paths-filter
+    itself parses this block as real YAML and is unaffected by comments; this
+    mirror must not diverge from that by treating one as a terminator.
     """
     base = root if root is not None else repo_root()
     path = base / _WORKFLOW
@@ -110,8 +121,11 @@ def backend_filter_patterns(root: pathlib.Path | None = None) -> list[str]:
         match = _FILTER_BULLET_RE.match(line)
         if match:
             patterns.append(match.group(1))
-        elif patterns:
-            break  # first non-bullet line after the list ends the block
+            continue
+        if not line.strip() or _FILTER_COMMENT_RE.match(line):
+            continue  # blank line or full-line comment -- keep scanning
+        if patterns:
+            break  # first genuine non-bullet, non-comment line ends the block
     return patterns
 
 
