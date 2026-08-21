@@ -10305,6 +10305,8 @@ export interface components {
          * @description Node role assignment with status (Issue #779).
          */
         NodeRoleResponse: {
+            /** Advisory */
+            advisory?: string | null;
             /**
              * Assignment Type
              * @default auto

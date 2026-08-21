@@ -6963,6 +6963,17 @@
       "NodeRoleResponse": {
         "description": "Node role assignment with status (Issue #779).",
         "properties": {
+          "advisory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory"
+          },
           "assignment_type": {
             "default": "auto",
             "title": "Assignment Type",
