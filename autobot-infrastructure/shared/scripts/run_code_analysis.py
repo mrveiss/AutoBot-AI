@@ -10,6 +10,7 @@ Runs various code analysis tools and outputs results in JSON format
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,11 +34,51 @@ sys.path.insert(0, str(_SHARED_DIR))
 # working directory differs.
 _ANALYSIS_SCRIPTS_DIR = project_root() / "autobot-backend" / "code_analysis" / "scripts"
 
+# #14587: none of the five sub-scripts add their own dependencies to
+# ``sys.path`` -- they import bare names (``code_quality_dashboard``,
+# ``utils.line_index``, ``constants.ttl_constants``, ``autobot_shared...``)
+# that only resolve when the *caller* puts these three directories on
+# ``PYTHONPATH``, the same way the live backend service's own systemd units
+# do. Launched as a bare ``[sys.executable, script_path]`` subprocess with no
+# ``env``, every one of the five raises ``ModuleNotFoundError`` on its first
+# import line -- a launch failure, not an analysis result.
+_ANALYSIS_PYTHONPATH_DIRS = (
+    project_root(),
+    project_root() / "autobot-backend",
+    _ANALYSIS_SCRIPTS_DIR.parent / "src",
+)
+
 # Ceiling on a single sub-script's wall-clock time, in seconds.
 _SUBPROCESS_TIMEOUT_SECONDS = 60
 
 # Result keys whose value is checked for a per-analysis failure.
 _ANALYSIS_RESULT_KEYS = ("code_quality", "duplicates", "performance", "architecture")
+
+# #14587: each sub-script `json.dump()`s its report to a file in its `cwd`
+# (pinned to `target_path` by `_invoke_subprocess`) and prints only
+# human-readable text -- there is nothing to parse on stdout. This maps the
+# script this orchestrator invokes to the file that same script writes, so
+# both sides read from the one channel that actually carries data.
+_ANALYSIS_OUTPUT_FILES = {
+    "analyze_code_quality.py": "comprehensive_quality_report.json",
+    "analyze_duplicates.py": "code_analysis_report.json",
+    "analyze_performance.py": "performance_analysis_report.json",
+    "analyze_performance_simple.py": "performance_simple_analysis_report.json",
+    "analyze_architecture.py": "architectural_analysis_report.json",
+}
+
+
+def _analysis_subprocess_env() -> Dict[str, str]:
+    """Environment for a sub-script subprocess, with its import path resolved.
+
+    #14587: prepends the three directories the five sub-scripts' bare imports
+    need onto the inherited ``PYTHONPATH`` -- see ``_ANALYSIS_PYTHONPATH_DIRS``.
+    """
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    new_entries = os.pathsep.join(str(p) for p in _ANALYSIS_PYTHONPATH_DIRS)
+    env["PYTHONPATH"] = f"{new_entries}{os.pathsep}{existing}" if existing else new_entries
+    return env
 
 
 def _invoke_subprocess(
@@ -47,12 +88,14 @@ def _invoke_subprocess(
 
     Exactly one of the pair is ``None``. ``cwd`` is pinned to ``target_path``
     because these scripts resolve their own analysis root relative to the
-    process's working directory, not from argv.
+    process's working directory, not from argv. ``env`` carries the
+    ``PYTHONPATH`` these scripts need to import their own dependencies.
     """
     try:
         result = subprocess.run(
             [sys.executable, str(script_path)],
             cwd=target_path,
+            env=_analysis_subprocess_env(),
             capture_output=True,
             text=True,
             timeout=_SUBPROCESS_TIMEOUT_SECONDS,
@@ -65,16 +108,50 @@ def _invoke_subprocess(
         return None, f"{label} analysis could not start: {e}"
 
 
-def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict[str, Any]:
-    """Run one sub-script under ``_ANALYSIS_SCRIPTS_DIR`` and parse its JSON stdout.
+def _read_report_file(target_path: str, script_name: str, label: str) -> Dict[str, Any]:
+    """Parse the JSON report ``script_name`` writes into ``target_path``.
 
-    #14543: a missing script, a non-zero exit, and stdout that fails to parse as
-    JSON are all reported as an ``error`` -- none of them may be folded into a
-    fabricated "success" the way this used to synthesize placeholder metrics.
+    #14587: the sub-scripts write their report to a file in their ``cwd``
+    (pinned to ``target_path``), not to stdout -- this is the read half of
+    that contract. A missing file, an unreadable one (permissions, race), one
+    that isn't valid JSON, and one whose top level isn't a JSON object all
+    degrade to the same ``error`` shape rather than propagating or being
+    treated as a result dict.
+    """
+    output_name = _ANALYSIS_OUTPUT_FILES.get(script_name)
+    if output_name is None:
+        return {"error": f"{label} analysis: no known report file for {script_name}"}
+
+    report_path = Path(target_path) / output_name
+    if not report_path.exists():
+        return {"error": f"{label} analysis did not write {output_name}"}
+
+    try:
+        with open(report_path, "r", encoding="utf-8") as f:
+            parsed = json.load(f)
+    except json.JSONDecodeError:
+        return {"error": f"{label} analysis wrote {output_name} but it was not valid JSON"}
+    except OSError as e:
+        return {"error": f"{label} analysis wrote {output_name} but it could not be read: {e}"}
+
+    if not isinstance(parsed, dict):
+        return {"error": f"{label} analysis wrote {output_name} but its top level was not a JSON object"}
+    return parsed
+
+
+def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict[str, Any]:
+    """Run one sub-script under ``_ANALYSIS_SCRIPTS_DIR`` and read its JSON report file.
+
+    #14543: a missing script, a non-zero exit, a launch failure, and a missing
+    or malformed report file are all reported as an ``error`` -- none of them
+    may be folded into a fabricated "success" the way this used to synthesize
+    placeholder metrics.
     """
     script_path = _ANALYSIS_SCRIPTS_DIR / script_name
     if not script_path.exists():
-        return {"error": f"Script not found: {script_path}"}
+        # #14587: no full filesystem path in a result that could reach a
+        # caller -- the script's own name identifies it just as well.
+        return {"error": f"Script not found: {script_name}"}
 
     result, error = _invoke_subprocess(script_path, target_path, label)
     if error is not None:
@@ -83,10 +160,7 @@ def _run_analysis_script(label: str, script_name: str, target_path: str) -> Dict
     if result.returncode != 0:
         return {"error": (result.stderr or "").strip() or f"{label} analysis exited {result.returncode}"}
 
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {"error": f"{label} analysis produced no parseable JSON output"}
+    return _read_report_file(target_path, script_name, label)
 
 
 def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
@@ -135,17 +209,49 @@ def _run_requested_analyses(results: Dict[str, Any], target_path: str, analysis_
             results["communication_patterns"] = architecture["communication_patterns"]
 
 
+# #14635: the real producer (code_quality_dashboard.py's
+# generate_comprehensive_report, written verbatim to comprehensive_quality_
+# report.json by analyze_code_quality.py) nests its scores under a
+# "quality_metrics" object, not at the report's top level, and has no
+# "complexity" or "doc_coverage" field anywhere. Reading top-level
+# "complexity"/"maintainability"/"test_coverage"/"doc_coverage" keys used to
+# always miss and fall back to these four hardcoded numbers -- fabricated
+# telemetry on every run, including a genuinely successful one. Maps only the
+# fields the real "quality_metrics" object actually carries.
+_QUALITY_METRICS_FIELD_MAP = {
+    "maintainability": "maintainability_index",
+    "test_coverage": "test_coverage_score",
+}
+
+
 def _extract_codebase_metrics(results: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Roll up headline metrics from the quality analysis, when it succeeded."""
+    """Roll up headline metrics the quality analysis actually computed.
+
+    Returns ``None`` when the quality analysis itself didn't run or failed --
+    same as before. A quality analysis that *succeeded* but is missing the
+    "quality_metrics" block it always writes is a producer/consumer shape
+    mismatch, not something to paper over with a default, so that raises
+    instead of returning fabricated numbers.
+
+    "complexity" and "doc_coverage" have no equivalent in the real report
+    (#14635) -- they are simply not included, rather than invented.
+    """
     quality = results.get("code_quality")
     if not isinstance(quality, dict) or quality.get("error"):
         return None
-    return {
-        "complexity": quality.get("complexity", 5),
-        "maintainability": quality.get("maintainability", "good"),
-        "test_coverage": quality.get("test_coverage", 70),
-        "doc_coverage": quality.get("doc_coverage", 65),
-    }
+
+    metrics = quality.get("quality_metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError(
+            "code_quality analysis succeeded but its report has no "
+            "'quality_metrics' object -- producer/consumer shape mismatch"
+        )
+
+    missing = [src for src in _QUALITY_METRICS_FIELD_MAP.values() if src not in metrics]
+    if missing:
+        raise ValueError(f"code_quality report's 'quality_metrics' is missing expected keys: {missing}")
+
+    return {dest: metrics[src] for dest, src in _QUALITY_METRICS_FIELD_MAP.items()}
 
 
 def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str, Any]:

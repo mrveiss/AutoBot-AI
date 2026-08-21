@@ -46,6 +46,17 @@
 # services/inventory_privileged_node_roles_test.py, which derives the
 # five-fact set from inventory_builder._DECLARED_ONLY_GROUPS instead of
 # repeating this list, so it fails loud on a sixth privileged fact.
+#
+# #14594: the fallback above existed because api/setup_wizard.py -- a SECOND
+# node_roles producer -- did not stamp node_roles_declared, relying on the
+# NodeRole assignment table happening to be declared-only. It now stamps
+# node_roles_declared directly from Node.roles (never the NodeRole table), so
+# the fallback is dead for every LIVE producer; it stays only for
+# hand-authored static inventories (ansible/inventory/slm-nodes.yml). Guarded
+# by services/node_roles_declared_producers_test.py (derives every node_roles
+# producer and asserts it also stamps node_roles_declared) and
+# api/setup_wizard_privileged_node_roles_test.py (end-to-end reproduction
+# through the setup-wizard path specifically).
 role_backend_active: >-
   {{ ('backend' in (node_roles_declared | default(node_roles | default([])))) or
      ('autobot-backend' in (node_roles_declared | default(node_roles | default([])))) or

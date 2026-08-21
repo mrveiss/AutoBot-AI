@@ -31,7 +31,7 @@ from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
-from services.inventory_builder import groups_for_role_tokens
+from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
 from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
 from services.role_registry import ROLE_ANSIBLE_GROUPS
 
@@ -110,34 +110,92 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
-def _ansible_groups_for_nodes(node_roles, node_id_to_inv_name: dict[str, str]) -> dict[str, set[str]]:
+def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str]) -> set[str]:
+    """Union of the canonical map AND the legacy ``ROLE_ANSIBLE_GROUPS`` one.
+
+    Split out so both the raw (all NodeRole rows) and declared (Node.roles
+    alone) group sets in ``_ansible_groups_for_nodes`` are computed the same
+    way -- a role like ``vnc`` reaches ``backend`` ONLY through the legacy
+    map (it has no entry in ``inventory_builder._ROLE_TO_GROUPS`` at all), so
+    computing "declared" through the canonical map alone would strip a role
+    the node genuinely declared (#14638).
+    """
+    groups = set(groups_for_role_tokens(role_tokens))
+    for token in role_tokens:
+        legacy = ROLE_ANSIBLE_GROUPS.get(token)
+        if legacy:
+            groups.add(legacy)
+    return groups
+
+
+def _ansible_groups_for_nodes(
+    node_roles,
+    node_id_to_inv_name: dict[str, str],
+    db_nodes: list,
+) -> dict[str, set[str]]:
     """Group name -> inventory names, unioning both vocabularies (#14286).
 
     Split out of ``_build_inventory_children`` to keep it under the length
     rule. The union is the point: neither map is a superset of the other, so
     dropping either would trade one set of silent no-ops for another.
 
+    #14638: the result is gated the same way the dynamic-inventory builder
+    gates its own groups (``_strip_undeclared_privileged_groups``,
+    #14513/#14552) -- a node whose only route into a privileged group
+    (``slm_server``, ``backend``, ``main``, ``frontend``, ``aiml``, ``npu``,
+    ``browser``) is a ``NodeRole`` row it never declared must not join it.
+    The check reads ``Node.roles`` directly through ``db_nodes`` -- the same
+    source #14637 uses for ``node_roles_declared`` -- rather than trusting the
+    ``NodeRole`` assignment table ``node_roles`` itself is built from, so the
+    gate survives a future writer that stops keeping that table declared-only
+    instead of depending on it staying that way (#14594).
+
+    ``_strip_undeclared_privileged_groups`` itself is not reused here: it
+    computes "declared" through ``groups_for_role_tokens`` alone, and this
+    path's raw side unions in ``ROLE_ANSIBLE_GROUPS`` too -- reusing it as-is
+    would strip a role (``vnc`` -> ``backend``) that is declared but only
+    reachable through the second vocabulary. Both sides go through
+    ``_groups_for_role_tokens_both_vocabularies`` instead, so "declared" and
+    "raw" agree on what a role token means.
+
     Args:
         node_roles: NodeRole rows, each carrying ``node_id`` and ``role_name``.
         node_id_to_inv_name: node id -> the name the inventory uses.
+        db_nodes: Node ORM rows -- the source of declared intent (Node.roles)
+            used to strip groups a node only reached via detection.
 
     Returns:
-        Every group each host belongs to, from both mappings.
+        Every group each host belongs to, from both mappings, privileged
+        groups stripped for any node that did not declare its way in.
     """
     roles_by_node: dict[str, list[str]] = {}
-    groups: dict[str, set[str]] = {}
+    raw_node_groups: dict[str, set[str]] = {}
 
     for nr in node_roles:
         inv_name = node_id_to_inv_name.get(nr.node_id)
         if not inv_name:
             continue
         roles_by_node.setdefault(inv_name, []).append(nr.role_name)
-        legacy = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
-        if legacy:
-            groups.setdefault(legacy, set()).add(inv_name)
 
     for inv_name, role_tokens in roles_by_node.items():
-        for group in groups_for_role_tokens(role_tokens):
+        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(role_tokens)
+
+    declared_roles_by_inv: dict[str, list[str]] = {}
+    for node in db_nodes:
+        inv_name = node_id_to_inv_name.get(node.node_id)
+        if inv_name:
+            declared_roles_by_inv[inv_name] = _declared_roles(node)
+
+    groups: dict[str, set[str]] = {}
+    for inv_name, node_group_set in raw_node_groups.items():
+        undeclared = node_group_set & _DECLARED_ONLY_GROUPS
+        if undeclared:
+            # A node this path cannot resolve back to a Node row has no
+            # declared intent to stand on -- absent means [], which fails
+            # closed rather than skipping the gate.
+            declared_groups = _groups_for_role_tokens_both_vocabularies(declared_roles_by_inv.get(inv_name, []))
+            node_group_set = node_group_set - (undeclared - declared_groups)
+        for group in node_group_set:
             groups.setdefault(group, set()).add(inv_name)
 
     return groups
@@ -147,6 +205,7 @@ def _build_inventory_children(
     hosts: dict[str, dict],
     node_roles: list,
     node_id_to_inv_name: dict[str, str],
+    db_nodes: list,
 ) -> tuple[dict[str, dict], dict[str, set[str]]]:
     """Build Ansible inventory ``children`` with role-based groups (#1346).
 
@@ -173,7 +232,7 @@ def _build_inventory_children(
     # and read back by nothing, so they contributed no activation at all;
     # ROLE_ANSIBLE_GROUPS now names the consulted spellings (`database`,
     # `browser`), which the canonical map emits too.
-    ansible_groups = _ansible_groups_for_nodes(node_roles, node_id_to_inv_name)
+    ansible_groups = _ansible_groups_for_nodes(node_roles, node_id_to_inv_name, db_nodes)
 
     children: dict[str, dict] = {
         "slm_nodes": {"hosts": {h: None for h in hosts}},
@@ -299,11 +358,23 @@ def _apply_role_host_vars(
     db_nodes: list,
     all_node_roles: list,
 ) -> None:
-    """Stamp node_roles, node_dependencies, and pending_dep_removals onto hosts (#2823).
+    """Stamp node_roles, node_roles_declared, node_dependencies, and
+    pending_dep_removals onto hosts (#2823).
 
     Sets node_roles so provision-fleet-roles.yml conditions work, resolves
     shared-dependency names for Phase 0 (#2747), and propagates any pending
     dependency removals recorded in node.extra_data.
+
+    #14594: node_roles_declared is stamped from ``node.roles`` directly (the
+    same source ``inventory_builder._declared_roles`` reads for the dynamic
+    inventory path), NOT from the NodeRole assignment table that node_roles
+    itself is built from. #14552's ``_declare_role_on_node`` already
+    established ``Node.roles`` as the sole record of operator intent for
+    privileged-group gating; this makes the node_roles_declared hostvar rest
+    on that same guarantee instead of on the incidental fact that every
+    current NodeRole writer happens to keep the table declared-only. If a
+    future writer ever stamps a NodeRole row the node never declared, this
+    hostvar is unaffected -- it never reads that table.
     """
     from services.role_registry import ROLE_DEPENDENCIES
 
@@ -320,6 +391,7 @@ def _apply_role_host_vars(
             continue
         if node.node_id in node_id_to_roles:
             hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
+        hosts[inv_name]["node_roles_declared"] = _declared_roles(node)
         roles = hosts[inv_name].get("node_roles", [])
         deps: set[str] = set()
         for role in roles:
@@ -418,6 +490,14 @@ def _inject_co_located_ai_stack(
         if _ai_stack_roles & set(roles):
             continue
         hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        # #14594: also inject into node_roles_declared. This is a deliberate
+        # system decision to run ai-stack here (#3461), equivalent to an
+        # operator declaring it -- role_ai_stack_active is one of the five
+        # PRIVILEGED facts that read node_roles_declared instead of the raw
+        # union, so without this the co-location convenience silently stops
+        # deploying ChromaDB the moment node_roles_declared exists.
+        declared = hosts[inv_name].get("node_roles_declared", [])
+        hosts[inv_name]["node_roles_declared"] = list(declared) + ["ai-stack"]
         # Note: ai-stack role now defaults to autobot:autobot (not autobot-ai)
         # per unified service account model (#4091). No override needed.
         injected.append(inv_name)
@@ -580,7 +660,7 @@ async def _generate_dynamic_inventory(
         return None
 
     (
-        _db_nodes,
+        db_nodes,
         hosts,
         node_id_to_hostname,
         _node_id_to_ip,
@@ -595,8 +675,10 @@ async def _generate_dynamic_inventory(
     # carries group membership, and roles whose mapped group isn't the one
     # role_*_active checks (tts-worker, browser-service) silently never deploy —
     # the provision reports failed=0 while optional roles stay inactive.
-    _apply_role_host_vars(hosts, _db_nodes, all_node_roles)
-    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
+    _apply_role_host_vars(hosts, db_nodes, all_node_roles)
+    # #14638: db_nodes carries Node.roles, the declared-intent source
+    # _ansible_groups_for_nodes gates privileged group membership on.
+    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname, db_nodes)
     infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
     # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
     # never sees the injected role because it reads from DB node_roles, not the
