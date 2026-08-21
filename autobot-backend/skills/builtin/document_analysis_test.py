@@ -488,7 +488,7 @@ async def test_the_real_agent_error_branch_produces_the_shape_this_skill_reads()
     # Imported directly, NOT via importorskip: this is the one test that meets
     # the real agent, so an environment where it cannot run must fail loudly
     # rather than skip back into the all-stubs state the review found.
-    import agents.summarization_agent as agents_pkg
+    import agents.summarization_agent as agents_pkg  # nosemgrep: extension-no-core-internals
 
     agent = agents_pkg.SummarizationAgent.__new__(agents_pkg.SummarizationAgent)
     agent.model_name = "a-model"
