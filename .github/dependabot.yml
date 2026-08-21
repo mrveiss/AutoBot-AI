@@ -415,11 +415,15 @@ updates:
           - "*"
     ignore:
       - dependency-name: "tokenizers"
-        # #14431: cap <0.24 — transformers pins tokenizers<=0.23.0, so a floor
-        # above that is unsatisfiable. The requirements files already carry the
-        # <0.24 cap and a #10331 comment; this stops dependabot re-proposing past
-        # it on every run. Unblock when transformers raises its cap.
-        versions: [">=0.24.0"]
+        # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
+        # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
+        # 0.24.0. The requirements files' <0.24 is a looser safety bound; keying
+        # the exclusion to it (as this entry first did) still let dependabot
+        # propose 0.23.1 — which is exactly what #14441 and #14442 carry.
+        # scripts/tokenizers_transformers_range_test.py pins the real cap at
+        # (0, 23, 0). Raise this only alongside a transformers bump that raises
+        # _TRANSFORMERS_CAP there.
+        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -447,11 +451,15 @@ updates:
           - "*"
     ignore:
       - dependency-name: "tokenizers"
-        # #14431: cap <0.24 — transformers pins tokenizers<=0.23.0, so a floor
-        # above that is unsatisfiable. The requirements files already carry the
-        # <0.24 cap and a #10331 comment; this stops dependabot re-proposing past
-        # it on every run. Unblock when transformers raises its cap.
-        versions: [">=0.24.0"]
+        # #14431: exclude >=0.23.1 — transformers 5.14.1 AND 5.15.0 both declare
+        # tokenizers<=0.23.0, so 0.23.1 is the FIRST unsatisfiable version, not
+        # 0.24.0. The requirements files' <0.24 is a looser safety bound; keying
+        # the exclusion to it (as this entry first did) still let dependabot
+        # propose 0.23.1 — which is exactly what #14441 and #14442 carry.
+        # scripts/tokenizers_transformers_range_test.py pins the real cap at
+        # (0, 23, 0). Raise this only alongside a transformers bump that raises
+        # _TRANSFORMERS_CAP there.
+        versions: [">=0.23.1"]
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic"

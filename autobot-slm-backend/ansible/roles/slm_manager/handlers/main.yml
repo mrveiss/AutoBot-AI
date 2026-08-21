@@ -3,9 +3,22 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 ---
+# #14693: every handler here performs a privileged operation -- systemd
+# daemon-reload, service restarts, `nginx -t`. None declared `become`, and the
+# ansible.cfg that was meant to supply it globally puts `become = True` under
+# [defaults], where ansible does not read it (the keys belong in
+# [privilege_escalation], which carries only become_flags). So the config
+# default has never applied, and these handlers ran unprivileged wherever the
+# calling play did not escalate.
+#
+# `restart slm backend` is the dangerous one: it carries `failed_when: false`,
+# so an unprivileged restart does not fail the play -- the service simply never
+# restarts and nothing reports it. That is the same silent no-restart the
+# self-update wedge (#14683) turns on.
 - name: reload systemd
   ansible.builtin.systemd:
     daemon_reload: true
+  become: true
 
 - name: restart slm backend
   ansible.builtin.systemd:
@@ -15,22 +28,27 @@
   # not be deployed yet when this handler fires from a config template
   # change.  The "Start backend service" task later ensures it runs.
   failed_when: false
+  become: true
 
 - name: test nginx config
   ansible.builtin.command:
     cmd: nginx -t
+  become: true
 
 - name: reload nginx
   ansible.builtin.systemd:
     name: nginx
     state: reloaded
+  become: true
 
 - name: restart nginx
   ansible.builtin.systemd:
     name: nginx
     state: restarted
+  become: true
 
 - name: restart grafana
   ansible.builtin.systemd:
     name: grafana-server
     state: restarted
+  become: true
