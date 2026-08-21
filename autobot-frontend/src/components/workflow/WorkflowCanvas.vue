@@ -436,7 +436,7 @@ import { ref, reactive, computed, nextTick, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
-import { CANVAS_NODE_WIDTH } from './canvasNode';
+import { CANVAS_NODE_WIDTH, CANVAS_NODE_HEIGHT, CANVAS_NODE_PORT_Y } from './canvasNode';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
   SELECTABLE_RULE_DIMENSIONS,
@@ -933,8 +933,8 @@ const connections = computed(() => {
     node.connections.forEach(targetId => {
       const target = props.nodes.find(n => n.id === targetId);
       if (target) {
-        const x1 = node.position.x + 240, y1 = node.position.y + 50;
-        const x2 = target.position.x, y2 = target.position.y + 50;
+        const x1 = node.position.x + CANVAS_NODE_WIDTH, y1 = node.position.y + CANVAS_NODE_PORT_Y;
+        const x2 = target.position.x, y2 = target.position.y + CANVAS_NODE_PORT_Y;
         const mx = (x1 + x2) / 2;
         result.push({ id: `${node.id}-${targetId}`, path: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` });
       }
@@ -1064,9 +1064,9 @@ function isRtl(): boolean {
 }
 
 /** A node's approximate visual centre, in canvas space — same anchor the
- *  connection-line paths already use (`x + 240`, `y + 50`, see `connections`). */
+ *  connection-line paths already use (`CANVAS_NODE_WIDTH`, `CANVAS_NODE_PORT_Y`). */
 function nodeCenter(node: CanvasNode): { x: number; y: number } {
-  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + 50 };
+  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + CANVAS_NODE_PORT_Y };
 }
 
 /**
@@ -1622,7 +1622,7 @@ function startConnect(nodeId: string, port: string, e: PointerEvent) {
   if (node) {
     lineStart.nodeId = nodeId;
     lineStart.x = node.position.x + (port === 'out' ? 240 : 0);
-    lineStart.y = node.position.y + 50;
+    lineStart.y = node.position.y + CANVAS_NODE_PORT_Y;
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   capturePointer(e);
@@ -1659,7 +1659,7 @@ function endInteraction(e: PointerEvent) {
     if (rect) {
       const x = (e.clientX - rect.left - pan.x) / zoom.value;
       const y = (e.clientY - rect.top - pan.y) / zoom.value;
-      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + 240 && y >= n.position.y && y <= n.position.y + 100);
+      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + CANVAS_NODE_WIDTH && y >= n.position.y && y <= n.position.y + CANVAS_NODE_HEIGHT);
       if (target && target.id !== lineStart.nodeId) emit('nodes-connected', lineStart.nodeId, target.id);
     }
   }
