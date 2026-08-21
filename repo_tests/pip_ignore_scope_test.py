@@ -47,6 +47,20 @@ def _normalise(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+def _version(text: str) -> tuple[int, ...] | None:
+    """The ``>=`` version in *text* as a comparable tuple, or ``None``.
+
+    Compared as a full tuple, never by major alone: ``tokenizers >=0.24.0``
+    against a ``>=0.22.0`` floor is major 0 on both sides, and a major-only
+    comparison calls that frozen when it is simply a cap. Every 0.x package
+    would be a false positive.
+    """
+    match = re.search(r">=\s*(\d+(?:\.\d+)*)", text)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
 def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
     """Every requirements file reachable from *path* through ``-r``."""
     path = path.resolve()
@@ -68,18 +82,29 @@ def _manifests_of(directory: str) -> list[Path]:
     return sorted(base.glob("requirements*.txt"))
 
 
-def _packages_reachable_from(directory: str) -> set[str]:
-    """Normalised package names a block can propose, following ``-r``."""
+def _files_reachable_from(directory: str) -> set[Path]:
+    """Every requirements file a block can edit, following ``-r``."""
     files: set[Path] = set()
     for manifest in _manifests_of(directory):
         _resolve_includes(manifest, files)
+    return files
 
+
+def _packages_pinned_in(file: Path) -> set[str]:
+    """Normalised package names pinned in one file."""
     packages: set[str] = set()
-    for file in files:
-        for line in file.read_text(encoding="utf-8").splitlines():
-            match = _PIN.match(line)
-            if match:
-                packages.add(_normalise(match.group(1)))
+    for line in file.read_text(encoding="utf-8").splitlines():
+        match = _PIN.match(line)
+        if match:
+            packages.add(_normalise(match.group(1)))
+    return packages
+
+
+def _packages_reachable_from(directory: str) -> set[str]:
+    """Normalised package names a block can propose, following ``-r``."""
+    packages: set[str] = set()
+    for file in _files_reachable_from(directory):
+        packages |= _packages_pinned_in(file)
     return packages
 
 
@@ -125,34 +150,91 @@ def test_include_resolution_finds_the_known_chains() -> None:
 
 
 def test_a_hard_exclude_holds_in_every_block_that_can_reach_it() -> None:
-    """The #14727 invariant.
+    """The #14727 invariant, stated over FILES rather than package names.
 
-    For every package some block considers unsafe, no other block may be able
-    to propose it.
+    The leak is two blocks able to edit **the same physical pin**, which is
+    what ``-r`` creates. Two blocks pinning a same-named package in their own
+    separate manifests is not a leak — those are independent requirements that
+    may legitimately sit at different ranges, and demanding they carry an
+    identical exclusion is actively harmful: an exclusion below a manifest's
+    own floor freezes that block out of every future update.
+
+    This distinction is not academic. Stated over package names, this test
+    demanded `websockets >=16.0.0` for `/autobot-slm-backend` (whose manifest
+    pins `>=17.0.1,<18`) and `protobuf >=7.0.0` for the ai-stack block (whose
+    manifest pins `>=7.35.1,<8.0.0`). Neither block has a single `-r` line, so
+    neither can touch the file the exclusion protects — and both additions
+    would have frozen those blocks permanently. The guard would have reported
+    green while doing the opposite of its purpose.
     """
     blocks = _pip_blocks()
-    reachable = {b["directory"]: _packages_reachable_from(b["directory"]) for b in blocks}
+    files = {b["directory"]: _files_reachable_from(b["directory"]) for b in blocks}
     excluded = {b["directory"]: _hard_excludes(b) for b in blocks}
 
-    everything_excluded = set().union(*excluded.values()) if excluded else set()
-
     gaps: list[str] = []
-    for package in sorted(everything_excluded):
-        owners = sorted(d for d, names in excluded.items() if package in names)
-        for directory in sorted(reachable):
-            if package in reachable[directory] and package not in excluded[directory]:
-                gaps.append(
-                    f"{package!r} is hard-excluded in {owners} but the "
-                    f"{directory!r} block can reach a file pinning it and does "
-                    f"not exclude it"
-                )
+    for owner, packages in sorted(excluded.items()):
+        for package in sorted(packages):
+            # The specific files this owner protects for this package.
+            protected = {f for f in files[owner] if package in _packages_pinned_in(f)}
+            if not protected:
+                continue
+            for other in sorted(files):
+                if other == owner or package in excluded[other]:
+                    continue
+                shared = protected & files[other]
+                if shared:
+                    names = ", ".join(sorted(str(f.relative_to(_REPO_ROOT)) for f in shared))
+                    gaps.append(
+                        f"{package!r} is hard-excluded in {owner!r}, but {other!r} "
+                        f"can also edit {names} and does not exclude it"
+                    )
 
     assert not gaps, (
-        "a dependabot hard-exclude does not hold everywhere it must (#14727). "
-        "An `ignore` entry protects one block; `-r` includes let another block "
-        "reach the same pin. Add the same `versions:` entry to each block "
-        "listed below, or narrow the manifests so it cannot reach it:\n  "
-        + "\n  ".join(gaps)
+        "a dependabot hard-exclude does not hold on a file another block can "
+        "also edit (#14727). `-r` includes let one block edit a pin another "
+        "block protects. Add the same `versions:` entry to the block named "
+        "below — and use the value that protects THAT file, not a copied "
+        "number:\n  " + "\n  ".join(gaps)
+    )
+
+
+def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
+    """An exclusion under a block's own floor freezes it forever.
+
+    This is the failure the previous version of the test above introduced. A
+    block that pins ``websockets>=17.0.1`` and excludes ``>=16.0.0`` can never
+    be offered any version at all — dependabot is told everything at or above
+    16 is off limits while the manifest demands at least 17.
+    """
+    frozen: list[str] = []
+    for block in _pip_blocks():
+        directory = block["directory"]
+        for entry in block.get("ignore", []):
+            ranges = entry.get("versions") or []
+            package = _normalise(entry.get("dependency-name", ""))
+            for spec in ranges:
+                excluded = _version(spec)
+                if excluded is None:
+                    continue
+                for file in _files_reachable_from(directory):
+                    for line in file.read_text(encoding="utf-8").splitlines():
+                        pin = _PIN.match(line)
+                        if not pin or _normalise(pin.group(1)) != package:
+                            continue
+                        floor = _version(line.split("#")[0])
+                        if floor is not None and floor >= excluded:
+                            frozen.append(
+                                f"{directory!r} excludes {package} {spec} but "
+                                f"{file.relative_to(_REPO_ROOT)} pins it at "
+                                f"'{line.split('#')[0].strip()}' — the floor is at "
+                                f"or above the exclusion, so no version can ever "
+                                f"be offered"
+                            )
+
+    assert not frozen, (
+        "an exclusion sits at or below its own manifest's floor, which freezes "
+        "the block out of every future update rather than capping it:\n  "
+        + "\n  ".join(sorted(set(frozen)))
     )
 
 
