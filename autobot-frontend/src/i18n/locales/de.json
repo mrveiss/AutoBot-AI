@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} Treffer für „{query}“",
       "searchNoResults": "Keine Treffer für „{query}“",
       "fitToSelection": "An Auswahl oder Filter anpassen",
-      "minimapLabel": "Canvas-Übersicht"
+      "minimapLabel": "Canvas-Übersicht",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
+      "undoScope": "Rückgängig machen und Wiederholen umfassen das Verschieben, Hinzufügen, Entfernen und Verbinden von Knoten auf dieser Canvas. Änderungen innerhalb eines Knotens sowie alles, was an den Server gesendet wird — Speichern, Anhängen, Trennen —, können hier nicht rückgängig gemacht werden.",
+      "selectionStatus": "{count} Knoten ausgewählt",
+      "contextMenuLabel": "Knotenaktionen",
+      "contextMenuButtonLabel": "Aktionen für {name}",
+      "contextMenuZoomToNode": "Auf Knoten zoomen",
+      "contextMenuFitSelection": "Ansicht an Auswahl anpassen",
+      "contextMenuDeleteSelection": "{count} ausgewählte Knoten löschen",
+      "contextMenuOpenWorkflow": "Verknüpften Workflow öffnen"
     },
     "editStep": {
       "title": "Edit Step {step}",

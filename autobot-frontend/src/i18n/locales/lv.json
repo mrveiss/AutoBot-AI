@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "Atrasti {count} rezultāti vaicājumam \"{query}\"",
       "searchNoResults": "Nav atbilstību vaicājumam \"{query}\"",
       "fitToSelection": "Pielāgot atlasei vai filtram",
-      "minimapLabel": "Audekla pārskats"
+      "minimapLabel": "Audekla pārskats",
+      "undo": "Atsaukt",
+      "redo": "Atkārtot",
+      "undoScope": "Atsaukšana un atkārtošana attiecas uz mezglu pārvietošanu, pievienošanu, noņemšanu un savienošanu šajā audeklā. Izmaiņas mezgla iekšienē, kā arī jebko, kas tiek nosūtīts serverim — saglabāšana, pievienošana, atvienošana —, šeit atsaukt nevar.",
+      "selectionStatus": "Atlasīti {count} mezgli",
+      "contextMenuLabel": "Mezgla darbības",
+      "contextMenuButtonLabel": "{name} darbības",
+      "contextMenuZoomToNode": "Tuvināt mezglam",
+      "contextMenuFitSelection": "Pielāgot skatu atlasei",
+      "contextMenuDeleteSelection": "Dzēst {count} atlasītos mezglus",
+      "contextMenuOpenWorkflow": "Atvērt saistīto darbplūsmu"
     },
     "editStep": {
       "title": "Edit Step {step}",

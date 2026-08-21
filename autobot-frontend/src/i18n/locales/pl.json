@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "Znaleziono {count} dla „{query}”",
       "searchNoResults": "Brak wyników dla „{query}”",
       "fitToSelection": "Dopasuj do zaznaczenia lub filtra",
-      "minimapLabel": "Podgląd całego obszaru roboczego"
+      "minimapLabel": "Podgląd całego obszaru roboczego",
+      "undo": "Cofnij",
+      "redo": "Ponów",
+      "undoScope": "Cofanie i ponawianie obejmują przenoszenie, dodawanie, usuwanie i łączenie węzłów na tym obszarze roboczym. Edycji wewnątrz węzła oraz wszystkiego, co jest wysyłane na serwer — zapisu, dołączania, odłączania — nie można tu cofnąć.",
+      "selectionStatus": "Wybrano węzłów: {count}",
+      "contextMenuLabel": "Działania węzła",
+      "contextMenuButtonLabel": "Działania dla {name}",
+      "contextMenuZoomToNode": "Przybliż do węzła",
+      "contextMenuFitSelection": "Dopasuj widok do zaznaczenia",
+      "contextMenuDeleteSelection": "Usuń {count} zaznaczonych węzłów",
+      "contextMenuOpenWorkflow": "Otwórz powiązany przepływ pracy"
     },
     "editStep": {
       "title": "Edit Step {step}",

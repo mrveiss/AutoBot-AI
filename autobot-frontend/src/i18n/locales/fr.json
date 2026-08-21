@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} résultats pour « {query} »",
       "searchNoResults": "Aucun résultat pour « {query} »",
       "fitToSelection": "Ajuster à la sélection ou au filtre",
-      "minimapLabel": "Aperçu du canevas"
+      "minimapLabel": "Aperçu du canevas",
+      "undo": "Annuler",
+      "redo": "Rétablir",
+      "undoScope": "Annuler et rétablir couvrent le déplacement, l'ajout, la suppression et la connexion des nœuds sur ce canevas. Les modifications à l'intérieur d'un nœud, ainsi que toute action envoyée au serveur — enregistrer, attacher, détacher — ne peuvent pas être annulées ici.",
+      "selectionStatus": "{count} nœuds sélectionnés",
+      "contextMenuLabel": "Actions du nœud",
+      "contextMenuButtonLabel": "Actions de {name}",
+      "contextMenuZoomToNode": "Zoomer sur le nœud",
+      "contextMenuFitSelection": "Ajuster la vue à la sélection",
+      "contextMenuDeleteSelection": "Supprimer {count} nœuds sélectionnés",
+      "contextMenuOpenWorkflow": "Ouvrir le workflow lié"
     },
     "editStep": {
       "title": "Edit Step {step}",

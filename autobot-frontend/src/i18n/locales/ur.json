@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "\"{query}\" کے لیے {count} نتائج ملے",
       "searchNoResults": "\"{query}\" کے لیے کوئی نتیجہ نہیں ملا",
       "fitToSelection": "انتخاب یا فلٹر کے مطابق فٹ کریں",
-      "minimapLabel": "کینوس کا جائزہ"
+      "minimapLabel": "کینوس کا جائزہ",
+      "undo": "کالعدم کریں",
+      "redo": "دوبارہ کریں",
+      "undoScope": "کالعدم کرنا اور دوبارہ کرنا اس کینوس پر نوڈز کو منتقل کرنے، شامل کرنے، ہٹانے اور جوڑنے کا احاطہ کرتے ہیں۔ نوڈ کے اندر ترامیم، اور سرور کو بھیجی جانے والی کوئی بھی کارروائی — محفوظ کرنا، منسلک کرنا، الگ کرنا — یہاں کالعدم نہیں کی جا سکتیں۔",
+      "selectionStatus": "{count} نوڈز منتخب کیے گئے",
+      "contextMenuLabel": "نوڈ کے اقدامات",
+      "contextMenuButtonLabel": "{name} کے اقدامات",
+      "contextMenuZoomToNode": "نوڈ پر زوم کریں",
+      "contextMenuFitSelection": "منظر کو انتخاب کے مطابق فٹ کریں",
+      "contextMenuDeleteSelection": "{count} منتخب نوڈز حذف کریں",
+      "contextMenuOpenWorkflow": "منسلک ورک فلو کھولیں"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
