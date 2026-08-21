@@ -29,10 +29,13 @@ import asyncio
 import contextlib
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Dev-host stub: minimal Pydantic models so the router can be imported
@@ -82,13 +85,18 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
 from api.code_sync import (  # noqa: E402
+    _UPDATE_ALL_STALE_SECONDS,
     UpdateAllJob,
+    _clear_update_all_job,
     _extract_ansible_fatal,
     _is_node_operational,
+    _job_is_stale,
     _make_stage,
     _run_fleet_stage,
+    _set_update_all_job,
     _StageStatus,
     _sync_fleet_node,
+    start_update_all,
 )
 
 # #11794: restore the pre-file models/models.schemas sys.modules entries now
@@ -578,3 +586,206 @@ def test_run_fleet_stage_skips_degraded_continues_to_healthy() -> None:
     assert job.skipped_fleet_nodes == 1
     assert job.completed_fleet_nodes == 1
     assert job.status == "partial", f"expected 'partial' (1 skip + 1 success), got {job.status!r}"
+
+
+# ---------------------------------------------------------------------------
+# #14703 — a wedged job must not lock out every future update
+# ---------------------------------------------------------------------------
+
+
+def _job_at(progress_at: str | None, created_at: str = "2026-08-21T12:00:00+00:00") -> UpdateAllJob:
+    job = _job_with_fleet_stage()
+    job.status = "running"
+    job.created_at = created_at
+    job.last_progress_at = progress_at
+    return job
+
+
+def test_a_job_that_stopped_advancing_is_stale() -> None:
+    """The defect: this job used to 409 every future update forever."""
+    long_ago = (datetime.now(timezone.utc) - timedelta(seconds=_UPDATE_ALL_STALE_SECONDS + 60)).isoformat()
+    assert _job_is_stale(_job_at(long_ago)) is True
+
+
+def test_a_job_still_making_progress_is_not_stale() -> None:
+    """The dangerous direction: reaping live work would be worse than the lockout."""
+    just_now = datetime.now(timezone.utc).isoformat()
+    assert _job_is_stale(_job_at(just_now)) is False
+
+
+def test_a_long_fleet_update_stays_fresh_while_nodes_progress() -> None:
+    """Staleness is judged on progress, not age.
+
+    A job created hours ago is fine as long as it keeps stamping — otherwise a
+    legitimate update across many nodes would be reaped mid-run.
+    """
+    old_creation = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    recent_progress = datetime.now(timezone.utc).isoformat()
+    assert _job_is_stale(_job_at(recent_progress, created_at=old_creation)) is False
+
+
+def test_falls_back_to_created_at_when_nothing_stamped() -> None:
+    long_ago = (datetime.now(timezone.utc) - timedelta(seconds=_UPDATE_ALL_STALE_SECONDS + 60)).isoformat()
+    assert _job_is_stale(_job_at(None, created_at=long_ago)) is True
+
+
+def test_an_unreadable_timestamp_is_never_stale() -> None:
+    """A bad reading must not retire a job that may be running."""
+    assert _job_is_stale(_job_at("not-a-timestamp")) is False
+    assert _job_is_stale(_job_at(None, created_at="")) is False
+
+
+def test_fleet_stage_stamps_progress_per_node() -> None:
+    """Without this the stamps exist but nothing sets them during the long stage."""
+    job = _job_with_fleet_stage()
+    job.last_progress_at = None
+    stamps = []
+
+    async def _fake_sync(executor, node_id, job, stage, slm_own_ip):
+        stamps.append(job.last_progress_at)
+        job.completed_fleet_nodes += 1
+        return True
+
+    with (
+        patch("api.code_sync._sync_fleet_node", side_effect=_fake_sync),
+        patch("api.code_sync.get_playbook_executor", return_value=MagicMock()),
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._clear_resume_plan", AsyncMock()),
+    ):
+        mock_settings.external_url = "http://10.0.0.1"
+        _run(_run_fleet_stage(job, ["node-a", "node-b"]))
+
+    assert all(s is not None for s in stamps), f"a node ran before any progress was stamped: {stamps}"
+    assert stamps[0] != stamps[1] or job.last_progress_at is not None
+
+
+# ---------------------------------------------------------------------------
+# #14703 review: the retirement path itself, not just the staleness predicate
+# ---------------------------------------------------------------------------
+
+
+def _stale_job() -> UpdateAllJob:
+    """A job that `_job_is_stale` will judge stale."""
+    long_ago = (datetime.now(timezone.utc) - timedelta(seconds=_UPDATE_ALL_STALE_SECONDS + 60)).isoformat()
+    return _job_at(long_ago)
+
+
+@contextlib.contextmanager
+def _no_real_orchestration():
+    """Keep the endpoint from launching a real update while under test."""
+    import api.code_sync as cs
+
+    started = []
+
+    async def _fake_orchestration(job, _db):
+        started.append(job.job_id)
+        await asyncio.sleep(0)
+
+    original = cs._run_update_all_orchestration
+    cs._run_update_all_orchestration = _fake_orchestration
+    try:
+        yield started
+    finally:
+        cs._run_update_all_orchestration = original
+        cs._update_all_task = None
+        _clear_update_all_job()
+
+
+def test_a_live_resume_plan_blocks_retiring_a_stale_looking_job() -> None:
+    """The #14703 review's critical finding, as a test.
+
+    `slm_self_update` detaches its playbook and stops stamping progress the
+    moment it fires, so a healthy long self-update is indistinguishable from a
+    dead job by timestamps alone. Retirement used to run first and call
+    `_clear_resume_plan()`, deleting the very evidence the C3-b guard reads —
+    so a second full orchestration could start against nodes the first was
+    still updating.
+    """
+    import api.code_sync as cs
+
+    cleared = []
+
+    async def _plan_exists():
+        return True
+
+    async def _record_clear():
+        cleared.append(True)
+
+    with _no_real_orchestration() as started:
+        _set_update_all_job(_stale_job())
+        with (
+            patch.object(cs, "_check_persisted_plan_exists", _plan_exists),
+            patch.object(cs, "_clear_resume_plan", _record_clear),
+        ):
+            with pytest.raises(HTTPException) as excinfo:
+                _run(start_update_all({}))
+
+        assert excinfo.value.status_code == 409
+        assert not cleared, "a live resume plan must never be cleared by retirement"
+        assert not started, "no orchestration may start while a self-update is in flight"
+
+
+def test_a_stale_job_is_still_retired_when_no_plan_is_live() -> None:
+    """The fix must not disable the feature it is protecting.
+
+    Without this, moving the plan check earlier could simply block every
+    retirement and silently restore the #14703 lockout.
+    """
+    import api.code_sync as cs
+
+    async def _no_plan():
+        return False
+
+    async def _noop_clear():
+        return None
+
+    with _no_real_orchestration() as started:
+        _set_update_all_job(_stale_job())
+        with (
+            patch.object(cs, "_check_persisted_plan_exists", _no_plan),
+            patch.object(cs, "_clear_resume_plan", _noop_clear),
+        ):
+            job = _run(start_update_all({}))
+            _run(asyncio.sleep(0))
+
+        assert job.status == "pending", "a fresh job should have been created"
+        assert started == [job.job_id], "exactly the new job should have been orchestrated"
+
+
+def test_concurrent_starts_only_create_one_orchestration() -> None:
+    """Two POSTs against the same stale job must not both start a run.
+
+    The decide-retire-create sequence awaits in the middle, so without a lock
+    both callers read the same stale job, both retire it, and both launch an
+    orchestration against the same live nodes — strictly worse than the
+    lockout retirement exists to fix.
+    """
+    import api.code_sync as cs
+
+    async def _no_plan():
+        # Yield control so a second caller can interleave here if the lock is absent.
+        await asyncio.sleep(0)
+        return False
+
+    async def _noop_clear():
+        await asyncio.sleep(0)
+
+    async def _drive():
+        _set_update_all_job(_stale_job())
+        results = await asyncio.gather(start_update_all({}), start_update_all({}), return_exceptions=True)
+        await asyncio.sleep(0)
+        return results
+
+    with _no_real_orchestration() as started:
+        with (
+            patch.object(cs, "_check_persisted_plan_exists", _no_plan),
+            patch.object(cs, "_clear_resume_plan", _noop_clear),
+        ):
+            results = _run(_drive())
+
+        accepted = [r for r in results if isinstance(r, UpdateAllJob)]
+        rejected = [r for r in results if isinstance(r, HTTPException)]
+
+        assert len(accepted) == 1, f"exactly one caller may start a run, got {len(accepted)}: {results}"
+        assert len(rejected) == 1 and rejected[0].status_code == 409
+        assert len(started) <= 1, f"double orchestration: {started}"

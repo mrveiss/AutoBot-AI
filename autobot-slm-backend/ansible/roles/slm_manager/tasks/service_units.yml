@@ -16,11 +16,20 @@
 # Kept as a separate file rather than duplicated into the playbook because a
 # second copy is what drifts. The marker-write above it in that play is exactly
 # that mistake, carried since #12223.
+# #14693: both tasks below declare `become` themselves rather than relying on
+# the caller. This file was written for one caller -- main.yml, which includes
+# it from an escalating context -- and #14668 added a second, the Play 1 include
+# in update-all-nodes.yml, where no play sets a play-level `become` and every
+# task declares its own. The template then ran unprivileged and failed with
+# "Destination /etc/systemd/system not writable", which aborted the play before
+# the SLM restart and left the whole self-update wedged. Writing a systemd unit
+# needs root whoever asks for it, so the requirement belongs here.
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2
     dest: /etc/systemd/system/{{ slm_backend_service }}.service
     mode: "0644"
+  become: true
   notify:
     - reload systemd
     - restart slm backend
@@ -31,4 +40,5 @@
     name: "{{ slm_backend_service }}"
     enabled: true
     daemon_reload: true
+  become: true
   tags: ['slm', 'backend', 'systemd']

@@ -46,6 +46,10 @@ DEFAULT_MAX_OCR_PAGES = 50
 # DPI runs in single-digit seconds; this leaves headroom while still bounding a
 # pathological page. Override with AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT.
 DEFAULT_OCR_PAGE_TIMEOUT = 60
+# The whole-document ceiling. The page timeout bounds one page; this bounds
+# the run, so a document of many just-under-the-page-limit pages cannot hold a
+# worker indefinitely (#13896 review).
+DEFAULT_OCR_TIMEOUT = 300
 
 
 def ocr_dpi() -> int:
@@ -77,6 +81,21 @@ def max_ocr_pages() -> int:
         blank_to_none(config.misc.document_max_ocr_pages),
         DEFAULT_MAX_OCR_PAGES,
         "AUTOBOT_DOCUMENT_MAX_OCR_PAGES",
+    )
+
+
+def ocr_timeout() -> int:
+    """Resolve the whole-document OCR wall-clock ceiling, in seconds.
+
+    `ocr_page_timeout` bounds a single page and the page ceiling bounds how
+    many are read, but neither bounds the run: fifty pages each finishing just
+    inside the page timeout is still fifty times that budget. This is the
+    deadline the caller enforces around the whole attempt.
+    """
+    return _positive_int_setting(
+        blank_to_none(config.misc.document_ocr_timeout),
+        DEFAULT_OCR_TIMEOUT,
+        "AUTOBOT_DOCUMENT_OCR_TIMEOUT",
     )
 
 

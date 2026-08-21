@@ -40,3 +40,22 @@ export interface CanvasTab {
 
 /** Canvas geometry shared by the renderer and the layout builders. */
 export const CANVAS_NODE_WIDTH = 240
+
+/**
+ * A node's effective height for geometry — hit-testing and port anchoring.
+ *
+ * Named because the renderer previously carried it as a bare `100` in the
+ * connection hit-test while `240` was already a constant, so half the geometry
+ * had a single source and half did not.
+ */
+export const CANVAS_NODE_HEIGHT = 100
+
+/**
+ * Where a connection attaches vertically: the node's mid-line.
+ *
+ * Derived rather than written as `50`, so it cannot drift from the height. The
+ * two were independent literals before, which meant changing the height moved
+ * every node while leaving every edge anchored to the old mid-line — a failure
+ * that renders as edges detached from their nodes and fails no test.
+ */
+export const CANVAS_NODE_PORT_Y = CANVAS_NODE_HEIGHT / 2
