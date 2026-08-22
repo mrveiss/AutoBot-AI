@@ -113,7 +113,10 @@ async def _find_vault_id_by_name(name: str, *, expected_type: str | None = None)
             continue
         try:
             return uuid.UUID(entry["id"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, TypeError, AttributeError):
+            # uuid.UUID raises AttributeError on an int/list and TypeError on None,
+            # neither of which is a ValueError — a non-string id would otherwise
+            # propagate past db.commit() as a 500 from a best-effort lookup.
             logger.warning("system-secrets-vault: skipping malformed vault entry for name=%s", name)
             continue
     return None

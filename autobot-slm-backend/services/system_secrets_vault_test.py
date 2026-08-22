@@ -445,8 +445,12 @@ class TestMirrorSecretToVault:
         """Scoping by type must not stop us maintaining our own copy."""
         with _real_modules_swapped():
             await _real_vc.vault_create("shared_name", "api_key", "foreign")
-            await ssv.mirror_secret_to_vault("shared_name", "ours")  # refused: foreign owns it
-            assert len(fake_vault.entries) == 1
+
+            assert await ssv.mirror_secret_to_vault("shared_name", "ours") is False
+            foreign = [e for e in fake_vault.entries.values() if e["name"] == "shared_name"]
+            assert len(foreign) == 1, "the refused mirror must not add a second entry"
+            assert foreign[0]["value"] == "foreign", "the foreign entry was rotated — type scoping regressed"
+            assert foreign[0]["type"] == "api_key"
 
             # A key we do own rotates normally, unaffected by the foreign entry.
             assert await ssv.mirror_secret_to_vault("hf_token", "first") is True
@@ -462,3 +466,19 @@ class TestMirrorSecretToVault:
 
             # Must not raise ValueError out through the create/update path.
             assert await ssv.mirror_secret_to_vault("hf_token", "value") is True
+
+    async def test_a_non_string_vault_id_does_not_raise(self, fake_vault):
+        """uuid.UUID raises AttributeError on an int and TypeError on None.
+
+        Neither is a ValueError, so a non-string id would propagate out of a
+        best-effort lookup and surface as a 500 after the row had committed.
+        """
+        with _real_modules_swapped():
+            for bad in (None, 12345, ["a", "b"]):
+                fake_vault.entries.clear()
+                fake_vault.entries[uuid.uuid4()] = {
+                    "id": bad,
+                    "name": "hf_token",
+                    "type": "system-secret",
+                }
+                assert await ssv.mirror_secret_to_vault("hf_token", "value") is True
