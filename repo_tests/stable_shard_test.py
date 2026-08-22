@@ -180,7 +180,42 @@ class TestDurationsFileHandling:
         assert load_module_weights(tmp_path / "nope.json") == {}
         table = build_bucket_table({}, SPLITS, DEFAULT_BUCKETS)
         assert len(table) == DEFAULT_BUCKETS
-        assert set(table) <= set(range(SPLITS))
+        # `<=` was the original assertion and it holds when ONE shard is used,
+        # so the degenerate case read as covered while being untested (#14802).
+        assert set(table) == set(range(SPLITS)), (
+            "every shard must receive buckets even with no durations data; "
+            "otherwise the unused shards collect nothing and the work lands on one"
+        )
+
+    @pytest.mark.parametrize(
+        "weights",
+        [
+            pytest.param({}, id="no-durations"),
+            pytest.param({"autobot-slm-backend/only_test.py": 100}, id="one-module"),
+            pytest.param({f"pkg/m{i}_test.py": 10 * (i + 1) for i in range(5)}, id="five-modules"),
+        ],
+    )
+    def test_every_shard_is_reachable_however_thin_the_durations(self, weights):
+        """A thin durations file must not make most shards unreachable.
+
+        Zero-weight buckets do not move `shard_load`, so a load-only tie-break
+        hands every one of them to the same lowest-index shard. The shards after
+        it then receive nothing — and stay unreachable by any file that could
+        later be added, since the mapping is by hash. #14648 is what activates
+        this algorithm in CI, and the SLM step's exit-5 tolerance would turn the
+        resulting empty shards into green rather than red.
+        """
+        table = build_bucket_table(weights, SPLITS, DEFAULT_BUCKETS)
+        assert set(table) == set(range(SPLITS)), f"only {len(set(table))} of {SPLITS} shards received buckets"
+
+    def test_a_thin_durations_file_does_not_strand_future_modules(self):
+        """The collapse is structural: unused shards can never be reached again."""
+        table = build_bucket_table({"autobot-slm-backend/only_test.py": 100}, SPLITS, DEFAULT_BUCKETS)
+        landed = {shard_of(f"future/mod{i}_test.py", table, DEFAULT_BUCKETS) for i in range(5000)}
+        assert landed == set(range(SPLITS)), (
+            f"5000 hypothetical new modules reached only shards {sorted(landed)} — "
+            "the rest cannot be reached by any file that could be added"
+        )
 
     def test_a_corrupt_durations_file_does_not_raise(self, tmp_path):
         bad = tmp_path / "bad.json"
