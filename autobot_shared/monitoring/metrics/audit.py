@@ -21,7 +21,11 @@ has.
 
 from prometheus_client import Counter
 
+from autobot_shared.logging_manager import get_logger
+
 from .base import BaseMetricsRecorder
+
+logger = get_logger(__name__)
 
 
 class AuditMetricsRecorder(BaseMetricsRecorder):
@@ -47,7 +51,7 @@ class AuditMetricsRecorder(BaseMetricsRecorder):
         self.audit_write_failures.labels(action=action, error_type=error_type).inc()
 
 
-__all__ = ["AuditMetricsRecorder"]
+__all__ = ["AuditMetricsRecorder", "record_audit_write_failure_safely"]
 
 
 def record_audit_write_failure_safely(action: object, error_type: str) -> None:
@@ -61,8 +65,6 @@ def record_audit_write_failure_safely(action: object, error_type: str) -> None:
     was previously defined in only one of them — same bug, same `audit_logs`
     table, one instrumented and the other silent (#14750).
     """
-    import logging
-
     try:
         from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
@@ -72,4 +74,4 @@ def record_audit_write_failure_safely(action: object, error_type: str) -> None:
         # uncounted — a failure counter reporting zero, which is worse than no
         # counter. Debug keeps it out of normal operation while leaving a trace
         # when the metric is inexplicably flat.
-        logging.getLogger(__name__).debug("audit write-failure metric could not be recorded: %s", exc)
+        logger.debug("audit write-failure metric could not be recorded: %s", exc)
