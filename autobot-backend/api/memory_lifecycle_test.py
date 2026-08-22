@@ -298,9 +298,7 @@ async def test_last_run_is_read_from_the_database_the_writer_uses(seeded, monkey
     importlib.reload(facts_mod)
 
     # Installed LAST so nothing overwrites it.
-    monkeypatch.setattr(
-        "autobot_shared.redis_client.get_async_redis_client", _capture, raising=False
-    )
+    monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", _capture, raising=False)
 
     section = await memory_lifecycle._decay_section(limit=10)
 
