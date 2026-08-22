@@ -109,10 +109,15 @@ def _pyproject_specs(path: Path) -> list[str]:
     """Every PEP 508 requirement string a pyproject declares."""
     import tomllib  # 3.11+; nothing this repo supports predates it
 
+    # Deliberately not wrapped in try/except. Returning [] on a parse error is
+    # the same under-approximation this guard exists to close: a malformed
+    # pyproject would contribute zero pins and the whole check would read as
+    # clean, which is exactly how the line-scan bug hid. Let it fail loudly,
+    # naming the file.
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
+    except (OSError, ValueError) as exc:
+        raise AssertionError(f"could not read {path} as TOML, so its pins cannot be counted: {exc}") from exc
 
     project = data.get("project") or {}
     specs: list[str] = [str(spec) for spec in (project.get("dependencies") or [])]
