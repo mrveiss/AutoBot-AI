@@ -363,6 +363,7 @@ async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> 
     with (
         patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute),
+        patch("llc.api.agent_hires._adapter_unavailable_reason", return_value=None),
     ):
         resp = await client.post(
             f"/api/llc/companies/{company_id}/agent-hires",
@@ -477,6 +478,7 @@ async def test_hire_accepts_registered_adapter_type(client) -> None:  # noqa: AN
     with (
         patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", AsyncMock(return_value=MagicMock())),
+        patch("llc.api.agent_hires._adapter_unavailable_reason", return_value=None),
     ):
         resp = await client.post(
             f"/api/llc/companies/{company_id}/agent-hires",
