@@ -8303,6 +8303,12 @@
       "roleLensBanner": "מסנן תצוגה: {role} — מציג {shown} מתוך {total} צמתים. הגישה לא משתנה.",
       "roleLensEmpty": "מסנן תצוגה: אין צמתים התואמים ל-\"{role}\" בתצוגה זו. הגישה לא משתנה — נקה את המסנן כדי לראות את כולם.",
       "roleLensClear": "נקה מסנן",
+      "teamFilterLabel": "סנן לפי צוות",
+      "teamFilterAll": "כל הצוותים",
+      "teamFilterBanner": "מסנן צוות: {team} — מציג {shown} מתוך {total} אנשים. הגישה לא משתנה.",
+      "toolFilterLabel": "סנן לפי כלי",
+      "toolFilterAll": "כל הכלים",
+      "toolFilterBanner": "מסנן כלי: {tool} — מציג {shown} מתוך {total} אנשים. הגישה לא משתנה.",
       "sidebar": {
         "owner": "בעלים",
         "tools": "כלים",
