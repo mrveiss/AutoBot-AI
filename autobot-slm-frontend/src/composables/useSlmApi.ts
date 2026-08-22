@@ -133,6 +133,10 @@ interface BackendNodeResponse {
   auth_method?: string
   code_status?: string
   code_version?: string
+  // #14794: the backend reports roles that reach no deploy path. It was absent
+  // here, so the mapper below silently dropped it and the setup wizard's toast
+  // could never fire — producer and consumer both built, the hop missing.
+  unreachable_roles?: string[]
 }
 
 interface NodesResponse {
@@ -169,6 +173,10 @@ function mapBackendNode(node: BackendNodeResponse): SLMNode {
     updated_at: node.updated_at,
     code_status: (node.code_status as SLMNode['code_status']) || undefined,
     code_version: node.code_version || undefined,
+    // #14794: carry it through. Defaulted so an older backend that does not
+    // send the field yields an empty list rather than undefined, which is what
+    // the consumers iterate.
+    unreachable_roles: node.unreachable_roles ?? [],
   }
 }
 
