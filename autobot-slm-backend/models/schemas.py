@@ -127,6 +127,13 @@ class NodeRoleResponse(BaseModel):
     current_version: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
+    #: #14676: names of assigned roles that reach no deploy path -- no ansible
+    #: group and no dedicated playbook -- so nothing will act on them. The
+    #: assignment still succeeds; without this the operator assigning it at the
+    #: fleet nodes page gets a plain success for something permanently inert.
+    #: Role NAMES rather than a message, so the UI can localise the wording.
+    #: Additive and defaulted, so existing clients are unaffected.
+    unreachable_roles: List[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -206,6 +213,10 @@ class NodeResponse(BaseModel):
     a2a_card: Dict[str, Any] | None = None
     # Issue #1019: Per-service health summary counts
     service_summary: Dict[str, int] | None = None
+    #: #14676: assigned roles that reach no deploy path, so the bulk role
+    #: editor can show what an assignment will silently not do. See
+    #: NodeRoleResponse.unreachable_roles.
+    unreachable_roles: List[str] = Field(default_factory=list)
     extra_data: Dict[str, Any] | None = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}

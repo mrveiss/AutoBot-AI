@@ -381,6 +381,7 @@
   },
   "common": {
     "codeSyncBadge": {},
+    "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
       "admin": "Admin",
       "agents": "Agents",
