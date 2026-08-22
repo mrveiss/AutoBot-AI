@@ -29,6 +29,23 @@ def _sample(counter, action: str, error_type: str) -> float:
     return counter.labels(action=action, error_type=error_type)._value.get()
 
 
+def _exported_sample(manager, action: str, error_type: str) -> float:
+    """Current value of the labelled sample in the manager's exported text.
+
+    Read as a delta rather than asserted as an exact 1.0: `get_metrics_manager()`
+    is a process-wide singleton that is never reset, so any other test that
+    drives this same label pair through it first would break an absolute
+    assertion while the code under test is perfectly correct. A false failure is
+    cheaper than a false pass but still a trap, and the delta form has no such
+    dependence on what ran before.
+    """
+    needle = f'autobot_audit_write_failures_total{{action="{action}",error_type="{error_type}"}} '
+    for line in manager.get_metrics().decode().splitlines():
+        if line.startswith(needle):
+            return float(line[len(needle) :])
+    return 0.0
+
+
 def test_the_counter_actually_counts():
     """Executed, not inspected — a recorder that cannot increment is decoration."""
     registry = prometheus_client.CollectorRegistry()
@@ -127,13 +144,16 @@ def test_the_shared_helper_reaches_the_exported_registry():
     from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
     from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
+    manager = get_metrics_manager()
+    before = _exported_sample(manager, "permission_denied", "IntegrityError")
+
     record_audit_write_failure_safely("permission_denied", "IntegrityError")
 
-    text = get_metrics_manager().get_metrics().decode()
+    after = _exported_sample(manager, "permission_denied", "IntegrityError")
 
-    assert 'autobot_audit_write_failures_total{action="permission_denied",error_type="IntegrityError"} 1.0' in text, (
+    assert after == before + 1, (
         "the shared helper did not reach the exported registry. The helper "
         "swallows its own failures, so this is exactly the case that leaves no "
-        "trace: the middleware counts a dropped audit and nothing is exported. "
-        "Exported text:\n" + text[:2000]
+        f"trace: the middleware counts a dropped audit and nothing is exported. "
+        f"Sample went {before} -> {after}."
     )
