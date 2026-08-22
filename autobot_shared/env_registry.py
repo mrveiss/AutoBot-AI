@@ -887,6 +887,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS",
+        type=float,
+        default=15.0,
+        description=(
+            "Ceiling on a proxied request from the SLM to a node's backend. "
+            "The aggregator fans out across the fleet, so without a bound one "
+            "unresponsive node would hold the whole lifecycle view open."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS",
         type=float,
         default=10.0,
