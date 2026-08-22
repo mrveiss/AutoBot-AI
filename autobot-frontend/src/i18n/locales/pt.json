@@ -8051,6 +8051,8 @@
       "colRunDuration": "Duração da execução",
       "colAction": "Ação",
       "statusUnknown": "desconhecido",
+      "skipReasonLabel": "Ignorado:",
+      "errorLabel": "Erro:",
       "triggering": "Acionando...",
       "triggerNow": "Acionar agora",
       "runHistoryTitle": "Histórico de execuções – {name}",
