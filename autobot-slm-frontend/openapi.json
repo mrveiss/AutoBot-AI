@@ -22095,6 +22095,59 @@
         ]
       }
     },
+    "/api/memory/lifecycle": {
+      "get": {
+        "description": "Aggregate the fleet's memory lifecycle views. Never raises to the client.",
+        "operationId": "get_memory_lifecycle_api_memory_lifecycle_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Memory Lifecycle Api Memory Lifecycle Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Memory Lifecycle",
+        "tags": [
+          "memory-lifecycle"
+        ]
+      }
+    },
     "/api/metrics": {
       "get": {
         "description": "Get system metrics (authenticated).",
