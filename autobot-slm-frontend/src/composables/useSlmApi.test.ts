@@ -240,4 +240,60 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
       await expect(useSlmApi().getSecretValue('K')).resolves.toBeNull()
     })
   })
+
+  describe('unreachable_roles survives the mapper (#14794)', () => {
+    // The field was computed by the backend and read by SetupWizardView, but
+    // mapBackendNode never copied it, so the wizard's warning could not fire.
+    // Both ends were built and only the hop between them was missing, which is
+    // why nothing looked wrong. These drive the real seam rather than the
+    // helper: the previous coverage was backend-only and could not see this.
+    const backendNode = (extra: Record<string, unknown> = {}) => ({
+      id: 1,
+      node_id: 'n1',
+      hostname: 'h1',
+      ip_address: '10.0.0.1',
+      status: 'online',
+      roles: ['my-custom-role'],
+      cpu_percent: 1,
+      memory_percent: 2,
+      disk_percent: 3,
+      last_heartbeat: null,
+      agent_version: null,
+      os_info: null,
+      created_at: 'c',
+      updated_at: 'u',
+      ...extra,
+    })
+
+    it('updateNodeRoles carries unreachable_roles through to the caller', async () => {
+      mockRaw.mockResolvedValue(
+        jsonResponse(backendNode({ unreachable_roles: ['my-custom-role'] }))
+      )
+
+      const result = await useSlmApi().updateNodeRoles('n1', ['my-custom-role'] as never)
+
+      expect(result.unreachable_roles).toEqual(['my-custom-role'])
+    })
+
+    it('getNodes carries unreachable_roles through the list mapper too', async () => {
+      mockRaw.mockResolvedValue(
+        jsonResponse({ nodes: [backendNode({ unreachable_roles: ['my-custom-role'] })], total: 1 })
+      )
+
+      const result = await useSlmApi().getNodes()
+
+      // getNodes returns SLMNode[], not the raw { nodes, total } envelope.
+      expect(result[0]!.unreachable_roles).toEqual(['my-custom-role'])
+    })
+
+    it('defaults to an empty list when the backend omits the field', async () => {
+      // Consumers iterate it directly, so undefined would throw rather than
+      // simply show nothing.
+      mockRaw.mockResolvedValue(jsonResponse(backendNode()))
+
+      const result = await useSlmApi().updateNodeRoles('n1', [] as never)
+
+      expect(result.unreachable_roles).toEqual([])
+    })
+  })
 })
