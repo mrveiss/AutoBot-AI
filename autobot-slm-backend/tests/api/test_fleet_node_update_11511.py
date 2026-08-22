@@ -657,7 +657,7 @@ def test_wait_does_not_resolve_while_the_unit_state_is_unknown() -> None:
         patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 2),
         patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
     ):
-        assert _run(_await_self_update_completion("2026-08-21T12:08:47.427212+00:00")) is None
+        assert _run(_await_self_update_completion(_fired_job(), "2026-08-21T12:08:47.427212+00:00")) is None
 
 
 def test_wait_returns_the_completion_once_the_play_ends() -> None:
@@ -669,7 +669,7 @@ def test_wait_returns_the_completion_once_the_play_ends() -> None:
         patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 5),
         patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
     ):
-        assert _run(_await_self_update_completion("2026-08-21T12:08:47.427212+00:00")) == _AFTER_FIRING
+        assert _run(_await_self_update_completion(_fired_job(), "2026-08-21T12:08:47.427212+00:00")) == _AFTER_FIRING
 
 
 def test_no_restart_still_reaches_the_fleet_stage() -> None:
@@ -771,7 +771,7 @@ def test_a_rotated_log_is_not_read_as_a_fresh_completion() -> None:
         patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 2),
         patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
     ):
-        assert _run(_await_self_update_completion(_FIRED_AT)) is None
+        assert _run(_await_self_update_completion(_fired_job(), _FIRED_AT)) is None
 
 
 def test_a_stubbed_verdict_reader_does_not_refuse_every_completion() -> None:
@@ -984,3 +984,59 @@ def test_concurrent_starts_only_create_one_orchestration() -> None:
         assert len(accepted) == 1, f"exactly one caller may start a run, got {len(accepted)}: {results}"
         assert len(rejected) == 1 and rejected[0].status_code == 409
         assert len(started) <= 1, f"double orchestration: {started}"
+
+
+def test_a_long_wait_does_not_let_the_job_be_retired_as_stale() -> None:
+    """The #14703 interaction: waiting IS progress.
+
+    The watch runs up to `_SELF_UPDATE_WATCH_TIMEOUT_SECONDS` (3600s) while the
+    staleness rule retires a job after `_UPDATE_ALL_STALE_SECONDS` (1800s) of
+    silence — exactly half. Without a stamp per poll, a healthy self-update that
+    runs past 1800s is retired at the halfway point of its own permitted wait,
+    and the reconcile path persists no resume plan, which is the only other
+    thing that stays the staleness rule.
+
+    Nothing in the suite runs a real self-update for 1800s, so this interaction
+    is untestable by observation and has to be pinned on the stamping itself.
+    """
+    job = _fired_job()
+    job.created_at = "2026-08-21T12:00:00+00:00"
+    job.last_progress_at = None
+
+    waiting = SimpleNamespace(in_progress=True, reason="a self-update play is running", last_completed_play_at=None)
+    with (
+        patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=waiting)),
+        patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 3),
+        patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
+    ):
+        assert _run(_await_self_update_completion(job, _FIRED_AT)) is None
+
+    assert job.last_progress_at is not None, "the watch never stamped progress — a long wait would be retired as stale"
+    assert not _job_is_stale(job), "a job actively waiting on its own self-update must not be judged stale"
+
+
+def test_a_degraded_self_update_does_not_resolve_the_stage() -> None:
+    """#12959: a clean recap does not mean the change landed.
+
+    A run can reach PLAY RECAP with zero failed hosts and still deliver nothing
+    role-owned. `/status` already gates on `verdict.degraded`; resolving this
+    stage on the weaker failed/unreachable counts would mark such a run resolved
+    and then deploy to the fleet on the strength of it.
+    """
+    job = _fired_job()
+    fleet = AsyncMock()
+    degraded = SimpleNamespace(
+        degraded=True, failed_hosts=0, unreachable_hosts=0, reason="role-owned change absent from this host"
+    )
+    with (
+        patch("api.code_sync._await_self_update_completion", AsyncMock(return_value=_AFTER_FIRING)),
+        patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
+        patch("api.code_sync._clear_resume_plan", AsyncMock()),
+        patch("api.code_sync._read_last_self_update_verdict", return_value=degraded),
+        patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value=_TARGET)),
+    ):
+        _run(_reconcile_self_update_stage(job, _TARGET, ["node-a"]))
+
+    assert job.status == "failed", "a degraded self-update must not resolve the stage"
+    assert "role-owned" in (_get_stage(job, "slm_self_update").message or ""), "the reason must reach the operator"
+    fleet.assert_not_awaited()

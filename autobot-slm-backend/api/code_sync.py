@@ -5547,7 +5547,7 @@ def _completion_is_from_a_rotated_log() -> bool:
         return False
 
 
-async def _await_self_update_completion(since: Optional[str]) -> Optional[str]:
+async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str]) -> Optional[str]:
     """Wait for the fired self-update play to finish. Returns its completion time.
 
     Returns None on timeout. If the play restarts this service — the case the
@@ -5558,6 +5558,15 @@ async def _await_self_update_completion(since: Optional[str]) -> Optional[str]:
     while True:
         await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
         activity = await read_deploy_activity()
+        # #14703 interaction: waiting IS progress. This loop runs up to
+        # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
+        # rule retires a job after _UPDATE_ALL_STALE_SECONDS (1800s default) of
+        # silence -- exactly half. Without a stamp per poll, a healthy
+        # self-update that takes longer than 1800s is retired as stale at the
+        # halfway point of its own permitted wait. The reconcile path is the
+        # no-restart case, so it deliberately persists no resume plan, and the
+        # resume plan is the only other thing that stays the staleness rule.
+        _mark_progress(job)
         # in_progress is None means the unit could not be queried — unknown is
         # not "finished", so keep waiting rather than resolving on a guess.
         if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
@@ -5590,7 +5599,7 @@ async def _reconcile_self_update_stage(
     and the job could neither complete nor fail.
     """
     stage = _get_stage(job, "slm_self_update")
-    completed_at = await _await_self_update_completion(stage.started_at)
+    completed_at = await _await_self_update_completion(job, stage.started_at)
 
     if completed_at is None:
         reason = (
@@ -5607,14 +5616,17 @@ async def _reconcile_self_update_stage(
         await _clear_resume_plan()
         return
 
-    from services.playbook_executor import SELF_UPDATE_LOG_PATH
-    from services.self_update_log_reader import read_self_update_verdict
-
-    verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
-    if verdict.failed_hosts or verdict.unreachable_hosts:
+    # #12959: the raw log read only says whether the PLAYBOOK finished. A run
+    # can reach its recap with zero failures and still deliver nothing
+    # role-owned, which `_read_last_self_update_verdict` folds in via
+    # probe_role_delivery and `/status` already gates on. Resolving this stage
+    # on the weaker check would let a degraded self-update be reported as
+    # resolved and then deploy to the fleet on the strength of it.
+    verdict = _read_last_self_update_verdict()
+    if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.
-        reason = (
+        reason = verdict.reason or (
             f"self-update play finished with {verdict.failed_hosts} failed and "
             f"{verdict.unreachable_hosts} unreachable host(s)"
         )
