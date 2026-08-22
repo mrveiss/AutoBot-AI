@@ -65,7 +65,7 @@ ansible-playbook playbooks/deploy-full.yml --tags backend --limit backend_node
 
 # Service restart only
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-backend action=restart"
+  -e "target=<group-or-host> service=autobot-backend action=restart"
 
 # Manual sync (dev)
 # rsync directly — the sync-to-vm.sh script targets the autobot-backend/ dir
