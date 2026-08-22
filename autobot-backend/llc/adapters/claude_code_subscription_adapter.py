@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
+from .subprocess_base import placeholder_run_id
 from .subprocess_support import inject_agent_credentials, serialize_invoke_context
 
 logger = get_logger(__name__)
@@ -68,7 +69,7 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
 
         session_id = str(uuid.uuid4())
-        run_id_placeholder = f"0/{session_id}"
+        run_id_placeholder = placeholder_run_id(session_id)
         output_file = _output_path(output_dir, agent_id, run_id_placeholder)
         os.makedirs(output_dir, exist_ok=True)
 

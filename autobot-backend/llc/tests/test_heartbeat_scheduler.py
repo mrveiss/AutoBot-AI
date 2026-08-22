@@ -756,6 +756,56 @@ class TestRecordRunForReplayH1:
         )
         assert captured.get("recorded_events"), "recorded_events must not be empty when a transcript exists"
 
+    async def test_transcript_still_resolves_when_the_state_file_is_gone(self):
+        """The fallback must rebuild the placeholder id, not the returned one.
+
+        A missing state file is the only case the fallback exists for. It used
+        to recompute the path from `<pid>/<session>`, naming a file no run has
+        ever written — a live process cannot have pid 0 — so the fallback
+        missed every time, precisely when it was needed, and reported the
+        #13614 symptom again with only a generic warning.
+        """
+        import os
+        import tempfile
+
+        from llc.adapters.claude_code_adapter import _output_path
+        from llc.adapters.subprocess_base import placeholder_run_id
+        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
+        agent_id = agent["agent_id"]
+        session = "session-no-state"
+        external_run_id = f"4242/{session}"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent["adapter_config"]["output_dir"] = tmpdir
+
+            # Built through the adapter's own helpers, so this keeps tracking
+            # the naming scheme rather than restating it.
+            real_transcript = _output_path(tmpdir, agent_id, placeholder_run_id(session))
+            with open(real_transcript, "w", encoding="utf-8") as fh:
+                fh.write('{"type": "result", "is_error": false}\n')
+
+            assert not os.path.exists(
+                os.path.join(tmpdir, f"llc_state_4242_{session}.json")
+            ), "no state file may exist, or this exercises the happy path instead"
+            assert not os.path.exists(_output_path(tmpdir, agent_id, external_run_id)), (
+                "the id-derived path must not exist, or this test proves nothing"
+            )
+
+            captured: dict = {}
+            mock_svc = MagicMock()
+            mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
+
+            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+                await _record_run_for_replay(
+                    agent, uuid.uuid4(), {}, "completed", external_run_id=external_run_id
+                )
+
+        assert "result" in (captured.get("output_text") or ""), (
+            "the fallback did not find the transcript the adapter actually wrote"
+        )
+
     async def test_no_external_run_id_stores_no_events(self):
         """When external_run_id is None, recorded_events is None."""
         from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
@@ -1010,3 +1060,22 @@ class TestQuotaExhausted:
                 agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
             )
         mock_pause.assert_not_awaited()
+
+
+class TestThePlaceholderRunIdHasOneDefinition:
+    """#13614 came from two places deriving the same id. Keep it at one."""
+
+    def test_no_adapter_rebuilds_the_placeholder_by_hand(self):
+        import pathlib
+
+        # Assembled from fragments so this guard does not match itself.
+        banned = '= f"' + "0/{session_id}" + '"'
+        adapters = pathlib.Path(__file__).resolve().parents[1] / "adapters"
+        assert adapters.is_dir(), f"adapters dir not found at {adapters}"
+        scanned = sorted(adapters.glob("*.py"))
+        assert scanned, "scanned no adapter files — this guard would pass on an empty set"
+        offenders = [p.name for p in scanned if banned in p.read_text(encoding="utf-8")]
+        assert offenders == [], (
+            f"{offenders} rebuild the placeholder run id by hand; import "
+            "placeholder_run_id from subprocess_base so there is one definition"
+        )

@@ -738,17 +738,29 @@ def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id
     returns, so reading that removes the second derivation entirely rather than
     trying to keep the two in step.
 
-    Falls back to the computed path for runs that predate the state file or
-    whose state could not be read — a best-effort guess is better than none,
-    and the caller already reports a missing transcript rather than recording
-    an empty one silently.
+    When the state file is missing or unreadable the path is recomputed — but
+    from the *placeholder* id the adapter actually named the file with, not
+    from `external_run_id`. Rebuilding it from the returned id names a file no
+    run has ever written, so the fallback would miss every time, precisely in
+    the case it exists to cover.
+
+    Only the claude_code family is resolvable here; the copilot adapters use a
+    different filename scheme and are tracked separately (#14760).
     """
     import json as _json
 
     try:
         from ..adapters.claude_code_adapter import _output_path as _cc_output_path
         from ..adapters.claude_code_adapter import _state_path as _cc_state_path
+        from ..adapters.subprocess_base import placeholder_run_id, session_id_from_run_id
     except ImportError:
+        # Losing the helpers is a wiring fault, not an absent transcript. The
+        # caller cannot tell those apart from a None, so say which it was.
+        logger.exception(
+            "Could not import adapter path helpers — replay transcript resolution "
+            "is disabled for run %s",
+            external_run_id,
+        )
         return None
 
     state_file = _cc_state_path(output_dir, external_run_id)
@@ -767,7 +779,9 @@ def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id
             state_file,
         )
 
-    return _cc_output_path(output_dir, agent_id, external_run_id)
+    return _cc_output_path(
+        output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id))
+    )
 
 
 async def _record_run_for_replay(
