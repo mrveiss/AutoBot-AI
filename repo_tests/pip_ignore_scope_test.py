@@ -105,6 +105,45 @@ def _files_reachable_from(directory: str) -> set[Path]:
     return files
 
 
+def _pyproject_specs(path: Path) -> list[str]:
+    """Every PEP 508 requirement string a pyproject declares."""
+    import tomllib  # 3.11+; nothing this repo supports predates it
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+    project = data.get("project") or {}
+    specs: list[str] = [str(spec) for spec in (project.get("dependencies") or [])]
+    for group in (project.get("optional-dependencies") or {}).values():
+        specs.extend(str(spec) for spec in (group or []))
+    return specs
+
+
+def _pins_in(path: Path) -> list[tuple[str, str]]:
+    """``(normalised name, pin text)`` for every pin *path* declares.
+
+    One derivation for both questions asked of a manifest — *which packages can
+    this block offer* and *what floor does it set for one of them*. They were
+    answered separately, and the second answered it by re-scanning raw lines,
+    so it silently skipped every pyproject dependency: the same #14733 defect,
+    in the sibling function that was not fixed with it. Deriving both from here
+    means a manifest format can only be mishandled in one place.
+    """
+    if path.name == "pyproject.toml":
+        candidates = _pyproject_specs(path)
+    else:
+        candidates = [line.split("#")[0] for line in path.read_text(encoding="utf-8").splitlines()]
+
+    pins: list[tuple[str, str]] = []
+    for spec in candidates:
+        match = _PIN.match(spec)
+        if match:
+            pins.append((_normalise(match.group(1)), spec.strip()))
+    return pins
+
+
 def _packages_pinned_in(path: Path) -> set[str]:
     """Distribution names pinned by *path*.
 
@@ -116,40 +155,7 @@ def _packages_pinned_in(path: Path) -> set[str]:
     with strings no dependabot block will ever name, so the guard looks like it
     covers pyproject while covering nothing in it.
     """
-    if path.name == "pyproject.toml":
-        return _packages_declared_in_pyproject(path)
-
-    packages: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        match = _PIN.match(line)
-        if match:
-            packages.add(_normalise(match.group(1)))
-    return packages
-
-
-def _packages_declared_in_pyproject(path: Path) -> set[str]:
-    """Every distribution named by a pyproject's project dependencies."""
-    try:
-        import tomllib
-    except ImportError:  # pragma: no cover - py<3.11 only
-        return set()
-
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return set()
-
-    project = data.get("project") or {}
-    specs: list[str] = list(project.get("dependencies") or [])
-    for group in (project.get("optional-dependencies") or {}).values():
-        specs.extend(group or [])
-
-    packages: set[str] = set()
-    for spec in specs:
-        match = _PIN.match(str(spec))
-        if match:
-            packages.add(_normalise(match.group(1)))
-    return packages
+    return {name for name, _ in _pins_in(path)}
 
 
 def _packages_reachable_from(directory: str) -> set[str]:
@@ -267,6 +273,37 @@ def test_reachability_includes_constraints_files() -> None:
     )
 
 
+def test_a_pyproject_pin_is_visible_to_the_frozen_exclusion_check(tmp_path) -> None:
+    """The other question asked of a manifest, on the same file format.
+
+    `_packages_pinned_in` was made TOML-aware, but the frozen-exclusion check
+    re-scanned raw lines itself, so it could never see a floor declared in a
+    pyproject — the identical #14733 defect surviving in the sibling function.
+    Both now derive from `_pins_in`, so this asserts the floor is recoverable,
+    not merely the package name.
+
+    Fails against the raw line-scan: TOML dependencies are quoted, so `_PIN`
+    matches none of them and the pin list comes back empty.
+    """
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "sample"\ndependencies = ["websockets>=17.0.1"]\n',
+        encoding="utf-8",
+    )
+
+    pins = dict(_pins_in(pyproject))
+
+    assert "websockets" in pins, (
+        f"parsed {sorted(pins)} — a quoted TOML dependency was not seen as a pin, "
+        "so a frozen exclusion against it could never be detected"
+    )
+    assert _version(pins["websockets"]) == (17, 0, 1)
+    assert "name" not in pins, "a TOML key was harvested as though it were a package"
+
+
 def test_a_pyproject_contributes_its_real_dependencies() -> None:
     """Asserting the filename is on the manifest list proves nothing.
 
@@ -314,16 +351,15 @@ def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
                 if excluded is None:
                     continue
                 for file in _files_reachable_from(directory):
-                    for line in file.read_text(encoding="utf-8").splitlines():
-                        pin = _PIN.match(line)
-                        if not pin or _normalise(pin.group(1)) != package:
+                    for name, pin_text in _pins_in(file):
+                        if name != package:
                             continue
-                        floor = _version(line.split("#")[0])
+                        floor = _version(pin_text)
                         if floor is not None and floor >= excluded:
                             frozen.append(
                                 f"{directory!r} excludes {package} {spec} but "
                                 f"{file.relative_to(_REPO_ROOT)} pins it at "
-                                f"'{line.split('#')[0].strip()}' — the floor is at "
+                                f"'{pin_text}' — the floor is at "
                                 f"or above the exclusion, so no version can ever "
                                 f"be offered"
                             )
