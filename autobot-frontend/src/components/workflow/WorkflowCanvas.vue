@@ -198,7 +198,7 @@
     </div>
 
     <!-- Canvas -->
-    <div ref="canvasRef" class="canvas-area" @pointerdown="startPan" @pointermove="onPointerMove"
+    <div ref="canvasRef" class="canvas-area" :style="canvasGridStyle" @pointerdown="startPan" @pointermove="onPointerMove"
          @pointerup="endInteraction" @pointercancel="endInteraction" @wheel.prevent="handleWheel">
       <div class="canvas-content" :style="canvasTransform">
         <!-- #14609: keyboard instructions for the canvas's own composite-widget
@@ -561,7 +561,15 @@ import { ref, reactive, computed, nextTick, useId, watch, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
-import { CANVAS_NODE_WIDTH, CANVAS_NODE_HEIGHT, CANVAS_NODE_PORT_Y } from './canvasNode';
+import {
+  CANVAS_NODE_WIDTH,
+  CANVAS_NODE_HEIGHT,
+  CANVAS_NODE_PORT_Y,
+  CANVAS_GRID_SIZE,
+  CANVAS_FIT_PADDING,
+  snapToGrid,
+  nextGridline,
+} from './canvasNode';
 import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
@@ -788,6 +796,12 @@ function nodeStyle(node: CanvasNode): Record<string, string> {
   const style: Record<string, string> = {
     left: `${node.position.x}px`,
     top: `${node.position.y}px`,
+    // #14726: the rendered width comes from the same constant `connections`,
+    // `nodeCenter`, the drop hit test and `nodeExtent` compute against. It
+    // used to be a `width: 240px` literal in the CSS — the one copy the user
+    // could actually see — with every one of those computations attempting to
+    // predict it. `org-group` still overrides it from `data` below.
+    width: `${CANVAS_NODE_WIDTH}px`,
   };
   if (node.type !== 'org-group') return style;
   const data = node.data as Record<string, unknown>;
@@ -1155,6 +1169,56 @@ const rovingTabStopId = computed<string | null>(() => {
 
 const canvasTransform = computed(() => ({ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom.value})` }));
 
+/* ------------------------------------------------------------------ *
+ * #14765 / #14726: canvas metrics the TEMPLATE binds, so the rendered
+ * value is produced from the constant instead of restated in CSS.
+ *
+ * #14726 records that the direction of this dependency used to be
+ * backwards: `.workflow-node { width: 240px }` was the width the browser
+ * actually rendered, and every TypeScript computation (`connections`,
+ * `nodeCenter`, the drop hit test, `nodeExtent`) was an attempt to predict
+ * it. Changing one without the other detached every edge from every node
+ * and failed no test, because the constants still agreed with each other.
+ * ------------------------------------------------------------------ */
+
+/**
+ * #14765: the grid is world content, not chrome.
+ *
+ * It is painted on `.canvas-area` — the fixed viewport — while the pan/zoom
+ * transform lives on its child `.canvas-content`, so without these two
+ * bindings the grid neither pans nor zooms: at 2x the squares stay 20 screen
+ * px while every node doubles, and panning slides the nodes across a
+ * stationary backdrop.
+ *
+ * A world point `w` lands at `pan + w * zoom` under `.canvas-content`'s
+ * transform, so gridlines at multiples of `CANVAS_GRID_SIZE` are
+ * `CANVAS_GRID_SIZE * zoom` apart on screen, with the origin at `pan`. The
+ * 1px line widths in the gradients are deliberately NOT scaled — a hairline
+ * should stay a hairline at every zoom.
+ *
+ * This is the one metric that belongs INSIDE the camera transform. The
+ * legend, minimap and instructions block are deliberately outside it (see
+ * their comments in the template) because they are chrome; the grid was
+ * grouped with them by accident.
+ */
+const canvasGridStyle = computed(() => {
+  const pitch = CANVAS_GRID_SIZE * zoom.value;
+  return {
+    backgroundSize: `${pitch}px ${pitch}px`,
+    backgroundPosition: `${pan.x}px ${pan.y}px`,
+  };
+});
+
+/**
+ * #14768: quantise a world position to the grid the canvas draws.
+ *
+ * `free` (Alt/Option held) bypasses it, matching the modifier convention in
+ * other canvas editors — the grid is a default, not a cage.
+ */
+function snapPosition(pos: { x: number; y: number }, free: boolean): { x: number; y: number } {
+  return free ? pos : { x: snapToGrid(pos.x), y: snapToGrid(pos.y) };
+}
+
 const connections = computed(() => {
   const result: { id: string; path: string }[] = [];
   props.nodes.forEach(node => {
@@ -1447,8 +1511,14 @@ function selectNode(id: string, event?: MouseEvent) {
   applySelectionIntent(id, event?.shiftKey ?? false);
 }
 
-/** Fixed-size step for a keyboard-driven node move — matches the background grid. */
-const NODE_KEYBOARD_MOVE_STEP = 20;
+/**
+ * Step for a keyboard-driven node move: exactly one grid cell.
+ *
+ * #14768: derived rather than written as `20`, so it cannot drift from the
+ * grid the user sees — the same reason `CANVAS_NODE_PORT_Y` is derived from
+ * `CANVAS_NODE_HEIGHT` (#14690).
+ */
+const NODE_KEYBOARD_MOVE_STEP = CANVAS_GRID_SIZE;
 
 type SpatialDirection = 'up' | 'down' | 'left' | 'right';
 
@@ -1540,12 +1610,34 @@ function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void
   const group = selectedIds.value.has(node.id) && selectedIds.value.size > 1
     ? selectedIds.value
     : new Set([node.id]);
+  // #14768: the press lands the focused node on the ADJACENT gridline rather
+  // than at `position + step`. From an off-grid node, `position + step` would
+  // stay off-grid forever; `snapToGrid(position + step)` would overshoot the
+  // line it was reaching for (x=10 would jump to 40, skipping 20). So the
+  // first press aligns, and every press after it advances exactly one cell.
+  // `NODE_KEYBOARD_MOVE_STEP` still states the intent — one grid cell — and
+  // `nextGridline` supplies the alignment; only the sign of the delta is read.
+  // `nextGridline` returns its axis unchanged for a 0 delta, so a horizontal
+  // press never quietly re-aligns the vertical axis.
+  //
+  // The whole group then moves by the delta the FOCUSED node's alignment
+  // produced, not by each node's own alignment — snapping every node
+  // independently would deform the selection and break the invariant #14612
+  // established, that every other node moves by the SAME delta.
+  const anchor = {
+    x: Math.max(0, nextGridline(node.position.x, dx)),
+    y: Math.max(0, nextGridline(node.position.y, dy)),
+  };
+  const appliedX = anchor.x - node.position.x;
+  const appliedY = anchor.y - node.position.y;
   const moves: CanvasAtomicAction[] = [];
   for (const id of group) {
     const n = props.nodes.find((candidate) => candidate.id === id);
     if (!n) continue;
     const before = { x: n.position.x, y: n.position.y };
-    const after = { x: Math.max(0, n.position.x + dx), y: Math.max(0, n.position.y + dy) };
+    const after = id === node.id
+      ? anchor
+      : { x: Math.max(0, n.position.x + appliedX), y: Math.max(0, n.position.y + appliedY) };
     emit('node-moved', id, after);
     moves.push({ kind: 'move', nodeId: id, before, after });
   }
@@ -1786,7 +1878,7 @@ const FOCUS_ZOOM = 1;
 
 /** Padding, in canvas px, kept around a fitted bounding box so a fitted node
  *  or selection is never drawn flush against the canvas edge. */
-const FIT_PADDING = 60;
+const FIT_PADDING = CANVAS_FIT_PADDING;
 
 /** The width/height a node occupies for bounding-box math (fit, minimap) —
  *  `org-group` carries its own from `data`, every other type is the fixed
@@ -2135,7 +2227,13 @@ function onPointerMove(e: PointerEvent) {
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;
-    const primary = { x: Math.max(0, x), y: Math.max(0, y) };
+    // #14768: the PRIMARY node snaps, and the rest of a multi-selection then
+    // moves by the delta that snapping produced. Snapping each node's own
+    // position independently would land them all on the grid but deform the
+    // selection, breaking #14612's stated invariant that every other node
+    // moves by the SAME delta as the dragged one. Snapping the leader keeps
+    // the group rigid and still puts it on the grid.
+    const primary = snapPosition({ x: Math.max(0, x), y: Math.max(0, y) }, e.altKey);
     // #14612: every other node in `dragStartPositions` (the rest of a
     // multi-selection, if any — a lone drag has exactly one entry, itself,
     // making this loop identical to the pre-#14612 single-emit behaviour)
@@ -2424,7 +2522,12 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 /* #14610: `touch-action: none` on every custom-gesture surface — without it, the
    browser's own touch scroll/pinch-zoom competes with our own pan/pinch/drag
    handling for the same one- and two-finger gestures. */
-.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; touch-action: none; }
+/* #14765: the gradients live here but their SIZE and ORIGIN come from
+   `canvasGridStyle`, bound in the template, so the grid pans and zooms with
+   `.canvas-content`. Painted on the fixed viewport with static metrics, as it
+   was, the grid stops describing the plane the nodes sit on. The 1px gradient
+   stops stay 1px on purpose — a hairline at every zoom. */
+.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); cursor: grab; touch-action: none; }
 .canvas-area:active { cursor: grabbing; }
 .canvas-content { position: absolute; min-width: 100%; min-height: 100%; transform-origin: 0 0; }
 
@@ -2432,7 +2535,10 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; touch-action: none; }
+/* #14726: no `width` here — `nodeStyle()` supplies it from
+   `CANVAS_NODE_WIDTH`, so the value the browser renders and the value the
+   geometry code predicts cannot drift apart. */
+.workflow-node { position: absolute; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; touch-action: none; }
 .workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 /* #14609: keyboard focus indicator — nodes carry no native focus styling of
@@ -2553,7 +2659,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .canvas-search-clear { display: flex; align-items: center; padding: var(--spacing-0); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
 .canvas-search-clear:hover { color: var(--text-primary); }
 .canvas-search-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .canvas-search-result { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-primary); cursor: pointer; }
 .canvas-search-result:hover, .canvas-search-result.active { background: var(--bg-tertiary); }
 .canvas-search-empty { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-tertiary); font-style: italic; }
@@ -2565,7 +2671,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .canvas-minimap-viewport { position: absolute; border: 1px solid var(--color-primary); background: var(--color-primary-bg); pointer-events: none; }
 
 .dropdown-container { position: relative; display: inline-block; }
-.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: var(--shadow-lg); }
 .dropdown-menu button { display: flex; align-items: center; gap: var(--spacing-2); width: 100%; padding: var(--spacing-2) var(--spacing-3); border: none; background: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; }
 .dropdown-menu button:hover { background: var(--bg-tertiary); }
 .target-label { font-size: var(--text-xs); color: var(--text-secondary); }
@@ -2574,7 +2680,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .node-header { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); color: var(--text-on-primary); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-size: var(--text-sm); font-weight: 600; }
 .node-header span { flex: 1; }
 .delete-btn { position: relative; padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
-.delete-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+.delete-btn:hover { opacity: 1; background: var(--bg-overlay-light); }
 /* #14610: same WCAG 2.5.5 touch-target widening as `.port`, for the same reason
    — the visible icon stays compact inside the node header on a mouse. */
 @media (pointer: coarse) {
@@ -2627,7 +2733,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
+.dialog-overlay { position: fixed; inset: 0; background: var(--bg-overlay); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: var(--radius-xl); padding: var(--spacing-6); }
 .dialog h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); display: flex; align-items: center; gap: var(--spacing-2-5); color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }
@@ -2732,7 +2838,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 /* #14612: the node's own context-menu trigger — mirrors `.delete-btn`'s
    existing header-icon-button styling. */
 .node-menu-btn { padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
-.node-menu-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+.node-menu-btn:hover { opacity: 1; background: var(--bg-overlay-light); }
 .node-menu-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 /* #14612: marquee — screen-space, a sibling of `.canvas-content` so it never
@@ -2745,7 +2851,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
    direction-specific CSS is needed here for the "opens on the correct side"
    requirement. */
 .context-menu-backdrop { position: fixed; inset: 0; z-index: var(--z-modal-backdrop); background: transparent; }
-.canvas-context-menu { position: fixed; z-index: var(--z-modal); min-width: 200px; max-width: 280px; margin: var(--spacing-0); padding: var(--spacing-1) var(--spacing-0); list-style: none; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.canvas-context-menu { position: fixed; z-index: var(--z-modal); min-width: 200px; max-width: 280px; margin: var(--spacing-0); padding: var(--spacing-1) var(--spacing-0); list-style: none; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .canvas-context-menu:focus-visible { outline: none; }
 .canvas-context-menu-item { display: block; width: 100%; padding: var(--spacing-2) var(--spacing-3); background: none; border: none; color: var(--text-primary); text-align: start; cursor: pointer; font-size: var(--text-sm); }
 .canvas-context-menu-item:hover { background: var(--bg-tertiary); }
