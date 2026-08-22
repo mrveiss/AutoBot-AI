@@ -92,11 +92,19 @@ def build_bucket_table(weights: Dict[str, int], splits: int, buckets: int) -> Li
         bucket_weight[bucket_of(module, buckets)] += weight
 
     shard_load = [0] * splits
+    # Bucket counts break the tie that load alone cannot. A zero-weight bucket
+    # adds nothing to `shard_load`, so without this the same lowest-index shard
+    # wins every subsequent tie and every weightless bucket piles onto it — with
+    # an empty durations file all 512 buckets land on shard 0, and the remaining
+    # shards become unreachable by any file that could ever be added, not merely
+    # empty today (#14802).
+    shard_buckets = [0] * splits
     table = [0] * buckets
     for bucket in sorted(range(buckets), key=lambda b: (-bucket_weight[b], b)):
-        target = min(range(splits), key=lambda s: (shard_load[s], s))
+        target = min(range(splits), key=lambda s: (shard_load[s], shard_buckets[s], s))
         table[bucket] = target
         shard_load[target] += bucket_weight[bucket]
+        shard_buckets[target] += 1
     return table
 
 
