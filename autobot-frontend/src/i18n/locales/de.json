@@ -8051,6 +8051,8 @@
       "colRunDuration": "Laufdauer",
       "colAction": "Aktion",
       "statusUnknown": "unbekannt",
+      "skipReasonLabel": "Übersprungen:",
+      "errorLabel": "Fehler:",
       "triggering": "Wird ausgelöst...",
       "triggerNow": "Jetzt auslösen",
       "runHistoryTitle": "Laufverlauf – {name}",
