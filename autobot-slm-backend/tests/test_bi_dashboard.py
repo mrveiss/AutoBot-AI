@@ -108,6 +108,17 @@ sys.modules["autobot_shared.network_constants"] = _nc
 _pq = types.ModuleType("autobot_shared.monitoring.prometheus_query")
 _pq.query_instant = AsyncMock(return_value=None)
 _monitoring_pkg = types.ModuleType("autobot_shared.monitoring")
+# Keep it a *package*. Without __path__ this plain module shadows the real
+# `autobot_shared.monitoring` for the whole process, and any later import of a
+# submodule it does not stub fails with "is not a package" — even though the
+# submodule exists on disk. It is installed at import scope with no teardown, so
+# the damage is not confined to this file: it broke collection of
+# test_rbac_middleware_cache.py and test_rbac_permission_denied_audit.py in
+# seven of twelve shards the moment something imported
+# `autobot_shared.monitoring.metrics.audit` (#14750, same class as #14741).
+# Pointing __path__ at the real directory keeps the stubbed `prometheus_query`
+# in place while letting every other submodule resolve from disk.
+_monitoring_pkg.__path__ = [str(Path(__file__).resolve().parents[2] / "autobot_shared" / "monitoring")]
 sys.modules["autobot_shared.monitoring"] = _monitoring_pkg
 sys.modules["autobot_shared.monitoring.prometheus_query"] = _pq
 
