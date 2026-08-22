@@ -22,9 +22,9 @@ from typing import Optional
 
 from .autobot_agent_adapter import AutoBotAgentAdapter
 from .base import (
-    adapter_unavailable_reason,
     AdapterRunStatus,
     LLCAdapter,
+    adapter_unavailable_reason,
     get_adapter,
     register_adapter,
     registered_adapter_types,

@@ -65,14 +65,14 @@ class _InProcessAdapter:
 
 class TestAdapterAvailabilityReason:
     def test_missing_cli_reports_the_actionable_message(self):
-        mod = _mod()
+        _mod()
         with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=False)):
             reason = _adapters().adapter_unavailable_reason("claude_code")
         assert reason is not None
         assert "not found on PATH" in reason
 
     def test_present_cli_reports_nothing(self):
-        mod = _mod()
+        _mod()
         with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=True)):
             assert _adapters().adapter_unavailable_reason("claude_code") is None
 
@@ -83,7 +83,7 @@ class TestAdapterAvailabilityReason:
         `hasattr`, so treating a probe-less adapter as runnable would have the
         hire succeed for a type the UI greys out.
         """
-        mod = _mod()
+        _mod()
         with patch("llc.adapters.base.get_adapter", return_value=_InProcessAdapter()):
             reason = _adapters().adapter_unavailable_reason("codex_subscription")
         assert reason is not None
@@ -97,7 +97,7 @@ class TestAdapterAvailabilityReason:
         """
         from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
 
-        mod = _mod()
+        _mod()
         with patch("llc.adapters.base.get_adapter", return_value=CodexSubscriptionAdapter()):
             reason = _adapters().adapter_unavailable_reason("codex_subscription")
         assert reason is not None, "a registered but unimplemented adapter must be refused"
@@ -109,7 +109,7 @@ class TestAdapterAvailabilityReason:
         simultaneously showing as unavailable — two surfaces disagreeing about
         the same question.
         """
-        mod = _mod()
+        _mod()
         with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(raises=True)):
             reason = _adapters().adapter_unavailable_reason("claude_code")
         assert reason is not None

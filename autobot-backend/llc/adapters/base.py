@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 from autobot_shared.logging_manager import get_logger
-
 from llc.models.enums import LLCRunStatus
 
 logger = get_logger(__name__)
