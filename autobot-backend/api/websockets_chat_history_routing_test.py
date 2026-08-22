@@ -23,7 +23,6 @@ hook (``_persist_event_to_chat_history``), so these tests drive *that* — the
 
 import asyncio
 from typing import Any, Dict, List
-
 from unittest.mock import patch
 
 from api.websockets import _persist_event_to_chat_history
