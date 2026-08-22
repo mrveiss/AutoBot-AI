@@ -22,6 +22,16 @@ from .loader import load_router_group
 MONITORING_ROUTER_CONFIGS = [
     ("api.branch_health", "router", "", ["branch-health"], "branch_health"),
     ("api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
+    # #12631: memory lifecycle read view. Registered here rather than under a new
+    # group because it is observability, and the umbrella (#12630) composes it
+    # into the same operator surface as the rest of monitoring.
+    (
+        "api.memory_lifecycle",
+        "router",
+        "/memory",
+        ["memory-lifecycle"],
+        "memory_lifecycle",
+    ),
     ("api.metrics", "router", "/metrics", ["metrics"], "metrics"),
     # Issue #1288: Prometheus scrape endpoint at /api/metrics/prometheus
     # (no auth, used by Prometheus server). Moved from /metrics to avoid
