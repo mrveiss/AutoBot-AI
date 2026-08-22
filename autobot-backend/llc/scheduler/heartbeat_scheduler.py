@@ -723,62 +723,31 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 
-def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id: str) -> Optional[str]:
-    """Locate the transcript an adapter run actually wrote (#13614).
+def _resolve_adapter_output_file(
+    adapter_type: str, output_dir: str, agent_id: str, external_run_id: str
+) -> Optional[str]:
+    """Locate the transcript an adapter run actually wrote (#13614, #14760).
 
-    The state file is the authority, not a recomputed path. `_output_path` is
-    called by the adapter *before* the process is spawned — it has to be, the
-    file is the child's stdout — so the run id in its name is the placeholder
-    `0/<session>`, while the id the adapter returns is `<pid>/<session>`. Two
-    places deriving the same path from different inputs is how a complete 37 KB
-    transcript sat on disk while `output_text` stayed empty and
-    `recorded_events` NULL.
-
-    The adapter records the real path in its state file, keyed by the run id it
-    returns, so reading that removes the second derivation entirely rather than
-    trying to keep the two in step.
-
-    When the state file is missing or unreadable the path is recomputed — but
-    from the *placeholder* id the adapter actually named the file with, not
-    from `external_run_id`. Rebuilding it from the returned id names a file no
-    run has ever written, so the fallback would miss every time, precisely in
-    the case it exists to cover.
-
-    Only the claude_code family is resolvable here; the copilot adapters use a
-    different filename scheme and are tracked separately (#14760).
+    Delegates to the adapters package, which resolves the path helpers from the
+    adapter registered under *adapter_type* rather than importing one family's
+    helpers directly. The previous version imported `claude_code_adapter`'s pair
+    unconditionally, so the copilot adapters — which name their files
+    `llc_copilot_*` rather than `llc_agent_*` — missed on both the state-file
+    lookup and the recomputed fallback, every time. The function was generic in
+    name only (#14760).
     """
-    import json as _json
-
     try:
-        from ..adapters.claude_code_adapter import _output_path as _cc_output_path
-        from ..adapters.claude_code_adapter import _state_path as _cc_state_path
-        from ..adapters.subprocess_base import placeholder_run_id, session_id_from_run_id
+        from ..adapters.subprocess_base import resolve_transcript_path
     except ImportError:
         # Losing the helpers is a wiring fault, not an absent transcript. The
         # caller cannot tell those apart from a None, so say which it was.
         logger.exception(
-            "Could not import adapter path helpers — replay transcript resolution " "is disabled for run %s",
+            "Could not import adapter path helpers — replay transcript resolution is disabled for run %s",
             external_run_id,
         )
         return None
 
-    state_file = _cc_state_path(output_dir, external_run_id)
-    try:
-        with open(state_file, "r", encoding="utf-8") as fh:
-            recorded = _json.load(fh).get("output_file")
-        if recorded:
-            return str(recorded)
-        logger.warning(
-            "Adapter state file %s carries no output_file — falling back to the computed path",
-            state_file,
-        )
-    except (OSError, ValueError):
-        logger.warning(
-            "Could not read adapter state file %s — falling back to the computed path",
-            state_file,
-        )
-
-    return _cc_output_path(output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id)))
+    return resolve_transcript_path(adapter_type, output_dir, agent_id, external_run_id)
 
 
 async def _record_run_for_replay(
@@ -810,7 +779,9 @@ async def _record_run_for_replay(
             cfg = agent.get("adapter_config") or {}
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id_str = str(agent.get("agent_id", ""))
-            output_file: Optional[str] = _resolve_adapter_output_file(output_dir, agent_id_str, external_run_id)
+            output_file: Optional[str] = _resolve_adapter_output_file(
+                adapter_type, output_dir, agent_id_str, external_run_id
+            )
 
             if output_file and _os.path.exists(output_file):
                 try:
