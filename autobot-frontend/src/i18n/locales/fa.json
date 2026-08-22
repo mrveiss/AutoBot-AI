@@ -8303,6 +8303,12 @@
       "roleLensBanner": "فیلتر نمایش: {role} — نمایش {shown} از {total} گره. دسترسی بدون تغییر است.",
       "roleLensEmpty": "فیلتر نمایش: هیچ گره‌ای با «{role}» در این نما مطابقت ندارد. دسترسی بدون تغییر است — فیلتر را پاک کنید تا همه را ببینید.",
       "roleLensClear": "پاک کردن فیلتر",
+      "teamFilterLabel": "فیلتر بر اساس تیم",
+      "teamFilterAll": "همه تیم‌ها",
+      "teamFilterBanner": "فیلتر تیم: {team} — نمایش {shown} از {total} نفر. دسترسی بدون تغییر است.",
+      "toolFilterLabel": "فیلتر بر اساس ابزار",
+      "toolFilterAll": "همه ابزارها",
+      "toolFilterBanner": "فیلتر ابزار: {tool} — نمایش {shown} از {total} نفر. دسترسی بدون تغییر است.",
       "sidebar": {
         "owner": "مالک",
         "tools": "ابزارها",

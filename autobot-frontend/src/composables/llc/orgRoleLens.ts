@@ -47,8 +47,14 @@ export function availableLensRoles(roots: OrgNode[]): string[] {
   return [...seen].sort((a, b) => a.localeCompare(b))
 }
 
-/** `data.title` off a canvas node's payload, or `null` when absent/not a string. */
-function nodeTitle(node: CanvasNode): string | null {
+/**
+ * `data.title` off a canvas node's payload, or `null` when absent/not a
+ * string. Exported for `orgCanvasFilters.ts` (#14608): the team/tool filters
+ * that compose with this lens match an `org-person` node's role the same
+ * way — reading it once, here, keeps "what a person's role is" a single
+ * definition instead of a second reader guessing at the same field.
+ */
+export function nodeTitle(node: CanvasNode): string | null {
   const data = node.data as Record<string, unknown>
   return typeof data.title === 'string' ? data.title : null
 }

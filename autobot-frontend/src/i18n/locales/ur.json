@@ -8303,6 +8303,12 @@
       "roleLensBanner": "ویو فلٹر: {role} — {total} میں سے {shown} نوڈز دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
       "roleLensEmpty": "ویو فلٹر: اس منظر میں \"{role}\" سے کوئی نوڈ میل نہیں کھاتا۔ رسائی تبدیل نہیں ہوتی — سب کو دیکھنے کے لیے فلٹر صاف کریں۔",
       "roleLensClear": "فلٹر صاف کریں",
+      "teamFilterLabel": "ٹیم کے مطابق فلٹر کریں",
+      "teamFilterAll": "تمام ٹیمیں",
+      "teamFilterBanner": "ٹیم فلٹر: {team} — {total} میں سے {shown} افراد دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
+      "toolFilterLabel": "ٹول کے مطابق فلٹر کریں",
+      "toolFilterAll": "تمام ٹولز",
+      "toolFilterBanner": "ٹول فلٹر: {tool} — {total} میں سے {shown} افراد دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
       "sidebar": {
         "owner": "مالک",
         "tools": "اوزار",
