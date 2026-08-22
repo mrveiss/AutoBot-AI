@@ -271,13 +271,14 @@ export const useChatStore = defineStore('chat', () => {
     if (!session) return
     session.messages = [...messages]
     session.updatedAt = new Date()
-    // Build the surviving set rather than spreading and deleting in place:
-    // one reassignment for reactivity, and no mutation while iterating.
-    const retained = new Set<string>()
-    pendingMessageIds.value.forEach(id => {
-      if (messages.some(m => m.id === id)) retained.add(id)
-    })
-    pendingMessageIds.value = retained
+    // The snapshot is authoritative, so nothing can still be awaiting an answer
+    // against it. A pending message that appears in the snapshot has landed —
+    // it is confirmed, not still pending; one that does not appear did not land,
+    // and has just been replaced away. Either way the pending set is empty.
+    //
+    // Retaining the ones present in the snapshot (as this did) left them stuck
+    // in a permanent 'sending' state for messages the server already held.
+    pendingMessageIds.value = new Set()
   }
 
   /**
