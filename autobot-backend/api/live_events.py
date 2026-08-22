@@ -229,11 +229,7 @@ async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
         return await _authorize_llc_channel(channel, user_payload)
     if channel.startswith("session:") or channel.startswith("chat:"):
         return await _authorize_conversation_channel(channel, user_payload)
-    if (
-        channel.startswith("workflow:")
-        or channel.startswith("heartbeat:")
-        or channel.startswith("task:")
-    ):
+    if channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:"):
         return await _authorize_resource_channel(channel, user_payload)
     return True
 
