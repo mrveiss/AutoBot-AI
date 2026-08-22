@@ -25,7 +25,7 @@
         </label>
         <label class="gantt-field">
           <span class="gantt-field-label">{{ $t('llc.gantt.zoom') }}</span>
-          <select v-model="zoom" class="gantt-select">
+          <select v-model="zoom" data-testid="gantt-zoom" class="gantt-select">
             <option value="day">{{ $t('llc.gantt.zoomDay') }}</option>
             <option value="week">{{ $t('llc.gantt.zoomWeek') }}</option>
             <option value="month">{{ $t('llc.gantt.zoomMonth') }}</option>
@@ -330,6 +330,26 @@ watch(scrollEl, (el) => {
 })
 
 /**
+ * #14799: resync when the pixel-to-date mapping changes without the container
+ * changing size.
+ *
+ * `syncViewport` was driven only by the scroll handler and the
+ * `ResizeObserver`. Changing zoom alters `pxPerDay` — so the SAME `scrollLeft`
+ * now names a different date — but does not resize `.gantt-scroll`, so neither
+ * driver fires and the cached `viewLeft`/`viewWidth` are reinterpreted against
+ * the new scale. Switching project does the same when the DOM node, and with
+ * it `scrollLeft`, survives the change.
+ *
+ * `nextTick` matters: the chart's width changes with zoom, and the browser
+ * clamps `scrollLeft` against the new width as part of that re-layout. Reading
+ * before the repaint would just re-cache the stale value.
+ */
+watch([zoom, selectedProjectId], async () => {
+  await nextTick()
+  syncViewport()
+})
+
+/**
  * Suspends culling while a PNG is being produced.
  *
  * An export must contain the WHOLE chart, not the slice that happened to be
@@ -362,10 +382,23 @@ const axisTicks = computed(() => {
     const x1 = viewLeft.value + viewWidth.value - LABEL_W + TICK_OVERSCAN_PX
     from = Math.max(rangeStart.value, msForX(x0))
     to = Math.min(rangeEnd.value, msForX(x1))
-    // Land on the same step lattice the unculled loop walks, so a tick sits at
-    // the same date whether or not culling is on.
-    const stepMs = step * DAY_MS
-    from = rangeStart.value + Math.floor((from - rangeStart.value) / stepMs) * stepMs
+    // #14799: a window that comes out EMPTY must not render an empty axis.
+    // The `viewWidth > 0` predicate above only covers a viewport that was
+    // never measured; a viewport measured under a *previous* `pxPerDay`
+    // reaches the same outcome by a different route — `msForX` reinterprets
+    // the stale pixel offset against the new scale and can push `from` past
+    // `to`, at which point the loop below runs zero times. Whatever the
+    // cause, "computed an empty window" falls back to the full range, because
+    // an axis with no ticks is indistinguishable from a chart with no data.
+    if (from > to) {
+      from = rangeStart.value
+      to = rangeEnd.value
+    } else {
+      // Land on the same step lattice the unculled loop walks, so a tick sits
+      // at the same date whether or not culling is on.
+      const stepMs = step * DAY_MS
+      from = rangeStart.value + Math.floor((from - rangeStart.value) / stepMs) * stepMs
+    }
   }
 
   for (let ms = from; ms <= to; ms += step * DAY_MS) {

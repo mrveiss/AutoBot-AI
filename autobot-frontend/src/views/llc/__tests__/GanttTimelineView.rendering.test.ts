@@ -150,6 +150,63 @@ describe('axis ticks are culled to the viewport (#14769)', () => {
   })
 })
 
+describe('the axis never renders empty (#14799)', () => {
+  /** Pick a zoom level from the toolbar select. */
+  async function setZoom(w: Awaited<ReturnType<typeof mountView>>, level: string) {
+    await w.get('[data-testid="gantt-zoom"]').setValue(level)
+    await flushPromises()
+  }
+
+  it('still renders ticks after a zoom change while scrolled away from the start', async () => {
+    // The defect: `zoom` was not watched, so `viewLeft`/`viewWidth` kept the
+    // values measured under the PREVIOUS `pxPerDay`. Reinterpreted against a
+    // coarser scale, `from` could overshoot `to` and the loop ran zero times.
+    const w = await mountView()
+    await setViewport(w, 1000, 6000)
+    expect(tickCount(w)).toBeGreaterThan(0)
+
+    await setZoom(w, 'quarter')
+
+    expect(tickCount(w)).toBeGreaterThan(0)
+  })
+
+  it('still renders ticks after zooming in from a scrolled position', async () => {
+    const w = await mountView()
+    await setViewport(w, 1000, 6000)
+
+    await setZoom(w, 'day')
+
+    expect(tickCount(w)).toBeGreaterThan(0)
+  })
+
+  it('falls back to the full range when the computed window comes out empty', async () => {
+    // Belt-and-braces for the same invariant, independent of the resync: an
+    // impossible window (scrolled far past a chart that has since shrunk)
+    // must draw the whole axis rather than nothing.
+    const w = await mountView()
+    await setViewport(w, 1000, 5_000_000)
+
+    expect(tickCount(w)).toBeGreaterThan(0)
+  })
+
+  it('keeps the final tick exactly once when scrolled to the end of the range', async () => {
+    // Every other culling assertion uses scrollLeft 0 or an arbitrary
+    // mid-scroll, so the right-hand boundary was never exercised — the place
+    // an off-by-one drops or duplicates the last tick.
+    const w = await mountView()
+    const allLabels = w.findAll('.gantt-axis-label').map((n) => n.text())
+    const finalLabel = allLabels[allLabels.length - 1]
+
+    const svg = w.get('svg.gantt-svg').element
+    const width = Number(svg.getAttribute('width'))
+    await setViewport(w, 1000, Math.max(0, width - 1000))
+
+    const visible = w.findAll('.gantt-axis-label').map((n) => n.text())
+    expect(visible).toContain(finalLabel)
+    expect(visible.filter((l) => l === finalLabel)).toHaveLength(1)
+  })
+})
+
 describe('PNG export (#14767)', () => {
   const origCreate = URL.createObjectURL
   const origRevoke = URL.revokeObjectURL
