@@ -22,6 +22,7 @@ from typing import Optional
 
 from .autobot_agent_adapter import AutoBotAgentAdapter
 from .base import (
+    adapter_unavailable_reason,
     AdapterRunStatus,
     LLCAdapter,
     get_adapter,
@@ -43,6 +44,7 @@ __all__ = [
     "CopilotLocalAdapter",
     "CopilotSubscriptionAdapter",
     "LLCAdapter",
+    "adapter_unavailable_reason",
     "get_adapter",
     "get_adapter_for_agent",
     "register_adapter",

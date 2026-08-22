@@ -33,6 +33,12 @@ def _mod() -> ModuleType:
     return mod
 
 
+def _adapters() -> ModuleType:
+    import llc.adapters.base as mod
+
+    return mod
+
+
 def _ctx() -> TenantContext:
     return TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
 
@@ -60,15 +66,15 @@ class _InProcessAdapter:
 class TestAdapterAvailabilityReason:
     def test_missing_cli_reports_the_actionable_message(self):
         mod = _mod()
-        with patch.object(mod, "get_adapter", return_value=_CliAdapter(available=False)):
-            reason = mod._adapter_unavailable_reason("claude_code")
+        with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=False)):
+            reason = _adapters().adapter_unavailable_reason("claude_code")
         assert reason is not None
         assert "not found on PATH" in reason
 
     def test_present_cli_reports_nothing(self):
         mod = _mod()
-        with patch.object(mod, "get_adapter", return_value=_CliAdapter(available=True)):
-            assert mod._adapter_unavailable_reason("claude_code") is None
+        with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=True)):
+            assert _adapters().adapter_unavailable_reason("claude_code") is None
 
     def test_an_adapter_without_the_probe_is_reported_unimplemented(self):
         """Absence of the probe means "not implemented", not "nothing to check".
@@ -78,8 +84,8 @@ class TestAdapterAvailabilityReason:
         hire succeed for a type the UI greys out.
         """
         mod = _mod()
-        with patch.object(mod, "get_adapter", return_value=_InProcessAdapter()):
-            reason = mod._adapter_unavailable_reason("codex_subscription")
+        with patch("llc.adapters.base.get_adapter", return_value=_InProcessAdapter()):
+            reason = _adapters().adapter_unavailable_reason("codex_subscription")
         assert reason is not None
         assert "not implemented" in reason
 
@@ -92,8 +98,8 @@ class TestAdapterAvailabilityReason:
         from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
 
         mod = _mod()
-        with patch.object(mod, "get_adapter", return_value=CodexSubscriptionAdapter()):
-            reason = mod._adapter_unavailable_reason("codex_subscription")
+        with patch("llc.adapters.base.get_adapter", return_value=CodexSubscriptionAdapter()):
+            reason = _adapters().adapter_unavailable_reason("codex_subscription")
         assert reason is not None, "a registered but unimplemented adapter must be refused"
 
     def test_a_crashing_probe_fails_closed(self):
@@ -104,8 +110,8 @@ class TestAdapterAvailabilityReason:
         the same question.
         """
         mod = _mod()
-        with patch.object(mod, "get_adapter", return_value=_CliAdapter(raises=True)):
-            reason = mod._adapter_unavailable_reason("claude_code")
+        with patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(raises=True)):
+            reason = _adapters().adapter_unavailable_reason("claude_code")
         assert reason is not None
         assert "could not be determined" in reason
 
@@ -123,7 +129,7 @@ class TestHireRejectsAnUnrunnableAdapter:
 
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
-            patch.object(mod, "get_adapter", return_value=_CliAdapter(available=False)),
+            patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=False)),
             patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
             pytest.raises(mod.HTTPException) as caught,
         ):
@@ -145,7 +151,7 @@ class TestHireRejectsAnUnrunnableAdapter:
 
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
-            patch.object(mod, "get_adapter", return_value=_CliAdapter(available=True)),
+            patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=True)),
             patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
         ):
             await mod.hire_agent(company_id=uuid.uuid4(), body=body, session=session, ctx=_ctx())

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
@@ -631,6 +632,26 @@ class PortabilityService(LLCServiceBase):
         existing = await self._agent_names_exist([name], company_id)
         if existing:
             warnings.append(f"Agent {name!r} already exists — skipped")
+            return None
+
+        # #14800: this creates a real, heartbeat-dispatched agent, so it answers the
+        # same two questions the hire route does. Without them a template naming an
+        # unknown adapter — or a known one whose CLI this host lacks — produced an
+        # agent whose every heartbeat is skipped, looking degraded forever.
+        #
+        # Skipped with a warning rather than failing the import: a template may
+        # legitimately be imported onto a host that is provisioned afterwards, and
+        # the response already carries both lists.
+        adapter_type = agent.get("adapter_type") or "claude_code"
+        if adapter_type not in registered_adapter_types():
+            warnings.append(f"Agent {name!r} names unknown adapter_type {adapter_type!r} — skipped")
+            return None
+        unavailable = adapter_unavailable_reason(adapter_type)
+        if unavailable:
+            warnings.append(
+                f"Agent {name!r} needs adapter {adapter_type!r}, which cannot run on this "
+                f"deployment: {unavailable} — skipped"
+            )
             return None
 
         # Use pre-minted ID from two-pass map if available
