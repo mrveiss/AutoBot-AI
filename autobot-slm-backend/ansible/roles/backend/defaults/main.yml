@@ -83,6 +83,11 @@ backend_cors_origins: "*"
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""
+
+# #12681: pin an exact claude-code package version (e.g. "2.1.89") for a
+# reproducible provision. Empty takes the current stable-channel build, matching
+# the CLAUDE_CLI_VERSION build arg the backend image already exposes.
+backend_claude_cli_version: ""
 # SLM WebSocket auth bearer value — populated from /etc/autobot/slm-secrets.env at deploy time (#7689).
 backend_slm_auth_tok: ""
 
