@@ -54,6 +54,7 @@ from typing import Any
 
 import yaml
 
+from collections.abc import Mapping
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
@@ -235,6 +236,16 @@ def _registry_deploy_paths() -> tuple[dict, set[str]] | None:
         from services.role_registry import DEFAULT_ROLES, ROLE_ANSIBLE_GROUPS
     except Exception as exc:  # pragma: no cover - registry unavailable in some harnesses
         logger.debug("role deploy-path report unavailable: registry could not be read (%s)", exc)
+        return None
+
+    # The import succeeding is not the same as getting the real registry. Test
+    # harnesses stub `services.*`, and a Mock imports cleanly, iterates as
+    # empty, and answers `.get()` with another Mock -- which is truthy, so every
+    # role would look matched and nothing would ever be reported. Checking the
+    # types makes that case "cannot judge" honestly, instead of a silent
+    # all-clear that reads exactly like a clean result.
+    if not isinstance(ROLE_ANSIBLE_GROUPS, Mapping) or not isinstance(DEFAULT_ROLES, (list, tuple)):
+        logger.debug("role deploy-path report unavailable: registry is not the expected shape")
         return None
 
     with_playbook = {
