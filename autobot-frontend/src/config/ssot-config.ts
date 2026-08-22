@@ -290,7 +290,10 @@ export interface AutoBotConfig {
   readonly frontendUrl: string;
   readonly redisUrl: string;
   readonly ollamaUrl: string;
+  /** @deprecated #14822 — legacy broadcast socket base; use `liveEventsUrl`. */
   readonly websocketUrl: string;
+  /** Canonical channel event socket (#14822): `/api/ws/live`. */
+  readonly liveEventsUrl: string;
   readonly aistackUrl: string;
   readonly npuWorkerUrl: string;
   readonly browserServiceUrl: string;
@@ -545,7 +548,16 @@ function buildConfig(): AutoBotConfig {
      * the first place.
      */
     get liveEventsUrl(): string {
-      return `${this.websocketUrl}/live`;
+      // Host/protocol resolution is duplicated from `websocketUrl` rather than
+      // read through `this`: a getter on a contextually-typed object literal
+      // makes `this` awkward to type, and the two must not silently disagree —
+      // so they are kept adjacent and identical apart from the `/live` suffix.
+      if (runtimeHttpProto() === 'https') {
+        const host =
+          typeof window !== 'undefined' ? window.location.host : vm.main;
+        return `wss://${host}/api/ws/live`;
+      }
+      return `ws://${vm.main}:${port.backend}/api/ws/live`;
     },
 
     get aistackUrl(): string {
