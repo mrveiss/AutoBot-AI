@@ -36,10 +36,20 @@ chmod 600 "$SECRETS_FILE"
 
 ensure_secret() {
     local key="$1"
+    # #14758: how the value is generated is per-key. The signing secrets are
+    # opaque strings, but the envelope root key is base64-DECODED and must be
+    # exactly 32 bytes, so `openssl rand -hex 32` (64 chars, decodes to 48) is
+    # rejected by load_root_key. Default to hex, override where it matters.
+    local generator="${2:-hex}"
     if grep -q "^${key}=" "$SECRETS_FILE" 2>/dev/null; then
         echo "  ${key}: already set — keeping existing value"
     else
-        printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>"$SECRETS_FILE"
+        local value
+        case "$generator" in
+            b64_32) value="$(openssl rand -base64 32 | tr '+/' '-_')" ;;
+            *)      value="$(openssl rand -hex 32)" ;;
+        esac
+        printf '%s=%s\n' "$key" "$value" >>"$SECRETS_FILE"
         echo "  ${key}: generated"
     fi
 }
@@ -47,6 +57,9 @@ ensure_secret() {
 echo "Writing signing secrets to ${SECRETS_FILE}"
 ensure_secret AUTOBOT_JWT_SECRET
 ensure_secret SECRET_KEY
+# The canonical envelope secret store is unreachable without this, and every
+# consumer degrades silently, so its absence looked like "no such secret".
+ensure_secret AUTOBOT_SECRETS_ROOT_KEY b64_32
 
 echo ""
 echo "Done. Start the stack with both env files:"

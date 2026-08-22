@@ -32,7 +32,11 @@ if [ -r "$SECRETS_FILE" ]; then
     # JWTs with AUTOBOT_JWT_SECRET (_GEN_JWT), so SLM_SECRET_KEY MUST be the
     # same value — NOT _GEN_SECRET_KEY (GH#9852: signing-secret alignment).
     : "${SLM_SECRET_KEY:=${_GEN_JWT:-}}"
-    export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY
+    # #14758: the envelope secret store refuses to start without this, and every
+    # consumer degrades silently when it is absent, so an unset root key looked
+    # exactly like "that secret does not exist".
+    : "${AUTOBOT_SECRETS_ROOT_KEY:=${_GEN_SECRETS_ROOT_KEY:-}}"
+    export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY AUTOBOT_SECRETS_ROOT_KEY
 fi
 
 exec "$@"
