@@ -320,7 +320,6 @@ describe('OrgChart multi-filter (#14608): filtered, never "no data"', () => {
     ])
     // The reporting hierarchy's own unit box also survives, unaffected.
     expect(ids).toContain(`${ORG_GROUP_PREFIX}ceo`)
-    expect(wrapper.find('[data-testid="canvas-filters-empty"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="role-lens-empty-canvas"]').exists()).toBe(false)
     // Platform has exactly one match (Grace), out of five people company-wide.
     expect(wrapper.get('[data-testid="team-filter-banner"]').text()).toContain('showing 1 of 5')
@@ -338,7 +337,6 @@ describe('OrgChart multi-filter (#14608): filtered, never "no data"', () => {
 
     const ids = canvasNodeIds(wrapper)
     expect(ids).toContain('tool:jira')
-    expect(wrapper.find('[data-testid="canvas-filters-empty"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="tool-filter-banner"]').text()).toContain('jira')
   })
 
@@ -363,9 +361,11 @@ describe('OrgChart multi-filter (#14608): filtered, never "no data"', () => {
     await wrapper.get('[data-testid="team-filter-select"]').setValue('t-design')
     await flushPromises()
 
-    // Neither empty-canvas message fires — the team's own box is on screen.
+    // The role-lens empty message does NOT fire — the team's own box is on
+    // screen, so the canvas is not empty. This assertion is load-bearing here
+    // precisely because a role lens IS active: break the landmark invariant
+    // and this is one of the tests that reddens.
     expect(wrapper.find('[data-testid="role-lens-empty-canvas"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="canvas-filters-empty"]').exists()).toBe(false)
     const ids = canvasNodeIds(wrapper)
     // Both containers survive as landmarks — Design (the selected team)
     // and the honest "not in a team" bucket solo1 itself falls into (an
