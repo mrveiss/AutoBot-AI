@@ -221,14 +221,21 @@ async def _fetch_company_model_overrides(
 def _adapter_unavailable_reason(adapter_type: str) -> Optional[str]:
     """Why *adapter_type* cannot run here, or None when it can (#12681).
 
-    Mirrors how ``GET /adapters`` decides ``available``: an adapter exposes
-    ``is_cli_available`` only when it shells out to a binary, so an in-process
-    adapter has nothing to check and is always runnable.
+    Mirrors how ``GET /adapters`` decides ``available``, from the same signal:
+    ``implemented = hasattr(adapter, "is_cli_available")``, and an unimplemented
+    adapter is not available.
+
+    Among *registered* adapters the method's absence means "not implemented",
+    not "in-process with nothing to check" — `codex_subscription` is a bare stub
+    whose ``invoke`` raises ``NotImplementedError``, and it is the only
+    registered type without the probe. Treating that as runnable would let a
+    hire succeed for an adapter the UI greys out as unavailable, which is the
+    two-surfaces-disagree defect this gate exists to prevent.
     """
     adapter = get_adapter(adapter_type)
     probe = getattr(adapter, "is_cli_available", None)
     if not callable(probe):
-        return None
+        return "it is registered but not implemented on this build"
     try:
         if probe():
             return None

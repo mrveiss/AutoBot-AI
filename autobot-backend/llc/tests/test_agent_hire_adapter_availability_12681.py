@@ -70,11 +70,31 @@ class TestAdapterAvailabilityReason:
         with patch.object(mod, "get_adapter", return_value=_CliAdapter(available=True)):
             assert mod._adapter_unavailable_reason("claude_code") is None
 
-    def test_an_adapter_without_a_cli_is_always_runnable(self):
-        """An in-process adapter has no binary to miss, so it must not be gated."""
+    def test_an_adapter_without_the_probe_is_reported_unimplemented(self):
+        """Absence of the probe means "not implemented", not "nothing to check".
+
+        `GET /adapters` computes `available = implemented` from the very same
+        `hasattr`, so treating a probe-less adapter as runnable would have the
+        hire succeed for a type the UI greys out.
+        """
         mod = _mod()
         with patch.object(mod, "get_adapter", return_value=_InProcessAdapter()):
-            assert mod._adapter_unavailable_reason("autobot_agent") is None
+            reason = mod._adapter_unavailable_reason("codex_subscription")
+        assert reason is not None
+        assert "not implemented" in reason
+
+    def test_the_real_codex_stub_is_refused(self):
+        """Against the actual registered adapter, not a stand-in.
+
+        The stand-in is what let this slip: `codex_subscription` is registered,
+        has no `is_cli_available`, and its `invoke` raises NotImplementedError.
+        """
+        from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
+
+        mod = _mod()
+        with patch.object(mod, "get_adapter", return_value=CodexSubscriptionAdapter()):
+            reason = mod._adapter_unavailable_reason("codex_subscription")
+        assert reason is not None, "a registered but unimplemented adapter must be refused"
 
     def test_a_crashing_probe_fails_closed(self):
         """`GET /adapters` reports available=False when the probe raises.
