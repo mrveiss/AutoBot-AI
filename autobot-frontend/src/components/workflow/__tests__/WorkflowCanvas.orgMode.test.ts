@@ -17,7 +17,7 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 }))
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
-import type { CanvasNode } from '../canvasNode'
+import { CANVAS_NODE_WIDTH, type CanvasNode } from '../canvasNode'
 import { buildOrgCanvasGraph } from '@/composables/llc/orgCanvasGraph'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import { firePointer } from './pointerTestUtils'
@@ -396,7 +396,16 @@ describe('WorkflowCanvas node rendering (#13996)', () => {
     })
 
     const step = wrapper.get('.workflow-node.step').attributes('style')
-    expect(step).not.toContain('width')
+    // #14726 moved the node width out of the CSS and into `nodeStyle()`, so
+    // every node now carries an inline width. `not.toContain('width')` was
+    // only ever a proxy for the invariant this test exists to guard — that an
+    // authoring node is NOT sized from its own `data` bag — and that proxy no
+    // longer distinguishes the two cases. Assert the invariant directly
+    // instead: the step's width is the shared constant, emphatically not the
+    // `width: 900` its `data` carries, and `data.height` is still ignored
+    // outright.
+    expect(step).toContain(`width: ${CANVAS_NODE_WIDTH}px`)
+    expect(step).not.toContain('900px')
     expect(step).not.toContain('height')
     expect(wrapper.get('.workflow-node.org-group').attributes('style')).toContain('width: 600px')
   })
