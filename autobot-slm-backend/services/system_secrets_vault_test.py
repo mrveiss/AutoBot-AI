@@ -426,9 +426,9 @@ class TestMirrorSecretToVault:
 
             surviving = list(fake_vault.entries.values())
             assert len(surviving) == 1, "refusing to mirror must not add a second entry"
-            assert surviving[0]["value"] == "the-real-provider-key", (
-                "the foreign provider credential was overwritten by an SLM secret"
-            )
+            assert (
+                surviving[0]["value"] == "the-real-provider-key"
+            ), "the foreign provider credential was overwritten by an SLM secret"
             assert surviving[0]["type"] == "api_key"
 
     async def test_delete_never_removes_a_foreign_entry_sharing_the_name(self, fake_vault):
@@ -462,4 +462,3 @@ class TestMirrorSecretToVault:
 
             # Must not raise ValueError out through the create/update path.
             assert await ssv.mirror_secret_to_vault("hf_token", "value") is True
-
