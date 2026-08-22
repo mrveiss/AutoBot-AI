@@ -27,7 +27,20 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 }))
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
-import type { CanvasNode } from '../canvasNode'
+import {
+  CANVAS_NODE_WIDTH,
+  CANVAS_NODE_HEIGHT,
+  CANVAS_FIT_PADDING,
+  type CanvasNode,
+} from '../canvasNode'
+
+// #14726: every expectation below derives from these rather than restating
+// `240` / `100` / `60`. The old literals meant this suite would keep passing
+// if `CANVAS_NODE_HEIGHT` changed and the fit-to-view code moved with it —
+// the assertion would be checking the geometry the canvas no longer has.
+const NODE_W = CANVAS_NODE_WIDTH
+const NODE_H = CANVAS_NODE_HEIGHT
+const PAD = CANVAS_FIT_PADDING * 2
 
 const VIEW_WIDTH = 1000
 const VIEW_HEIGHT = 700
@@ -91,31 +104,34 @@ describe('reset stays fixed (#14611: a second control, not a change to it)', () 
 
 describe('fit to selection or filter (#14611)', () => {
   it('fits the selected node, clamped to ZOOM_MAX for a node this small on a 1000x700 view', async () => {
-    // A single 240x100 node, +60px padding each side, fills far less than the
-    // viewport — the fit would want to zoom in past 2x, so `clampZoom`'s own
-    // ZOOM_MAX must win. (880/240 ≈ 3.67, 580/100 = 5.8 — both above ZOOM_MAX.)
+    // A single node, plus `CANVAS_FIT_PADDING` each side, fills far less than
+    // the viewport — the fit would want to zoom in past 2x, so `clampZoom`'s
+    // own ZOOM_MAX must win at the shipped geometry.
     const wrapper = mountCanvas({ selectedNodeId: 'a' })
 
     await wrapper.get('[data-testid="canvas-fit-view"]').trigger('click')
 
     const result = transform(wrapper)
     expect(result.scale).toBe(2)
-    // Centred on node 'a' (240x100 at 0,0 → centre (120, 50)) at scale 2.
-    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - 120 * 2, 5)
-    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - 50 * 2, 5)
+    // Centred on node 'a' (at 0,0 → its own centre) at scale 2.
+    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - (NODE_W / 2) * 2, 5)
+    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - (NODE_H / 2) * 2, 5)
   })
 
   it('fits every drawn node — which, when a filter has narrowed `nodes`, IS the filter — when nothing is selected', async () => {
-    // Nodes 'a' (0,0) and 'b' (2000,1000): bounding box (0,0)-(2240,1100).
+    // Nodes 'a' (0,0) and 'b' (2000,1000): the box is the spread plus one
+    // node's own extent on each axis.
     const wrapper = mountCanvas({ selectedNodeId: null })
 
     await wrapper.get('[data-testid="canvas-fit-view"]').trigger('click')
 
-    const expectedScale = Math.min((VIEW_WIDTH - 120) / 2240, (VIEW_HEIGHT - 120) / 1100)
+    const boxW = 2000 + NODE_W
+    const boxH = 1000 + NODE_H
+    const expectedScale = Math.min((VIEW_WIDTH - PAD) / boxW, (VIEW_HEIGHT - PAD) / boxH)
     const result = transform(wrapper)
     expect(result.scale).toBeCloseTo(expectedScale, 5)
-    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - 1120 * expectedScale, 5)
-    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - 550 * expectedScale, 5)
+    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - (boxW / 2) * expectedScale, 5)
+    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - (boxH / 2) * expectedScale, 5)
   })
 
   it('respects clampZoom\'s ZOOM_MIN floor rather than zooming out further for a huge spread', async () => {
@@ -148,8 +164,8 @@ describe('the inbound deep link\'s viewport jump (#14611 focus-node-id prop)', (
 
     const result = transform(wrapper)
     expect(result.scale).toBe(1)
-    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - 120, 5)
-    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - 50, 5)
+    expect(result.x).toBeCloseTo(VIEW_WIDTH / 2 - NODE_W / 2, 5)
+    expect(result.y).toBeCloseTo(VIEW_HEIGHT / 2 - NODE_H / 2, 5)
   })
 
   it('is a no-op when the id names nothing currently drawn — never moves the viewport to nowhere', async () => {
