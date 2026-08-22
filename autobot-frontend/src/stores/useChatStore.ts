@@ -271,10 +271,13 @@ export const useChatStore = defineStore('chat', () => {
     if (!session) return
     session.messages = [...messages]
     session.updatedAt = new Date()
-    for (const id of [...pendingMessageIds.value]) {
-      if (!messages.some(m => m.id === id)) pendingMessageIds.value.delete(id)
-    }
-    pendingMessageIds.value = new Set(pendingMessageIds.value)
+    // Build the surviving set rather than spreading and deleting in place:
+    // one reassignment for reactivity, and no mutation while iterating.
+    const retained = new Set<string>()
+    pendingMessageIds.value.forEach(id => {
+      if (messages.some(m => m.id === id)) retained.add(id)
+    })
+    pendingMessageIds.value = retained
   }
 
   /**
