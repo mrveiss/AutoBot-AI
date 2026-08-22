@@ -24,6 +24,8 @@ from __future__ import annotations
 from types import ModuleType
 from unittest.mock import patch
 
+import pytest
+
 
 def _svc() -> ModuleType:
     import llc.services.portability as mod
