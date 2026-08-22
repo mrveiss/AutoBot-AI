@@ -752,8 +752,7 @@ class TestRecordRunForReplayH1:
 
         output_text = captured.get("output_text") or ""
         assert "result" in output_text, (
-            "the transcript was not attached — the recorder did not resolve the "
-            "path the adapter actually wrote"
+            "the transcript was not attached — the recorder did not resolve the " "path the adapter actually wrote"
         )
         assert captured.get("recorded_events"), "recorded_events must not be empty when a transcript exists"
 

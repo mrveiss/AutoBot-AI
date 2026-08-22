@@ -799,9 +799,7 @@ async def _record_run_for_replay(
             cfg = agent.get("adapter_config") or {}
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id_str = str(agent.get("agent_id", ""))
-            output_file: Optional[str] = _resolve_adapter_output_file(
-                output_dir, agent_id_str, external_run_id
-            )
+            output_file: Optional[str] = _resolve_adapter_output_file(output_dir, agent_id_str, external_run_id)
 
             if output_file and _os.path.exists(output_file):
                 try:
