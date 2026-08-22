@@ -164,7 +164,85 @@ describe('PNG export (#14767)', () => {
     URL.createObjectURL = origCreate
     URL.revokeObjectURL = origRevoke
     vi.unstubAllGlobals()
+    // `stubCanvas` spies on `document.createElement`; leaving that installed
+    // would hand the next file's mounts a fake canvas.
+    vi.restoreAllMocks()
   })
+
+  /**
+   * Replace the off-DOM canvas and anchor with inspectable stubs.
+   *
+   * jsdom's `getContext('2d')` returns null without the native `canvas`
+   * package, and the export bails on a null context — so without this the
+   * happy path cannot be reached at all and every assertion below would pass
+   * vacuously. Any other tag falls through to the real implementation, so
+   * Vue's own rendering is untouched.
+   */
+  function stubCanvas() {
+    const ctx = {
+      fillStyle: '',
+      scale: vi.fn(),
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+    }
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ctx),
+      toDataURL: vi.fn(() => 'data:image/png;base64,STUB'),
+    }
+    const link = { download: '', href: '', click: vi.fn() }
+    const real = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      if (tag === 'canvas') return canvas as unknown as HTMLCanvasElement
+      if (tag === 'a') return link as unknown as HTMLAnchorElement
+      return real(tag)
+    }) as typeof document.createElement)
+    return { ctx, canvas, link }
+  }
+
+  /** Let the off-DOM `new Image()` resolve, exercising the success path. */
+  function passImageLoad() {
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+        set src(_v: string) {
+          setTimeout(() => this.onload?.(), 0)
+        }
+      },
+    )
+  }
+
+  /**
+   * Pin the SVG's reported CSS size.
+   *
+   * jsdom's SVG support does not reliably provide `width.baseVal`, so the
+   * dimensions the export reads are defined outright. This also makes the
+   * scale assertions exact rather than dependent on layout maths that jsdom
+   * would not perform anyway.
+   */
+  function pinSvgSize(w: Awaited<ReturnType<typeof mountView>>, cssW: number, cssH: number) {
+    const svg = w.get('svg.gantt-svg').element
+    Object.defineProperty(svg, 'width', { value: { baseVal: { value: cssW } }, configurable: true })
+    Object.defineProperty(svg, 'height', { value: { baseVal: { value: cssH } }, configurable: true })
+  }
+
+  /** Resolve `--bg-surface` to `value` for the duration of a test. */
+  function stubToken(value: string) {
+    vi.stubGlobal(
+      'getComputedStyle',
+      () => ({ getPropertyValue: () => value }) as unknown as CSSStyleDeclaration,
+    )
+  }
+
+  async function runExport(w: Awaited<ReturnType<typeof mountView>>) {
+    await w.get('[data-testid="gantt-export-png"]').trigger('click')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 5))
+    await flushPromises()
+  }
 
   /** Make the off-DOM `new Image()` reject, exercising the failure path. */
   function failImageLoad() {
@@ -186,12 +264,104 @@ describe('PNG export (#14767)', () => {
     failImageLoad()
     const w = await mountView()
 
-    await w.get('[data-testid="gantt-export-png"]').trigger('click')
-    await flushPromises()
-    await new Promise((r) => setTimeout(r, 5))
-    await flushPromises()
+    await runExport(w)
 
     expect(revoked).toContain('blob:gantt-test')
+  })
+
+  it('sizes the canvas by devicePixelRatio rather than exporting at 1x', async () => {
+    // The defect: the canvas was sized in CSS px, so every export was 1x and
+    // soft on any retina screen. With DPR 2 and an oversample of 2 the chart
+    // should come out at 4x its CSS size.
+    vi.stubGlobal('devicePixelRatio', 2)
+    stubToken('#101010')
+    passImageLoad()
+    const { ctx, canvas, link } = stubCanvas()
+    const w = await mountView()
+    pinSvgSize(w, 440, 66)
+
+    await runExport(w)
+
+    expect(canvas.width).toBe(440 * 4)
+    expect(canvas.height).toBe(66 * 4)
+    // The context is scaled to match, so every drawing coordinate below stays
+    // in CSS units — otherwise the chart would be drawn into one quadrant.
+    expect(ctx.scale).toHaveBeenCalledWith(4, 4)
+    expect(ctx.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 440, 66)
+    expect(link.click).toHaveBeenCalled()
+  })
+
+  it('never scales below 1x, so a very wide chart exports whole rather than cropped', async () => {
+    // The cap exists because browsers refuse canvases past a dimension limit.
+    // Clamping must floor at 1x: a soft complete export beats a sharp
+    // truncated one.
+    vi.stubGlobal('devicePixelRatio', 3)
+    stubToken('#101010')
+    passImageLoad()
+    const { canvas } = stubCanvas()
+    const w = await mountView()
+    pinSvgSize(w, 40000, 66)
+
+    await runExport(w)
+
+    expect(canvas.width).toBe(40000)
+    expect(canvas.height).toBe(66)
+  })
+
+  it('paints the active theme surface, not a hardcoded white', async () => {
+    vi.stubGlobal('devicePixelRatio', 1)
+    stubToken('#123456')
+    passImageLoad()
+    const { ctx } = stubCanvas()
+    const w = await mountView()
+    pinSvgSize(w, 440, 66)
+
+    await runExport(w)
+
+    expect(ctx.fillStyle).toBe('#123456')
+  })
+
+  it('falls back to white when the theme token resolves to nothing', async () => {
+    vi.stubGlobal('devicePixelRatio', 1)
+    stubToken('')
+    passImageLoad()
+    const { ctx } = stubCanvas()
+    const w = await mountView()
+    pinSvgSize(w, 440, 66)
+
+    await runExport(w)
+
+    expect(ctx.fillStyle).toBe('#ffffff')
+  })
+
+  it('serialises the WHOLE axis, not the culled slice', async () => {
+    // The interaction between the two issues in this PR. With culling active,
+    // an export that did not suspend it would ship a PNG missing every
+    // gridline outside the viewport — and both a complete and a gutted export
+    // look identical from the outside, so only a test catches it.
+    vi.stubGlobal('devicePixelRatio', 1)
+    stubToken('#101010')
+    let ticksAtSerialise = -1
+    vi.stubGlobal(
+      'XMLSerializer',
+      class {
+        serializeToString(node: Node) {
+          ticksAtSerialise = (node as Element).querySelectorAll('.gantt-gridline').length
+          return '<svg/>'
+        }
+      },
+    )
+    passImageLoad()
+    stubCanvas()
+    const w = await mountView()
+    const uncounted = tickCount(w)
+    await setViewport(w, 1000)
+    expect(tickCount(w)).toBeLessThan(uncounted)
+    pinSvgSize(w, 440, 66)
+
+    await runExport(w)
+
+    expect(ticksAtSerialise).toBe(uncounted)
   })
 
   it('restores tick culling after a failed export rather than leaving the axis unculled', async () => {
@@ -202,10 +372,7 @@ describe('PNG export (#14767)', () => {
     await setViewport(w, 1000)
     const culled = tickCount(w)
 
-    await w.get('[data-testid="gantt-export-png"]').trigger('click')
-    await flushPromises()
-    await new Promise((r) => setTimeout(r, 5))
-    await flushPromises()
+    await runExport(w)
 
     expect(tickCount(w)).toBe(culled)
   })
