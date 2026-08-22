@@ -1756,12 +1756,21 @@
       pause:
         seconds: 5
 
+    # #14701: this stage is named Verify and could not fail. `ignore_errors`
+    # meant a run whose SLM never came back still printed "Fleet Update
+    # Complete" with "SLM: Check manually" and exited successfully -- a check
+    # that cannot fail is worse than no check, because the green run reads as
+    # verified. Retried rather than probed once: Play 2 restarts services, so a
+    # single immediate probe races the restart it follows.
     - name: Check SLM health
       uri:
         url: "https://{{ slm_host }}/slm/api/health"
         validate_certs: false
+        status_code: 200
       register: slm_health
-      ignore_errors: true
+      until: slm_health.status == 200
+      retries: 12
+      delay: 10
 
     - name: Clean up deploy archives
       file:

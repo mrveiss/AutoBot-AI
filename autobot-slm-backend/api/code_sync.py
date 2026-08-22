@@ -5524,27 +5524,39 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
-def _completion_is_from_a_rotated_log() -> bool:
-    """True when the last verdict was read from the rotated log, not the live one.
+def _rotated_completion_time() -> Optional[str]:
+    """When the last verdict came from the ROTATED log, when that log was rotated.
 
-    logrotate uses copytruncate here, so after a rotation the live log is empty
-    and its mtime dates the truncation — recent enough to pass the freshness
-    check above while describing no play at all. The verdict then comes from the
-    rotated file, i.e. an OLDER run. Treating that as our completion would
-    resolve this stage against someone else's outcome.
+    Returns None when the verdict came from the live log (the normal case) or
+    cannot be read.
+
+    #14804: the live log's mtime dates a `copytruncate`, not a play, which is why
+    a rotated reading must not be taken at face value. But refusing it outright
+    made the condition permanent: if the play's recap lands right at the rotation
+    boundary it exists only in the `.1` file, the process has already exited, and
+    nothing will ever write to the live log again for that run. Every later poll
+    saw the same signal, so a genuinely successful self-update waited out the full
+    timeout and was reported FAILED.
+
+    The rotated file's own mtime does date the completion, so it is the honest
+    timestamp to resolve on rather than a reason to keep waiting.
     """
     try:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        rotated = getattr(read_self_update_verdict(SELF_UPDATE_LOG_PATH), "from_rotated_log", False)
-        # `is True`, not truthiness: a stubbed reader returns a Mock whose every
-        # attribute is truthy, which would make this refuse every completion and
-        # hang the stage. Only a real boolean True means "rotated".
-        return rotated is True
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        if getattr(verdict, "from_rotated_log", False) is not True:
+            return None
+        # Only a run that reached its recap is a completion. `complete` is a real
+        # bool on the verdict; a stub returns a Mock, which must not pass.
+        if getattr(verdict, "complete", False) is not True:
+            return None
+        mtime = getattr(verdict, "rotated_log_mtime", None)
+        return mtime if isinstance(mtime, str) and mtime else None
     except Exception as exc:  # pragma: no cover - must never break the wait
-        logger.debug("update-all: could not tell whether the verdict came from a rotated log (%s)", exc)
-        return False
+        logger.debug("update-all: could not read the rotated-log completion time (%s)", exc)
+        return None
 
 
 async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str]) -> Optional[str]:
@@ -5570,14 +5582,22 @@ async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str
         # in_progress is None means the unit could not be queried — unknown is
         # not "finished", so keep waiting rather than resolving on a guess.
         if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
-            if _completion_is_from_a_rotated_log():
-                # The live log was rotated out from under us. Its mtime now
-                # dates the truncation, not a play, so the "completion" above
-                # describes a run we cannot see. Waiting is the honest move:
-                # this is precisely the reading that must not be trusted.
-                logger.warning("update-all: self-update verdict came from a rotated log — not treating it as ours")
-            else:
+            rotated_at = _rotated_completion_time()
+            if rotated_at is None:
                 return activity.last_completed_play_at
+            # #14804: the reading came from the rotated log, so the live mtime
+            # above dates a truncation rather than a play. Resolve on the
+            # rotated file's own mtime when that post-dates our firing -- it is
+            # the one timestamp here that describes a real completion. Waiting
+            # instead made this condition permanent and turned a successful
+            # self-update into a FAILED job an hour later.
+            if _completion_is_newer_than(rotated_at, since):
+                logger.warning(
+                    "update-all: self-update recap landed in the rotated log; resolving on its rotation time %s",
+                    rotated_at,
+                )
+                return rotated_at
+            logger.warning("update-all: rotated-log verdict pre-dates this run — still waiting")
         # Checked after polling, never before: a misconfigured timeout must not
         # produce a verdict from zero observations.
         if time.monotonic() >= deadline:
