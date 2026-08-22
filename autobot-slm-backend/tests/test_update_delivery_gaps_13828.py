@@ -28,16 +28,11 @@ yaml = pytest.importorskip("yaml")
 
 _REPO = Path(__file__).resolve().parents[2]
 _ANSIBLE = _REPO / "autobot-slm-backend" / "ansible"
-_UNIT_ONLY = _ANSIBLE / "roles" / "backend" / "tasks" / "unit_only.yml"
-_TEMPLATES = _ANSIBLE / "roles" / "backend" / "templates"
+_ROLES = _ANSIBLE / "roles"
+_UNIT_ONLY = _ROLES / "backend" / "tasks" / "unit_only.yml"
+_MAIN = _ROLES / "backend" / "tasks" / "main.yml"
 _ENROLL = _ANSIBLE / "playbooks" / "enroll-node.yml"
 _SERVICE_PLAYBOOKS = ("slm-service-control.yml", "slm-service-logs.yml")
-
-
-#: #14827 — templated, monitored, and rendered by nothing. Excluded by NAME with
-#: a pointer to the issue rather than by a pattern, so it cannot quietly absorb a
-#: future unit that is merely forgotten. Delete this line when #14827 lands.
-_NOT_YET_WIRED = {"autobot-mcp-bridge@.service"}
 
 
 def _load(path: Path):
@@ -64,31 +59,62 @@ def _walk_tasks(container):
             yield from _walk_tasks(container[key])
 
 
-def test_unit_only_renders_every_unit_the_role_owns() -> None:
-    """Derived from the templates on disk, not from a hand-written list.
+def _systemd_units(path: Path) -> set[str]:
+    """Unit basenames a task file writes under /etc/systemd/system.
 
-    A guard listing the same three names it checks would pass forever; this one
-    fails when a fourth unit template is added and not wired in.
+    Reads both the direct `dest:` form and a loop over unit names, so the two
+    files can be compared however each happens to be written.
     """
-    owned = {p.name[: -len(".j2")] for p in _TEMPLATES.glob("*.service.j2")} - _NOT_YET_WIRED
-    assert owned, "no unit templates found — this guard would pass vacuously"
-    assert len(owned) >= 3, f"expected at least the three managed units, got {sorted(owned)}"
+    units: set[str] = set()
+    for task in _walk_tasks(_load(path)):
+        for mod in ("ansible.builtin.template", "template", "ansible.builtin.copy", "copy"):
+            spec = task.get(mod)
+            dest = str(spec.get("dest", "")) if isinstance(spec, dict) else ""
+            if "/etc/systemd/system/" in dest and dest.endswith(".service"):
+                units.add(Path(dest).name)
+            if "/etc/systemd/system/" in dest and "{{ item }}" in dest:
+                units.update(str(i) for i in (task.get("loop") or []))
+    return units
 
-    rendered: set[str] = set()
-    for task in _load(_UNIT_ONLY):
-        if not isinstance(task, dict):
-            continue
-        for item in task.get("loop") or []:
-            rendered.add(str(item))
-        dest = str((task.get("ansible.builtin.template") or {}).get("dest", ""))
-        if dest:
-            rendered.add(Path(dest).name)
 
-    missing = owned - rendered
+def test_unit_only_renders_every_unit_main_installs() -> None:
+    """The set rendered by unit_only.yml must equal the set main.yml installs.
+
+    Compared against `main.yml` rather than against the templates on disk: a
+    template can exist without the role installing it (`autobot-mcp-bridge@.service`
+    is exactly that, #14827), so the templates are the wrong denominator. What
+    matters for the update path is that every unit the role *installs* can also be
+    refreshed without a full role run.
+    """
+    installed = _systemd_units(_MAIN)
+    rendered = _systemd_units(_UNIT_ONLY)
+    assert installed, "main.yml installs no units — this guard would pass vacuously"
+
+    missing = installed - rendered
     assert not missing, (
         f"unit_only.yml does not render {sorted(missing)} — changes to those units "
-        "cannot reach a host through the updater"
+        "cannot reach a host through the updater, which is the whole point of the include"
     )
+
+    extra = rendered - installed
+    assert not extra, (
+        f"unit_only.yml renders {sorted(extra)} that main.yml does not install — "
+        "the two have diverged in the other direction"
+    )
+
+
+def test_backend_is_still_the_only_role_with_a_unit_only_include() -> None:
+    """The cross-role audit, pinned rather than recorded once and forgotten.
+
+    #13828 asked whether other roles share the main/unit_only asymmetry. At the
+    time only `backend` had a `unit_only.yml`, so there was nothing else to
+    diverge. If another role gains one, it needs the same equality check and this
+    fails to say so.
+    """
+    roles = sorted(p.parent.parent.name for p in _ROLES.glob("*/tasks/unit_only.yml"))
+    assert roles == [
+        "backend"
+    ], f"roles with a unit_only.yml are now {roles} — extend the equality check above to each of them"
 
 
 def test_service_control_playbooks_fail_loudly_without_a_target() -> None:
@@ -115,13 +141,26 @@ def test_enroll_node_hook_source_exists() -> None:
     assert resolved.is_file(), f"hook source does not exist: {resolved}"
 
 
-def test_the_node_hook_is_the_agent_notifier_not_the_developer_hook() -> None:
-    """Two different files share this basename; a node needs the notifier."""
-    node_hook = _REPO / "autobot-infrastructure" / "shared" / "scripts" / "hooks" / "slm-post-commit"
-    dev_hook = _REPO / "scripts" / "hooks" / "slm-post-commit"
-    assert node_hook.is_file() and dev_hook.is_file(), "expected both hooks to exist"
-    assert node_hook.read_bytes() != dev_hook.read_bytes(), (
-        "the two hooks are now identical — if they were deduplicated, this guard and "
-        "the enroll-node src both need revisiting"
+def test_the_enrolled_hook_is_the_agent_notifier() -> None:
+    """A node needs the notifier, whichever file ends up providing it.
+
+    Two files currently share this basename: the repo-root one heals stash-pop
+    conflict markers (#2416), the infrastructure one notifies the SLM agent of
+    commits (#741). #14176 asks for them to be consolidated into one with both
+    behaviours folded in, so this deliberately asserts the *behaviour* the
+    enrolled hook must have rather than which of the two files it is — otherwise
+    this guard would fail the moment that consolidation happens.
+    """
+    src = None
+    for task in _walk_tasks(_load(_ENROLL)):
+        if "post-commit hook" in str(task.get("name", "")).lower():
+            src = str((task.get("copy") or task.get("ansible.builtin.copy") or {}).get("src", ""))
+    assert src, "no post-commit hook copy task found — this guard would pass vacuously"
+
+    resolved = (_ANSIBLE / "playbooks" / src.replace("{{ playbook_dir }}/", "")).resolve()
+    assert resolved.is_file(), f"hook source does not exist: {resolved}"
+    body = resolved.read_text(encoding="utf-8").lower()
+    assert "agent" in body, (
+        "the hook a node is given no longer notifies the SLM agent — enrolment would deploy "
+        "a hook that does not do the job enrolment needs"
     )
-    assert "agent" in node_hook.read_text(encoding="utf-8").lower(), "the node hook no longer looks like the notifier"
