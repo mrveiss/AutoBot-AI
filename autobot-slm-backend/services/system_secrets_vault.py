@@ -85,17 +85,37 @@ async def _legacy_get(session: AsyncSession, key: str) -> str | None:
     return decrypt_data(row.encrypted_value)
 
 
-async def _find_vault_id_by_name(name: str) -> uuid.UUID | None:
-    """Scan the System vault listing for an entry named *name* (no cached id available)."""
+async def _find_vault_entries_by_name(name: str) -> list[dict]:
+    """Every System vault entry named *name* (best-effort, never raises).
+
+    The vault namespace is FLAT and shared: `provider_key_vault` stores LLM
+    provider credentials under plain names like ``OPENAI_API_KEY`` with
+    ``secret_type="api_key"``. A name match alone therefore does not mean the
+    entry is ours, so callers that write must check the type (#14759).
+    """
     from user_management.services.vault_client import VaultClientError, vault_list
 
     try:
         entries = await vault_list()
     except VaultClientError:
-        return None
-    for entry in entries:
-        if entry.get("name") == name:
+        return []
+    return [e for e in entries if e.get("name") == name]
+
+
+async def _find_vault_id_by_name(name: str, *, expected_type: str | None = None) -> uuid.UUID | None:
+    """Id of the entry named *name*, optionally restricted to one secret type.
+
+    A malformed listing row is skipped rather than raised through: this is a
+    best-effort lookup and its callers document themselves as never raising.
+    """
+    for entry in await _find_vault_entries_by_name(name):
+        if expected_type is not None and entry.get("type") != expected_type:
+            continue
+        try:
             return uuid.UUID(entry["id"])
+        except (KeyError, ValueError):
+            logger.warning("system-secrets-vault: skipping malformed vault entry for name=%s", name)
+            continue
     return None
 
 
@@ -124,7 +144,7 @@ async def retrieve_secret(session: AsyncSession, key: str) -> str | None:
     if not is_configured():
         return None
 
-    vault_id = await _find_vault_id_by_name(key)
+    vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
     if vault_id is None:
         return None
     try:
@@ -156,7 +176,7 @@ async def delete_vault_copy(key: str) -> None:
 
     if not is_configured():
         return
-    vault_id = await _find_vault_id_by_name(key)
+    vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
     if vault_id is None:
         return
     try:
@@ -201,8 +221,25 @@ async def mirror_secret_to_vault(key: str, plaintext: str) -> bool:
     if not is_configured():
         return False
 
+    entries = await _find_vault_entries_by_name(key)
+    ours = [e for e in entries if e.get("type") == _SECRET_TYPE]
+    if entries and not ours:
+        # The vault namespace is flat and shared. `provider_key_vault` stores
+        # live LLM provider credentials under plain names like OPENAI_API_KEY,
+        # and the SLM secret key is free text, so the names can collide. Taking
+        # the entry over would rotate a credential that belongs to another
+        # subsystem — and its reader treats absence as "no credential" and falls
+        # back to "", so a later failed mirror deleting it would be worse still.
+        logger.error(
+            "system-secrets-vault: refusing to mirror key=%s — a vault entry of type %r "
+            "already owns that name; the copy is left untouched",
+            key,
+            [e.get("type") for e in entries],
+        )
+        return False
+
     try:
-        vault_id = await _find_vault_id_by_name(key)
+        vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
         if vault_id is None:
             await vault_create(key, _SECRET_TYPE, plaintext)
             logger.info("system-secrets-vault: created vault copy key=%s", key)
@@ -240,7 +277,7 @@ async def migrate_key_to_vault(session: AsyncSession, key: str) -> bool:
     if not is_configured():
         return False
 
-    if await _find_vault_id_by_name(key) is not None:
+    if await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE) is not None:
         logger.info("system-secrets-vault: migrate skip key=%s (already migrated)", key)
         return False
 
