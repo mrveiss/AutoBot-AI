@@ -649,14 +649,18 @@ export class ChatController {
   }
 
   // Enhanced session operations with error handling
-  async createNewSession(title?: string): Promise<string> {
+  // #12685: optional metadata is forwarded to the backend as-is so callers
+  // (e.g. CeoChatView) can stamp first-class tenancy scoping (company_id,
+  // session_kind) on creation, instead of the title being the only signal —
+  // the fragility that let agent conversations leak into the general list.
+  async createNewSession(title?: string, metadata?: Record<string, unknown>): Promise<string> {
     // MVA-164: Client-mint UUID before any API call (server-round-trip-first pattern)
     // Generate UUID upfront
     const sessionId = crypto.randomUUID()
 
     // Call backend immediately with the client-minted UUID
     try {
-      await chatRepository.createNewChat(title, undefined, sessionId)
+      await chatRepository.createNewChat(title, metadata, sessionId)
       logger.debug('New chat session created on backend:', sessionId)
     } catch (error) {
       // Backend create failed - don't create local session if backend fails
