@@ -65,9 +65,9 @@ async def test_redis_publishes_durably_instead_of_dropping(buses):
     await EventBus().publish("chat:c1", "chat.message_added", {"m": 1}, persist=PersistStrategy.REDIS)
 
     live_manager.publish.assert_awaited_once()
-    assert live_manager.publish.await_args.kwargs.get("durable") is True, (
-        "REDIS published without requesting durable storage — nothing to replay from"
-    )
+    assert (
+        live_manager.publish.await_args.kwargs.get("durable") is True
+    ), "REDIS published without requesting durable storage — nothing to replay from"
 
 
 @pytest.mark.asyncio

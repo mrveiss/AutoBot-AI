@@ -18,7 +18,6 @@ The fake Redis below implements only INCR/XADD/XRANGE/EXPIRE semantics, so the
 tests exercise the real ``ChannelEventStream`` logic rather than a mock of it.
 """
 
-import json
 
 import pytest
 
