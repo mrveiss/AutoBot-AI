@@ -1219,11 +1219,36 @@ function snapPosition(pos: { x: number; y: number }, free: boolean): { x: number
   return free ? pos : { x: snapToGrid(pos.x), y: snapToGrid(pos.y) };
 }
 
+/**
+ * Edge geometry for every drawn connection.
+ *
+ * #14766: the target of each edge is resolved through an index built once per
+ * recompute, not by scanning `props.nodes` per edge. The scan made this
+ * O(N x E), and it runs on the drag hot path: `onPointerMove` emits
+ * `node-moved` for every node in `dragStartPositions` on EVERY pointer event,
+ * the consumer writes `node.position`, and this computed re-resolves all E
+ * edges against all N nodes for each of those ticks.
+ *
+ * The index costs one O(N) pass, which is strictly cheaper than the scan for
+ * any E >= 1. The same structure already existed a few hundred lines below
+ * (`orgFacts` keys nodes by id) — this was a missed application of it, not an
+ * unfamiliar technique.
+ *
+ * Note the drop hit-test in `endInteraction` still uses a linear `find`, and
+ * deliberately so: it runs once per drop rather than once per edge, and a
+ * geometric hit-test cannot be answered by an id lookup anyway.
+ */
 const connections = computed(() => {
   const result: { id: string; path: string }[] = [];
+  // FIRST occurrence wins, exactly as `props.nodes.find(...)` did. A plain
+  // `byId.set(node.id, node)` would keep the LAST, so a list carrying a
+  // duplicate id would silently re-anchor its edges to the other node — a
+  // behaviour change smuggled in under a performance fix.
+  const byId = new Map<string, CanvasNode>();
+  for (const node of props.nodes) if (!byId.has(node.id)) byId.set(node.id, node);
   props.nodes.forEach(node => {
     node.connections.forEach(targetId => {
-      const target = props.nodes.find(n => n.id === targetId);
+      const target = byId.get(targetId);
       if (target) {
         const x1 = node.position.x + CANVAS_NODE_WIDTH, y1 = node.position.y + CANVAS_NODE_PORT_Y;
         const x2 = target.position.x, y2 = target.position.y + CANVAS_NODE_PORT_Y;
