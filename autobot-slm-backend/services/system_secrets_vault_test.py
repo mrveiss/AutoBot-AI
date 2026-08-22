@@ -408,4 +408,3 @@ class TestMirrorSecretToVault:
         with _real_modules_swapped():
             assert await ssv.mirror_secret_to_vault("sso:provider:okta:secret", "v") is False
             assert fake_vault.entries == {}
-
