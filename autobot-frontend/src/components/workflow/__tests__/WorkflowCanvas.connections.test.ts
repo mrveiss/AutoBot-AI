@@ -130,3 +130,52 @@ describe('the node count this canvas is known to carry (#14766)', () => {
     expect(paths(w).every((d) => d.startsWith('M'))).toBe(true)
   })
 })
+
+describe('the edge-target index cannot go stale (#14792)', () => {
+  // Staleness is structurally impossible today: the index is a plain local Map
+  // built inside the `connections` computed and rebuilt from `props.nodes` on
+  // every evaluation, so whatever invalidates the computed rebuilds the index in
+  // the same pass. Nothing in the existing suite asserts that, because every
+  // case mounts once and asserts immediately.
+  //
+  // The regression these guard against is the obvious future optimisation:
+  // hoisting the Map into a ref, or memoising it outside the computed, to avoid
+  // rebuilding it each time. That would look like a clean win, pass the whole
+  // suite, and silently render edges against stale positions during a drag —
+  // the exact operation the index was introduced to make fast.
+
+  it('redraws against the new positions when a node moves after mount', async () => {
+    const w = mountCanvas([step('n1', 0, 0, ['n2']), step('n2', 400, 200)])
+    const before = paths(w)
+    expect(before).toHaveLength(1)
+
+    await w.setProps({ nodes: [step('n1', 0, 0, ['n2']), step('n2', 900, 600)] })
+
+    const after = paths(w)
+    expect(after).toHaveLength(1)
+    expect(after[0]).not.toBe(before[0])
+  })
+
+  it('resolves an edge to a node added after mount', async () => {
+    // A node absent at mount, then present. A cached index would keep reporting
+    // the target missing and drop the edge for good.
+    const w = mountCanvas([step('n1', 0, 0, ['later'])])
+    expect(paths(w)).toHaveLength(0)
+
+    await w.setProps({ nodes: [step('n1', 0, 0, ['later']), step('later', 300, 300)] })
+
+    expect(paths(w)).toHaveLength(1)
+  })
+
+  it('drops an edge whose target is removed after mount', async () => {
+    // The other direction: a cached index would keep drawing to a node that is
+    // no longer on the canvas.
+    const w = mountCanvas([step('n1', 0, 0, ['n2']), step('n2', 400, 200)])
+    expect(paths(w)).toHaveLength(1)
+
+    await w.setProps({ nodes: [step('n1', 0, 0, ['n2'])] })
+
+    expect(paths(w)).toHaveLength(0)
+  })
+})
+
