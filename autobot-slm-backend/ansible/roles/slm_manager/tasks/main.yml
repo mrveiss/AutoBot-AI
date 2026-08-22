@@ -669,6 +669,11 @@
 # ==========================================================
 # SLM Admin UI health monitor service
 # ==========================================================
+# #14700: these two need root -- a systemd unit template and a systemd enable
+# with daemon_reload -- and relied on the calling play escalating. That is the
+# exact shape that broke in #14693 once a non-escalating caller appeared, and
+# #14699 means the config-level default has never applied, so nothing else would
+# catch it. Declared here so correctness does not depend on the caller.
 - name: "SLM | Deploy slm-admin-ui health monitor service"
   ansible.builtin.template:
     src: slm-admin-ui.service.j2
@@ -677,6 +682,7 @@
   notify:
     - reload systemd
   tags: ['slm', 'frontend', 'systemd']
+  become: true
 
 - name: "SLM | Enable slm-admin-ui service"
   ansible.builtin.systemd:
@@ -691,6 +697,7 @@
 # Auto-detect: if the user frontend code exists on this host,
 # enable co-located mode (SLM at /slm, user frontend at /).
 # ==========================================================
+  become: true
 - name: "SLM | Detect co-located user frontend (#3013)"
   ansible.builtin.stat:
     path: "{{ frontend_dist_dir | dirname }}/package.json"

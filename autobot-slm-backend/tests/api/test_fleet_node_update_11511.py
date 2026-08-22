@@ -97,7 +97,7 @@ from api.code_sync import (  # noqa: E402
     UpdateAllJob,
     _await_self_update_completion,
     _clear_update_all_job,
-    _completion_is_from_a_rotated_log,
+    _rotated_completion_time,
     _completion_is_newer_than,
     _extract_ansible_fatal,
     _get_stage,
@@ -756,38 +756,6 @@ def test_a_foreign_play_does_not_resolve_this_stage() -> None:
     fleet.assert_not_awaited()
 
 
-def test_a_rotated_log_is_not_read_as_a_fresh_completion() -> None:
-    """logrotate uses copytruncate, so the live log's mtime dates the truncation.
-
-    That timestamp is recent enough to pass the freshness check while describing
-    no play at all, with the verdict coming from an older run.
-    """
-    done = SimpleNamespace(
-        in_progress=False, reason="no self-update play is running", last_completed_play_at=_AFTER_FIRING
-    )
-    with (
-        patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=done)),
-        patch("api.code_sync._completion_is_from_a_rotated_log", return_value=True),
-        patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 2),
-        patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
-    ):
-        assert _run(_await_self_update_completion(_fired_job(), _FIRED_AT)) is None
-
-
-def test_a_stubbed_verdict_reader_does_not_refuse_every_completion() -> None:
-    """The rotated check must not trip on a Mock's blanket truthiness.
-
-    `getattr(mock, "from_rotated_log", False)` returns a Mock, which is truthy,
-    so a truthiness test here would refuse every completion and hang the stage.
-    """
-    with patch("services.self_update_log_reader.read_self_update_verdict", return_value=MagicMock()):
-        assert _completion_is_from_a_rotated_log() is False
-
-
-# #14703 — a wedged job must not lock out every future update
-# ---------------------------------------------------------------------------
-
-
 def _job_at(progress_at: str | None, created_at: str = "2026-08-21T12:00:00+00:00") -> UpdateAllJob:
     job = _job_with_fleet_stage()
     job.status = "running"
@@ -1040,3 +1008,44 @@ def test_a_degraded_self_update_does_not_resolve_the_stage() -> None:
     assert job.status == "failed", "a degraded self-update must not resolve the stage"
     assert "role-owned" in (_get_stage(job, "slm_self_update").message or ""), "the reason must reach the operator"
     fleet.assert_not_awaited()
+
+
+def test_a_rotated_recap_resolves_instead_of_waiting_out_the_timeout() -> None:
+    """#14804: the rotated condition could become permanent.
+
+    logrotate uses copytruncate and the running play holds the fd, so a recap
+    landing at the boundary exists only in the `.1` file and nothing will ever
+    write to the live log again for that run. Refusing every rotated reading
+    meant a successful self-update waited the full hour and was reported FAILED.
+    The rotated file's own mtime dates the completion, so resolve on it.
+    """
+    done = SimpleNamespace(
+        in_progress=False, reason="no self-update play is running", last_completed_play_at=_AFTER_FIRING
+    )
+    with (
+        patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=done)),
+        patch("api.code_sync._rotated_completion_time", return_value=_AFTER_FIRING),
+        patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 5),
+        patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
+    ):
+        assert _run(_await_self_update_completion(_fired_job(), _FIRED_AT)) == _AFTER_FIRING
+
+
+def test_a_rotated_recap_older_than_this_run_is_still_refused() -> None:
+    """Resolving on the rotated mtime must not resurrect someone else's run."""
+    done = SimpleNamespace(
+        in_progress=False, reason="no self-update play is running", last_completed_play_at=_AFTER_FIRING
+    )
+    with (
+        patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=done)),
+        patch("api.code_sync._rotated_completion_time", return_value=_BEFORE_FIRING),
+        patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 2),
+        patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
+    ):
+        assert _run(_await_self_update_completion(_fired_job(), _FIRED_AT)) is None
+
+
+def test_a_stubbed_verdict_reader_yields_no_rotated_time() -> None:
+    """A Mock's attributes are all truthy; `is not True` is what keeps it out."""
+    with patch("services.self_update_log_reader.read_self_update_verdict", return_value=MagicMock()):
+        assert _rotated_completion_time() is None
