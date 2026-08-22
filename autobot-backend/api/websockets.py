@@ -487,6 +487,35 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
             logger.error("Failed to add message to chat history: %s", e)
 
 
+async def _persist_event_to_chat_history(event_data: dict) -> None:
+    """Persist one published event to chat history, independent of delivery.
+
+    Issue #14814: registered once as the event manager's persistence hook, so
+    history is written even when no WebSocket client is connected.  Resolves the
+    manager lazily — it does not exist yet at import time.
+    """
+    from utils.resource_factory import ResourceFactory
+
+    manager = ResourceFactory.get_initialized_chat_history_manager()
+    if manager is None:
+        return
+    payload = event_data.get("payload") or {}
+    await _add_to_chat_history(manager, event_data.get("type", "default"), payload)
+
+
+def register_chat_history_persistence() -> None:
+    """Wire event persistence into the event manager (Issue #14814).
+
+    Called once during application startup.  Idempotent — re-registering
+    replaces the same hook.
+    """
+    try:
+        get_event_bus().register_persistence_hook(_persist_event_to_chat_history)
+        logger.info("Chat-history persistence hook registered with event manager")
+    except Exception as e:
+        logger.error("Failed to register chat-history persistence hook: %s", e)
+
+
 async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager):
     """Create broadcast event handler function (Issue #315 - extracted).
 
@@ -499,16 +528,15 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     """
 
     async def broadcast_event(event_data: dict):
-        """Broadcast event to WebSocket client and add to chat history."""
+        """Send one event to this WebSocket client.
+
+        #14814: persistence deliberately does NOT happen here.  It used to,
+        which meant chat history was only written as a side effect of a client
+        being attached — with no client, events were never persisted at all.
+        History is now written once at publish time, independently of delivery.
+        """
         try:
             await websocket.send_json(event_data)
-
-            # Add event to chat history manager
-            message_type = event_data.get("type", "default")
-            raw_data = event_data.get("payload", {})
-
-            await _add_to_chat_history(chat_history_manager, message_type, raw_data)
-
         except RuntimeError as e:
             if "websocket" in str(e).lower() or "connection" in str(e).lower():
                 logger.info("WebSocket connection lost during broadcast: %s", e)
@@ -670,28 +698,29 @@ def _get_chat_history_manager(websocket: WebSocket):
 
 def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
     """
-    Register broadcast function with event manager.
+    Register this connection's broadcast callback with the event manager.
 
     Issue #665: Extracted from websocket_endpoint to reduce function length.
-
-    Args:
-        broadcast_event: Broadcast callback function
+    Issue #14814: additive registration — registering a second client no longer
+    displaces the first.
     """
     try:
         get_event_bus().register_ws_broadcast(broadcast_event)
-        logger.info("Successfully registered WebSocket broadcast with event manager")
+        logger.info("Registered WebSocket broadcast with event manager")
     except Exception as e:
         logger.warning("Failed to register WebSocket broadcast, continuing: %s", e)
 
 
-def _unregister_event_manager_broadcast() -> None:
+def _unregister_event_manager_broadcast(broadcast_event: Callable) -> None:
     """
-    Unregister broadcast function from event manager.
+    Unregister only *this* connection's broadcast callback.
 
     Issue #665: Extracted from websocket_endpoint to reduce function length.
+    Issue #14814: this used to clear the single global callback, so one client
+    disconnecting silenced every other client that was still connected.
     """
     try:
-        get_event_bus().register_ws_broadcast(None)
+        get_event_bus().unregister_ws_broadcast(broadcast_event)
         logger.info("WebSocket broadcast unregistered from event manager")
     except Exception as e:
         logger.error("Error during event manager cleanup: %s", e)
@@ -755,7 +784,8 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error("WebSocket error: %s", e, exc_info=True)
     finally:
         # Issue #665: Use helper for cleanup
-        _unregister_event_manager_broadcast()
+        # Issue #14814: unregister this connection only, never the global slot.
+        _unregister_event_manager_broadcast(broadcast_event)
         logger.info("WebSocket connection cleanup completed")
 
 
