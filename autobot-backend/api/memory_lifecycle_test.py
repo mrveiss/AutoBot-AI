@@ -269,15 +269,15 @@ async def test_last_run_is_read_from_the_database_the_writer_uses(seeded, monkey
     originally read it with ``database="main"`` — a different logical database,
     so the key was never found and ``last_run`` was permanently ``None``.
 
-    That is a silent failure, not a loud one: the endpoint's own error path
-    already answers ``None`` for "could not read it", so a wrong-database read
-    is indistinguishable from a Redis blip. The whole point of this PR is that
-    the key "had no readers"; a reader pointed at the wrong database is still
-    no reader.
+    That is a silent failure: the endpoint already answers ``None`` for "could
+    not read it", so a wrong-database read is indistinguishable from a Redis
+    blip. This PR exists because the key "had no readers"; a reader pointed at
+    the wrong database is still no reader.
 
-    So the database is asserted at the seam rather than eyeballed: the client
-    factory is captured and its ``database`` argument compared against the
-    writer's own.
+    Deliberately does NOT use `_decay_with`: that helper installs its own
+    `get_async_redis_client` returning ``None``, which would overwrite the
+    capture below and leave `requested` empty. The first version of this test
+    did exactly that and failed for that reason, not because the fix was wrong.
     """
     requested: List[str] = []
 
@@ -289,9 +289,18 @@ async def test_last_run_is_read_from_the_database_the_writer_uses(seeded, monkey
         requested.append(kwargs.get("database"))
         return _Client()
 
+    monkeypatch.setattr("knowledge.get_knowledge_base", lambda: _async(seeded), raising=False)
+    monkeypatch.setenv("AUTOBOT_FACTS_PRUNE_EPOCH", _EPOCH.isoformat())
+    import importlib
+
+    import knowledge.facts as facts_mod
+
+    importlib.reload(facts_mod)
+
+    # Installed LAST so nothing overwrites it.
     monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", _capture, raising=False)
 
-    section = await _decay_with(seeded, monkeypatch)
+    section = await memory_lifecycle._decay_section(limit=10)
 
     assert requested, "the last-run lookup never asked for a Redis client"
 
