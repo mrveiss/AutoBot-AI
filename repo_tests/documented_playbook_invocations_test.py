@@ -29,7 +29,13 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PLAYBOOK_DIRS = ["autobot-slm-backend/ansible/playbooks"]
+# Every directory that can hold a playbook, not just the main one. A narrower
+# scan misses a templated `hosts:` added elsewhere and reports clean — the same
+# under-approximation this guard exists to catch.
+PLAYBOOK_DIRS = [
+    "autobot-slm-backend/ansible/playbooks",
+    "autobot-slm-backend/ansible/tests/playbooks",
+]
 SKIP_DIRS = {".git", ".worktrees", ".claude", "node_modules", "venv", ".venv"}
 
 # `hosts: "{{ target }}"` — a play whose host list comes from a run-time variable.
@@ -40,7 +46,9 @@ def _playbooks_requiring_a_variable() -> dict[str, str]:
     """Map playbook filename -> the variable its `hosts:` needs."""
     required: dict[str, str] = {}
     for rel in PLAYBOOK_DIRS:
-        for path in sorted((REPO_ROOT / rel).glob("*.yml")):
+        directory = REPO_ROOT / rel
+        assert directory.is_dir(), f"{rel} is not a directory — re-point PLAYBOOK_DIRS rather than scanning nothing"
+        for path in sorted(directory.glob("*.yml")):
             match = _TEMPLATED_HOSTS.search(path.read_text(encoding="utf-8"))
             if match:
                 required[path.name] = match.group(1)
