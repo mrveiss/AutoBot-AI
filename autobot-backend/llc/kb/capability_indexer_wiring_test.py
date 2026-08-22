@@ -60,8 +60,15 @@ class _FakeSession:
 
 
 def _factory_returning(row):
-    """Stands in for `get_async_session_factory` at the database boundary."""
-    return lambda: _FakeSession(row)
+    """Stands in for `get_async_session_factory` at the database boundary.
+
+    Two levels of callable, matching production: `_fetch_agent_row` does
+    `factory = get_async_session_factory()` and then `async with factory()`.
+    Returning the session directly makes the second call fail with
+    "'_FakeSession' object is not callable".
+    """
+    session_factory = lambda: _FakeSession(row)  # noqa: E731 - a one-line stub reads better inline
+    return lambda: session_factory
 
 
 class _FakeCollection:
