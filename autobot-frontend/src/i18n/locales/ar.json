@@ -8303,6 +8303,12 @@
       "roleLensBanner": "فلتر العرض: {role} — يعرض {shown} من {total} عقدة. الوصول لا يتغيّر.",
       "roleLensEmpty": "فلتر العرض: لا توجد عقد مطابقة لـ «{role}» في هذا العرض. الوصول لا يتغيّر — امسح الفلتر لرؤية الجميع.",
       "roleLensClear": "مسح الفلتر",
+      "teamFilterLabel": "تصفية حسب الفريق",
+      "teamFilterAll": "كل الفرق",
+      "teamFilterBanner": "فلتر الفريق: {team} — يعرض {shown} من {total} أشخاص. الوصول لا يتغيّر.",
+      "toolFilterLabel": "تصفية حسب الأداة",
+      "toolFilterAll": "كل الأدوات",
+      "toolFilterBanner": "فلتر الأداة: {tool} — يعرض {shown} من {total} أشخاص. الوصول لا يتغيّر.",
       "sidebar": {
         "owner": "المالك",
         "tools": "الأدوات",

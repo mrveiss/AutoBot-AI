@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Filtr widoku: {role} — pokazano {shown} z {total} węzłów. Dostęp pozostaje bez zmian.",
       "roleLensEmpty": "Filtr widoku: żaden węzeł nie pasuje do „{role}” w tym widoku. Dostęp pozostaje bez zmian — wyczyść filtr, aby zobaczyć wszystkich.",
       "roleLensClear": "Wyczyść filtr",
+      "teamFilterLabel": "Filtruj według zespołu",
+      "teamFilterAll": "Wszystkie zespoły",
+      "teamFilterBanner": "Filtr zespołu: {team} — pokazano {shown} z {total} osób. Dostęp pozostaje bez zmian.",
+      "toolFilterLabel": "Filtruj według narzędzia",
+      "toolFilterAll": "Wszystkie narzędzia",
+      "toolFilterBanner": "Filtr narzędzia: {tool} — pokazano {shown} z {total} osób. Dostęp pozostaje bez zmian.",
       "sidebar": {
         "owner": "Właściciel",
         "tools": "Narzędzia",

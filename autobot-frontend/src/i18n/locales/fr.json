@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Filtre d'affichage : {role} — affiche {shown} sur {total} nœuds. L'accès reste inchangé.",
       "roleLensEmpty": "Filtre d'affichage : aucun nœud ne correspond à « {role} » dans cette vue. L'accès reste inchangé — effacez le filtre pour tout voir.",
       "roleLensClear": "Effacer le filtre",
+      "teamFilterLabel": "Filtrer par équipe",
+      "teamFilterAll": "Toutes les équipes",
+      "teamFilterBanner": "Filtre d'équipe : {team} — affiche {shown} sur {total} personnes. L'accès reste inchangé.",
+      "toolFilterLabel": "Filtrer par outil",
+      "toolFilterAll": "Tous les outils",
+      "toolFilterBanner": "Filtre d'outil : {tool} — affiche {shown} sur {total} personnes. L'accès reste inchangé.",
       "sidebar": {
         "owner": "Titulaire",
         "tools": "Outils",
