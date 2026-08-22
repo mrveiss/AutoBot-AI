@@ -648,26 +648,32 @@ class TestRunAdapterSkipped:
 
 @pytest.mark.asyncio
 class TestRecordRunForReplayH1:
-    async def test_uses_exact_output_path_from_external_run_id(self):
-        """_record_run_for_replay resolves the exact file via _output_path(external_run_id).
+    async def test_resolves_exactly_one_file_never_a_glob(self):
+        """Resolution names one file outright — no glob, no mtime ordering.
 
-        No glob, no mtime ordering — the external_run_id returned by adapter.invoke
-        uniquely determines the file.
+        This previously wrote the transcript at the path derived from the
+        returned run id `<pid>/<session>`. No adapter has ever written there:
+        the file is named before the child exists, so it always carries the
+        placeholder `0/<session>` (#13614). The anti-glob guarantee below is
+        the part worth keeping, so it now runs against the name the adapter
+        actually produces instead of one that only existed in this test.
         """
         import os
         import tempfile
         import time
 
+        from llc.adapters.claude_code_adapter import _output_path
+        from llc.adapters.subprocess_base import placeholder_run_id
         from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
-        external_run_id = "12345/session-abc"
-        expected_filename = f"llc_agent_{agent_id}_12345_session-abc.jsonl"
+        session = "session-abc"
+        external_run_id = f"12345/{session}"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             agent["adapter_config"]["output_dir"] = tmpdir
-            exact_path = os.path.join(tmpdir, expected_filename)
+            exact_path = _output_path(tmpdir, agent_id, placeholder_run_id(session))
             with open(exact_path, "w", encoding="utf-8") as fh:
                 fh.write('{"type": "result", "is_error": false}\n')
 
