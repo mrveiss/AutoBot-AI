@@ -272,7 +272,7 @@ class PortabilityService(LLCServiceBase):
 
             # Pass 3: attach every reporting line whose manager actually landed,
             # and name the ones that did not instead of pointing at nothing.
-            await self._link_reporting_lines(agents_list, landed, dropped_links)
+            await self._link_reporting_lines(agents_list, landed, dropped_links, company_id)
 
             # goals
             for goal in template.get("goals", []):
@@ -674,6 +674,7 @@ class PortabilityService(LLCServiceBase):
         agents_list: List[Dict[str, Any]],
         landed: Dict[str, str],
         dropped_links: List[Dict[str, str]],
+        company_id: Any,
     ) -> None:
         """Attach reports_to for agents whose manager was actually inserted (#14811).
 
@@ -708,10 +709,18 @@ class PortabilityService(LLCServiceBase):
                 )
                 continue
 
+            # Scoped by company as well as agent_id. `agent_id` carries a
+            # table-wide UNIQUE constraint today, so the company clause is
+            # redundant — but that constraint is declared in a migration three
+            # files away, and if it ever became per-company (the natural change
+            # when two tenants want the same agent slug) this UPDATE would
+            # silently start crossing tenants. Every sibling query on this table
+            # scopes by company_id; this one was the outlier.
             await self.session.execute(
-                text("UPDATE agent_org_nodes SET reports_to = :mgr WHERE agent_id = :aid").bindparams(
-                    mgr=manager_dest_id, aid=landed[source_id]
-                )
+                text(
+                    "UPDATE agent_org_nodes SET reports_to = :mgr "
+                    "WHERE agent_id = :aid AND company_id = :cid"
+                ).bindparams(mgr=manager_dest_id, aid=landed[source_id], cid=company_id)
             )
 
     async def _import_agent(

@@ -56,6 +56,18 @@ class _FakeSession:
         return SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
 
 
+COMPANY = "co-under-test"
+
+
+def _update_params(session: _FakeSession) -> List[Dict[str, Any]]:
+    """Bound params of every reporting-line UPDATE the linker issued."""
+    return [
+        stmt.compile().params
+        for stmt in session.statements
+        if "UPDATE agent_org_nodes SET reports_to" in str(stmt)
+    ]
+
+
 def _updates(session: _FakeSession) -> Dict[str, str]:
     """agent_id -> reports_to, for every UPDATE the linker issued."""
     out: Dict[str, str] = {}
@@ -81,7 +93,7 @@ class TestALandedManagerGetsItsReportingLine:
         landed = {"src-mgr": "dst-mgr", "src-sub": "dst-sub"}
         dropped: List[Dict[str, str]] = []
 
-        await svc._link_reporting_lines(agents, landed, dropped)
+        await svc._link_reporting_lines(agents, landed, dropped, COMPANY)
 
         assert _updates(session) == {"dst-sub": "dst-mgr"}
         assert dropped == []
@@ -103,7 +115,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
         landed = {"src-sub": "dst-sub"}  # the manager did not land, for `reason`
         dropped: List[Dict[str, str]] = []
 
-        await svc._link_reporting_lines(agents, landed, dropped)
+        await svc._link_reporting_lines(agents, landed, dropped, COMPANY)
 
         assert _updates(session) == {}, "no UPDATE may name a manager that was never inserted"
         assert dropped == [
@@ -123,7 +135,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
         agents = [_agent("src-sub", "Engineer", reports_to="never-existed")]
         dropped: List[Dict[str, str]] = []
 
-        await svc._link_reporting_lines(agents, {"src-sub": "dst-sub"}, dropped)
+        await svc._link_reporting_lines(agents, {"src-sub": "dst-sub"}, dropped, COMPANY)
 
         assert _updates(session) == {}
         assert len(dropped) == 1
@@ -138,7 +150,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
         agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
         dropped: List[Dict[str, str]] = []
 
-        await svc._link_reporting_lines(agents, {"src-mgr": "dst-mgr"}, dropped)
+        await svc._link_reporting_lines(agents, {"src-mgr": "dst-mgr"}, dropped, COMPANY)
 
         assert _updates(session) == {}
         assert dropped == []
@@ -159,7 +171,7 @@ class TestNothingIsLostWhenNothingIsSkipped:
         landed = {"a": "A", "b": "B", "c": "C", "d": "D"}
         dropped: List[Dict[str, str]] = []
 
-        await svc._link_reporting_lines(agents, landed, dropped)
+        await svc._link_reporting_lines(agents, landed, dropped, COMPANY)
 
         assert _updates(session) == {"B": "A", "C": "B", "D": "B"}
         assert dropped == []
@@ -204,3 +216,29 @@ class TestTheImportActuallyRunsPassThree:
                 "manager_source_agent_id": "src-mgr",
             }
         ], "the lost reporting line must reach the caller, not only the log"
+
+
+class TestTheUpdateCannotReachAnotherCompany:
+    @pytest.mark.asyncio
+    async def test_every_update_is_scoped_to_the_importing_company(self):
+        """`agent_id` is table-wide UNIQUE today, so the company clause is
+        redundant — and that is exactly why it is easy to drop.
+
+        The constraint is declared in a migration three files away. If it ever
+        became per-company — the natural change the first time two tenants want
+        the same agent slug — an UPDATE matching on `agent_id` alone would begin
+        rewriting another tenant's hierarchy with no error. Asserting the bound
+        parameter keeps that safety visible at this call site rather than
+        inferred from a distant schema.
+        """
+        session = _FakeSession()
+        svc = PortabilityService(session)
+        agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
+
+        await svc._link_reporting_lines(agents, {"src-mgr": "M", "src-sub": "S"}, [], COMPANY)
+
+        params = _update_params(session)
+        assert params, "no UPDATE was issued, so this guard would pass vacuously"
+        assert all(p["cid"] == COMPANY for p in params), (
+            f"an UPDATE was not scoped to the importing company: {params}"
+        )
