@@ -166,7 +166,10 @@ describe('moving a node by keyboard is undoable (#14612)', () => {
     const w = mountCanvas({ nodes: [step('n1', 10, 10)] })
     await w.get('[data-node-id="n1"]').trigger('keydown', { key: 'ArrowRight', ctrlKey: true })
 
-    expect(w.emitted('node-moved')).toEqual([['n1', { x: 30, y: 10 }]])
+    // #14768: an arrow press lands on the ADJACENT gridline, so an off-grid
+    // node at x=10 aligns to 20 rather than moving a full step to 30. The
+    // undo below still restores the off-grid start exactly.
+    expect(w.emitted('node-moved')).toEqual([['n1', { x: 20, y: 10 }]])
     await undoBtn(w).trigger('click')
     expect((w.emitted('node-moved') as unknown as unknown[]).length).toBe(2)
     expect((w.emitted('node-moved') as unknown as [string, { x: number; y: number }][]).at(-1)).toEqual([
