@@ -55,9 +55,7 @@ async def test_initialize_negotiates_and_advertises_capabilities():
     transport = FakeTransport()
     server = AcpServer(runner=_echo_runner, transport=transport)
 
-    await server._dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 1}}
-    )
+    await server._dispatch({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 1}})
 
     result = _results(transport)[0]["result"]
     assert result["protocolVersion"] == ACP_PROTOCOL_VERSION
@@ -70,9 +68,7 @@ async def test_initialize_never_claims_a_version_above_its_own():
     transport = FakeTransport()
     server = AcpServer(runner=_echo_runner, transport=transport)
 
-    await server._dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 99}}
-    )
+    await server._dispatch({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 99}})
 
     assert _results(transport)[0]["result"]["protocolVersion"] == ACP_PROTOCOL_VERSION
 
@@ -91,9 +87,7 @@ async def test_methods_before_initialize_are_refused():
     transport = FakeTransport()
     server = AcpServer(runner=_echo_runner, transport=transport)
 
-    await server._dispatch(
-        {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/tmp"}}
-    )
+    await server._dispatch({"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/tmp"}})
 
     assert _errors(transport)[0]["error"]["code"] == int(AcpErrorCode.INVALID_REQUEST)
 
@@ -104,9 +98,7 @@ async def test_session_new_requires_an_absolute_cwd():
     server = AcpServer(runner=_echo_runner, transport=transport)
     server._initialized = True
 
-    await server._dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": "relative/path"}}
-    )
+    await server._dispatch({"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": "relative/path"}})
 
     assert _errors(transport)[0]["error"]["code"] == int(AcpErrorCode.INVALID_PARAMS)
 
@@ -117,9 +109,7 @@ async def test_full_turn_streams_updates_and_ends():
     server = AcpServer(runner=_echo_runner, transport=transport)
 
     await server._dispatch({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-    await server._dispatch(
-        {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": "/work"}}
-    )
+    await server._dispatch({"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": "/work"}})
     session_id = _results(transport)[-1]["result"]["sessionId"]
 
     await server._dispatch(
@@ -188,9 +178,7 @@ async def test_permission_granted_when_client_selects_allow():
     task = asyncio.create_task(server.request_permission("s1", "t1", "Run tests"))
     await asyncio.sleep(0)
     call = [m for m in transport.sent if m.get("method") == "session/request_permission"][0]
-    server._resolve_client_call(
-        {"id": call["id"], "result": {"outcome": {"outcome": "selected", "optionId": "allow"}}}
-    )
+    server._resolve_client_call({"id": call["id"], "result": {"outcome": {"outcome": "selected", "optionId": "allow"}}})
 
     assert await task is True
 

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
@@ -618,6 +619,36 @@ class PortabilityService(LLCServiceBase):
                 return candidate
         raise TemplateImportError(f"Cannot find free issue_prefix for {prefix!r}")
 
+    @staticmethod
+    def _adapter_runnable_or_warn(name: str, declared: Optional[str], warnings: List[str]) -> bool:
+        """False when *declared* names an adapter this deployment cannot run (#14800).
+
+        Only a DECLARED type is checked. An omitted `adapter_type` is not a
+        `claude_code` agent — the scheduler reads a missing value as
+        `autobot_agent`, which runs in-process, is deliberately absent from the
+        registry, and needs no CLI. Defaulting to `claude_code` here would have
+        spuriously skipped every ordinary in-process agent in a template
+        re-imported onto a host without that CLI, which is a regression on a
+        normal export/import round trip rather than a fix.
+
+        Skipped with a warning rather than failing the import: a template may
+        legitimately be imported onto a host provisioned afterwards, and the
+        response already carries `warnings` and `skipped`.
+        """
+        if not declared:
+            return True
+        if declared not in registered_adapter_types():
+            warnings.append(f"Agent {name!r} names unknown adapter_type {declared!r} — skipped")
+            return False
+        unavailable = adapter_unavailable_reason(declared)
+        if unavailable:
+            warnings.append(
+                f"Agent {name!r} needs adapter {declared!r}, which cannot run on this "
+                f"deployment: {unavailable} — skipped"
+            )
+            return False
+        return True
+
     async def _import_agent(
         self,
         agent: Dict[str, Any],
@@ -631,6 +662,9 @@ class PortabilityService(LLCServiceBase):
         existing = await self._agent_names_exist([name], company_id)
         if existing:
             warnings.append(f"Agent {name!r} already exists — skipped")
+            return None
+
+        if not self._adapter_runnable_or_warn(name, agent.get("adapter_type"), warnings):
             return None
 
         # Use pre-minted ID from two-pass map if available

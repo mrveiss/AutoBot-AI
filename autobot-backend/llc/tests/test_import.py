@@ -309,7 +309,13 @@ async def test_import_agent_insert_binds_match_named_params() -> None:
     company_id = uuid.uuid4()
     agent = {"name": "Bot", "agent_id": "old-id", "adapter_config": {}}
 
-    with patch.object(svc, "_agent_names_exist", return_value=[]):
+    # #14800: the import now also checks the adapter can run, and CI has no
+    # `claude` binary. This test is about SQL bind names, so state availability
+    # rather than letting the probe decide and skip before the INSERT.
+    with (
+        patch.object(svc, "_agent_names_exist", return_value=[]),
+        patch("llc.services.portability.adapter_unavailable_reason", return_value=None),
+    ):
         await svc._import_agent(agent, company_id, secret_mapping={}, warnings=[])
 
     stmt = svc.session.execute.call_args_list[0].args[0]

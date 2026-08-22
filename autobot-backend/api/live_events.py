@@ -88,11 +88,7 @@ async def _authorize_conversation_channel(channel: str, user_payload: dict) -> b
     # ``get_session_owner`` returns the *username* it stored in session
     # metadata, but a JWT may identify the caller by either field — compare
     # against both rather than guessing which one this deployment uses.
-    identities = {
-        str(value)
-        for value in (user_payload.get("user_id"), user_payload.get("username"))
-        if value
-    }
+    identities = {str(value) for value in (user_payload.get("user_id"), user_payload.get("username")) if value}
     if not identities:
         return False
     _prefix, _, ident = channel.partition(":")

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Optional
 
 from acp.protocol import (
     ACP_PROTOCOL_VERSION,
@@ -233,9 +233,7 @@ class AcpServer:
         call_id = f"agent-{self._next_call_id}"
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending_client_calls[call_id] = future
-        await self._transport.send(
-            {"jsonrpc": "2.0", "id": call_id, "method": method, "params": params}
-        )
+        await self._transport.send({"jsonrpc": "2.0", "id": call_id, "method": method, "params": params})
         try:
             return await future
         finally:
@@ -261,9 +259,7 @@ class AcpServer:
         await self._transport.send({"jsonrpc": "2.0", "method": method, "params": params})
 
     async def _send_error(self, request_id: Any, error: AcpError) -> None:
-        await self._transport.send(
-            {"jsonrpc": "2.0", "id": request_id, "error": error.to_dict()}
-        )
+        await self._transport.send({"jsonrpc": "2.0", "id": request_id, "error": error.to_dict()})
 
     def _require_session(self, session_id: Any) -> AcpSession:
         session = self._sessions.get(str(session_id))
@@ -284,9 +280,5 @@ class AcpServer:
             return prompt
         if not isinstance(prompt, list):
             return ""
-        parts = [
-            block.get("text", "")
-            for block in prompt
-            if isinstance(block, dict) and block.get("type") == "text"
-        ]
+        parts = [block.get("text", "") for block in prompt if isinstance(block, dict) and block.get("type") == "text"]
         return "\n".join(part for part in parts if part)
