@@ -33,7 +33,7 @@ from typing import Callable, Iterable, Optional
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
-from .base import AdapterRunStatus
+from .base import AdapterRunStatus, get_adapter
 from .subprocess_support import probe_pid, render_context_markdown, terminate_pid
 
 logger = get_logger(__name__)
@@ -96,8 +96,6 @@ def adapter_transcript_helpers(
     Returns None when the type is unregistered, is not a subprocess adapter
     (in-process agents write no transcript), or declares neither helper.
     """
-    from .base import get_adapter
-
     try:
         adapter = get_adapter(adapter_type)
     except KeyError:
