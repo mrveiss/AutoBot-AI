@@ -250,9 +250,9 @@ class ExtractedDocument:
         Distinct from :attr:`has_usable_text_layer`: a DOCX whose content is
         entirely a table has no text layer at all and is still a complete,
         successful extraction — its data lives in ``tables`` (#13884). PDF
-        table extraction is not implemented, which :attr:`tables_attempted`
-        reports rather than leaving callers to infer it from an empty list
-        (#13895), so this collapses back to the text-layer check for PDFs.
+        table extraction is implemented as of #14232; :attr:`tables_attempted`
+        still reports whether it ran, rather than leaving callers to infer it
+        from an empty list (#13895).
         """
         return self.has_usable_text_layer or bool(self.tables)
 
@@ -306,6 +306,43 @@ def extract_pdf(raw: bytes) -> ExtractedDocument:
     )
 
 
+DEFAULT_MAX_TABLE_PAGES = 50
+
+
+def max_table_pages() -> int:
+    """Resolve how many pages table detection may scan (#14232).
+
+    `page.extract_tables()` runs pdfplumber's line and rectangle layout
+    analysis, which is materially heavier than pypdf's text extraction — and
+    unlike OCR, which only runs on pages that already failed to produce text,
+    this runs on every page of every PDF. A large table-dense document well
+    inside the upload size limit can still carry hundreds of pages.
+
+    So it is bounded the same way OCR's page ceiling is, and from the same kind
+    of env-backed knob rather than a literal at the call site.
+    """
+    raw = blank_to_none(config.misc.document_max_table_pages)
+    if raw is None:
+        return DEFAULT_MAX_TABLE_PAGES
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MAX_TABLE_PAGES=%r is not an integer; using %d",
+            raw,
+            DEFAULT_MAX_TABLE_PAGES,
+        )
+        return DEFAULT_MAX_TABLE_PAGES
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MAX_TABLE_PAGES=%d is not positive; using %d",
+            value,
+            DEFAULT_MAX_TABLE_PAGES,
+        )
+        return DEFAULT_MAX_TABLE_PAGES
+    return value
+
+
 def _pdf_tables(raw: bytes) -> Tuple[Tuple[Any, ...], bool]:
     """Extract tables with pdfplumber, reporting whether it ran (#14232).
 
@@ -325,10 +362,14 @@ def _pdf_tables(raw: bytes) -> Tuple[Tuple[Any, ...], bool]:
         logger.debug("pdfplumber is not installed; PDF table extraction skipped")
         return (), False
 
+    max_pages = max_table_pages()
     try:
         with pdfplumber.open(io.BytesIO(raw)) as document:
             tables = [
-                _normalize_table(table) for page in document.pages for table in (page.extract_tables() or []) if table
+                _normalize_table(table)
+                for page in document.pages[:max_pages]
+                for table in (page.extract_tables() or [])
+                if table
             ]
     except Exception as exc:
         # A text layer that read fine must not be lost because table detection
