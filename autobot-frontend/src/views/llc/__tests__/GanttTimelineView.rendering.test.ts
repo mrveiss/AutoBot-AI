@@ -62,10 +62,15 @@ const LONG_TIMELINE = {
   edges: [],
 }
 
+/** A project with nothing scheduled — renders the empty state, not the chart. */
+const EMPTY_TIMELINE = { project_id: 'p2', items: [], edges: [] }
+
 function wireApi() {
   h.api.get.mockImplementation((url: string) => {
-    if (url === '/api/llc/companies/c1/projects') return Promise.resolve([{ id: 'p1', name: 'Proj 1' }])
+    if (url === '/api/llc/companies/c1/projects')
+      return Promise.resolve([{ id: 'p1', name: 'Proj 1' }, { id: 'p2', name: 'Proj 2' }])
     if (url === '/api/llc/projects/p1/timeline') return Promise.resolve(LONG_TIMELINE)
+    if (url === '/api/llc/projects/p2/timeline') return Promise.resolve(EMPTY_TIMELINE)
     return Promise.reject(new Error(`unexpected url ${url}`))
   })
 }
@@ -204,6 +209,56 @@ describe('the axis never renders empty (#14799)', () => {
     const visible = w.findAll('.gantt-axis-label').map((n) => n.text())
     expect(visible).toContain(finalLabel)
     expect(visible.filter((l) => l === finalLabel)).toHaveLength(1)
+  })
+})
+
+describe('viewport bookkeeping is released with the element (#14769)', () => {
+  it('resets the measured width when the scroll container unrenders', async () => {
+    // Switching to a project with nothing scheduled swaps the chart for the
+    // empty state, so `.gantt-scroll` — and the `scrollLeft` cached from the
+    // previous project — goes away. If the measured width survived that, the
+    // next chart would be culled against a viewport belonging to a different
+    // project, which is the stale-mapping failure #14799 records by another
+    // route.
+    const w = await mountView()
+    await setViewport(w, 1000, 4000)
+    expect(w.find('.gantt-scroll').exists()).toBe(true)
+
+    await w.get('select.gantt-select').setValue('p2')
+    await flushPromises()
+    await flushPromises()
+
+    expect(w.find('.gantt-scroll').exists()).toBe(false)
+
+    // Back to a project that has items: the axis must render, which it only
+    // does if the stale measurement was cleared rather than reapplied.
+    await w.get('select.gantt-select').setValue('p1')
+    await flushPromises()
+    await flushPromises()
+
+    expect(tickCount(w)).toBeGreaterThan(0)
+  })
+
+  it('releases the resize observer on unmount', async () => {
+    // The watcher tears the observer down when the element CHANGES, but a
+    // straight unmount never fires it with `null` — so the teardown lives in
+    // `onBeforeUnmount` too. Without it the observer outlives the component
+    // and keeps a detached node reachable.
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = disconnect
+      },
+    )
+    const w = await mountView()
+
+    w.unmount()
+
+    expect(disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
   })
 })
 
