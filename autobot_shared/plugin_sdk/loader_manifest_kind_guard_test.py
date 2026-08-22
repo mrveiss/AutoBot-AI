@@ -69,32 +69,38 @@ _MANIFEST = """{{
 }}"""
 
 
-#: Top-level package names a loaded fixture plugin can install. `plugins*` is
-#: the fixture module itself; `plugin_sdk*` comes from `_BASEPLUGIN_SOURCE`,
-#: which imports the SDK by its top-level name the way a real plugin does — so
-#: loading the fixture aliases the whole package into `sys.modules`.
-_FIXTURE_MODULE_ROOTS = ("plugins", "plugin_sdk")
-
-
 @pytest.fixture(autouse=True)
 def _fresh_plugin_modules():
-    """Drop cached fixture modules between tests (mirrors plugin_load_visibility_test.py).
+    """Undo the sys.modules mutations a plugin load leaves behind.
 
-    #14111: this previously dropped only `plugins*`, so the eight `plugin_sdk*`
-    aliases survived the test and tripped the sys.modules leak guard. It went
-    unnoticed because the guard attributes a leak to the file that *first*
-    installs the key in its shard — so whether this file was blamed depended on
-    which other tests happened to share its group. Changing the shard
-    assignment surfaced it; the leak itself is not new.
+    Two different mutations, cleaned two different ways.
 
-    Only keys this test added are removed: `before` is captured first, so a
-    genuine pre-existing import is left alone.
+    `plugins*` are the fixture plugin modules this test imports, so removing
+    only what this test added is right — `before` guards a genuine pre-existing
+    entry.
+
+    `plugin_sdk*` is not that. `autobot_shared.plugin_sdk.loader` deliberately
+    aliases the canonical package under its top-level name (#11636) so a plugin
+    importing `plugin_sdk.base` gets the same singletons; it is a **global,
+    process-wide** mutation, not one this test owns. Filtering it through
+    `before` therefore does not work: whichever test loads a plugin first in the
+    shard installs the aliases, and every later test — including this one — sees
+    them as pre-existing and leaves them. That is why the sys.modules leak guard
+    kept reporting them against this file after a `before`-scoped fix (#14111).
+
+    So they are removed unconditionally. That is safe because the aliases are
+    re-created on demand by the loader, and because the backend-local
+    `plugin_sdk` package is a re-export shim — a later `from plugin_sdk import
+    base` resolves to the same classes either way, which is the invariant
+    `tests/test_plugin_sdk_shim.py` pins.
     """
     before = set(sys.modules)
     yield
     for name in set(sys.modules) - before:
-        if name.split(".", 1)[0] in _FIXTURE_MODULE_ROOTS:
+        if name.split(".", 1)[0] == "plugins":
             sys.modules.pop(name, None)
+    for name in [n for n in sys.modules if n == "plugin_sdk" or n.startswith("plugin_sdk.")]:
+        sys.modules.pop(name, None)
 
 
 def _make_plugin(root: Path, name: str, *, kind: str | None = None, source: str = _BASEPLUGIN_SOURCE) -> Path:
