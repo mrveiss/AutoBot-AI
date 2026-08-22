@@ -96,12 +96,13 @@ class LiveEventService {
   // explicitly (e.g., test override). Returns null when no token is available
   // so connect() can defer instead of producing a guaranteed-403 handshake.
   //
-  // Path is `/live` not `/ws/live` — `config.websocketUrl` already ends in
-  // `/api/ws` (see ssot-config.ts websocketUrl getter, baked in by #6271).
-  // Backend WS handler is `/api/ws/live`. Prepending `/ws/` here would build
-  // `wss://host/api/ws/ws/live` and 404 every connection.
+  // #14822: the `/live` suffix now lives in `config.liveEventsUrl` rather than
+  // being appended here. The old comment warned that `config.websocketUrl`
+  // already ends in `/api/ws`, so prepending `/ws/` would build
+  // `wss://host/api/ws/ws/live` and 404 — the named getter removes the chance
+  // of getting that wrong at each call site.
   private getUrl(token?: string): string | null {
-    const base = `${config.websocketUrl}/live`
+    const base = config.liveEventsUrl
     if (token) {
       const sep = base.includes('?') ? '&' : '?'
       return `${base}${sep}token=${encodeURIComponent(token)}`
