@@ -8452,6 +8452,8 @@
       "secretMappingIncomplete": "Complete todos los valores de secretos anteriores antes de importar.",
       "importSuccess": "Importación exitosa — ID de empresa:",
       "warningsLabel": "Advertencias:",
+      "droppedReportingLinesLabel": "Líneas de reporte que no se pudieron conservar:",
+      "droppedReportingLine": "{agent} se importó sin responsable: {manager} no se creó.",
       "importFailed": "La importación falló:",
       "toastTemplateExported": "Plantilla exportada correctamente",
       "toastTemplateExportFailed": "Error al exportar la plantilla",

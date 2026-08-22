@@ -76524,6 +76524,13 @@ export interface components {
             skipped: {
                 [key: string]: string[];
             };
+            /**
+             * Dropped Reporting Lines
+             * @default []
+             */
+            dropped_reporting_lines: {
+                [key: string]: string;
+            }[];
             /** Warnings */
             warnings: string[];
         } & {
