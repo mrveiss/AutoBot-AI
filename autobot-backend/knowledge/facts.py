@@ -1504,6 +1504,18 @@ class FactsMixin:
     def _collect_prune_candidates(
         self, facts: List[Dict[str, Any]], quality_floor: float, cutoff: datetime, epoch: datetime
     ) -> List[str]:
+        """Fact ids safe to prune. Thin view over :meth:`_prune_candidate_details`.
+
+        The predicate lives in exactly one place (#12631). A preview that
+        recomputed "would this be deleted" separately from the deleter could
+        disagree with it, and an operator approving a preview that does not
+        match what runs is worse than having no preview.
+        """
+        return [c["fact_id"] for c in self._prune_candidate_details(facts, quality_floor, cutoff, epoch)]
+
+    def _prune_candidate_details(
+        self, facts: List[Dict[str, Any]], quality_floor: float, cutoff: datetime, epoch: datetime
+    ) -> List[Dict[str, Any]]:
         """Return fact_ids that are genuinely dead and safe to prune (A3 #12554).
 
         A candidate must satisfy ALL of: unprotected (incl. curated/ingested — see
@@ -1512,7 +1524,7 @@ class FactsMixin:
         reflects real non-use rather than predating A1 instrumentation; and older
         than ``cutoff``. Unknown-age, pre-epoch, or newer facts are kept (fail-safe).
         """
-        candidates: List[str] = []
+        candidates: List[Dict[str, Any]] = []
         for fact in facts:
             meta = fact.get("metadata") or {}
             if _fact_is_protected(meta):
@@ -1531,7 +1543,20 @@ class FactsMixin:
                 continue
             fid = fact.get("fact_id")
             if fid:
-                candidates.append(fid)
+                # Reasons carry the VALUES that qualified it, not the rule names.
+                # "quality below floor" tells an operator nothing they cannot read
+                # off the rule; "quality 0.04 below floor 0.10" tells them whether
+                # the floor is set where they meant it to be (#12631).
+                candidates.append(
+                    {
+                        "fact_id": fid,
+                        "reasons": [
+                            f"quality {quality:.2f} below floor {quality_floor:.2f}",
+                            f"never recalled (access_count={access})",
+                            f"created {created.date().isoformat()}, older than cutoff {cutoff.date().isoformat()}",
+                        ],
+                    }
+                )
         return candidates
 
     async def consolidate_facts(
@@ -1575,7 +1600,8 @@ class FactsMixin:
             logger.warning("consolidate_facts: scan failed (non-fatal): %s", exc)
             return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run}
 
-        candidates = self._collect_prune_candidates(facts, quality_floor, cutoff, epoch)
+        candidate_details = self._prune_candidate_details(facts, quality_floor, cutoff, epoch)
+        candidates = [c["fact_id"] for c in candidate_details]
         pruned = 0
         # Circuit breaker: an unexpectedly large candidate set means the signals
         # are wrong (mis-set epoch, instrumentation gap). Refuse and shout.
@@ -1612,6 +1638,19 @@ class FactsMixin:
             "remaining": len(facts) - pruned,
             "dry_run": dry_run,
         }
+        # #12631: the dry run is the prune PREVIEW an operator approves, so it has
+        # to say which facts and why — a count alone cannot be reviewed. Added
+        # only on the dry-run path: `candidates` stays an int for the celery task
+        # that already reads this summary (#12554), and the enforcing path has no
+        # reader for the detail.
+        if dry_run:
+            # Capped at what a single run could act on. The nightly task defaults
+            # to dry_run, so an uncapped list meant up to _FACTS_PRUNE_SCAN_LIMIT
+            # entries with three reason strings each landing in the log every
+            # night — detail beyond max-per-run describes facts no run would
+            # reach. Truncation is reported rather than silent.
+            summary["candidate_details"] = candidate_details[:_FACTS_PRUNE_MAX_PER_RUN]
+            summary["candidate_details_truncated"] = len(candidate_details) > _FACTS_PRUNE_MAX_PER_RUN
         logger.info(
             "consolidate_facts: scanned=%d candidates=%d pruned=%d dry_run=%s",
             len(facts),
@@ -1620,6 +1659,46 @@ class FactsMixin:
             dry_run,
         )
         return summary
+
+    async def list_facts_with_usage(self, limit: int = _FACTS_PRUNE_SCAN_LIMIT) -> List[Dict[str, Any]]:
+        """Facts with their usage signals flattened for ranking (#12631).
+
+        `access_count`, `last_accessed` and `quality_score` live in each fact's
+        `metadata`, while the rankers take them at the top level. Flattening here
+        rather than in the endpoint keeps the shape one thing: a second reader
+        that flattened differently is how two views of the same fact come to
+        disagree.
+        """
+        facts = await self.get_all_facts(limit=limit)
+        flattened: List[Dict[str, Any]] = []
+        for fact in facts:
+            meta = fact.get("metadata") or {}
+            flattened.append(
+                {
+                    **fact,
+                    "fact_id": fact.get("fact_id"),
+                    "quality_score": meta.get("quality_score"),
+                    "access_count": meta.get("access_count", 0),
+                    "last_accessed": meta.get("last_accessed"),
+                }
+            )
+        return flattened
+
+    @staticmethod
+    def prune_config_snapshot() -> Dict[str, Any]:
+        """The decay configuration as it is actually resolved (#12631).
+
+        Reports `epoch_set` rather than the epoch value because an unset epoch is
+        what disables pruning entirely — the single most consequential thing an
+        operator can be wrong about here, and invisible until they read this.
+        """
+        return {
+            "epoch_set": _parse_iso(_FACTS_PRUNE_EPOCH) is not None,
+            "quality_floor": _FACTS_PRUNE_QUALITY_FLOOR,
+            "max_age_days": _FACTS_PRUNE_MAX_AGE_DAYS,
+            "max_per_run": _FACTS_PRUNE_MAX_PER_RUN,
+            "scan_limit": _FACTS_PRUNE_SCAN_LIMIT,
+        }
 
     async def delete_facts_by_session(self, session_id: str, preserve_important: bool = True) -> Dict[str, Any]:
         """Delete all facts created during a specific session. Issue #620.

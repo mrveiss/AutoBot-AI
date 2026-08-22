@@ -158,3 +158,33 @@ async def test_scan_failure_returns_empty_summary(monkeypatch):
     summary = await kb.consolidate_facts(dry_run=False, now=NOW)
     assert summary == {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": False}
     kb.delete_fact.assert_not_awaited()
+
+
+def test_unparseable_usage_metadata_keeps_the_fact():
+    """The fail-safe branch review found untested.
+
+    A fact whose usage metadata cannot be parsed must be KEPT. Treating garbage
+    as "never accessed, no quality" would make the least-understood facts the
+    first to be deleted.
+
+    Only TRUTHY garbage reaches that branch: the predicate reads
+    ``int(meta.get("access_count", 0) or 0)``, so a falsy-but-wrong value —
+    ``[]``, ``""``, ``None`` — is normalised to 0 by the ``or`` and never raises.
+    That distinction is the subject of a separate finding; here the branch that
+    does exist is pinned.
+    """
+    kb = _KB([])
+    cutoff = EPOCH_DT + timedelta(days=400)
+    facts = [
+        {
+            "fact_id": "unparseable-quality",
+            "timestamp": (EPOCH_DT + timedelta(days=1)).isoformat(),
+            "metadata": {"quality_score": "not-a-number", "access_count": 0},
+        },
+        {
+            "fact_id": "unparseable-access",
+            "timestamp": (EPOCH_DT + timedelta(days=1)).isoformat(),
+            "metadata": {"quality_score": 0.01, "access_count": "many"},
+        },
+    ]
+    assert kb._collect_prune_candidates(facts, quality_floor=0.1, cutoff=cutoff, epoch=EPOCH_DT) == []
