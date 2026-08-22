@@ -212,11 +212,14 @@ async def _main(apply_changes: bool) -> None:
     sessions = await chat_mgr.list_sessions()
     plan = build_plan(sessions, await load_known_company_ids())
 
+    # Reported through the logger, not print(), matching
+    # `session_reply_backfill` and `workflow_redis_backfill` — the two existing
+    # operator-run backfills — and the repo's logging standard.
     if not apply_changes:
-        print(render(plan))
+        logger.info("%s", render(plan))
         return
     written = await apply_plan(plan, chat_mgr)
-    print(render(plan, applied=written))
+    logger.info("%s", render(plan, applied=written))
 
 
 def main() -> None:
