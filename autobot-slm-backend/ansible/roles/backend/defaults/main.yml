@@ -90,6 +90,11 @@ autobot_internal_api_key: ""
 # the store exactly as dark as it is today rather than sealing secrets under a
 # key the SLM does not share.
 autobot_secrets_root_key: ""
+
+# #12681: pin an exact claude-code package version (e.g. "2.1.89") for a
+# reproducible provision. Empty takes the current stable-channel build, matching
+# the CLAUDE_CLI_VERSION build arg the backend image already exposes.
+backend_claude_cli_version: ""
 # SLM WebSocket auth bearer value — populated from /etc/autobot/slm-secrets.env at deploy time (#7689).
 backend_slm_auth_tok: ""
 

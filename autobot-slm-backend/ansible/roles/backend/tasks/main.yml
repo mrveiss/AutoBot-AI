@@ -292,6 +292,117 @@
 # handles the task-failure/mid-deploy-error case, which is what left the backend
 # dead today.
 # ============================================================
+# Placed BEFORE the restart-guarded window below on purpose (#12681): these
+# tasks reach two third-party apt repos, and inside that block a transient
+# outage would abort the whole deploy — code sync, config, workers, nginx and
+# the health check — after the service was already stopped. Out here a repo
+# hiccup fails this feature loudly and leaves a running backend running.
+# #12681: the LLC agent CLIs. docker/backend/Dockerfile installs `claude` and
+# `gh` from signed apt repos and proves both resolve at build time, but NOTHING
+# installed them on an ansible-provisioned host. `resolve_cli_binary` therefore
+# returned None for every claude_code / copilot_local agent hired on a systemd
+# deployment, so the agent could be hired and could never run — which is the
+# "provisioning fails invisibly" symptom the issue reports.
+#
+# Same signed repos as the image, fetched with get_url rather than piped to a
+# shell. Failing loudly here is deliberate: a host that cannot install the CLI
+# should fail provisioning rather than come up hosting agents that cannot run.
+- name: "Backend | Ensure the apt keyring directory exists (#12681)"
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Read the dpkg architecture for the CLI apt sources (#12681)"
+  ansible.builtin.command:
+    cmd: dpkg --print-architecture
+  register: _backend_dpkg_arch
+  changed_when: false
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Install the agent CLI repository signing keys (#12681)"
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+    mode: "0644"
+    # #2835 precedent: bound the fetch. lock_timeout below bounds the dpkg lock,
+    # not a hung TCP connection to a third-party host — an unbounded fetch stalls
+    # the whole play rather than failing it.
+    timeout: 120
+  loop:
+    - url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+      dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    - url: https://downloads.claude.ai/keys/claude-code.asc
+      dest: /etc/apt/keyrings/claude-code.asc
+  loop_control:
+    label: "{{ item.dest }}"
+  become: true
+  register: _backend_cli_keys
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Add the agent CLI apt sources (#12681)"
+  ansible.builtin.copy:
+    dest: "/etc/apt/sources.list.d/{{ item.file }}"
+    content: "{{ item.line }}\n"
+    mode: "0644"
+  loop:
+    - file: github-cli.list
+      line: >-
+        deb [arch={{ _backend_dpkg_arch.stdout | trim }}
+        signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg]
+        https://cli.github.com/packages stable main
+    - file: claude-code.list
+      line: >-
+        deb [signed-by=/etc/apt/keyrings/claude-code.asc]
+        https://downloads.claude.ai/claude-code/apt/stable stable main
+  loop_control:
+    label: "{{ item.file }}"
+  become: true
+  register: _backend_cli_sources
+  tags: ['backend', 'packages', 'llc']
+
+# Also refreshed when a version is pinned: the keys and sources only change on
+# first install, so a converged host would otherwise never refresh, and pinning a
+# newly-released version would fail against a stale cache — defeating the point
+# of the pin.
+- name: "Backend | Refresh apt after adding the agent CLI sources (#12681)"
+  ansible.builtin.apt:
+    update_cache: true
+    lock_timeout: 60
+  become: true
+  when: >-
+    _backend_cli_sources is changed
+    or _backend_cli_keys is changed
+    or (backend_claude_cli_version | default('') | trim | length > 0)
+  tags: ['backend', 'packages', 'llc']
+
+# An empty version takes the current stable-channel build; set
+# backend_claude_cli_version to pin an exact package version.
+- name: "Backend | Install the LLC agent CLIs (#12681)"
+  ansible.builtin.apt:
+    name: "{{ ['gh'] + ['claude-code' + ('=' + backend_claude_cli_version if (backend_claude_cli_version | default('') | trim | length > 0) else '')] }}"
+    state: present
+    install_recommends: false
+    lock_timeout: 60
+  become: true
+  tags: ['backend', 'packages', 'llc']
+
+# The image runs `claude --version` at build time so an install regression
+# fails the build instead of silently breaking dispatch. The equivalent here is
+# to resolve them on the host: a task that installs without checking would let
+# a broken PATH look identical to a successful provision.
+- name: "Backend | Verify the agent CLIs resolve on PATH (#12681)"
+  ansible.builtin.command:
+    cmd: "{{ item }} --version"
+  loop:
+    - gh
+    - claude
+  changed_when: false
+  tags: ['backend', 'packages', 'llc']
+
+
 - name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
   block:
   # MVA-1633: Prevent systemd Restart=always race during env updates.
