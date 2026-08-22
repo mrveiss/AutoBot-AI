@@ -54,6 +54,34 @@ _COMMON_CLI_INSTALL_DIRS: tuple[str, ...] = (
 )
 
 
+PLACEHOLDER_PID = "0"
+
+
+def placeholder_run_id(session_id: str) -> str:
+    """The run id a transcript filename is built from, before the child exists.
+
+    An adapter has to name its output file *before* spawning the process — the
+    file is the child's stdout — so no pid exists yet and ``PLACEHOLDER_PID``
+    stands in for it. The run id the adapter returns afterwards carries the
+    real pid, so the two ids never agree.
+
+    Anything recomputing a transcript path must therefore rebuild *this* id.
+    Deriving it from the returned run id names a file no run has ever written,
+    which is how a complete transcript sat on disk while the replay log stayed
+    empty (#13614).
+    """
+    return f"{PLACEHOLDER_PID}/{session_id}"
+
+
+def session_id_from_run_id(run_id: str) -> str:
+    """The session half of a ``<pid>/<session>`` run id.
+
+    Falls back to the whole string when there is no pid prefix, so a caller
+    never has to guard the shape before asking.
+    """
+    return run_id.split("/", 1)[-1]
+
+
 def _common_cli_search_dirs() -> list[str]:
     """Common install dirs, plus the npm global bin dir when NPM_CONFIG_PREFIX is set."""
     dirs = list(_COMMON_CLI_INSTALL_DIRS)
