@@ -88,9 +88,12 @@ export function useSessionSync(sessionId: Ref<string | null>) {
    */
   async function resync(id: string): Promise<void> {
     try {
-      const response = await apiClient.get(`/api/chat/sessions/${encodeURIComponent(id)}`)
-      const payload = response?.data as { data?: { messages?: BackendMessage[] } } | undefined
-      const rawMessages = payload?.data?.messages
+      // ApiClient resolves to the parsed body itself, so the backend's
+      // DataResponse wrapper is the only `data` level to unwrap.
+      const body = await apiClient.get<{ data?: { messages?: BackendMessage[] } }>(
+        `/api/chat/sessions/${encodeURIComponent(id)}`
+      )
+      const rawMessages = body?.data?.messages
       if (!Array.isArray(rawMessages)) {
         syncError.value = 'Server snapshot contained no messages array'
         synchronized.value = false

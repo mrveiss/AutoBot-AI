@@ -89,6 +89,8 @@ class GlobalWebSocketService {
   heartbeatTimeout: number
   listeners: Map<string, Set<EventCallback>>
   state: WebSocketReactiveState
+  /** #14818: highest global-channel event_id seen; replayed from on reconnect. */
+  private lastGlobalEventId: number | null
   private _backendWaitTimer: ReturnType<typeof setInterval> | null
 
   constructor() {
@@ -102,6 +104,7 @@ class GlobalWebSocketService {
     this.connectionTimeout = 5000
     this.heartbeatInterval = null
     this.heartbeatTimeout = 30000
+    this.lastGlobalEventId = null
     this._backendWaitTimer = null
     this.listeners = new Map()
 

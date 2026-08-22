@@ -170,10 +170,14 @@ export const useChatStore = defineStore('chat', () => {
    */
   async function createServerSession(title?: string): Promise<{ id: string; authoritative: boolean }> {
     try {
-      const response = await apiClient.post('/api/chat/sessions', { title })
-      const serverId =
-        (response?.data as { data?: { session_id?: string; id?: string } })?.data?.session_id ??
-        (response?.data as { data?: { session_id?: string; id?: string } })?.data?.id
+      // ApiClient returns the parsed body directly (Promise<T>), not an
+      // axios-style { data } envelope — the backend's own DataResponse wrapper
+      // is the single `data` level here.
+      const body = await apiClient.post<{ data?: { session_id?: string; id?: string } }>(
+        '/api/chat/sessions',
+        { title }
+      )
+      const serverId = body?.data?.session_id ?? body?.data?.id
       if (serverId) {
         return { id: createNewSession(title, serverId), authoritative: true }
       }

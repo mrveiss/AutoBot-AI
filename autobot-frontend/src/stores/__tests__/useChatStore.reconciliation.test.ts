@@ -18,7 +18,7 @@ function remoteMessage(id: string, content = 'from another client'): ChatMessage
     content,
     sender: 'bot',
     timestamp: new Date(),
-  } as ChatMessage
+  }
 }
 
 describe('chat store reconciliation (#14821)', () => {
@@ -30,7 +30,7 @@ describe('chat store reconciliation (#14821)', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
 
-    const id = store.addMessage({ content: 'hello', sender: 'user' } as never)
+    const id = store.addMessage({ content: 'hello', sender: 'user' })
 
     expect(id).not.toBeNull()
     expect(store.hasPendingMessages).toBe(true)
@@ -39,7 +39,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('confirms a pending message when the server echoes it', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    const id = store.addMessage({ content: 'hello', sender: 'user' } as never) as string
+    const id = store.addMessage({ content: 'hello', sender: 'user' }) as string
 
     const confirmed = store.confirmMessage(id)
 
@@ -51,7 +51,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('rewrites the local id to the server id on confirmation', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    const localId = store.addMessage({ content: 'hello', sender: 'user' } as never) as string
+    const localId = store.addMessage({ content: 'hello', sender: 'user' }) as string
 
     store.confirmMessage(localId, 'server-123')
 
@@ -61,7 +61,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('reverts the optimistic effect when the server rejects', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    const id = store.addMessage({ content: 'nope', sender: 'user' } as never) as string
+    const id = store.addMessage({ content: 'nope', sender: 'user' }) as string
     expect(store.currentMessages).toHaveLength(1)
 
     const rejected = store.rejectMessage(id, 'quota exceeded')
@@ -107,14 +107,14 @@ describe('chat store reconciliation (#14821)', () => {
     // the server's, so an id-only check misses and renders a second bubble.
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    const localId = store.addMessage({ content: 'hello there', sender: 'user' } as never) as string
+    const localId = store.addMessage({ content: 'hello there', sender: 'user' }) as string
 
-    const echo = {
+    const echo: ChatMessage = {
       id: 'server-echo-1',
       content: 'hello there',
       sender: 'user',
       timestamp: new Date(),
-    } as ChatMessage
+    }
     const applied = store.applyRemoteMessage('s1', echo)
 
     expect(applied).toBe(false)
@@ -127,7 +127,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('a genuinely different message from another client is still applied', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    store.addMessage({ content: 'mine', sender: 'user' } as never)
+    store.addMessage({ content: 'mine', sender: 'user' })
 
     const applied = store.applyRemoteMessage('s1', remoteMessage('other-1', 'theirs'))
 
@@ -139,7 +139,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('server snapshot replaces local contents and clears stale pendings', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    store.addMessage({ content: 'local only', sender: 'user' } as never)
+    store.addMessage({ content: 'local only', sender: 'user' })
     expect(store.hasPendingMessages).toBe(true)
 
     store.applyServerSnapshot('s1', [remoteMessage('srv-1', 'authoritative')])
@@ -152,7 +152,7 @@ describe('chat store reconciliation (#14821)', () => {
   it('a pending message present in the snapshot stays confirmed, not dropped twice', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')
-    const id = store.addMessage({ content: 'kept', sender: 'user' } as never) as string
+    const id = store.addMessage({ content: 'kept', sender: 'user' }) as string
 
     store.applyServerSnapshot('s1', [remoteMessage(id, 'kept')])
 
