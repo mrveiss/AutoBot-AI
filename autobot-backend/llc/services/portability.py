@@ -718,8 +718,7 @@ class PortabilityService(LLCServiceBase):
             # scopes by company_id; this one was the outlier.
             await self.session.execute(
                 text(
-                    "UPDATE agent_org_nodes SET reports_to = :mgr "
-                    "WHERE agent_id = :aid AND company_id = :cid"
+                    "UPDATE agent_org_nodes SET reports_to = :mgr " "WHERE agent_id = :aid AND company_id = :cid"
                 ).bindparams(mgr=manager_dest_id, aid=landed[source_id], cid=company_id)
             )
 

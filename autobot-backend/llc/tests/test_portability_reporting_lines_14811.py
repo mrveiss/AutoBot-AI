@@ -62,9 +62,7 @@ COMPANY = "co-under-test"
 def _update_params(session: _FakeSession) -> List[Dict[str, Any]]:
     """Bound params of every reporting-line UPDATE the linker issued."""
     return [
-        stmt.compile().params
-        for stmt in session.statements
-        if "UPDATE agent_org_nodes SET reports_to" in str(stmt)
+        stmt.compile().params for stmt in session.statements if "UPDATE agent_org_nodes SET reports_to" in str(stmt)
     ]
 
 
@@ -239,6 +237,4 @@ class TestTheUpdateCannotReachAnotherCompany:
 
         params = _update_params(session)
         assert params, "no UPDATE was issued, so this guard would pass vacuously"
-        assert all(p["cid"] == COMPANY for p in params), (
-            f"an UPDATE was not scoped to the importing company: {params}"
-        )
+        assert all(p["cid"] == COMPANY for p in params), f"an UPDATE was not scoped to the importing company: {params}"
