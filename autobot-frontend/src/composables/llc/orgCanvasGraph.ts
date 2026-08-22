@@ -465,6 +465,24 @@ export function teamMemberOrgNodeId(nodeId: string): string | null {
 }
 
 /**
+ * The team (or `UNGROUPED_TEAM_ID`) id a team-roster canvas node belongs to,
+ * or `null` when `nodeId` does not name one.
+ *
+ * The multi-filter's team predicate (`orgCanvasFilters.ts`, #14608) needs this
+ * for a roster's duplicate `org-person` nodes, which carry no `data` field
+ * naming their team — the id (`teamMemberNodeId`'s `groupId`) is the only
+ * place it lives. A reporting-hierarchy `org-person` has no such id shape and
+ * gets `null`, same as `teamMemberOrgNodeId` above.
+ */
+export function teamGroupIdOfMemberNode(nodeId: string): string | null {
+  if (!nodeId.startsWith(TEAM_GROUP_PREFIX)) return null
+  const at = nodeId.indexOf(TEAM_MEMBER_MARK)
+  if (at < 0) return null
+  const groupId = nodeId.slice(TEAM_GROUP_PREFIX.length, at)
+  return groupId.length > 0 ? groupId : null
+}
+
+/**
  * One team's (or the ungrouped bucket's) people, packed in a grid inside
  * their own container — a team carries no hierarchy, so it lays out like the
  * ungrouped grid above, not like a unit's tree (#13994's same reasoning,
