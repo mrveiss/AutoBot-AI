@@ -1,0 +1,132 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
+// Author: mrveiss
+/**
+ * #14766: edge geometry.
+ *
+ * The `connections` computed used to resolve each edge's target with
+ * `props.nodes.find(...)`, making it O(N x E) — on the drag hot path, where
+ * `onPointerMove` emits `node-moved` per pointer event and the consumer's
+ * write re-triggers the computed. It now resolves through an index built once
+ * per recompute.
+ *
+ * That is a pure refactor, so the tests that matter are the ones that pin the
+ * OUTPUT: the rendered `d` attributes must be byte-identical to what the scan
+ * produced, including the cases where the two implementations could plausibly
+ * disagree — a dangling target, a self-edge, several edges from one node, and
+ * a duplicate id (`find` returns the FIRST match; a naive `Map.set` loop keeps
+ * the LAST).
+ *
+ * The expected path strings below are written out in full rather than
+ * recomputed from the same formula the component uses. A test that rebuilds
+ * the formula would keep passing if the formula itself changed.
+ */
+
+import { describe, it, expect, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
+
+vi.mock('@/composables/useConfirmDialog', () => ({
+  useConfirmDialog: () => ({ confirm: vi.fn().mockResolvedValue(true) }),
+}))
+
+import WorkflowCanvas from '../WorkflowCanvas.vue'
+import type { CanvasNode } from '../canvasNode'
+
+function step(id: string, x: number, y: number, connections: string[] = []): CanvasNode {
+  return {
+    id,
+    type: 'step',
+    position: { x, y },
+    data: { command: '', description: '', risk_level: 'low', requires_confirmation: true },
+    connections,
+  }
+}
+
+function mountCanvas(nodes: CanvasNode[]) {
+  return mount(WorkflowCanvas, {
+    props: { nodes, selectedNodeId: null },
+    global: { plugins: [createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })] },
+  })
+}
+
+/** Every rendered edge path, in render order. */
+function paths(w: ReturnType<typeof mountCanvas>): string[] {
+  return w.findAll('.connection-line').map((p) => p.attributes('d') ?? '')
+}
+
+describe('edge geometry is unchanged by the index (#14766)', () => {
+  it('draws the same path the linear scan produced', () => {
+    // n1 at (0, 0) -> n2 at (400, 200). Ports attach at the node mid-line
+    // (CANVAS_NODE_PORT_Y = 50) and leave the source's right edge
+    // (CANVAS_NODE_WIDTH = 240), so the curve runs (240,50) -> (400,250) with
+    // both control points on the midpoint x = 320.
+    const w = mountCanvas([step('n1', 0, 0, ['n2']), step('n2', 400, 200)])
+
+    expect(paths(w)).toEqual(['M240,50 C320,50 320,250 400,250'])
+  })
+
+  it('skips an edge whose target is not on the canvas rather than drawing to nowhere', () => {
+    const w = mountCanvas([step('n1', 0, 0, ['ghost']), step('n2', 400, 200)])
+
+    expect(paths(w)).toEqual([])
+  })
+
+  it('draws every edge of a node that has several', () => {
+    const w = mountCanvas([
+      step('n1', 0, 0, ['n2', 'n3']),
+      step('n2', 400, 200),
+      step('n3', 400, 600),
+    ])
+
+    expect(paths(w)).toEqual([
+      'M240,50 C320,50 320,250 400,250',
+      'M240,50 C320,50 320,650 400,650',
+    ])
+  })
+
+  it('draws a self-edge as the scan did rather than dropping it', () => {
+    const w = mountCanvas([step('n1', 0, 0, ['n1'])])
+
+    expect(paths(w)).toEqual(['M240,50 C120,50 120,50 0,50'])
+  })
+
+  it('resolves a duplicated id to the FIRST match, as find() did', () => {
+    // Two nodes share the id 'dup'. `find` returns the first; a `Map.set` loop
+    // that did not guard would keep the last and re-anchor the edge to
+    // (800, 400) instead of (400, 200).
+    const w = mountCanvas([
+      step('n1', 0, 0, ['dup']),
+      step('dup', 400, 200),
+      step('dup', 800, 400),
+    ])
+
+    expect(paths(w)).toEqual(['M240,50 C320,50 320,250 400,250'])
+  })
+})
+
+describe('the node count this canvas is known to carry (#14766)', () => {
+  // The canvas renders every node as live DOM with no virtualisation and no
+  // documented ceiling — before this, no test in the suite mounted more than a
+  // handful. This states the number rather than leaving it to be discovered by
+  // a real org graph. It is a floor on what we support, not a performance
+  // budget: raise it when a surface needs more.
+  // 200 leaves headroom under the suite's 10s `testTimeout` while still being
+  // an order of magnitude past anything the suite mounted before.
+  const SUPPORTED_NODES = 200
+
+  it(`renders ${SUPPORTED_NODES} nodes and their edges without dropping any`, () => {
+    const nodes = Array.from({ length: SUPPORTED_NODES }, (_, i) =>
+      step(`n${i}`, (i % 20) * 300, Math.floor(i / 20) * 200, i > 0 ? [`n${i - 1}`] : []),
+    )
+
+    const w = mountCanvas(nodes)
+
+    expect(w.findAll('.workflow-node')).toHaveLength(SUPPORTED_NODES)
+    // Every node but the first carries exactly one outgoing edge.
+    expect(paths(w)).toHaveLength(SUPPORTED_NODES - 1)
+    expect(paths(w).every((d) => d.startsWith('M'))).toBe(true)
+  })
+})
