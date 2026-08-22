@@ -100,3 +100,39 @@ class TestTheGateAndTheInsertAgree:
         assert 'agent.get("adapter_type")' in gate_line, gate_line
         assert 'agent.get("adapter_type")' in insert_line, insert_line
         assert '"claude_code"' not in gate_line, "the gate must not resolve a default the INSERT does not also apply"
+
+    @pytest.mark.asyncio
+    async def test_an_omitted_adapter_type_is_persisted_as_it_was_given(self):
+        """Behavioural counterpart to the source check above.
+
+        The source guard catches a default reappearing at the gate. This catches
+        the consequence: an omitted `adapter_type` must reach the INSERT as NULL,
+        so the scheduler resolves it to `autobot_agent` — not as `claude_code`,
+        which is the adapter the old code checked but never stored.
+        """
+        from unittest.mock import AsyncMock
+
+        mod = _svc()
+        svc = mod.PortabilityService.__new__(mod.PortabilityService)
+        svc._agent_names_exist = AsyncMock(return_value=[])
+        svc._resolve_secrets = lambda cfg, mapping, *a, **k: cfg
+        svc.session = AsyncMock()
+
+        with patch.object(mod, "adapter_unavailable_reason", return_value=None):
+            await mod.PortabilityService._import_agent(svc, {"name": "Ops"}, "company-1", {}, [], {})
+
+        svc.session.execute.assert_awaited()
+
+        # The INSERT is a text() clause with .bindparams(), executed as a single
+        # positional argument — so the bound value is read off the compiled
+        # statement, the same way test_import.py inspects this call.
+        from sqlalchemy.dialects import postgresql
+
+        stmt = svc.session.execute.await_args.args[0]
+        compiled = stmt.compile(dialect=postgresql.dialect(paramstyle="pyformat"))
+        assert compiled.params["adapter_type"] is None, (
+            f"an omitted adapter_type must persist as NULL, got "
+            f"{compiled.params['adapter_type']!r} — the scheduler reads NULL as "
+            "autobot_agent, so writing anything else silently changes which adapter "
+            "the agent runs on"
+        )
