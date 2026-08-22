@@ -12,10 +12,13 @@ Protocol:
   Subscribe:   {"action": "subscribe",   "channel": "task:abc123"}
                {"action": "subscribe",   "channel": "chat:c1", "last_event_id": 42}
   Unsubscribe: {"action": "unsubscribe", "channel": "task:abc123"}
+  Command:     {"action": "command", "channel": "operation:x", "command": "pause",
+                "payload": {...}}
   Ping:        {"action": "ping"}
   Server ack:  {"type": "subscribed",   "channel": "...", "replayed": <int>}
                {"type": "unsubscribed", "channel": "..."}
                {"type": "resync",       "channel": "...", "reason": "..."}
+               {"type": "command_result","channel": "...", "command": "...", "result": {...}}
                {"type": "pong"}
                {"type": "error",        "message": "..."}
   Live event:  {"type": "live_event", "channel": "...", "event_type": "...",
@@ -40,6 +43,7 @@ from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
+from events.channel_commands import CommandRefused, dispatch_command
 from events.channel_stream import get_channel_event_stream
 from services.workflow_permission_service import WorkflowPermissionService
 
@@ -205,6 +209,58 @@ async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
     return False
 
 
+async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
+    """Single authorization rule for a channel, shared by subscribe and command.
+
+    #14824: commands must not be able to reach a channel the caller could not
+    subscribe to. Deriving both from this one function is what keeps the two
+    paths from drifting — a second copy of the rules is how one of them ends up
+    weaker than the other.
+    """
+    if not user_payload:
+        return True
+    if channel.startswith("agent:"):
+        claimed_id = channel.split(":", 1)[1]
+        user_id = str(user_payload.get("user_id", ""))
+        username = user_payload.get("username", "")
+        is_admin = "admin" in user_payload.get("roles", [])
+        return is_admin or claimed_id in (user_id, username)
+    if channel.startswith("company:") or channel.startswith("board:"):
+        return await _authorize_llc_channel(channel, user_payload)
+    if channel.startswith("session:") or channel.startswith("chat:"):
+        return await _authorize_conversation_channel(channel, user_payload)
+    if (
+        channel.startswith("workflow:")
+        or channel.startswith("heartbeat:")
+        or channel.startswith("task:")
+    ):
+        return await _authorize_resource_channel(channel, user_payload)
+    return True
+
+
+async def _handle_command(
+    ws: WebSocket,
+    channel: str,
+    command: str,
+    payload: dict,
+    user_payload: dict | None,
+) -> None:
+    """Route one client command to the handler registered for its channel (#14824)."""
+    try:
+        result = await dispatch_command(channel, command, payload, user_payload, _authorize_channel)
+    except CommandRefused as refusal:
+        await _send_error(ws, refusal.reason)
+        return
+    await ws.send_json(
+        {
+            "type": "command_result",
+            "channel": channel,
+            "command": command,
+            "result": result or {},
+        }
+    )
+
+
 async def _handle_subscribe(
     ws: WebSocket,
     channel: str,
@@ -288,6 +344,14 @@ async def _handle_message(ws: WebSocket, raw: str, user_payload: dict | None) ->
         )
     elif action == "unsubscribe":
         await _handle_unsubscribe(ws, data.get("channel", ""))
+    elif action == "command":
+        await _handle_command(
+            ws,
+            data.get("channel", ""),
+            data.get("command", ""),
+            data.get("payload") or {},
+            user_payload,
+        )
     elif action == "ping":
         await ws.send_json({"type": "pong"})
     else:
