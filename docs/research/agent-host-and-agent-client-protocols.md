@@ -192,6 +192,283 @@ either protocol on the wire**, and that is very likely where the value is.
 
 ---
 
-## Phase 2 — AutoBot Comparison
+---
 
-Not started. Awaiting explicit go-ahead.
+## AutoBot Comparison: AHP + ACP → AutoBot
+
+**Focus (owner-set):** AutoBot is one host, many clients — so AHP's core problem *is* AutoBot's
+problem. This section is scoped to the multi-client session/state-sync path.
+
+**Headline:** AutoBot already has almost every *ingredient* AHP needs — channel-scoped fan-out,
+monotonic per-channel event ids, a Redis Streams replay buffer, per-session multi-connection
+presence — but they are **wired to three different buses, and the main chat WebSocket uses the one
+that is structurally single-client**. The gap is assembly, not invention.
+
+### Audit: what was read
+
+`autobot-backend/api/websockets.py`, `events/bus.py`, `event_manager.py`, `live_event_manager.py`,
+`events/stream_manager.py`, `api/live_events.py`, `api/presence_ws.py`, `websocket/presence.py`,
+`mcp/autobot_server.py`, `a2a/agent_card.py`; frontend
+`src/services/GlobalWebSocketService.ts`, `src/services/LiveEventService.ts`,
+`src/stores/useChatStore.ts`; plus repo-wide greps for `@router.websocket`, `register_ws_broadcast`,
+`PersistStrategy`, `subscribe_ws`, `event_id`, and `acp|agent client protocol`.
+
+---
+
+### Finding 0 (blocking, pre-existing bug) — `/api/ws` is structurally single-client
+
+Not an adoption item — a defect the audit surfaced, and the reason multi-client does not work today.
+
+`api/websockets.py:681` registers each connection's handler via
+`get_event_bus().register_ws_broadcast(broadcast_event)`, which lands on
+`EventManager.register_websocket_broadcast` (`event_manager.py:53`). That setter assigns a **single
+scalar**, not a list:
+
+```python
+self._websocket_broadcast_callback: Callable[...] | None = None   # event_manager.py:31
+```
+
+Consequences, in order of severity:
+
+1. **Last-writer-wins.** Client B connecting silently stops Client A receiving anything on this
+   path. No error, no log.
+2. **First disconnect kills delivery for everyone.** `api/websockets.py:694` clears the callback to
+   `None` on *any* client's teardown — including in the `finally` of a client that was already
+   superseded. Remaining connected clients go permanently silent.
+3. **Chat history stops being written.** `_add_to_chat_history` is invoked from *inside*
+   `broadcast_event` (`api/websockets.py:510`). No callback → no broadcast → **no persistence**.
+   This is a data-loss path, not just a UI path.
+
+Blast radius is wide: `PersistStrategy.NONE` (which routes to this single-callback path) is the
+strategy used by `api/workflow.py` (7 sites), `chat_workflow/cot_events.py:201`, `api/agent.py:194`,
+`orchestrator.py:968`, `orchestration/workflow_runner.py:695`,
+`services/approval_gate_service.py:362`, `services/npu_worker_manager.py:902`, `worker_node.py`,
+`diagnostics.py`. Chain-of-thought, workflow progress, and approval-gate events all ride it.
+
+The frontend's primary socket, `GlobalWebSocketService` (`src/services/GlobalWebSocketService.ts:146`),
+connects to exactly this endpoint (`${getApiBase()}/ws`).
+
+**This should be filed and fixed on its own merits regardless of any protocol adoption.** The fix
+is small — make the callback a set keyed by connection — and does not require AHP.
+
+---
+
+### What We Can Adopt
+
+#### 1. Host-authoritative session state (AHP's central premise) — **adopt-with-conditions**
+
+*Already-exists audit.* `src/stores/useChatStore.ts` is the source of truth for sessions today:
+`createNewSession` mints the id client-side (`:136-138`), messages are appended locally
+(`:199`, `:279`), and the store persists to `localStorage` under `autobot-chat-store` (`:856`).
+There is no server-authoritative session document and no reconciliation anywhere in the store —
+grep for `optimistic|rollback|revert` returns only `hasPendingApproval` (`:462`), which is
+unrelated. Two browsers on one account produce two divergent truths that never converge.
+
+*Visible benefit.* Open the same session on desktop and phone and see the same thing; a refresh
+stops losing state; server-side features (search, audit, quotas) get one thing to read.
+
+*Hidden cost.* This is the single largest item here. It relocates ownership of chat state from the
+store to the backend, touches every writer in `useChatStore.ts`, and demands a
+confirmed/pending/optimistic split in the store to avoid regressing input latency. Pre-1.0 protocol
+churn if AHP's shapes are copied literally.
+
+*Verdict.* **Adopt the doctrine, not the wire format.** Make the backend authoritative for session
+and turn state and give clients a snapshot+delta subscription. Do *not* import AHP's
+`ahp-session:/` / `ahp-chat:/` URI scheme or its full 10-channel/30-command surface — AutoBot has
+one host and one product, so the interop pressure that justifies AHP's size does not apply.
+Effort: **significant**.
+
+#### 2. Reconnect-with-replay via `lastSeenServerSeq` — **adopt** (highest value/effort ratio)
+
+*Already-exists audit.* Three of the four pieces are built:
+- `LiveEventManager.publish` already stamps a **monotonic per-channel `event_id`**
+  (`live_event_manager.py:_next_event_id`, `:88`).
+- `LiveEventService.ts:33,409` already **receives** `event_id` — and does nothing with it but log.
+- `RedisEventStreamManager` (`events/stream_manager.py:125`) is a **real replay buffer**: Redis
+  Streams via `xadd(..., maxlen=config.max_stream_length)` (`:167`), with `xrange` (`:322`),
+  `get_latest` (`:262`), and `get_event` (`:337`).
+
+The missing piece is the wiring, and it is worse than missing — it is *explicitly dropped*:
+
+```python
+if persist is PersistStrategy.REDIS:
+    logger.critical("PersistStrategy.REDIS is not implemented in EventBus — event dropped ...")
+    return                                              # events/bus.py:76-84
+```
+
+Meanwhile `LiveEventManager._event_counters` is a plain in-process dict — it resets on restart and
+is not shared across workers, so today's `event_id` is not even durable.
+
+Reconnect handling exists on both services (`GlobalWebSocketService.ts:447`,
+`LiveEventService.ts:218`) with exponential backoff, and `LiveEventService` correctly re-subscribes
+its channels on reopen (`:148`). But no client sends a last-seen id, so **every event during the
+disconnect window is silently lost** — the failure mode is invisible, which is the worst kind.
+
+*Visible benefit.* No lost workflow/CoT/approval events across a laptop sleep, a WiFi handover, or
+a backend restart.
+
+*Hidden cost.* Sequence allocation must move to Redis to be durable and multi-worker-safe; you
+inherit a retention policy (`maxlen`) and the snapshot-vs-replay branch when the gap exceeds the
+buffer. Modest and well-bounded.
+
+*Verdict.* **Adopt.** Wire `PersistStrategy.REDIS` into `EventBus.publish`, source `event_id` from
+the Redis stream id, accept `last_event_id` on the `/ws/live` subscribe action, and replay via
+`xrange` — falling back to a snapshot when the id is older than `maxlen`. Effort: **moderate**.
+
+#### 3. Uniform `channel` routing key on *every* message — **adopt, narrowly**
+
+*Already-exists audit.* AutoBot has **25 WebSocket routes** (`grep -c '@router.websocket'`,
+excluding tests): `api/websockets.py` ×3, `api/live_events.py`, `api/terminal.py` ×2,
+`api/analytics.py` ×2, `api/advanced_control.py` ×2, `api/presence_ws.py`, `api/monitoring.py`,
+`api/voice_stream.py`, `api/logs.py`, `api/vnc_proxy.py`, `api/overseer_handlers.py`,
+`services/workflow_automation/routes.py`, and others — each with its own hand-rolled envelope,
+auth, keepalive, and teardown.
+
+`LiveEventManager` already validates a channel grammar —
+`{agent,task,workflow,heartbeat,company,board}:{id}` plus `global` (`live_event_manager.py:23,25-32`)
+— so the concept is established and enforced; it is just confined to one endpoint.
+
+*Visible benefit.* One socket, one envelope, one auth path; new event types need no new route.
+Proxies and the frontend dispatch on `(type, channel)` without per-message knowledge.
+
+*Hidden cost.* Consolidating 25 endpoints is a large migration touching binary-ish streams (VNC,
+voice, terminal PTY) that genuinely should *not* be multiplexed onto a JSON event socket.
+
+*Verdict.* **Adopt for the event-shaped subset only** — chat, workflow, agent, approvals, NPU,
+analytics, monitoring. Leave VNC/voice/terminal/logs on dedicated sockets. Extend the existing
+`_VALID_PREFIXES` grammar with `session:{id}` and `chat:{id}` rather than inventing a URI scheme.
+Effort: **significant** (but incremental — one route at a time).
+
+#### 4. Write-ahead reconciliation in the Pinia store — **adopt-with-conditions**
+
+*Already-exists audit.* Nothing resembling this exists. `useChatStore.ts` pushes straight into
+`currentSession.value.messages` with no pending set; the only echo-handling is id-matching dedup at
+`:252` and `:274` (#11843), which is a symptom of exactly the problem AHP's `origin`/`clientSeq`
+solves properly.
+
+*Visible benefit.* Instant local echo *and* convergence between clients; deletes the dedup hacks.
+
+*Hidden cost.* Real complexity in the store — `confirmedState` + `pendingActions[]` + computed
+`optimisticState`, plus rebase. Only pays off **after** item 1 lands; on its own it has nothing to
+reconcile against.
+
+*Verdict.* **Adopt-with-conditions — strictly sequenced after item 1.** AHP's own honesty applies
+here: chat actions are append-only, so rebasing is near-trivial and server-wins settles the rest.
+Effort: **moderate**, conditional.
+
+#### 5. A written doctrine with anti-goals and design tests — **adopt** (cheapest, highest leverage)
+
+*Already-exists audit.* `docs/developer/` covers *process* (`CLAUDE_RULES.md`, `CLAUDE_GIT.md`,
+`CLAUDE_REVIEW.md`, `ARCHITECTURE_EXCEPTIONS.md`) but there is no equivalent of AHP's
+`guide/doctrine.md` — a normative statement of *what the event/state layer is for and what it
+refuses to do*. The three-parallel-bus history recorded in `events/bus.py:7-12` (and its still-open
+"Phase 2/Phase 3" migration plan) is precisely what an anti-goals list prevents.
+
+*Visible benefit.* Kills the "which bus do I publish to?" question permanently; gives reviewers an
+objective test.
+
+*Hidden cost.* Essentially none — one document. Risk is it going stale, mitigated by keeping it a
+checklist per `CLAUDE.md`'s lean-instructions rule.
+
+*Verdict.* **Adopt.** Steal AHP's design tests verbatim — *"Can a minimal client ignore this and
+still render a coherent session?"*, *"Is the durable, user-visible result in state rather than only
+an ephemeral notification?"* — and its anti-goals format. Effort: **trivial**.
+
+#### 6. ACP server surface (let external editors drive AutoBot agents) — **adopt-with-conditions**
+
+*Already-exists audit.* **No ACP anywhere.** A repo-wide grep for
+`agent client protocol|agent-client-protocol` returns only
+`docs/archives/plans/2026-03-04-service-message-bus-design.md:17`, which refers to an unrelated
+"Agent Communication Protocol" from a LangGraph article. AutoBot does expose two adjacent surfaces:
+an MCP **server** (`mcp/autobot_server.py`, with scope checks `_check_scope:526`, rate limiting
+`_is_rate_limited:535`, and Redis token validation `_validate_redis_token:423`) and an A2A agent
+card (`a2a/agent_card.py:build_agent_card:128`). Both **advertise capability outward**; neither lets
+an editor *drive* an AutoBot agent through a prompt/stream/permission loop.
+
+*Visible benefit.* Implementing `initialize` / `session/new` / `session/prompt` / `session/update` /
+`session/request_permission` would make AutoBot agents appear inside Zed, JetBrains, Neovim and
+Emacs via the ACP Registry — real distribution for a protocol with 4k stars and vendor backing.
+
+*Hidden cost.* ACP presumes one client, one human, one editor, one task — the opposite of AutoBot's
+long-running autonomous shape. Sessions would need a mapping from ACP's stdio-scoped model onto
+AutoBot's persistent server-side sessions, and ACP moved v1.0→v1.7 within a year on a cadence set by
+editor-UX priorities.
+
+*Verdict.* **Adopt-with-conditions, and not now.** Correct sequencing is items 0 → 2 → 1: a
+host-authoritative session with replay is a *prerequisite* for an ACP adapter that behaves sanely,
+because ACP's `session/load` replays whole history and `session/resume` needs a durable session to
+resume into. Revisit once item 1 lands. Effort: **significant**.
+
+---
+
+### What We Already Do Better
+
+- **WebSocket authentication.** AHP explicitly punts: *"Access to the AHP endpoint itself is a
+  transport-layer concern and is outside the scope of the AHP wire protocol."* AutoBot has a
+  concrete, uniform, tested convention — `enforce_ws_origin` (`api/ws_security.py`) plus
+  `authenticate_websocket`, with the deliberate accept-then-close-4001 pattern
+  (`api/websockets.py:718-724`, `api/live_events.py:224-231`, #12366) so clients get a real close
+  frame instead of an ambiguous handshake 403. Guarded by `tests/test_websocket_auth_smoke.py` and
+  `tests/test_websockets_auth_reject_12366.py`.
+- **Presence and collaboration.** AHP's `SessionState` has an `activeClients` field and stops
+  there. `websocket/presence.py:PresenceManager` keeps
+  `Dict[session_id][user_id] -> Set[WebSocket]` (`:35`) — note it already models **one user with
+  several concurrent connections**, i.e. the desktop-plus-phone case — with join/leave broadcast
+  (`_broadcast_event:160`), `get_online_users:112`, and targeted `send_to_user:128`. It is wired
+  end-to-end to `src/composables/useSessionCollaboration.ts`,
+  `components/collaboration/ParticipantList.vue` and `PresenceIndicator.vue`. **"Who is here" is
+  solved better than AHP specifies it; "what they see" is the part that is missing.**
+- **MCP depth.** AHP's `mcp://` channel relays a deliberately narrow, capability-gated subset
+  (`serverTools`, `serverResources`, `logging`, `sampling`). AutoBot runs a full MCP server with
+  per-tool scope enforcement and throttling (`mcp/auth_throttle.py`).
+- **Explicit durability as a typed choice.** `PersistStrategy` (`events/bus.py:40`) makes
+  "in-memory vs fan-out vs durable" a decision at the call site. AHP's doctrine assumes durable
+  state but offers no equivalent knob. The enum is the right design — one arm of it just is not
+  implemented yet (see item 2).
+
+### Gaps & Opportunities — prioritised
+
+| # | Gap | Impact | Effort | Note |
+|---|-----|--------|--------|------|
+| 1 | `/api/ws` single-callback broadcast (Finding 0) | **Critical** — multi-client silently broken; chat history silently stops persisting | trivial | Pre-existing bug. File and fix independently of everything else. |
+| 2 | `PersistStrategy.REDIS` logs critical and drops the event | **High** — the durable substrate is built (`events/stream_manager.py`) and unreachable through the unified bus | trivial–moderate | Unwired existing work, not new work. |
+| 3 | No `last_event_id` / replay on reconnect | **High** — events in the disconnect window are lost with no signal | moderate | Depends on #2. |
+| 4 | `event_id` is an in-process counter | **High** — resets on restart, diverges across workers | trivial | Source it from the Redis stream id. |
+| 5 | Two competing event sockets (`/api/ws` vs `/api/ws/live`), frontend uses **both** | **High** — canonical-source violation; `events/bus.py:19-22` still lists Phase 2/3 as outstanding | moderate | `GlobalWebSocketService` → `/api/ws`; `LiveEventService` → `/ws/live`. |
+| 6 | Session state is client-authoritative (Pinia + `localStorage`) | **High** — two clients cannot converge, by construction | significant | The real multi-client blocker. |
+| 7 | No `session:`/`chat:` channel prefixes in `_VALID_PREFIXES` | Medium — no way to scope a subscription to a conversation | trivial | One-line grammar extension; unblocks #6. |
+| 8 | No write-ahead reconciliation in the store | Medium | moderate | Only after #6. |
+| 9 | No doctrine doc for the event/state layer | Medium — three-bus sprawl is the recorded cost of its absence | trivial | Best value-per-hour on the list. |
+| 10 | 25 bespoke WebSocket routes | Medium | significant | Consolidate the event-shaped subset only. |
+| 11 | No ACP server surface | Low *now*, high later | significant | Gated on #6. |
+| 12 | No synchronized drafts / per-chat working directory | Low | moderate | AHP's `chat/draftChanged`; the per-chat-worktree idea maps onto AutoBot's own worktree discipline. |
+
+### Specific Code/Files Affected
+
+- `autobot-backend/event_manager.py:31,53` — `_websocket_broadcast_callback` scalar →
+  `set[Callable]`; `register_websocket_broadcast` → `add`/`discard`. **(Gap 1)**
+- `autobot-backend/api/websockets.py:671-697` — register/unregister per connection instead of
+  overwriting a global; move `_add_to_chat_history` (`:459`) **out** of the broadcast handler so
+  persistence no longer depends on a client being attached. **(Gap 1)**
+- `autobot-backend/events/bus.py:76-84` — implement the `PersistStrategy.REDIS` arm against
+  `RedisEventStreamManager` instead of `logger.critical` + `return`. **(Gaps 2, 4)**
+- `autobot-backend/live_event_manager.py:23,84-88` — add `session`/`chat` to `_VALID_PREFIXES`;
+  source `event_id` from the Redis stream id rather than `_event_counters`. **(Gaps 4, 7)**
+- `autobot-backend/api/live_events.py:_handle_message` — accept `last_event_id` on `subscribe`;
+  replay via `xrange`, else return a snapshot. **(Gap 3)**
+- `autobot-frontend/src/services/LiveEventService.ts:148,251` — track the highest seen `event_id`
+  per channel; send it on re-subscribe; surface a gap as a resync rather than a silent hole.
+  **(Gap 3)**
+- `autobot-frontend/src/services/GlobalWebSocketService.ts:146,153` — migration target: fold onto
+  `/ws/live` once channel coverage is equivalent, retiring the duplicate path. **(Gap 5)**
+- `autobot-frontend/src/stores/useChatStore.ts:136,199,279,252,274` — server-assigned session ids;
+  snapshot+delta subscription; confirmed/pending/optimistic split replacing the id-match dedup.
+  **(Gaps 6, 8)**
+- `docs/developer/` — new `EVENT_STATE_DOCTRINE.md` (principles, design tests, anti-goals), linked
+  from the `CLAUDE.md` trigger table. **(Gap 9)**
+
+### Recommended sequence
+
+**Gap 1 → 2 → 4 → 3 → 7 → 6 → 8 → 5 → 10 → 11.** The first four are small, independently
+valuable, and mostly consist of connecting things AutoBot has already built. Gap 9 (the doctrine
+doc) can land in parallel at any point and makes the rest easier to review.
