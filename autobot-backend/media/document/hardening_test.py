@@ -62,9 +62,22 @@ class TestTheKnobsHaveACeilingAndNotJustAFloor:
         `MAX_OCR_DPI`, say — which is exactly the mistake a copy-pasted resolver
         makes.
         """
-        expected = getattr(ocr_mod, ceiling)
-        monkeypatch.setattr(ocr_mod.config.misc, field, str(expected * 10), raising=False)
-        assert getattr(ocr_mod, resolver)() == expected
+        real = getattr(ocr_mod, ceiling)
+        monkeypatch.setattr(ocr_mod.config.misc, field, str(real * 10), raising=False)
+        assert getattr(ocr_mod, resolver)() == real
+
+        # Asserting against the real value alone cannot tell two ceilings apart
+        # when they share a number, and two of these do: MAX_OCR_DPI is 600 and
+        # MAX_OCR_PAGE_TIMEOUT is MAX_OCR_TIMEOUT // 3 == 600. A resolver
+        # reaching for the other one -- the copy-paste mistake named above --
+        # would still have returned 600 and passed. Repointing THIS constant at
+        # a sentinel binds the assertion to the constant by name: a resolver
+        # wired elsewhere keeps clamping to that other ceiling's real value and
+        # fails here.
+        sentinel = real + 7919
+        monkeypatch.setattr(ocr_mod, ceiling, sentinel)
+        monkeypatch.setattr(ocr_mod.config.misc, field, str(sentinel * 10), raising=False)
+        assert getattr(ocr_mod, resolver)() == sentinel
 
     def test_a_non_integer_or_negative_still_falls_back(self):
         """The ceiling must not have displaced the existing floor behaviour."""
