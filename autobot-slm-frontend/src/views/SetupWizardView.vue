@@ -495,6 +495,8 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useProvisionStore } from '@/stores/provision'
 import type { NodeRole } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
+import { useToast } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('SetupWizard')
 
@@ -519,6 +521,8 @@ const {
 // unmount (user navigates to another page during provisioning), browser
 // refresh (state recovers via getProvisionStatus), and WS disconnect.
 const provisionStore = useProvisionStore()
+const { showToast } = useToast()
+const { t } = useI18n()
 
 // ── Wizard state ──────────────────────────────────────────────────────────
 
@@ -967,9 +971,19 @@ function toggleRole(nodeId: string, roleName: string) {
 async function saveRoles() {
   savingRoles.value = true
   try {
+    // #14676: collect across every node, so one toast names all the roles that
+    // will silently deploy nothing rather than one toast per node.
+    const unreachable = new Set<string>()
     for (const node of nodes.value) {
       const roles = nodeRoles.value[node.node_id] || []
-      await updateNodeRoles(node.node_id, roles as NodeRole[])
+      const updated = await updateNodeRoles(node.node_id, roles as NodeRole[])
+      for (const name of updated?.unreachable_roles ?? []) unreachable.add(name)
+    }
+    if (unreachable.size > 0) {
+      showToast(
+        t('common.roleReachesNoDeployPath', { roles: [...unreachable].sort().join(', ') }),
+        'warning',
+      )
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)
