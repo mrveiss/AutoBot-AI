@@ -93,3 +93,44 @@ def test_the_ansible_generator_asks_for_the_right_length() -> None:
     ) + re.findall(r"AUTOBOT_SECRETS_ROOT_KEY=.*?length=(\d+)", tasks)
     assert generators, "found no generator for the root key to check"
     assert set(generators) == {"32"}, f"root key generated at wrong length(s): {set(generators)}"
+
+
+def test_every_root_key_jinja_expression_compiles() -> None:
+    """A nested `{{ }}` inside an open expression is a hard TemplateSyntaxError.
+
+    YAML validity says nothing about Jinja validity, so a task file can parse
+    cleanly and still abort at run time. That matters more than it sounds here:
+    the generator lives in the same multi-key `set_fact` that produces the SLM's
+    signing key, encryption key, admin password and auth token, so one bad
+    expression fails all of them on every fresh install.
+    """
+    jinja2 = pytest.importorskip("jinja2")
+
+    env = jinja2.Environment()  # nosec B701  # compiling only, never rendering untrusted input
+    # Filters/lookups Ansible injects that core Jinja does not ship.
+    env.filters["b64encode"] = lambda v: v
+    env.globals["lookup"] = lambda *a, **k: "x"
+
+    task_files = [
+        REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml",
+        REPO_ROOT / "autobot-slm-backend/ansible/roles/backend/tasks/main.yml",
+    ]
+    checked = 0
+    for path in task_files:
+        assert path.is_file(), f"{path} missing — this guard would pass vacuously"
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"\{\{.*?\}\}", text, re.DOTALL):
+            expr = match.group(0)
+            context = text[max(0, match.start() - 200) : match.end()]
+            if ROOT_KEY not in context and "autobot_secrets_root_key" not in context:
+                continue
+            checked += 1
+            try:
+                env.compile(expr)
+            except jinja2.TemplateSyntaxError as exc:  # pragma: no cover - failure path
+                raise AssertionError(f"{path.name}: {exc}\n  {expr[:160]}") from exc
+
+    assert checked >= 3, (
+        f"only {checked} root-key expressions found — the extraction missed some, "
+        "so a passing result would not mean they are all valid"
+    )

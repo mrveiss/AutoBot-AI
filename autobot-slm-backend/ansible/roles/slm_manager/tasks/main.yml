@@ -424,7 +424,7 @@
     autobot_secrets_root_key: >-
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
-         else {{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }} }}
+         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
