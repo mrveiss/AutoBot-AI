@@ -69,6 +69,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import type { CodePayload } from '@/types/canvas'
 import { createLogger } from '@/utils/debugUtils'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
 const logger = createLogger('CodeCell')
 
@@ -80,9 +81,9 @@ const renderError = ref<string>('')
 const highlightJsLoaded = ref(false)
 const copyFeedback = ref<string>('')
 const copyTimeout = ref<number>()
-const prefersReducedMotion = typeof window !== 'undefined'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false
+// #14770: third inline reader of this preference in the codebase; all three
+// now go through the composable, which also makes them reactive.
+const { prefersReducedMotion } = useReducedMotion()
 
 const isDark = typeof window !== 'undefined'
   ? window.matchMedia('(prefers-color-scheme: dark)').matches

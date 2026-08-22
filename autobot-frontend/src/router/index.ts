@@ -1238,6 +1238,8 @@ export const routes: RouteRecordRaw[] = [
   }
 ]
 
+import { scrollBehavior } from '@/composables/useReducedMotion'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
@@ -1247,10 +1249,13 @@ const router = createRouter({
       return savedPosition
     }
     // Scroll to top for new pages
+    // #14770: a scroll the app initiates is motion the stylesheet's global
+    // reduced-motion rule cannot reach — `scroll-behavior: auto !important`
+    // does not override a behaviour passed programmatically.
     if (to.hash) {
-      return { el: to.hash, behavior: 'smooth' }
+      return { el: to.hash, behavior: scrollBehavior() }
     }
-    return { top: 0, behavior: 'smooth' }
+    return { top: 0, behavior: scrollBehavior() }
   }
 })
 
