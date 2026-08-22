@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Filtro de visualização: {role} — mostrando {shown} de {total} nós. O acesso permanece inalterado.",
       "roleLensEmpty": "Filtro de visualização: nenhum nó corresponde a \"{role}\" nesta vista. O acesso permanece inalterado — limpe o filtro para ver todos.",
       "roleLensClear": "Limpar filtro",
+      "teamFilterLabel": "Filtrar por equipa",
+      "teamFilterAll": "Todas as equipas",
+      "teamFilterBanner": "Filtro de equipa: {team} — mostrando {shown} de {total} pessoas. O acesso permanece inalterado.",
+      "toolFilterLabel": "Filtrar por ferramenta",
+      "toolFilterAll": "Todas as ferramentas",
+      "toolFilterBanner": "Filtro de ferramenta: {tool} — mostrando {shown} de {total} pessoas. O acesso permanece inalterado.",
       "sidebar": {
         "owner": "Responsável",
         "tools": "Ferramentas",

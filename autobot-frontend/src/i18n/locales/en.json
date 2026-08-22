@@ -8291,6 +8291,12 @@
       "roleLensBanner": "View filter: {role} — showing {shown} of {total} nodes. Access is unchanged.",
       "roleLensEmpty": "View filter: no nodes match \"{role}\" here. Access is unchanged — clear the filter to see everyone.",
       "roleLensClear": "Clear filter",
+      "teamFilterLabel": "Filter by team",
+      "teamFilterAll": "All teams",
+      "teamFilterBanner": "Team filter: {team} — showing {shown} of {total} people. Access is unchanged.",
+      "toolFilterLabel": "Filter by tool",
+      "toolFilterAll": "All tools",
+      "toolFilterBanner": "Tool filter: {tool} — showing {shown} of {total} people. Access is unchanged.",
       "sidebar": {
         "owner": "Owner",
         "tools": "Tools",

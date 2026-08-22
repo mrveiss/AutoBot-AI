@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Ansichtsfilter: {role} — zeigt {shown} von {total} Knoten. Der Zugriff bleibt unverändert.",
       "roleLensEmpty": "Ansichtsfilter: Keine Knoten entsprechen „{role}“ in dieser Ansicht. Der Zugriff bleibt unverändert — Filter zurücksetzen, um alle zu sehen.",
       "roleLensClear": "Filter zurücksetzen",
+      "teamFilterLabel": "Nach Team filtern",
+      "teamFilterAll": "Alle Teams",
+      "teamFilterBanner": "Teamfilter: {team} — zeigt {shown} von {total} Personen. Der Zugriff bleibt unverändert.",
+      "toolFilterLabel": "Nach Werkzeug filtern",
+      "toolFilterAll": "Alle Werkzeuge",
+      "toolFilterBanner": "Werkzeugfilter: {tool} — zeigt {shown} von {total} Personen. Der Zugriff bleibt unverändert.",
       "sidebar": {
         "owner": "Inhaber",
         "tools": "Werkzeuge",
