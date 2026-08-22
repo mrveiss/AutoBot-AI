@@ -282,7 +282,8 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
 
       const result = await useSlmApi().getNodes()
 
-      expect(result.nodes[0].unreachable_roles).toEqual(['my-custom-role'])
+      // getNodes returns SLMNode[], not the raw { nodes, total } envelope.
+      expect(result[0]!.unreachable_roles).toEqual(['my-custom-role'])
     })
 
     it('defaults to an empty list when the backend omits the field', async () => {
