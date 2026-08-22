@@ -1,7 +1,7 @@
 disable_existing_loggers: false
 formatters:
   json:
-    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    class: pythonjsonlogger.json.JsonFormatter
     format: '%(asctime)s %(name)s %(levelname)s %(message)s'
   standard:
     format: '%(asctime)s [%(name)s] %(levelname)s: %(message)s'

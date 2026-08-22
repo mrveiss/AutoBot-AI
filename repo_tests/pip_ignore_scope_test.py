@@ -29,6 +29,7 @@ insufficient is not visible from reading the config.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -104,11 +105,48 @@ def _files_reachable_from(directory: str) -> set[Path]:
     return files
 
 
-def _packages_pinned_in(file: Path) -> set[str]:
-    """Normalised package names pinned in one file."""
+def _packages_pinned_in(path: Path) -> set[str]:
+    """Distribution names pinned by *path*.
+
+    `pyproject.toml` is parsed as TOML rather than scanned line-wise: a
+    dependency there is quoted (`    "pydantic>=2.13.3",`), so the requirements
+    regex matches none of them and instead harvests the ordinary `key = value`
+    lines — `name`, `version`, `description` — as though they were packages
+    (#14733). That is worse than missing the file: it fills the reachable set
+    with strings no dependabot block will ever name, so the guard looks like it
+    covers pyproject while covering nothing in it.
+    """
+    if path.name == "pyproject.toml":
+        return _packages_declared_in_pyproject(path)
+
     packages: set[str] = set()
-    for line in file.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         match = _PIN.match(line)
+        if match:
+            packages.add(_normalise(match.group(1)))
+    return packages
+
+
+def _packages_declared_in_pyproject(path: Path) -> set[str]:
+    """Every distribution named by a pyproject's project dependencies."""
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover - py<3.11 only
+        return set()
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+
+    project = data.get("project") or {}
+    specs: list[str] = list(project.get("dependencies") or [])
+    for group in (project.get("optional-dependencies") or {}).values():
+        specs.extend(group or [])
+
+    packages: set[str] = set()
+    for spec in specs:
+        match = _PIN.match(str(spec))
         if match:
             packages.add(_normalise(match.group(1)))
     return packages
@@ -229,17 +267,32 @@ def test_reachability_includes_constraints_files() -> None:
     )
 
 
-def test_a_pyproject_counts_as_an_owned_manifest() -> None:
-    """dependabot's pip ecosystem updates pyproject.toml as readily as a txt file.
+def test_a_pyproject_contributes_its_real_dependencies() -> None:
+    """Asserting the filename is on the manifest list proves nothing.
 
-    Modelling only `requirements*.txt` under-approximated what a block reaches,
-    and an under-approximating guard reports clean rather than reporting less.
+    The first version of this checked that `pyproject.toml` appeared among the
+    considered manifests — which it did, while `_PIN` matched none of its
+    dependencies. TOML entries are quoted (`    "pydantic>=2.13.3",`), so the
+    requirements regex instead harvested `name`, `version`, `description` and
+    friends as though they were packages: a reachable set full of strings no
+    dependabot block will ever name (#14733).
     """
-    owned = {d: _manifests_of(d) for d in (b["directory"] for b in _pip_blocks())}
-    considered = {m.name for ms in owned.values() for m in ms}
-    if not any((_REPO_ROOT / b["directory"].lstrip("/") / "pyproject.toml").is_file() for b in _pip_blocks()):
-        pytest.skip("no pip block directory carries a pyproject.toml today")
-    assert "pyproject.toml" in considered, "a pip block owns a pyproject.toml that the reachability computation ignores"
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
+
+    shared = _REPO_ROOT / "autobot_shared" / "pyproject.toml"
+    if not shared.is_file():
+        pytest.skip("autobot_shared/pyproject.toml has moved; re-point this guard")
+
+    packages = _packages_pinned_in(shared)
+    assert packages, "no dependency parsed out of pyproject.toml"
+    assert {"redis", "pydantic", "fastapi"} & packages, (
+        f"parsed {sorted(packages)[:8]} — those are TOML keys, not dependencies, "
+        "so the file is being read line-wise instead of as TOML"
+    )
+    assert not (
+        {"authors", "description", "license", "version"} & packages
+    ), "TOML keys are leaking into the package set as pseudo-dependencies"
 
 
 def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
