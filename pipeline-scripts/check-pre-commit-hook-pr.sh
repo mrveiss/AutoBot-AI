@@ -265,7 +265,18 @@ else
 
     # Partition the hook's violation blocks. A block starts at a VIOLATION
     # header carrying "path:line" and runs to the next blank line.
-    filtered=$(printf '%s\n' "$hook_output" | ADDED="$added_lines" awk '
+    # The added-line set is passed through a FILE, not the environment.
+    # ``ADDED="$added_lines" awk`` counted every added line against ARG_MAX
+    # (E2BIG covers argv *and* envp), so a large PR died with
+    # "/usr/bin/awk: Argument list too long" and exit 126 — a checker crash that
+    # blocked the PR while reporting nothing about its actual content. Scales
+    # with diff size now instead of breaking at it.
+    added_file=$(mktemp)
+    # shellcheck disable=SC2064 -- expand $added_file now, not at trap time.
+    trap "rm -f '$added_file'" EXIT
+    printf '%s\n' "$added_lines" > "$added_file"
+
+    filtered=$(printf '%s\n' "$hook_output" | awk -v added_file="$added_file" '
         # is_violation distinguishes a real violation block from the hook'"'"'s
         # banner and trailer. Counting those as kept reported "6 violations on
         # lines this PR added" for a PR that added one clean line — the summary
@@ -295,8 +306,10 @@ else
             return 0
         }
         BEGIN {
-            split(ENVIRON["ADDED"], a, "\n")
-            for (i in a) if (a[i] != "") added[a[i]] = 1
+            # Read the set line by line rather than splitting one giant string:
+            # no single value has to fit in an environment slot or an awk field.
+            while ((getline line < added_file) > 0) if (line != "") added[line] = 1
+            close(added_file)
             keep = 1
         }
         {
