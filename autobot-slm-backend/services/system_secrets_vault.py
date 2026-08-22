@@ -117,7 +117,15 @@ async def _find_vault_id_by_name(name: str, *, expected_type: str | None = None)
             # uuid.UUID raises AttributeError on an int/list and TypeError on None,
             # neither of which is a ValueError — a non-string id would otherwise
             # propagate past db.commit() as a 500 from a best-effort lookup.
-            logger.warning("system-secrets-vault: skipping malformed vault entry for name=%s", name)
+            # The name is deliberately NOT logged here: CodeQL traces it from a
+            # secret source into this sink (py/clear-text-logging-sensitive-data).
+            # The entry's type is a label rather than a credential, and it is the
+            # more useful diagnostic anyway — the callers already log which key
+            # the operation was for.
+            logger.warning(
+                "system-secrets-vault: skipping a vault entry with a malformed id (type=%s)",
+                entry.get("type"),
+            )
             continue
     return None
 
