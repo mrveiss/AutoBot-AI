@@ -211,6 +211,32 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #14758: the envelope secret store raised at import on every provisioned
+# deployment because nothing ever wrote its root key, and each consumer swallowed
+# the failure, so an entirely absent store looked like "that secret does not
+# exist". slm_manager generates it into slm-secrets.env; read it here so both
+# services derive the same vault KEKs. The SLM's SSO vault migration states
+# outright that it needs the BACKEND's root key, so two values would be a silent
+# decryption failure rather than a config nuisance.
+- name: "Backend | Read AUTOBOT_SECRETS_ROOT_KEY from slm-secrets.env (#14758)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_SECRETS_ROOT_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_secrets_root_key
+  changed_when: false
+  failed_when: false
+  when: _slm_secrets_stat.stat.exists | default(false)
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Align autobot_secrets_root_key with slm-secrets.env when present (#14758)"
+  ansible.builtin.set_fact:
+    autobot_secrets_root_key: "{{ _backend_secrets_root_key.stdout | trim }}"
+  when: (_backend_secrets_root_key.stdout | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service

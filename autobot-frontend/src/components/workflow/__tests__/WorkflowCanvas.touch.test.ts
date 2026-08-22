@@ -139,7 +139,9 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
       pointerType: 'touch', pointerId: 1, clientX: 130, clientY: 140,
     })
 
-    expect(w.emitted('node-moved')).toEqual([['n1', { x: 130, y: 80 }]])
+    // #14768: the drag lands on the grid — the raw drop is (130, 80) and 130
+    // snaps to the nearest 20. The y is already a grid multiple.
+    expect(w.emitted('node-moved')).toEqual([['n1', { x: 140, y: 80 }]])
     // The pan transform must not have moved — this was a drag, not a pan.
     expect(transform(w)).toContain('translate(50px, 50px)')
   })
