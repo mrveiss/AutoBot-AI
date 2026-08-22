@@ -56,6 +56,11 @@ class ImportExecuteResponse(BaseModel):
     company_id: str
     created_entities: Dict[str, List[str]]
     skipped: Dict[str, List[str]]
+    # Reporting lines that could not be honoured because the manager was not
+    # created (#14811). Structured, not prose: `warnings` carries server-composed
+    # English the UI cannot translate, and an operator has to be able to see
+    # which agents lost their manager in their own locale.
+    dropped_reporting_lines: List[Dict[str, str]] = []
     warnings: List[str]
 
 
