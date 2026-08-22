@@ -38,6 +38,7 @@ _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "
 # its exemption to be removed rather than sitting here exempting nothing.
 _KNOWN_BROKEN = {
     ("chat_history/context_overflow.py", "llm_shared.gateway"): "#14840",
+    ("slash_command_handler.py", "services.consolidated_health_service"): "#14851",
 }
 
 
@@ -66,7 +67,15 @@ def _optional_import_nodes(tree: ast.AST) -> set[int]:
             for sub in ast.walk(handler.type) if handler.type else []:
                 if isinstance(sub, ast.Name):
                     caught.add(sub.id)
-        if {"ImportError", "ModuleNotFoundError", "Exception"} & caught:
+        # Deliberately NOT including bare `Exception`. A broad handler is not a
+        # declaration that the import is optional — and in this repo it is the
+        # single most common wrapper around a first-party import, including all
+        # three call sites of the very function #14839 fixed
+        # (`agent_org_service.py:263`, `:331`, `portability.py:716`). Treating it
+        # as an exemption would have made this guard blind at exactly the places
+        # its own docstring names. It caught the original bug only because that
+        # import happened to sit in a function with no surrounding try.
+        if {"ImportError", "ModuleNotFoundError"} & caught:
             guarded.update(id(child) for child in ast.walk(node))
     return guarded
 
