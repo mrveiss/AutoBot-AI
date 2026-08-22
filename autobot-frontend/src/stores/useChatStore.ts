@@ -274,15 +274,48 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
+   * #14821: correlate an inbound server message with a message we sent.
+   *
+   * Our optimistic copy carries a locally generated id while the echo carries
+   * the server's, so ids alone cannot match them. Correlating on
+   * (sender, content) among *pending* messages only — confirmed history is
+   * never rescanned — keeps the echo from rendering a second bubble.
+   *
+   * LIMITATION, stated rather than hidden: two identical unconfirmed messages
+   * from the same sender are indistinguishable here, and the older one is
+   * confirmed first. The complete fix is a client-supplied correlation id that
+   * the backend echoes back (AHP calls this `origin.clientSeq`); this function
+   * is the seam that fix would replace, and nothing else needs to change.
+   *
+   * Returns the local id it confirmed, or null when the message is genuinely
+   * from another client.
+   */
+  function correlatePendingMessage(sessionId: string, message: ChatMessage): string | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+    for (const localId of pendingMessageIds.value) {
+      const candidate = session.messages.find(m => m.id === localId)
+      if (!candidate) continue
+      if (candidate.sender === message.sender && candidate.content === message.content) {
+        confirmMessage(localId, message.id)
+        return localId
+      }
+    }
+    return null
+  }
+
+  /**
    * #14820: apply a message that originated on another client.
    *
-   * Ignores one we already hold, so a server echo of our own message updates
-   * nothing rather than rendering a duplicate.
+   * Ignores one we already hold, and first checks whether it is really the
+   * echo of something we sent — otherwise our own message would come back as
+   * a duplicate bubble.
    */
   function applyRemoteMessage(sessionId: string, message: ChatMessage): boolean {
     const session = sessions.value.find(s => s.id === sessionId)
     if (!session) return false
     if (session.messages.some(m => m.id === message.id)) return false
+    if (correlatePendingMessage(sessionId, message) !== null) return false
     session.messages.push(message)
     session.updatedAt = new Date()
     return true
@@ -1047,6 +1080,7 @@ export const useChatStore = defineStore('chat', () => {
     rejectMessage,           // #14821
     applyServerSnapshot,     // #14820
     applyRemoteMessage,      // #14820
+    correlatePendingMessage, // #14821
     addOrUpdateMessage,  // Issue #650: ID-based deduplication for streaming
     updateMessage,
     updateMessageMetadata,

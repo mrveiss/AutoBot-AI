@@ -102,6 +102,40 @@ describe('chat store reconciliation (#14821)', () => {
     expect(store.currentMessages).toHaveLength(1)
   })
 
+  it('the echo of our own message confirms it instead of duplicating it', () => {
+    // The defect this guards: our optimistic copy has a local id, the echo has
+    // the server's, so an id-only check misses and renders a second bubble.
+    const store = useChatStore()
+    store.createNewSession('Test', 's1')
+    const localId = store.addMessage({ content: 'hello there', sender: 'user' } as never) as string
+
+    const echo = {
+      id: 'server-echo-1',
+      content: 'hello there',
+      sender: 'user',
+      timestamp: new Date(),
+    } as ChatMessage
+    const applied = store.applyRemoteMessage('s1', echo)
+
+    expect(applied).toBe(false)
+    expect(store.currentMessages).toHaveLength(1)
+    expect(store.currentMessages[0].id).toBe('server-echo-1')
+    expect(store.hasPendingMessages).toBe(false)
+    expect(localId).not.toBe('server-echo-1')
+  })
+
+  it('a genuinely different message from another client is still applied', () => {
+    const store = useChatStore()
+    store.createNewSession('Test', 's1')
+    store.addMessage({ content: 'mine', sender: 'user' } as never)
+
+    const applied = store.applyRemoteMessage('s1', remoteMessage('other-1', 'theirs'))
+
+    expect(applied).toBe(true)
+    expect(store.currentMessages).toHaveLength(2)
+    expect(store.hasPendingMessages).toBe(true)
+  })
+
   it('server snapshot replaces local contents and clears stale pendings', () => {
     const store = useChatStore()
     store.createNewSession('Test', 's1')

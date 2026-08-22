@@ -131,10 +131,9 @@ export function useSessionSync(sessionId: Ref<string | null>) {
       if (!raw) return
       const message = toChatMessage(raw)
       if (!message) return
-      // #14821: our own message coming back is a confirmation, not new content.
-      if (!chatStore.confirmMessage(message.id, message.id)) {
-        chatStore.applyRemoteMessage(id, message)
-      }
+      // #14821: applyRemoteMessage correlates the echo of our own pending
+      // message and confirms it, rather than rendering a second bubble.
+      chatStore.applyRemoteMessage(id, message)
     } else if (event.event_type === CHAT_CLEARED) {
       chatStore.applyServerSnapshot(id, [])
     }
