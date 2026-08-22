@@ -250,9 +250,9 @@ class ExtractedDocument:
         Distinct from :attr:`has_usable_text_layer`: a DOCX whose content is
         entirely a table has no text layer at all and is still a complete,
         successful extraction — its data lives in ``tables`` (#13884). PDF
-        table extraction is not implemented, which :attr:`tables_attempted`
-        reports rather than leaving callers to infer it from an empty list
-        (#13895), so this collapses back to the text-layer check for PDFs.
+        table extraction is implemented as of #14232; :attr:`tables_attempted`
+        still reports whether it ran, rather than leaving callers to infer it
+        from an empty list (#13895).
         """
         return self.has_usable_text_layer or bool(self.tables)
 
@@ -294,13 +294,100 @@ def extract_pdf(raw: bytes) -> ExtractedDocument:
     reader = _pdf_reader(raw)
     pages = tuple(PageText(number=n, text=_pdf_page_text(page, n)) for n, page in enumerate(reader.pages, start=1))
     info = reader.metadata or {}
+    tables, tables_attempted = _pdf_tables(raw)
     return ExtractedDocument(
         format="pdf",
         text=render_pages(pages),
         pages=pages,
         page_count=len(pages),
         info=_pdf_info(info),
+        tables=tables,
+        tables_attempted=tables_attempted,
     )
+
+
+DEFAULT_MAX_TABLE_PAGES = 50
+
+
+def max_table_pages() -> int:
+    """Resolve how many pages table detection may scan (#14232).
+
+    `page.extract_tables()` runs pdfplumber's line and rectangle layout
+    analysis, which is materially heavier than pypdf's text extraction — and
+    unlike OCR, which only runs on pages that already failed to produce text,
+    this runs on every page of every PDF. A large table-dense document well
+    inside the upload size limit can still carry hundreds of pages.
+
+    So it is bounded the same way OCR's page ceiling is, and from the same kind
+    of env-backed knob rather than a literal at the call site.
+    """
+    raw = blank_to_none(config.misc.document_max_table_pages)
+    if raw is None:
+        return DEFAULT_MAX_TABLE_PAGES
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MAX_TABLE_PAGES=%r is not an integer; using %d",
+            raw,
+            DEFAULT_MAX_TABLE_PAGES,
+        )
+        return DEFAULT_MAX_TABLE_PAGES
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_DOCUMENT_MAX_TABLE_PAGES=%d is not positive; using %d",
+            value,
+            DEFAULT_MAX_TABLE_PAGES,
+        )
+        return DEFAULT_MAX_TABLE_PAGES
+    return value
+
+
+def _pdf_tables(raw: bytes) -> Tuple[Tuple[Any, ...], bool]:
+    """Extract tables with pdfplumber, reporting whether it ran (#14232).
+
+    Returns ``(tables, attempted)``. ``attempted`` is the field that keeps an
+    empty result honest: ``([], True)`` means the document has no tables, and
+    ``([], False)`` means nothing looked. #13895 introduced that distinction
+    because PDF returned a bare ``[]`` unconditionally while DOCX did real work.
+
+    pdfplumber is guard-imported. It is a heavier dependency than pypdf and a
+    deployment may not carry it; a missing library degrades to
+    ``attempted: False`` rather than failing an extraction whose text layer is
+    perfectly readable.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        logger.debug("pdfplumber is not installed; PDF table extraction skipped")
+        return (), False
+
+    max_pages = max_table_pages()
+    try:
+        with pdfplumber.open(io.BytesIO(raw)) as document:
+            tables = [
+                _normalize_table(table)
+                for page in document.pages[:max_pages]
+                for table in (page.extract_tables() or [])
+                if table
+            ]
+    except Exception as exc:
+        # A text layer that read fine must not be lost because table detection
+        # tripped, so this reports "did not look" rather than raising.
+        logger.warning("PDF table extraction failed: %s", exc)
+        return (), False
+
+    return tuple(tables), True
+
+
+def _normalize_table(table: Sequence[Sequence[Any]]) -> List[List[str]]:
+    """Render one table as rows of cell strings.
+
+    Identical in shape to :func:`_docx_table`, so a consumer needs one parser
+    for both formats rather than branching on where the table came from.
+    pdfplumber yields ``None`` for an empty cell where python-docx yields ``""``.
+    """
+    return [[("" if cell is None else str(cell)).strip() for cell in row] for row in table]
 
 
 def _pdf_reader(raw: bytes) -> Any:
