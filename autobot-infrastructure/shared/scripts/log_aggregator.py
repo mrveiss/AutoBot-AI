@@ -787,7 +787,13 @@ class LogAggregator:
             "disable_existing_loggers": False,
             "formatters": {
                 "json": {
-                    "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
+                    # python-json-logger moved this to `pythonjsonlogger.json` in 3.x and
+                    # REMOVED the old path in 4.x; requirements-ai.txt pins >=4.2.0,
+                    # so the previous string named a class the pinned version does not
+                    # ship. This config is dumped as YAML for other services to load,
+                    # so nothing here resolves it — the failure lands on whoever reads
+                    # it, which is why no check saw it (#14745).
+                    "class": "pythonjsonlogger.json.JsonFormatter",
                     "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
                 },
                 "standard": {"format": "%(asctime)s [%(name)s] %(levelname)s: %(message)s"},

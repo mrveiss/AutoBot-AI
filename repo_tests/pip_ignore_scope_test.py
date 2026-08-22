@@ -39,7 +39,10 @@ _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
 
 # `openai>=2.53.0`, `openai==2.53.0  # note`, `pkg[extra]>=1 ; marker`
 _PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*[=<>!~]")
-_INCLUDE = re.compile(r"^\s*-r\s+(\S+)")
+# `-c` reaches a file just as `-r` does: pip applies a constraints file to
+# everything installed from the manifest naming it, so a block that can edit
+# a constraints file can move a pin another block protects (#14733).
+_INCLUDE = re.compile(r"^\s*-(?:r|c)\s+(\S+)")
 
 
 def _normalise(name: str) -> str:
@@ -62,7 +65,7 @@ def _version(text: str) -> tuple[int, ...] | None:
 
 
 def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
-    """Every requirements file reachable from *path* through ``-r``."""
+    """Every requirements file reachable from *path* through ``-r`` or ``-c``."""
     path = path.resolve()
     if path in seen or not path.is_file():
         return seen
@@ -75,11 +78,22 @@ def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
 
 
 def _manifests_of(directory: str) -> list[Path]:
-    """The requirements manifests a pip block owns directly."""
+    """The dependency manifests a pip block owns directly.
+
+    `pyproject.toml` counts: dependabot's pip ecosystem updates it as readily as
+    a requirements file, so a block owning a directory containing one can move a
+    pin from there. Modelling only `requirements*.txt` under-approximated what a
+    block reaches, and an under-approximating guard reports clean rather than
+    reporting less (#14733).
+    """
     base = _REPO_ROOT / directory.lstrip("/")
     if not base.is_dir():
         return []
-    return sorted(base.glob("requirements*.txt"))
+    manifests = sorted(base.glob("requirements*.txt"))
+    pyproject = base / "pyproject.toml"
+    if pyproject.is_file():
+        manifests.append(pyproject)
+    return manifests
 
 
 def _files_reachable_from(directory: str) -> set[Path]:
@@ -120,11 +134,7 @@ def _hard_excludes(block: dict) -> set[str]:
     a semver-major ignore does NOT stop a grouped ``all-dependencies`` bump from
     re-proposing the package. Only a ``versions:`` range actually holds.
     """
-    return {
-        _normalise(entry["dependency-name"])
-        for entry in block.get("ignore", [])
-        if entry.get("versions")
-    }
+    return {_normalise(entry["dependency-name"]) for entry in block.get("ignore", []) if entry.get("versions")}
 
 
 def test_the_config_is_where_this_guard_expects() -> None:
@@ -198,6 +208,40 @@ def test_a_hard_exclude_holds_in_every_block_that_can_reach_it() -> None:
     )
 
 
+def test_reachability_includes_constraints_files() -> None:
+    """A `-c` file is reachable exactly as a `-r` file is (#14733).
+
+    pip applies a constraints file to everything installed from the manifest
+    naming it, so a block that can edit one can move a pin another block
+    protects. `constraints/shared.txt` is named by manifests in several
+    dependabot directories and describes itself as the single source of truth,
+    so following only `-r` left the guard blind to its most widely shared file
+    while still reporting clean.
+    """
+    shared = _REPO_ROOT / "constraints" / "shared.txt"
+    if not shared.is_file():
+        pytest.skip("constraints/shared.txt has moved; re-point this guard")
+
+    reaching = [b["directory"] for b in _pip_blocks() if shared in _files_reachable_from(b["directory"])]
+    assert len(reaching) > 1, (
+        "the constraints file is reachable from at most one block, so either the "
+        "layout changed or `-c` is no longer being followed — the case this guard exists for"
+    )
+
+
+def test_a_pyproject_counts_as_an_owned_manifest() -> None:
+    """dependabot's pip ecosystem updates pyproject.toml as readily as a txt file.
+
+    Modelling only `requirements*.txt` under-approximated what a block reaches,
+    and an under-approximating guard reports clean rather than reporting less.
+    """
+    owned = {d: _manifests_of(d) for d in (b["directory"] for b in _pip_blocks())}
+    considered = {m.name for ms in owned.values() for m in ms}
+    if not any((_REPO_ROOT / b["directory"].lstrip("/") / "pyproject.toml").is_file() for b in _pip_blocks()):
+        pytest.skip("no pip block directory carries a pyproject.toml today")
+    assert "pyproject.toml" in considered, "a pip block owns a pyproject.toml that the reachability computation ignores"
+
+
 def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
     """An exclusion under a block's own floor freezes it forever.
 
@@ -233,8 +277,7 @@ def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
 
     assert not frozen, (
         "an exclusion sits at or below its own manifest's floor, which freezes "
-        "the block out of every future update rather than capping it:\n  "
-        + "\n  ".join(sorted(set(frozen)))
+        "the block out of every future update rather than capping it:\n  " + "\n  ".join(sorted(set(frozen)))
     )
 
 
@@ -242,16 +285,12 @@ def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
 def test_the_known_offenders_stay_excluded_everywhere(package: str) -> None:
     """Pin the specific regression, so a future edit cannot quietly undo it."""
     blocks = _pip_blocks()
-    reaching = [
-        b["directory"]
-        for b in blocks
-        if _normalise(package) in _packages_reachable_from(b["directory"])
-    ]
+    reaching = [b["directory"] for b in blocks if _normalise(package) in _packages_reachable_from(b["directory"])]
     assert reaching, f"no pip block reaches {package} — has it been removed?"
 
-    missing = [d for d in reaching if _normalise(package) not in _hard_excludes(
-        next(b for b in blocks if b["directory"] == d)
-    )]
+    missing = [
+        d for d in reaching if _normalise(package) not in _hard_excludes(next(b for b in blocks if b["directory"] == d))
+    ]
     assert not missing, (
         f"{package} is reachable from {missing} without a hard exclude there. "
         f"#14722 is what that costs: a grouped bump to an unsatisfiable major "
