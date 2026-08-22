@@ -736,8 +736,16 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time event stream between backend and frontend.
 
+    DEPRECATED (#14822): ``/api/ws/live`` is the canonical event socket. It
+    subscribes per channel and fans out per client, where this endpoint
+    broadcasts every event to every connected client with no scoping. The
+    AutoBot frontend moved to ``/ws/live``; this route remains for external or
+    pinned clients and is no longer the model new work should target.
+
     Issue #665: Refactored to use extracted helper methods.
     Issue #2818: Authenticate before accepting connection.
+    Issue #14814: broadcast registration is per-connection, so several clients
+    can be attached at once.
     """
     if not await enforce_ws_origin(websocket):
         return

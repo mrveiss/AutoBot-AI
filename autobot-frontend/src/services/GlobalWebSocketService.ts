@@ -143,14 +143,18 @@ class GlobalWebSocketService {
         window.location.hostname === 'localhost'
 
       if (isViteDevServer) {
-        const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
+        // #14822: the channel socket is now the single event endpoint. The
+        // legacy `/ws` used a global broadcast slot that could only ever serve
+        // one client (#14814); `/ws/live` fans out per subscriber.
+        const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws/live`
         logger.debug('Development WebSocket URL (via Vite proxy):', wsUrl)
         return wsUrl
       }
 
       // Issue #916: Use window.location.host so WebSocket goes through nginx proxy at .21
       // Nginx proxies /api/ws to backend with proxy_ssl_verify off (handles self-signed cert)
-      const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
+      // #14822: single event endpoint — see the development branch above.
+      const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws/live`
       logger.debug('Production WebSocket URL (via nginx proxy):', wsUrl)
       return wsUrl
     } catch (error: unknown) {
@@ -331,6 +335,15 @@ class GlobalWebSocketService {
     this.saveConnectionState()
     this.startHeartbeat()
 
+    // #14822: `/ws/live` delivers nothing until a channel is subscribed.
+    // #14818: resume from the last event we saw so the reconnect window is
+    // replayed instead of silently lost.
+    this.send(
+      this.lastGlobalEventId === null
+        ? { action: 'subscribe', channel: 'global' }
+        : { action: 'subscribe', channel: 'global', last_event_id: this.lastGlobalEventId }
+    )
+
     this.trackEvent('connection_opened', { url: this.state.url })
     this.emit('connected', { url: this.state.url })
 
@@ -347,16 +360,39 @@ class GlobalWebSocketService {
       this.state.lastMessage = data
 
       if (data.type === 'ping') {
-        this.send({ type: 'pong', timestamp: Date.now() })
+        // Server-initiated keepalive; the channel socket expects `action`.
+        this.send({ action: 'ping', timestamp: Date.now() })
         return
       }
       if (data.type === 'pong') {
         return
       }
+      // #14822: channel-socket control frames carry no listener payload.
+      if (
+        data.type === 'subscribed' ||
+        data.type === 'unsubscribed' ||
+        data.type === 'connection_established'
+      ) {
+        return
+      }
+      // #14818: the server could not replay what we missed — drop the marker
+      // and tell listeners their view must be rebuilt.
+      if (data.type === 'resync') {
+        logger.warn('Global channel resync required:', data.reason)
+        this.lastGlobalEventId = null
+        this.emit('resync', data)
+        return
+      }
 
-      this.emit('message', data)
-      if (data.type) {
-        this.emit(data.type as string, data)
+      // #14822: `/ws/live` wraps events as
+      // {type:'live_event', channel, event_type, event_id, payload}.
+      // Listeners registered against the legacy flat {type, payload} shape must
+      // keep working, so unwrap rather than forcing every consumer to change.
+      const unwrapped = this._unwrapChannelEvent(data)
+
+      this.emit('message', unwrapped)
+      if (unwrapped.type) {
+        this.emit(unwrapped.type as string, unwrapped)
       }
 
       this.trackEvent('message_received', {
@@ -372,6 +408,33 @@ class GlobalWebSocketService {
         rawDataLength:
           typeof event.data === 'string' ? event.data.length : 0
       })
+    }
+  }
+
+  /**
+   * Translate a channel frame into the legacy flat event shape (#14822).
+   *
+   * Also advances the global high-water mark so a reconnect can ask for a
+   * replay (#14818). Anything that is not a `live_event` passes through
+   * untouched.
+   */
+  private _unwrapChannelEvent(
+    data: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (data.type !== 'live_event') return data
+
+    const eventId = data.event_id
+    if (typeof eventId === 'number') {
+      if (this.lastGlobalEventId === null || eventId > this.lastGlobalEventId) {
+        this.lastGlobalEventId = eventId
+      }
+    }
+
+    return {
+      type: data.event_type,
+      payload: data.payload ?? {},
+      channel: data.channel,
+      event_id: data.event_id
     }
   }
 
@@ -563,7 +626,9 @@ class GlobalWebSocketService {
 
     this.heartbeatInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.send({ type: 'ping', timestamp: Date.now() })
+        // #14822: the channel socket dispatches on `action`, not `type`.
+        // Sending the legacy shape here left the heartbeat silently inert.
+        this.send({ action: 'ping', timestamp: Date.now() })
       } else {
         this.stopHeartbeat()
       }
@@ -743,7 +808,7 @@ class GlobalWebSocketService {
         }
 
         this.on('pong', handlePong)
-        this.send({ type: 'ping', timestamp: Date.now(), test: true })
+        this.send({ action: 'ping', timestamp: Date.now(), test: true })
       })
     }
 

@@ -39,7 +39,9 @@ logger = get_logger(__name__)
 class PersistStrategy(Enum):
     """Controls which storage backend(s) receive the event."""
 
-    NONE = "none"  # In-memory EventManager only (fire-and-forget signals)
+    # In-process listeners plus channel fan-out.  Historically "EventManager
+    # only", but its WebSocket delivery was a single global slot; see #14822.
+    NONE = "none"
     MEMORY = "memory"  # LiveEventManager (WebSocket fan-out, channel-scoped)
     BOTH = "both"  # EventManager + LiveEventManager (old workaround, now explicit)
     REDIS = "redis"  # RedisEventStreamManager (durable, task-scoped history)
@@ -82,7 +84,13 @@ class EventBus:
             return
         if persist in (PersistStrategy.NONE, PersistStrategy.BOTH):
             await get_event_manager().publish(event_type, {"channel": channel, **payload})
-        if persist in (PersistStrategy.MEMORY, PersistStrategy.BOTH):
+        if persist in (PersistStrategy.NONE, PersistStrategy.MEMORY, PersistStrategy.BOTH):
+            # #14822: NONE now fans out to the channel too.  This is
+            # behaviour-preserving, not a widening: NONE events already reached
+            # WebSocket clients, via the single global broadcast slot inside
+            # EventManager.  That slot only ever served one client (#14814), so
+            # routing the same events through the channel model is what lets the
+            # frontend converge on one socket without losing anything.
             await get_live_event_manager().publish(channel, event_type, payload)
 
     async def subscribe_ws(self, ws: WebSocket, channel: str) -> bool:
