@@ -49,12 +49,12 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from collections.abc import Mapping
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
