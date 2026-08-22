@@ -239,11 +239,30 @@ jobs:
         # everything outside this shard's group at collection time, and xdist
         # then distributes what remains by scope exactly as before.
         #
-        # pytest-split's default `duration_based_chunks` algorithm cuts the
-        # collected list into CONTIGUOUS chunks, which keeps whole modules
-        # inside one shard. The alternative `least_duration` would scatter
-        # individual tests across shards and split modules — the same
-        # fixture-sharing hazard that made worksteal worse. Do not switch it.
+        # #14111: assignment is `repo_tests/stable_shard.py`, not pytest-split.
+        #
+        # The rule the old note protected still holds and is now enforced by a
+        # test rather than a comment: whole modules stay inside one shard, so
+        # --dist loadscope keeps behaving as it did. `least_duration`, which
+        # scatters individual tests and splits modules, remains the thing not
+        # to do — it is the same fixture-sharing hazard that made worksteal
+        # worse.
+        #
+        # What changed is *stability*, not that rule. pytest-split cut the
+        # COLLECTED LIST into contiguous chunks, so a shard's membership was a
+        # function of that list's order and membership: adding one test file
+        # shifted every downstream boundary and re-dealt every later shard,
+        # reddening PRs on failures nowhere near their diff. It also meant a
+        # checkout missing optional dependencies collected a different set and
+        # so named different tests for the same --group, which is why a shard
+        # failure could not be reproduced locally.
+        #
+        # The replacement hashes each module into one of 512 buckets and maps
+        # buckets to shards from the DURATIONS FILE — an input a PR adding
+        # tests does not touch. Measured on the real file: 1.18x spread by test
+        # count, and zero modules move when one is added, grown or removed.
+        # Regenerating durations is the one operation that legitimately
+        # re-deals, and a test names it so.
         #
         # #13084: two SEPARATE pytest invocations, not one combined session.
         # autobot-backend/ and autobot-slm-backend/ each define top-level
@@ -261,8 +280,9 @@ jobs:
         python -m pytest \
           autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts \
           -n auto --dist loadscope \
-          --splits 12 --group ${{ matrix.shard }} \
-          --durations-path .test_durations \
+          -p repo_tests.stable_shard \
+          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
           --durations=25 \
@@ -284,21 +304,28 @@ jobs:
         # trees run in 336s without it and 35m11s with it, while pytest's own
         # --durations reported every one of the 25 slowest tests under 10s. It
         # is the wrong thing to pay for on every PR.
-        # #13637: pytest exits 5 for "no tests collected". Under --splits 12
-        # that is a scheduling artefact rather than a result — .test_durations_slm
-        # describes 1501 tests against 1644 collected, so pytest-split packs
-        # unevenly and the later groups come out empty. Measured: group 1 took
-        # 497 of 1644 while groups 8-12 took none, and `bash -e` then failed the
-        # step, reddening the base branch on runs with zero test failures.
+        # #13637: pytest exits 5 for "no tests collected", which under the old
+        # contiguous packing was a scheduling artefact rather than a result —
+        # .test_durations_slm describes 1501 tests against 1644 collected, so
+        # group 1 took 497 while groups 8-12 took none, and `bash -e` failed the
+        # step on runs with zero test failures.
         #
-        # The empty shard is announced rather than silently swallowed, and 5 is
-        # the only tolerated code. Fixing the packing is the real repair.
+        # #14111 is the repair that note asked for. Measured against the real
+        # .test_durations_slm under the new assignment: 106 modules across all
+        # twelve shards, none empty, 1.22x spread by test count.
+        #
+        # The tolerance is kept anyway, deliberately. It costs nothing, and the
+        # condition it guards is a property of the *module set*, not of the
+        # algorithm: a target that genuinely has fewer modules than shards still
+        # empties one, and that must stay announced rather than red. The empty
+        # shard is printed, and 5 remains the only tolerated code.
         set +e
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
-          --splits 12 --group ${{ matrix.shard }} \
-          --durations-path .test_durations_slm \
+          -p repo_tests.stable_shard \
+          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
           --durations=25 \
