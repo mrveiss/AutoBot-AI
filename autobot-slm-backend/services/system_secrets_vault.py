@@ -168,6 +168,61 @@ async def delete_vault_copy(key: str) -> None:
         logger.warning("system-secrets-vault: delete failed key=%s: %s", key, type(exc).__name__)
 
 
+async def mirror_secret_to_vault(key: str, plaintext: str) -> bool:
+    """Keep *key*'s vault copy in step with a create or update (#14759).
+
+    The delete half of this already existed — :func:`delete_vault_copy` runs
+    whenever the legacy row is deleted — but create and update did not mirror at
+    all. A secret migrated to the vault and then edited kept serving its
+    pre-update value to anything reading the vault by name, with no error.
+    Reads from inside the SLM are legacy-first, so the divergence was invisible
+    from here; only an external vault reader saw it, and it saw a plausible
+    value rather than a failure.
+
+    Best-effort, never raises: the legacy row remains the live write path, so a
+    flaky vault must not make a secret un-editable.
+
+    On failure the vault copy is REMOVED rather than left behind. A reader that
+    gets nothing raises or falls back; a reader that gets last week's password
+    proceeds confidently with the wrong credential. Absent is recoverable,
+    stale is not detectable.
+    """
+    if not is_migratable(key):
+        return False
+
+    from user_management.services.vault_client import (
+        VaultClientError,
+        VaultSecretNotFound,
+        is_configured,
+        vault_create,
+        vault_rotate,
+    )
+
+    if not is_configured():
+        return False
+
+    try:
+        vault_id = await _find_vault_id_by_name(key)
+        if vault_id is None:
+            await vault_create(key, _SECRET_TYPE, plaintext)
+            logger.info("system-secrets-vault: created vault copy key=%s", key)
+        else:
+            await vault_rotate(vault_id, plaintext)
+            logger.info("system-secrets-vault: rotated vault copy key=%s", key)
+        return True
+    except (VaultClientError, VaultSecretNotFound) as exc:
+        # Logged at error, not warning: an unmirrored write is the defect this
+        # function exists to close, so it must not read as routine noise.
+        logger.error(
+            "system-secrets-vault: mirror failed key=%s: %s — dropping the vault copy "
+            "so no reader is served the superseded value",
+            key,
+            type(exc).__name__,
+        )
+        await delete_vault_copy(key)
+        return False
+
+
 async def migrate_key_to_vault(session: AsyncSession, key: str) -> bool:
     """Copy one ``system_secrets`` row into the System vault (idempotent).
 
