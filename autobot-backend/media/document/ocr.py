@@ -51,20 +51,51 @@ DEFAULT_OCR_PAGE_TIMEOUT = 60
 # worker indefinitely (#13896 review).
 DEFAULT_OCR_TIMEOUT = 300
 
+# Whole-document extraction (parse + table analysis), seconds. Generous
+# relative to a normal parse so only a pathological document trips it.
+DEFAULT_EXTRACTION_TIMEOUT = 120
+
 # Ceilings. The floor alone left every knob unbounded upward, so a sane-looking
 # config change — not just hostile input — removed the protection it configures
 # (#14751). DPI is the sharpest: `render(scale=dpi/72)` allocates a bitmap sized
 # by the page's declared box times the scale, so cost grows QUADRATICALLY in it.
 MAX_OCR_DPI = 600  # beyond this adds no legibility tesseract can use
 MAX_OCR_PAGES_CEILING = 500  # the page ceiling is the bound on a 5000-page scan
-MAX_OCR_PAGE_TIMEOUT = 300  # one page may not outlast the whole-document budget
 MAX_OCR_TIMEOUT = 1800  # a single ingest may not hold a worker for half an hour
+MAX_EXTRACTION_TIMEOUT = 900  # an executor slot is shared; it may not be held forever
+# A page may take up to a third of the whole-document budget. A flat 300s would
+# have silently clamped an operator who had deliberately raised this knob, even
+# where the document ceiling could accommodate that page. Derived rather than
+# written twice, so the two ceilings cannot drift apart.
+MAX_OCR_PAGE_TIMEOUT = MAX_OCR_TIMEOUT // 3
 
 # Per-page rasterization budget, in pixels. A PDF declaring an enormous MediaBox
 # becomes a multi-gigabyte allocation at 300 DPI before any per-page timeout can
 # help — `_ocr_one_page` catches MemoryError, but an OS-level OOM kill lands
 # before Python raises. 40 MP is roughly A0 at 300 DPI.
 MAX_OCR_PAGE_PIXELS = 40_000_000
+
+# What an unmeasurable or malformed page renders at: the default DPI rather
+# than whatever was configured, so a bad declaration cannot buy a bigger bitmap.
+_SAFE_UNMEASURED_SCALE = DEFAULT_OCR_DPI / 72
+
+
+def extraction_timeout() -> int:
+    """Whole-document extraction ceiling, seconds (#14754).
+
+    Offloading to a thread frees the event loop but does not bound the work:
+    `asyncio.to_thread` uses the process-wide default executor, so an extraction
+    that never finishes occupies one of a small number of shared slots forever —
+    slots the OCR path's own deadline-bounded calls also draw from.
+
+    Distinct from `ocr_timeout`, which bounds only the OCR recovery pass.
+    """
+    return _positive_int_setting(
+        blank_to_none(config.misc.document_extraction_timeout),
+        DEFAULT_EXTRACTION_TIMEOUT,
+        "AUTOBOT_DOCUMENT_EXTRACTION_TIMEOUT",
+        MAX_EXTRACTION_TIMEOUT,
+    )
 
 
 def ocr_dpi() -> int:
@@ -307,16 +338,25 @@ def _bounded_scale(page, dpi: int, number: int) -> float:
 
     Downscaled rather than refused — OCR at a lower effective DPI still reads a
     page, whereas skipping it returns nothing for a page that was merely large.
-    A page whose size cannot be measured keeps the requested scale, which is
-    the behaviour that predates this bound.
+    A page whose size cannot be measured — or which declares a degenerate one —
+    renders at the DEFAULT DPI rather than whatever was configured, so a bad
+    declaration cannot buy a larger bitmap than a good one.
     """
     scale = dpi / 72
     try:
         width, height = page.get_size()
     except Exception:  # a page that will not report its size is not measurable
-        return scale
+        logger.warning("page %d would not report its size; keeping the default scale", number)
+        return _SAFE_UNMEASURED_SCALE
     projected = (width * scale) * (height * scale)
-    if projected <= MAX_OCR_PAGE_PIXELS or projected <= 0:
+    if projected <= 0:
+        # A zero or inverted MediaBox is malformed, not small. Treating it as
+        # "within budget" handed back the full scale for exactly the hostile
+        # input this bound exists to catch, since a renderer taking abs() of a
+        # negative dimension would then allocate unclamped.
+        logger.warning("page %d declares a degenerate size; keeping the default scale", number)
+        return _SAFE_UNMEASURED_SCALE
+    if projected <= MAX_OCR_PAGE_PIXELS:
         return scale
     reduced = scale * (MAX_OCR_PAGE_PIXELS / projected) ** 0.5
     logger.warning(

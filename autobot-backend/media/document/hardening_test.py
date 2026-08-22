@@ -43,14 +43,28 @@ class TestTheKnobsHaveACeilingAndNotJustAFloor:
         """
         assert ocr_mod._positive_int_setting(str(asked), 300, "X", ceiling) == expected
 
-    def test_every_knob_carries_a_ceiling(self):
-        """A knob added later without one reopens the hole this closes."""
-        import inspect
+    @pytest.mark.parametrize(
+        "resolver,field,ceiling",
+        [
+            ("ocr_dpi", "document_ocr_dpi", "MAX_OCR_DPI"),
+            ("ocr_page_timeout", "document_ocr_page_timeout", "MAX_OCR_PAGE_TIMEOUT"),
+            ("max_ocr_pages", "document_max_ocr_pages", "MAX_OCR_PAGES_CEILING"),
+            ("ocr_timeout", "document_ocr_timeout", "MAX_OCR_TIMEOUT"),
+            ("extraction_timeout", "document_extraction_timeout", "MAX_EXTRACTION_TIMEOUT"),
+        ],
+    )
+    def test_each_resolver_clamps_to_its_own_ceiling(self, monkeypatch, resolver, field, ceiling):
+        """Exercises the real resolvers, not a synthetic ceiling.
 
-        src = inspect.getsource(ocr_mod)
-        for resolver in ("ocr_dpi", "ocr_page_timeout", "max_ocr_pages", "ocr_timeout"):
-            body = src.split(f"def {resolver}(")[1].split("\ndef ")[0]
-            assert "MAX_" in body, f"{resolver} resolves without a ceiling (#14751)"
+        The previous version of this test read the source and asserted the
+        substring "MAX_" appeared in each resolver body. That passes if a
+        resolver is wired to the WRONG ceiling — `ocr_page_timeout` reaching for
+        `MAX_OCR_DPI`, say — which is exactly the mistake a copy-pasted resolver
+        makes.
+        """
+        expected = getattr(ocr_mod, ceiling)
+        monkeypatch.setattr(ocr_mod.config.misc, field, str(expected * 10), raising=False)
+        assert getattr(ocr_mod, resolver)() == expected
 
     def test_a_non_integer_or_negative_still_falls_back(self):
         """The ceiling must not have displaced the existing floor behaviour."""
@@ -150,3 +164,84 @@ class TestExtractionDoesNotHoldTheEventLoop:
             "extraction ran inline — one large document holds the worker's event "
             "loop for the whole parse, stalling every other coroutine on it"
         )
+
+    @pytest.mark.asyncio
+    async def test_the_loop_keeps_running_during_a_slow_extraction(self):
+        """The behavioural half: a ticker must advance while extraction blocks.
+
+        Asserting that `to_thread` was called proves the call shape, not the
+        outcome — #14754 asks for the loop observed staying responsive. This
+        blocks a real thread with `time.sleep` and counts ticks on the loop
+        meanwhile; inline extraction would starve the ticker and leave it at
+        roughly zero.
+        """
+        import time
+
+        from media.core.types import MediaInput, MediaType, ProcessingIntent
+        from media.document.extraction import ExtractedDocument
+        from media.document.pipeline import DocumentPipeline
+
+        extracted = ExtractedDocument(format="pdf", text="hello", tables=(), info={})
+
+        def slow_extract(_raw, _mime):
+            time.sleep(0.25)  # blocking, as the real parser is
+            return extracted
+
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        beat = asyncio.ensure_future(ticker())
+        try:
+            with patch("media.document.pipeline.extract_document", slow_extract):
+                await DocumentPipeline()._process_impl(
+                    MediaInput(
+                        media_id="test-doc",
+                        media_type=MediaType.DOCUMENT,
+                        intent=ProcessingIntent.EXTRACTION,
+                        data=b"%PDF-1.4 x",
+                        mime_type="application/pdf",
+                        metadata={},
+                    )
+                )
+        finally:
+            beat.cancel()
+
+        assert ticks > 5, (
+            f"the loop ticked {ticks} times during a 0.25s extraction — it was held "
+            "by the parse rather than freed by the offload"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_hung_extraction_degrades_instead_of_hanging(self):
+        """A deadline breach must report, not wait forever (#14754)."""
+        import time
+
+        from media.core.types import MediaInput, MediaType, ProcessingIntent
+        from media.document.pipeline import DocumentPipeline
+
+        def never_returns(_raw, _mime):
+            time.sleep(30)
+
+        with (
+            patch("media.document.pipeline.extract_document", never_returns),
+            patch("media.document.ocr.extraction_timeout", return_value=1),
+        ):
+            result = await DocumentPipeline()._process_impl(
+                MediaInput(
+                    media_id="test-doc",
+                    media_type=MediaType.DOCUMENT,
+                    intent=ProcessingIntent.EXTRACTION,
+                    data=b"%PDF-1.4 x",
+                    mime_type="application/pdf",
+                    metadata={},
+                )
+            )
+
+        assert "exceeded" in str(
+            result.result_data
+        ), "a hung extraction must surface a deadline breach rather than block the request"

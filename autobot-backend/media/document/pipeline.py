@@ -54,13 +54,31 @@ class DocumentPipeline(BasePipeline):
         raw_bytes = self._decode_input(media_input.data)
         mime_type = (media_input.mime_type or "").lower()
 
+        # Imported here, as the OCR helpers below are: this module must load on a
+        # host without the optional document dependencies installed.
+        from media.document.ocr import extraction_timeout
+
+        deadline = extraction_timeout()
+
         try:
             # #14754: extraction is blocking CPU work — PDF parsing plus
             # pdfplumber layout analysis on every page — and this handler is
             # async, so one large document stalled every other coroutine on the
             # worker, health endpoints included. Same shape as the OCR fix in
             # _recover_scanned_pages below (#13896), one function over.
-            extracted = await asyncio.to_thread(extract_document, raw_bytes, mime_type)
+            extracted = await asyncio.wait_for(
+                asyncio.to_thread(extract_document, raw_bytes, mime_type),
+                timeout=deadline,
+            )
+        except asyncio.TimeoutError:
+            # to_thread frees the loop but does not bound the work: the default
+            # executor has a small, process-wide slot count that the OCR path's
+            # own bounded calls also draw from, so an extraction that never
+            # returns holds one forever. Degrading names the cause; without the
+            # deadline the request simply never completes (#14754).
+            reason = f"extraction exceeded {deadline}s"
+            logger.warning("Document extraction timed out after %ss", deadline)
+            return self._error_result(detect_format(raw_bytes, mime_type), reason, media_input.metadata)
         except DocumentDependencyError as exc:
             # A missing library is a deployment gap, not a bad upload — keep the
             # two distinguishable so one is never diagnosed as the other.

@@ -1318,7 +1318,27 @@ async def upload_file_to_knowledge(
     # pdfplumber layout analysis on every page — and this handler is async, so a
     # large upload held the worker's event loop for the whole extraction and
     # stalled every other coroutine on it, health endpoints included.
-    content, extracted_doc = await asyncio.to_thread(_extract_file_content, filename, file_content)
+    from media.document.ocr import extraction_timeout
+
+    _deadline = extraction_timeout()
+    try:
+        content, extracted_doc = await asyncio.wait_for(
+            asyncio.to_thread(_extract_file_content, filename, file_content),
+            timeout=_deadline,
+        )
+    except asyncio.TimeoutError:
+        # The deadline is what makes the offload safe: to_thread frees the loop
+        # but the default executor's slots are process-wide and shared with the
+        # OCR path, so an extraction that never returns holds one indefinitely.
+        # Reported as a rejected upload rather than left to hang (#14754).
+        logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Could not read {filename!r} within {_deadline}s. The document may be "
+                "unusually large or complex; try splitting it."
+            ),
+        )
     if not _has_usable_content(content, extracted_doc):
         # #13884: distinguish "we could not read it" from "it is empty". A scanned
         # PDF parses fine and yields nothing, and a generic message left the user
