@@ -114,6 +114,40 @@ describe('useReducedMotion', () => {
     expect(mm.listeners).toHaveLength(0)
   })
 
+  it('subscribes through the legacy addListener where addEventListener is absent', () => {
+    // Pre-2019 spelling; some environments still expose only this one, and a
+    // missing modern listener must not silently drop the subscription.
+    const listeners: ((e: MediaQueryListEvent) => void)[] = []
+    const removeListener = vi.fn()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addListener: (fn: (e: MediaQueryListEvent) => void) => listeners.push(fn),
+        removeListener,
+      })),
+    )
+    const scope = effectScope()
+    const state = scope.run(() => useReducedMotion())!
+    expect(listeners).toHaveLength(1)
+
+    listeners[0]({ matches: true } as MediaQueryListEvent)
+    expect(state.prefersReducedMotion.value).toBe(true)
+
+    scope.stop()
+    expect(removeListener).toHaveBeenCalled()
+  })
+
+  it('still returns a usable ref when matchMedia throws', () => {
+    vi.stubGlobal('matchMedia', () => {
+      throw new Error('unsupported media feature')
+    })
+    const scope = effectScope()
+    const state = scope.run(() => useReducedMotion())!
+    expect(state.prefersReducedMotion.value).toBe(false)
+    scope.stop()
+  })
+
   it('still returns a usable ref where matchMedia is absent', () => {
     vi.stubGlobal('matchMedia', undefined)
     const scope = effectScope()
