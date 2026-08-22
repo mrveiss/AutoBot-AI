@@ -676,12 +676,12 @@ def test_no_restart_still_reaches_the_fleet_stage() -> None:
     """The regression: this is the run that used to hang forever."""
     job = _fired_job()
     fleet = AsyncMock()
-    verdict = SimpleNamespace(failed_hosts=0, unreachable_hosts=0, reason=None)
+    verdict = SimpleNamespace(degraded=False, failed_hosts=0, unreachable_hosts=0, reason=None)
     with (
         patch("api.code_sync._await_self_update_completion", AsyncMock(return_value=_AFTER_FIRING)),
         patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
         patch("api.code_sync._clear_resume_plan", AsyncMock()),
-        patch("services.self_update_log_reader.read_self_update_verdict", return_value=verdict),
+        patch("api.code_sync._read_last_self_update_verdict", return_value=verdict),
         # The deployed commit must match the target or the stage refuses to
         # continue -- the play that completed may not have been ours.
         patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value=_TARGET)),
@@ -698,12 +698,12 @@ def test_failed_play_fails_the_job_with_a_reason() -> None:
     """A count alone gave the operator nothing to act on."""
     job = _fired_job()
     fleet = AsyncMock()
-    verdict = SimpleNamespace(failed_hosts=1, unreachable_hosts=0, reason=None)
+    verdict = SimpleNamespace(degraded=True, failed_hosts=1, unreachable_hosts=0, reason=None)
     with (
         patch("api.code_sync._await_self_update_completion", AsyncMock(return_value=_AFTER_FIRING)),
         patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
         patch("api.code_sync._clear_resume_plan", AsyncMock()),
-        patch("services.self_update_log_reader.read_self_update_verdict", return_value=verdict),
+        patch("api.code_sync._read_last_self_update_verdict", return_value=verdict),
     ):
         _run(_reconcile_self_update_stage(job, "4b6defc4", ["node-a"]))
 
@@ -742,12 +742,12 @@ def test_a_foreign_play_does_not_resolve_this_stage() -> None:
     """
     job = _fired_job()
     fleet = AsyncMock()
-    verdict = SimpleNamespace(failed_hosts=0, unreachable_hosts=0, reason=None)
+    verdict = SimpleNamespace(degraded=False, failed_hosts=0, unreachable_hosts=0, reason=None)
     with (
         patch("api.code_sync._await_self_update_completion", AsyncMock(return_value=_AFTER_FIRING)),
         patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
         patch("api.code_sync._clear_resume_plan", AsyncMock()),
-        patch("services.self_update_log_reader.read_self_update_verdict", return_value=verdict),
+        patch("api.code_sync._read_last_self_update_verdict", return_value=verdict),
         patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value="0000000000000000")),
     ):
         _run(_reconcile_self_update_stage(job, _TARGET, ["node-a"]))
