@@ -83,6 +83,13 @@ backend_cors_origins: "*"
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""
+
+# #14758: root key for the canonical envelope secret store. Read back from
+# slm-secrets.env at deploy time so the backend and the SLM derive the same vault
+# keys. Empty here on purpose — never commit a real value; an empty render leaves
+# the store exactly as dark as it is today rather than sealing secrets under a
+# key the SLM does not share.
+autobot_secrets_root_key: ""
 # SLM WebSocket auth bearer value — populated from /etc/autobot/slm-secrets.env at deploy time (#7689).
 backend_slm_auth_tok: ""
 

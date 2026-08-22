@@ -202,9 +202,16 @@ describe('a bulk drag moves the whole selection as ONE undo step (#14612)', () =
     expect(n2Moves.length).toBeGreaterThan(0)
     // The pointer moved from clientX 100 to 130 (30px, at zoom 1) — n1
     // dragged 10 -> 40, and n2 must have moved by that identical 30px delta
-    // from ITS OWN start (300 -> 330).
-    expect(n1Moves.at(-1)![1]).toEqual({ x: 40, y: 10 })
-    expect(n2Moves.at(-1)![1]).toEqual({ x: 330, y: 10 })
+    // from ITS OWN start (300 -> 330). That invariant is what this test
+    // guards and it is unchanged by #14768.
+    //
+    // The y values move 10 -> 20 because a drop snaps BOTH axes, even one the
+    // pointer did not move: the point of the grid is that a node is on it
+    // after a drag, and an axis exempted for not having moved would leave
+    // nodes half-aligned forever. n2 follows by the leader's delta (+10), so
+    // the two still moved by an identical vector.
+    expect(n1Moves.at(-1)![1]).toEqual({ x: 40, y: 20 })
+    expect(n2Moves.at(-1)![1]).toEqual({ x: 330, y: 20 })
 
     expect(undoBtn(w).attributes('disabled')).toBeUndefined()
     const movesBeforeUndo = moves.length
