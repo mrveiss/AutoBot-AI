@@ -8051,7 +8051,7 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
-      "skipReasonLabel": "رد شد:",
+      "skipReasonLabel": "نادیده گرفته شد:",
       "errorLabel": "خطا:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",

@@ -13,7 +13,7 @@
 // field being present in the payload proves nothing while the template never
 // reads it, which is exactly how this stayed invisible.
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
@@ -37,6 +37,10 @@ const AGENT = { id: 'a1', name: 'Agent One', heartbeat_enabled: true }
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 const LABELS = en.llc.heartbeat
 
+// The component starts a 15s auto-refresh interval on mount, cleared only by
+// onUnmounted. Without this the handle outlives every test in the file.
+let mounted: ReturnType<typeof mount> | null = null
+
 /** Mount the monitor and open one agent's run history. */
 async function mountWithRuns(runs: Record<string, unknown>[]) {
   get.mockImplementation((url: string) =>
@@ -49,12 +53,18 @@ async function mountWithRuns(runs: Record<string, unknown>[]) {
   await flushPromises()
   await wrapper.find('.agent-row').trigger('click')
   await flushPromises()
+  mounted = wrapper
   return wrapper
 }
 
 describe('HeartbeatMonitor surfaces why a run was skipped (#12681)', () => {
   beforeEach(() => {
     get.mockReset()
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = null
   })
 
   it('renders the persisted reason for a skipped run', async () => {
