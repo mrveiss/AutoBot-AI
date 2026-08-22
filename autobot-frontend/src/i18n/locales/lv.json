@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Skata filtrs: {role} — rāda {shown} no {total} mezgliem. Piekļuve nemainās.",
       "roleLensEmpty": "Skata filtrs: nevienam mezglam neatbilst \"{role}\" šajā skatā. Piekļuve nemainās — notīriet filtru, lai redzētu visus.",
       "roleLensClear": "Notīrīt filtru",
+      "teamFilterLabel": "Filtrēt pēc komandas",
+      "teamFilterAll": "Visas komandas",
+      "teamFilterBanner": "Komandas filtrs: {team} — rāda {shown} no {total} cilvēkiem. Piekļuve nemainās.",
+      "toolFilterLabel": "Filtrēt pēc rīka",
+      "toolFilterAll": "Visi rīki",
+      "toolFilterBanner": "Rīka filtrs: {tool} — rāda {shown} no {total} cilvēkiem. Piekļuve nemainās.",
       "sidebar": {
         "owner": "Īpašnieks",
         "tools": "Rīki",

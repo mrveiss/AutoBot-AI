@@ -8303,6 +8303,12 @@
       "roleLensBanner": "Filtro de vista: {role} — mostrando {shown} de {total} nodos. El acceso no cambia.",
       "roleLensEmpty": "Filtro de vista: ningún nodo coincide con «{role}» en esta vista. El acceso no cambia — borra el filtro para ver a todos.",
       "roleLensClear": "Borrar filtro",
+      "teamFilterLabel": "Filtrar por equipo",
+      "teamFilterAll": "Todos los equipos",
+      "teamFilterBanner": "Filtro de equipo: {team} — mostrando {shown} de {total} personas. El acceso no cambia.",
+      "toolFilterLabel": "Filtrar por herramienta",
+      "toolFilterAll": "Todas las herramientas",
+      "toolFilterBanner": "Filtro de herramienta: {tool} — mostrando {shown} de {total} personas. El acceso no cambia.",
       "sidebar": {
         "owner": "Propietario",
         "tools": "Herramientas",

@@ -134,6 +134,13 @@ class _FakeVault:
     async def vault_list(self) -> list:
         return list(self.entries.values())
 
+    async def vault_rotate(self, secret_id: uuid.UUID, new_value: str) -> dict:
+        entry = self.entries.get(secret_id)
+        if entry is None:
+            raise _real_vc.VaultSecretNotFound(str(secret_id))
+        entry["value"] = new_value
+        return entry
+
     async def vault_delete(self, secret_id: uuid.UUID) -> None:
         self.entries.pop(secret_id, None)
 
@@ -147,6 +154,7 @@ def fake_vault(monkeypatch):
         monkeypatch.setattr(_real_vc, "vault_create", fv.vault_create)
         monkeypatch.setattr(_real_vc, "vault_read", fv.vault_read)
         monkeypatch.setattr(_real_vc, "vault_list", fv.vault_list)
+        monkeypatch.setattr(_real_vc, "vault_rotate", fv.vault_rotate)
         monkeypatch.setattr(_real_vc, "vault_delete", fv.vault_delete)
         yield fv
 
@@ -332,3 +340,145 @@ class TestNoSecretValueLogged:
             assert value == secret_value
             for record in caplog.records:
                 assert secret_value not in record.getMessage()
+
+
+class TestMirrorSecretToVault:
+    """#14759: create/update never mirrored, so an edited key served a stale value.
+
+    The delete half was already correct, which is what made this easy to miss —
+    someone clearly understood the vault copy needs maintaining and did only one
+    of the three write paths.
+    """
+
+    async def test_create_writes_the_vault_copy(self, fake_vault):
+        with _real_modules_swapped():
+            assert await ssv.mirror_secret_to_vault("hf_token", "first") is True
+            vault_id = await ssv._find_vault_id_by_name("hf_token")
+            assert vault_id is not None
+            assert await _real_vc.vault_read(vault_id) == "first"
+
+    async def test_update_rotates_in_place_rather_than_recreating(self, fake_vault):
+        """The id must survive: a delete+create would break anything holding it."""
+        with _real_modules_swapped():
+            await ssv.mirror_secret_to_vault("hf_token", "first")
+            original_id = await ssv._find_vault_id_by_name("hf_token")
+
+            assert await ssv.mirror_secret_to_vault("hf_token", "second") is True
+
+            assert await ssv._find_vault_id_by_name("hf_token") == original_id
+            assert await _real_vc.vault_read(original_id) == "second"
+            assert len(fake_vault.entries) == 1, "rotation must not leave a second copy"
+
+    async def test_the_stale_value_is_never_left_behind_on_failure(self, fake_vault, monkeypatch):
+        """A failed mirror drops the copy instead of serving the superseded value.
+
+        This is the whole point of the issue: a reader that gets nothing raises
+        or falls back, while a reader handed last week's credential proceeds
+        confidently with the wrong one. Absent is recoverable; stale is not
+        detectable.
+        """
+        with _real_modules_swapped():
+            await ssv.mirror_secret_to_vault("hf_token", "first")
+            assert len(fake_vault.entries) == 1
+
+            async def _boom(secret_id, new_value):
+                raise _real_vc.VaultClientError("vault unreachable")
+
+            monkeypatch.setattr(_real_vc, "vault_rotate", _boom)
+
+            assert await ssv.mirror_secret_to_vault("hf_token", "second") is False
+            assert fake_vault.entries == {}, (
+                "the pre-update value is still readable from the vault — "
+                "this is exactly the stale read #14759 reports"
+            )
+
+    async def test_no_op_when_the_vault_is_not_configured(self, fake_vault):
+        with _real_modules_swapped():
+            fake_vault.configured = False
+            assert await ssv.mirror_secret_to_vault("hf_token", "value") is False
+            assert fake_vault.entries == {}
+
+    async def test_irreducible_key_is_never_mirrored(self, fake_vault):
+        """The auth-bootstrap key gates the vault; mirroring it is a deputy cycle."""
+        with _real_modules_swapped():
+            assert await ssv.mirror_secret_to_vault("autobot_internal_api_key", "v") is False
+            assert fake_vault.entries == {}
+
+    async def test_sso_prefixed_key_is_never_mirrored(self, fake_vault):
+        with _real_modules_swapped():
+            assert await ssv.mirror_secret_to_vault("sso:provider:okta:secret", "v") is False
+            assert fake_vault.entries == {}
+
+    async def test_a_foreign_entry_sharing_the_name_is_never_taken_over(self, fake_vault):
+        """The vault namespace is flat and shared with the provider-key store.
+
+        `provider_key_vault` keeps live LLM credentials under plain names like
+        OPENAI_API_KEY, and the SLM secret key is free text, so the names can
+        collide. Rotating that entry would silently replace another
+        subsystem's credential — and its reader falls back to "" on absence,
+        so deleting it on a later failed mirror would be worse still.
+        """
+        with _real_modules_swapped():
+            await _real_vc.vault_create("OPENAI_API_KEY", "api_key", "the-real-provider-key")
+            assert len(fake_vault.entries) == 1
+
+            assert await ssv.mirror_secret_to_vault("OPENAI_API_KEY", "an-slm-secret") is False
+
+            surviving = list(fake_vault.entries.values())
+            assert len(surviving) == 1, "refusing to mirror must not add a second entry"
+            assert (
+                surviving[0]["value"] == "the-real-provider-key"
+            ), "the foreign provider credential was overwritten by an SLM secret"
+            assert surviving[0]["type"] == "api_key"
+
+    async def test_delete_never_removes_a_foreign_entry_sharing_the_name(self, fake_vault):
+        """Deleting an SLM secret must not delete another subsystem's credential."""
+        with _real_modules_swapped():
+            await _real_vc.vault_create("OPENAI_API_KEY", "api_key", "the-real-provider-key")
+
+            await ssv.delete_vault_copy("OPENAI_API_KEY")
+
+            assert len(fake_vault.entries) == 1, "a foreign vault entry was deleted"
+            assert list(fake_vault.entries.values())[0]["value"] == "the-real-provider-key"
+
+    async def test_our_own_entry_is_still_rotated_when_a_foreign_name_exists(self, fake_vault):
+        """Scoping by type must not stop us maintaining our own copy."""
+        with _real_modules_swapped():
+            await _real_vc.vault_create("shared_name", "api_key", "foreign")
+
+            assert await ssv.mirror_secret_to_vault("shared_name", "ours") is False
+            foreign = [e for e in fake_vault.entries.values() if e["name"] == "shared_name"]
+            assert len(foreign) == 1, "the refused mirror must not add a second entry"
+            assert foreign[0]["value"] == "foreign", "the foreign entry was rotated — type scoping regressed"
+            assert foreign[0]["type"] == "api_key"
+
+            # A key we do own rotates normally, unaffected by the foreign entry.
+            assert await ssv.mirror_secret_to_vault("hf_token", "first") is True
+            assert await ssv.mirror_secret_to_vault("hf_token", "second") is True
+            ours = [e for e in fake_vault.entries.values() if e["name"] == "hf_token"]
+            assert len(ours) == 1 and ours[0]["value"] == "second"
+
+    async def test_a_malformed_vault_entry_does_not_raise(self, fake_vault):
+        """The lookup is best-effort; a bad row must be skipped, not propagated."""
+        with _real_modules_swapped():
+            bad_id = uuid.uuid4()
+            fake_vault.entries[bad_id] = {"id": "not-a-uuid", "name": "hf_token", "type": "system-secret"}
+
+            # Must not raise ValueError out through the create/update path.
+            assert await ssv.mirror_secret_to_vault("hf_token", "value") is True
+
+    async def test_a_non_string_vault_id_does_not_raise(self, fake_vault):
+        """uuid.UUID raises AttributeError on an int and TypeError on None.
+
+        Neither is a ValueError, so a non-string id would propagate out of a
+        best-effort lookup and surface as a 500 after the row had committed.
+        """
+        with _real_modules_swapped():
+            for bad in (None, 12345, ["a", "b"]):
+                fake_vault.entries.clear()
+                fake_vault.entries[uuid.uuid4()] = {
+                    "id": bad,
+                    "name": "hf_token",
+                    "type": "system-secret",
+                }
+                assert await ssv.mirror_secret_to_vault("hf_token", "value") is True
