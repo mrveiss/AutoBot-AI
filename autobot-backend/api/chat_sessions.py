@@ -465,7 +465,7 @@ def _is_agent_scoped_session(session: dict) -> bool:
     it. Such legacy sessions keep showing in the general list exactly as they
     did before (no data loss, no silent re-scoping). A backfill/admin cleanup
     for pre-existing "CEO · <company_id>" sessions is a separate, explicit,
-    one-time operation — filed as a follow-up, not folded into this filter.
+    one-time operation — #14756, not folded into this filter.
     """
     return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
