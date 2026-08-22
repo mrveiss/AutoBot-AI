@@ -472,3 +472,38 @@ resume into. Revisit once item 1 lands. Effort: **significant**.
 **Gap 1 → 2 → 4 → 3 → 7 → 6 → 8 → 5 → 10 → 11.** The first four are small, independently
 valuable, and mostly consist of connecting things AutoBot has already built. Gap 9 (the doctrine
 doc) can land in parallel at any point and makes the rest easier to review.
+
+---
+
+## Sources
+
+**Agent Host Protocol (AHP)** — Microsoft, MIT, protocol v0.3.0, repo created 2026-03-12
+(253 stars / 66 forks / 786 commits at time of writing).
+- Docs site — <https://microsoft.github.io/agent-host-protocol/>
+- Repository — <https://github.com/microsoft/agent-host-protocol>
+- `docs/guide/ahp-and-acp.md` — the "AHP is a coordination layer, ACP is a communication layer"
+  layering, the mutex analogy, and the AHP-upstream/ACP-downstream host architecture
+- `docs/guide/doctrine.md` — principles, design tests, anti-goals
+- `docs/guide/reconciliation.md` — `confirmedState` / `pendingActions[]` / `optimisticState`
+- `docs/specification/overview.md` — JSON-RPC framing, message categories, channel routing key
+- `docs/specification/subscriptions.md` — channel URI scheme, `subscribe`/`unsubscribe`,
+  `delivery.maxLatencyMs`, `view.turns`
+- `docs/specification/lifecycle.md` — `initialize`, `reconnect` with `lastSeenServerSeq`,
+  replay-vs-snapshot
+- `docs/specification/transport.md` — transport-agnosticism; connection auth declared out of scope
+- `docs/specification/chat-channel.md` — turns, drafts, forks/side-chats, per-chat working
+  directories
+- `docs/specification/mcp-channel.md` — capability-gated MCP relay
+- `docs/specification/authentication.md` — RFC 9728 / RFC 6750 semantics over JSON-RPC
+
+**Agent Client Protocol (ACP)** — Zed Industries + JetBrains, Apache-2.0, v1.7.0, repo created
+2025-06-23 (4,044 stars / 349 forks at time of writing).
+- Introduction — <https://agentclientprotocol.com/get-started/introduction>
+- Protocol overview (full method inventory) — <https://agentclientprotocol.com/protocol/overview>
+- Session setup — <https://agentclientprotocol.com/protocol/session-setup>
+- Repository — <https://github.com/zed-industries/agent-client-protocol>
+- ACP Registry announcement — <https://zed.dev/blog/acp-registry>
+- Zed ACP landing page — <https://zed.dev/acp>
+
+Repository metadata (stars, forks, commit counts, licences, creation dates) read via the GitHub
+API on 2026-08-22.
