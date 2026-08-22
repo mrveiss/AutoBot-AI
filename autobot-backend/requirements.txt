@@ -127,6 +127,11 @@ pytesseract>=0.3.13
 # Apache-2.0, AGPL's copyleft reaches network use, and this repo already
 # removed a weaker GPL-3.0 dependency for the same reason (0d67a956e).
 pypdfium2>=4.30.0
+# PDF table extraction (#14232). pypdf cannot detect tables, which is why the
+# old _extract_pdf_tables was a stub returning [] while DOCX did real work.
+# media/document/extraction.py guard-imports it and reports tables_attempted:
+# false when absent, so a missing wheel never fails an otherwise-readable PDF.
+pdfplumber>=0.11.0
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):

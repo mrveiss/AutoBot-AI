@@ -79,12 +79,21 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 # ---------------------------------------------------------------------------
 
 
-def test_pdf_reports_that_tables_were_never_attempted():
-    """The regression this issue exists for: [] read as a genuine negative."""
+def test_pdf_now_looks_for_tables_and_says_so():
+    """#14232 resolved what #13895 could only report.
+
+    This test used to assert `tables_attempted is False` for PDFs, because
+    `_extract_pdf_tables` was a stub returning `[]` while DOCX did real work —
+    #13895 existed to make that emptiness honest rather than to fix it.
+
+    PDF table extraction is implemented now, so the flag flips. The invariant
+    #13895 established is unchanged and still asserted: an empty `tables` means
+    "looked and found none" only when `tables_attempted` is true.
+    """
     data = _result(_pdf(["some prose"]), "application/pdf")
 
     assert data["tables"] == []
-    assert data["tables_attempted"] is False, "an unattempted field must not look like an empty result"
+    assert data["tables_attempted"] is True, "PDF table extraction runs now (#14232)"
 
 
 def test_docx_reports_that_tables_were_attempted():
@@ -94,14 +103,20 @@ def test_docx_reports_that_tables_were_attempted():
     assert data["tables"] == [[["a", "b"], ["c", "d"]]]
 
 
-def test_a_docx_with_genuinely_no_tables_is_distinguishable_from_a_pdf():
-    """Both carry ``tables: []``; only the flag separates them."""
+def test_a_docx_and_a_pdf_with_genuinely_no_tables_both_report_looking():
+    """Both carry ``tables: []``, and since #14232 both looked.
+
+    The flag no longer separates the two formats — it separates "looked and
+    found none" from "did not look", which is what #13895 was for. A missing
+    pdfplumber still produces ``attempted: False``; that case is covered in
+    test_pdf_tables_14232.py.
+    """
     docx_data = _result(_docx(["just prose"]), _DOCX_MIME)
     pdf_data = _result(_pdf(["just prose"]), "application/pdf")
 
     assert docx_data["tables"] == pdf_data["tables"] == []
     assert docx_data["tables_attempted"] is True, "DOCX looked and found none"
-    assert pdf_data["tables_attempted"] is False, "PDF never looked"
+    assert pdf_data["tables_attempted"] is True, "PDF looks now too (#14232)"
 
 
 # ---------------------------------------------------------------------------
