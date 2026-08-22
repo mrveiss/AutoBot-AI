@@ -55,7 +55,15 @@ async function enterScope(id: string) {
     if (mapped && chatStore.sessions.some((s) => s.id === mapped)) {
       await controller.switchToSession(mapped)
     } else {
-      const sid = await controller.createNewSession(`CEO · ${id}`)
+      // #12685: stamp first-class tenancy scoping (company_id/session_kind) on
+      // the session, not just the display title — the backend filters
+      // GET /api/chat/sessions on these fields so this company's CEO chat
+      // does not leak into the operator's general chat list or another
+      // company's.
+      const sid = await controller.createNewSession(`CEO · ${id}`, {
+        company_id: id,
+        session_kind: 'agent',
+      })
       ceoSessions.set(id, sid)
     }
   } catch (err) {

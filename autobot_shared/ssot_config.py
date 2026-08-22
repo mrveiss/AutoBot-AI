@@ -1579,6 +1579,25 @@ class MiscConfig(RedactedSettings):
         default="",
         alias="AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE",
     )
+    # #13896: rasterization resolution for the OCR fallback. 150 DPI is the
+    # usual cause of OCR failures that get blamed on the engine; 300 is the
+    # scanning baseline tesseract's own documentation assumes.
+    document_ocr_dpi: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_DPI")
+    # #13896: per-document page ceiling for OCR. Rasterizing and reading a page
+    # costs CPU-seconds, so an unbounded document can occupy a worker for
+    # minutes.
+    document_max_ocr_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_OCR_PAGES")
+    # Per-page OCR wall-clock ceiling (#13896 review). The page ceiling bounds
+    # count, this bounds cost: one page with a pathological MediaBox renders a
+    # very large bitmap however few pages were asked for.
+    document_ocr_page_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT")
+    document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
+    document_max_table_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_PAGES")
+    # #13896: master switch for the OCR fallback. Default on where the toolchain
+    # is present, since it only runs on pages that produced no text at all — a
+    # born-digital document never rasterizes. Set to "false" to trade scanned
+    # documents for a guaranteed CPU ceiling.
+    document_ocr_enabled: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_ENABLED")
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(

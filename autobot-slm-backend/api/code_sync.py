@@ -634,6 +634,12 @@ _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS"
 # interval cannot turn the wait into a busy loop.
 _SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
 _SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
+
+# #14703: how long an update-all job may make no progress before a new one may
+# supersede it. Generous on purpose -- every stage transition and every fleet
+# node stamps progress, so this bounds the gap between two signs of life, not
+# the job's total duration.
+_UPDATE_ALL_STALE_SECONDS = max(60, int(os.getenv("SLM_UPDATE_ALL_STALE_SECONDS", "1800")))
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 
@@ -4573,6 +4579,14 @@ _active_update_all: Dict[str, Any] = {}
 
 # Module-level references to tasks created by the update-all pipeline (M3).
 _update_all_task: Optional[asyncio.Task] = None
+
+# #14703 review: `start_update_all` reads the current job, may retire it, then
+# creates and stores a new one — with awaits in between. Without a lock two
+# concurrent POSTs can both judge the same job stale, both retire it, and both
+# start an orchestration against the same live nodes. That is strictly worse
+# than the lockout this retirement exists to fix, so the whole
+# decide-retire-create sequence is serialised.
+_update_all_start_lock = asyncio.Lock()
 _resume_task: Optional[asyncio.Task] = None
 
 
@@ -4611,6 +4625,41 @@ class UpdateAllJob(BaseModel):
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
+    #: #14703: when this job last actually did something. Judged on progress
+    #: rather than age: a legitimate fleet update across many nodes can outlive
+    #: any fixed age bound, and reaping a job that is still working would be
+    #: worse than the lockout it is meant to cure.
+    last_progress_at: Optional[str] = None
+
+
+def _mark_progress(job: "UpdateAllJob") -> None:
+    """Stamp that *job* is still doing something (#14703)."""
+    job.last_progress_at = utc_timestamp()
+
+
+def _job_is_stale(job: "UpdateAllJob") -> bool:
+    """True when *job* claims to be running but has shown no sign of life.
+
+    A job's status is only ever advanced by its own orchestration, so one that
+    stopped advancing stays "running" forever and 409s every future update.
+    There is no cancel path, so without this the builtin updater is disabled
+    until the process restarts -- an out-of-band action to recover from a stuck
+    update, which is exactly what should not be needed.
+
+    Falls back to `created_at` for a job that never stamped progress. An
+    unparseable or absent timestamp is NOT treated as stale: a job that is
+    genuinely running must never be reaped on a bad reading.
+    """
+    marker = job.last_progress_at or job.created_at
+    if not marker:
+        return False
+    try:
+        seen = datetime.fromisoformat(marker)
+    except (ValueError, TypeError):
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - seen).total_seconds() > _UPDATE_ALL_STALE_SECONDS
 
 
 def _short_sha(sha: Optional[str]) -> Optional[str]:
@@ -5323,7 +5372,11 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     executor = get_playbook_executor()
     slm_own_ip = urlparse(settings.external_url).hostname or ""
 
+    _mark_progress(job)
     for node_id in node_ids:
+        # #14703: every node is a sign of life, so a long fleet update across
+        # many nodes never looks stale however long it legitimately takes.
+        _mark_progress(job)
         _stage_log(stage, f"Syncing fleet node {node_id} ...")
         try:
             cont = await _sync_fleet_node(executor, node_id, job, stage, slm_own_ip)
@@ -5608,17 +5661,23 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
     """
     job.status = "running"
 
+    _mark_progress(job)
+
     remote_commit = await _run_github_stage(job, db_service_ref)
     if remote_commit is None:
         return
+    _mark_progress(job)
 
     pulled_commit = await _run_pull_stage(job, db_service_ref)
     if pulled_commit is None:
         return
+    _mark_progress(job)
 
     outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
+    _mark_progress(job)
 
     slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
+    _mark_progress(job)
     if job.status == "failed":
         return
     if slm_fired:
@@ -5816,9 +5875,57 @@ async def start_update_all(
     exists (self-update in flight) — prevents double-orchestration race (C3-b).
     Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
     """
+    async with _update_all_start_lock:
+        return await _start_update_all_locked()
+
+
+def _retire_stale_job(existing: UpdateAllJob) -> None:
+    """Mark a stalled job failed so a new run can start (#14703).
+
+    #14703: a job that stopped advancing used to 409 forever, disabling the
+    builtin updater until someone restarted the process. Retiring it lets the
+    next request through, so recovering from a stuck update needs no
+    out-of-band action.
+
+    Callers MUST establish that no resume plan is live before calling this —
+    a detached self-update stops stamping progress and is otherwise
+    indistinguishable from a dead job.
+    """
+    logger.warning(
+        "update-all: job %s has made no progress since %s — retiring it as stale so a new run can start",
+        existing.job_id,
+        existing.last_progress_at or existing.created_at,
+    )
+    existing.status = "failed"
+    existing.failure_reason = (
+        f"No progress for over {_UPDATE_ALL_STALE_SECONDS}s — retired so a new update could run (#14703)"
+    )
+    existing.completed_at = utc_timestamp()
+
+
+async def _start_update_all_locked() -> UpdateAllJob:
+    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
     global _update_all_task
 
     existing = _get_update_all_job()
+
+    # #14703 review: read the resume plan BEFORE any staleness decision. A
+    # persisted plan means a self-update is genuinely in flight, and the
+    # `slm_self_update` stage detaches the playbook and stops stamping
+    # progress the moment it fires — so a healthy long self-update looks
+    # exactly like a dead job to `_job_is_stale`. Retiring first also called
+    # `_clear_resume_plan()`, which deleted the very evidence the C3-b guard
+    # below reads, letting a second orchestration start against nodes the
+    # first one was still updating.
+    plan_exists = await _check_persisted_plan_exists()
+
+    if existing and existing.status in ("pending", "running") and not plan_exists and _job_is_stale(existing):
+        _retire_stale_job(existing)
+        # No plan exists on this path (checked above), so this only clears
+        # partial residue — it can no longer destroy a live plan.
+        await _clear_resume_plan()
+        existing = None
+
     if existing and existing.status in ("pending", "running"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -5826,7 +5933,7 @@ async def start_update_all(
         )
 
     # C3-b: also block when a persisted resume plan is present (restart in flight)
-    if await _check_persisted_plan_exists():
+    if plan_exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="SLM self-update is in flight (persisted resume plan found) — wait for restart to complete",

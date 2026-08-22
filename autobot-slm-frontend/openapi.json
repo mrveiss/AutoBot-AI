@@ -12819,6 +12819,17 @@
             "title": "Job Id",
             "type": "string"
           },
+          "last_progress_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Progress At"
+          },
           "skipped_fleet_nodes": {
             "default": 0,
             "title": "Skipped Fleet Nodes",
@@ -22067,6 +22078,59 @@
         "summary": "Complete Maintenance Window",
         "tags": [
           "maintenance"
+        ]
+      }
+    },
+    "/api/memory/lifecycle": {
+      "get": {
+        "description": "Aggregate the fleet's memory lifecycle views. Never raises to the client.",
+        "operationId": "get_memory_lifecycle_api_memory_lifecycle_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Memory Lifecycle Api Memory Lifecycle Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Memory Lifecycle",
+        "tags": [
+          "memory-lifecycle"
         ]
       }
     },

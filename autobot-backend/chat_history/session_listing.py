@@ -43,6 +43,29 @@ def _extract_chat_id_from_filename(filename: str) -> str | None:
     return None
 
 
+def _extract_session_scope(chat_data: Dict[str, Any]) -> tuple[str, str]:
+    """Pull the tenancy-scoping fields out of a session's stored metadata (#12685).
+
+    ``company_id`` and ``session_kind`` are written into ``metadata`` at session
+    creation time (see ``api/chat_sessions.create_session``) — the structural
+    replacement for parsing the display title ("CEO · <company_id>") that let
+    every company's agent conversations pile into one unscoped list. Sessions
+    created before this fix carry neither field; they are deliberately left as
+    ``("", "user")`` rather than reclassified, so they keep appearing in the
+    general list exactly as they did before (no data loss, no silent re-scoping
+    — see #12685's migration note).
+
+    Returns:
+        (company_id, session_kind) — empty string / "user" when absent.
+    """
+    metadata = chat_data.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return "", "user"
+    company_id = metadata.get("company_id") or ""
+    session_kind = metadata.get("session_kind") or "user"
+    return str(company_id), str(session_kind)
+
+
 def _generate_chat_name(chat_id: str) -> str:
     """Generate a display name for a chat (Issue #315: extracted).
 
@@ -101,6 +124,7 @@ class SessionListingMixin:
             async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
                 file_content = await f.read()
                 chat_data = self._decrypt_data(file_content)
+                company_id, session_kind = _extract_session_scope(chat_data)
 
                 return {
                     "chatId": chat_id,
@@ -108,6 +132,9 @@ class SessionListingMixin:
                     "messageCount": len(chat_data.get("messages", [])),
                     "createdTime": chat_data.get("created_time", ""),
                     "lastModified": chat_data.get("last_modified", ""),
+                    # #12685: first-class tenancy scoping, not a title parse.
+                    "companyId": company_id,
+                    "sessionKind": session_kind,
                 }
         except Exception as e:
             logger.error("Error reading chat file %s: %s", filename, str(e))
@@ -142,26 +169,41 @@ class SessionListingMixin:
             logger.error("Error listing chat sessions: %s", str(e))
             return []
 
-    async def _read_chat_file_metadata(self, chat_path: str) -> tuple[str | None, int]:
-        """Read chat name and message count from file (Issue #315: extracted).
+    async def _read_chat_file_metadata(self, chat_path: str) -> tuple[str | None, int, str, str]:
+        """Read chat name, message count and tenancy scope from file.
+
+        Issue #315: extracted. Issue #12685: also returns (company_id,
+        session_kind) so the fast listing path used by the default
+        ``GET /api/chat/sessions`` can filter agent/company conversations out
+        without a second, decrypting read.
+
+        Prefers ``self._decrypt_data`` (the same method the slow ``list_sessions``
+        path uses) over a raw ``json.loads`` so the scoping fields are readable
+        on installs with encryption enabled — the file is read into memory
+        either way, so this costs nothing extra. Falls back to ``json.loads``
+        when the mixed-in manager does not provide ``_decrypt_data`` (e.g. a
+        minimal ``SessionListingMixin``-only manager in tests), preserving the
+        prior raw-JSON behaviour for that case exactly.
 
         Args:
             chat_path: Path to chat JSON file
 
         Returns:
-            Tuple of (chat_name or None, message_count)
+            Tuple of (chat_name or None, message_count, company_id, session_kind)
         """
         try:
             async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
                 content = await f.read()
-                chat_data = json.loads(content)
-                chat_name = chat_data.get("name", "").strip() or None
+                decrypt = getattr(self, "_decrypt_data", None)
+                chat_data = decrypt(content) if decrypt else json.loads(content)
+                chat_name = (chat_data.get("name", "") or "").strip() or None
                 messages = chat_data.get("messages", [])
                 message_count = len(messages) if isinstance(messages, list) else 0
-                return chat_name, message_count
+                company_id, session_kind = _extract_session_scope(chat_data)
+                return chat_name, message_count, company_id, session_kind
         except Exception as read_err:
             logger.debug("Could not read chat file content: %s", read_err)
-            return None, 0
+            return None, 0, "", "user"
 
     async def _build_session_entry(self, chat_id: str, chat_path: str, filename: str) -> Dict[str, Any] | None:
         """Build a session entry from file metadata (Issue #315: extracted).
@@ -180,7 +222,7 @@ class SessionListingMixin:
             last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
             file_size = stat.st_size
 
-            chat_name, message_count = await self._read_chat_file_metadata(chat_path)
+            chat_name, message_count, company_id, session_kind = await self._read_chat_file_metadata(chat_path)
             if not chat_name:
                 chat_name = _generate_chat_name(chat_id)
 
@@ -204,6 +246,12 @@ class SessionListingMixin:
                 "isActive": False,
                 "fileSize": file_size,
                 "fast_mode": True,
+                # #12685: first-class tenancy scoping, not a title parse. Empty
+                # companyId / sessionKind == "user" means an ordinary human
+                # session (or a legacy one predating this fix — see the
+                # migration note on _extract_session_scope).
+                "companyId": company_id,
+                "sessionKind": session_kind,
             }
         except Exception as e:
             # #14248: loud and excluded, matching the malformed-timestamp precedent
