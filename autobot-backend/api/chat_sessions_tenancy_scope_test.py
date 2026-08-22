@@ -63,9 +63,7 @@ async def _list_sessions_for(username: str, sessions=None):
 
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch.object(chat_sessions, "get_chat_history_manager", return_value=_manager(sessions)):
-            with patch.object(
-                chat_sessions, "_build_ownership_validator", return_value=_validator_owning_everything()
-            ):
+            with patch.object(chat_sessions, "_build_ownership_validator", return_value=_validator_owning_everything()):
                 response = await chat_sessions.list_sessions(request, current_user, scope=None, team_id=None)
 
     return response
