@@ -10297,6 +10297,8 @@ export interface components {
             ssh_user: string | null;
             /** Status */
             status: string;
+            /** Unreachable Roles */
+            unreachable_roles?: string[];
             /**
              * Updated At
              * Format: date-time
@@ -10343,6 +10345,8 @@ export interface components {
              * @default not_installed
              */
             status: string;
+            /** Unreachable Roles */
+            unreachable_roles?: string[];
         } & {
             [key: string]: unknown;
         };

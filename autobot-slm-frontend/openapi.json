@@ -6920,6 +6920,13 @@
             "title": "Status",
             "type": "string"
           },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -7010,6 +7017,13 @@
             "default": "not_installed",
             "title": "Status",
             "type": "string"
+          },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
           }
         },
         "required": [

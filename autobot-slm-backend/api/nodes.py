@@ -675,7 +675,13 @@ async def update_node_roles(
     await db.refresh(node)
 
     logger.info("Node roles updated: %s -> %s", node_id, roles_data.roles)
-    return NodeResponse.model_validate(node)
+    # #14676: the bulk role editor writes NodeRole rows directly rather than
+    # going through _upsert_node_role, so it needs the advisory attached here
+    # too -- an operator assigning an inert role through this surface would
+    # otherwise get the same unqualified success the single-role path used to.
+    response = NodeResponse.model_validate(node)
+    response.unreachable_roles = _unreachable_roles(list(roles_data.roles or []))
+    return response
 
 
 @router.get("/{node_id}/detected-roles", response_model=NodeRolesResponse)
@@ -856,6 +862,37 @@ async def _declare_role_on_node(db: AsyncSession, node_id: str, role_name: str) 
         logger.info("Declared role on node: %s -> %s", node_id, role_name)
 
 
+def _unreachable_roles(role_names: list[str]) -> list[str]:
+    """Assigned roles that nothing will deploy (#14676).
+
+    Roles are assigned from the fleet nodes page. A role that reaches no
+    ansible group AND has no dedicated playbook is still recorded and still
+    listed on the node -- but nothing anywhere acts on it, so the operator gets
+    a plain success for an assignment that is permanently inert.
+
+    The assignment is never rejected: a custom role may legitimately be defined
+    before its deploy path is, and refusing it would be the worse failure.
+
+    Returns role names rather than a message so the UI can localise the wording.
+    """
+    try:
+        from services.inventory_builder import unmatched_role_tokens
+
+        return sorted(unmatched_role_tokens(list(role_names or [])))
+    except Exception as exc:  # noqa: BLE001 - this must never fail an assignment
+        # Warned, not debug-logged: this code exists to stop a failure being
+        # swallowed silently, so swallowing its own would be the same defect.
+        logger.warning("Could not evaluate role deploy paths for %s: %s", list(role_names or []), exc)
+        return []
+
+
+def _role_response_with_advisory(record: object, role_name: str) -> NodeRoleResponse:
+    """Attach the #14676 deploy-path report to a single-role assignment."""
+    response = NodeRoleResponse.model_validate(record)
+    response.unreachable_roles = _unreachable_roles([role_name])
+    return response
+
+
 async def _upsert_node_role(
     db: AsyncSession,
     node_id: str,
@@ -881,7 +918,7 @@ async def _upsert_node_role(
             role_request.role_name,
             role_request.assignment_type,
         )
-        return NodeRoleResponse.model_validate(existing)
+        return _role_response_with_advisory(existing, role_request.role_name)
 
     node_role = NodeRole(
         node_id=node_id,
@@ -899,7 +936,7 @@ async def _upsert_node_role(
         role_request.role_name,
         role_request.assignment_type,
     )
-    return NodeRoleResponse.model_validate(node_role)
+    return _role_response_with_advisory(node_role, role_request.role_name)
 
 
 @router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
