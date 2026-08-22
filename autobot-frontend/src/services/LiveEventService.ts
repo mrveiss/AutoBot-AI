@@ -48,10 +48,21 @@ export interface SteeringMessage {
   guidance: string
 }
 
+/** Server could not produce a complete history for a channel (#14818). */
+export interface LiveEventResync {
+  type: 'resync'
+  channel: string
+  reason: string
+}
+
+/** Callback invoked when a channel's local view must be rebuilt from scratch. */
+export type LiveEventResyncCallback = (resync: LiveEventResync) => void
+
 type ServerMessage =
   | LiveEvent
+  | LiveEventResync
   | { type: 'connection_established'; message: string }
-  | { type: 'subscribed'; channel: string }
+  | { type: 'subscribed'; channel: string; replayed?: number }
   | { type: 'unsubscribed'; channel: string }
   | { type: 'pong' }
   | { type: 'ping' }
@@ -70,6 +81,13 @@ class LiveEventService {
 
   private readonly subscribedChannels = new Set<string>()
   private readonly channelListeners = new Map<string, Set<LiveEventCallback>>()
+
+  // #14818: highest event_id seen per channel. Sent back as last_event_id on
+  // re-subscribe so the server can replay what was missed while disconnected.
+  // Without this the disconnect window was a silent hole — events vanished with
+  // no error anywhere.
+  private readonly lastEventIds = new Map<string, number>()
+  private readonly resyncListeners = new Map<string, Set<LiveEventResyncCallback>>()
 
   readonly isConnected: Ref<boolean> = ref(false)
   readonly connectionState: Ref<LiveEventConnectionState> = ref('disconnected')
@@ -164,10 +182,19 @@ class LiveEventService {
       return
     }
     if (msg.type === 'pong') return
+    if (msg.type === 'resync') {
+      this._handleResync(msg)
+      return
+    }
+    if (msg.type === 'subscribed') {
+      // `replayed` tells us how much history the server rebuilt for us. Worth a
+      // log line: a non-zero value is the reconnect path actually working.
+      logger.debug('Subscribed', { channel: msg.channel, replayed: msg.replayed ?? 0 })
+      return
+    }
     if (
       msg.type === 'error' ||
       msg.type === 'connection_established' ||
-      msg.type === 'subscribed' ||
       msg.type === 'unsubscribed'
     ) {
       logger.debug('Server ack:', msg.type)
@@ -178,7 +205,61 @@ class LiveEventService {
     }
   }
 
+  /**
+   * Handle a server resync directive (#14818).
+   *
+   * The server could not give us a complete history, so the local view for this
+   * channel is untrustworthy. Drop the marker — resubscribing from a stale one
+   * would ask for a replay the server has already said it cannot produce — and
+   * tell listeners to rebuild.
+   */
+  private _handleResync(msg: LiveEventResync): void {
+    logger.warn('Resync required for channel', { channel: msg.channel, reason: msg.reason })
+    this.lastEventIds.delete(msg.channel)
+    const listeners = this.resyncListeners.get(msg.channel)
+    if (listeners) {
+      listeners.forEach((cb) => {
+        try {
+          cb(msg)
+        } catch (err: unknown) {
+          logger.error('Error in resync listener:', err)
+        }
+      })
+    }
+  }
+
+  /**
+   * Register a callback invoked when `channel` needs a full rebuild (#14818).
+   * Returns an unregister function.
+   */
+  onResync(channel: string, callback: LiveEventResyncCallback): () => void {
+    let listeners = this.resyncListeners.get(channel)
+    if (!listeners) {
+      listeners = new Set()
+      this.resyncListeners.set(channel, listeners)
+    }
+    listeners.add(callback)
+    return () => {
+      const current = this.resyncListeners.get(channel)
+      if (!current) return
+      current.delete(callback)
+      if (current.size === 0) this.resyncListeners.delete(channel)
+    }
+  }
+
+  /** Highest event_id seen on `channel`, or undefined if none yet (#14818). */
+  lastSeenEventId(channel: string): number | undefined {
+    return this.lastEventIds.get(channel)
+  }
+
   private _dispatchLiveEvent(event: LiveEvent): void {
+    // #14818: advance the marker before dispatch. Guard against going backwards
+    // — a replayed batch must never lower the high-water mark.
+    const previous = this.lastEventIds.get(event.channel)
+    if (previous === undefined || event.event_id > previous) {
+      this.lastEventIds.set(event.channel, event.event_id)
+    }
+
     const listeners = this.channelListeners.get(event.channel)
     if (listeners) {
       listeners.forEach((cb) => {
@@ -340,6 +421,17 @@ class LiveEventService {
   }
 
   private _sendAction(action: 'subscribe' | 'unsubscribe', channel: string): void {
+    if (action === 'subscribe') {
+      // #14818: only send a marker we actually hold. Omitting it (rather than
+      // sending 0) keeps a first-ever subscribe distinguishable from a resume.
+      const lastEventId = this.lastEventIds.get(channel)
+      this._send(
+        lastEventId === undefined
+          ? { action, channel }
+          : { action, channel, last_event_id: lastEventId }
+      )
+      return
+    }
     this._send({ action, channel })
   }
 
