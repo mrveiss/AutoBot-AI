@@ -723,6 +723,64 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 
+def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id: str) -> Optional[str]:
+    """Locate the transcript an adapter run actually wrote (#13614).
+
+    The state file is the authority, not a recomputed path. `_output_path` is
+    called by the adapter *before* the process is spawned — it has to be, the
+    file is the child's stdout — so the run id in its name is the placeholder
+    `0/<session>`, while the id the adapter returns is `<pid>/<session>`. Two
+    places deriving the same path from different inputs is how a complete 37 KB
+    transcript sat on disk while `output_text` stayed empty and
+    `recorded_events` NULL.
+
+    The adapter records the real path in its state file, keyed by the run id it
+    returns, so reading that removes the second derivation entirely rather than
+    trying to keep the two in step.
+
+    When the state file is missing or unreadable the path is recomputed — but
+    from the *placeholder* id the adapter actually named the file with, not
+    from `external_run_id`. Rebuilding it from the returned id names a file no
+    run has ever written, so the fallback would miss every time, precisely in
+    the case it exists to cover.
+
+    Only the claude_code family is resolvable here; the copilot adapters use a
+    different filename scheme and are tracked separately (#14760).
+    """
+    import json as _json
+
+    try:
+        from ..adapters.claude_code_adapter import _output_path as _cc_output_path
+        from ..adapters.claude_code_adapter import _state_path as _cc_state_path
+        from ..adapters.subprocess_base import placeholder_run_id, session_id_from_run_id
+    except ImportError:
+        # Losing the helpers is a wiring fault, not an absent transcript. The
+        # caller cannot tell those apart from a None, so say which it was.
+        logger.exception(
+            "Could not import adapter path helpers — replay transcript resolution " "is disabled for run %s",
+            external_run_id,
+        )
+        return None
+
+    state_file = _cc_state_path(output_dir, external_run_id)
+    try:
+        with open(state_file, "r", encoding="utf-8") as fh:
+            recorded = _json.load(fh).get("output_file")
+        if recorded:
+            return str(recorded)
+        logger.warning(
+            "Adapter state file %s carries no output_file — falling back to the computed path",
+            state_file,
+        )
+    except (OSError, ValueError):
+        logger.warning(
+            "Could not read adapter state file %s — falling back to the computed path",
+            state_file,
+        )
+
+    return _cc_output_path(output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id)))
+
+
 async def _record_run_for_replay(
     agent: Dict[str, Any],
     run_id: uuid.UUID,
@@ -752,13 +810,7 @@ async def _record_run_for_replay(
             cfg = agent.get("adapter_config") or {}
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id_str = str(agent.get("agent_id", ""))
-            output_file: Optional[str] = None
-            try:
-                from ..adapters.claude_code_adapter import _output_path as _cc_output_path
-
-                output_file = _cc_output_path(output_dir, agent_id_str, external_run_id)
-            except ImportError:
-                pass
+            output_file: Optional[str] = _resolve_adapter_output_file(output_dir, agent_id_str, external_run_id)
 
             if output_file and _os.path.exists(output_file):
                 try:
