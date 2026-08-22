@@ -137,10 +137,11 @@ class TestExtractionDoesNotHoldTheEventLoop:
         ):
             await DocumentPipeline()._process_impl(
                 MediaInput(
-                    data=b"%PDF-1.4 x",
+                    media_id="test-doc",
                     media_type=MediaType.DOCUMENT,
+                    intent=ProcessingIntent.EXTRACTION,
+                    data=b"%PDF-1.4 x",
                     mime_type="application/pdf",
-                    intent=ProcessingIntent.EXTRACT,
                     metadata={},
                 )
             )
