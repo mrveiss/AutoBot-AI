@@ -5484,7 +5484,11 @@ def _completion_is_from_a_rotated_log() -> bool:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        return bool(getattr(read_self_update_verdict(SELF_UPDATE_LOG_PATH), "from_rotated_log", False))
+        rotated = getattr(read_self_update_verdict(SELF_UPDATE_LOG_PATH), "from_rotated_log", False)
+        # `is True`, not truthiness: a stubbed reader returns a Mock whose every
+        # attribute is truthy, which would make this refuse every completion and
+        # hang the stage. Only a real boolean True means "rotated".
+        return rotated is True
     except Exception as exc:  # pragma: no cover - must never break the wait
         logger.debug("update-all: could not tell whether the verdict came from a rotated log (%s)", exc)
         return False

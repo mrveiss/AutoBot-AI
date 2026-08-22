@@ -90,6 +90,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
 from api.code_sync import (  # noqa: E402
+    _completion_is_from_a_rotated_log,
     UpdateAllJob,
     _await_self_update_completion,
     _completion_is_newer_than,
@@ -608,6 +609,8 @@ def _fired_job() -> UpdateAllJob:
 
 _BEFORE_FIRING = "2026-08-21T12:00:00+00:00"
 _AFTER_FIRING = "2026-08-21T12:09:17.784629+00:00"
+_TARGET = "4b6defc41813bef8201c8ce6921588aa60bcafb7"
+_FIRED_AT = "2026-08-21T12:08:47.427212+00:00"
 
 
 def test_stale_completion_is_not_our_play() -> None:
@@ -671,8 +674,11 @@ def test_no_restart_still_reaches_the_fleet_stage() -> None:
         patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
         patch("api.code_sync._clear_resume_plan", AsyncMock()),
         patch("services.self_update_log_reader.read_self_update_verdict", return_value=verdict),
+        # The deployed commit must match the target or the stage refuses to
+        # continue -- the play that completed may not have been ours.
+        patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value=_TARGET)),
     ):
-        _run(_reconcile_self_update_stage(job, "4b6defc41813bef8201c8ce6921588aa60bcafb7", ["node-a"]))
+        _run(_reconcile_self_update_stage(job, _TARGET, ["node-a"]))
 
     stage = _get_stage(job, "slm_self_update")
     assert stage.status == _StageStatus.SUCCESS, f"stage left at {stage.status!r}"
@@ -716,3 +722,55 @@ def test_timeout_fails_the_stage_rather_than_hanging() -> None:
     assert job.status == "failed"
     assert stage.completed_at
     fleet.assert_not_awaited()
+
+
+def test_a_foreign_play_does_not_resolve_this_stage() -> None:
+    """The completion signal is box-global (#14685 review).
+
+    POST /self-update and the fleet sync job share the same log and unit, and
+    neither checks for an update-all in flight, so an unrelated play can satisfy
+    the wait. A deployed commit that is not the target means the outcome was not
+    ours, and the fleet must not be touched on the strength of it.
+    """
+    job = _fired_job()
+    fleet = AsyncMock()
+    verdict = SimpleNamespace(failed_hosts=0, unreachable_hosts=0, reason=None)
+    with (
+        patch("api.code_sync._await_self_update_completion", AsyncMock(return_value=_AFTER_FIRING)),
+        patch("api.code_sync._run_fleet_stage_or_already_current", fleet),
+        patch("api.code_sync._clear_resume_plan", AsyncMock()),
+        patch("services.self_update_log_reader.read_self_update_verdict", return_value=verdict),
+        patch("api.code_sync._get_slm_deployed_commit", AsyncMock(return_value="0000000000000000")),
+    ):
+        _run(_reconcile_self_update_stage(job, _TARGET, ["node-a"]))
+
+    assert job.status == "failed", "a play that left the wrong commit deployed must not pass"
+    fleet.assert_not_awaited()
+
+
+def test_a_rotated_log_is_not_read_as_a_fresh_completion() -> None:
+    """logrotate uses copytruncate, so the live log's mtime dates the truncation.
+
+    That timestamp is recent enough to pass the freshness check while describing
+    no play at all, with the verdict coming from an older run.
+    """
+    done = SimpleNamespace(
+        in_progress=False, reason="no self-update play is running", last_completed_play_at=_AFTER_FIRING
+    )
+    with (
+        patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=done)),
+        patch("api.code_sync._completion_is_from_a_rotated_log", return_value=True),
+        patch("api.code_sync._SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 2),
+        patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
+    ):
+        assert _run(_await_self_update_completion(_FIRED_AT)) is None
+
+
+def test_a_stubbed_verdict_reader_does_not_refuse_every_completion() -> None:
+    """The rotated check must not trip on a Mock's blanket truthiness.
+
+    `getattr(mock, "from_rotated_log", False)` returns a Mock, which is truthy,
+    so a truthiness test here would refuse every completion and hang the stage.
+    """
+    with patch("services.self_update_log_reader.read_self_update_verdict", return_value=MagicMock()):
+        assert _completion_is_from_a_rotated_log() is False
