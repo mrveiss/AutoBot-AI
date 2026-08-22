@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.adapters import registered_adapter_types
+from llc.adapters import get_adapter, registered_adapter_types
 from llc.deps import assert_company_access
 from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
@@ -218,6 +218,37 @@ async def _fetch_company_model_overrides(
 # ---------------------------------------------------------------------------
 
 
+def _adapter_unavailable_reason(adapter_type: str) -> Optional[str]:
+    """Why *adapter_type* cannot run here, or None when it can (#12681).
+
+    Mirrors how ``GET /adapters`` decides ``available``, from the same signal:
+    ``implemented = hasattr(adapter, "is_cli_available")``, and an unimplemented
+    adapter is not available.
+
+    Among *registered* adapters the method's absence means "not implemented",
+    not "in-process with nothing to check" — `codex_subscription` is a bare stub
+    whose ``invoke`` raises ``NotImplementedError``, and it is the only
+    registered type without the probe. Treating that as runnable would let a
+    hire succeed for an adapter the UI greys out as unavailable, which is the
+    two-surfaces-disagree defect this gate exists to prevent.
+    """
+    adapter = get_adapter(adapter_type)
+    probe = getattr(adapter, "is_cli_available", None)
+    if not callable(probe):
+        return "it is registered but not implemented on this build"
+    try:
+        if probe():
+            return None
+    except Exception as exc:
+        # Fail CLOSED, matching `GET /adapters`, which reports available=False when
+        # the probe raises. Diverging here would let a hire succeed for an adapter
+        # the UI is simultaneously showing as unavailable.
+        logger.warning("adapter %s availability probe failed: %s", adapter_type, type(exc).__name__)
+        return f"its availability could not be determined ({type(exc).__name__})"
+    message = getattr(adapter, "cli_not_found_message", None)
+    return message() if callable(message) else f"{adapter_type} is not available"
+
+
 @router.post("/agent-hires", response_model=AgentHireRead, status_code=201)
 async def create_agent_hire(
     body: AgentHireCreate,
@@ -370,6 +401,18 @@ async def hire_agent(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(f"Unknown adapter_type {resolved_adapter!r}. " f"Registered types: {registered_adapter_types()}"),
+        )
+
+    # #12681: registered is not the same as runnable. The check above stops an
+    # unknown type, but a known one whose CLI is absent produces the identical
+    # symptom it was written to prevent — every heartbeat skipped, the agent
+    # looking degraded forever. The availability probe already exists and is
+    # already what `GET /adapters` reports; the hire path simply never asked.
+    unavailable = _adapter_unavailable_reason(resolved_adapter)
+    if unavailable:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(f"Adapter {resolved_adapter!r} is registered but cannot run on this " f"deployment: {unavailable}"),
         )
 
     is_haiku = resolved_model == HAIKU_MODEL
