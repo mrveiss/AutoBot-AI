@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import pathlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Set
@@ -205,12 +206,42 @@ def render(plan: BackfillPlan, *, applied: int | None = None) -> str:
     return "\n".join(lines)
 
 
+def _sessions_on_disk(chat_mgr) -> int:
+    """How many session files exist, independent of the listing path.
+
+    `list_sessions` catches its own errors and returns `[]`, so a failed listing
+    and an install with no chats produce the identical "scanned 0". That reads
+    as "nothing to do" — the shape this repo keeps getting bitten by — and for a
+    backfill it would mean reporting success having examined nothing.
+    """
+    directory = pathlib.Path(chat_mgr._get_chats_directory())
+    if not directory.is_dir():
+        return 0
+    return len(list(directory.glob("*_chat.json")))
+
+
 async def _main(apply_changes: bool) -> None:
     from chat_history import ChatHistoryManager
 
     chat_mgr = ChatHistoryManager()
     sessions = await chat_mgr.list_sessions()
-    plan = build_plan(sessions, await load_known_company_ids())
+
+    on_disk = _sessions_on_disk(chat_mgr)
+    if not sessions and on_disk:
+        raise RuntimeError(
+            f"listing returned no sessions while {on_disk} session file(s) exist on disk — "
+            "the listing failed silently. Refusing to report a clean scan of nothing."
+        )
+
+    try:
+        known = await load_known_company_ids()
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not read the company list, so no title could be confirmed against a real "
+            f"company: {exc}. Nothing was written."
+        ) from exc
+
+    plan = build_plan(sessions, known)
 
     # Reported through the logger, not print(), matching
     # `session_reply_backfill` and `workflow_redis_backfill` — the two existing
