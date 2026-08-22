@@ -51,6 +51,21 @@ DEFAULT_OCR_PAGE_TIMEOUT = 60
 # worker indefinitely (#13896 review).
 DEFAULT_OCR_TIMEOUT = 300
 
+# Ceilings. The floor alone left every knob unbounded upward, so a sane-looking
+# config change — not just hostile input — removed the protection it configures
+# (#14751). DPI is the sharpest: `render(scale=dpi/72)` allocates a bitmap sized
+# by the page's declared box times the scale, so cost grows QUADRATICALLY in it.
+MAX_OCR_DPI = 600  # beyond this adds no legibility tesseract can use
+MAX_OCR_PAGES_CEILING = 500  # the page ceiling is the bound on a 5000-page scan
+MAX_OCR_PAGE_TIMEOUT = 300  # one page may not outlast the whole-document budget
+MAX_OCR_TIMEOUT = 1800  # a single ingest may not hold a worker for half an hour
+
+# Per-page rasterization budget, in pixels. A PDF declaring an enormous MediaBox
+# becomes a multi-gigabyte allocation at 300 DPI before any per-page timeout can
+# help — `_ocr_one_page` catches MemoryError, but an OS-level OOM kill lands
+# before Python raises. 40 MP is roughly A0 at 300 DPI.
+MAX_OCR_PAGE_PIXELS = 40_000_000
+
 
 def ocr_dpi() -> int:
     """Resolve the rasterization DPI from config."""
@@ -58,6 +73,7 @@ def ocr_dpi() -> int:
         blank_to_none(config.misc.document_ocr_dpi),
         DEFAULT_OCR_DPI,
         "AUTOBOT_DOCUMENT_OCR_DPI",
+        MAX_OCR_DPI,
     )
 
 
@@ -72,6 +88,7 @@ def ocr_page_timeout() -> int:
         blank_to_none(config.misc.document_ocr_page_timeout),
         DEFAULT_OCR_PAGE_TIMEOUT,
         "AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT",
+        MAX_OCR_PAGE_TIMEOUT,
     )
 
 
@@ -81,6 +98,7 @@ def max_ocr_pages() -> int:
         blank_to_none(config.misc.document_max_ocr_pages),
         DEFAULT_MAX_OCR_PAGES,
         "AUTOBOT_DOCUMENT_MAX_OCR_PAGES",
+        MAX_OCR_PAGES_CEILING,
     )
 
 
@@ -96,6 +114,7 @@ def ocr_timeout() -> int:
         blank_to_none(config.misc.document_ocr_timeout),
         DEFAULT_OCR_TIMEOUT,
         "AUTOBOT_DOCUMENT_OCR_TIMEOUT",
+        MAX_OCR_TIMEOUT,
     )
 
 
@@ -112,8 +131,35 @@ def ocr_enabled() -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
-def _positive_int_setting(raw: str | None, default: int, env_name: str) -> int:
-    """Parse a positive-int knob, falling back loudly rather than silently."""
+def tesseract_cmd() -> str:
+    """The configured tesseract binary path, or "" when unset.
+
+    Read from the environment because there is no SSOT field for it and
+    `ssot_config` is already over its size ceiling; the substantive defect was
+    never where it is read from but that setting it did nothing (#14751).
+    """
+    return os.environ.get("TESSERACT_CMD", "").strip()
+
+
+def _apply_tesseract_cmd(pytesseract) -> None:
+    """Point pytesseract at the configured binary.
+
+    `ocr_environment_report` displayed TESSERACT_CMD without ever assigning it,
+    so an operator could believe they had redirected OCR when they had not — a
+    diagnostic reporting a setting it does not apply is worse than no field.
+    """
+    configured = tesseract_cmd()
+    if configured:
+        pytesseract.pytesseract.tesseract_cmd = configured
+
+
+def _positive_int_setting(raw: str | None, default: int, env_name: str, maximum: int | None = None) -> int:
+    """Parse a positive-int knob, falling back loudly rather than silently.
+
+    *maximum* is clamped to rather than rejected: an operator who asked for more
+    than the ceiling wants as much as they can have, and refusing to the default
+    would quietly give them *less* than they asked for (#14751).
+    """
     if raw is None:
         return default
     try:
@@ -124,6 +170,9 @@ def _positive_int_setting(raw: str | None, default: int, env_name: str) -> int:
     if value <= 0:
         logger.warning("%s=%d must be positive; falling back to %d", env_name, value, default)
         return default
+    if maximum is not None and value > maximum:
+        logger.warning("%s=%d exceeds the %d ceiling; clamping", env_name, value, maximum)
+        return maximum
     return value
 
 
@@ -164,6 +213,8 @@ def ocr_availability() -> Tuple[bool, str]:
         import pytesseract
     except ImportError:
         return False, "pytesseract is not installed"
+
+    _apply_tesseract_cmd(pytesseract)
 
     try:
         import pypdfium2  # noqa: F401
@@ -222,6 +273,8 @@ def _run_ocr(raw: bytes, wanted: List[int], skipped: Tuple[int, ...]) -> OcrResu
     import pypdfium2
     import pytesseract
 
+    _apply_tesseract_cmd(pytesseract)
+
     dpi = ocr_dpi()
     recovered: Dict[int, str] = {}
 
@@ -243,6 +296,40 @@ def _run_ocr(raw: bytes, wanted: List[int], skipped: Tuple[int, ...]) -> OcrResu
     return OcrResult(attempted=True, pages=recovered, skipped_pages=skipped)
 
 
+def _bounded_scale(page, dpi: int, number: int) -> float:
+    """Scale for *page* at *dpi*, reduced so the bitmap fits the pixel budget.
+
+    The page ceiling bounds how many pages are rasterized and the page timeout
+    bounds how long one may take, but neither bounds how LARGE one is: a PDF
+    declaring an enormous MediaBox allocates a multi-gigabyte bitmap at the
+    default DPI before any timeout can intervene, and an OS-level OOM kill
+    lands before Python raises MemoryError for the caller to catch (#14751).
+
+    Downscaled rather than refused — OCR at a lower effective DPI still reads a
+    page, whereas skipping it returns nothing for a page that was merely large.
+    A page whose size cannot be measured keeps the requested scale, which is
+    the behaviour that predates this bound.
+    """
+    scale = dpi / 72
+    try:
+        width, height = page.get_size()
+    except Exception:  # a page that will not report its size is not measurable
+        return scale
+    projected = (width * scale) * (height * scale)
+    if projected <= MAX_OCR_PAGE_PIXELS or projected <= 0:
+        return scale
+    reduced = scale * (MAX_OCR_PAGE_PIXELS / projected) ** 0.5
+    logger.warning(
+        "page %d would rasterize to %.0f MP at %d DPI; reducing to %.0f DPI to stay " "within the %.0f MP budget",
+        number,
+        projected / 1_000_000,
+        dpi,
+        reduced * 72,
+        MAX_OCR_PAGE_PIXELS / 1_000_000,
+    )
+    return reduced
+
+
 def _ocr_one_page(document, number: int, dpi: int, pytesseract) -> str:
     """Read one page, degrading to empty text rather than failing the document.
 
@@ -258,7 +345,7 @@ def _ocr_one_page(document, number: int, dpi: int, pytesseract) -> str:
     """
     try:
         page = document[number - 1]
-        image = page.render(scale=dpi / 72).to_pil()
+        image = page.render(scale=_bounded_scale(page, dpi, number)).to_pil()
         try:
             return pytesseract.image_to_string(image, timeout=ocr_page_timeout()) or ""
         finally:
@@ -281,5 +368,5 @@ def ocr_environment_report() -> Dict[str, object]:
         "reason": reason,
         "dpi": ocr_dpi(),
         "max_pages": max_ocr_pages(),
-        "tesseract_cmd": os.environ.get("TESSERACT_CMD", ""),
+        "tesseract_cmd": tesseract_cmd(),
     }
