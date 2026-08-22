@@ -26,6 +26,7 @@ from typing import Any, Dict
 import httpx
 from fastapi import APIRouter, Depends, Query
 
+from autobot_shared.ssot_constants import QueryDefaults
 from config import settings
 from services.auth import get_current_user
 
@@ -65,9 +66,12 @@ def _unreachable(node: str, reason: str) -> Dict[str, Any]:
     return {**_EMPTY_SECTIONS, "node": node, "degraded": True, "error": reason}
 
 
+# The ceiling is MAX_SEARCH_LIMIT, not KNOWLEDGE_DEFAULT_LIMIT which the linter
+# suggests: both are 100 today, but one is a maximum and the other a default, and
+# a ceiling that silently tracks a default drifts the moment the default moves.
 @router.get("/lifecycle")
 async def get_memory_lifecycle(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(QueryDefaults.DEFAULT_TOP_K * 2, ge=1, le=QueryDefaults.MAX_SEARCH_LIMIT),
     _user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Aggregate the fleet's memory lifecycle views. Never raises to the client."""
