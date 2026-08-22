@@ -25,7 +25,6 @@ from types import ModuleType
 from unittest.mock import patch
 
 
-
 def _svc() -> ModuleType:
     import llc.services.portability as mod
 
