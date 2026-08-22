@@ -9,8 +9,8 @@ import ast
 import importlib.util
 import sys
 import types
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
