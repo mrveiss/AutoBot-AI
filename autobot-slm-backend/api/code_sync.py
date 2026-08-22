@@ -628,6 +628,13 @@ async def _get_tracker_for_db(db: AsyncSession):
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
 
+# #14683: how long the update-all orchestration waits for a fired self-update
+# play to report a completion before giving up on it. Generous: the play covers
+# every deployed role on the box. The poll floor is 1s so a misconfigured
+# interval cannot turn the wait into a busy loop.
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
+_SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
+
 # #14703: how long an update-all job may make no progress before a new one may
 # supersede it. Generous on purpose -- every stage transition and every fleet
 # node stamps progress, so this bounds the gap between two signs of life, not
@@ -5493,6 +5500,165 @@ async def _run_fleet_stage_or_already_current(
     job.completed_at = utc_timestamp()
 
 
+def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str]) -> bool:
+    """True when *completed_at* dates a play that finished after *since*.
+
+    The comparison is the whole point (#14683): "no play is running" is also
+    true a moment after firing, before the detached play has started, so a bare
+    not-running reading would report an instant, false completion. Only a
+    completion strictly newer than the moment we fired proves our play ended.
+
+    An unparseable or absent timestamp is NOT a completion.
+    """
+    if not completed_at or not since:
+        return False
+    try:
+        done = datetime.fromisoformat(completed_at)
+        fired = datetime.fromisoformat(since)
+    except (ValueError, TypeError):
+        return False
+    if done.tzinfo is None:
+        done = done.replace(tzinfo=timezone.utc)
+    if fired.tzinfo is None:
+        fired = fired.replace(tzinfo=timezone.utc)
+    return done > fired
+
+
+def _completion_is_from_a_rotated_log() -> bool:
+    """True when the last verdict was read from the rotated log, not the live one.
+
+    logrotate uses copytruncate here, so after a rotation the live log is empty
+    and its mtime dates the truncation — recent enough to pass the freshness
+    check above while describing no play at all. The verdict then comes from the
+    rotated file, i.e. an OLDER run. Treating that as our completion would
+    resolve this stage against someone else's outcome.
+    """
+    try:
+        from services.playbook_executor import SELF_UPDATE_LOG_PATH
+        from services.self_update_log_reader import read_self_update_verdict
+
+        rotated = getattr(read_self_update_verdict(SELF_UPDATE_LOG_PATH), "from_rotated_log", False)
+        # `is True`, not truthiness: a stubbed reader returns a Mock whose every
+        # attribute is truthy, which would make this refuse every completion and
+        # hang the stage. Only a real boolean True means "rotated".
+        return rotated is True
+    except Exception as exc:  # pragma: no cover - must never break the wait
+        logger.debug("update-all: could not tell whether the verdict came from a rotated log (%s)", exc)
+        return False
+
+
+async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str]) -> Optional[str]:
+    """Wait for the fired self-update play to finish. Returns its completion time.
+
+    Returns None on timeout. If the play restarts this service — the case the
+    orchestration was originally written for — this coroutine simply dies with
+    the process and the startup resume hook takes over, exactly as before.
+    """
+    deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
+    while True:
+        await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
+        activity = await read_deploy_activity()
+        # #14703 interaction: waiting IS progress. This loop runs up to
+        # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
+        # rule retires a job after _UPDATE_ALL_STALE_SECONDS (1800s default) of
+        # silence -- exactly half. Without a stamp per poll, a healthy
+        # self-update that takes longer than 1800s is retired as stale at the
+        # halfway point of its own permitted wait. The reconcile path is the
+        # no-restart case, so it deliberately persists no resume plan, and the
+        # resume plan is the only other thing that stays the staleness rule.
+        _mark_progress(job)
+        # in_progress is None means the unit could not be queried — unknown is
+        # not "finished", so keep waiting rather than resolving on a guess.
+        if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
+            if _completion_is_from_a_rotated_log():
+                # The live log was rotated out from under us. Its mtime now
+                # dates the truncation, not a play, so the "completion" above
+                # describes a run we cannot see. Waiting is the honest move:
+                # this is precisely the reading that must not be trusted.
+                logger.warning("update-all: self-update verdict came from a rotated log — not treating it as ours")
+            else:
+                return activity.last_completed_play_at
+        # Checked after polling, never before: a misconfigured timeout must not
+        # produce a verdict from zero observations.
+        if time.monotonic() >= deadline:
+            return None
+
+
+async def _reconcile_self_update_stage(
+    job: UpdateAllJob,
+    remote_commit: str,
+    outdated_node_ids: List[str],
+) -> None:
+    """Resolve a fired self-update stage when this process was NOT restarted.
+
+    #14683: the stage used to have no completion path in this process at all.
+    It fired the play, returned, and relied on the restart killing us so the
+    startup resume hook would continue the fleet stage. When the play finished
+    without replacing the service, nothing ever ran again: the stage stayed
+    RUNNING and the fleet stage stayed PENDING forever, so no node was updated
+    and the job could neither complete nor fail.
+    """
+    stage = _get_stage(job, "slm_self_update")
+    completed_at = await _await_self_update_completion(job, stage.started_at)
+
+    if completed_at is None:
+        reason = (
+            f"self-update play reported no completion within {_SELF_UPDATE_WATCH_TIMEOUT_SECONDS}s — "
+            "not continuing to the fleet stage"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    # #12959: the raw log read only says whether the PLAYBOOK finished. A run
+    # can reach its recap with zero failures and still deliver nothing
+    # role-owned, which `_read_last_self_update_verdict` folds in via
+    # probe_role_delivery and `/status` already gates on. Resolving this stage
+    # on the weaker check would let a degraded self-update be reported as
+    # resolved and then deploy to the fleet on the strength of it.
+    verdict = _read_last_self_update_verdict()
+    if verdict.degraded:
+        # Carry the reason into the stage: the count alone gave an operator
+        # nothing to act on.
+        reason = verdict.reason or (
+            f"self-update play finished with {verdict.failed_hosts} failed and "
+            f"{verdict.unreachable_hosts} unreachable host(s)"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    # The completion signal is box-global: the log path and the systemd unit are
+    # shared by every self-update trigger (POST /self-update, the fleet sync
+    # job), none of which check for an update-all in flight. A play that is not
+    # ours can therefore satisfy the wait above. Verifying the deployed commit
+    # is what makes the outcome ours, and it is the same check the restart path
+    # already performs via _resume_verify_slm_stage before touching the fleet.
+    if not await _resume_verify_slm_stage(job, remote_commit):
+        await _clear_resume_plan()
+        return
+
+    _stage_log(stage, "Self-update play completed without restarting this service — continuing")
+    stage.status = _StageStatus.SUCCESS
+    stage.sha = _short_sha(remote_commit)
+    stage.message = f"SLM self-update completed at {_short_sha(remote_commit)} (no restart required)"
+    stage.completed_at = utc_timestamp()
+    await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
+    await _clear_resume_plan()
+
+
 async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> None:
     """Background task: run the 4-stage one-click update pipeline (M4).
 
@@ -5527,7 +5693,14 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
     if job.status == "failed":
         return
     if slm_fired:
-        return  # process restarts; resume hook handles fleet stage
+        # #14683: previously an unconditional return, on the assumption that the
+        # restart would kill this process and the startup resume hook would pick
+        # the fleet stage up. That holds only when the play actually replaces the
+        # service. If we are still alive when the play finishes, nothing else will
+        # ever advance the job, so reconcile it here. When the restart DOES happen
+        # this coroutine dies mid-wait and the resume hook runs exactly as before.
+        await _reconcile_self_update_stage(job, remote_commit, outdated_node_ids)
+        return
 
     await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
 
