@@ -17,13 +17,11 @@ present while nothing emits), so the wiring is asserted, not assumed.
 
 from __future__ import annotations
 
-
 import pytest
 
 prometheus_client = pytest.importorskip("prometheus_client")
 
 from autobot_shared.monitoring.metrics.audit import AuditMetricsRecorder  # noqa: E402
-
 
 
 def _sample(counter, action: str, error_type: str) -> float:
