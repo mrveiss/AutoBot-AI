@@ -5,9 +5,9 @@
 apscheduler>=3.11.3             # Issue #6590: hourly LLM key rotation job
 croniter>=6.2.4                 # GH#9027: required by LLC RoutineScheduler and routines API
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn>=0.52.1
+uvicorn>=0.52.3
 websockets>=15.0.1,<16       # Issue #3098 + #10386: CAP <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16, so >=16 makes langgraph unresolvable (ResolutionImpossible). Dependabot #10997 wrongly bumped this to >=16,<17 (bypassing the <16 cap in dependabot.yml) and broke every PR's Docker build. desktop_streaming_manager + slm_client use only legacy-compat API present in 15.x; CI pins 15.0.1. DO NOT bump past <16 until langgraph-sdk widens its cap.
-python-dotenv>=1.2.2
+python-dotenv>=1.2.3
 aiofiles>=25.1.0
 pydantic>=2.13.4
 email-validator>=2.3.0  # Issue #2953: required by pydantic for EmailStr validation
@@ -17,8 +17,8 @@ vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
 psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
-sqlalchemy>=2.0.51
-alembic>=1.19.0
+sqlalchemy>=2.0.52
+alembic>=1.19.1
 aiosqlite>=0.22.1
 asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
 
@@ -36,12 +36,12 @@ reportlab>=5.0.0    # PDF export for transcripts
 # loosens the constraint and the OneDrive connector's parsers still install (#14228, GH#9004).
 
 # AI/ML
-openai>=2.53.0
-anthropic>=0.120.2
-boto3>=1.43.66                       # GH#9010: AWS Bedrock provider
+openai>=2.54.0
+anthropic>=0.122.0
+boto3>=1.43.73                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=7.35.1,<8.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
-sentence-transformers>=5.7.0
+sentence-transformers>=6.0.0
 torch==2.13.0  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
 torchvision==0.28.0  # paired with torch 2.12.1; CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
@@ -66,7 +66,7 @@ tree-sitter-javascript>=0.25.0
 -r ../requirements.txt
 
 # Issue #858: Additional runtime dependencies for Python 3.13
-xxhash>=3.8.1          # Hash functions for LLM caching
+xxhash>=4.0.1          # Hash functions for LLM caching
 structlog>=26.1.0      # Structured logging for service auth
 llama-index>=0.14.23,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
 llama-index-core>=0.14.23,<0.15.0     # Explicit core pin matching ecosystem (#2642)
@@ -74,18 +74,18 @@ llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.3.14,<2.0.0               # Issue #1572 + #10386: bumped from 1.3.1 — unblocked by websockets relaxation to >=15,<16; 1.3.10 requires langgraph>=1.2.5 + langchain-core>=1.4.7
-langchain-core>=1.5.3,<2.0.0          # Issue #1572 + #10386: bumped from 1.3.3 — langchain 1.3.10 requires >=1.4.7
+langchain>=1.3.15,<2.0.0               # Issue #1572 + #10386: bumped from 1.3.1 — unblocked by websockets relaxation to >=15,<16; 1.3.10 requires langgraph>=1.2.5 + langchain-core>=1.4.7
+langchain-core>=1.5.6,<2.0.0          # Issue #1572 + #10386: bumped from 1.3.3 — langchain 1.3.10 requires >=1.4.7
 langchain-community>=0.4.2,<0.5.0     # Issue #1572 + #10386: bumped from 0.4.1 — aligned with ai-stack canonical (#2808)
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
-langgraph>=1.2.10,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
+langgraph>=1.2.11,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
 langgraph-checkpoint-redis>=0.5.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.3  # HTML to Markdown conversion
 mcp>=2.0.0            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
-praw>=8.0.2             # Reddit OAuth API for CommunityGrowthSkill
+praw>=8.0.3             # Reddit OAuth API for CommunityGrowthSkill
 
 # Web push notifications (GH#4459)
 pywebpush>=2.4.0        # VAPID/RFC8291 browser push delivery
@@ -117,6 +117,16 @@ Pillow>=12.3.0          # Image processing - SECURITY UPDATE (OOB write fix)
 # vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
 # guard-import it and degrade to "pytesseract not installed" with no alert.
 pytesseract>=0.3.13
+# PDF rasterizer for the OCR fallback (#13896). pypdf cannot render pages, so
+# without this a scanned PDF can be *detected* (#13884) but never *read*.
+# media/document/ocr.py guard-imports it and degrades to "OCR unavailable"
+# rather than failing extraction.
+#
+# Apache-2.0/BSD, and it bundles pdfium, so no system package is required.
+# Chosen over PyMuPDF, which is AGPL-3.0-or-commercial: AutoBot ships
+# Apache-2.0, AGPL's copyleft reaches network use, and this repo already
+# removed a weaker GPL-3.0 dependency for the same reason (0d67a956e).
+pypdfium2>=4.30.0
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):
@@ -129,6 +139,6 @@ defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # langsmith>=0.1.0       # Set LANGSMITH_API_KEY to activate
 
 # Content Reach optional source backends (#10932) — lazy-imported; backend starts without them
-ddgs>=9.14.4               # #10932 content-reach: keyless web search (optional, lazy)
+ddgs>=9.15.0               # #10932 content-reach: keyless web search (optional, lazy)
 trafilatura>=2.2.0        # #10932 content-reach: readable article extraction (optional, lazy)
 yt-dlp>=2026.7.4        # #10932 content-reach: YouTube caption extraction (optional, lazy)

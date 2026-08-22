@@ -3819,7 +3819,24 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "نوڈز کے درمیان فوکس منتقل کرنے کے لیے ایرو کیز استعمال کریں۔ فوکس شدہ نوڈ کو منتخب کرنے کے لیے Enter یا Space دبائیں۔ انتخاب ختم کرنے کے لیے Escape دبائیں۔",
-      "a11yInstructionsMove": "منتخب نوڈ کو حرکت دینے کے لیے Control دبائے رکھیں اور ایک ایرو کی دبائیں۔"
+      "a11yInstructionsMove": "منتخب نوڈ کو حرکت دینے کے لیے Control دبائے رکھیں اور ایک ایرو کی دبائیں۔",
+      "searchLabel": "نوڈز تلاش کریں",
+      "searchPlaceholder": "نام سے تلاش کریں",
+      "searchClear": "تلاش صاف کریں",
+      "searchResultsStatus": "\"{query}\" کے لیے {count} نتائج ملے",
+      "searchNoResults": "\"{query}\" کے لیے کوئی نتیجہ نہیں ملا",
+      "fitToSelection": "انتخاب یا فلٹر کے مطابق فٹ کریں",
+      "minimapLabel": "کینوس کا جائزہ",
+      "undo": "کالعدم کریں",
+      "redo": "دوبارہ کریں",
+      "undoScope": "کالعدم کرنا اور دوبارہ کرنا اس کینوس پر نوڈز کو منتقل کرنے، شامل کرنے، ہٹانے اور جوڑنے کا احاطہ کرتے ہیں۔ نوڈ کے اندر ترامیم، اور سرور کو بھیجی جانے والی کوئی بھی کارروائی — محفوظ کرنا، منسلک کرنا، الگ کرنا — یہاں کالعدم نہیں کی جا سکتیں۔",
+      "selectionStatus": "{count} نوڈز منتخب کیے گئے",
+      "contextMenuLabel": "نوڈ کے اقدامات",
+      "contextMenuButtonLabel": "{name} کے اقدامات",
+      "contextMenuZoomToNode": "نوڈ پر زوم کریں",
+      "contextMenuFitSelection": "منظر کو انتخاب کے مطابق فٹ کریں",
+      "contextMenuDeleteSelection": "{count} منتخب نوڈز حذف کریں",
+      "contextMenuOpenWorkflow": "منسلک ورک فلو کھولیں"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -8008,7 +8025,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "اخراجات کو ہر ایجنٹ کے مجموعے کے طور پر ریکارڈ کیا جاتا ہے، تاریخ والے واقعات کے طور پر نہیں، اس لیے ابھی روزانہ کی تاریخ موجود نہیں۔"
+      "noDatedEvents": "اخراجات کو ہر ایجنٹ کے مجموعے کے طور پر ریکارڈ کیا جاتا ہے، تاریخ والے واقعات کے طور پر نہیں، اس لیے ابھی روزانہ کی تاریخ موجود نہیں۔",
+      "stepRollup": "نقشہ بند عمل کی لاگت",
+      "byRole": "بلحاظ کردار",
+      "byTool": "بلحاظ آلہ",
+      "role": "کردار",
+      "tool": "آلہ",
+      "coverage": "احاطہ",
+      "coverageComplete": "تمام مراحل کی لاگت نکالی گئی",
+      "coveragePartial": "{total} میں سے {costed} مراحل کی لاگت نکالی گئی",
+      "stepRollupEmpty": "ابھی کوئی مرحلہ نقشہ بند نہیں، اس لیے جمع کرنے کو کچھ نہیں۔",
+      "stepRollupUnavailable": "مجموعے لوڈ نہیں ہو سکے۔",
+      "stepRollupToolNote": "ہر مرحلہ اپنے کردار کے ہر آلے میں شمار ہوتا ہے، اس لیے آلات کے مجموعے کرداروں کے مجموعوں کے برابر نہیں ہوتے۔",
+      "perMonth": "ماہانہ"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8313,6 +8342,7 @@
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasGroupKind": "گروپ",
       "toolNodeLabel": "ٹول",
@@ -8321,8 +8351,10 @@
       "toolAttachError": "یہ ٹول منسلک نہیں ہو سکا۔",
       "toolDetachError": "یہ ٹول الگ نہیں ہو سکا۔",
       "toolDetach": "{tool} کو {role} سے الگ کریں",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
-      "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔"
+      "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔",
+      "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",

@@ -52689,6 +52689,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/costs/step-rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Step Rollup
+         * @description Monthly cost of the company's process steps, by role and by tool.
+         *
+         *     A sum over what the canvas already shows, from the same
+         *     ``derive_step_cost`` the per-step panel uses — so the two can never
+         *     disagree. Read-only; composes existing rows and creates nothing.
+         *
+         *     A step whose role carries several tools contributes its full cost to each
+         *     of those tools, because "what does this tool cost us to operate" is the
+         *     question being answered. The tool totals therefore do not sum to the role
+         *     totals, by design.
+         */
+        get: operations["step_rollup_api_llc_costs_step_rollup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/workflows/{company_id}": {
         parameters: {
             query?: never;
@@ -90245,6 +90274,36 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * RollupBucketOut
+         * @description One grouping's monthly total, with the coverage behind it.
+         *
+         *     ``per_month`` is the sum of the steps that could be costed. It is reported
+         *     beside ``costed`` / ``not_costable`` rather than alone, because a partial
+         *     total presented as a complete one is indistinguishable from a complete one
+         *     by looking at it — the arithmetic form of the failure #14064, #13617 and
+         *     #14556 each produced in this area.
+         */
+        RollupBucketOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Per Month */
+            per_month: string;
+            /** Costed */
+            costed: number;
+            /** Not Costable */
+            not_costable: number;
+            /** Total Steps */
+            total_steps: number;
+            /** Is Complete */
+            is_complete: boolean;
+            /** Currencies */
+            currencies: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /** RotateBody */
         RotateBody: {
             /** Value */
@@ -95002,6 +95061,15 @@ export interface components {
             currency: string | null;
             /** Missing */
             missing: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** StepRollupResponse */
+        StepRollupResponse: {
+            /** By Role */
+            by_role: components["schemas"]["RollupBucketOut"][];
+            /** By Tool */
+            by_tool: components["schemas"]["RollupBucketOut"][];
         } & {
             [key: string]: unknown;
         };
@@ -175174,6 +175242,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuotaWindow"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    step_rollup_api_llc_costs_step_rollup_get: {
+        parameters: {
+            query: {
+                /** @description Company UUID */
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepRollupResponse"];
                 };
             };
             /** @description Validation Error */

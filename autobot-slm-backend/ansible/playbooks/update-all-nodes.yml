@@ -287,6 +287,23 @@
       become: true
       tags: [slm]
 
+    # #14624: render the systemd unit from the SAME task file the role uses.
+    #
+    # This play deploys the backend by unarchive and never runs slm_manager, so
+    # the unit was refreshed only on a full provision. A host was found running
+    # one from two months earlier, predating the AUTOBOT_PROJECT_ROOT line the
+    # template has carried since #14575 -- and once #14544 raised instead of
+    # guessing, the backend crash-looped with no in-band recovery, because the
+    # endpoints that deploy a fix live in the service that will not start.
+    #
+    # `tasks_from` rather than a copied template task: a second copy is what
+    # drifts, and the marker-write above is that mistake already made once.
+    - name: "[PLAY 1] SLM | Refresh the backend systemd unit (#14624)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: service_units.yml
+      tags: [slm, systemd]
+
     - name: "[PLAY 1] SLM | Own the deployed-commit marker (#12223)"
       file:
         path: /opt/autobot/autobot-slm-backend/.deployed_commit

@@ -996,6 +996,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMOTE_APPROVAL_FLAG_TTL_SECONDS",
+        type=int,
+        default=604800,
+        description=(
+            "How long a session stays flagged for remote approval routing without being "
+            "refreshed. Expiry returns the session to asking inline; it never widens autonomy."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long a remotely delivered approval stays correlatable with its reply. "
+            "After this the reply can no longer be tied to a request and resolves nothing."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
         type=int,
         default=86400,

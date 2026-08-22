@@ -1,8 +1,38 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.15.0
+pypdf==6.16.1
 reportlab>=4.0.0            # MVA-2174: PDF export for transcripts
 markdown==3.10.3
-nltk==3.10.2
+nltk==3.10.3
 beautifulsoup4==4.15.0
 markdownify==1.2.3
+# OCR fallback (#13896). CI installs requirements-ci/*, never
+# autobot-backend/requirements.txt, so a production declaration alone never
+# reaches a test runner: pytesseract was declared in #13885 and still absent
+# here months later, which is why every OCR test skipped.
+# pytesseract is the binding; the tesseract binary is installed by the
+# "Install OCR system packages" step in .github/actions/setup-python-suite.
+pytesseract>=0.3.13
+pypdfium2>=4.30.0          # renders PDF pages for OCR; Apache-2.0/BSD, bundles pdfium
+# #14551: production dep (autobot-backend/requirements.txt, Live Canvas
+# HTML->PDF export). transcriber/tests/test_export_api.py gates on
+# pytest.importorskip("weasyprint") — silently skipping without this.
+weasyprint>=69.0
+# #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
+# readable-article extraction, lazy). tests/content_reach/sources/test_web_page.py
+# gates on pytest.importorskip("trafilatura") — silently skipping without this.
+trafilatura>=2.2.0
+# #14551: production dep (autobot-backend/requirements.txt, code-graph AST
+# parsing). services/knowledge/code_indexer_test.py, impact_analysis_test.py,
+# code_indexer_extensions_test.py, code_indexer_shape_test.py and
+# code_intelligence/fingerprinting/shared_identity_test.py all gate on
+# `tree_sitter_python` being importable — 5 files silently skipping code
+# indexing coverage without this.
+tree-sitter-python>=0.25.0
+# #14551 CI incident: mirroring tree-sitter-python ALONE was not enough —
+# it does NOT declare `tree-sitter` as a runtime dependency (verified by the
+# real CI failure it caused: "No module named 'tree_sitter'" from
+# code_indexer.py's `from tree_sitter import Language, Parser`, once
+# tree-sitter-python itself imported fine). The two ship as siblings, not a
+# dependency pair; both must be declared explicitly here.
+tree-sitter>=0.26.0

@@ -58,13 +58,23 @@ _PROVISION_PLAYBOOK = _SLM_ROOT / "ansible" / "playbooks" / "provision-fleet-rol
 # fallback. Used only as a non-regression pin (test below), never as the
 # source of the privileged/non-privileged split itself -- that split is
 # derived, see _privileged_facts().
+# Facts that activate on DETECTED roles as well as declared ones, on purpose.
+#
+# #14567 (owner decision): `role_llm_active` left this set. It gates `ai_stack`
+# and `llm_nodes`, and `setup-ai-stack.yml` provisions against
+# `hosts: ai_stack` — so those are deploy targets, and the rule established in
+# #14513/#14552 is that detection alone never makes a node a deploy target.
+#
+# The consequence is deliberate: a node whose AI role was only inferred from
+# hardware no longer auto-activates. Declaring the role restores it. Keeping the
+# fact union while gating the group would have left the group half and the
+# node_roles half disagreeing, which is the split this module exists to prevent.
 _DELIBERATELY_UNION_FACTS = frozenset(
     {
         "role_tts_worker_active",
         "role_redis_active",
         "role_vnc_active",
         "role_xrdp_active",
-        "role_llm_active",
     }
 )
 

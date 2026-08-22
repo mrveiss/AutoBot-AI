@@ -1,0 +1,152 @@
+# requirements-ci drift allowlist (#14551)
+#
+# One package name per line. Each entry is a package declared in
+# autobot-backend/requirements.txt or autobot-slm-backend/requirements.txt
+# that requirements-ci.txt / requirements-ci/*.txt deliberately does not
+# mirror. tools/lint/check_requirements_ci_drift.py enforces two things:
+#
+#   1. any production package missing from CI that is NOT listed here fails
+#      the check — a new, undeclared omission;
+#   2. any entry listed here that CI now installs, or that production no
+#      longer declares, ALSO fails — a stale entry exempts nothing while
+#      looking authoritative.
+#
+# THIS LIST ONLY SHRINKS. Seeded from the actual drift measured 2026-08-18,
+# then re-audited against a code-reviewer finding the same day: 9 entries in
+# the first version of this file claimed "no CI-scoped test exercising the
+# real library" while a real skipif/importorskip gate existed and was
+# silently skipping. Per the same policy that mirrors pytesseract instead of
+# allowlisting it (the headline incident #14551 documents), every one of
+# those 9 was mirrored into the matching requirements-ci/*.txt file instead
+# of listed here — see the per-package comments at each mirror site for the
+# exact gated test(s). Auditing also found bcrypt and pydantic-settings,
+# unconditionally imported by autobot_shared/auth/jwt_core.py and
+# autobot_shared/ssot_config.py respectively (both declared in
+# autobot_shared/pyproject.toml but never installed from there by CI, the
+# same shape as the pre-existing PyJWT[crypto] comment in security.txt) —
+# also mirrored rather than baselined, since collection of nearly the whole
+# suite depends on them.
+#
+# A THIRD round (real CI run, not local audit) found the `tree-sitter`
+# entry below was ALSO a false rationale: mirroring `tree-sitter-python`
+# alone was assumed to pull in the base `tree-sitter` package transitively —
+# it does not, and code_indexer.py's `from tree_sitter import Language,
+# Parser` failed on the real runner with 4 shards red
+# ("No module named 'tree_sitter'") until `tree-sitter` was mirrored
+# explicitly too. Lesson: an assumption about transitive resolution is not
+# verified until CI actually runs — this file no longer asserts one without
+# citing where it was checked.
+#
+# Do NOT add an entry here to silence a new failure without checking first
+# whether the omission is a genuine bug (mirror it into requirements-ci/) or
+# a deliberate one (document why here). In particular: grep the package's
+# real *import* name (not its pip distribution name) for
+# `pytest.importorskip`, `importlib.util.find_spec(...) is None`, and an
+# unguarded top-level `import`/`from` inside `autobot_shared/` before
+# assuming "no test needs it" — and do not assume transitive resolution
+# without verifying the dependency actually declares it.
+
+# --- SLM-backend SSO / auth / ops libraries -------------------------------
+# Declared in autobot-slm-backend/requirements.txt. The python-suite tests
+# covering these modules mock the network/subprocess boundary rather than
+# exercising the real library (see e.g. services/deployment.py's shutil.which
+# gates and the shutil.which patches throughout autobot-slm-backend/tests/),
+# so the CI-scoped suite does not need the real packages installed.
+# (ldap3 and bcrypt were REMOVED from this group — see requirements-ci/
+# security.txt: both have a real gate and are mirrored, not baselined.)
+ansible-runner
+authlib
+paramiko
+pyotp
+pysaml2
+typing-extensions
+
+# --- OpenTelemetry tracing stack ------------------------------------------
+# Issue #57/#697: distributed tracing across the 5-VM deployment. Several
+# production files DO import opentelemetry unconditionally at module scope
+# (middleware/tracing_middleware.py, llm_shared/observability/otel_observer.py,
+# pki/distributor.py, utils/traced_http_client.py, services/tracing_service.py)
+# — but none of them is imported by anything else in the tree (verified by
+# grep), so no currently-collected test reaches that import. autobot_shared/
+# itself imports no opentelemetry module unconditionally (verified directly,
+# unlike bcrypt/pydantic-settings above).
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+opentelemetry-exporter-otlp-proto-grpc
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-proto
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-redis
+opentelemetry-instrumentation-aiohttp-client
+opentelemetry-propagator-b3
+protobuf
+
+# --- Torch, resolved transitively (unlike tree-sitter above) --------------
+# #13316: requirements-ci.txt deliberately never names torch — it arrives
+# transitively via sentence-transformers (already declared in
+# requirements-ci/ai-ml.txt), resolved against the PyTorch CPU wheel index so
+# the ~3GB CUDA closure is never pulled. This one IS verified: the CI run
+# that caught the tree-sitter gap above installed torch fine via this path
+# (see the "Installing CI-safe requirements" step's ~3GB-vs-10-package-closure
+# comment in setup-python-suite/action.yml, and the completion_trainer_test.py
+# 17 tests that import torch directly and pass in CI).
+torch
+torchvision
+
+# tree-sitter-javascript has no CI-scoped test gating on it directly (only
+# services/knowledge/code_indexer.py imports it, lazily, inside a method) —
+# genuinely no coverage today, unlike tree-sitter-python (mirrored into
+# requirements-ci/document.txt alongside the base tree-sitter package itself,
+# #14551 — see that file's comment for why both, not just the language
+# binding, had to be explicit).
+tree-sitter-javascript
+
+# --- LangChain / LlamaIndex / MCP extras ----------------------------------
+# The pinned core packages (langchain, langchain-core, llama-index-core, ...)
+# are in requirements-ci/langchain.txt and requirements-ci/llama-index.txt;
+# these are transitive extras of that same ecosystem with no CI-scoped test
+# importing them directly.
+langchain-ollama
+langgraph
+langgraph-checkpoint-redis
+llama-index
+mcp
+
+# --- Document / knowledge-base optional format libraries ------------------
+# requirements.txt marks several of these "Optional (install separately for
+# full media support)" or lazy-imported; the rest are format converters with
+# no CI-scoped test exercising the real library (verified: no unguarded
+# top-level import in autobot-backend/ or autobot_shared/).
+openpyxl
+python-pptx
+odfpy
+networkx
+bleach
+xxhash
+
+# --- Content Reach optional source backends (#10932) -----------------------
+# (ddgs, trafilatura, yt-dlp were REMOVED from this group — see
+# requirements-ci/document.txt and requirements-ci/networking.txt: all three
+# have a real importorskip/find_spec gate and are mirrored, not baselined.)
+
+# --- Misc production deps with no CI-scoped real-library test -------------
+email-validator
+defusedxml
+pywebpush
+tenacity
+anthropic
+boto3
+asyncpg
+praw
+vulture
+vanna
+
+# --- Satisfied under a different package name, not a real omission -------
+# autobot-backend/requirements.txt declares opencv-python-headless; CI
+# declares plain opencv-python (requirements-ci/automation.txt) instead —
+# both packages install the same `cv2` import module. computer_vision/
+# template_matching_test.py does `cv2 = pytest.importorskip("cv2")` and
+# genuinely runs today against opencv-python's cv2. Listed here because the
+# pip DISTRIBUTION name differs, not because coverage is missing.
+opencv-python-headless

@@ -13112,6 +13112,8 @@ export interface components {
             failure_reason?: string | null;
             /** Job Id */
             job_id: string;
+            /** Last Progress At */
+            last_progress_at?: string | null;
             /**
              * Skipped Fleet Nodes
              * @default 0

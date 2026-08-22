@@ -37,7 +37,7 @@ Environment="AUTOBOT_PROJECT_ROOT={{ slm_base_dir }}"
 # explicitly, the same way slm-agent's own unit already does.
 Environment="REDIS_HOST={{ slm_manager_redis_host }}"
 Environment="AUTOBOT_REDIS_HOST={{ slm_manager_redis_host }}"
-EnvironmentFile=-{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
+EnvironmentFile=-{{ postgresql_credentials_dir | default('/etc/autobot') }}/{{ postgresql_credentials_file | default('db-credentials.env') }}
 EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 # #11668: bound uvicorn's SIGTERM shutdown (see autobot-backend.service.j2) so the
 # SLM restart during code-sync self-update doesn't hang on lingering connections.

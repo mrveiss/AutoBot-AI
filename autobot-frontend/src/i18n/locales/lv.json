@@ -4380,7 +4380,24 @@
       "nodeAriaLabel": "{kind}: {name}",
       "nodeAriaLabelWithState": "{kind}: {name}, {state}",
       "a11yInstructions": "Izmantojiet bulttaustiņus, lai pārvietotu fokusu starp mezgliem. Nospiediet Enter vai atstarpi, lai atlasītu fokusēto mezglu. Nospiediet Escape, lai atceltu atlasi.",
-      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu."
+      "a11yInstructionsMove": "Turiet nospiestu Control un nospiediet bulttaustiņu, lai pārvietotu atlasīto mezglu.",
+      "searchLabel": "Meklēt mezglus",
+      "searchPlaceholder": "Meklēt pēc nosaukuma",
+      "searchClear": "Notīrīt meklēšanu",
+      "searchResultsStatus": "Atrasti {count} rezultāti vaicājumam \"{query}\"",
+      "searchNoResults": "Nav atbilstību vaicājumam \"{query}\"",
+      "fitToSelection": "Pielāgot atlasei vai filtram",
+      "minimapLabel": "Audekla pārskats",
+      "undo": "Atsaukt",
+      "redo": "Atkārtot",
+      "undoScope": "Atsaukšana un atkārtošana attiecas uz mezglu pārvietošanu, pievienošanu, noņemšanu un savienošanu šajā audeklā. Izmaiņas mezgla iekšienē, kā arī jebko, kas tiek nosūtīts serverim — saglabāšana, pievienošana, atvienošana —, šeit atsaukt nevar.",
+      "selectionStatus": "Atlasīti {count} mezgli",
+      "contextMenuLabel": "Mezgla darbības",
+      "contextMenuButtonLabel": "{name} darbības",
+      "contextMenuZoomToNode": "Tuvināt mezglam",
+      "contextMenuFitSelection": "Pielāgot skatu atlasei",
+      "contextMenuDeleteSelection": "Dzēst {count} atlasītos mezglus",
+      "contextMenuOpenWorkflow": "Atvērt saistīto darbplūsmu"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -8008,7 +8025,19 @@
       "colInputTokens": "Input Tokens",
       "colOutputTokens": "Output Tokens",
       "colCost": "Cost",
-      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav."
+      "noDatedEvents": "Izdevumi tiek uzskaitīti kā kopsummas katram aģentam, nevis kā datēti notikumi, tāpēc dienas vēstures vēl nav.",
+      "stepRollup": "Kartētās darbības izmaksas",
+      "byRole": "Pēc lomas",
+      "byTool": "Pēc rīka",
+      "role": "Loma",
+      "tool": "Rīks",
+      "coverage": "Aptvērums",
+      "coverageComplete": "Visi soļi aprēķināti",
+      "coveragePartial": "Aprēķināti {costed} no {total} soļiem",
+      "stepRollupEmpty": "Procesa soļi vēl nav kartēti, tāpēc nav ko summēt.",
+      "stepRollupUnavailable": "Kopsummas neizdevās ielādēt.",
+      "stepRollupToolNote": "Solis tiek ieskaitīts katram tā lomas rīkam, tāpēc rīku kopsummas nesakrīt ar lomu kopsummām.",
+      "perMonth": "mēnesī"
     },
     "heartbeat": {
       "title": "Heartbeat Monitor",
@@ -8313,6 +8342,7 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
       "canvasGroupKind": "Grupa",
       "toolNodeLabel": "Rīks",
@@ -8321,8 +8351,10 @@
       "toolAttachError": "Neizdevās pievienot šo rīku.",
       "toolDetachError": "Neizdevās noņemt šo rīku.",
       "toolDetach": "Noņemt {tool} no {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
-      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks."
+      "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
+      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",

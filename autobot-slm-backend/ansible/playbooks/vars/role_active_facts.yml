@@ -112,8 +112,12 @@ role_xrdp_active: >-
      ('autobot-xrdp' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('rdp_nodes', []) | default([]))) }}
 
+# #14567: `ai_stack`/`llm_nodes` became declaration-gated when the deploy gate
+# closed over the role map. Per #14560 a fact gating a privileged group must
+# read node_roles_declared, or the group half is gated while the node_roles
+# half is not and a detected-but-undeclared node still activates the role.
 role_llm_active: >-
-  {{ ('llm' in (node_roles | default([]))) or
+  {{ ('llm' in (node_roles_declared | default(node_roles | default([])))) or
      (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
      (inventory_hostname in (groups.get('llm_nodes', []) | default([]))) }}
 

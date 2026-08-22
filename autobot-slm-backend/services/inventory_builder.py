@@ -279,7 +279,44 @@ def _declared_roles(node: Any) -> list[str]:
 # derivation immediately found three MORE gates I had also missed by reading
 # one range of the file -- `aiml`, `npu` and `browser` -- which is the whole
 # argument against maintaining this list by eye.
-_DECLARED_ONLY_GROUPS = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
+# The groups a deploy play NAMES. `update-all-nodes.yml` gates on these; other
+# playbooks target their siblings, which is what #14567 is about.
+_DEPLOY_GATED_SEED = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
+
+
+def _close_over_role_groups(seed: frozenset) -> frozenset:
+    """Every group granted by a role that can already place a node in a gated one.
+
+    #14567: gating only the names a playbook happens to mention leaves the
+    SIBLING names the same role grants. `ai-stack` maps to
+    ``{ai_stack, aiml, ai, llm_nodes}`` while the seed holds only `aiml` -- yet
+    `setup-ai-stack.yml` targets ``hosts: ai_stack`` and `setup-npu-worker.yml`
+    targets ``hosts: npu_worker``, both reachable from `/infrastructure/execute`
+    with `limit_hosts` optional. Enumerating the names by hand has now been too
+    short three times (#14513 -> #14552 -> this), so the set is derived.
+
+    A group is NOT gated when a non-deploy role also grants it. `slm-agent`
+    grants `slm`/`slm_nodes` alongside the `slm-` prefix role, and
+    `deploy-slm-agent.yml` targets `slm_nodes` -- gating them would withhold the
+    agent-repair playbook from agent nodes, making the remedy the agent's own
+    401 message names (#14350 / #14351) unreachable for exactly the nodes that
+    need it.
+    """
+    deploy_groups: set = set(seed)
+    shared_with_non_deploy: set = set()
+
+    for groups in _ROLE_TO_GROUPS.values():
+        if groups & set(seed):
+            deploy_groups |= groups
+        else:
+            shared_with_non_deploy |= groups
+
+    # The seed itself is never removed: those names came from deploy gates
+    # directly, not by inference.
+    return frozenset(set(seed) | (deploy_groups - shared_with_non_deploy))
+
+
+_DECLARED_ONLY_GROUPS = _close_over_role_groups(_DEPLOY_GATED_SEED)
 
 
 def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:

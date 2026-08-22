@@ -1,8 +1,16 @@
 # Core web framework — tightly coupled versions
 # fastapi pins starlette range; keep these in sync
 fastapi==0.141.1
-starlette==1.4.1
+starlette==1.6.0
 python-multipart==0.0.32
-uvicorn==0.52.1
+uvicorn==0.52.3
 pydantic[email]==2.13.4
 websockets==15.0.1
+# #14551: same shape as PyJWT[crypto]/bcrypt in requirements-ci/security.txt —
+# autobot_shared/ssot_config.py does an unconditional `from pydantic_settings
+# import BaseSettings, SettingsConfigDict`, and it is declared in
+# autobot_shared/pyproject.toml but NOT installed from there by CI. ssot_config
+# is the platform's SSOT config module (`from autobot_shared.ssot_config import
+# config`); without this, importing it — and therefore nearly anything that
+# reads config — fails collection outright.
+pydantic-settings>=2.15.0
