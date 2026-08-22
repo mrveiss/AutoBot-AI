@@ -757,8 +757,7 @@ def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id
         # Losing the helpers is a wiring fault, not an absent transcript. The
         # caller cannot tell those apart from a None, so say which it was.
         logger.exception(
-            "Could not import adapter path helpers — replay transcript resolution "
-            "is disabled for run %s",
+            "Could not import adapter path helpers — replay transcript resolution " "is disabled for run %s",
             external_run_id,
         )
         return None
@@ -779,9 +778,7 @@ def _resolve_adapter_output_file(output_dir: str, agent_id: str, external_run_id
             state_file,
         )
 
-    return _cc_output_path(
-        output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id))
-    )
+    return _cc_output_path(output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id)))
 
 
 async def _record_run_for_replay(

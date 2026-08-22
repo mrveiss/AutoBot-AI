@@ -789,22 +789,20 @@ class TestRecordRunForReplayH1:
             assert not os.path.exists(
                 os.path.join(tmpdir, f"llc_state_4242_{session}.json")
             ), "no state file may exist, or this exercises the happy path instead"
-            assert not os.path.exists(_output_path(tmpdir, agent_id, external_run_id)), (
-                "the id-derived path must not exist, or this test proves nothing"
-            )
+            assert not os.path.exists(
+                _output_path(tmpdir, agent_id, external_run_id)
+            ), "the id-derived path must not exist, or this test proves nothing"
 
             captured: dict = {}
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
             with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
-                await _record_run_for_replay(
-                    agent, uuid.uuid4(), {}, "completed", external_run_id=external_run_id
-                )
+                await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=external_run_id)
 
-        assert "result" in (captured.get("output_text") or ""), (
-            "the fallback did not find the transcript the adapter actually wrote"
-        )
+        assert "result" in (
+            captured.get("output_text") or ""
+        ), "the fallback did not find the transcript the adapter actually wrote"
 
     async def test_no_external_run_id_stores_no_events(self):
         """When external_run_id is None, recorded_events is None."""

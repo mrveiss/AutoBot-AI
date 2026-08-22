@@ -33,8 +33,7 @@ from autobot_shared.logging_manager import get_logger
 
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
-from .subprocess_base import placeholder_run_id
-from .subprocess_base import SubprocessLifecycleAdapter
+from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import inject_agent_credentials, serialize_invoke_context
 
