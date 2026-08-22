@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} resultados para \"{query}\"",
       "searchNoResults": "Sin coincidencias para \"{query}\"",
       "fitToSelection": "Ajustar a la selección o al filtro",
-      "minimapLabel": "Vista general del lienzo"
+      "minimapLabel": "Vista general del lienzo",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
+      "undoScope": "Deshacer y rehacer cubren mover, añadir, eliminar y conectar nodos en este lienzo. Las ediciones dentro de un nodo, y cualquier acción enviada al servidor — guardar, adjuntar, separar — no se pueden deshacer aquí.",
+      "selectionStatus": "{count} nodos seleccionados",
+      "contextMenuLabel": "Acciones del nodo",
+      "contextMenuButtonLabel": "Acciones de {name}",
+      "contextMenuZoomToNode": "Ampliar al nodo",
+      "contextMenuFitSelection": "Ajustar vista a la selección",
+      "contextMenuDeleteSelection": "Eliminar {count} nodos seleccionados",
+      "contextMenuOpenWorkflow": "Abrir flujo de trabajo vinculado"
     },
     "editStep": {
       "title": "Edit Step {step}",

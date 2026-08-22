@@ -34,6 +34,7 @@ Package Structure:
 
 # Issue #10778: HTTP API request counter
 from .api_requests import ApiRequestsMetricsRecorder
+from .audit import AuditMetricsRecorder
 from .base import BaseMetricsRecorder
 
 # Issue #13765: cgroup memory-throttling pressure collector
@@ -72,6 +73,7 @@ from .websocket import WebSocketMetricsRecorder
 from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
+    "AuditMetricsRecorder",
     "BaseMetricsRecorder",
     # Issue #10778: HTTP API request counter
     "ApiRequestsMetricsRecorder",

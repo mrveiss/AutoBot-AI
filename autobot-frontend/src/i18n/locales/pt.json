@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} resultados para \"{query}\"",
       "searchNoResults": "Nenhum resultado para \"{query}\"",
       "fitToSelection": "Ajustar à seleção ou ao filtro",
-      "minimapLabel": "Visão geral da tela"
+      "minimapLabel": "Visão geral da tela",
+      "undo": "Desfazer",
+      "redo": "Refazer",
+      "undoScope": "Desfazer e refazer abrangem mover, adicionar, remover e conectar nós nesta tela. Edições dentro de um nó, e qualquer ação enviada ao servidor — salvar, anexar, desanexar — não podem ser desfeitas aqui.",
+      "selectionStatus": "{count} nós selecionados",
+      "contextMenuLabel": "Ações do nó",
+      "contextMenuButtonLabel": "Ações de {name}",
+      "contextMenuZoomToNode": "Ampliar para o nó",
+      "contextMenuFitSelection": "Ajustar visualização à seleção",
+      "contextMenuDeleteSelection": "Excluir {count} nós selecionados",
+      "contextMenuOpenWorkflow": "Abrir fluxo de trabalho vinculado"
     },
     "editStep": {
       "title": "Edit Step {step}",

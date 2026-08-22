@@ -146,21 +146,43 @@ def test_audit_is_clean_on_the_real_tree():
 # --------------------------------------------------------------------------
 
 
-def test_pytesseract_is_tracked_pending_the_colliding_pr():
-    """The headline incident this issue documents, without racing #14510.
+def test_pytesseract_is_mirrored_now_that_this_pr_landed_it():
+    """The #13885/#14551 incident, now resolved rather than deferred.
 
     pytesseract sat declared in production and undeclared in CI for months
-    (#13885) while every real OCR test skipped — normally this guard's policy
-    is "mirror it, don't allowlist it" (see the fixes for scikit-learn, ldap3,
-    etc. below). pytesseract is the one deliberate exception: #14510 (open as
-    of this writing) already adds it to requirements-ci/document.txt for its
-    own OCR-fallback feature. Landing it from BOTH PRs would collide, so it is
-    allowlisted here instead, with a comment pointing at #14510 — and the
-    audit will force this line's removal the moment either PR lands it for
-    real, which is the self-correcting property that makes the exception safe.
+    (#13885) while every real OCR test skipped. The policy is "mirror it,
+    don't allowlist it", and pytesseract was the one deliberate exception —
+    allowlisted with a comment pointing at #14510, because landing it from
+    both PRs at once would collide.
+
+    The exception's own justification said the audit "will force this line's
+    removal the moment either PR lands it for real, which is the
+    self-correcting property that makes the exception safe". This is that
+    branch, and that is what happened: #14510 declares it in
+    requirements-ci/document.txt, so the allowlist entry became a stale
+    exemption and the drift audit refused it.
+
+    So the assertion flips to the resolved state rather than disappearing. A
+    temporary guard that simply vanishes leaves nothing asserting the end it
+    was steering toward — and this one has an end worth pinning: declared in
+    CI, and NOT carrying an exemption that would let it drift back out.
     """
+    ci = checker.ci_requirement_names()
     allowlist = checker.load_allowlist()
-    assert "pytesseract" in allowlist, "pytesseract must stay tracked (allowlisted) until #14510 lands it for real"
+    assert "pytesseract" in ci, (
+        "pytesseract must be declared where CI installs from — an absent exemption "
+        "proves nothing on its own if the mirror it was waiting for went away."
+    )
+    assert "pytesseract" not in allowlist, (
+        "pytesseract is declared in requirements-ci now, so an allowlist entry "
+        "is a stale exemption — the drift audit fails on exactly this."
+    )
+
+    declared = (REPO_ROOT / "requirements-ci" / "document.txt").read_text(encoding="utf-8")
+    assert any(line.startswith("pytesseract") for line in declared.splitlines()), (
+        "pytesseract is neither mirrored into requirements-ci nor allowlisted — "
+        "that is the #13885 state where every OCR test silently skips"
+    )
 
 
 def test_the_9_corrected_baseline_entries_are_now_mirrored_not_allowlisted():

@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "נמצאו {count} תוצאות עבור \"{query}\"",
       "searchNoResults": "אין התאמות עבור \"{query}\"",
       "fitToSelection": "התאם לבחירה או למסנן",
-      "minimapLabel": "סקירה כללית של הקנבס"
+      "minimapLabel": "סקירה כללית של הקנבס",
+      "undo": "בטל",
+      "redo": "בצע שוב",
+      "undoScope": "בטל ובצע שוב חלים על הזזה, הוספה, הסרה וחיבור של צמתים על הקנבס הזה. עריכות בתוך צומת, וכל פעולה שנשלחת לשרת — שמירה, צירוף, ניתוק — לא ניתנות לביטול כאן.",
+      "selectionStatus": "{count} צמתים נבחרו",
+      "contextMenuLabel": "פעולות צומת",
+      "contextMenuButtonLabel": "פעולות עבור {name}",
+      "contextMenuZoomToNode": "התמקד בצומת",
+      "contextMenuFitSelection": "התאם תצוגה לבחירה",
+      "contextMenuDeleteSelection": "מחק {count} צמתים נבחרים",
+      "contextMenuOpenWorkflow": "פתח את זרימת העבודה המקושרת"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
