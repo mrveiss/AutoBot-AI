@@ -204,6 +204,13 @@ all:
     main:
       hosts:
         test-empty-roles-via-group: {}
+    # #14682: chromadb and tts-worker both GRANT ai_stack, so this is the real
+    # shape — a node legitimately in ai_stack that must not run an LLM. Before
+    # the fix, role_llm_active gated on ai_stack membership and fired here.
+    ai_stack:
+      hosts:
+        test-chromadb-only-no-llm: {}
+        test-tts-worker-only-no-llm: {}
     # SLM Manager hosts must be in slm_server group (matches install.sh
     # localhost.yml + seed-fleet-nodes.yml inventory layout).
     slm_server:
