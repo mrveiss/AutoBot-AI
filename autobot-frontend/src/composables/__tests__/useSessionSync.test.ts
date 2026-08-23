@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useSessionSync } from '@/composables/useSessionSync'
 import { useChatStore } from '@/stores/useChatStore'
 import apiClient from '@/utils/ApiClient'
@@ -54,11 +54,19 @@ function backendMessage(id: string, text: string, sender = 'bot') {
   return { id, text, sender, timestamp: '2026-08-23T10:00:00Z', message_type: 'llm_response' }
 }
 
-/** Let the immediate watcher + its awaited resync settle. */
+/**
+ * Let the watcher and its awaited resync settle.
+ *
+ * `watch(..., { immediate: true })` runs its callback through Vue's scheduler,
+ * and the callback then awaits a mocked HTTP round trip. `nextTick` flushes the
+ * scheduler; the macrotask turn drains the promise chain behind it. Hand-rolled
+ * microtask counting would work by accident today and break the moment the
+ * composable gains another await.
+ */
 async function settle() {
-  await Promise.resolve()
-  await Promise.resolve()
+  await nextTick()
   await new Promise((r) => setTimeout(r, 0))
+  await nextTick()
 }
 
 describe('useSessionSync (#14820)', () => {
