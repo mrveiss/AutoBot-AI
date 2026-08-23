@@ -311,4 +311,91 @@ describe('useSessionSync (#14820)', () => {
     // Reached the new session despite the failure above.
     expect(harness.__channelHandlers.has('chat:s2')).toBe(true)
   })
+
+  it('accepts message_id when the record carries no id', async () => {
+    // Backend records surface their identity on either field depending on the
+    // path that produced them.
+    vi.mocked(apiClient.get).mockResolvedValue(
+      snapshot([{ message_id: 'via-message-id', text: 'hi', sender: 'bot' }])
+    )
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+
+    useSessionSync(ref('s1'))
+    await settle()
+
+    expect(store.currentMessages[0].id).toBe('via-message-id')
+  })
+
+  it('defaults a message with no sender to the assistant', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([{ id: 'm1', text: 'hi' }]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+
+    useSessionSync(ref('s1'))
+    await settle()
+
+    expect(store.currentMessages[0].sender).toBe('bot')
+  })
+
+  it('defaults missing text to an empty string rather than undefined', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([{ id: 'm1', sender: 'bot' }]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+
+    useSessionSync(ref('s1'))
+    await settle()
+
+    expect(store.currentMessages[0].content).toBe('')
+  })
+
+  it('reports a non-Error rejection as a string', async () => {
+    // A thrown string would otherwise surface as "undefined" in syncError,
+    // which tells the user nothing about why their view is stale.
+    vi.mocked(apiClient.get).mockRejectedValue('plain string failure')
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+
+    const { syncError } = useSessionSync(ref('s1'))
+    await settle()
+
+    expect(syncError.value).toBe('plain string failure')
+  })
+
+  it('an event arriving after the session is cleared is a no-op', async () => {
+    // Handlers are captured by the subscription, so one can still fire between
+    // the session going null and teardown completing.
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    const sessionId = ref<string | null>('s1')
+    useSessionSync(sessionId)
+    await settle()
+
+    const chatHandler = harness.__channelHandlers.get('chat:s1')!
+    const sessionHandler = harness.__channelHandlers.get('session:s1')!
+    sessionId.value = null
+    await settle()
+
+    chatHandler({
+      event_type: 'chat.message_added',
+      payload: { message: backendMessage('late', 'too late') },
+    })
+    sessionHandler({ event_type: 'session.deleted', payload: {} })
+
+    expect(store.sessions.find((s) => s.id === 's1')).toBeDefined()
+  })
+
+  it('exposes resync for a caller to trigger a manual rebuild', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    const { resync } = useSessionSync(ref('s1'))
+    await settle()
+
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([backendMessage('m9', 'manual')]))
+    await resync('s1')
+
+    expect(store.currentMessages[0].content).toBe('manual')
+  })
 })
