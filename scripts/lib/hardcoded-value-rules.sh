@@ -659,3 +659,37 @@ hv_stale_baseline_entries() {
     done
     return 0
 }
+
+# The baseline rewritten to what the last scan actually found -- REMOVAL ONLY.
+#
+# WHY THIS IS SAFE, structurally rather than by inspection. Two properties, and
+# both come from the shape of the loop rather than from a check that could be
+# forgotten:
+#
+#   * it iterates "${!HV_BASELINE[@]}" -- keys ALREADY in the baseline -- so it
+#     cannot introduce one. Findings are never iterated here.
+#   * it emits min(baseline_count, seen_count), so it cannot raise one.
+#
+# That matters because a prune that could add or increment would BE the bypass
+# check_baseline_no_growth.sh exists to prevent: fix nothing, run prune, and
+# every new finding becomes "known". The two guards are complementary only
+# while this direction is closed by construction.
+#
+# hv_partition increments HV_BASELINE_SEEN BEFORE testing it against the
+# allowance, so `seen` is the true number of findings for that key, including
+# any beyond what the baseline permits. That is what makes min() correct: a key
+# baselined at 2 and now found 3 times prunes to 2, not 3.
+#
+# Requires a completed hv_partition over a FULL tree scan. Pruning against a
+# partial scan drops every key the scan did not reach, which is why the caller
+# must refuse to write the result of an empty one.
+hv_pruned_baseline() {
+    local key kept seen
+    for key in "${!HV_BASELINE[@]}"; do
+        kept="${HV_BASELINE[$key]}"
+        seen="${HV_BASELINE_SEEN[$key]:-0}"
+        [ "$seen" -lt "$kept" ] && kept="$seen"
+        [ "$kept" -gt 0 ] && printf '%s|%s\n' "$kept" "$key"
+    done
+    return 0
+}

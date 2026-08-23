@@ -215,3 +215,120 @@ def test_the_real_repository_has_no_new_blocking_ssot_violations():
         "a real fleet IP is now reachable through *.sh/*.yml/*.yaml scanning and must be "
         f"fixed at the source (or noqa'd if a documented example), not allow-listed: {report}"
     )
+
+
+# ── #14912: --prune-baseline, and the audit message that sends you to it ─────
+
+
+def _write_baseline(root, lines: list[str]) -> None:
+    """Replace the baseline body, keeping its header (which carries the rules)."""
+    path = root / "pipeline-scripts" / "hardcoded_values_baseline.txt"
+    header = [ln for ln in path.read_text(encoding="utf-8").splitlines(keepends=True) if ln.startswith("#")]
+    path.write_text("".join(header) + "".join(f"{ln}\n" for ln in lines), encoding="utf-8")
+
+
+def _baseline_keys(root) -> set:
+    path = root / "pipeline-scripts" / "hardcoded_values_baseline.txt"
+    return {
+        ln.split("|", 1)[1]
+        for ln in path.read_text(encoding="utf-8").splitlines()
+        if ln[:1].isdigit()
+    }
+
+
+def _run_flag(root, flag: str) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603  # fixed argv, no shell
+        ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), flag],
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_prune_refuses_when_the_scan_found_nothing(tmp_path):
+    """An empty scan and a broken detector are indistinguishable, and this path WRITES.
+
+    A rules file that failed to load, or scan directories that moved, would take
+    every baselined entry with it — and the no-growth guard would not object,
+    because shrinking is allowed by design.
+    """
+    root = _hermetic_repo(tmp_path)  # no scan directories exist here
+    before = (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").read_bytes()
+    result = _run_flag(root, "--prune-baseline")
+    assert result.returncode != 0
+    assert "refusing to rewrite the baseline" in result.stderr
+    assert (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").read_bytes() == before
+
+
+def test_prune_removes_a_stranded_entry_and_the_audit_then_passes(tmp_path):
+    """The recovery loop the audit message now names."""
+    root = _hermetic_repo(tmp_path)
+    scanned = root / "autobot-backend"
+    scanned.mkdir(parents=True)
+    (scanned / "svc.py").write_text(f'HOST = "{_FLEET_IP}"\n', encoding="utf-8")
+    _write_baseline(
+        root,
+        [
+            f"1|ssot|autobot-backend/svc.py|{_FLEET_IP}",
+            "1|ssot|autobot-backend/gone.py|" + _FLEET_IP,
+        ],
+    )
+    assert _run_flag(root, "--audit-baseline").returncode == 1
+    assert _run_flag(root, "--prune-baseline").returncode == 0
+    assert _baseline_keys(root) == {f"ssot|autobot-backend/svc.py|{_FLEET_IP}"}
+    assert _run_flag(root, "--audit-baseline").returncode == 0
+
+
+def test_prune_cannot_add_a_key(tmp_path):
+    """The property that stops prune becoming the bypass the no-growth guard prevents."""
+    root = _hermetic_repo(tmp_path)
+    scanned = root / "autobot-backend"
+    scanned.mkdir(parents=True)
+    (scanned / "known.py").write_text(f'HOST = "{_FLEET_IP}"\n', encoding="utf-8")
+    # A violation that is NOT baselined — prune must leave it a violation.
+    (scanned / "brand_new.py").write_text('HOST = "' + ".".join(("172", "16", "168", "91")) + '"\n', encoding="utf-8")
+    _write_baseline(root, [f"1|ssot|autobot-backend/known.py|{_FLEET_IP}"])
+
+    assert _run_flag(root, "--prune-baseline").returncode == 0
+    keys = _baseline_keys(root)
+    assert not any("brand_new.py" in k for k in keys), f"prune ADDED a key: {sorted(keys)}"
+    assert json.loads(_run_flag(root, "--json").stdout)["ssot_violations"] >= 1, (
+        "prune silenced a finding it was never allowed to absorb"
+    )
+
+
+def test_prune_cannot_raise_a_count(tmp_path):
+    """min(baseline, found): a key baselined at 1 and found twice stays at 1."""
+    root = _hermetic_repo(tmp_path)
+    scanned = root / "autobot-backend"
+    scanned.mkdir(parents=True)
+    (scanned / "svc.py").write_text(f'A = "{_FLEET_IP}"\nB = "{_FLEET_IP}"\n', encoding="utf-8")
+    _write_baseline(root, [f"1|ssot|autobot-backend/svc.py|{_FLEET_IP}"])
+
+    assert _run_flag(root, "--prune-baseline").returncode == 0
+    body = (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").read_text(encoding="utf-8")
+    entry = [ln for ln in body.splitlines() if ln[:1].isdigit()]
+    assert entry == [f"1|ssot|autobot-backend/svc.py|{_FLEET_IP}"], entry
+
+
+def test_prune_preserves_the_header(tmp_path):
+    """The header carries the rules governing the file, including 'only shrinks'."""
+    root = _hermetic_repo(tmp_path)
+    scanned = root / "autobot-backend"
+    scanned.mkdir(parents=True)
+    (scanned / "svc.py").write_text(f'HOST = "{_FLEET_IP}"\n', encoding="utf-8")
+    _write_baseline(root, [f"1|ssot|autobot-backend/svc.py|{_FLEET_IP}"])
+    assert _run_flag(root, "--prune-baseline").returncode == 0
+    text = (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").read_text(encoding="utf-8")
+    assert text.startswith("#")
+    assert "only ever shrinks" in text.lower() or "only ever shrink" in text.lower()
+
+
+def test_the_audit_failure_names_the_recovery_command(tmp_path):
+    """#14912: most of this guard's cost was discoverability, not the rule."""
+    root = _hermetic_repo(tmp_path)
+    (root / "autobot-backend").mkdir(parents=True)
+    _write_baseline(root, [f"1|ssot|autobot-backend/gone.py|{_FLEET_IP}"])
+    result = _run_flag(root, "--audit-baseline")
+    assert result.returncode == 1
+    assert "--prune-baseline" in result.stdout, "the failure does not say how to recover"
+    assert "gone.py" in result.stdout, "the failure does not name the entries"
