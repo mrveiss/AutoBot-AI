@@ -8597,7 +8597,15 @@
       "unassigned": "no role",
       "unassignedHint": "Carried by this department, but no role explains their presence",
       "inactive": "Inactive",
-      "inactiveHint": "Deactivated or removed — still shown because their work items and role remain, but they cannot be given new work."
+      "inactiveHint": "Deactivated or removed — still shown because their work items and role remain, but they cannot be given new work.",
+      "editAriaLabel": "Edit {name}",
+      "fullNameLabel": "Full name",
+      "roleTitleLabel": "Role / title",
+      "emailLabel": "Email",
+      "phoneLabel": "Phone",
+      "saving": "Saving…",
+      "save": "Save",
+      "contactSaveError": "Could not save the contact."
     }
   },
   "mobile": {

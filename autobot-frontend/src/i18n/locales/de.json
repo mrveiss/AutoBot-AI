@@ -8609,7 +8609,15 @@
       "unassigned": "keine Rolle",
       "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit",
       "inactive": "Inaktiv",
-      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden."
+      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden.",
+      "editAriaLabel": "{name} bearbeiten",
+      "fullNameLabel": "Vollständiger Name",
+      "roleTitleLabel": "Rolle / Titel",
+      "emailLabel": "E-Mail",
+      "phoneLabel": "Telefon",
+      "saving": "Wird gespeichert…",
+      "save": "Speichern",
+      "contactSaveError": "Der Kontakt konnte nicht gespeichert werden."
     }
   },
   "code": {
