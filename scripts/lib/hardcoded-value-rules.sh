@@ -446,16 +446,36 @@ hv_scan_line() {
     return 0
 }
 
-# Apply every rule to every line of one file.
+# Apply every rule to every line of one file, exact line numbers preserved.
 #
-# Reading the whole file (rather than prefiltering) keeps line numbers exact,
-# which is what the pre-commit path needs: it scans a handful of staged files
-# and reports positions a developer will jump to.
+# The prefilter is applied per line here as well as on the tree-scan path, for
+# two reasons and not only the obvious one.
+#
+# Speed: `pre-commit run --all-files` hands this entry point every tracked file,
+# and `verify-precommit-config` is a REQUIRED check. Measured without the
+# prefilter, 200 files took 78s — about 50 minutes over the 7639 tracked
+# in-scope files, which is not a slow check, it is a check that never reports.
+#
+# Symmetry, which matters more: the two entry points must agree about what is in
+# scope. If a tree scan filtered lines and a staged scan did not, the same file
+# would be judged differently depending on which one looked at it — the exact
+# shape of the get_staged_files defect (#14034) that reported a Vue file as a
+# Redis connection. Both paths now apply the same superset filter, and
+# hardcoded_value_rules_test.py asserts per rule that the filter really is a
+# superset, so this costs no coverage on either.
+#
+# Line numbers stay exact because the counter increments before the filter.
 hv_scan_file() {
     local file="${1:?file required}" n=0 line
     [ -f "$file" ] || return 0
+    # Computed once per process, not once per file: the command substitution is
+    # a fork, and pre-commit hands this entry point every tracked file in one
+    # invocation.
+    [ -n "${_HV_PREFILTER_CACHE:-}" ] || _HV_PREFILTER_CACHE="$(hv_prefilter_pattern)"
+    local prefilter="$_HV_PREFILTER_CACHE"
     while IFS= read -r line || [ -n "$line" ]; do
         n=$((n + 1))
+        [[ $line =~ $prefilter ]] || continue
         hv_scan_line "$file" "$n" "$line"
     done < "$file"
     return 0
