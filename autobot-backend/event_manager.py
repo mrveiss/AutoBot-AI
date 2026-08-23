@@ -11,7 +11,7 @@ both fire-and-forget and awaitable delivery patterns.
 """
 
 import asyncio  # Added back asyncio import
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Set
 
 import yaml
 
@@ -27,9 +27,16 @@ class EventManager:
     """Manages event publishing and subscription with WebSocket support."""
 
     def __init__(self):
-        """Initialize event manager with empty listeners and no WebSocket callback."""
+        """Initialize event manager with empty listeners and no WebSocket callbacks."""
         self._listeners: Dict[str, list[Callable[[Dict[str, Any]], Awaitable[None]]]] = {}
-        self._websocket_broadcast_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None
+        # #14814: a set, not a scalar.  This was a single callback, so each new
+        # WebSocket connection overwrote the previous one and the first
+        # disconnect cleared delivery for everyone still connected.
+        self._websocket_broadcast_callbacks: Set[Callable[[Dict[str, Any]], Awaitable[None]]] = set()
+        # #14814: persistence must not be a side effect of delivery.  This hook
+        # fires exactly once per publish, whether zero clients or ten are
+        # connected.
+        self._persistence_hook: Callable[[Dict[str, Any]], Awaitable[None]] | None = None
         self._config = self._load_config()  # Load config on init
 
     def _load_config(self):
@@ -50,9 +57,34 @@ class EventManager:
         """Check if debug mode is enabled in configuration."""
         return self._config.get("agent_behavior", {}).get("debug_mode", False)
 
-    def register_websocket_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]] | None):
-        """Registers a callback function to broadcast events via WebSocket."""
-        self._websocket_broadcast_callback = callback
+    def register_websocket_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
+        """Register one connection's broadcast callback.
+
+        #14814: additive.  Every connected client keeps receiving events when
+        another connects or drops; pair each call with
+        :meth:`unregister_websocket_broadcast`.
+        """
+        if callback is None:
+            raise ValueError("callback must not be None — use unregister_websocket_broadcast()")
+        self._websocket_broadcast_callbacks.add(callback)
+
+    def unregister_websocket_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
+        """Remove one connection's broadcast callback, leaving the others intact."""
+        self._websocket_broadcast_callbacks.discard(callback)
+
+    def register_persistence_hook(self, hook: Callable[[Dict[str, Any]], Awaitable[None]] | None) -> None:
+        """Register the single hook that durably records published events.
+
+        #14814: chat history used to be written from inside the WebSocket
+        broadcast callback, so with no client attached nothing was persisted at
+        all.  Persistence now hangs here instead, decoupled from delivery.
+        """
+        self._persistence_hook = hook
+
+    @property
+    def websocket_broadcast_count(self) -> int:
+        """Number of registered broadcast callbacks (used by tests and diagnostics)."""
+        return len(self._websocket_broadcast_callbacks)
 
     async def publish(self, event_type: str, payload: Dict[str, Any]):
         """Publishes an event to all registered listeners and broadcasts
@@ -60,9 +92,23 @@ class EventManager:
         """
         event_data = {"type": event_type, "payload": payload}
 
-        # Broadcast via WebSocket if registered
-        if self._websocket_broadcast_callback:
-            await self._websocket_broadcast_callback(event_data)
+        # #14814: persist first and exactly once, independent of how many
+        # clients are attached.  A persistence failure must not stop delivery.
+        if self._persistence_hook is not None:
+            try:
+                await self._persistence_hook(event_data)
+            except Exception as exc:
+                logger.error("Event persistence hook failed: %s", exc)
+
+        # #14814: fan out to every registered connection.  Iterate a copy — a
+        # failing callback is removed mid-loop.  One dead socket must not stop
+        # delivery to the others, so each is isolated.
+        for callback in list(self._websocket_broadcast_callbacks):
+            try:
+                await callback(event_data)
+            except Exception as exc:
+                logger.warning("WebSocket broadcast callback failed, unregistering: %s", exc)
+                self._websocket_broadcast_callbacks.discard(callback)
 
         # Notify local listeners (if any)
         if event_type in self._listeners:

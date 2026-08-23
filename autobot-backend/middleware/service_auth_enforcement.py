@@ -78,7 +78,10 @@ EXEMPT_PATHS: List[str] = [
     "/api/monitoring",
     "/api/metrics",
     "/api/analytics",
-    # WebSocket connections (api.websockets router mounted at /api prefix)
+    # WebSocket connections (api.websockets router mounted at /api prefix).
+    # #14822: prefix match, so this one entry covers both the legacy /api/ws
+    # and the canonical /api/ws/live. Narrowing it to /api/ws/live would
+    # silently start rejecting the legacy endpoint.
     "/api/ws",
     # API documentation
     "/docs",
