@@ -107,10 +107,27 @@ def _deletions(doc: Any) -> list[dict]:
 def _includes_of(doc: Any, target: str) -> list[dict]:
     out = []
     for task in _walk(doc):
-        inc = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
-        if isinstance(inc, str) and Path(inc).name == target:
+        inc = _include_path(task)
+        if inc and Path(inc).name == target:
             out.append(task)
     return out
+
+
+def _include_path(task: dict) -> str | None:
+    inc = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
+    return inc if isinstance(inc, str) else None
+
+
+def _delegations(doc: Any) -> list[dict]:
+    """Tasks that hand a directory to something for removal.
+
+    Keyed on the CONTRACT (a `remove_dir_path` is passed) rather than on the
+    include target, so that a call site repointed at some other file is still
+    recognised as a removal and still has to answer for itself. Keying on the
+    target instead is how the first version of this guard let exactly that
+    mutation through.
+    """
+    return [t for t in _walk(doc) if _include_path(t) and "remove_dir_path" in (t.get("vars") or {})]
 
 
 def _when_list(task: dict) -> list[str]:
@@ -286,6 +303,60 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
     )
 
 
+def _delegated_targets(task: dict) -> list[str]:
+    """The concrete paths one delegation can remove, loop expanded.
+
+    Callers pass `remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"` over
+    a loop, so the literal string says nothing about what is actually scheduled.
+    Expanding it is the difference between a guard that reads the code and one
+    that reads what the code will do.
+    """
+    spec = str((task.get("vars") or {}).get("remove_dir_path", ""))
+    if not spec:
+        return []
+    items = task.get("loop")
+    if not isinstance(items, list):
+        return [spec]
+    loop_var = ((task.get("loop_control") or {}).get("loop_var")) or "item"
+    return [str(_render_value(spec, {loop_var: item})) for item in items]
+
+
+def test_the_protected_config_dir_is_never_scheduled_for_removal() -> None:
+    """/opt/autobot/config holds permission_rules.yaml, read at runtime (#3873).
+
+    roles/backend/tasks/clean.yml has excluded it since then. The fleet cleanup
+    playbook removed it on every node anyway — a protection decided in one copy
+    of the cleanup logic and never carried to the other (#13148, #14678). An
+    unpinned decision regrows, so it is pinned here rather than left as a
+    comment.
+    """
+    protected = "/opt/autobot/config"
+    targets_seen = 0
+    offenders: list[str] = []
+    for candidate in sorted(_ANSIBLE.rglob("*.yml")) + sorted(_ANSIBLE.rglob("*.yaml")):
+        try:
+            docs = [d for d in yaml.safe_load_all(candidate.read_text(encoding="utf-8")) if d]
+        except yaml.YAMLError:
+            continue
+        for task in _delegations(docs):
+            for target in _delegated_targets(task):
+                targets_seen += 1
+                if target.rstrip("/") == protected:
+                    offenders.append(f"{candidate.relative_to(_ANSIBLE)}: {task.get('name')}")
+        for task in _deletions(docs):
+            spec = _module(task, "ansible.builtin.file", "file") or {}
+            targets_seen += 1
+            if str(spec.get("path") or "").rstrip("/") == protected:
+                offenders.append(f"{candidate.relative_to(_ANSIBLE)}: {task.get('name')}")
+
+    assert targets_seen > 50, f"only {targets_seen} removal targets expanded — the sweep is not reaching the tree"
+    assert not offenders, (
+        f"{protected} is scheduled for removal by:\n  "
+        + "\n  ".join(sorted(set(offenders)))
+        + "\nIt holds permission_rules.yaml, which permission_matcher.py reads at runtime (#3873)."
+    )
+
+
 @pytest.mark.parametrize("path", _CALL_SITES, ids=lambda p: p.name)
 def test_every_cleanup_site_delegates_to_the_primitive(path: Path) -> None:
     """A file that stopped delegating has stopped being covered."""
@@ -297,6 +368,37 @@ def test_every_cleanup_site_delegates_to_the_primitive(path: Path) -> None:
             f"{path.name}: '{task.get('name')}' includes the primitive without passing remove_dir_path, "
             "so it would remove an undefined path"
         )
+
+
+def test_every_delegated_removal_reaches_the_primitive() -> None:
+    """`assert includes` only proves SOME removal still delegates.
+
+    A file with several call sites can have one of them repointed elsewhere and
+    still satisfy that. So every task that passes a `remove_dir_path` is checked
+    individually, across the whole tree, and the file it names must be the
+    primitive and must exist.
+    """
+    seen = 0
+    offenders: list[str] = []
+    for candidate in sorted(_ANSIBLE.rglob("*.yml")) + sorted(_ANSIBLE.rglob("*.yaml")):
+        try:
+            docs = [d for d in yaml.safe_load_all(candidate.read_text(encoding="utf-8")) if d]
+        except yaml.YAMLError:
+            continue
+        for task in _delegations(docs):
+            seen += 1
+            target = Path(_include_path(task) or "")
+            where = f"{candidate.relative_to(_ANSIBLE)}: {task.get('name')} -> {target}"
+            if target.name != _PRIMITIVE.name:
+                offenders.append(f"{where} (not the guarded primitive)")
+            elif not (_SHARED / target.name).is_file():
+                offenders.append(f"{where} (target file does not exist)")
+
+    assert seen >= len(_CALL_SITES), (
+        f"only {seen} delegated removals found across the tree, fewer than the {len(_CALL_SITES)} known "
+        "call sites — the sweep is not seeing them"
+    )
+    assert not offenders, "these removals are handed to something other than the guard:\n  " + "\n  ".join(offenders)
 
 
 # --------------------------------------------------------------------------

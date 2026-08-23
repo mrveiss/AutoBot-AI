@@ -40,6 +40,12 @@
 # which probes for data/ and refuses rather than deleting. The promise below is
 # now enforced by the code that makes it.
 #
+# /opt/autobot/config is deliberately absent from every list below. It holds
+# permission_rules.yaml, which permission_matcher.py reads at runtime;
+# roles/backend/tasks/clean.yml has excluded it since #3873. This playbook
+# removed it on every node anyway — a protection decided in one copy of the
+# cleanup logic and never carried to the other (#13148, #14678).
+#
 # Safety notes:
 #   - A directory holding data/ is REPORTED and left alone, never removed
 #   - All removals use state: absent (idempotent, no error if already gone)
@@ -87,7 +93,6 @@
         - {dir: autobot-npu-worker, why: "wrong node — the NPU worker does not run on the SLM manager"}
         - {dir: autobot-browser-worker, why: "wrong node — the browser worker does not run on the SLM manager"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -115,7 +120,6 @@
         - {dir: autobot-slm-frontend, why: "wrong node — the SLM frontend does not run on the backend node"}
         - {dir: autobot-slm-backend, why: "wrong node — the SLM backend does not run on the backend node"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -166,7 +170,6 @@
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -194,7 +197,6 @@
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -222,7 +224,6 @@
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -253,7 +254,6 @@
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -281,7 +281,6 @@
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
         - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
-        - {dir: config, why: "stale loose directory at the /opt/autobot root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
