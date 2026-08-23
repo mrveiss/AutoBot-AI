@@ -154,7 +154,14 @@ function makeI18n() {
   return createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en, ar } })
 }
 
-async function mountOnCanvas(fixture?: Fixture, i18n = makeI18n()) {
+// #14860: the default is ONE shared instance. Seven of this file's nine mounts
+// never touch the locale, and each was re-ingesting the ~400KB `en` and `ar`
+// bundles. The two RTL cases below deliberately mutate
+// `i18n.global.locale.value`, so they keep calling makeI18n() and pass their own
+// instance in — a mutated instance must never reach the next test.
+const sharedI18n = makeI18n()
+
+async function mountOnCanvas(fixture?: Fixture, i18n = sharedI18n) {
   mockApi(fixture)
   const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true } } })
   await flushPromises()

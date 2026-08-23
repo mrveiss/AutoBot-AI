@@ -15,7 +15,26 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
+
+# Import root for the inline Python below. PROJECT_ROOT is resolved above from
+# this file's own location (database/ -> scripts/ -> shared/ ->
+# autobot-infrastructure/ -> repo root, four levels); the knowledge package
+# lives under autobot-backend and autobot_shared.* at the repo root. Exported so
+# the quoted heredoc below can read it - inside a quoted heredoc ${PROJECT_ROOT}
+# is a literal string, never a substitution (#14867).
+export PROJECT_ROOT
+export PYTHONPATH="${PROJECT_ROOT}/autobot-backend:${PROJECT_ROOT}:${PYTHONPATH:-}"
+
+if [ ! -d "${PROJECT_ROOT}/autobot-backend" ]; then
+    echo "ERROR: backend package root not found at ${PROJECT_ROOT}/autobot-backend;" >&2
+    echo "       CLAUDE.md was NOT re-indexed (#14867)." >&2
+    exit 1
+fi
 
 echo "=== CLAUDE.md Vector Database Re-indexing ==="
 echo "Starting: $(date)"
@@ -104,14 +123,20 @@ cd ${PROJECT_ROOT}
 
 python3 << 'PYTHON_SCRIPT'
 import asyncio
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
 
-# Add project to path
-sys.path.insert(0, '${PROJECT_ROOT}')
+# (#14867) This heredoc is quoted, so '${PROJECT_ROOT}' was inserted verbatim
+# and every path built from it pointed at a directory that cannot exist. The
+# shell exports PROJECT_ROOT instead.
+PROJECT_ROOT = os.environ["PROJECT_ROOT"]
+sys.path.insert(0, PROJECT_ROOT)
 
-from src.knowledge_base import KnowledgeBase
+# (#14867) There is no src package. KnowledgeBase is exported by the knowledge
+# package under autobot-backend (knowledge/_composed.py).
+from knowledge import KnowledgeBase
 from llama_index.core import Document
 
 async def reindex_claude_md():
@@ -119,10 +144,12 @@ async def reindex_claude_md():
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
-        claude_path = Path("${PROJECT_ROOT}/CLAUDE.md")
+        claude_path = Path(PROJECT_ROOT) / "CLAUDE.md"
         if not claude_path.exists():
-            print("ERROR: CLAUDE.md not found!")
-            return
+            # (#14867) This used to return normally, so a re-index that never
+            # touched a single document still exited 0.
+            print(f"ERROR: CLAUDE.md not found at {claude_path}!", file=sys.stderr)
+            return 1
 
         content = claude_path.read_text(encoding='utf-8')
         print(f"Read CLAUDE.md: {len(content)} bytes")
@@ -147,13 +174,17 @@ async def reindex_claude_md():
         stats = await kb.get_stats()
         print(f"New document count: {stats.get('total_documents', 0)}")
         print(f"Indexed documents: {stats.get('indexed_documents', 0)}")
+        return 0
 
     except Exception as e:
-        print(f"ERROR during re-indexing: {e}")
+        # (#14867) The traceback used to be printed and then discarded, leaving
+        # the script to run its "verification" steps and exit 0.
+        print(f"ERROR during re-indexing: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
+        return 1
 
-asyncio.run(reindex_claude_md())
+sys.exit(asyncio.run(reindex_claude_md()))
 PYTHON_SCRIPT
 
 echo ""

@@ -30,7 +30,20 @@ from pathlib import Path
 from typing import List
 
 import aiohttp
-import docker
+
+# The docker SDK is an optional operator dependency, declared in no
+# requirements file (#14518). Every other call site in this repo guards it the
+# same way -- scripts/logging/log_forwarder.py, autobot-backend's
+# secure_sandbox_executor.py, services/execution/docker_backend.py and
+# container_pool.py. A bare top-level import killed this aggregator before it
+# could collect any of its non-Docker log sources.
+try:
+    import docker
+
+    DOCKER_AVAILABLE = True
+except ImportError:
+    DOCKER_AVAILABLE = False
+    docker = None
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -170,11 +183,14 @@ class ComprehensiveLogAggregator:
         self.executor = ThreadPoolExecutor(max_workers=10)
 
         # Initialize Docker client
-        try:
-            self.docker_client = docker.from_env()
-            logger.info("Docker client initialized")
-        except Exception as e:
-            logger.warning("Docker client failed to initialize: %s", e)
+        if not DOCKER_AVAILABLE:
+            logger.warning("docker SDK not installed - container log sources disabled")
+        else:
+            try:
+                self.docker_client = docker.from_env()
+                logger.info("Docker client initialized")
+            except Exception as e:
+                logger.warning("Docker client failed to initialize: %s", e)
 
         # Setup logging
         logging.basicConfig(level=logging.INFO)

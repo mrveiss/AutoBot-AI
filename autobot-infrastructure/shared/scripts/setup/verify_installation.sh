@@ -13,6 +13,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Import roots for the inline Python below, derived from this script's own
+# location: the repo root is four levels up (setup/ -> scripts/ -> shared/ ->
+# autobot-infrastructure/ -> repo root). `config.*` and `agents.*` live under
+# autobot-backend, `autobot_shared.*` at the repo root. This replaces the old
+# `export PYTHONPATH=$(pwd)`, which resolved to wherever the operator happened
+# to be standing (#14867).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+export PYTHONPATH="${REPO_ROOT}/autobot-backend:${REPO_ROOT}:${PYTHONPATH:-}"
+
 success_count=0
 total_checks=0
 
@@ -96,13 +106,28 @@ check_item "Playwright service" "curl -sf http://localhost:3000/health"
 
 # Agent configuration test
 echo -e "\n${BLUE}⚙️  Agent Configuration Test${NC}"
+# (#14867) This check used to be skipped silently whenever ./venv/bin/activate
+# was missing, and its outcome was neither counted in total_checks nor able to
+# affect the exit status - so a failing agent configuration still ended in
+# "All checks passed". It now always runs and always counts.
 if [ -f venv/bin/activate ]; then
+    # shellcheck source=/dev/null
     source venv/bin/activate
-    export PYTHONPATH=$(pwd)
+fi
 
-    python3 -c "
+total_checks=$((total_checks + 1))
+# (#14867) There is no src package. config_manager is the canonical config
+# singleton (see autobot-backend/worker_node.py).
+# (#14867) UNRESOLVED: get_agent_orchestrator names nothing in this tree.
+# AgentType lives in agents.agent_orchestration (types.py); the nearest accessor
+# after the #3393 move of agents/agent_orchestrator.py is
+# get_distributed_agent_coordinator, but that is a rename guess rather than a
+# match, so the import below is left naming what it was written against and its
+# failure is now loud instead of discarded.
+# NOTE: no backticks inside this double-quoted block - bash would run them.
+if python3 -c "
 try:
-    from src.config import global_config_manager
+    from config import config_manager as global_config_manager
     from src.agents import AgentType, get_agent_orchestrator
 
     # Test model assignments
@@ -120,9 +145,15 @@ try:
 
     print('✅ Agent configuration test passed')
 except Exception as e:
-    print(f'❌ Agent configuration test failed: {e}')
-    exit(1)
-" && echo -e "${GREEN}✅ Agent configuration test passed${NC}" || echo -e "${RED}❌ Agent configuration test failed${NC}"
+    import sys, traceback
+    print(f'❌ Agent configuration test failed: {e}', file=sys.stderr)
+    traceback.print_exc()
+    sys.exit(1)
+"; then
+    echo -e "${GREEN}✅ Agent configuration test passed${NC}"
+    success_count=$((success_count + 1))
+else
+    echo -e "${RED}❌ Agent configuration test failed - see the traceback above${NC}" >&2
 fi
 
 # Summary

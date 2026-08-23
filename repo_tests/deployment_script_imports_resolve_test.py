@@ -18,6 +18,21 @@ exactly where this one hid.
 Scope: resolves the **module**, not the imported name, and never imports
 anything — importing would execute package `__init__` side effects, which a
 static check has no business doing.
+
+#14877 merged its own copy of this guard into this file rather than shipping a
+second one (consolidate, never fork). It added three things:
+
+* the importing script's **own directory** counts as an import root, because
+  these scripts export ``${SCRIPT_DIR}`` on PYTHONPATH. Without it the guard
+  reported a false positive on ``test_startup_coordinator.sh``, whose
+  ``startup_coordinator.py`` is a sibling;
+* ``test_no_inline_check_fabricates_its_own_result`` — #14867's second
+  acceptance criterion. Resolving the import is half the job: #14868 fixed
+  these imports and removed the stderr suppression, but left ``|| echo "{}"``
+  in place, so a check that cannot run still reports a value indistinguishable
+  from a clean result (#14880);
+* seven of the nine ``_KNOWN_BROKEN`` entries below were retired, because
+  #14877 fixed those imports.
 """
 
 from __future__ import annotations
@@ -41,15 +56,12 @@ _IMPORT = re.compile(r"^\s*from\s+([a-zA-Z_][\w.]*)\s+import\s+", re.M)
 # below asserts each is STILL broken, so a fix that leaves its entry behind
 # fails here rather than silently un-guarding that script.
 _KNOWN_BROKEN = {
-    ("check_ai_stack_health.sh", "src.prompt_manager"): "#14867",
-    ("database/reindex_claude_md.sh", "src.knowledge_base"): "#14867",
-    ("diagnose_startup_performance.sh", "backend"): "#14867",
-    ("restore_kb_backup.sh", "backup.engine"): "#14867",
-    ("setup/setup_tier2_research.sh", "src.agents.advanced_web_research"): "#14867",
-    ("setup/verify_installation.sh", "src.config"): "#14867",
-    ("setup/verify_installation.sh", "src.agents"): "#14867",
-    ("test-service-auth-deployment.sh", "backend.utils.async_redis_manager"): "#14867",
-    ("test_startup_coordinator.sh", "scripts.startup_coordinator"): "#14867",
+    # Seven siblings were retired by #14877, which repaired those imports.
+    # These two name a backup engine and an agent-orchestrator accessor that
+    # were never built — zero hits repo-wide — so the fix is a logic change,
+    # not an import rewrite.
+    ("restore_kb_backup.sh", "backup.engine"): "#14875",
+    ("setup/verify_installation.sh", "src.agents"): "#14875",
 }
 
 # Third-party and stdlib names an inline block may legitimately import.
@@ -61,8 +73,16 @@ _EXTERNAL_PREFIXES = {
 }
 
 
-def _resolves(module: str) -> bool:
-    for root in _IMPORT_ROOTS:
+def _resolves(module: str, script_dir: Path | None = None) -> bool:
+    """Resolve against the roots these scripts actually export on PYTHONPATH.
+
+    ``script_dir`` is the importing script's own directory. Several of these
+    scripts export ``${SCRIPT_DIR}`` (see test_startup_coordinator.sh:15) and
+    import a sibling module, so omitting it makes the guard report a false
+    positive on a script that runs perfectly well (#14877).
+    """
+    roots = list(_IMPORT_ROOTS) + ([script_dir] if script_dir else [])
+    for root in roots:
         base = root / Path(*module.split("."))
         if base.with_suffix(".py").exists() or (base / "__init__.py").exists():
             return True
@@ -93,7 +113,7 @@ def _unresolvable() -> tuple[list[str], int, int]:
             if top in _EXTERNAL_PREFIXES:
                 continue
             seen += 1
-            if not _resolves(module):
+            if not _resolves(module, script.parent):
                 rel_to_scripts = str(script.relative_to(_SCRIPT_DIR))
                 if (rel_to_scripts, module) in _KNOWN_BROKEN:
                     continue
@@ -257,4 +277,95 @@ def test_no_script_awaits_the_sync_redis_client() -> None:
         "these await the canonical Redis accessor without async_client=True, which "
         "returns a SYNC client and raises TypeError at call time — an import-layer "
         "guard cannot see this (#14866):\n  " + "\n  ".join(offenders)
+    )
+
+
+# --------------------------------------------------------------------------
+# The reporting layer (#14867, #14877). Resolving the import and letting the
+# error reach stderr are both necessary and still not sufficient: what a caller
+# downstream READS must also change when the check could not run. #14868 fixed
+# these imports and removed the `2>/dev/null`, but left `|| echo "{}"`, so the
+# monitor still answers a failed check with a value that reads as "no findings".
+# That is the specific thing #14866 cost: `0|0|0` violations reported *because*
+# the imports were broken.
+# --------------------------------------------------------------------------
+
+# A literal that impersonates a successful measurement. Deliberately not every
+# `|| echo` — a fallback that says "unavailable" is fine; one that says "0" or
+# "{}" is a fabricated clean result.
+_SENTINEL = re.compile(r'^(?:[0-9|.]+|UNKNOWN|N/?A|\{\}|\[\]|""|null)$', re.IGNORECASE)
+_FALLBACK_ECHO = re.compile(r'\|\|\s*(?:echo|printf)\s+(["\']?)([^"\'\n;]*)\1')
+
+# Scripts still doing this, each with its tracking issue. Same self-guarding
+# contract as _KNOWN_BROKEN: asserted STILL fabricating, so a fix forces the
+# entry out rather than leaving the guard quietly narrower than it claims.
+_KNOWN_FABRICATING = {"monitoring/access_control_monitor.sh": "#14880"}
+
+
+def _fabricated_results() -> tuple[list[tuple[str, int, str]], int]:
+    """(sites answering a failed python check with a sentinel, blocks seen).
+
+    Reuses the two block regexes above rather than scanning a single line. The
+    first draft of this function matched ``python3 -c`` to end-of-line, which
+    finds nothing for a MULTI-LINE block — the ``|| echo "{}"`` sits after the
+    closing quote, several lines down. It reported zero fabricated results on a
+    file that has three, and only the positive control below caught it. That is
+    the same shape as the delimiter trap documented for the call layer.
+    """
+    sites: list[tuple[str, int, str]] = []
+    blocks = 0
+    for script in _shell_scripts():
+        text = script.read_text(encoding="utf-8", errors="replace")
+        for pattern in (_PY_BLOCK_MULTILINE, _PY_BLOCK_INLINE):
+            for match in pattern.finditer(text):
+                blocks += 1
+                newline = text.find("\n", match.end())
+                tail = text[match.end() : newline if newline != -1 else len(text)]
+                echo = _FALLBACK_ECHO.search(tail)
+                if echo and _SENTINEL.match(echo.group(2).strip()):
+                    sites.append(
+                        (str(script.relative_to(_SCRIPT_DIR)),
+                         text[: match.start()].count("\n") + 1,
+                         echo.group(2).strip())
+                    )
+    return sites, blocks
+
+
+def test_the_fabrication_sweep_reached_the_scripts() -> None:
+    """Discovery floor — an extractor that stops matching reports clean."""
+    sites, blocks = _fabricated_results()
+    assert blocks >= 20, (
+        f"only extracted {blocks} inline python blocks — the matcher has "
+        "regressed and the check below would pass having read nothing"
+    )
+    assert sites, (
+        "the sweep found no fabricated results at all, but _KNOWN_FABRICATING "
+        "is not empty — the matcher has regressed"
+    )
+
+
+def test_no_inline_check_fabricates_its_own_result() -> None:
+    """A check that could not run must not report a reassuring value (#14867)."""
+    sites, _ = _fabricated_results()
+    offenders = [
+        f"{rel}:{line}  answers a failed python block with {value!r}"
+        for rel, line, value in sites
+        if rel not in _KNOWN_FABRICATING
+    ]
+    assert not offenders, (
+        "a failed check must be distinguishable from a clean one by what it "
+        "REPORTS, not only by what reaches stderr. Emit an explicit error and a "
+        "non-zero exit status instead of a sentinel (#14867):\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+@pytest.mark.parametrize("rel,issue", sorted(_KNOWN_FABRICATING.items()))
+def test_each_fabrication_exemption_is_still_broken(rel: str, issue: str) -> None:
+    """An obsolete exemption exempts nothing, and is this check's positive control."""
+    assert (_SCRIPT_DIR / rel).is_file(), f"{rel} moved or was deleted — update this exemption ({issue})"
+    sites, _ = _fabricated_results()
+    assert any(r == rel for r, _, _ in sites), (
+        f"{rel} no longer fabricates a result, so the exemption ({issue}) is "
+        "obsolete — remove it from _KNOWN_FABRICATING so the script is guarded again"
     )

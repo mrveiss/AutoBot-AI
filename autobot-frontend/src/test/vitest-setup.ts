@@ -1,7 +1,28 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import '@testing-library/jest-dom'
-import { vi, afterAll } from 'vitest'
+import { vi, afterAll, afterEach } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
+
+// #14842/#14613: destroy every mounted component tree after the test that made
+// it. The `beforeEach` below resets `document.body.innerHTML`, which DETACHES a
+// mounted tree's DOM but never unmounts the app — its component instances,
+// watchers and effects stay live for the rest of the file. A file that mounts
+// 30 times therefore ran its last test with 29 live trees still reacting to
+// every shared ref it touched, and the per-test cost grew as the file
+// progressed. That is why the failures land on a different test each run and
+// why a file passes alone but times out inside a larger, more loaded run.
+//
+// This generalises the per-file teardown that `OrgChart.canvasFilters.test.ts`
+// already carried, where the same accumulation was measured at ~3.4s on a quiet
+// runner against the 10s per-test ceiling on a loaded one. Unmounting is the
+// fix rather than a longer timeout: a longer timeout keeps the accumulation and
+// only raises the load needed to trip it.
+//
+// Safe against a test that unmounts its own wrapper — Vue's `app.unmount()` is
+// idempotent — and against a test that depends on a previous test's DOM,
+// because the `beforeEach` below already made that impossible.
+enableAutoUnmount(afterEach)
 
 // Prevent cross-file pollution: some test files call vi.stubGlobal() (e.g. window,
 // navigator, EventSource) at module scope without restoring. Under parallel file

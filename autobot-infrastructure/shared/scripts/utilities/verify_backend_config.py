@@ -7,6 +7,18 @@
 Verify that the backend configuration includes workflow endpoints
 """
 
+import sys
+from pathlib import Path
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 
 def test_app_factory():
     """Test that the app factory properly includes workflow router."""
@@ -16,7 +28,7 @@ def test_app_factory():
 
     try:
         # Test importing the workflow router
-        from backend.api.workflow import router as workflow_router
+        from api.workflow import router as workflow_router
 
         print("✅ Workflow router import successful")
 
@@ -63,7 +75,7 @@ def test_route_registration():
 
     try:
         # Simulate what happens during app startup
-        from backend.api.workflow import router as workflow_router
+        from api.workflow import router as workflow_router
         from fastapi import APIRouter, FastAPI
 
         # Create test app

@@ -25,6 +25,15 @@ import aiohttp
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -176,7 +185,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from backend.app_factory import create_app
+            from app_factory import create_app
 
             create_app()
 
@@ -515,7 +524,7 @@ class AutomatedTestingSuite:
 
         try:
             # Test if file upload validation exists
-            from backend.api.files import is_safe_file
+            from api.files import is_safe_file
 
             # Test safe files
             safe_files = ["document.pd", "image.jpg", "text.txt"]
