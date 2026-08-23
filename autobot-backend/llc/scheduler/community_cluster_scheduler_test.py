@@ -44,10 +44,8 @@ import pytest
 from llc.scheduler.base import PENDING_CANCELLATION_REQUIREMENT, SUPPORTS_PENDING_CANCELLATION
 from llc.scheduler.community_cluster_scheduler import CommunityClusteringScheduler
 
-requires_pending_cancellation = pytest.mark.skipif(
-    not SUPPORTS_PENDING_CANCELLATION,
-    reason=PENDING_CANCELLATION_REQUIREMENT,
-)
+# #13369: assert the capability, never skip on it — see test_poll_loop_scheduler.
+assert SUPPORTS_PENDING_CANCELLATION, PENDING_CANCELLATION_REQUIREMENT
 
 
 class _FakeMeshDB:
@@ -97,7 +95,6 @@ class _SwallowingClusterer:
             return []  # driver consumed it; run() reports success
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_swallowed_cancel_does_not_rearm_a_full_interval() -> None:
     """A masked-and-swallowed cancel must not buy the loop a fresh 6h sleep.
