@@ -23,12 +23,27 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
 
 
 def _run(tmp_path: Path, content: str, rel: str = ".github/workflows/test.yml") -> subprocess.CompletedProcess:
-    """Write a workflow file and invoke the hook via argv mode."""
+    r"""Write a workflow file and invoke the hook via argv mode.
+
+    The path goes in REPO-RELATIVE with cwd at its root, because that is the
+    only shape a real caller produces: pre-commit and the CI wrappers both hand
+    the hook paths relative to the repository root.
+
+    GH#14884: this used to pass ``str(f)`` — an absolute ``/tmp/pytest-.../...``
+    path. GH#13936 made ``get_staged_files`` apply the caller's own pattern to
+    the argv branch as well as the staged branch, and this hook's pattern is
+    anchored: ``^\.github/(workflows|actions)/.*\.ya?ml$``. An absolute path
+    cannot match that anchor, so the hook received an empty file list, took its
+    ``[ -z "$files" ] && exit 0`` path and reported clean. The seven "must
+    reject" tests read that as a missing rejection and went red; worse, the
+    three "must allow" tests went green having exercised nothing at all.
+    """
     f = tmp_path / rel
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(content, encoding="utf-8")
     return subprocess.run(
-        [str(HOOK_PATH), str(f)],
+        [str(HOOK_PATH), rel],
+        cwd=tmp_path,
         capture_output=True,
         text=True,
     )

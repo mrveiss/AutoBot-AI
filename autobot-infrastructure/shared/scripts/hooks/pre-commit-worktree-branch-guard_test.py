@@ -20,6 +20,7 @@ repository.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -78,13 +79,14 @@ class TestFailsClosedWhenGitWorktreeListFails:
     """
 
     def _make_fake_git(self, tmp_path: Path) -> Path:
-        real_git = subprocess.run(["command", "-v", "git"], shell=False, capture_output=True, text=True)
-        # Resolve the real git path without relying on a shell builtin.
-        real_git_path = None
-        for candidate in ("/usr/bin/git", "/bin/git", "/usr/local/bin/git"):
-            if Path(candidate).exists():
-                real_git_path = candidate
-                break
+        # GH#14884: this used to resolve git with
+        # `subprocess.run(["command", "-v", "git"])`. `command` is a POSIX shell
+        # BUILTIN, not a binary, so subprocess raised FileNotFoundError on every
+        # machine with no `command` executable on PATH — before the hardcoded
+        # candidate list below it ever ran, and its result was never read anyway.
+        # That left this fail-closed property unverified. shutil.which answers
+        # the same question in-process, and honours PATH instead of guessing.
+        real_git_path = shutil.which("git")
         assert real_git_path, "could not locate a real git binary to delegate to"
 
         fake_bin = tmp_path.parent / "fake-bin"
