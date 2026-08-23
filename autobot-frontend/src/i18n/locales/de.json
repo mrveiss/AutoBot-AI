@@ -8452,6 +8452,8 @@
       "secretMappingIncomplete": "Füllen Sie alle Geheimniswerte oben aus, bevor Sie importieren.",
       "importSuccess": "Import erfolgreich — Unternehmens-ID:",
       "warningsLabel": "Warnungen:",
+      "droppedReportingLinesLabel": "Berichtslinien, die nicht übernommen werden konnten:",
+      "droppedReportingLine": "{agent} wurde ohne Vorgesetzten importiert: {manager} wurde nicht erstellt.",
       "importFailed": "Import fehlgeschlagen:",
       "toastTemplateExported": "Vorlage erfolgreich exportiert",
       "toastTemplateExportFailed": "Vorlagenexport fehlgeschlagen",

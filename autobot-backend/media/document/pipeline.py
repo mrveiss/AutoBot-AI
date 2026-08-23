@@ -9,6 +9,7 @@
 
 """Document processing pipeline for text documents, PDFs, DOCX, etc."""
 
+import asyncio
 import base64
 from typing import Any, Dict
 
@@ -53,8 +54,31 @@ class DocumentPipeline(BasePipeline):
         raw_bytes = self._decode_input(media_input.data)
         mime_type = (media_input.mime_type or "").lower()
 
+        # Imported here, as the OCR helpers below are: this module must load on a
+        # host without the optional document dependencies installed.
+        from media.document.ocr import extraction_timeout
+
+        deadline = extraction_timeout()
+
         try:
-            extracted = extract_document(raw_bytes, mime_type)
+            # #14754: extraction is blocking CPU work — PDF parsing plus
+            # pdfplumber layout analysis on every page — and this handler is
+            # async, so one large document stalled every other coroutine on the
+            # worker, health endpoints included. Same shape as the OCR fix in
+            # _recover_scanned_pages below (#13896), one function over.
+            extracted = await asyncio.wait_for(
+                asyncio.to_thread(extract_document, raw_bytes, mime_type),
+                timeout=deadline,
+            )
+        except asyncio.TimeoutError:
+            # to_thread frees the loop but does not bound the work: the default
+            # executor has a small, process-wide slot count that the OCR path's
+            # own bounded calls also draw from, so an extraction that never
+            # returns holds one forever. Degrading names the cause; without the
+            # deadline the request simply never completes (#14754).
+            reason = f"extraction exceeded {deadline}s"
+            logger.warning("Document extraction timed out after %ss", deadline)
+            return self._error_result(detect_format(raw_bytes, mime_type), reason, media_input.metadata)
         except DocumentDependencyError as exc:
             # A missing library is a deployment gap, not a bad upload — keep the
             # two distinguishable so one is never diagnosed as the other.
@@ -117,12 +141,30 @@ class DocumentPipeline(BasePipeline):
         being fixed; reclaiming the thread promptly needs a killable subprocess
         and is tracked separately.
         """
-        import asyncio
-
         from media.document.ocr import OcrResult, ocr_pdf_pages, ocr_timeout
 
-        if extracted.format != "pdf" or not extracted.empty_page_numbers:
-            return extracted, OcrResult(attempted=False, reason="no unreadable pages")
+        if extracted.format != "pdf":
+            return extracted, OcrResult(attempted=False, reason="not a paginated PDF")
+
+        if not extracted.empty_page_numbers:
+            # #14751: "unreadable" here is strictly `page.text.strip() == ""`,
+            # while `has_usable_text_layer` — which drives the reported
+            # `no_text_layer` status — uses a ratio and a per-page floor. One
+            # stray character on every page (a page number, a Bates stamp) makes
+            # them disagree: the document is reported as having no usable text
+            # layer AND as having nothing to OCR.
+            #
+            # The trigger is deliberately left as-is; widening it to every
+            # document failing the ratio would OCR far more than intended. What
+            # changes is that the contradiction is now stated rather than
+            # reported as "no unreadable pages", which reads as agreement.
+            reason = (
+                "no page is empty, but the text layer is not usable — OCR reads only "
+                "wholly empty pages, so a page with a stamp or number is skipped"
+                if not extracted.has_usable_text_layer
+                else "no unreadable pages"
+            )
+            return extracted, OcrResult(attempted=False, reason=reason)
 
         deadline = ocr_timeout()
         try:

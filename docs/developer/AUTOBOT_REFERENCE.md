@@ -123,7 +123,7 @@ autobot-infrastructure/
 cd autobot-slm-backend/ansible
 
 ansible-playbook playbooks/deploy-full.yml
-ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+ansible-playbook playbooks/slm-service-control.yml -e "target=<group-or-host> service=autobot-backend action=restart"
 ansible-playbook playbooks/deploy-full.yml --tags frontend,backend
 ansible-playbook playbooks/deploy-full.yml --limit slm_server
 ```
@@ -188,7 +188,7 @@ redis-cli -h <database-ip> ping
 # Ansible Deployment
 cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-full.yml
-ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+ansible-playbook playbooks/slm-service-control.yml -e "target=<group-or-host> service=autobot-backend action=restart"
 
 # Manual sync
 ./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/

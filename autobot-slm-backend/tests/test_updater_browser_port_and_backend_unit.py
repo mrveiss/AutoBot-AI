@@ -120,7 +120,24 @@ def test_unit_only_renders_the_template_and_does_not_restart() -> None:
     tasks = yaml.safe_load(_UNIT_ONLY.read_text(encoding="utf-8"))
     blob = str(tasks)
 
-    assert "autobot-backend.service.j2" in blob, "the unit template must be rendered"
+    # #13828: asserted on the rendered SET rather than on the literal string
+    # "autobot-backend.service.j2". unit_only.yml now renders the three units the
+    # backend role installs through a loop, so the template name appears as
+    # "{{ item }}.j2" and a substring check reported the unit as missing while it
+    # was being rendered perfectly well. What matters is that the unit is
+    # rendered, not how the task spells it.
+    rendered = set()
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        dest = str((task.get("ansible.builtin.template") or {}).get("dest", ""))
+        if dest.endswith(".service"):
+            rendered.add(Path(dest).name)
+        if "{{ item }}" in dest:
+            rendered.update(str(i) for i in (task.get("loop") or []))
+    assert (
+        "autobot-backend.service" in rendered
+    ), f"the backend unit must be rendered; unit_only renders {sorted(rendered)}"
     assert "daemon_reload" in blob, "systemd must be reloaded after a unit change"
     assert "restarted" not in blob, (
         "unit_only must not restart — the play already restarts the backend, and "

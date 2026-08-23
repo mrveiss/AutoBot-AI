@@ -61,7 +61,7 @@ ansible-playbook playbooks/deploy-full.yml --tags slm_agent --limit 02-Frontend
 
 # Restart on all nodes
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-slm-agent action=restart"
+  -e "target=<group-or-host> service=autobot-slm-agent action=restart"
 ```
 
 ---
