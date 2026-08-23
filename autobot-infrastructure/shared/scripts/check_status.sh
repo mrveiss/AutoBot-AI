@@ -16,11 +16,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
 # SSOT Configuration - Issue #694
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || {
-    # Fallback if lib not found
-    # PROJECT_ROOT is exported by scripts/lib/project_root.sh, sourced above,
-    # so the pre-#13149 fallback assignment here is redundant (#13149).
-    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+# #14172: the first path is an expected miss (callers sit at two different
+# depths), so only its stderr is discarded. The LAST attempt keeps its stderr
+# and a failure is fatal -- the old fallback re-read .env and carried on with
+# every ${VAR:-literal} silently taking its hardcoded right-hand side.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/../lib/ssot-config.sh" || {
+    echo "FATAL: ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
 }
 
 # Assign SSOT variables with fallbacks

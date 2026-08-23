@@ -25,7 +25,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 # a loopback default there silently points a distributed Redis at the wrong
 # host. Do not fold this into the library's own defaulting.
 _OPERATOR_REDIS_HOST="${AUTOBOT_REDIS_HOST:-}"
-source "$PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" || {
+    echo "FATAL: $PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 INFRA_ROOT="${PROJECT_ROOT}/autobot-infrastructure"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
