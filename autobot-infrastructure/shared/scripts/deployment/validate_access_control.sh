@@ -34,6 +34,17 @@ NC='\033[0m'
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The backend package root, derived from this script's own location so it works
+# from any checkout. Every python3 block below imports `services.*`/`security.*`
+# from here; without this on PYTHONPATH they resolve to nothing and each check
+# silently reports a failure it never actually ran (#14866).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+BACKEND_DIR="${REPO_ROOT}/autobot-backend"
+# Both roots are needed: `services.*` / `security.*` live under autobot-backend,
+# while `autobot_shared.*` sits at the repo root. Omitting either leaves half the
+# imports unresolvable, which is the shape of the original bug.
+export PYTHONPATH="${BACKEND_DIR}:${REPO_ROOT}:${PYTHONPATH:-}"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
@@ -89,7 +100,7 @@ log_info() {
 test_feature_flags_exists() {
     log_test "Feature flags system exists"
 
-    if python3 -c "from backend.services.feature_flags import get_feature_flags" 2>/dev/null; then
+    if python3 -c "from services.feature_flags import get_feature_flags"; then
         log_pass
     else
         log_fail "Cannot import feature_flags module"
@@ -102,7 +113,7 @@ test_get_enforcement_mode() {
 
     local mode=$(python3 -c "
 import asyncio
-from backend.services.feature_flags import get_feature_flags
+from services.feature_flags import get_feature_flags
 
 async def main():
     flags = await get_feature_flags()
@@ -110,7 +121,7 @@ async def main():
     print(mode.value)
 
 asyncio.run(main())
-" 2>/dev/null)
+")
 
     if [ -n "$mode" ]; then
         log_pass
@@ -126,12 +137,16 @@ test_ownership_coverage() {
 
     local result=$(python3 -c "
 import asyncio
-from backend.utils.async_redis_manager import get_redis_manager
-from backend.security.session_ownership import SessionOwnershipValidator
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from security.session_ownership import SessionOwnershipValidator
 
 async def main():
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Exactly what security/session_ownership.py:836 does. Calling it bare
+    # returns the SYNC client (async_client defaults to False), so `await` on it
+    # raises TypeError — and `.main()` exists on neither client. That turned an
+    # import-time failure into a call-time one, which is the same defect a step
+    # later (#14866).
+    redis = await get_redis_manager(async_client=True, database="main")
 
     # Count total sessions
     cursor = 0
@@ -156,7 +171,7 @@ async def main():
     print(f'{total}|{owned}|{coverage:.1f}')
 
 asyncio.run(main())
-" 2>/dev/null)
+")
 
     IFS='|' read -r total owned coverage <<< "$result"
 
@@ -174,7 +189,7 @@ test_audit_logging() {
 
     python3 -c "
 import asyncio
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -199,7 +214,7 @@ async def main():
 
 import sys
 sys.exit(asyncio.run(main()))
-" > /dev/null 2>&1
+"
 
     if [ $? -eq 0 ]; then
         log_pass
@@ -223,7 +238,7 @@ test_redis_connectivity() {
 test_backend_health() {
     log_test "Backend API health"
 
-    if curl -s -f "http://$BACKEND_HOST:$BACKEND_PORT/api/health" > /dev/null 2>&1; then
+    if curl -s -f -o /dev/null "http://$BACKEND_HOST:$BACKEND_PORT/api/health"; then
         log_pass
     else
         log_warn "Backend API not responding"
@@ -237,12 +252,16 @@ test_ownership_performance() {
     local result=$(python3 -c "
 import asyncio
 import time
-from backend.utils.async_redis_manager import get_redis_manager
-from backend.security.session_ownership import SessionOwnershipValidator
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from security.session_ownership import SessionOwnershipValidator
 
 async def main():
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Exactly what security/session_ownership.py:836 does. Calling it bare
+    # returns the SYNC client (async_client defaults to False), so `await` on it
+    # raises TypeError — and `.main()` exists on neither client. That turned an
+    # import-time failure into a call-time one, which is the same defect a step
+    # later (#14866).
+    redis = await get_redis_manager(async_client=True, database="main")
 
     validator = SessionOwnershipValidator(redis)
 
@@ -267,7 +286,7 @@ async def main():
     print(f'{avg_ms:.2f}')
 
 asyncio.run(main())
-" 2>/dev/null)
+")
 
     if [ -n "$result" ]; then
         if (( $(echo "$result < 10" | bc -l) )); then
@@ -288,7 +307,7 @@ test_audit_performance() {
     local result=$(python3 -c "
 import asyncio
 import time
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -313,7 +332,7 @@ async def main():
     print(f'{avg_ms:.2f}')
 
 asyncio.run(main())
-" 2>/dev/null)
+")
 
     if [ -n "$result" ]; then
         if (( $(echo "$result < 5" | bc -l) )); then
@@ -336,7 +355,7 @@ test_security_enforcement() {
 
     python3 -c "
 import asyncio
-from backend.services.feature_flags import get_feature_flags, EnforcementMode
+from services.feature_flags import get_feature_flags, EnforcementMode
 
 async def main():
     flags = await get_feature_flags()
@@ -352,7 +371,7 @@ async def main():
 
 import sys
 sys.exit(asyncio.run(main()))
-" > /dev/null 2>&1
+"
 
     if [ $? -eq 0 ]; then
         log_pass
