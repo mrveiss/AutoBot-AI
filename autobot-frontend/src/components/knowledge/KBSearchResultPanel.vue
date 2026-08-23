@@ -621,8 +621,8 @@ async function copyContent(): Promise<void> {
 <!-- Global style for the highlight mark (scoped won't reach v-html content) -->
 <style>
 .kb-highlight {
-  background-color: #fef08a;
-  color: #713f12;
+  background-color: var(--kbsearch-highlight-bg);
+  color: var(--kbsearch-highlight-text);
   border-radius: var(--radius-xs);
   padding: var(--spacing-0) var(--spacing-px);
   font-weight: 600;

@@ -218,34 +218,34 @@ button:focus-visible {
 
 .hljs-dark :deep(.hljs-attr),
 .hljs-dark :deep(.hljs-attribute) {
-  color: #88bbff;
+  color: var(--codecell-syntax-attr-dark);
 }
 
 .hljs-dark :deep(.hljs-literal),
 .hljs-dark :deep(.hljs-number) {
-  color: #d19a66;
+  color: var(--codecell-syntax-number-dark);
 }
 
 .hljs-dark :deep(.hljs-string) {
-  color: #98c379;
+  color: var(--codecell-syntax-string-dark);
 }
 
 .hljs-dark :deep(.hljs-built_in),
 .hljs-dark :deep(.hljs-builtin-name) {
-  color: #61afef;
+  color: var(--codecell-syntax-callable-dark);
 }
 
 .hljs-dark :deep(.hljs-title),
 .hljs-dark :deep(.hljs-function) {
-  color: #61afef;
+  color: var(--codecell-syntax-callable-dark);
 }
 
 .hljs-dark :deep(.hljs-keyword) {
-  color: #c678dd;
+  color: var(--codecell-syntax-keyword-dark);
 }
 
 .hljs-dark :deep(.hljs-comment) {
-  color: #5c6370;
+  color: var(--codecell-syntax-comment-dark);
   font-style: italic;
 }
 
@@ -257,34 +257,34 @@ button:focus-visible {
 
 .hljs-light :deep(.hljs-attr),
 .hljs-light :deep(.hljs-attribute) {
-  color: #0184bc;
+  color: var(--codecell-syntax-attr-light);
 }
 
 .hljs-light :deep(.hljs-literal),
 .hljs-light :deep(.hljs-number) {
-  color: #986801;
+  color: var(--codecell-syntax-number-light);
 }
 
 .hljs-light :deep(.hljs-string) {
-  color: #50a14f;
+  color: var(--codecell-syntax-string-light);
 }
 
 .hljs-light :deep(.hljs-built_in),
 .hljs-light :deep(.hljs-builtin-name) {
-  color: #4078f2;
+  color: var(--codecell-syntax-callable-light);
 }
 
 .hljs-light :deep(.hljs-title),
 .hljs-light :deep(.hljs-function) {
-  color: #4078f2;
+  color: var(--codecell-syntax-callable-light);
 }
 
 .hljs-light :deep(.hljs-keyword) {
-  color: #a626a4;
+  color: var(--codecell-syntax-keyword-light);
 }
 
 .hljs-light :deep(.hljs-comment) {
-  color: #a0a1a7;
+  color: var(--codecell-syntax-comment-light);
   font-style: italic;
 }
 </style>
