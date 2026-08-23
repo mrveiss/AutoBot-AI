@@ -28,6 +28,13 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Import roots for the inline Python below, derived from this script's own
+# location. `services.*`/`security.*` live under autobot-backend and
+# `autobot_shared.*` at the repo root; without both, every block below fails and
+# falls through to its fabricated default (#14866).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+export PYTHONPATH="${REPO_ROOT}/autobot-backend:${REPO_ROOT}:${PYTHONPATH:-}"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Colors
@@ -85,7 +92,7 @@ log_metric() {
 get_enforcement_mode() {
     python3 -c "
 import asyncio
-from backend.services.feature_flags import get_feature_flags
+from services.feature_flags import get_feature_flags
 
 async def main():
     flags = await get_feature_flags()
@@ -93,7 +100,7 @@ async def main():
     print(mode.value.upper())
 
 asyncio.run(main())
-" 2>/dev/null || echo "UNKNOWN"
+" || echo "UNKNOWN"
 }
 
 # Get rollout statistics
@@ -101,7 +108,7 @@ get_rollout_stats() {
     python3 -c "
 import asyncio
 import json
-from backend.services.feature_flags import get_feature_flags
+from services.feature_flags import get_feature_flags
 
 async def main():
     flags = await get_feature_flags()
@@ -109,7 +116,7 @@ async def main():
     print(json.dumps(stats, indent=2))
 
 asyncio.run(main())
-" 2>/dev/null || echo "{}"
+" || echo "{}"
 }
 
 # Get audit statistics
@@ -117,7 +124,7 @@ get_audit_stats() {
     python3 -c "
 import asyncio
 import json
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -125,7 +132,7 @@ async def main():
     print(json.dumps(stats, indent=2))
 
 asyncio.run(main())
-" 2>/dev/null || echo "{}"
+" || echo "{}"
 }
 
 # Get recent denied access attempts
@@ -134,7 +141,7 @@ get_recent_denials() {
 import asyncio
 import json
 from datetime import datetime, timedelta
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -148,15 +155,15 @@ async def main():
         print(f'{entry.timestamp} | {entry.user_id or \"anonymous\"} | {entry.operation} | {entry.resource}')
 
 asyncio.run(main())
-" 2>/dev/null
+"
 }
 
 # Get session ownership coverage
 get_ownership_coverage() {
     python3 -c "
 import asyncio
-from backend.utils.async_redis_manager import get_redis_manager
-from backend.security.session_ownership import SessionOwnershipValidator
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from security.session_ownership import SessionOwnershipValidator
 
 async def main():
     redis_manager = await get_redis_manager()
@@ -184,7 +191,7 @@ async def main():
     print(f'{total}|{owned}|{coverage:.1f}')
 
 asyncio.run(main())
-" 2>/dev/null || echo "0|0|0"
+" || echo "0|0|0"
 }
 
 # Display dashboard
