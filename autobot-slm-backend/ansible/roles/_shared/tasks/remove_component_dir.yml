@@ -1,0 +1,62 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE way provisioning removes a component directory (#14856).
+#
+# A component directory is a top-level entry under /opt/autobot — the unit a
+# role deploys to. On a deployed node those are not code-only:
+#
+#   autobot-backend       data/unified_memory.db, data/conversation_files.db,
+#                         data/transcriber.db, data/service-keys
+#   autobot-slm-backend   data/.slm_keys
+#
+# `state: absent` on the parent takes `data/` with it. Every caller that used to
+# spell that deletion out for itself had to remember the probe, and the ones
+# that forgot are how #14856 happened: `playbooks/cleanup-nodes.yml` removed
+# every one of those paths with no condition at all, while printing
+# "data/ and logs/ were NOT removed (contain runtime data)" to the operator
+# afterwards. The claim was in the summary text, not in the code.
+#
+# So the probe lives here instead of in each caller, and callers delegate. A
+# caller decides WHETHER a directory belongs on this node; this file decides
+# whether removing it is safe. That split is deliberate — the caller's decision
+# can be wrong (#14513, #14560, #14666, #14682 were each a role-active fact
+# being wrong in turn), and this is the backstop that survives it being wrong.
+#
+# Fail-safe in both directions: when the probe cannot tell, the directory stays.
+# A stale directory is recoverable; a deleted database is not.
+#
+# Contract:
+#   caller_role       (str) Display label for task names, e.g. "Backend".
+#   remove_dir_path   (str) Absolute path of the directory to remove.
+#   remove_reason     (str) Why it is being removed — shown when we refuse.
+
+- name: "{{ caller_role }} | Remove: probe {{ remove_dir_path }} for persistent data (#14856)"
+  ansible.builtin.stat:
+    path: "{{ remove_dir_path }}/data"
+  register: _remove_dir_data
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Remove: REFUSING to delete {{ remove_dir_path }} — it holds data (#14856)"
+  ansible.builtin.debug:
+    msg: >-
+      {{ remove_dir_path }} was selected for removal ({{ remove_reason | default('no reason given') }})
+      but it contains a data/ directory. Refusing to delete it, because that
+      would take the databases and key material with it. If this node genuinely
+      should not carry {{ remove_dir_path }}, move or archive the data
+      deliberately and remove the directory by hand.
+  when: _remove_dir_data.stat.exists | default(false)
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Remove: {{ remove_dir_path }}"
+  ansible.builtin.file:
+    path: "{{ remove_dir_path }}"
+    state: absent
+  # `default(true)` is the whole guard: if the stat above did not run, failed, or
+  # returned something unreadable, we do not KNOW whether data is there — and
+  # "unknown" must resolve to the non-destructive branch. Flipping this to
+  # `default(false)` restores exactly the failure mode #14856 was filed for.
+  when: not (_remove_dir_data.stat.exists | default(true))
+  tags: ['clean']

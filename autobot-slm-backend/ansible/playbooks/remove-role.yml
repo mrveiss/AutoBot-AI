@@ -170,11 +170,19 @@
     # =======================================================================
     # DISK CLEANUP
     # =======================================================================
+    # #14856: this removed the component directory outright, so removing a role
+    # from a node that still held its databases or key material destroyed them
+    # silently. Removing a role is a legitimate destructive operation, but the
+    # data inside it is not part of what the operator asked to remove — so the
+    # removal goes through the shared guard, which refuses and reports when the
+    # directory holds data/ instead of taking it along.
     - name: "Remove role application directory"
-      ansible.builtin.file:
-        path: "/opt/autobot/{{ role_target_dir }}"
-        state: absent
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/remove_component_dir.yml
       when: role_target_dir is defined and role_target_dir | length > 0
+      vars:
+        caller_role: "Remove role"
+        remove_dir_path: "/opt/autobot/{{ role_target_dir }}"
+        remove_reason: "role {{ role_target_dir }} is being removed from this node"
 
     - name: "Clean orphan user-level Python packages"
       ansible.builtin.file:
