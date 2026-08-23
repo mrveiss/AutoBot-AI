@@ -124,3 +124,61 @@ def test_declared_roles_keep_every_group_they_grant():
         ("tts-worker", "ai_stack"),
     ):
         assert expected in _groups(_node([role], [role])), f"declared {role} lost {expected}"
+
+
+# ---------------------------------------------------------------------------
+# #14681 — the derived gate must not be able to shrink unnoticed
+# ---------------------------------------------------------------------------
+
+
+def test_every_gated_group_is_pinned_by_name() -> None:
+    """The gate is derived, so a change to the role map can silently shrink it.
+
+    Four of the six derived names were pinned; `llm_nodes` and `ai` appeared
+    nowhere in this file, and neither did the seed name `main`. A group that
+    drops out of the gate stops being stripped from an undeclared node, which
+    reopens the privileged path the gate exists to close — silently, because
+    nothing asserted it was ever in there.
+
+    Pinned as a whole set rather than by adding two more names: the next group
+    to appear would otherwise be unpinned in exactly the same way.
+    """
+    from services.inventory_builder import _DECLARED_ONLY_GROUPS
+
+    expected = {
+        # seed (#14552)
+        "slm_server",
+        "backend",
+        "main",
+        "frontend",
+        "aiml",
+        "npu",
+        "browser",
+        # derived by _close_over_role_groups (#14567)
+        "ai",
+        "ai_stack",
+        "browser_worker",
+        "llm_nodes",
+        "npu_worker",
+        "npu_workers",
+    }
+    assert set(_DECLARED_ONLY_GROUPS) == expected, (
+        "the deploy gate changed. If a group was added, add it above. If one was REMOVED, "
+        "check that an undeclared node can no longer reach whatever that group provisions "
+        f"before updating this test.\n  missing: {sorted(expected - set(_DECLARED_ONLY_GROUPS))}"
+        f"\n  unexpected: {sorted(set(_DECLARED_ONLY_GROUPS) - expected)}"
+    )
+
+
+def test_declaring_a_vector_database_does_not_activate_the_llm_runtime() -> None:
+    """#14682: chromadb and tts-worker grant ai_stack but do not run an LLM.
+
+    Asserted on the role map rather than on the jinja: `llm_nodes` is the signal
+    `role_llm_active` now uses, so what matters is which tokens reach it.
+    """
+    from services.inventory_builder import _ROLE_TO_GROUPS
+
+    llm_tokens = {token for token, groups in _ROLE_TO_GROUPS.items() if "llm_nodes" in groups}
+    assert "chromadb" not in llm_tokens, "declaring chromadb would run the ollama installer"
+    assert "tts-worker" not in llm_tokens, "declaring tts-worker would run the ollama installer"
+    assert llm_tokens, "no token grants llm_nodes — role_llm_active could never fire"
