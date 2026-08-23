@@ -18,6 +18,7 @@ The schedule is registered in celery_app.py so that beat picks it up.
 """
 
 import logging
+from typing import TYPE_CHECKING, Optional
 
 from celery import shared_task
 
@@ -29,11 +30,40 @@ from utils.celery_reliability import (
     DeadLetterTask,
 )
 
-from ..services.sprint_autoclose import SprintAutoCloseService
+if TYPE_CHECKING:  # import cost paid only by type checkers
+    from ..services.sprint_autoclose import SprintAutoCloseService
 
 logger = logging.getLogger(__name__)
 
-_svc = SprintAutoCloseService()
+# #13332: this module is imported EAGERLY by llc/scheduler/__init__.py, because
+# that is the only way Celery's autodiscovery reaches the @shared_task below
+# (GH#12318).  It therefore pays its import cost on every worker, beat process
+# and API process — and importing SprintAutoCloseService at module level made
+# that cost enormous and invisible:
+#
+#   llc.services.sprint_autoclose -> llc.kb.sprint_summarizer
+#       -> llm_shared.types      (probes PyTorch/CUDA at import; logs
+#                                 "PyTorch not available or CUDA libraries missing")
+#       -> llc.kb.collections    (ChromaDB / knowledge stack)
+#
+# So merely touching `llc.scheduler.base` — three stdlib imports — booted the
+# vector/LLM stack, which is the chain #13332 measured.  Deferring the service to
+# first call keeps registration eager (the decorator still runs at import) while
+# the expensive tail is paid only when the task actually executes, once a day.
+#
+# `_svc` stays a module attribute holding a single process-wide instance, so the
+# construction semantics and any test that patches it are unchanged.
+_svc: "Optional[SprintAutoCloseService]" = None
+
+
+def _service() -> "SprintAutoCloseService":
+    """Return the process-wide service, constructing it on first use (#13332)."""
+    global _svc
+    if _svc is None:
+        from ..services.sprint_autoclose import SprintAutoCloseService
+
+        _svc = SprintAutoCloseService()
+    return _svc
 
 
 # #11586: transient errors (ConnectionError/TimeoutError/OSError) retry with
@@ -70,11 +100,12 @@ def run_daily_check(self: object) -> dict:  # type: ignore[type-arg]
 
 async def _async_check() -> int:
     """Inner async body — separate function so it's unit-testable."""
+    svc = _service()
     session_factory = get_async_session_factory()
     async with session_factory() as session:
-        sprints = await _svc.check_and_queue(session)
+        sprints = await svc.check_and_queue(session)
         await session.commit()
-    await _svc.publish_queued(sprints)
+    await svc.publish_queued(sprints)
     logger.info("Sprint auto-close daily check: %d sprints queued for approval", len(sprints))
     return len(sprints)
 
