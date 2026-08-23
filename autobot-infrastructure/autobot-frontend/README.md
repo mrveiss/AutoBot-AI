@@ -58,7 +58,7 @@ ansible-playbook playbooks/deploy-full.yml --tags frontend --limit frontend_vm
 
 # nginx reload only (config change)
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-frontend action=reload"
+  -e "target=<group-or-host> service=autobot-frontend action=reload"
 
 # Manual sync + build
 ./infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-frontend/

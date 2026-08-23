@@ -112,7 +112,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-full.yml
 
 # Service control (start/stop/restart)
-ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+ansible-playbook playbooks/slm-service-control.yml -e "target=<group-or-host> service=autobot-backend action=restart"
 
 # Deploy specific roles
 ansible-playbook playbooks/deploy-full.yml --tags frontend,backend
