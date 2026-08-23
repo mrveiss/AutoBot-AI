@@ -7,6 +7,21 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Import root for the generated test script below, derived from this script's
+# own location: the repo root is four levels up (setup/ -> scripts/ -> shared/
+# -> autobot-infrastructure/ -> repo root) and agents.* lives under
+# autobot-backend. Baked into the generated file so it runs from any cwd, which
+# the old "from src.agents..." import could never do (#14867).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+BACKEND_DIR="${REPO_ROOT}/autobot-backend"
+
+if [ ! -d "${BACKEND_DIR}" ]; then
+    echo "ERROR: backend package root not found at ${BACKEND_DIR};" >&2
+    echo "       the generated test script would import nothing (#14867)." >&2
+    exit 1
+fi
+
 echo "🚀 Setting up Tier 2 Advanced Web Research capabilities..."
 
 # Check if we're in a virtual environment
@@ -59,15 +74,26 @@ if [ ! -f config/web_research.yaml ]; then
 fi
 
 # Create a test script
-cat > test_tier2_research.py << 'EOF'
+cat > test_tier2_research.py << EOF
 #!/usr/bin/env python3
+# Import root baked in at generation time (#14867).
+import sys
+sys.path.insert(0, "${BACKEND_DIR}")
+EOF
+
+cat >> test_tier2_research.py << 'EOF'
 """
 Test script for Tier 2 Advanced Web Research capabilities
 """
 
 import asyncio
 import json
-from src.agents.advanced_web_research import AdvancedWebResearcher
+
+# (#14867) There is no src.agents.advanced_web_research module and no
+# AdvancedWebResearcher class. The Tier 2 researcher - async context manager,
+# search_web(query, max_results), CAPTCHA solver, browser fingerprinting - is
+# WebResearcher in autobot-backend/agents/web_researcher.py.
+from agents.web_researcher import WebResearcher
 
 async def test_advanced_research():
     print("🧪 Testing Advanced Web Research...")
@@ -79,9 +105,19 @@ async def test_advanced_research():
         }
     }
 
-    async with AdvancedWebResearcher(config) as researcher:
+    async with WebResearcher(config) as researcher:
         # Test search
         results = await researcher.search_web("python web scraping tutorial", max_results=3)
+
+        # (#14867) This used to print a green tick and exit 0 even when the
+        # researcher had returned status == "error" and zero results.
+        if results.get('status') != 'success':
+            print(
+                f"❌ Search FAILED: status={results.get('status')} "
+                f"error={results.get('error')}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         print(f"✅ Search completed!")
         print(f"Status: {results['status']}")
