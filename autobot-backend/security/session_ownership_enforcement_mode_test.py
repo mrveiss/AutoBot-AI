@@ -62,9 +62,7 @@ class TestAPolicyDecisionIsUnchanged:
     """The half that must NOT move: a mode someone actually set."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "mode", [EnforcementMode.DISABLED, EnforcementMode.LOG_ONLY, EnforcementMode.ENFORCED]
-    )
+    @pytest.mark.parametrize("mode", [EnforcementMode.DISABLED, EnforcementMode.LOG_ONLY, EnforcementMode.ENFORCED])
     async def test_a_resolved_mode_is_returned_verbatim(self, mode):
         assert await _validator(_flags_returning(mode))._get_enforcement_mode() == mode.value
 
@@ -86,9 +84,7 @@ class TestAnUndeterminedModeDoesNotDisableEnforcement:
         mode = await validator._get_enforcement_mode()
 
         assert mode == DEGRADED_ENFORCEMENT_MODE == "log_only"
-        assert mode != "disabled", (
-            "an unreachable flag store was read as 'authorization is off' — the #14010 defect"
-        )
+        assert mode != "disabled", "an unreachable flag store was read as 'authorization is off' — the #14010 defect"
 
     @pytest.mark.asyncio
     async def test_a_missing_flags_service_degrades_to_log_only(self):
@@ -116,9 +112,7 @@ class TestAnUndeterminedModeDoesNotDisableEnforcement:
 
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, "an undetermined enforcement mode must not degrade quietly"
-        assert any("log_only" in r.getMessage() for r in warnings), (
-            "the warning must say what it degraded to"
-        )
+        assert any("log_only" in r.getMessage() for r in warnings), "the warning must say what it degraded to"
 
 
 class TestTheFlagStoreReportsFailureInsteadOfInventingAnAnswer:
