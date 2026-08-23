@@ -19,6 +19,7 @@ Two properties of that closure are load-bearing and pinned below.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import sys
 from pathlib import Path
@@ -179,6 +180,29 @@ def test_declaring_a_vector_database_does_not_activate_the_llm_runtime() -> None
     assert llm_tokens, "no token grants llm_nodes — role_llm_active could never fire"
 
 
+def _legacy_role_groups() -> dict:
+    """`ROLE_ANSIBLE_GROUPS` read from source, without importing role_registry.
+
+    #14307's guard is right to object to importing it here: conftest does not
+    real-load `role_registry` (it pulls SQLAlchemy, above the dependency-light
+    bar that list holds to), so an import resolves to a MagicMock or not
+    depending on shard order — and a MagicMock iterates as empty, which would
+    make this test pass by examining nothing.
+
+    Parsing the literal is deterministic and needs no import at all.
+    """
+    src = (_SLM_ROOT / "services" / "role_registry.py").read_text(encoding="utf-8")
+    for node in ast.parse(src).body:
+        target = None
+        if isinstance(node, ast.AnnAssign):
+            target = getattr(node.target, "id", None)
+        elif isinstance(node, ast.Assign) and node.targets:
+            target = getattr(node.targets[0], "id", None)
+        if target == "ROLE_ANSIBLE_GROUPS":
+            return ast.literal_eval(node.value)
+    raise AssertionError("ROLE_ANSIBLE_GROUPS not found — this guard would pass vacuously")
+
+
 def test_the_legacy_vocabulary_cannot_grant_a_gated_group_by_detection() -> None:
     """#14681: the legacy `ROLE_ANSIBLE_GROUPS` is a second way to reach a group.
 
@@ -188,21 +212,16 @@ def test_the_legacy_vocabulary_cannot_grant_a_gated_group_by_detection() -> None
     reaches its group solely through that map (#14638), so it is a live path,
     not a theoretical one.
     """
-    try:
-        from services.role_registry import ROLE_ANSIBLE_GROUPS
-    except Exception:  # pragma: no cover - registry unavailable in some harnesses
-        import pytest
-
-        pytest.skip("role_registry unavailable in this harness")
+    legacy = _legacy_role_groups()
+    assert legacy, "the legacy map is empty — nothing would be checked"
 
     gated = set(inventory_builder._DECLARED_ONLY_GROUPS)
-    for token, granted in ROLE_ANSIBLE_GROUPS.items():
+    for token, granted in legacy.items():
         names = {granted} if isinstance(granted, str) else set(granted or ())
         privileged = names & gated
         if not privileged:
             continue
-        node = _node(declared=[], detected=[token])
-        leaked = _groups(node) & privileged
+        leaked = _groups(_node(declared=[], detected=[token])) & privileged
         assert not leaked, (
             f"the legacy vocabulary lets detected token {token!r} grant gated group(s) {sorted(leaked)} "
             "— the closure only reasons about _ROLE_TO_GROUPS"
