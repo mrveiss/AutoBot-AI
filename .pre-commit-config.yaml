@@ -633,7 +633,12 @@ repos:
         name: Detect Hardcoded Values (Strict)
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
-        types: [python, ts, vue]
+        # #14371: was [python, ts, vue]. The merged rule set scans .sh/.yml/.yaml
+        # too — the CI tree scanner has since #14316, specifically because
+        # Ansible playbooks and shell utilities are where hardcoded hosts, paths
+        # and accounts actually get typed. A hook whose `types` were narrower
+        # than its own rules would be a guard narrower than its subject.
+        types_or: [python, ts, vue, javascript, shell, yaml]
         # Generated clients are machine-produced from the OpenAPI schema; a
         # "hardcoded value" in one is a symptom of the schema, not of code
         # anyone wrote, so scanning them finds nothing actionable.

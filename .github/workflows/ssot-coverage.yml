@@ -33,6 +33,12 @@ on:
       - '**/*.yml'
       - '**/*.yaml'
       - 'pipeline-scripts/detect-hardcoded-values.sh'
+      # #14371: the rules moved into a shared library and the known backlog into
+      # a baseline. Either one changes the verdict this workflow reports, so
+      # either one must trigger it — an entry-point-only filter would let a rule
+      # change land without the check that judges it ever running.
+      - 'scripts/lib/hardcoded-value-rules.sh'
+      - 'pipeline-scripts/hardcoded_values_baseline.txt'
       - '.github/workflows/ssot-coverage.yml'
 
 concurrency:
@@ -58,7 +64,9 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        chmod +x ./pipeline-scripts/detect-hardcoded-values.sh
+        # No chmod: the script is tracked 100755 (#14371). `core.fileMode=false`
+        # in this repository means a chmod never reaches the index, so a script
+        # that needed one here was a script that did not work on a fresh clone.
         # Run with JSON output for parsing
         set +e  # Don't exit on error
         JSON_OUTPUT=$(./pipeline-scripts/detect-hardcoded-values.sh --json 2>/dev/null)
@@ -94,6 +102,16 @@ jobs:
         echo "::group::Detailed SSOT Compliance Report"
         ./pipeline-scripts/detect-hardcoded-values.sh --report 2>/dev/null || true
         echo "::endgroup::"
+
+    - name: Audit the hardcoded-value baseline for stranded entries (#14371)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # BLOCKING. pipeline-scripts/hardcoded_values_baseline.txt only ever
+        # shrinks: a fixed violation must take its baseline line with it. An
+        # entry naming a path that has moved exempts nothing, silently, and
+        # re-permits the value the moment the path comes back.
+        ./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
 
     - name: Comment on PR with SSOT status
       # #14153: this is a nicety on top of the analysis above, not the

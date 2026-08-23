@@ -150,13 +150,26 @@ class TestAllowlistedContexts:
         # has a clear regression to flip.
         assert result.returncode == 0
 
-    def test_allows_yaml_files(self, tmp_path: Path) -> None:
-        # Hook only filters .py/.ts/.vue — YAML/JSON pass through untouched
+    def test_blocks_yaml_files_since_the_rule_sets_merged(self, tmp_path: Path) -> None:
+        """#14371: YAML is in scope now, and this is the gap that closed.
+
+        This hook used to filter to .py/.ts/.vue/.js, so an Ansible playbook or
+        a deployment manifest carrying a raw fleet address passed untouched.
+        The CI tree scanner had covered .sh/.yml/.yaml since #14316 —
+        specifically because that is where hardcoded hosts, paths and accounts
+        actually get typed — and that coverage is part of the merged rule set
+        rather than something traded away for it.
+
+        The assertion is inverted from the version that pinned the gap: a
+        merge that keeps every rule has to change the outcome here, and a test
+        still asserting the old outcome would hide the merge failing to.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"deploy.yaml": 'host: "172.16.168.23"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "172.16.168.23" in result.stdout
 
     def test_allows_markdown_files(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -619,9 +632,11 @@ class TestHardcodedModelNames:
     ``qwen3.5:9b``, ``nomic-embed-text:latest``, ``gemma2:2b``, ``phi3:mini``,
     ``mistral:7b-instruct``, ``dolphin-llama3:8b``.
 
-    Anything outside that list is silently allowed — including current-gen
-    models like ``qwen3:8b`` (no ``.5`` suffix). Documented false-negative;
-    keep the deny list in sync with whatever models are actively used.
+    #14371: the table is no longer the whole rule. It still supplies the
+    precise config-key suggestion for a known model, but the merged rule set
+    also carries the generic ``(llama3|dolphin|openchat|gemma|phi|deepseek|
+    qwen)…:<N>b`` regex from the dormant third detector, so a model the table
+    has not heard of is caught too.
     """
 
     def test_blocks_hardcoded_qwen35_model_string(self, tmp_path: Path) -> None:
@@ -633,15 +648,23 @@ class TestHardcodedModelNames:
         assert result.returncode != 0
         assert "qwen3.5:9b" in result.stdout
 
-    def test_allows_unlisted_model_documented_false_negative(self, tmp_path: Path) -> None:
-        # #6786 regression target: the model_pattern is a hardcoded allowlist
-        # (model names that get fenced); models added later (qwen3:8b, etc.)
-        # silently pass. Flip the assertion when the model_pattern is generalized.
+    def test_blocks_an_unlisted_model_now_that_the_generic_rule_is_in(self, tmp_path: Path) -> None:
+        """#6786's regression target, flipped by #14371 exactly as it asked.
+
+        The explicit deny list is an allowlist by another name: a model added
+        after it was written (``qwen3:8b``, no ``.5``) passed silently. The
+        dormant third detector carried a GENERIC tag regex that would have
+        caught it, and nothing ever invoked that detector. Merging the rule
+        sets brings the generic rule in alongside the explicit table, so the
+        table still supplies the precise config-key suggestion and the regex
+        catches what the table has not heard of yet.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"src/llm.py": 'MODEL = "qwen3:8b"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "qwen3:8b" in result.stdout
 
     def test_allows_model_via_config_llm(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(

@@ -123,14 +123,27 @@ def test_get_staged_files_both_branches_agree(tmp_path):
     assert sorted(from_git.stdout.split()) == sorted(from_argv.stdout.split()) == ["src/foo.py"]
 
 
-def test_get_staged_files_argv_mode_no_args(tmp_path):
-    """No positional args + no git → falls through to git path; in non-git tmpdir, returns empty."""
+def test_get_staged_files_no_args_outside_a_repo_is_fatal_not_empty(tmp_path):
+    """GH#14151: a git failure must NOT be reported as 'nothing staged'.
+
+    The no-argv branch used to pipe `git diff --cached` straight into
+    `grep … || true`, and that trailing `|| true` swallowed "grep matched
+    nothing" and "git itself failed" identically — both produced empty output.
+    Every caller's `[ -z "$files" ] && exit 0` then read a broken git as a clean
+    tree.
+
+    This test asserted the swallowing behaviour until #14371 — the third
+    assertion in this file found pinning a bug rather than a fix. All three
+    were red against the code they cover, on the base branch, unnoticed:
+    the Python suite is not a required check here, so a red test in it blocks
+    nothing.
+    """
     result = _run_in_subshell(
         'get_staged_files "\\.py$"',
         cwd=tmp_path,
     )
-    # In a non-git dir, `git diff --cached` errors; we use `|| true` so exit is still 0
-    assert result.returncode == 0
+    assert result.returncode != 0, "a failed `git diff --cached` was reported as an empty result"
+    assert "refusing to report clean" in result.stderr
     assert result.stdout == ""
 
 
