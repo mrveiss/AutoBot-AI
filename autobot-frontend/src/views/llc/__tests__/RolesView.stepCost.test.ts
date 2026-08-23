@@ -69,8 +69,12 @@ function respond(cost: unknown = COSTED, rate: unknown = { hourly_rate: '120.000
   })
 }
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 async function mountView() {
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   // The first role is selected automatically on load (RolesView L472), so the
   // detail pane is present without an explicit click.
   const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { BaseModal: true } } })

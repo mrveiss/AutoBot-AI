@@ -75,10 +75,15 @@ function node(id: string, x: number, y: number): CanvasNode {
   }
 }
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
 function mountCanvas(props: Record<string, unknown> = {}) {
   return mount(WorkflowCanvas, {
     props: { nodes: [node('a', 0, 0), node('b', 2000, 1000)], selectedNodeId: null, readonly: true, ...props },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+    global: { plugins: [i18n] },
   })
 }
 
@@ -185,7 +190,7 @@ describe('the inbound deep link\'s viewport jump (#14611 focus-node-id prop)', (
         readonly: true,
         focusNodeId: 'a',
       },
-      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+      global: { plugins: [i18n] },
       attachTo: document.body,
     })
     await nextTick()

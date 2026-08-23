@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 import OrgPeopleList from '../OrgPeopleList.vue'
@@ -44,9 +45,13 @@ const PEOPLE = buildOrgPeople(
 
 const GROUPS = groupPeopleByTeam(PEOPLE, [])
 
-function makeI18n(locale: 'en' | 'ar' = 'en') {
-  return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } })
-}
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } }),
+)
 
 function mountList(
   overrides: Partial<{
