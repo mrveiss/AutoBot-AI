@@ -88,7 +88,19 @@ describe('LiveEventService subscribe frames (#14818)', () => {
     service = new LiveEventService()
   })
 
+  it('queues rather than sends while disconnected', () => {
+    // subscribe() is guarded on isConnected — subscriptions taken before the
+    // socket opens are replayed by _onOpen instead of being dropped on the
+    // floor. Asserted explicitly so the queueing path is not mistaken for a
+    // silently failed send.
+    const sent = captureSends(service)
+    service.subscribe('chat:c1', () => {})
+
+    expect(sent).toHaveLength(0)
+  })
+
   it('omits last_event_id on a first-ever subscribe', () => {
+    service.isConnected.value = true
     const sent = captureSends(service)
     service.subscribe('chat:c1', () => {})
 
@@ -100,6 +112,7 @@ describe('LiveEventService subscribe frames (#14818)', () => {
   })
 
   it('sends the marker when resuming a channel it has seen', () => {
+    service.isConnected.value = true
     service.subscribe('chat:c1', () => {})
     deliver(service, liveEvent('chat:c1', 42))
 
