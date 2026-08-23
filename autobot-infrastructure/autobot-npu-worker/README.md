@@ -53,7 +53,7 @@ ansible-playbook playbooks/deploy-full.yml --tags npu-worker --limit npu_vm
 
 # Restart
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-npu-worker action=restart"
+  -e "target=<group-or-host> service=autobot-npu-worker action=restart"
 
 # Manual sync
 ./infrastructure/shared/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
