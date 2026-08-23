@@ -29,6 +29,7 @@ class FakeRedis:
     def __init__(self):
         self.counters: dict[str, int] = {}
         self.streams: dict[str, list] = {}
+        self.plain: dict[str, str] = {}
         self._seq = 0
 
     async def incr(self, key: str) -> int:
@@ -49,6 +50,15 @@ class FakeRedis:
 
     async def expire(self, key, ttl):
         return True
+
+    async def setnx(self, key, value):
+        if key in self.counters or key in self.plain:
+            return False
+        self.plain[key] = value
+        return True
+
+    async def get(self, key):
+        return self.plain.get(key)
 
 
 @pytest.fixture
@@ -182,3 +192,72 @@ async def test_append_failure_does_not_raise(stream):
 
     stream._redis.xadd = boom
     await stream.append("chat:c1", {"event_id": 1})  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_a_lost_durable_write_forces_resync_for_earlier_clients(stream):
+    """Review finding: a swallowed append failure punched an invisible hole.
+
+    ``replay_since`` only checks the LOWER boundary of the retained range, so a
+    client whose marker sits below a mid-stream hole was handed a partial
+    history as if it were whole.
+    """
+    await _publish(stream, "chat:c1", 3)
+
+    # Event 4's durable write fails and is swallowed, as it must be — the event
+    # still reached live subscribers, only its replayability is lost.
+    async def boom(*_a, **_kw):
+        raise RuntimeError("redis rejected the write")
+
+    original_xadd = stream._redis.xadd
+    stream._redis.xadd = boom
+    event_id = await stream.next_event_id("chat:c1")
+    await stream.append("chat:c1", {"event_id": event_id, "payload": {}})
+    stream._redis.xadd = original_xadd
+
+    await _publish(stream, "chat:c1", 2)  # ids 5, 6 land normally
+
+    result = await stream.replay_since("chat:c1", 2)
+
+    assert result.resync_required, "partial history returned as if it were whole"
+    assert result.reason == "durable_write_lost"
+
+
+@pytest.mark.asyncio
+async def test_a_client_past_the_hole_is_unaffected(stream):
+    """The marker records the LOWEST lost id, so later clients still replay."""
+    await _publish(stream, "chat:c1", 3)
+
+    async def boom(*_a, **_kw):
+        raise RuntimeError("redis rejected the write")
+
+    original_xadd = stream._redis.xadd
+    stream._redis.xadd = boom
+    event_id = await stream.next_event_id("chat:c1")
+    await stream.append("chat:c1", {"event_id": event_id, "payload": {}})
+    stream._redis.xadd = original_xadd
+
+    await _publish(stream, "chat:c1", 2)
+
+    # Marker is at 4; a client that already saw 4 lost nothing.
+    result = await stream.replay_since("chat:c1", 4)
+
+    assert not result.resync_required
+    assert [e["event_id"] for e in result.events] == [5, 6]
+
+
+@pytest.mark.asyncio
+async def test_by_design_gaps_do_not_trigger_a_resync(stream):
+    """Non-durable events consume ids without being appended.
+
+    Only PersistStrategy.REDIS publishes durably, so the stream is legitimately
+    full of holes. A naive contiguity check would fire on every one of them and
+    resync clients constantly for no reason.
+    """
+    await _publish(stream, "chat:c1", 2)
+    await stream.next_event_id("chat:c1")  # id 3, never appended (non-durable)
+    await _publish(stream, "chat:c1", 1)  # id 4 appended
+
+    result = await stream.replay_since("chat:c1", 1)
+
+    assert not result.resync_required, "a by-design gap was mistaken for data loss"

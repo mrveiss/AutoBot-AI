@@ -100,6 +100,11 @@ class ChannelEventStream:
     def _stream_key(channel: str) -> str:
         return f"{CHANNEL_STREAM_KEY_PREFIX}{channel}"
 
+    @staticmethod
+    def _broken_key(channel: str) -> str:
+        """Key marking that a durable write was lost, so replay is untrustworthy."""
+        return f"{CHANNEL_STREAM_KEY_PREFIX}{channel}:broken-from"
+
     async def next_event_id(self, channel: str) -> int:
         """Allocate the next sequence number for ``channel``.
 
@@ -139,7 +144,53 @@ class ChannelEventStream:
             )
             await redis_client.expire(stream_key, CHANNEL_STREAM_TTL_SECONDS)
         except Exception as exc:
+            # The event still reached connected clients; only its replayability
+            # is lost. But a swallowed failure here punches a hole in the replay
+            # window that `replay_since` cannot otherwise see: it checks only the
+            # lower boundary of the retained range, so a client whose marker sits
+            # *below* the hole would be handed a partial history as if it were
+            # whole — the exact silent loss this module exists to prevent.
+            #
+            # Contiguity checking is NOT a workable substitute: only
+            # PersistStrategy.REDIS publishes durably, so non-durable events
+            # legitimately consume sequence numbers without ever being appended
+            # and the stream is full of by-design gaps. Recording the failure is
+            # what distinguishes "never meant to be replayable" from "should
+            # have been, and is missing".
             logger.warning("Failed to persist event for replay on %s: %s", channel, exc)
+            await self._mark_broken(channel, int(message.get("event_id", 0)))
+
+    async def _mark_broken(self, channel: str, event_id: int) -> None:
+        """Record the lowest event id whose durable write was lost."""
+        redis_client = await self._get_redis()
+        if redis_client is None:
+            return
+        try:
+            key = self._broken_key(channel)
+            # SETNX keeps the *lowest* failed id: a client below it cannot be
+            # served a complete history, one above it is unaffected.
+            await redis_client.setnx(key, str(event_id))
+            await redis_client.expire(key, CHANNEL_STREAM_TTL_SECONDS)
+        except Exception as exc:
+            # Cannot record the hole. Fail loud rather than leave a silent gap.
+            logger.error("Could not mark replay broken on %s: %s", channel, exc)
+
+    async def _broken_from(self, channel: str) -> int | None:
+        """Lowest event id known to be missing from the replay window, if any."""
+        redis_client = await self._get_redis()
+        if redis_client is None:
+            return None
+        try:
+            raw = await redis_client.get(self._broken_key(channel))
+        except Exception:
+            return None
+        if raw is None:
+            return None
+        try:
+            return int(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+        except (TypeError, ValueError):
+            # An unreadable marker means we cannot prove the window is whole.
+            return 0
 
     async def replay_since(self, channel: str, last_event_id: int) -> ReplayResult:
         """Return the events on ``channel`` newer than ``last_event_id``.
@@ -151,6 +202,12 @@ class ChannelEventStream:
         redis_client = await self._get_redis()
         if redis_client is None:
             return ReplayResult(resync_required=True, reason="replay_unavailable")
+
+        # A recorded durable-write failure below the caller's position means we
+        # cannot hand them a complete history, however healthy the range looks.
+        broken_from = await self._broken_from(channel)
+        if broken_from is not None and broken_from > last_event_id:
+            return ReplayResult(resync_required=True, reason="durable_write_lost")
 
         try:
             entries = await redis_client.xrange(self._stream_key(channel))

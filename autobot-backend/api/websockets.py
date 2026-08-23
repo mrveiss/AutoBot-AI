@@ -516,7 +516,59 @@ def register_chat_history_persistence() -> None:
         logger.error("Failed to register chat-history persistence hook: %s", e)
 
 
-async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager):
+async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache: dict) -> bool:
+    """Decide whether one broadcast event may be shown to this connection.
+
+    Issue #14814 made ``/ws`` delivery additive so several clients could receive
+    events. That fixed delivery but widened an existing leak: this endpoint has
+    no channel scoping, so every connected client would otherwise see every
+    ``PersistStrategy.NONE`` event, including other users' sessions.
+
+    Scoping rules, in order:
+
+    * an explicit ``user_id`` in the payload must match this connection;
+    * a ``session_id`` must resolve to a session this user owns;
+    * anything else is a system-wide event (worker health, NPU status,
+      diagnostics) and stays visible to everyone, as before.
+
+    Fails **closed** for session-scoped events: if ownership cannot be
+    resolved, the event is withheld rather than shown to the wrong user.
+    """
+    payload = event_data.get("payload") or {}
+    if not isinstance(payload, dict):
+        return True
+
+    claimed_user = payload.get("user_id")
+    if claimed_user is not None:
+        return str(claimed_user) == current_user_id
+
+    session_id = payload.get("session_id")
+    if not session_id:
+        return True
+
+    session_id = str(session_id)
+    if session_id in owner_cache:
+        return owner_cache[session_id]
+
+    allowed = False
+    try:
+        from utils.resource_factory import ResourceFactory
+
+        manager = ResourceFactory.get_initialized_chat_history_manager()
+        if manager is not None:
+            owner = await manager.get_session_owner(session_id)
+            # An unowned session predates ownership tracking and stays visible;
+            # an owned one is visible only to its owner.
+            allowed = owner is None or str(owner) == current_user_id
+    except Exception as exc:
+        logger.warning("Could not resolve session owner for %s, withholding: %s", session_id, exc)
+        allowed = False
+
+    owner_cache[session_id] = allowed
+    return allowed
+
+
+async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager, current_user_id: str = ""):
     """Create broadcast event handler function (Issue #315 - extracted).
 
     Args:
@@ -526,6 +578,8 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     Returns:
         Async function that broadcasts events
     """
+    # Per-connection memo so a burst on one session costs a single lookup.
+    owner_cache: dict[str, bool] = {}
 
     async def broadcast_event(event_data: dict):
         """Send one event to this WebSocket client.
@@ -536,6 +590,10 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
         History is now written once at publish time, independently of delivery.
         """
         try:
+            # #14814 follow-up: this endpoint has no channel scoping, so filter
+            # per event rather than shipping every user's traffic to everyone.
+            if not await _event_is_for_user(event_data, current_user_id, owner_cache):
+                return
             await websocket.send_json(event_data)
         except RuntimeError as e:
             if "websocket" in str(e).lower() or "connection" in str(e).lower():
@@ -779,7 +837,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Issue #665: Use helper for chat history manager access
     chat_history_manager = _get_chat_history_manager(websocket)
 
-    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager)
+    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager, current_user_id)
 
     # Issue #665: Use helper for event manager registration
     _register_event_manager_broadcast(broadcast_event)

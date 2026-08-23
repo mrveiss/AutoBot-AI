@@ -231,7 +231,21 @@ async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
         return await _authorize_conversation_channel(channel, user_payload)
     if channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:"):
         return await _authorize_resource_channel(channel, user_payload)
-    return True
+    # ``global`` is the shared broadcast channel: every authenticated client is
+    # meant to see it, and it carries no per-tenant payload of its own.
+    if channel == "global":
+        return True
+    # Everything else is DENIED.  This used to `return True`, which was
+    # survivable while the socket was subscribe-only — every valid prefix above
+    # has an explicit rule, so nothing reached data unchecked. It stopped being
+    # survivable when ``dispatch_command`` started using this same function as
+    # the only gate on a *write* path: a handler registered for a new prefix
+    # (``research:``, ``operation:``, ...) would have been reachable by any
+    # connected client with no check at all. Defaulting to deny means a new
+    # channel type is inert until someone writes its rule, which is the failure
+    # direction we want.
+    logger.warning("Denying unrecognised channel prefix: %s", channel)
+    return False
 
 
 async def _handle_command(
