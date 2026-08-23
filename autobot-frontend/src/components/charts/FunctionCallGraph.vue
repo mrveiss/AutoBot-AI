@@ -1144,7 +1144,11 @@ function runClusterLayout() {
   const layoutOptions = clusterLayoutMode.value === 'force'
     ? {
         name: 'fcose',
-        animate: true,
+        // #14806: the cluster/Stats view is a sibling of `runLayout` and was
+        // left animating when that one was fixed. Same reasoning: the layout
+        // still runs and reaches the same positions, it just does not animate
+        // its way there.
+        animate: !isReducedMotion(),
         animationDuration: 500,
         fit: true,
         padding: 40,
@@ -1156,7 +1160,7 @@ function runClusterLayout() {
       }
     : {
         name: 'grid',
-        animate: true,
+        animate: !isReducedMotion(),
         animationDuration: 300,
         fit: true,
         padding: 40,

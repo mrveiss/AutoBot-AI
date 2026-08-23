@@ -92,6 +92,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** Switch to the Stats/cluster view, which runs its own layout. */
+async function openClusterView(w: Awaited<ReturnType<typeof mountGraph>>) {
+  await w.get(`.view-toggle button[title="${en.charts.callGraph.clusterView}"]`).trigger('click')
+  await flushPromises()
+  await flushPromises()
+}
+
 describe('graph layout honours prefers-reduced-motion (#14770)', () => {
   it('animates the layout by default', async () => {
     stubMatchMedia(false)
@@ -109,6 +116,39 @@ describe('graph layout honours prefers-reduced-motion (#14770)', () => {
     stubMatchMedia(true)
 
     const w = await mountGraph()
+
+    expect(layoutSpy).toHaveBeenCalled()
+    expect(animateFlags()).toContain(false)
+    expect(animateFlags()).not.toContain(true)
+    w.unmount()
+  })
+})
+
+describe('the cluster layout honours it too (#14806)', () => {
+  // #14806: `runClusterLayout` is a sibling of `runLayout` in the same file and
+  // was left animating when that one was fixed. The suite passed unchanged with
+  // the gap present, because it only ever drove `runLayout` — a test that
+  // exercises one of two paths proves nothing about the other.
+  it('animates the cluster layout by default', async () => {
+    stubMatchMedia(false)
+    const w = await mountGraph()
+    layoutSpy.mockClear()
+
+    await openClusterView(w)
+
+    // Guard: if opening the view ran no layout at all, the assertion in the
+    // next test would pass for the wrong reason.
+    expect(layoutSpy).toHaveBeenCalled()
+    expect(animateFlags()).toContain(true)
+    w.unmount()
+  })
+
+  it('does not animate the cluster layout under reduced motion', async () => {
+    stubMatchMedia(true)
+    const w = await mountGraph()
+    layoutSpy.mockClear()
+
+    await openClusterView(w)
 
     expect(layoutSpy).toHaveBeenCalled()
     expect(animateFlags()).toContain(false)
