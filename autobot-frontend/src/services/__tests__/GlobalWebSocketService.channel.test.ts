@@ -233,3 +233,131 @@ describe('GlobalWebSocketService subscribe-on-open (#14822)', () => {
     expect(service.connectionState.value).toBe('connected')
   })
 })
+
+describe('GlobalWebSocketService URL construction (#14822)', () => {
+  const realLocation = window.location
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: realLocation, writable: true })
+  })
+
+  function stubLocation(value: Record<string, string>) {
+    Object.defineProperty(window, 'location', { value, writable: true })
+  }
+
+  it('targets the channel socket behind the nginx proxy', () => {
+    stubLocation({ protocol: 'http:', host: 'autobot.example', port: '', hostname: 'autobot.example' })
+    const service = new GlobalWebSocketService()
+
+    expect(service.getWebSocketUrl().endsWith('/ws/live')).toBe(true)
+    expect(service.getWebSocketUrl()).not.toMatch(/\/ws$/)
+  })
+
+  it('upgrades to wss on an https page', () => {
+    // ws:// on an https page is blocked outright by browsers, so the scheme
+    // has to follow the page.
+    stubLocation({ protocol: 'https:', host: 'autobot.example', port: '', hostname: 'autobot.example' })
+    const service = new GlobalWebSocketService()
+
+    expect(service.getWebSocketUrl().startsWith('wss://')).toBe(true)
+  })
+
+  it('targets the channel socket through the Vite dev proxy too', () => {
+    // The dev branch is a separate code path; if only the production branch
+    // were migrated, local development would still talk to the legacy endpoint
+    // and nobody would notice until deploy.
+    stubLocation({ protocol: 'http:', host: 'localhost:5173', port: '5173', hostname: 'localhost' })
+    const service = new GlobalWebSocketService()
+
+    expect(service.getWebSocketUrl().endsWith('/ws/live')).toBe(true)
+  })
+})
+
+describe('GlobalWebSocketService heartbeat (#14822)', () => {
+  let service: GlobalWebSocketService
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    service = new GlobalWebSocketService()
+  })
+
+  afterEach(() => {
+    service.stopHeartbeat()
+    vi.useRealTimers()
+  })
+
+  it('pings with an action-shaped frame while the socket is open', () => {
+    const sent: Array<Record<string, unknown>> = []
+    privates(service).send = (d) => {
+      sent.push(d)
+      return true
+    }
+    ;(service as unknown as { ws: { readyState: number } }).ws = { readyState: WebSocket.OPEN }
+
+    service.startHeartbeat()
+    vi.advanceTimersByTime(30000)
+
+    expect(sent.some((f) => f.action === 'ping')).toBe(true)
+    // The legacy `type`-shaped ping was silently ignored by the channel socket,
+    // leaving the heartbeat inert while looking healthy.
+    expect(sent.every((f) => !('type' in f))).toBe(true)
+  })
+
+  it('stops itself when the socket is no longer open', () => {
+    const sent: Array<Record<string, unknown>> = []
+    privates(service).send = (d) => {
+      sent.push(d)
+      return true
+    }
+    ;(service as unknown as { ws: { readyState: number } | null }).ws = null
+
+    service.startHeartbeat()
+    vi.advanceTimersByTime(90000)
+
+    expect(sent).toHaveLength(0)
+  })
+})
+
+describe('GlobalWebSocketService testConnection (#14822)', () => {
+  let service: GlobalWebSocketService
+
+  beforeEach(() => {
+    service = new GlobalWebSocketService()
+  })
+
+  it('resolves true when a pong arrives, using an action-shaped ping', async () => {
+    const sent: Array<Record<string, unknown>> = []
+    privates(service).send = (d) => {
+      sent.push(d)
+      return true
+    }
+    service.isConnected.value = true
+
+    const pending = service.testConnection()
+    expect(sent[0]).toMatchObject({ action: 'ping', test: true })
+
+    service.emit('pong', {})
+
+    await expect(pending).resolves.toBe(true)
+  })
+
+  it('reports false when a reconnect attempt fails', async () => {
+    // The disconnected branch tries to reconnect first. connect() is stubbed
+    // because the real one opens a socket — a test must never depend on the
+    // network, and an unstubbed call would hang until the connect timeout.
+    service.isConnected.value = false
+    ;(service as unknown as { connect: () => Promise<void> }).connect = () =>
+      Promise.reject(new Error('no backend'))
+
+    await expect(service.testConnection()).resolves.toBe(false)
+  })
+
+  it('reports the connected state after a successful reconnect', async () => {
+    service.isConnected.value = false
+    ;(service as unknown as { connect: () => Promise<void> }).connect = async () => {
+      service.isConnected.value = true
+    }
+
+    await expect(service.testConnection()).resolves.toBe(true)
+  })
+})
