@@ -66,29 +66,61 @@ def test_color_codes_exported():
 # === get_staged_files: argv mode ===
 
 
-def test_get_staged_files_argv_mode_passes_through(tmp_path):
-    """When positional args are provided, they bypass git diff."""
+def test_get_staged_files_argv_mode_bypasses_git(tmp_path):
+    """Positional args bypass `git diff --cached` — the list comes from argv."""
     result = _run_in_subshell(
-        'get_staged_files "ignored_pattern" file1.py file2.py file3.txt',
+        'get_staged_files "\\.py$" file1.py file2.py file3.txt',
         cwd=tmp_path,
     )
     assert result.returncode == 0
-    assert result.stdout == "file1.py\nfile2.py\nfile3.txt\n"
+    # Not a git repo, so a non-empty result can only have come from argv.
+    assert result.stdout == "file1.py\nfile2.py\n"
 
 
-def test_get_staged_files_argv_mode_pattern_ignored(tmp_path):
-    """Argv mode does NOT filter by pattern — caller is expected to pre-filter.
+def test_get_staged_files_argv_mode_applies_the_pattern(tmp_path):
+    """GH#14034: the argv branch MUST apply $pattern, exactly like the git branch.
 
-    This matches the #6785 generic-wrapper convention: CI passes the exact
-    file list it wants checked.
+    Regression pin. The argv branch used to `printf '%s\\n' "$@"` and return
+    without ever running the caller's regex, so every hook's own file-type
+    filter was silently bypassed in CI (which always passes argv) while working
+    locally under pre-commit (which does not). That handed a .vue file to
+    pre-commit-no-direct-redis' Python tokenizer and the resulting
+    IndentationError was reported as "1 direct Redis connection(s) found" in a
+    file containing no Redis at all.
+
+    This test asserted the OPPOSITE until #14371 — it pinned the bug, so the
+    one-line fix had nothing holding it in place.
     """
     result = _run_in_subshell(
         'get_staged_files "\\.py$" file1.txt file2.md',
         cwd=tmp_path,
     )
     assert result.returncode == 0
-    # file1.txt and file2.md are returned even though they don't match \.py$
-    assert result.stdout == "file1.txt\nfile2.md\n"
+    assert result.stdout == "", "argv branch must drop files that do not match the pattern"
+
+
+def test_get_staged_files_both_branches_agree(tmp_path):
+    """The argv and git branches return the SAME set for the same input (#14034).
+
+    The defect was not "argv is wrong" in isolation — it was that the two
+    documented invocation paths disagreed, so a hook was filtered locally and
+    unfiltered in CI. Asserting the two agree is what pins that shut; asserting
+    either one alone does not.
+    """
+    tracked = {
+        "src/foo.py": "# python",
+        "src/bar.vue": "<template/>",
+        "docs/readme.md": "# markdown",
+    }
+    _make_git_repo(tmp_path, tracked)
+
+    from_git = _run_in_subshell('get_staged_files "\\.py$"', cwd=tmp_path)
+    argv = " ".join(sorted(tracked))
+    from_argv = _run_in_subshell(f'get_staged_files "\\.py$" {argv}', cwd=tmp_path)
+
+    assert from_git.returncode == 0
+    assert from_argv.returncode == 0
+    assert sorted(from_git.stdout.split()) == sorted(from_argv.stdout.split()) == ["src/foo.py"]
 
 
 def test_get_staged_files_argv_mode_no_args(tmp_path):
