@@ -17,15 +17,27 @@ from starlette.websockets import WebSocketState
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from events.channel_stream import get_channel_event_stream
 
 logger = get_logger(__name__)
 
-_VALID_PREFIXES = {"agent", "task", "workflow", "heartbeat", "company", "board"}
+# #14819: session and chat make a conversation addressable, which is what lets
+# several clients subscribe to the same conversation instead of falling back to
+# ``global`` (everything) or the legacy single-client endpoint.
+_VALID_PREFIXES = {
+    "agent",
+    "task",
+    "workflow",
+    "heartbeat",
+    "company",
+    "board",
+    "session",
+    "chat",
+}
 
 
 def _is_valid_channel(channel: str) -> bool:
-    """Return True for a valid channel — an agent/task/workflow/heartbeat/company/board
-    ``:{id}`` prefix, or ``global``."""
+    """Return True for a valid channel — a known ``{prefix}:{id}`` form, or ``global``."""
     if channel == "global":
         return True
     parts = channel.split(":", 1)
@@ -39,7 +51,6 @@ class LiveEventManager:
         self._subscriptions: Dict[str, Set[WebSocket]] = {}
         self._client_channels: Dict[int, Set[str]] = {}
         self._lock = asyncio.Lock()
-        self._event_counters: Dict[str, int] = {}
 
     def _ws_key(self, ws: WebSocket) -> int:
         return id(ws)
@@ -84,17 +95,22 @@ class LiveEventManager:
                         del self._subscriptions[channel]
         logger.debug("Client removed from all channel subscriptions")
 
-    def _next_event_id(self, channel: str) -> int:
-        """Return next auto-incrementing event ID for channel."""
-        self._event_counters[channel] = self._event_counters.get(channel, 0) + 1
-        return self._event_counters[channel]
+    async def publish(self, channel: str, event_type: str, payload: dict, *, durable: bool = False) -> int:
+        """Publish event to channel subscribers and global subscribers.
 
-    async def publish(self, channel: str, event_type: str, payload: dict) -> int:
-        """Publish event to channel subscribers and global subscribers."""
+        #14817: the sequence number comes from :class:`ChannelEventStream`
+        (Redis ``INCR``), so it is monotonic across restarts and shared between
+        workers.  It previously came from a process-local dict, which reset on
+        restart and diverged across processes — an id a client trusts but which
+        silently restarts is worse than no id at all.
+
+        ``durable`` additionally records the event in the channel's replay
+        window so a reconnecting client can ask for what it missed (#14818).
+        """
         if not _is_valid_channel(channel):
             logger.warning("Publish to invalid channel ignored: %s", channel)
             return 0
-        event_id = self._next_event_id(channel)
+        event_id = await get_channel_event_stream().next_event_id(channel)
         message = {
             "type": "live_event",
             "channel": channel,
@@ -102,6 +118,8 @@ class LiveEventManager:
             "event_id": event_id,
             "payload": payload,
         }
+        if durable:
+            await get_channel_event_stream().append(channel, message)
         async with self._lock:
             recipients: Set[WebSocket] = set()
             recipients.update(self._subscriptions.get(channel, set()))

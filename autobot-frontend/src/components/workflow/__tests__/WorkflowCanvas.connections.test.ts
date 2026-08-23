@@ -45,10 +45,17 @@ function step(id: string, x: number, y: number, connections: string[] = []): Can
   }
 }
 
+// #14854: built once, not per mount. This file mounts many times and the `en`
+// bundle is ~400KB, so constructing a fresh i18n instance inside mountCanvas
+// re-ingested the whole message tree on every single mount. The instance is
+// read-only here — no test mutates locale or messages — so sharing it is safe
+// and removes work that was never the thing under test.
+const i18nForTests = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 function mountCanvas(nodes: CanvasNode[]) {
   return mount(WorkflowCanvas, {
     props: { nodes, selectedNodeId: null },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })] },
+    global: { plugins: [i18nForTests] },
   })
 }
 
@@ -113,22 +120,35 @@ describe('the node count this canvas is known to carry (#14766)', () => {
   // handful. This states the number rather than leaving it to be discovered by
   // a real org graph. It is a floor on what we support, not a performance
   // budget: raise it when a surface needs more.
-  // 200 leaves headroom under the suite's 10s `testTimeout` while still being
-  // an order of magnitude past anything the suite mounted before.
+  // 200 is an order of magnitude past anything else the suite mounts.
   const SUPPORTED_NODES = 200
 
-  it(`renders ${SUPPORTED_NODES} nodes and their edges without dropping any`, () => {
-    const nodes = Array.from({ length: SUPPORTED_NODES }, (_, i) =>
-      step(`n${i}`, (i % 20) * 300, Math.floor(i / 20) * 200, i > 0 ? [`n${i - 1}`] : []),
-    )
+  // #14854: this case previously ran at 11-15s against the suite's 10s
+  // `testTimeout` and flaked on runner load. Mounting 200 live DOM nodes with no
+  // virtualisation is genuinely slow, and the node count *is* the assertion — so
+  // the honest fix is an explicit budget for this one test, not a smaller graph
+  // (which would delete the coverage #14766 exists for) and not a global timeout
+  // bump (which would hide every other slow test too).
+  const MOUNT_BUDGET_MS = 30_000
 
-    const w = mountCanvas(nodes)
+  it(
+    `renders ${SUPPORTED_NODES} nodes and their edges without dropping any`,
+    () => {
+      const nodes = Array.from({ length: SUPPORTED_NODES }, (_, i) =>
+        step(`n${i}`, (i % 20) * 300, Math.floor(i / 20) * 200, i > 0 ? [`n${i - 1}`] : []),
+      )
 
-    expect(w.findAll('.workflow-node')).toHaveLength(SUPPORTED_NODES)
-    // Every node but the first carries exactly one outgoing edge.
-    expect(paths(w)).toHaveLength(SUPPORTED_NODES - 1)
-    expect(paths(w).every((d) => d.startsWith('M'))).toBe(true)
-  })
+      const w = mountCanvas(nodes)
+
+      expect(w.findAll('.workflow-node')).toHaveLength(SUPPORTED_NODES)
+      // Collected once: each call re-queries all 199 edges.
+      const rendered = paths(w)
+      // Every node but the first carries exactly one outgoing edge.
+      expect(rendered).toHaveLength(SUPPORTED_NODES - 1)
+      expect(rendered.every((d) => d.startsWith('M'))).toBe(true)
+    },
+    MOUNT_BUDGET_MS,
+  )
 })
 
 describe('the edge-target index cannot go stale (#14792)', () => {

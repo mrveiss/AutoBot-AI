@@ -21,7 +21,11 @@ has.
 
 from prometheus_client import Counter
 
+from autobot_shared.logging_manager import get_logger
+
 from .base import BaseMetricsRecorder
+
+logger = get_logger(__name__)
 
 
 class AuditMetricsRecorder(BaseMetricsRecorder):
@@ -47,4 +51,27 @@ class AuditMetricsRecorder(BaseMetricsRecorder):
         self.audit_write_failures.labels(action=action, error_type=error_type).inc()
 
 
-__all__ = ["AuditMetricsRecorder"]
+__all__ = ["AuditMetricsRecorder", "record_audit_write_failure_safely"]
+
+
+def record_audit_write_failure_safely(action: object, error_type: str) -> None:
+    """Count a dropped audit record, without ever raising from the attempt.
+
+    Metrics are best-effort here by construction: every caller runs inside a
+    handler that exists so an audit problem cannot break a request, so this must
+    not become a way for one to do so (#14654, #14674).
+
+    Lives here rather than in a middleware because both backends need it and it
+    was previously defined in only one of them — same bug, same `audit_logs`
+    table, one instrumented and the other silent (#14750).
+    """
+    try:
+        from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_audit_write_failure(action=str(action), error_type=error_type)
+    except Exception as exc:  # nosec B110  # see docstring: never raise from the audit path
+        # Without this the counter's own failure is both unrecorded AND
+        # uncounted — a failure counter reporting zero, which is worse than no
+        # counter. Debug keeps it out of normal operation while leaving a trace
+        # when the metric is inexplicably flat.
+        logger.debug("audit write-failure metric could not be recorded: %s", exc)
