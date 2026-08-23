@@ -17,6 +17,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -79,12 +80,18 @@ const TEAM_NODES = buildTeamCanvasNodes(
 
 const ALL_NODES = [...PEOPLE_NODES, ...PROCESS_NODES, ...TOOL_NODES, ...TEAM_NODES]
 
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } }),
+)
+
 function mountCanvas(locale: 'en' | 'ar' = 'en', nodes = ALL_NODES) {
   return mount(WorkflowCanvas, {
     props: { nodes, selectedNodeId: null, readonly: true },
-    global: {
-      plugins: [createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } })],
-    },
+    global: { plugins: [makeI18n(locale)] },
     attachTo: document.body,
   })
 }
@@ -97,11 +104,11 @@ describe('canvas search box (#14611)', () => {
   it('is present when the canvas has nodes, and never gated on readonly', () => {
     const readonlyWrapper = mount(WorkflowCanvas, {
       props: { nodes: ALL_NODES, selectedNodeId: null, readonly: true },
-      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+      global: { plugins: [makeI18n('en')] },
     })
     const authoringWrapper = mount(WorkflowCanvas, {
       props: { nodes: ALL_NODES, selectedNodeId: null, readonly: false },
-      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+      global: { plugins: [makeI18n('en')] },
     })
 
     expect(readonlyWrapper.find('[data-testid="canvas-search-input"]').exists()).toBe(true)
@@ -111,7 +118,7 @@ describe('canvas search box (#14611)', () => {
   it('is absent from an empty canvas — nothing to search', () => {
     const wrapper = mount(WorkflowCanvas, {
       props: { nodes: [], selectedNodeId: null, readonly: true },
-      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+      global: { plugins: [makeI18n('en')] },
     })
 
     expect(wrapper.find('[data-testid="canvas-search-input"]').exists()).toBe(false)

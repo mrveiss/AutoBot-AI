@@ -44,8 +44,12 @@ function respond(rollup: unknown): void {
   })
 }
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 async function mountDashboard() {
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   const wrapper = mount(CostDashboard, {
     global: { plugins: [i18n], stubs: { BaseModal: true, BaseButton: true, Icon: true } },
   })

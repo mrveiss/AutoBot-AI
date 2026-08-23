@@ -78,8 +78,12 @@ function respond(processes: unknown = PROCESSES): void {
   })
 }
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
 async function mountChart() {
-  const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
   const wrapper = mount(OrgChart, {
     global: { plugins: [i18n], stubs: { CanvasNodeSidebar: true, OrgPeopleList: true } },
   })
