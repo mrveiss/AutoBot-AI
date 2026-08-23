@@ -30,7 +30,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 _SLM_ROOT = Path(__file__).resolve().parents[2]
 _REGISTRY = _SLM_ROOT / "services" / "role_registry.py"
 _WIZARD = _SLM_ROOT / "api" / "setup_wizard.py"
