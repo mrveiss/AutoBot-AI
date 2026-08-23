@@ -7,10 +7,15 @@
  * branch was taken, not merely that the end state happened to match.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatStore } from '@/stores/useChatStore'
 import type { ChatMessage } from '@/types/api'
+import apiClient from '@/utils/ApiClient'
+
+vi.mock('@/utils/ApiClient', () => ({
+  default: { post: vi.fn(), get: vi.fn() },
+}))
 
 function remoteMessage(id: string, content = 'from another client'): ChatMessage {
   return {
@@ -158,5 +163,59 @@ describe('chat store reconciliation (#14821)', () => {
 
     expect(store.currentMessages).toHaveLength(1)
     expect(store.hasPendingMessages).toBe(false)
+  })
+})
+
+
+describe('server-authoritative session creation (#14820)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('adopts the id the server assigns', async () => {
+    // The whole point of #14820: the backend owns session identity. Two clients
+    // minting their own ids can never converge.
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { session_id: 'srv-abc' } })
+    const store = useChatStore()
+
+    const result = await store.createServerSession('My chat')
+
+    expect(result).toEqual({ id: 'srv-abc', authoritative: true })
+    expect(store.currentSessionId).toBe('srv-abc')
+  })
+
+  it('accepts `id` as well as `session_id`', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'srv-xyz' } })
+    const store = useChatStore()
+
+    const result = await store.createServerSession()
+
+    expect(result.id).toBe('srv-xyz')
+    expect(result.authoritative).toBe(true)
+  })
+
+  it('falls back to a local session when the backend is unreachable', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue(new Error('network down'))
+    const store = useChatStore()
+
+    const result = await store.createServerSession('Offline chat')
+
+    // Usable offline — but flagged, so a caller can tell this session is NOT
+    // synchronized to other clients rather than assuming it is.
+    expect(result.authoritative).toBe(false)
+    expect(result.id).toBeTruthy()
+    expect(store.sessionCount).toBe(1)
+  })
+
+  it('falls back when the response carries no id at all', async () => {
+    // A 200 with an unexpected body must not be mistaken for success — that
+    // would leave the client believing a server session exists when none does.
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} })
+    const store = useChatStore()
+
+    const result = await store.createServerSession()
+
+    expect(result.authoritative).toBe(false)
   })
 })

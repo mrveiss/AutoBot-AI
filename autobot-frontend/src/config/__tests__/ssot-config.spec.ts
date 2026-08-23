@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reloadConfig, runtimeHttpProto, getBackendUrl } from '../ssot-config';
+import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -619,5 +619,28 @@ describe('getBackendUrl() — proxy-mode default (#12339)', () => {
 
   it('returns "" (proxy mode) when neither host nor base URL is set', () => {
     expect(getBackendUrl()).toBe('');
+  });
+});
+
+describe('liveEventsUrl (#14822)', () => {
+  it('points at the channel socket, not the legacy broadcast endpoint', () => {
+    // The migration is only real if the canonical getter actually resolves to
+    // /api/ws/live — the deprecated websocketUrl still ends at /api/ws.
+    expect(getConfig().liveEventsUrl.endsWith('/api/ws/live')).toBe(true);
+  });
+
+  it('stays exactly websocketUrl plus /live', () => {
+    // liveEventsUrl duplicates websocketUrl's host/protocol resolution rather
+    // than reading `this` (a getter on a contextually-typed object literal makes
+    // `this` awkward to type). Duplication is only safe while the two agree, so
+    // this is the assertion that keeps them from drifting apart.
+    const config = getConfig();
+    expect(config.liveEventsUrl).toBe(`${config.websocketUrl}/live`);
+  });
+
+  it('uses the same ws/wss scheme as websocketUrl', () => {
+    const config = getConfig();
+    const scheme = (url: string) => url.split('://')[0];
+    expect(scheme(config.liveEventsUrl)).toBe(scheme(config.websocketUrl));
   });
 });
