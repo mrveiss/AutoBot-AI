@@ -50,7 +50,9 @@
     caller_role: "SLM Agent"
     remove_dir_path: /opt/slm-agent
     remove_reason: "pre-#1129 flat install superseded by the canonical agent directory"
-  become: true
+  # No `become:` here — it is not a valid attribute for a TaskInclude, and the
+  # privilege this removal needs is asserted on the tasks that do the work,
+  # inside remove_component_dir.yml.
   tags: ['clean']
 
 # #11508: a stale, hand-created systemd drop-in repointed the agent's ExecStart

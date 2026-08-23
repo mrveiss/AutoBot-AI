@@ -55,12 +55,30 @@ _CALL_SITES = (
     _ANSIBLE / "roles" / "slm_agent" / "tasks" / "clean.yml",
 )
 
-# A component directory is a single segment under /opt/autobot — the unit a role
-# deploys to, and the thing that carries data/. `{{ ... }}` is collapsed first so
-# that "/opt/autobot/{{ role_target_dir }}" is recognised as one of these and a
-# fully-templated "{{ some_path }}" is not.
+# A component directory is a per-component install root: the unit a role deploys
+# to, and the thing that carries data/. Two shapes qualify — the canonical
+# /opt/autobot/<component>, and the flat pre-rename roots directly under /opt
+# that predate it (/opt/slm-agent is one this file's own subject still cleans up).
+#
+# /opt/autobot itself is deliberately NOT one. It is the root that *contains*
+# component directories, and removing it is decommissioning a node — a different,
+# explicitly-named operation, not a cleanup. That is a boundary, not an
+# exception: nothing here exempts a component directory from the rule.
+#
+# `{{ ... }}` is collapsed first so that "/opt/autobot/{{ role_target_dir }}" is
+# recognised as one of these and a fully-templated "{{ some_path }}" is not.
 _TEMPLATE = re.compile(r"\{\{.*?\}\}")
-_COMPONENT_DIR = re.compile(r"^/opt/autobot/[^/]+/?$")
+_INSTALL_ROOT = "/opt/autobot"
+
+
+def _is_component_dir(raw: str) -> bool:
+    path = _TEMPLATE.sub("TPL", raw).strip().rstrip("/")
+    if not path.startswith("/opt/") or path == _INSTALL_ROOT:
+        return False
+    tail = path[len("/opt/") :]
+    if tail.startswith("autobot/"):
+        tail = tail[len("autobot/") :]
+    return bool(tail) and "/" not in tail
 
 
 # --------------------------------------------------------------------------
@@ -290,7 +308,7 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
             deletions_seen += 1
             spec = _module(task, "ansible.builtin.file", "file") or {}
             raw = str(spec.get("path") or spec.get("dest") or "")
-            if _COMPONENT_DIR.match(_TEMPLATE.sub("TPL", raw).strip()):
+            if _is_component_dir(raw):
                 offenders.append(f"{path.relative_to(_ANSIBLE)}: {task.get('name')} -> {raw}")
 
     # Presence, not absence of failure: an empty scan reads as a clean scan.
@@ -353,6 +371,113 @@ def test_the_protected_config_dir_is_never_scheduled_for_removal() -> None:
         f"{protected} is scheduled for removal by:\n  "
         + "\n  ".join(sorted(set(offenders)))
         + "\nIt holds permission_rules.yaml, which permission_matcher.py reads at runtime (#3873)."
+    )
+
+
+_REMOVE_ROLE = _ANSIBLE / "playbooks" / "remove-role.yml"
+
+
+def _play_tasks(path: Path) -> list[dict]:
+    docs = _load(path)
+    plays = docs if isinstance(docs, list) else [docs]
+    for play in plays:
+        if isinstance(play, dict) and isinstance(play.get("tasks"), list):
+            return [t for t in play["tasks"] if isinstance(t, dict)]
+    raise AssertionError(f"{path.name} has no play with a tasks list")
+
+
+def test_the_removal_summary_reports_what_happened_not_what_was_asked() -> None:
+    """A refusal the operator never reads is a refusal that does not protect them.
+
+    The role-removal summary used to print "<dir> removed" whenever a target dir
+    was named. Now that the removal can refuse — because the directory holds
+    data/ — that line would tell an operator the directory is gone while it is
+    still there, and the "REFUSING" message scrolls by hundreds of lines
+    earlier. That is this issue's own defect shape, a claim in the prose the
+    code does not implement, so the summary is derived from observed state and
+    both directions are asserted here.
+    """
+    tasks = _play_tasks(_REMOVE_ROLE)
+
+    delegate_at = next(
+        (i for i, t in enumerate(tasks) if _include_path(t) and "remove_dir_path" in (t.get("vars") or {})), None
+    )
+    assert delegate_at is not None, "remove-role.yml no longer delegates its removal"
+
+    decisions = [
+        t for t in tasks if "_disk_cleanup_summary" in (_module(t, "ansible.builtin.set_fact", "set_fact") or {})
+    ]
+    assert decisions, "nothing computes _disk_cleanup_summary"
+    expr = str((_module(decisions[0], "ansible.builtin.set_fact", "set_fact"))["_disk_cleanup_summary"])
+
+    # Which stat the summary depends on is read out of the expression rather
+    # than named here, so this follows the real data flow instead of a naming
+    # convention that a rename would quietly break. Picking "the first stat in
+    # the play" instead matched an unrelated earlier probe.
+    referenced = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expr))
+    rechecks = [
+        i
+        for i, t in enumerate(tasks)
+        if _module(t, "ansible.builtin.stat", "stat") and str(t.get("register", "")) in referenced
+    ]
+    assert rechecks, "the summary is not derived from any stat result, so it cannot know what happened"
+    assert min(rechecks) > delegate_at, "the directory is re-checked BEFORE the removal, so the summary predates it"
+
+    summaries = [t for t in tasks if "_disk_cleanup_summary" in str(_module(t, "ansible.builtin.debug", "debug") or {})]
+    assert summaries, "the summary no longer reports the computed disk-cleanup result"
+
+    # Removed for real -> says removed. Still there -> must NOT say removed.
+    base = {"role_target_dir": "autobot-backend"}
+    gone = str(_render_value(expr, {**base, "_role_dir_after": _stat(False)}))
+    kept = str(_render_value(expr, {**base, "_role_dir_after": _stat(True)}))
+    unknown = str(_render_value(expr, base))
+
+    assert "removed" in gone.lower(), f"a directory that IS gone is not reported as removed: {gone!r}"
+    assert "removed" not in kept.lower(), f"a directory still on disk is reported as removed: {kept!r}"
+    assert "removed" not in unknown.lower(), f"an unverified removal is reported as removed: {unknown!r}"
+    assert (
+        "skipped" in str(_render_value(expr, {"_role_dir_after": _stat(False)})).lower()
+    ), "with no target directory the summary should say it was skipped"
+
+
+def test_no_include_carries_a_keyword_ansible_rejects() -> None:
+    """Only Ansible's parser knows which keywords an include accepts.
+
+    This change moved five call sites onto `include_tasks`, and one of them
+    carried `become: true` — valid on a task, rejected outright on a TaskInclude,
+    and invisible to YAML parsing, to review, and to every structural check in
+    this file. CI's playbook syntax-check caught it; nothing here did.
+
+    The authority is read from Ansible itself rather than transcribed, so it
+    cannot drift: `TaskInclude.VALID_INCLUDE_KEYWORDS` is the same set the
+    parser enforces. This is an attribute read — no playbook is parsed or run.
+    """
+    task_include = pytest.importorskip("ansible.playbook.task_include")
+    valid = set(task_include.TaskInclude.VALID_INCLUDE_KEYWORDS)
+    assert "become" not in valid, "the keyword set no longer matches the parser behaviour this guard assumes"
+    assert "when" in valid and "vars" in valid, "the keyword set looks wrong — this guard would flag everything"
+
+    include_keys = {"include_tasks", "ansible.builtin.include_tasks"}
+    seen = 0
+    offenders: list[str] = []
+    for candidate in sorted(_ANSIBLE.rglob("*.yml")) + sorted(_ANSIBLE.rglob("*.yaml")):
+        try:
+            docs = [d for d in yaml.safe_load_all(candidate.read_text(encoding="utf-8")) if d]
+        except yaml.YAMLError:
+            continue
+        for task in _walk(docs):
+            keys = set(task)
+            used = include_keys & keys
+            if not used:
+                continue
+            seen += 1
+            rejected = keys - valid - include_keys
+            if rejected:
+                offenders.append(f"{candidate.relative_to(_ANSIBLE)}: {task.get('name')} -> {sorted(rejected)}")
+
+    assert seen > 50, f"only {seen} include_tasks found across the tree — the sweep is not reaching it"
+    assert not offenders, "Ansible rejects these keywords on an include, so the play fails to parse:\n  " + "\n  ".join(
+        offenders
     )
 
 

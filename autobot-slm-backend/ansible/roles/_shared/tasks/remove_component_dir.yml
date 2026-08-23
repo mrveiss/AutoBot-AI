@@ -37,6 +37,10 @@
   ansible.builtin.stat:
     path: "{{ remove_dir_path }}/data"
   register: _remove_dir_data
+  # Stated here rather than left to the caller: the probe must see what root
+  # sees. A probe running unprivileged can miss a data/ it cannot read, and
+  # "could not see it" must never become "there was none".
+  become: true
   tags: ['clean']
 
 - name: "{{ caller_role }} | Remove: REFUSING to delete {{ remove_dir_path }} — it holds data (#14856)"
@@ -54,6 +58,7 @@
   ansible.builtin.file:
     path: "{{ remove_dir_path }}"
     state: absent
+  become: true
   # `default(true)` is the whole guard: if the stat above did not run, failed, or
   # returned something unreadable, we do not KNOW whether data is there — and
   # "unknown" must resolve to the non-destructive branch. Flipping this to

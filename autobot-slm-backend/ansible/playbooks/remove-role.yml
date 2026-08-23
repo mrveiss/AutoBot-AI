@@ -184,6 +184,27 @@
         remove_dir_path: "/opt/autobot/{{ role_target_dir }}"
         remove_reason: "role {{ role_target_dir }} is being removed from this node"
 
+    # #14856: this line used to read "<dir> removed" whenever a target dir was
+    # named, regardless of what the removal did. Now that the removal can refuse
+    # — because the directory holds data/ — a summary that reports it as removed
+    # is the same defect this issue is about: a claim in the prose that the code
+    # does not implement. So it reports what the filesystem says afterwards.
+    - name: "Re-check the role directory after removal (#14856)"
+      ansible.builtin.stat:
+        path: "/opt/autobot/{{ role_target_dir }}"
+      register: _role_dir_after
+      when: role_target_dir is defined and role_target_dir | length > 0
+      become: true
+
+    - name: "Record what the disk cleanup actually did (#14856)"
+      ansible.builtin.set_fact:
+        _disk_cleanup_summary: >-
+          {{ 'skipped (no target dir)'
+             if not (role_target_dir is defined and role_target_dir | length > 0)
+             else ('/opt/autobot/' + role_target_dir + ' removed'
+                   if not (_role_dir_after.stat.exists | default(true))
+                   else '/opt/autobot/' + role_target_dir + ' KEPT - it holds data, see the REFUSING message above') }}
+
     - name: "Clean orphan user-level Python packages"
       ansible.builtin.file:
         path: "/home/{{ service_user | default('autobot') }}/.local/lib"
@@ -204,7 +225,7 @@
           - Host: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})
           - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
           - Service file: {{ 'skipped (dpkg conffile)' if (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'dpkg_owned' else 'removed' }}
-          - Disk cleanup: {{ '/opt/autobot/' + role_target_dir + ' removed' if (role_target_dir is defined and role_target_dir | length > 0) else 'skipped (no target dir)' }}
+          - Disk cleanup: {{ _disk_cleanup_summary }}
           - Backup: {{ _backup_path | default('none') if (_backup_performed | default(false)) else 'skipped' }}
 
   handlers:
