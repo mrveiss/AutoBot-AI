@@ -12,7 +12,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { ref, nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
+import { ref, nextTick, defineComponent, h } from 'vue'
 import { useSessionSync } from '@/composables/useSessionSync'
 import { useChatStore } from '@/stores/useChatStore'
 import apiClient from '@/utils/ApiClient'
@@ -397,5 +398,51 @@ describe('useSessionSync (#14820)', () => {
     await resync('s1')
 
     expect(store.currentMessages[0].content).toBe('manual')
+  })
+
+  it('rebuilds when the resync directive arrives on the session channel', async () => {
+    // Both channels register a resync handler. Exercising only the chat one
+    // left the session path unproven — and a session-level resync is exactly
+    // what fires when the session list itself falls out of the replay window.
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    useSessionSync(ref('s1'))
+    await settle()
+
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([backendMessage('s-after', 'session rebuild')]))
+    harness.__resyncHandlers.get('session:s1')!({
+      channel: 'session:s1',
+      reason: 'replay_unavailable',
+    })
+    await settle()
+
+    expect(store.currentMessages[0].content).toBe('session rebuild')
+  })
+
+  it('tears down its subscriptions when the owning component unmounts', async () => {
+    // Called bare, the composable's onUnmounted hook never registers, so the
+    // teardown-on-unmount path went unproven. Mounting a real component is the
+    // only way to exercise it — and a composable that leaks subscriptions past
+    // unmount would keep writing into a store the view no longer shows.
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+
+    const Host = defineComponent({
+      setup() {
+        useSessionSync(ref('s1'))
+        return () => h('div')
+      },
+    })
+
+    const wrapper = mount(Host)
+    await settle()
+    expect(harness.__channelHandlers.has('chat:s1')).toBe(true)
+
+    wrapper.unmount()
+
+    expect(harness.__channelHandlers.has('chat:s1')).toBe(false)
+    expect(harness.__channelHandlers.has('session:s1')).toBe(false)
   })
 })
