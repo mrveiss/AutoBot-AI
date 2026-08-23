@@ -1,25 +1,30 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Pre-commit Hook: Hardcoded Value Detection (Strict Mode)
-# =========================================================
+# Pre-commit Hook: Hardcoded Value Detection — STAGED FILES entry point.
 #
-# Blocks commits containing:
-# - Hardcoded VM IPs (172.16.168.*)
-# - Hardcoded infrastructure ports in URL context
-# - Magic numbers that should use QueryDefaults constants
-# - Hardcoded role/category strings
+# Issue: #694 (rules) / #14371 (consolidation)
 #
-# Issue: #694 - Configuration Consolidation
+# #14371: this is now a thin entry point. Every rule lives in
+# scripts/lib/hardcoded-value-rules.sh, which carries the UNION of what the
+# three former detectors implemented — this hook, the CI tree scanner, and the
+# dormant autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+# whose rules had never run anywhere. pipeline-scripts/detect-hardcoded-values.sh
+# is the other entry point onto the same rules.
 #
-# Install: ln -sf ../../scripts/hooks/pre-commit-hardcoded-values .git/hooks/pre-commit
-# Or add to .pre-commit-config.yaml as local hook
+# This one differs from the tree scanner in exactly two ways, and both are
+# entry-point policy rather than rule content:
+#   * it scans the staged file list (or an explicit argv list from CI);
+#   * it exits 1 on a violation, because it is the one with the power to stop a
+#     commit.
+#
+# Install: pre-commit install (registered in .pre-commit-config.yaml)
 
 set -euo pipefail
 
-# Source shared library (#7185 — colors + get_staged_files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
 source "$SCRIPT_DIR/lib/_common.sh" || {
@@ -27,587 +32,114 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
     exit 1
 }
 
-VIOLATIONS=0
-WARNINGS=0
+# Named PROJECT_ROOT, not REPO_ROOT, to match the spelling the tree's canonical
+# resolver already uses (autobot-infrastructure/shared/scripts/lib/ssot-config.sh
+# exports PROJECT_ROOT) and the one
+# repo_tests/shell_lib_sources_resolve_test.py (#14041/#14172) can expand — it
+# resolves a `source .../lib/...` path through SCRIPT_DIR and PROJECT_ROOT only,
+# and skips any site still holding a `$` it cannot expand.
+#
+# Being precise about what this buys TODAY: nothing yet. That guard walks
+# `*.sh` only, and every hook in this directory is extensionless, so it cannot
+# see this file at all — 16 hooks source lib/_common.sh and none are covered.
+# Filed separately. The spelling is chosen so this site is verified rather than
+# silently skipped the moment that walk is widened.
+#
+# Resolved from THIS SCRIPT's location, not from `git rev-parse` against the
+# cwd. The hook must load the rules and the baseline belonging to the checkout
+# it is part of; resolving through the cwd makes it load whichever tree it
+# happens to be pointed at — and in a throwaway repo (which is how its own test
+# suite drives it) that is no tree at all, so the load fails and the hook cannot
+# report anything.
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+[ -f "${PROJECT_ROOT}/scripts/lib/hardcoded-value-rules.sh" ] || {
+    echo "FATAL: rule library not found under ${PROJECT_ROOT} — refusing to report clean" >&2
+    exit 1
+}
+# shellcheck source=scripts/lib/hardcoded-value-rules.sh
+source "${PROJECT_ROOT}/scripts/lib/hardcoded-value-rules.sh" || {
+    echo "FATAL: cannot load scripts/lib/hardcoded-value-rules.sh — refusing to report clean" >&2
+    exit 1
+}
 
-# Get Python/TypeScript/Vue files to scan, applying the same allowlist
-# regardless of source. Uses get_staged_files (#7185) for the staged-files
-# lookup with positional-args override (#6725: same hook runs as local
-# pre-commit AND CI gate). The multi-stage allowlist below is hook-specific
-# and must remain.
-# GH#14151: get_staged_files' own git-diff failure (e.g. a corrupted index)
-# used to be masked by the trailing `|| true` below, which existed only to
-# tolerate "the filters matched nothing" — a real git failure looked
-# identical. Captured separately so get_staged_files' non-zero return
-# propagates (set -e turns that into a hard stop); the later filter chain's
-# `|| true` still only ever tolerates an empty *result*, not a git error.
+# Staged files, with the #6785 positional-args override so the same script runs
+# as a local pre-commit hook AND as a CI gate. hv_file_in_scope applies the
+# extension and exclusion rules — the same ones the tree scanner uses, so the
+# two entry points cannot disagree about what is in scope.
+#
+# GH#14151: get_staged_files' own git-diff failure (a corrupted index, say) is
+# propagated rather than masked, so a broken git cannot read as "nothing
+# staged".
 get_files_to_scan() {
-    local staged
-    staged="$(get_staged_files '\.(py|ts|vue|js)$' "$@")" || return 1
-    printf '%s\n' "$staged" | \
-        grep -v -E '(/__pycache__/|/node_modules/|/\.venv/|/venv/|/archive/|/tmp/|/\.tmp/|^tmp/|^archive/)' | \
-        grep -v -E '(test_|_test\.py|\.test\.ts|\.test\.js|\.spec\.ts|\.spec\.js)' | \
-        grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
-        grep -v -E '(path_constants\.py|network_constants\.py|security_constants\.py)' | \
-        grep -v -E '(constants/|config\.py$|\.env)' || true
+    local staged file
+    staged="$(get_staged_files '.' "$@")" || return 1
+    while IFS= read -r file; do
+        [ -n "$file" ] && hv_file_in_scope "$file" && printf '%s\n' "$file"
+    done <<< "$staged"
+    return 0
 }
 
-# Shared call-argument matcher (#14005 -> #14048).
-#
-# Every "keyword-style" regex in this file (identifier bound to a literal with
-# `=`/`:` — assignment, dict value, function default) is blind to the
-# "call-argument" shape: `obj.get("field", value)`. There the field name is a
-# STRING-LITERAL positional argument, not an identifier bound with `=`/`:`, so
-# there is no operator between the field name and the default value for the
-# keyword-style regex to anchor on. #14005 hit this first for
-# check_hardcoded_categories (`doc.get("category", "general")`); the same gap
-# was audited and confirmed in check_hardcoded_roles, check_hardcoded_timeouts
-# and check_magic_numbers (#14048) — every one of them reuses this identical
-# keyword-style shape and is blind to the identical call-argument shape.
-#
-# Anchored to `.get(` so it only matches an actual dict-style lookup, not any
-# comma-joined pair of matching literals elsewhere (a tuple, an assertion).
-#
-# Args:
-#   $1  line to test
-#   $2  field-name alternation, e.g. 'role' or 'timeout|timeout_seconds'
-#   $3  value regex, ALREADY shaped by the caller (quoted for string values —
-#       e.g. `["'](user|assistant|system)["']` — or bare for numeric ones —
-#       e.g. `\b(30|60)\b` — since some checkers key off a quoted string
-#       default and others off a bare numeric one)
-#   $4  optional: pass "i" for a case-insensitive match, matching
-#       check_magic_numbers' existing `grep -qiE` keyword-style patterns
-_matches_get_call_argument() {
-    local line="$1" fields="$2" value_regex="$3" flags="${4:-}"
-    local pattern="\\.get\\([[:space:]]*[\"'](${fields})[\"'][[:space:]]*,[[:space:]]*${value_regex}"
-    if [ "$flags" = "i" ]; then
-        echo "$line" | grep -qiE "$pattern"
-    else
-        echo "$line" | grep -qE "$pattern"
-    fi
-}
-
-# Check for hardcoded VM IPs
-check_hardcoded_ips() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
-            continue
-        fi
-
-        # Skip if using config/getenv
-        if echo "$line" | grep -qE '(config\.|getenv|CONFIG\[|AUTOBOT_|ssot_config)'; then
-            continue
-        fi
-
-        # Check for VM IPs
-        if echo "$line" | grep -qE '172\.16\.168\.(19|2[0-5])'; then
-            local ip
-            ip=$(echo "$line" | grep -oE '172\.16\.168\.(19|2[0-5])')
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded VM IP: $ip"
-            echo -e "  ${CYAN}Fix: Use config.vm.* from ssot_config${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded ports in URL context
-check_hardcoded_ports() {
-    local file="$1"
-    local line_num=0
-
-    # Infrastructure ports that should use SSOT
-    local ports="8001|5173|6379|11434|6080|8080|8081|8082|3000"
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
-            continue
-        fi
-
-        # Skip if using config/getenv
-        if echo "$line" | grep -qE '(config\.|getenv|CONFIG\[|AUTOBOT_|NetworkConstants)'; then
-            continue
-        fi
-
-        # Skip array slicing like [0:10] or [:5]
-        if echo "$line" | grep -qE '\[[0-9]*:[0-9]*\]'; then
-            continue
-        fi
-
-        # Check for ports in URL context (e.g., :8001/ or :8001" or :8001')
-        if echo "$line" | grep -qE ":(${ports})[^0-9]"; then
-            local port
-            port=$(echo "$line" | grep -oE ":(${ports})" | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded port: $port"
-            echo -e "  ${CYAN}Fix: Use config.port.* from ssot_config${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for magic numbers that should use QueryDefaults
-check_magic_numbers() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
-            continue
-        fi
-
-        # Skip imports and constants definitions
-        if echo "$line" | grep -qE '(^from |^import |QueryDefaults\.|DEFAULT_|_LIMIT|_SIZE)'; then
-            continue
-        fi
-
-        # Skip pure type hints (return type annotations like -> int)
-        # But NOT function parameter defaults like limit: int = 10
-        if echo "$line" | grep -qE '(-> int$|-> int:|List\[|Optional\[)'; then
-            continue
-        fi
-
-        # Pattern 1: limit=10, limit: int = 10, default=10, Field(default=10) for
-        # limit/search context (keyword-style) AND the call-argument shape
-        # `d.get("limit", 10)` — see _matches_get_call_argument (#14005 -> #14048).
-        if echo "$line" | grep -qiE '(limit|top_k|max_results|page_size)[^a-z_].*=\s*10\b' || \
-           _matches_get_call_argument "$line" 'limit|top_k|max_results|page_size' '10\b' i; then
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Magic number 10 in limit/search context"
-            echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_SEARCH_LIMIT${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-            continue
-        fi
-
-        # Pattern 2: limit=50, page_size=50, Field(default=50) (keyword-style) AND
-        # the call-argument shape `d.get("page_size", 50)` (#14005 -> #14048).
-        if echo "$line" | grep -qiE '(limit|page_size)[^a-z_].*=\s*50\b' || \
-           _matches_get_call_argument "$line" 'limit|page_size' '50\b' i; then
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Magic number 50 in pagination context"
-            echo -e "  ${CYAN}Fix: Use QueryDefaults.DEFAULT_PAGE_SIZE${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-            continue
-        fi
-
-        # Pattern 3: limit=100 for knowledge/batch context (keyword-style) AND the
-        # call-argument shape `d.get("limit", 100)` (#14005 -> #14048).
-        if echo "$line" | grep -qiE '(limit|batch)[^a-z_].*=\s*100\b' || \
-           _matches_get_call_argument "$line" 'limit|batch' '100\b' i; then
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Magic number 100 in limit/batch context"
-            echo -e "  ${CYAN}Fix: Use QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT or BatchConfig.LARGE_BATCH${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-            continue
-        fi
-
-        # Pattern 4: offset=0 (only if explicitly set, not just = 0 anywhere)
-        # (keyword-style) AND the call-argument shape `d.get("offset", 0)`
-        # (#14005 -> #14048).
-        if echo "$line" | grep -qiE 'offset[^a-z_]*[=:][^=]*\b0\b' || \
-           _matches_get_call_argument "$line" 'offset' '0\b' i; then
-            # This is a warning, not a violation - offset=0 is common
-            echo -e "${YELLOW}WARNING${NC} $file:$line_num"
-            echo "  Consider using QueryDefaults.DEFAULT_OFFSET for consistency"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            WARNINGS=$((WARNINGS + 1))
-            continue
-        fi
-
-        # Pattern 5: max_results=5 for RAG context (keyword-style) AND the
-        # call-argument shape `d.get("max_results", 5)` (#14005 -> #14048).
-        if echo "$line" | grep -qiE '(max_results|rag)[^a-z_]*[=:][^=]*\b5\b' || \
-           _matches_get_call_argument "$line" 'max_results|rag' '5\b' i; then
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Magic number 5 in RAG/results context"
-            echo -e "  ${CYAN}Fix: Use QueryDefaults.RAG_DEFAULT_RESULTS${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-            continue
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded role strings
-check_hardcoded_roles() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments. Includes JSDoc/block-comment continuation lines
-        # (`* ...`) — same false-positive class caught for
-        # check_hardcoded_categories in review of #14005: the quote-class fix
-        # below makes single-quoted literals visible for the first time,
-        # which surfaces `* - role: 'user'`-style doc comments in .ts files
-        # (#14048).
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
-            continue
-        fi
-
-        # Skip if using CategoryDefaults
-        if echo "$line" | grep -qE '(CategoryDefaults\.|ROLE_)'; then
-            continue
-        fi
-
-        # Skip string definitions in constants files
-        if echo "$line" | grep -qE '^[[:space:]]*(ROLE_|DEFAULT_).*='; then
-            continue
-        fi
-
-        # Skip TypeScript/Flow string-literal union types, e.g.
-        # `role?: 'user' | 'assistant' | 'system'` — a type annotation
-        # enumerating accepted values, not a hardcoded default. Same
-        # surfacing as the comment case above (#14048, mirroring #14005).
-        if echo "$line" | grep -qE '["'"'"'][[:space:]]*\|[[:space:]]*["'"'"']'; then
-            continue
-        fi
-
-        # Check for role="user" or role: "user" patterns (keyword-style:
-        # assignment, dict literal value, function default) AND the
-        # call-argument shape `d.get("role", "user")` — see
-        # _matches_get_call_argument (#14005 -> #14048).
-        #
-        # Quote class is a LITERAL apostrophe inside the bracket expression
-        # (["'](...)["']), not `["\x27]`. Backslash has no special meaning
-        # inside a POSIX bracket expression under GNU grep, so `["\x27]`
-        # matched one of the five literal characters ", \, x, 2, 7 — never
-        # an apostrophe — and every single-quoted literal (`'user'`) silently
-        # passed. Same bug as #14005's categories fix, audited and confirmed
-        # here in #14048.
-        if echo "$line" | grep -qE 'role[^a-z_]*[=:][^=]*["'"'"'](user|assistant|system)["'"'"']' || \
-           _matches_get_call_argument "$line" 'role' '["'"'"'](user|assistant|system)["'"'"']'; then
-            local role
-            role=$(echo "$line" | grep -oE '["'"'"'](user|assistant|system)["'"'"']' | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded role string: $role"
-            echo -e "  ${CYAN}Fix: Use CategoryDefaults.ROLE_USER/ROLE_ASSISTANT/ROLE_SYSTEM${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded AutoBot file paths (#3397)
-# Catches /opt/autobot, /tmp/autobot, /var/lib/autobot used as bare string
-# literals instead of going through SSOT config.path or AUTOBOT_BASE_DIR env var.
-check_hardcoded_paths() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
-            continue
-        fi
-
-        # Skip if already using env var or SSOT config
-        if echo "$line" | grep -qE '(AUTOBOT_BASE_DIR|os\.environ\.get|getenv|config\.path)'; then
-            continue
-        fi
-
-        # Skip string assignments in ssot_config / path_constants (these ARE the SSOT)
-        if echo "$line" | grep -qE '(PathConfig|PathConstants|default=.*opt/autobot|Field\()'; then
-            continue
-        fi
-
-        # Skip shell-style ${VAR:-/opt/autobot} expansions — those use the env var
-        if echo "$line" | grep -qE '\$\{[A-Z_]+:-/opt/autobot'; then
-            continue
-        fi
-
-        # Detect bare /opt/autobot, /tmp/autobot, /var/lib/autobot path literals (both single and double quotes)
-        if echo "$line" | grep -qE "[\"'](/opt/autobot|/tmp/autobot|/var/lib/autobot)"; then
-            local path_val
-            path_val=$(echo "$line" | grep -oE "[\"'](/opt/autobot|/tmp/autobot|/var/lib/autobot)[^\"']*[\"']" | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded AutoBot file path: $path_val"
-            echo -e "  ${CYAN}Fix: Use config.path.base_dir from ssot_config or os.environ.get('AUTOBOT_BASE_DIR', '/opt/autobot')${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded model name strings outside SSOT constants (#3397)
-# Catches model name literals that should come from ssot_config constants.
-check_hardcoded_model_names() {
-    local file="$1"
-    local line_num=0
-
-    # Model name patterns that have SSOT equivalents
-    local model_pattern="llama3\.2:latest|llama3\.2:1b|qwen3\.5:9b|nomic-embed-text:latest|gemma2:2b|phi3:mini|mistral:7b-instruct|dolphin-llama3:8b"
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
-            continue
-        fi
-
-        # Skip if using SSOT constants or config
-        if echo "$line" | grep -qE '(ROUTING_MODEL|CLASSIFICATION_MODEL|LIGHT_PROCESSING_MODEL|INSTRUCTION_MODEL|SYSTEM_MODEL|QUALITY_MODEL|DEFAULT_LLM_MODEL|DEFAULT_EMBEDDING_MODEL|config\.llm\.)'; then
-            continue
-        fi
-
-        # Skip assignments in ssot_config itself (these define the constants)
-        if echo "$line" | grep -qE '^(ROUTING_MODEL|CLASSIFICATION_MODEL|LIGHT_PROCESSING_MODEL|INSTRUCTION_MODEL|SYSTEM_MODEL|QUALITY_MODEL|DEFAULT_LLM_MODEL|DEFAULT_EMBEDDING_MODEL)\s*='; then
-            continue
-        fi
-
-        # Detect bare model name string literals (both single and double quotes)
-        if echo "$line" | grep -qE "[\"'](${model_pattern})[\"']"; then
-            local model_val
-            model_val=$(echo "$line" | grep -oE "[\"'](${model_pattern})[\"']" | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded model name: $model_val"
-            echo -e "  ${CYAN}Fix: Import ROUTING_MODEL/DEFAULT_LLM_MODEL/etc from autobot_shared.ssot_config${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded category strings
-check_hardcoded_categories() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments. Includes JSDoc/block-comment continuation lines
-        # (`* ...`) — the fixed quote class below now also matches
-        # single-quoted literals, which surfaced `* - mode: 'a' | 'b'`-style
-        # doc comments in .ts files as false positives (review of #14005).
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
-            continue
-        fi
-
-        # Skip if using CategoryDefaults
-        if echo "$line" | grep -qE '(CategoryDefaults\.|GENERAL|UNKNOWN|SEARCH_MODE)'; then
-            continue
-        fi
-
-        # Skip TypeScript/Flow string-literal union types, e.g.
-        # `mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'` — a type
-        # annotation enumerating the accepted values, not a hardcoded
-        # default. Same surfacing as the comment case above: the fixed
-        # quote class now matches these once single-quoted values are
-        # visible at all.
-        if echo "$line" | grep -qE '["'"'"'][[:space:]]*\|[[:space:]]*["'"'"']'; then
-            continue
-        fi
-
-        # Check for category="general" or mode="hybrid" patterns (keyword-style:
-        # assignment, dict literal value, function default) AND the call-argument
-        # shape `d.get("category", "general")` — the key is a STRING LITERAL
-        # positional argument, not an identifier bound with `=`/`:`, so it has no
-        # operator between the field name and the default value. That shape falls
-        # through the keyword-style pattern whether or not it sits inside a
-        # comprehension (#14005) — the comprehension itself isn't the cause, the
-        # missing operator is.
-        #
-        # Quote class is a LITERAL apostrophe inside the bracket expression
-        # (["'](...)["']), not `["\x27]`. Backslash has no special meaning
-        # inside a POSIX bracket expression under GNU grep, so `["\x27]`
-        # matches one of the five literal characters ", \, x, 2, 7 — never an
-        # apostrophe — and every single-quoted literal (`'general'`) silently
-        # passed both alternatives. Caught in review of #14005.
-        #
-        # The call-argument alternative is the shared _matches_get_call_argument
-        # helper (#14048) — anchored to `.get(` so it only matches an actual
-        # dict-style lookup, not any comma-joined pair of matching string
-        # literals (e.g. a tuple literal or an assertion).
-        if echo "$line" | grep -qE '(category|search_mode|mode)[^a-z_]*[=:][^=]*["'"'"'](general|hybrid|unknown)["'"'"']' || \
-           _matches_get_call_argument "$line" 'category|search_mode|mode' '["'"'"'](general|hybrid|unknown)["'"'"']'; then
-            local value
-            value=$(echo "$line" | grep -oE '["'"'"'](general|hybrid|unknown)["'"'"']' | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded category/mode string: $value"
-            echo -e "  ${CYAN}Fix: Use CategoryDefaults.GENERAL/SEARCH_MODE_HYBRID/UNKNOWN${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded database DSN strings (#3397)
-# Catches sqlite:///, postgresql://, mysql:// used as bare string literals.
-check_hardcoded_db_dsns() {
-    local file="$1"
-    local line_num=0
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
-            continue
-        fi
-
-        # Skip if using env var or SSOT config
-        if echo "$line" | grep -qE '(getenv|os\.environ|AUTOBOT_|config\.|SettingsConfigDict|env_prefix)'; then
-            continue
-        fi
-
-        # Skip variable assignments in ssot_config / settings files
-        if echo "$line" | grep -qE '(default=|Field\()'; then
-            continue
-        fi
-
-        # Detect embedded DSN literals
-        if echo "$line" | grep -qE '"(sqlite:///|postgresql://[^{]|mysql://[^{]|mongodb://[^{])'; then
-            local dsn
-            dsn=$(echo "$line" | grep -oE '"(sqlite:///|postgresql://|mysql://|mongodb://)[^"]*"' | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded database DSN: $dsn"
-            echo -e "  ${CYAN}Fix: Use config.database.* from ssot_config or AUTOBOT_DB_URL env var${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Check for hardcoded timeout magic numbers in timeout context (#3397)
-# Catches assignments like timeout=30, timeout_seconds=60 that bypass TimeoutConfig.
-check_hardcoded_timeouts() {
-    local file="$1"
-    local line_num=0
-
-    # Common timeout values that should come from TimeoutConfig
-    local timeout_values="30|60|120|300|3600"
-
-    while IFS= read -r line; do
-        line_num=$((line_num + 1))
-
-        # Skip comments
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
-            continue
-        fi
-
-        # Skip if using SSOT config
-        if echo "$line" | grep -qE '(TimeoutConfig|config\.timeout|AUTOBOT_TIMEOUT|ssot_config)'; then
-            continue
-        fi
-
-        # Skip constant definitions in constants/config files
-        if echo "$line" | grep -qE '^[[:space:]]*(TIMEOUT|DEFAULT_TIMEOUT|[A-Z_]+_TIMEOUT)\s*='; then
-            continue
-        fi
-
-        # Detect timeout=N or timeout_seconds=N patterns (keyword-style) AND
-        # the call-argument shape `d.get("timeout", 30)` — see
-        # _matches_get_call_argument (#14005 -> #14048). Unlike
-        # categories/roles the default here is a bare numeric literal, not a
-        # quoted string, so no quote-class bug applies — only the missing
-        # keyword-style operator did.
-        if echo "$line" | grep -qE "(timeout|timeout_seconds|connect_timeout|read_timeout)[^a-z_]*[=:][^=]*\b(${timeout_values})\b" || \
-           _matches_get_call_argument "$line" 'timeout|timeout_seconds|connect_timeout|read_timeout' "\\b(${timeout_values})\\b"; then
-            local val
-            val=$(echo "$line" | grep -oE "\b(${timeout_values})\b" | head -1)
-            echo -e "${RED}VIOLATION${NC} $file:$line_num"
-            echo "  Hardcoded timeout value: $val"
-            echo -e "  ${CYAN}Fix: Use config.timeout.* from ssot_config (TimeoutConfig)${NC}"
-            echo "  Line: ${line:0:80}"
-            echo ""
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    done < "$file"
-}
-
-# Main execution
 main() {
-    echo -e "${BOLD}Pre-commit: Hardcoded Value Detection (Strict)${NC}"
-    echo "Issue #694 - Configuration Consolidation"
+    printf '%b\n' "${BOLD}Pre-commit: Hardcoded Value Detection${NC}"
+    echo "Issue #694 / #14371 — ${#HV_RULES[@]} rule classes: ${HV_RULES[*]}"
     echo "================================================"
-    echo ""
+    echo
+
+    hv_load_baseline "${PROJECT_ROOT}/pipeline-scripts/hardcoded_values_baseline.txt" || exit 1
 
     local files
     files=$(get_files_to_scan "$@")
-
-    if [[ -z "$files" ]]; then
-        echo -e "${GREEN}No Python/TypeScript/Vue files staged for commit.${NC}"
+    if [ -z "$files" ]; then
+        printf '%b\n' "${GREEN}No in-scope files staged for commit.${NC}"
         exit 0
     fi
 
-    local file_count
-    file_count=$(echo "$files" | wc -l)
-    echo "Scanning $file_count staged file(s)..."
-    echo ""
+    local raw newfile file
+    raw=$(mktemp); newfile=$(mktemp)
+    trap 'rm -f "$raw" "$newfile"' EXIT
+    while IFS= read -r file; do
+        [ -n "$file" ] && hv_scan_file "$file"
+    done <<< "$files" > "$raw"
 
-    for file in $files; do
-        if [[ -f "$file" ]]; then
-            check_hardcoded_ips "$file"
-            check_hardcoded_ports "$file"
-            check_magic_numbers "$file"
-            check_hardcoded_roles "$file"
-            check_hardcoded_categories "$file"
-            check_hardcoded_paths "$file"
-            check_hardcoded_model_names "$file"
-            check_hardcoded_db_dsns "$file"
-            check_hardcoded_timeouts "$file"
+    # Redirection, not a pipe: through a pipe hv_partition runs in a subshell
+    # and its suppressed-count dies with it.
+    hv_partition < "$raw" > "$newfile"
+
+    echo "Scanned $(printf '%s\n' "$files" | grep -c . || true) staged file(s)."
+    # Printed on every run, pass or fail. A backlog nobody is reminded of is
+    # indistinguishable from no backlog.
+    [ "$HV_SUPPRESSED" -gt 0 ] && echo "  $HV_SUPPRESSED pre-existing finding(s) baselined, tracked in $HV_BASELINE_ISSUE"
+    echo
+
+    local violations warnings
+    violations=$(grep -c '^VIOLATION|' "$newfile" || true)
+    warnings=$(grep -c '^WARNING|' "$newfile" || true)
+
+    while IFS='|' read -r sev class file lineno value; do
+        [ -n "$sev" ] || continue
+        if [ "$sev" = "VIOLATION" ]; then
+            printf '%b %s:%s\n' "${RED}VIOLATION${NC}" "$file" "$lineno"
+        else
+            printf '%b %s:%s\n' "${YELLOW}WARNING${NC}" "$file" "$lineno"
         fi
-    done
+        echo "  Hardcoded ${class} value: ${value}"
+    done < "$newfile"
 
     echo "================================================"
-
-    if [[ $VIOLATIONS -gt 0 ]]; then
-        echo -e "${RED}COMMIT BLOCKED: $VIOLATIONS violation(s) found${NC}"
-        if [[ $WARNINGS -gt 0 ]]; then
-            echo -e "${YELLOW}Plus $WARNINGS warning(s)${NC}"
-        fi
-        echo ""
-        echo "Quick fixes:"
-        echo "  Python:     from src.constants.threshold_constants import QueryDefaults, CategoryDefaults"
-        echo "  Python:     from src.config.ssot_config import config"
-        echo "  TypeScript: import { config } from '@/config/ssot-config'"
-        echo ""
-        echo "Documentation: docs/developer/SSOT_CONFIG_GUIDE.md"
-        echo ""
-        echo "To bypass (NOT recommended): git commit --no-verify"
+    if [ "$violations" -gt 0 ]; then
+        printf '%b\n' "${RED}COMMIT BLOCKED: $violations violation(s) found${NC}"
+        [ "$warnings" -gt 0 ] && printf '%b\n' "${YELLOW}Plus $warnings warning(s)${NC}"
+        echo
+        echo "Run 'pipeline-scripts/detect-hardcoded-values.sh --report' for the full picture."
+        echo "Documentation: docs/developer/HARDCODING_PREVENTION.md"
         exit 1
-    elif [[ $WARNINGS -gt 0 ]]; then
-        echo -e "${YELLOW}$WARNINGS warning(s) - commit allowed${NC}"
-        echo ""
-        exit 0
-    else
-        echo -e "${GREEN}No violations found!${NC}"
+    fi
+    if [ "$warnings" -gt 0 ]; then
+        printf '%b\n' "${YELLOW}$warnings warning(s) — commit allowed${NC}"
         exit 0
     fi
+    printf '%b\n' "${GREEN}No new violations found!${NC}"
+    exit 0
 }
 
 main "$@"

@@ -32,6 +32,14 @@ import subprocess  # nosec B404  # fixed argv, no shell
 from pathlib import Path
 
 _SCRIPT = Path(__file__).with_name("detect-hardcoded-values.sh")
+# #14371: the entry point is thin now — the rules live in the shared library and
+# the known backlog lives in the baseline, so a hermetic tree needs both. The
+# real baseline is copied verbatim rather than stubbed empty: its keys name
+# paths in the real checkout, so none of them match anything under tmp_path and
+# the fixtures below are judged on the rules alone, while the entry point still
+# exercises the same load-and-partition path CI runs.
+_LIB = Path(__file__).resolve().parent.parent / "scripts" / "lib" / "hardcoded-value-rules.sh"
+_BASELINE = Path(__file__).with_name("hardcoded_values_baseline.txt")
 
 _BAD_ACCOUNT = "ka" + "li"
 _FLEET_IP = ".".join(("172", "16", "168", "77"))
@@ -44,7 +52,43 @@ def _hermetic_repo(tmp_path: Path) -> Path:
     target = scripts_dir / "detect-hardcoded-values.sh"
     shutil.copy(_SCRIPT, target)
     target.chmod(target.stat().st_mode | stat.S_IEXEC)
+    lib_dir = root / "scripts" / "lib"
+    lib_dir.mkdir(parents=True)
+    shutil.copy(_LIB, lib_dir / "hardcoded-value-rules.sh")
+    shutil.copy(_BASELINE, scripts_dir / "hardcoded_values_baseline.txt")
     return root
+
+
+def test_a_missing_rule_library_is_fatal_not_clean(tmp_path):
+    """#14371: the shared rules are a hard dependency, not a nice-to-have.
+
+    Removing them must stop the scan, not degrade it into a run that applies no
+    rules and reports a clean tree — which is what an entry point that tolerated
+    a failed `source` would do, and is the failure shape every rule in the
+    library exists to catch.
+    """
+    root = _hermetic_repo(tmp_path)
+    (root / "scripts" / "lib" / "hardcoded-value-rules.sh").unlink()
+    result = subprocess.run(  # nosec B603  # fixed argv, no shell
+        ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), "--json"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "refusing to report clean" in result.stderr
+
+
+def test_a_missing_baseline_is_fatal_not_clean(tmp_path):
+    """An unread exemption set and an empty one look identical to every caller."""
+    root = _hermetic_repo(tmp_path)
+    (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").unlink()
+    result = subprocess.run(  # nosec B603  # fixed argv, no shell
+        ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), "--json"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "baseline" in result.stderr
 
 
 def _run(root: Path) -> dict:

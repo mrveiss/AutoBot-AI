@@ -23,9 +23,16 @@ on:
     # No YAML anchor here: #12934 removed the pull_request.paths filter that
     # used to alias it, so naming the anchor now fails actionlint's
     # syntax-check as "defined but not used".
+    #
+    # #12986: the backend-Python entries are the canonical `backend-python` set
+    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
+    # pipeline-scripts/check_workflow_path_filters.py enforces the match — and
+    # also asserts this workflow still has NO `pull_request.paths` (#12934).
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - 'autobot-frontend/src/**'
       - 'scripts/audit_api_wiring.py'
       - 'scripts/api_wiring_baseline.txt'
@@ -62,15 +69,11 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            wiring:
-              - 'autobot-backend/**/*.py'
-              - 'autobot-slm-backend/**/*.py'
-              - 'autobot-frontend/src/**'
-              - 'scripts/audit_api_wiring.py'
-              - 'scripts/api_wiring_baseline.txt'
-              - 'requirements*.txt'
-              - '.github/workflows/api-wiring.yml'
+          # #12986: `wiring` is defined in the canonical filter file, which is
+          # also where it PICKED UP autobot_shared/**/*.py — a tree
+          # scripts/audit_api_wiring.py imports from and this filter omitted,
+          # so the required context self-skipped over a real input.
+          filters: .github/filters/backend-python-paths.yml
 
   api-wiring:
     needs: changes
