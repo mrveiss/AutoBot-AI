@@ -416,6 +416,15 @@ class ErrorDefinition:
         }
 
 
+# #12969: the catalog in use, as a value something can read. `load_catalog`
+# used to return True whether it had loaded the deployed YAML or silently
+# substituted the built-ins, so no caller could tell the two apart.
+CATALOG_FILENAME = "error_messages.yaml"
+SOURCE_UNLOADED = "unloaded"
+SOURCE_YAML = "yaml"
+SOURCE_BUILTIN_FALLBACK = "builtin-fallback"
+
+
 class ErrorCatalog:
     """
     Singleton error catalog loader with caching and validation
@@ -434,22 +443,60 @@ class ErrorCatalog:
         self._catalog: Dict[str, ErrorDefinition] = {}
         self._raw_data: dict | None = None
         self._catalog_path: Path | None = None
+        # #12969: which catalog is actually in use, and where it was looked for.
+        # Both are read by the error-resilience health probe, so "the deployed
+        # catalog is not being used" is a state something can observe rather
+        # than a log line nobody read for two releases.
+        self.source: str = SOURCE_UNLOADED
+        self.searched_paths: list[Path] = []
+
+    def _candidate_paths(self) -> list[Path]:
+        """Every location the deployed catalog could occupy, in priority order.
+
+        Two anchors for each, deduplicated. ``PATH.PROJECT_ROOT`` is
+        ``Path(autobot_shared/__file__).parent.parent`` — the repo root in a
+        checkout, and something else wherever ``autobot_shared`` is installed
+        beside the backend rather than above it. On the deployed layout that
+        made ``PATH.STATIC_DIR`` name a directory that does not exist, so the
+        loader reported "not found" about a file that was present, 9794 bytes,
+        written thirteen minutes earlier (#12969).
+
+        Anchoring the second candidate on THIS module's own location reaches the
+        backend's static dir in any layout that keeps ``utils/`` beside
+        ``static/`` — which is every layout, because they ship together.
+
+        ``PATH.CONFIG_DIR`` is kept and its repo spelling added beside it: the
+        constant says ``infrastructure/shared/config`` and the directory in this
+        repository is ``autobot-infrastructure/shared/config``, so that
+        candidate has never resolved in a checkout. Fixing the constant is #14892
+        — it has nine other consumers whose behaviour is unverified, and this
+        loader must not depend on that being right.
+        """
+        here = Path(__file__).resolve()
+        backend_dir = here.parent.parent
+        install_root = here.parents[2]
+        candidates = [
+            PATH.STATIC_DIR / CATALOG_FILENAME,
+            backend_dir / "static" / CATALOG_FILENAME,
+            PATH.CONFIG_DIR / CATALOG_FILENAME,
+            install_root / "autobot-infrastructure" / "shared" / "config" / CATALOG_FILENAME,
+            install_root / "infrastructure" / "shared" / "config" / CATALOG_FILENAME,
+        ]
+        ordered: list[Path] = []
+        for candidate in candidates:
+            if candidate not in ordered:
+                ordered.append(candidate)
+        return ordered
 
     def _resolve_catalog_path(self) -> Path | None:
-        """Find error_messages.yaml searching backend static dir then infrastructure.
+        """First candidate that exists, recording every path searched.
 
-        Helper for load_catalog (Issue #912).
+        Helper for load_catalog (Issue #912, #12969).
         """
-        # Try backend-bundled static dir first (always present when backend is synced)
-        backend_local = PATH.STATIC_DIR / "error_messages.yaml"
-        if backend_local.exists():
-            return backend_local
-
-        # Fall back to infrastructure path (works on dev machine / full-repo deploys)
-        infra_path = PATH.CONFIG_DIR / "error_messages.yaml"
-        if infra_path.exists():
-            return infra_path
-
+        self.searched_paths = self._candidate_paths()
+        for candidate in self.searched_paths:
+            if candidate.exists():
+                return candidate
         return None
 
     def _load_builtin_fallback(self) -> None:
@@ -470,9 +517,15 @@ class ErrorCatalog:
                 details=data.get("details"),
             )
         self._initialized = True
-        logger.warning(
-            "Error catalog YAML not found; using built-in fallback (%d errors)",
+        self.source = SOURCE_BUILTIN_FALLBACK
+        # #12969: "not found" without saying WHERE it looked is why this sat
+        # unexamined in two separate log sweeps. ERROR, not WARNING: the
+        # deployed catalog being present and unread is a misconfiguration, and
+        # every edit to it is silently a no-op until someone notices.
+        logger.error(
+            "Error catalog YAML not found; using built-in fallback (%d errors). Searched, in order: %s",
             len(self._catalog),
+            ", ".join(str(path) for path in self.searched_paths) or "no path at all — the resolver never ran",
         )
 
     def load_catalog(self, catalog_path: Path | None = None) -> bool:
@@ -483,20 +536,27 @@ class ErrorCatalog:
             catalog_path: Path to error_messages.yaml (auto-detected if None)
 
         Returns:
-            True if loaded successfully, False otherwise
+            True only if the deployed YAML catalog is in use. False means the
+            built-in fallback is loaded — the platform still answers, but the
+            deployed catalog is NOT what it is answering from (#12969).
         """
         if self._initialized and catalog_path is None:
-            # Already loaded from default path
-            return True
+            # Already loaded — report which catalog, not merely that one loaded.
+            return self.source == SOURCE_YAML
 
         # Auto-detect catalog path (Issue #912: try multiple locations)
         if catalog_path is None:
             catalog_path = self._resolve_catalog_path()
 
         if catalog_path is None or not catalog_path.exists():
-            # Issue #912: graceful fallback — prevents HTTP 500 when YAML is missing
+            # Issue #912: the built-in fallback still prevents an HTTP 500 when
+            # the YAML is missing, and that stays. #12969: it no longer reports
+            # success. Returning True made "the deployed catalog is in use" and
+            # "the deployed catalog was never found" the same answer — and it
+            # was the second one on every host, for as long as the install had
+            # existed, while the fallback happened to agree so nothing showed.
             self._load_builtin_fallback()
-            return True
+            return False
 
         try:
             # Load YAML catalog
@@ -506,6 +566,7 @@ class ErrorCatalog:
             self._catalog_path = catalog_path
             self._parse_catalog()
             self._initialized = True
+            self.source = SOURCE_YAML
 
             logger.info(
                 "Loaded error catalog: %d errors from %s",
@@ -517,7 +578,7 @@ class ErrorCatalog:
         except Exception as e:
             logger.error("Failed to load error catalog: %s", e, exc_info=True)
             self._load_builtin_fallback()
-            return True
+            return False
 
     def _parse_catalog(self):
         """Parse raw YAML data into ErrorDefinition objects (Issue #315 - uses helpers)"""
@@ -624,20 +685,28 @@ class ErrorCatalog:
         return {
             "total_errors": len(self._catalog),
             "catalog_path": str(self._catalog_path) if self._catalog_path else None,
+            "source": self.source,
             "version": self._raw_data.get("version") if self._raw_data else None,
             "last_updated": (self._raw_data.get("last_updated") if self._raw_data else None),
             "by_category": category_counts,
             "by_component": component_counts,
         }
 
+    @property
+    def catalog_path(self) -> Path | None:
+        """Where the loaded catalog came from, or None when on the built-ins."""
+        return self._catalog_path
+
     def reload_catalog(self) -> bool:
         """
         Force reload catalog from disk
 
         Returns:
-            True if reloaded successfully
+            True only if the deployed YAML catalog is in use after the reload;
+            False if it fell back to the built-ins (#12969).
         """
         self._initialized = False
+        self.source = SOURCE_UNLOADED
         return self.load_catalog(self._catalog_path)
 
 
