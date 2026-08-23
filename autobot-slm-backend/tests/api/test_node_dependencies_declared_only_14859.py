@@ -30,7 +30,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 
 _SLM_ROOT = Path(__file__).resolve().parents[2]
 _REGISTRY = _SLM_ROOT / "services" / "role_registry.py"
