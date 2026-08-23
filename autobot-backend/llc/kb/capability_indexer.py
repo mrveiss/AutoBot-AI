@@ -23,7 +23,7 @@ async def _fetch_agent_row(agent_id: str, company_id: str) -> Optional[Dict[str,
     """Read agent data from agent_org_nodes for capability indexing."""
     from sqlalchemy import text
 
-    from llc.db import get_async_session_factory
+    from user_management.database import get_async_session_factory
 
     factory = get_async_session_factory()
     async with factory() as session:
