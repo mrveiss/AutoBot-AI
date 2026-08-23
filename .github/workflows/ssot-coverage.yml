@@ -58,6 +58,15 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
+      with:
+        # fetch-depth: 2, not the actions/checkout default of 1. On a
+        # pull_request the checkout is the MERGE commit, and the baseline
+        # no-growth guard below has to diff this branch's baseline against the
+        # base's. Depth 2 supplies both parents, so scripts/lib/git-scope.sh
+        # resolves HEAD^1 without any event payload. At depth 1 it resolves
+        # nothing and the guard fails CLOSED — correct, but it would red every
+        # run rather than actually comparing.
+        fetch-depth: 2
 
     - name: Run SSOT-aware hardcoded value detection
       id: ssot_check
@@ -112,6 +121,22 @@ jobs:
         # entry naming a path that has moved exempts nothing, silently, and
         # re-permits the value the moment the path comes back.
         ./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
+
+    - name: Fail if the hardcoded-value baseline GREW (#14371)
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        # BLOCKING, and the other half of the audit above. That one checks the
+        # baseline references nothing stale; this one checks it has not quietly
+        # acquired anything. Without it the whole gate is bypassed in one line:
+        # hardcode a value and append its key to the baseline in the same
+        # change, and the detector's correct finding is suppressed under a
+        # green check. The invariant was written in a comment and asserted
+        # nowhere.
+        ./pipeline-scripts/check_baseline_no_growth.sh
 
     - name: Comment on PR with SSOT status
       # #14153: this is a nicety on top of the analysis above, not the

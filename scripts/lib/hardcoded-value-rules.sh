@@ -242,6 +242,31 @@ _hv_get_call_argument() {
     [[ $1 =~ $re ]]
 }
 
+# Strip the userinfo out of a URL-shaped value before it is reported.
+#
+# Both rules that emit one of these echo the literal they matched, and that
+# literal reaches a tracked baseline file and a public CI log that is posted
+# onto pull requests. `postgresql://user:pass@host/db` therefore travels
+# verbatim into both -- demonstrated, not hypothetical: two such values were
+# already sitting in the generated baseline. Those two happen to be
+# placeholders, which is luck about the sample, not a property of the
+# mechanism: a real credential in a real DSN lands there identically.
+#
+# Shared by _hv_rule_dsn and _hv_rule_url rather than written twice -- they had
+# the same defect for the same reason, and two redactors would be two things to
+# drift. The scheme and host survive so the finding is still actionable; only
+# the credential is dropped.
+#
+# `[^/@[:space:]]*` before the `@` is what keeps this from eating a path: in
+# `https://example.com/a@b` the `@` follows a `/`, so nothing is redacted.
+_hv_redact_userinfo() {
+    if [[ $1 =~ ^(.*[a-zA-Z0-9+.-]+://)[^/@[:space:]]*@(.*)$ ]]; then
+        printf '%s<redacted>@%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        return 0
+    fi
+    printf '%s' "$1"
+}
+
 _hv_emit() {
     printf '%s|%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" "$5" "$6"
 }
@@ -328,7 +353,7 @@ _hv_rule_dsn() {
     _hv_match "$3" "$_HV_DSN_QUOTED_RE" || return 0
     local dsn="$HV_MATCH"
     [[ $3 =~ $_HV_DSN_SKIP_RE ]] && return 0
-    _hv_emit VIOLATION other "$1" "$2" "$dsn" "config.database.* from ssot_config, or the AUTOBOT_DB_URL env var"
+    _hv_emit VIOLATION other "$1" "$2" "$(_hv_redact_userinfo "$dsn")" "config.database.* from ssot_config, or the AUTOBOT_DB_URL env var"
 }
 
 # Hardcoded URLs (detector 2 only — the single rule that fork alone carried).
@@ -343,7 +368,7 @@ _hv_rule_url() {
     # A URL containing a known SSOT IP is reported by _hv_rule_ip instead, with
     # the config key that replaces it — a strictly more useful message.
     [[ $3 =~ $HV_VM_IP ]] && return 0
-    _hv_emit VIOLATION other "$1" "$2" "$url" "SSOT config URLs (config.backend_url, config.redis_url, …)"
+    _hv_emit VIOLATION other "$1" "$2" "$(_hv_redact_userinfo "$url")" "SSOT config URLs (config.backend_url, config.redis_url, …)"
 }
 
 # Account identities in the positions that actually carry one (detector 1,
@@ -519,21 +544,81 @@ declare -A HV_BASELINE_SEEN=()
 # unbound-variable crash that looks like a scan failure.
 HV_SUPPRESSED=0
 
-# Load the baseline. A baseline file that is named but absent, or that parses to
-# nothing, is FATAL: an empty exemption set and an unread exemption set look
-# identical to every caller, and the unread one silently turns 1977 known
-# findings into 1977 build failures.
-hv_load_baseline() {
-    local file="${1:?baseline path required}" line count key
-    HV_BASELINE=(); HV_BASELINE_SEEN=()
-    [ -f "$file" ] || { printf 'FATAL: baseline %s does not exist\n' "$file" >&2; return 1; }
-    while IFS= read -r line; do
-        [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
-        count="${line%%|*}"; key="${line#*|}"
-        HV_BASELINE["$key"]="$count"
-    done < "$file"
-    [ "${#HV_BASELINE[@]}" -gt 0 ] || { printf 'FATAL: baseline %s parsed to zero entries\n' "$file" >&2; return 1; }
+# Parse a baseline file into the associative array named by $2.
+#
+# One parser, two callers: hv_load_baseline below and the no-growth guard, which
+# has to read TWO baselines (this branch's and the base ref's) in one process.
+# Writing the guard its own parser would be a second thing to drift from the
+# format -- the exact fork this whole change exists to stop.
+#
+# Fail-closed at every step. A named-but-absent file, a file that parses to
+# nothing, a line whose count is not a number, and a line with an empty key are
+# all FATAL: an unread exemption set and an empty one are indistinguishable to
+# every caller, and the unread one silently turns 1977 known findings into 1977
+# build failures -- or, in the guard's direction, waves through every addition.
+hv_parse_baseline_into() {
+    local _hv_bp_file="${1:?baseline path required}" _hv_bp_line _hv_bp_count _hv_bp_key
+    local -n _hv_bp_out="${2:?target array name required}"
+    _hv_bp_out=()
+    [ -f "$_hv_bp_file" ] || { printf 'FATAL: baseline %s does not exist\n' "$_hv_bp_file" >&2; return 1; }
+    while IFS= read -r _hv_bp_line; do
+        [[ $_hv_bp_line =~ ^[[:space:]]*(#|$) ]] && continue
+        _hv_bp_count="${_hv_bp_line%%|*}"
+        _hv_bp_key="${_hv_bp_line#*|}"
+        [[ $_hv_bp_count =~ ^[0-9]+$ ]] || {
+            printf 'FATAL: %s: count is not a number: %s\n' "$_hv_bp_file" "$_hv_bp_line" >&2
+            return 1
+        }
+        [ -n "$_hv_bp_key" ] && [ "$_hv_bp_key" != "$_hv_bp_line" ] || {
+            printf 'FATAL: %s: line has no <count>|<key> separator: %s\n' "$_hv_bp_file" "$_hv_bp_line" >&2
+            return 1
+        }
+        _hv_bp_out["$_hv_bp_key"]="$_hv_bp_count"
+    done < "$_hv_bp_file"
+    [ "${#_hv_bp_out[@]}" -gt 0 ] || {
+        printf 'FATAL: baseline %s parsed to zero entries\n' "$_hv_bp_file" >&2
+        return 1
+    }
     return 0
+}
+
+# Load the baseline into HV_BASELINE for suppression.
+hv_load_baseline() {
+    HV_BASELINE=(); HV_BASELINE_SEEN=()
+    hv_parse_baseline_into "${1:?baseline path required}" HV_BASELINE
+}
+
+# Report every way the baseline at $2 is LARGER than the one at $1.
+#
+# THE INVARIANT THIS ASSERTS, which until now lived only in a comment three
+# functions up: the baseline only ever shrinks. `--audit-baseline` checks the
+# opposite direction -- that no entry has been stranded -- so between them the
+# file cannot reference what no longer exists NOR quietly acquire what does.
+#
+# Without this, the bypass is one line: hardcode a value, append its key here in
+# the same change, and hv_partition suppresses it as already-known while
+# ssot-coverage reports zero violations over a finding the detector made
+# correctly. The count-in-key design already stopped a bump on an EXISTING key
+# from being free; a brand-new key was the more direct route and was undefended.
+#
+# Shrinking is not growth and must stay silent: removals and decreases are how a
+# fixed violation leaves, and a guard that blocked those would make the file
+# unmaintainable. Returns 0 when the new baseline is a subset-or-equal.
+hv_baseline_growth() {
+    local old_file="${1:?old baseline required}" new_file="${2:?new baseline required}" key found=0
+    declare -A _hv_old=() _hv_new=()
+    hv_parse_baseline_into "$old_file" _hv_old || return 2
+    hv_parse_baseline_into "$new_file" _hv_new || return 2
+    for key in "${!_hv_new[@]}"; do
+        if [ -z "${_hv_old[$key]+set}" ]; then
+            printf 'NEW-KEY  (+%s)  %s\n' "${_hv_new[$key]}" "$key"
+            found=1
+        elif [ "${_hv_new[$key]}" -gt "${_hv_old[$key]}" ]; then
+            printf 'COUNT-UP (%s->%s)  %s\n' "${_hv_old[$key]}" "${_hv_new[$key]}" "$key"
+            found=1
+        fi
+    done
+    [ "$found" -eq 0 ]
 }
 
 # Split records on stdin into new (stdout) and baselined (counted in

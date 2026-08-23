@@ -194,7 +194,7 @@
 1|other|autobot-backend/code_analysis/setup.py|https://github.com/autobot/code-analysis-suite/issues
 1|other|autobot-backend/code_analysis/src/env_analyzer.py|"mysql://"
 2|other|autobot-backend/code_analysis/src/env_analyzer.py|"postgresql://"
-1|other|autobot-backend/code_analysis/src/env_analyzer.py|"postgresql://user:pass@host/db"
+1|other|autobot-backend/code_analysis/src/env_analyzer.py|"postgresql://<redacted>@host/db"
 2|other|autobot-backend/code_intelligence/bug_predictor.py|100
 1|other|autobot-backend/code_intelligence/code_generation/generator.py|"system"
 1|other|autobot-backend/code_intelligence/code_generation/generator.py|"user"
@@ -596,7 +596,7 @@
 1|other|autobot-frontend/src/components/file-browser/FilePreview.stories.ts|https://via.placeholder.com/400x300
 1|other|autobot-frontend/src/components/knowledge/EntityExtractor.vue|'user'
 1|other|autobot-frontend/src/components/knowledge/WebResearchSettings.vue|30
-1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|"postgresql://user:pass@host:5432/db"
+1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|"postgresql://<redacted>@host:5432/db"
 4|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://gitlab.com
 1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://www.googleapis.com/auth/drive.readonly
 1|ssot|autobot-frontend/src/components/security/SecretsManager.vue|:5432
