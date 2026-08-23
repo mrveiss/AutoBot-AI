@@ -179,6 +179,12 @@ def test_the_sweep_actually_reached_the_tree() -> None:
         "(#14041 enumerated 56 scripts); the matcher has regressed"
     )
     rels = {site.rel for site in _SITES}
+    # 55, not 56: #14371 retired
+    # autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh, a dormant
+    # unwired fork whose rules moved into scripts/lib/hardcoded-value-rules.sh.
+    # The floor is left AT the current count rather than lowered for headroom, so
+    # it still catches a regressed matcher; a future legitimate retirement has to
+    # come here and say so, which is the point.
     assert len({site.rel for site in _SITES}) >= 55, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
