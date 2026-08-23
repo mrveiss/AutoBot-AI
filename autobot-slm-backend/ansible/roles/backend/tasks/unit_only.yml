@@ -24,20 +24,32 @@
 # "[PLAY 2] Backend | Restart service" task after this; adding a second restart
 # here would bounce the backend twice per update.
 ---
-- name: "Backend | Render systemd unit from template (#12777)"
+# #13828: this rendered ONLY autobot-backend.service, so a change to a celery
+# unit template could never reach a host through the updater -- it landed only
+# on a full `roles/backend` run, which the update path does not do. The whole
+# point of unit_only is that unit-file changes reach hosts without one, and it
+# did that for one of the three units the role owns.
+#
+# Looped rather than three copied tasks: a fourth unit added to the role should
+# need a list entry, not another block to forget.
+- name: "Backend | Render systemd units from templates (#12777, #13828)"
   ansible.builtin.template:
-    src: autobot-backend.service.j2
-    dest: /etc/systemd/system/autobot-backend.service
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
     owner: root
     group: root
   become: true
-  register: _backend_unit_rendered
+  loop:
+    - autobot-backend.service
+    - autobot-celery.service
+    - autobot-celery-beat.service
+  register: _backend_units_rendered
   tags: [backend, systemd, unit]
 
 - name: "Backend | Reload systemd after unit change (#12777)"
   ansible.builtin.systemd:
     daemon_reload: true
   become: true
-  when: _backend_unit_rendered.changed
+  when: _backend_units_rendered.changed
   tags: [backend, systemd, unit]

@@ -58,11 +58,12 @@ _IMPLICIT_GROUPS = frozenset({"all", "localhost", "*", "127.0.0.1"})
 # inventory. Each entry needs a tracking issue: a bare name here is
 # indistinguishable from the silent-skip bug this guard exists to catch, so the
 # allowlist records *why* it is not one rather than hiding it.
-#   `target` — slm-service-control.yml / slm-service-logs.yml, the SLM remote
-#   service-control path. No shipped inventory defines it and no in-repo caller
-#   passes one; whether it should become `{{ target }}` (loud failure) is a
-#   remote-execution decision tracked in #13786.
-_RUNTIME_SUPPLIED_PATTERNS = frozenset({"target"})
+# (#13786 resolved the only entry this ever held: slm-service-control.yml and
+# slm-service-logs.yml now declare `hosts: "{{ target }}"`, so an unset target is
+# an undefined-variable error rather than a play that matches nothing and reports
+# success. Templated patterns are skipped above, so an entry for it here would be
+# a dormant exemption -- one that guards nothing while reading as though it does.)
+_RUNTIME_SUPPLIED_PATTERNS: frozenset = frozenset()
 
 
 def _ansible_files(root: pathlib.Path) -> list[pathlib.Path]:
@@ -143,11 +144,7 @@ def _inventory_paths(root: pathlib.Path) -> list[pathlib.Path]:
 
 def _ini_groups(text: str) -> set:
     """Group names from an INI-format inventory (``[group]`` headers)."""
-    return {
-        m.group(1).split(":")[0]
-        for line in text.splitlines()
-        if (m := re.match(r"^\s*\[([^\]]+)\]\s*$", line))
-    }
+    return {m.group(1).split(":")[0] for line in text.splitlines() if (m := re.match(r"^\s*\[([^\]]+)\]\s*$", line))}
 
 
 def inventory_groups(root: pathlib.Path) -> dict[str, set]:
