@@ -185,10 +185,18 @@ afterEach(() => {
   while (mountedWrappers.length) mountedWrappers.pop()?.unmount()
 })
 
+// #14854: built once for this file, not once per mount. The `en` bundle is
+// ~400KB and this file mounts 16 times, so constructing a fresh i18n inside the
+// helper re-ingested the entire message tree on every test — which is what
+// pushed two cases past the 10s per-test timeout. The instance is read-only
+// here (no test changes locale or messages), so sharing it is safe.
+const i18nForTests = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 async function mountOnCanvas(fixture?: Fixture) {
   mockApi(fixture)
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-  const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true } } })
+  const wrapper = mount(OrgChart, {
+    global: { plugins: [i18nForTests], stubs: { HireAgentModal: true } },
+  })
   mountedWrappers.push(wrapper as unknown as VueWrapper)
   await flushPromises()
   await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')

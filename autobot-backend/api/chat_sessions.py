@@ -37,6 +37,11 @@ from api.schemas_chat import (
     SessionUpdateData,
 )
 from api.schemas_common import DataResponse
+from api.session_events import (
+    publish_session_created,
+    publish_session_deleted,
+    publish_session_updated,
+)
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -896,6 +901,10 @@ async def create_session(session_data: SessionCreate, request: Request):
         outcome="success",
     )
 
+    # #14820: tell every other client this session now exists.  The backend is
+    # the authority for session state; observers render from what it publishes.
+    await publish_session_created(session_id, session if isinstance(session, dict) else {})
+
     return create_chat_response(
         data=session,
         message="Session created successfully",
@@ -956,6 +965,9 @@ async def update_session(
         session_id,
         {"title": session_data.title, "request_id": request_id},
     )
+
+    # #14820: a title change made in one client must show up in the others.
+    await publish_session_updated(session_id, {"title": session_data.title})
 
     return create_chat_response(
         data=updated_session,
@@ -1442,6 +1454,10 @@ async def delete_session(
         },
         outcome="success",
     )
+
+    # #14820: other clients must drop this session from their list rather than
+    # holding a reference to something the backend no longer has.
+    await publish_session_deleted(session_id)
 
     return _build_delete_session_response(
         session_id,

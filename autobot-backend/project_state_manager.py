@@ -274,7 +274,9 @@ class ProjectStateManager:
 
     def _get_phase4_capabilities(self) -> List[PhaseCapability]:
         """Get Phase 4 System Integration capabilities."""
-        ws_url = get_service_url("backend", "/ws").replace("http://", "ws://").replace("https://", "wss://")
+        # #14822: probe the canonical channel socket, not the legacy broadcast
+        # endpoint — a capability report should describe what clients use.
+        ws_url = get_service_url("backend", "/api/ws/live").replace("http://", "ws://").replace("https://", "wss://")
         return [
             PhaseCapability(
                 "terminal_integration",
