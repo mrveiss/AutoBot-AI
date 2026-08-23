@@ -328,6 +328,7 @@ function groupLabel(group: OrgPeopleGroup): string {
                 v-if="person.orgNodeId"
                 type="button"
                 class="truncate text-sm font-medium text-autobot-text-primary hover:text-autobot-text-link"
+                :data-testid="`org-person-open-${person.key}`"
                 @click="emit('select', person.orgNodeId)"
               >
                 {{ person.name }}
