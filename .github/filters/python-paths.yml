@@ -45,3 +45,17 @@ python:
   - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2'
   - 'autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2'
   - 'autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2'
+  # #14909/#14891: the same shape again, for the hook guards. Three repo_tests
+  # assert on inputs that contain no Python at all — git hook INDEX MODES
+  # (git_hooks_executable_test.py), the copy-based installer
+  # (git_hooks_installer_test.py) and every shell script under
+  # autobot-infrastructure/ (shell_lib_sources_resolve_test.py). Without these
+  # entries, flipping tools/git-hooks/pre-push back to 100644, or reintroducing
+  # `|| true` in an extensionless hook, touches no `**/*.py` path: the shim
+  # computes `python != 'true'`, reports `python-suite` green, and the guard
+  # written to catch exactly that never runs. A mode-only change still appears
+  # in the changed-file list, so these entries do gate it.
+  - 'tools/git-hooks/**'
+  - 'scripts/install-git-hooks.sh'
+  - 'autobot-infrastructure/shared/scripts/hooks/**'
+  - 'autobot-infrastructure/**/*.sh'
