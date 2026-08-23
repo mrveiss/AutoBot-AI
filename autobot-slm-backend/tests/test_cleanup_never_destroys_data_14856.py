@@ -298,8 +298,7 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
     assert deletions_seen > 50, f"only {deletions_seen} state=absent tasks found — the sweep is not finding deletions"
     assert not offenders, (
         "these tasks remove a whole component directory themselves instead of delegating to "
-        f"{_PRIMITIVE.name}, so nothing checks whether the directory holds data/:\n  "
-        + "\n  ".join(offenders)
+        f"{_PRIMITIVE.name}, so nothing checks whether the directory holds data/:\n  " + "\n  ".join(offenders)
     )
 
 
