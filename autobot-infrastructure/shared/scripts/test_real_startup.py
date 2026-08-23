@@ -10,6 +10,16 @@ Test real AutoBot startup time without importing heavy libraries
 import os
 import sys
 import time
+from pathlib import Path
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 
 def test_backend_import():
@@ -22,13 +32,13 @@ def test_backend_import():
     # Add project root to path
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    print("📦 Importing backend.main (with lazy loading)...")
+    print("📦 Importing backend main (with lazy loading)...")
     import_start = time.time()
-    from backend import main
+    import main
 
     import_duration = time.time() - import_start
 
-    print(f"✅ backend.main imported in: {import_duration:.3f}s")
+    print(f"✅ backend main imported in: {import_duration:.3f}s")
 
     # Test that the app isn't created yet
     print(f"📋 App type: {type(main.app)}")
@@ -62,7 +72,7 @@ def test_uvicorn_startup():
 
     # This is what uvicorn roughly does:
     # 1. Import the module
-    from backend import main
+    import main
 
     import_time = time.time() - start_time
 

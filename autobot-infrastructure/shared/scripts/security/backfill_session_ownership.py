@@ -34,12 +34,22 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from backend.security.session_ownership import SessionOwnershipValidator
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
+from security.session_ownership import SessionOwnershipValidator  # noqa: E402
 
 from autobot_shared.redis_client import get_async_redis_client
 

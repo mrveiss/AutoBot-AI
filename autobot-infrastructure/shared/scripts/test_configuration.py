@@ -17,6 +17,16 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# #14518: the ``src.`` package prefix below is a pre-restructure path that no
+# longer exists (src/unified_config.py was a re-export wrapper deleted by
+# 441649af66 in favour of the ``config`` package, and src/ later became
+# autobot-backend/). autobot-backend was also never on sys.path, so this
+# script raised ModuleNotFoundError on its own import block. Add the
+# directory the way the other operator entry points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 # Setup logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +37,7 @@ def test_config_imports():
     logger.info("Testing configuration imports...")
 
     try:
-        import src.unified_config  # noqa: F401 - test imports work
+        import config  # noqa: F401 - test imports work
 
         logger.info("   All configuration imports successful")
         return True

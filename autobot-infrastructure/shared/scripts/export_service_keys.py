@@ -21,8 +21,17 @@ logger = logging.getLogger(__name__)
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 import structlog
-from backend.security.service_auth import ServiceAuthManager
+from security.service_auth import ServiceAuthManager  # noqa: E402
 
 from autobot_shared.redis_client import get_async_redis_client
 

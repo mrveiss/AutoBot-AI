@@ -14,7 +14,8 @@
 #     56-script enumeration (docs/audit/ssot_config_shell_library_14041.md)
 #   - a literal that matches the SSOT keeps its value; a literal that diverges
 #     (AUTOBOT_BROWSER_SERVICE_PORT: 3000 vs 9001) gets the SSOT value
-#   - a missing/unreadable library still degrades via `|| true`
+#   - a missing/unreadable library is FATAL and loud (#14172) -- it used to
+#     degrade via `|| true`, which is the defect #14172 closed
 
 set -uo pipefail
 
@@ -45,46 +46,114 @@ out=$(bash -c "source '$LIB'; echo \"\$AUTOBOT_BACKEND_PORT\"")
 check "shape A: AUTOBOT_BACKEND_PORT default" "$out" "8001"
 
 # --- literal matches SSOT: value unchanged ----------------------------------
-out=$(bash -c "source '$LIB' 2>/dev/null || true; echo \"\${AUTOBOT_BACKEND_PORT:-8001}\"")
+out=$(bash -c "source '$LIB'; echo \"\${AUTOBOT_BACKEND_PORT:-8001}\"")
 check "matching literal (AUTOBOT_BACKEND_PORT 8001)" "$out" "8001"
 
 # --- literal diverges from SSOT: script now gets the SSOT value -------------
-out=$(bash -c "source '$LIB' 2>/dev/null || true; echo \"\${AUTOBOT_BROWSER_SERVICE_PORT:-3000}\"")
+out=$(bash -c "source '$LIB'; echo \"\${AUTOBOT_BROWSER_SERVICE_PORT:-3000}\"")
 check "diverging literal (AUTOBOT_BROWSER_SERVICE_PORT 3000 -> SSOT 9001)" "$out" "9001"
 
-# --- missing library: || true degrades to the literal, unchanged -----------
-out=$(bash -c "source /nonexistent/lib/ssot-config.sh 2>/dev/null || true; echo \"\${AUTOBOT_BROWSER_SERVICE_PORT:-3000}\"")
-check "missing library degrades to literal" "$out" "3000"
+# --- #14172: a missing library is FATAL and LOUD, not a silent degrade ------
+# This is the contract inversion #14172 decided. Before, every one of the 56
+# scripts answered a missing config bootstrap by carrying on with its hardcoded
+# ${VAR:-literal} right-hand side -- indistinguishable at runtime from having no
+# config system at all, which is exactly how #14041 stayed invisible.
+#
+# Executes the block AS SHIPPED, extracted out of a real script, rather than
+# re-typing the idiom here: a future edit that reintroduces `|| true` on the
+# shipped line has to trip this test. status-all-vms.sh is used because its
+# source line is the plain single-path shape the other 50 scripts share.
+_shipped="${REPO_ROOT}/autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh"
+_block=$(sed -n '/^source .*lib\/ssot-config\.sh/,/^}/p' "$_shipped")
+if [ -z "$_block" ]; then
+    echo "FAIL: could not extract the shipped ssot-config source block from status-all-vms.sh"
+    fail=$((fail + 1))
+else
+    _stderr_file="$(mktemp)"
+    # SCRIPT_DIR points at a directory with no lib/ -- the deploy/gitignore/rename
+    # regression #14172 exists to make visible.
+    out=$(bash -c "
+SCRIPT_DIR='$(mktemp -d)'
+$_block
+echo REACHED_THE_REST_OF_THE_SCRIPT
+" 2>"$_stderr_file")
+    rc=$?
+    _stderr_out=$(cat "$_stderr_file"); rm -f "$_stderr_file"
+
+    if [ "$rc" -ne 0 ]; then
+        echo "PASS: missing library exits non-zero (rc=$rc)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL: missing library exited 0 -- the script carried on with hardcoded fallbacks"
+        fail=$((fail + 1))
+    fi
+    check "missing library never reaches the rest of the script" "$out" ""
+    case "$_stderr_out" in
+        *FATAL*) echo "PASS: missing library announces itself on stderr"; pass=$((pass + 1)) ;;
+        *) echo "FAIL: missing library produced no FATAL on stderr -- got: [$_stderr_out]"; fail=$((fail + 1)) ;;
+    esac
+fi
 
 # --- Shape B: two-path attempt (check_status.sh et al.), first path wins ----
+# Both shape-B assertions execute the block AS SHIPPED for the same reason as
+# above. The two scripts sit at different depths, which is the whole reason the
+# shape tries two paths; only the LAST attempt keeps its stderr and dies.
+_shape_b_block() {
+    sed -n '/^source .*lib\/ssot-config\.sh/,/^}/p' "$1"
+}
+
+_b1=$(_shape_b_block "${REPO_ROOT}/autobot-infrastructure/shared/scripts/check_status.sh")
 out=$(bash -c "
 SCRIPT_DIR='${REPO_ROOT}/autobot-infrastructure/shared/scripts'
-source \"\$SCRIPT_DIR/lib/ssot-config.sh\" 2>/dev/null || source \"\$SCRIPT_DIR/../lib/ssot-config.sh\" 2>/dev/null || echo BOTH_FAILED
+$_b1
 echo \"\$AUTOBOT_BACKEND_HOST\"
 ")
 check "shape B: two-path attempt from scripts/ resolves" "$out" "127.0.0.1"
 
 # --- Shape B: second path wins (distributed/check-health.sh depth) ---------
+_b2=$(_shape_b_block "${REPO_ROOT}/autobot-infrastructure/shared/scripts/distributed/check-health.sh")
 out=$(bash -c "
 SCRIPT_DIR='${REPO_ROOT}/autobot-infrastructure/shared/scripts/distributed'
-source \"\$SCRIPT_DIR/../lib/ssot-config.sh\" 2>/dev/null || source \"\$SCRIPT_DIR/lib/ssot-config.sh\" 2>/dev/null || echo BOTH_FAILED
+$_b2
 echo \"\$AUTOBOT_OLLAMA_HOST\"
 ")
 check "shape B: two-path attempt from distributed/ resolves" "$out" "127.0.0.1"
 
+# --- Shape B is still fatal when BOTH paths miss --------------------------
+_stderr_file="$(mktemp)"
+out=$(bash -c "
+SCRIPT_DIR='$(mktemp -d)'
+$_b1
+echo REACHED_THE_REST_OF_THE_SCRIPT
+" 2>"$_stderr_file")
+rc=$?
+_stderr_out=$(cat "$_stderr_file"); rm -f "$_stderr_file"
+if [ "$rc" -ne 0 ] && [ "$out" = "" ]; then
+    echo "PASS: shape B dies when both paths miss"
+    pass=$((pass + 1))
+else
+    echo "FAIL: shape B survived both paths missing -- rc=$rc out=[$out]"
+    fail=$((fail + 1))
+fi
+case "$_stderr_out" in
+    *FATAL*) echo "PASS: shape B announces itself on stderr"; pass=$((pass + 1)) ;;
+    *) echo "FAIL: shape B produced no FATAL on stderr -- got: [$_stderr_out]"; fail=$((fail + 1)) ;;
+esac
+
 # --- ssh-hardening depth (../../lib) ----------------------------------------
+_b3=$(_shape_b_block "${REPO_ROOT}/autobot-infrastructure/shared/scripts/security/ssh-hardening/verify-ssh-security.sh")
 out=$(bash -c "
 SCRIPT_DIR='${REPO_ROOT}/autobot-infrastructure/shared/scripts/security/ssh-hardening'
-source \"\${SCRIPT_DIR}/../../lib/ssot-config.sh\" 2>/dev/null || true
+$_b3
 echo \"\$AUTOBOT_REDIS_HOST\"
 ")
 check "ssh-hardening depth (../../lib) resolves" "$out" "127.0.0.1"
 
-# --- Shape C: status-all-vms.sh -- unguarded source under set -e, VMS array -
+# --- Shape C: status-all-vms.sh -- shipped block under set -e, VMS array ----
 out=$(bash -c "
 set -e
 SCRIPT_DIR='${REPO_ROOT}/autobot-infrastructure/shared/scripts/vm-management'
-source \"\$SCRIPT_DIR/../lib/ssot-config.sh\"
+$_block
 echo \"ok:\${VMS[browser]}:\$AUTOBOT_BROWSER_SERVICE_PORT\"
 ")
 check "shape C: status-all-vms.sh no longer crashes, VMS populated" "$out" "ok:127.0.0.1:9001"

@@ -4,6 +4,21 @@
 # Backend Startup Performance Diagnosis Script
 # Analyzes what's causing slow startup times
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Import root for the generated profiler below, derived from this script's own
+# location: the repo root is three levels up (scripts/ -> shared/ ->
+# autobot-infrastructure/ -> repo root) and the backend modules are top-level
+# under autobot-backend. Baked into the generated file so it profiles the real
+# backend from any cwd (#14867).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+BACKEND_DIR="${REPO_ROOT}/autobot-backend"
+
+if [ ! -d "${BACKEND_DIR}" ]; then
+    echo "ERROR: backend package root not found at ${BACKEND_DIR};" >&2
+    echo "       the generated profiler would import nothing (#14867)." >&2
+    exit 1
+fi
+
 echo "🔍 AutoBot Backend Startup Performance Analysis"
 echo "=============================================="
 echo "Investigating ~1 minute startup delay..."
@@ -242,8 +257,14 @@ echo "     - Cache heavy computations"
 
 # Step 10: Generate startup profile script
 echo -e "\n${BLUE}📊 Step 10: Creating Startup Profiler${NC}"
-cat > scripts/profile_startup.py << 'EOF'
+cat > scripts/profile_startup.py << EOF
 #!/usr/bin/env python3
+# Import root baked in at generation time (#14867).
+import sys
+sys.path.insert(0, "${BACKEND_DIR}")
+EOF
+
+cat >> scripts/profile_startup.py << 'EOF'
 """
 Startup Performance Profiler
 Profiles AutoBot backend startup to identify bottlenecks
@@ -251,15 +272,15 @@ Profiles AutoBot backend startup to identify bottlenecks
 import cProfile
 import pstats
 import time
-import sys
 import os
 
 def profile_startup():
     """Profile the startup sequence"""
     print("🔍 Starting backend startup profiling...")
 
-    # Add the project root to Python path
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # (#14867) The backend package root is inserted at the top of this file from
+    # the location of diagnose_startup_performance.sh; the old two-parent walk
+    # from __file__ resolved to the repo root, where these modules do not live.
 
     profiler = cProfile.Profile()
     profiler.enable()
@@ -267,9 +288,11 @@ def profile_startup():
     start_time = time.time()
 
     try:
-        # Import main components
+        # (#14867) There is no `backend` package: main.py and app_factory.py are
+        # top-level modules under autobot-backend, which is on sys.path above.
         print("Importing main modules...")
-        from backend import main, app_factory
+        import app_factory
+        import main  # noqa: F401  - imported for its startup side effects
 
         print("Creating FastAPI app...")
         app = app_factory.create_app()
@@ -277,8 +300,12 @@ def profile_startup():
         end_time = time.time()
 
     except Exception as e:
-        print(f"Error during profiling: {e}")
-        return
+        # (#14867) This used to return normally, so a profiler that never
+        # imported the backend exited 0 and reported nothing was wrong.
+        print(f"Error during profiling: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
     finally:
         profiler.disable()
 

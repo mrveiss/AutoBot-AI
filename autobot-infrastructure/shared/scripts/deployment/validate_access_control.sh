@@ -45,7 +45,11 @@ BACKEND_DIR="${REPO_ROOT}/autobot-backend"
 # while `autobot_shared.*` sits at the repo root. Omitting either leaves half the
 # imports unresolvable, which is the shape of the original bug.
 export PYTHONPATH="${BACKEND_DIR}:${REPO_ROOT}:${PYTHONPATH:-}"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"

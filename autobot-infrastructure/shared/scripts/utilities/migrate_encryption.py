@@ -26,8 +26,18 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# #14518: ``chat_history_manager``, ``config`` and ``encryption_service`` are
+# first-party autobot-backend modules, and that directory was never on
+# sys.path, so this migration raised ModuleNotFoundError on its own import
+# block. Add it the way the other operator entry points in this tree do
+# (#14129). The flat ``chat_history_manager`` module is now the
+# ``chat_history`` package, which is where ChatHistoryManager lives.
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 # Import AutoBot modules after path setup
-from chat_history_manager import ChatHistoryManager  # noqa: E402
+from chat_history import ChatHistoryManager  # noqa: E402
 
 from config import config as global_config_manager  # noqa: E402
 from encryption_service import (  # noqa: E402

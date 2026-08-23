@@ -15,7 +15,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 
 # Configuration
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 AUTOBOT_ROOT="${PROJECT_ROOT}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"

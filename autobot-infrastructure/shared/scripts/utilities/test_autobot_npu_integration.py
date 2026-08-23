@@ -78,7 +78,11 @@ def test_npu_worker_compatibility():
     """Test NPU worker Python compatibility"""
     try:
         # Test if we can import our NPU model manager
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "docker" / "npu-worker"))
+        # npu_model_manager.py ships with the NPU worker, not under shared/
+        # (#14518). parents[3] is autobot-infrastructure/ from
+        # shared/scripts/utilities/; the old three-.parent walk resolved to
+        # shared/docker/npu-worker, which does not exist.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "autobot-npu-worker" / "docker"))
 
         try:
             from npu_model_manager import NPUModelManager

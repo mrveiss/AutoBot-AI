@@ -10,9 +10,19 @@ Detailed startup timing analysis to identify bottlenecks
 import os
 import sys
 import time
+from pathlib import Path
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 
 def time_import(module_name):
@@ -83,7 +93,7 @@ def main():
 
     # Test backend imports
     print("\n🏭 Backend Module Imports:")
-    backend_modules = ["backend.main", "backend.app_factory"]
+    backend_modules = ["main", "app_factory"]
 
     backend_total = 0
     for module in backend_modules:
@@ -96,7 +106,7 @@ def main():
     print("\n🚀 FastAPI App Creation:")
     app_start = time.time()
     try:
-        from backend.app_factory import create_app
+        from app_factory import create_app
 
         create_app()
         app_duration = time.time() - app_start

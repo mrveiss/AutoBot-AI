@@ -23,6 +23,20 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# #14518: the checks below import ``utils.*`` from autobot-backend and
+# ``monitoring.claude_api_monitor`` from autobot-slm-backend (reached through a
+# stale ``src.`` prefix). Neither tree was on sys.path, so the script raised
+# ModuleNotFoundError on its own import block. Add both the way the other
+# operator entry points in this tree do (#14129). Order matters: each insert(0)
+# moves the previous entry down, so autobot-slm-backend ends up ahead of
+# autobot-backend -- both ship a regular ``monitoring`` package and only the SLM
+# one contains claude_api_monitor, so the backend copy must not shadow it.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _tree in ("autobot-backend", "autobot-slm-backend"):
+    _candidate = str(_REPO_ROOT / _tree)
+    if _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
+
 print("=" * 70)
 print("Testing Phase 5 Cleanup & Deprecation (Issue #348)")
 print("=" * 70)
@@ -135,7 +149,7 @@ def test_claude_api_monitor_deprecation():
     print("\n✓ ClaudeAPIMonitor Deprecation:")
 
     # Check module docstring for deprecation notice
-    import src.monitoring.claude_api_monitor as cam_module
+    import monitoring.claude_api_monitor as cam_module
 
     if "DEPRECATED" in cam_module.__doc__:
         print("  ✅ Module marked as DEPRECATED in docstring")
