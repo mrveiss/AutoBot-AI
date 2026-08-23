@@ -105,7 +105,8 @@ export const ServiceURLs = Object.freeze({
 
   // WebSocket URLs
   WEBSOCKET_API: config.websocketUrl,
-  WEBSOCKET_LOCAL: `ws://${NetworkConstants.LOCALHOST_NAME}:${config.port.backend}/api/ws`
+  // #14822: the channel socket is the canonical event endpoint.
+  WEBSOCKET_LOCAL: `ws://${NetworkConstants.LOCALHOST_NAME}:${config.port.backend}/api/ws/live`
 })
 
 /**
