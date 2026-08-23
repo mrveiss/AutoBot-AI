@@ -26,6 +26,7 @@ from typing import Any, Dict, List
 from unittest.mock import patch
 
 from api.websockets import _persist_event_to_chat_history
+from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 from chat_history.messages import MessagesMixin
 
 
@@ -128,19 +129,55 @@ def test_event_is_persisted_with_no_websocket_client_attached() -> None:
     ``broadcast_event``: with no client connected there was no callback, so no
     broadcast, so nothing was ever written. No WebSocket exists in this test at
     all — the event must still land.
+
+    ``tool_output`` is used deliberately. Types in
+    ``SKIP_WEBSOCKET_PERSISTENCE_TYPES`` (``llm_response`` among them) are
+    persisted by their own handlers and this path is *supposed* to skip them, so
+    picking one would assert the opposite of the intended behaviour while
+    looking like a delivery bug.
     """
+    # Guard the premise rather than assuming it: if this type is ever added to
+    # the skip set, fail here with the real reason instead of further down with
+    # a misleading "nothing was persisted" message.
+    assert "tool_output" not in SKIP_WEBSOCKET_PERSISTENCE_TYPES, (
+        "tool_output joined the skip set — this test now proves nothing; pick another persisted type"
+    )
+
     manager = _RecordingHistory()
 
     asyncio.run(
         _persist_with(
             manager,
             {
-                "type": "llm_response",
-                "payload": {"response": "answered offline", "session_id": "session-z"},
+                "type": "tool_output",
+                "payload": {"output": "ran while nobody watched", "session_id": "session-z"},
             },
         )
     )
 
     stored = asyncio.run(manager.get_session_messages("session-z", limit=500))
     assert len(stored) == 1, "nothing was persisted while no client was connected"
-    assert "answered offline" in stored[0]["text"]
+    assert "ran while nobody watched" in stored[0]["text"]
+
+
+def test_a_skipped_type_is_still_skipped_through_the_new_hook() -> None:
+    """The other half of the contract: moving persistence must not start writing
+    types that are deliberately persisted elsewhere (#350).
+
+    Without this, a future change that dropped the skip check would look like an
+    improvement — more events recorded — while silently double-writing every
+    streaming LLM response.
+    """
+    skipped_type = next(iter(SKIP_WEBSOCKET_PERSISTENCE_TYPES))
+    manager = _RecordingHistory()
+
+    asyncio.run(
+        _persist_with(
+            manager,
+            {"type": skipped_type, "payload": {"response": "handled elsewhere", "session_id": "session-y"}},
+        )
+    )
+
+    stored = asyncio.run(manager.get_session_messages("session-y", limit=500))
+    assert stored == [], f"{skipped_type} is persisted by its own handler and must not be double-written here"
+    assert manager.history == []
