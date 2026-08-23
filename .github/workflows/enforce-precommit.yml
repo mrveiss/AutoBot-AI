@@ -153,23 +153,19 @@ jobs:
           # Resolve through HEAD's own parents first (#13880): on a
           # pull_request the checkout is the merge commit, so HEAD^1 is the
           # base tip and HEAD^2 is the PR head — no event payload needed.
-          have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
-          if have 'HEAD^2' && have 'HEAD^1'; then
-            base="HEAD^1"
-          elif have "${PR_BASE_SHA:-x}"; then
-            base="$PR_BASE_SHA"
-          else
-            echo "::error::cannot resolve a base commit — refusing to report 0 changed files as clean"
-            exit 1
-          fi
+          # #13984: this was the FIFTH hand-written copy of the same base
+          # resolution. It now comes from the canonical resolver, which also
+          # supplies the origin/<base> and last-resort-parent fallbacks this
+          # copy never had.
+          # shellcheck source=scripts/lib/git-scope.sh
+          source scripts/lib/git-scope.sh
+          base=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}")
+          git_scope_require_commits "$base" HEAD
           # No extension pathspec: the destructive entries in both #14137
           # (venv) and #14149 (all.yml) are exactly the shapes a
           # source-extension filter would exclude — one has no extension at
           # all, the other isn't a source file.
-          if ! raw_files=$(git diff --name-only "$base" HEAD); then
-            echo "::error::git diff failed for ${base}..HEAD — refusing to report clean."
-            exit 1
-          fi
+          raw_files=$(git_scope_diff_names "$base" HEAD)
           if [ -z "$raw_files" ]; then
             echo "No changed files — skipping pre-commit-no-tracked-symlink."
             exit 0
