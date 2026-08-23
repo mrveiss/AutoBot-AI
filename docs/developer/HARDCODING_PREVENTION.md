@@ -331,10 +331,12 @@ git commit --no-verify -m "Your message"
 ### Script Location
 
 ```text
-scripts/lib/hardcoded-value-rules.sh                 the rules
-pipeline-scripts/detect-hardcoded-values.sh          tree-scan entry point
-autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
-                                                     staged-files entry point
+source scripts/lib/hardcoded-value-rules.sh          the rules — SOURCED by both
+                                                     entry points, never executed,
+                                                     so it is tracked mode 644
+./pipeline-scripts/detect-hardcoded-values.sh        tree-scan entry point (755)
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
+                                                     staged-files entry point (755)
 pipeline-scripts/hardcoded_values_baseline.txt       the measured backlog
 ```
 
