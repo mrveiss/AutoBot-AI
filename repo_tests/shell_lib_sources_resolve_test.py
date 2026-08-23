@@ -217,7 +217,11 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     the site count catches a regex that stopped matching, and the named script
     catches a walk that reaches files but not the ones this guard is about.
     """
-    assert _SCANNED >= 179, (
+    # 180, not 179: fixing slm-post-commit's shebang (#14909 — it sat on line 4,
+    # under the copyright header, where it is a comment) also made that file
+    # visible to this walk. It carries no lib source, so the site counts below
+    # are unchanged.
+    assert _SCANNED >= 180, (
         f"only walked {_SCANNED} shell scripts — the skip list is eating the tree, "
         "or the shebang detector stopped recognising extensionless scripts (#14891)"
     )
