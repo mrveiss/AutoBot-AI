@@ -120,18 +120,40 @@ To add a new hook to CI:
 Run the detection script manually to audit the entire codebase:
 
 ```bash
-# Scan entire codebase for violations
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+# Scan the whole tree; one-line summary
+./pipeline-scripts/detect-hardcoded-values.sh
 
-# Get detailed report with line numbers
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh | less
+# Detailed report, including the known-backlog count
+./pipeline-scripts/detect-hardcoded-values.sh --report | less
 
-# Scan specific file or directory
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
+# Machine-readable, as ssot-coverage.yml consumes it
+./pipeline-scripts/detect-hardcoded-values.sh --json
+
+# Fail if a baseline entry no longer matches anything
+./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
+
+# Scan a specific file list (the staged-files entry point takes argv)
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values autobot-backend/api/chat.py
 ```
 
-**Script location**: `autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh`
+### Where the rules live (#14371)
+
+There is **one** rule set, in `scripts/lib/hardcoded-value-rules.sh`. Two thin
+entry points read it:
+
+| Entry point | Scope | On a violation |
+|---|---|---|
+| `pipeline-scripts/detect-hardcoded-values.sh` | a tree | always exits 0; `ssot-coverage.yml` decides pass/fail from the reported counts |
+| `autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values` | staged files, or an explicit argv list from CI | exits 1 — this is the one that stops a commit |
+
+They differ only in where the lines come from and what they do with the
+verdict. Adding a rule means adding it to the library, once, and both entry
+points pick it up.
+
+`pipeline-scripts/hardcoded_values_baseline.txt` records the findings that
+already existed when the three former detectors were merged. It only ever
+shrinks: a finding that is not in it fails the build, and every run prints how
+many baselined findings it suppressed.
 
 ---
 
@@ -309,7 +331,13 @@ git commit --no-verify -m "Your message"
 ### Script Location
 
 ```text
-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+source scripts/lib/hardcoded-value-rules.sh          the rules — SOURCED by both
+                                                     entry points, never executed,
+                                                     so it is tracked mode 644
+./pipeline-scripts/detect-hardcoded-values.sh        tree-scan entry point (755)
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
+                                                     staged-files entry point (755)
+pipeline-scripts/hardcoded_values_baseline.txt       the measured backlog
 ```
 
 ### What It Detects
@@ -365,13 +393,10 @@ bash infrastructure/shared/scripts/install-pre-commit-hooks.sh
 If needed, install manually:
 
 ```bash
-# Make script executable
-chmod +x autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
-
-# Create pre-commit hook
-cat > .git/hooks/pre-commit-hardcode-check << 'EOF'
-#!/bin/bash
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
+# Nothing to install by hand: the hook is registered in .pre-commit-config.yaml
+# as `detect-hardcoded-values` and runs on every commit once `pre-commit
+# install` has been run. To invoke it directly against what is staged:
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
 if [ $? -ne 0 ]; then
     echo "Hardcoded values detected. Fix violations before committing."
     exit 1
@@ -402,10 +427,10 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 
 ```bash
 # Before starting work
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+./pipeline-scripts/detect-hardcoded-values.sh
 
-# After making changes
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
+# After making changes, against just what you staged
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
 ```
 
 ### 3. Keep .env.example Updated

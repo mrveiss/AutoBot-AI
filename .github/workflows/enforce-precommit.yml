@@ -111,6 +111,21 @@ jobs:
           # tighten together, and this becomes absolute when the baseline empties.
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
 
+      - name: Workflow path filters must match the canonical set (#12986)
+        run: |
+          # BLOCKING, and deliberately in THIS workflow rather than
+          # code-quality: enforce-precommit carries no `paths:` filter (it is a
+          # required context, and a path-filtered required check never
+          # reports), so this guard's reach is the whole repository. In
+          # code-quality it would sit behind a `changes` filter that does not
+          # cover .github/workflows/**, and would therefore never run on the
+          # exact edit it exists to catch.
+          #
+          # pyyaml is present here as pre-commit's own dependency, installed by
+          # the setup-python-ci step above -- same route
+          # check_precommit_hooks_executed.py already relies on.
+          python3 pipeline-scripts/check_workflow_path_filters.py
+
       - name: Enforce SPDX/Apache-2.0 license header (#9840)
         run: |
           # BLOCKING: every first-party .py/.ts/.tsx/.js/.mjs/.sh/.css file must
@@ -138,23 +153,27 @@ jobs:
           # Resolve through HEAD's own parents first (#13880): on a
           # pull_request the checkout is the merge commit, so HEAD^1 is the
           # base tip and HEAD^2 is the PR head — no event payload needed.
-          have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
-          if have 'HEAD^2' && have 'HEAD^1'; then
-            base="HEAD^1"
-          elif have "${PR_BASE_SHA:-x}"; then
-            base="$PR_BASE_SHA"
-          else
-            echo "::error::cannot resolve a base commit — refusing to report 0 changed files as clean"
-            exit 1
-          fi
+          # #13984: this was the FIFTH hand-written copy of the same base
+          # resolution. It now comes from the canonical resolver, which also
+          # supplies the origin/<base> and last-resort-parent fallbacks this
+          # copy never had.
+          # shellcheck source=scripts/lib/git-scope.sh
+          source scripts/lib/git-scope.sh
+          # Explicit `|| { exit 1; }` rather than leaning on Actions' implicit
+          # `bash -eo pipefail`. Both stop the step; only one says so at the
+          # call site, and every other git-scope call site in this change uses
+          # the explicit form. A reader should not have to know the runner's
+          # default shell flags to see that this fails closed.
+          base=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}") || exit 1
+          git_scope_require_commits "$base" HEAD || exit 1
           # No extension pathspec: the destructive entries in both #14137
           # (venv) and #14149 (all.yml) are exactly the shapes a
           # source-extension filter would exclude — one has no extension at
           # all, the other isn't a source file.
-          if ! raw_files=$(git diff --name-only "$base" HEAD); then
-            echo "::error::git diff failed for ${base}..HEAD — refusing to report clean."
-            exit 1
-          fi
+          # Same explicit form. git_scope_diff_names returns 0 for an empty
+          # result and non-zero only when git itself failed, so this fires on a
+          # real failure and never on "nothing changed".
+          raw_files=$(git_scope_diff_names "$base" HEAD) || exit 1
           if [ -z "$raw_files" ]; then
             echo "No changed files — skipping pre-commit-no-tracked-symlink."
             exit 0

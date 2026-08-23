@@ -15,6 +15,10 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent / "lint-conventions.sh"
+# #13984: the script now sources the canonical base/head resolver instead of
+# carrying its own copy, so the throwaway repo has to ship the library too --
+# the fixture models a checkout, and a checkout has scripts/lib/ in it.
+LIB = Path(__file__).resolve().parent / "lib" / "git-scope.sh"
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -28,6 +32,8 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts").mkdir(parents=True)
     (r / "scripts" / "lint-conventions.sh").write_bytes(SCRIPT.read_bytes())
     (r / "scripts" / "lint-conventions.sh").chmod(0o755)
+    (r / "scripts" / "lib").mkdir(parents=True)
+    (r / "scripts" / "lib" / "git-scope.sh").write_bytes(LIB.read_bytes())
     _git(r.parent, "init", "-q", "-b", "main", str(r))
     _git(r, "config", "user.email", "t@example.invalid")
     _git(r, "config", "user.name", "t")
@@ -232,3 +238,16 @@ def test_a_subject_containing_the_field_separator_cannot_shift_the_parse(repo: P
     _bot_commit(repo, "build(deps): bump a\x1fb group", "dependabot[bot]", "d[bot]@users.noreply.github.com")
 
     assert run(repo, "--range", "HEAD~1..HEAD").returncode == 0
+
+
+def test_a_missing_git_scope_library_is_fatal_not_clean(repo: Path) -> None:
+    """#13984: the shared resolver is a hard dependency, not a nice-to-have.
+
+    Deleting it must stop the script, not degrade it into a run that resolves
+    no base and reports a clean tree — the failure shape every rule in that
+    library exists to prevent.
+    """
+    (repo / "scripts" / "lib" / "git-scope.sh").unlink()
+    res = run(repo, "--all")
+    assert res.returncode != 0
+    assert "refusing to report clean" in res.stderr

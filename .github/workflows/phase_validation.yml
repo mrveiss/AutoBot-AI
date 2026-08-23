@@ -5,10 +5,14 @@ name: Phase Validation Integration
 on:
   push:
     branches: [ main, Dev_new_gui ]
+    # #12986: the backend-Python entries are the canonical `backend-python`
+    # set from .github/filters/backend-python-paths.yml; GitHub cannot include a file in an event path filter,
+    # so pipeline-scripts/check_workflow_path_filters.py enforces the match.
     paths: &phase_paths
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'pipeline-scripts/**'
