@@ -58,7 +58,7 @@ ansible-playbook playbooks/deploy-slm-manager.yml --tags monitoring
 
 # Restart Grafana only
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-monitoring-grafana action=restart"
+  -e "target=<group-or-host> service=autobot-monitoring-grafana action=restart"
 ```
 
 ---

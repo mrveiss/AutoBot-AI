@@ -8452,6 +8452,8 @@
       "secretMappingIncomplete": "Renseignez toutes les valeurs de secret ci-dessus avant d'importer.",
       "importSuccess": "Importation réussie — ID de l'entreprise :",
       "warningsLabel": "Avertissements :",
+      "droppedReportingLinesLabel": "Liens hiérarchiques non conservés :",
+      "droppedReportingLine": "{agent} a été importé sans responsable : {manager} n'a pas été créé.",
       "importFailed": "Échec de l'importation :",
       "toastTemplateExported": "Modèle exporté avec succès",
       "toastTemplateExportFailed": "Échec de l'exportation du modèle",

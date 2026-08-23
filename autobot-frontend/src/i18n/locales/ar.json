@@ -8452,6 +8452,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",

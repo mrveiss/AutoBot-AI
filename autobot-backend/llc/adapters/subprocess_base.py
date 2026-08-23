@@ -33,7 +33,7 @@ from typing import Callable, Iterable, Optional
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
-from .base import AdapterRunStatus
+from .base import AdapterRunStatus, get_adapter
 from .subprocess_support import probe_pid, render_context_markdown, terminate_pid
 
 logger = get_logger(__name__)
@@ -80,6 +80,93 @@ def session_id_from_run_id(run_id: str) -> str:
     never has to guard the shape before asking.
     """
     return run_id.split("/", 1)[-1]
+
+
+def adapter_transcript_helpers(
+    adapter_type: str,
+) -> Optional[tuple[Callable[..., str], Callable[..., str]]]:
+    """The ``(_output_path, _state_path)`` pair for a subprocess adapter type.
+
+    Resolved from the adapter object in the registry rather than from a
+    type-name lookup table. A table is a second list of adapter types that has
+    to be kept in step with the registry by hand, and the failure mode is
+    silent: the missing entry makes transcript resolution return nothing, which
+    is indistinguishable from a run that produced no transcript.
+
+    Returns None when the type is unregistered, is not a subprocess adapter
+    (in-process agents write no transcript), or declares neither helper.
+    """
+    try:
+        adapter = get_adapter(adapter_type)
+    except KeyError:
+        return None
+    if not is_subprocess_adapter(adapter):
+        return None
+
+    # Read off the class: both are staticmethods, and the base class only
+    # *annotates* them, so an adapter that never assigned one yields None here
+    # instead of inheriting some other adapter's scheme.
+    output_path = getattr(type(adapter), "_output_path", None)
+    state_path = getattr(type(adapter), "_state_path", None)
+    if output_path is None or state_path is None:
+        return None
+    return output_path, state_path
+
+
+def resolve_transcript_path(
+    adapter_type: str,
+    output_dir: str,
+    agent_id: str,
+    external_run_id: str,
+) -> Optional[str]:
+    """Locate the transcript a subprocess adapter run actually wrote (#13614, #14760).
+
+    The state file is the authority, not a recomputed path. ``_output_path`` is
+    called by the adapter *before* the process is spawned — it has to be, the
+    file is the child's stdout — so the run id in its name is the placeholder
+    ``0/<session>``, while the id the adapter returns is ``<pid>/<session>``.
+    Two places deriving the same path from different inputs is how a complete
+    37 KB transcript sat on disk while ``output_text`` stayed empty.
+
+    When the state file is missing or unreadable the path is recomputed — but
+    from the *placeholder* id the adapter actually named the file with, not
+    from ``external_run_id``. Rebuilding it from the returned id names a file no
+    run has ever written, so the fallback would miss every time, precisely in
+    the case it exists to cover.
+
+    Each adapter family supplies its own path pair, so the copilot scheme
+    (``llc_copilot_*``) resolves as readily as the claude_code one
+    (``llc_agent_*``); previously only the latter did (#14760).
+    """
+    helpers = adapter_transcript_helpers(adapter_type)
+    if helpers is None:
+        logger.warning(
+            "No transcript path helpers for adapter_type %r — replay output cannot "
+            "be resolved for run %s. A subprocess adapter must declare both "
+            "_output_path and _state_path.",
+            adapter_type,
+            external_run_id,
+        )
+        return None
+    output_path, state_path = helpers
+
+    state_file = state_path(output_dir, external_run_id)
+    try:
+        with open(state_file, "r", encoding="utf-8") as fh:
+            recorded = json.load(fh).get("output_file")
+        if recorded:
+            return str(recorded)
+        logger.warning(
+            "Adapter state file %s carries no output_file — falling back to the computed path",
+            state_file,
+        )
+    except (OSError, ValueError):
+        logger.warning(
+            "Could not read adapter state file %s — falling back to the computed path",
+            state_file,
+        )
+
+    return output_path(output_dir, agent_id, placeholder_run_id(session_id_from_run_id(external_run_id)))
 
 
 def _common_cli_search_dirs() -> list[str]:
@@ -154,6 +241,10 @@ class SubprocessLifecycleAdapter:
     _LOG_NAME: str = "SubprocessAdapter"
     # staticmethod (output_dir, run_id) -> str; set by each subclass.
     _state_path: Callable[[str, str], str]
+    # staticmethod (output_dir, agent_id, run_id) -> str; set by each subclass.
+    # Declared, not defaulted: an adapter that never sets it must be *findable*
+    # rather than silently unresolvable, which is what #14760 was.
+    _output_path: Callable[[str, str, str], str]
     # Name of the CLI binary required by this adapter (e.g. "claude", "gh").
     # Subclasses declare this; None means no external CLI required (GH#9793).
     _required_cli: Optional[str] = None
@@ -301,6 +392,11 @@ __all__ = [
     "resolve_timeout",
     "resolve_cli_binary",
     "is_subprocess_adapter",
+    "adapter_transcript_helpers",
+    "resolve_transcript_path",
+    "placeholder_run_id",
+    "session_id_from_run_id",
+    "PLACEHOLDER_PID",
 ]
 
 
