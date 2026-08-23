@@ -117,28 +117,41 @@ def test_the_wizard_resolves_dependencies_from_the_declared_hostvar() -> None:
     Executing this path needs a database and a full inventory build; what is
     load-bearing is which of the two hostvars the loop reads, and that is
     visible without either.
+
+    Only the INNERMOST matching loop counts. `ast.walk` also reports every
+    enclosing loop — the `for node in db_nodes:` wrapper contains the
+    dependency loop, so a naive search "finds" it iterating `db_nodes` and
+    fails on a correct file. That is exactly what happened here on the first
+    attempt.
     """
     src = _WIZARD.read_text(encoding="utf-8")
     tree = ast.parse(src)
 
-    loops = [
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.For)
-        and any(
+    def resolves_dependencies(node: ast.AST) -> bool:
+        return any(
             isinstance(c, ast.Call)
             and isinstance(c.func, ast.Attribute)
             and c.func.attr == "get"
             and isinstance(c.func.value, ast.Name)
             and c.func.value.id == "ROLE_DEPENDENCIES"
-            for c in ast.walk(n)
+            for c in ast.walk(node)
+        )
+
+    candidates = [n for n in ast.walk(tree) if isinstance(n, ast.For) and resolves_dependencies(n)]
+    assert candidates, "no loop resolves ROLE_DEPENDENCIES — this guard would pass vacuously"
+
+    # Drop any loop that merely encloses another matching loop.
+    innermost = [
+        loop
+        for loop in candidates
+        if not any(
+            other is not loop and resolves_dependencies(other) for other in ast.walk(loop) if isinstance(other, ast.For)
         )
     ]
-    assert loops, "no loop resolves ROLE_DEPENDENCIES — this guard would pass vacuously"
+    assert len(innermost) == 1, f"expected exactly one dependency loop, found {len(innermost)}"
 
-    for loop in loops:
-        iterated = ast.unparse(loop.iter)
-        assert "declared" in iterated, (
-            f"dependencies are resolved from {iterated!r}, which is not the declared-roles hostvar — "
-            "a contaminated node would be provisioned for roles it never declared (#14859)"
-        )
+    iterated = ast.unparse(innermost[0].iter)
+    assert "declared" in iterated, (
+        f"dependencies are resolved from {iterated!r}, which is not the declared-roles hostvar — "
+        "a contaminated node would be provisioned for roles it never declared (#14859)"
+    )
