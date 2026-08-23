@@ -418,9 +418,17 @@ role_xrdp_active: >-
 # It previously had two byte-identical siblings kept in step by a diff guard;
 # the guard worked but enforcing three copies was never the fix #7095 asked for.
 # The test inventory's copy is generated from this file at CI time.
+# #14682: `ai_stack` is NOT an LLM signal. It is granted by `chromadb` and
+# `tts-worker` as well as by `ai-stack` and `autobot-llm-*`, so gating on it
+# meant declaring a vector database or a speech synthesiser ran roles/llm --
+# curl https://ollama.ai/install.sh piped to a root shell, a systemd unit, and
+# a model pull -- on that host.
+#
+# `llm_nodes` carries exactly the two tokens that do mean "runs an LLM runtime"
+# (`ai-stack`, `autobot-llm-`), so it is the correct signal and the `ai_stack`
+# clause is dropped. A node declaring `llm` still matches on the first clause.
 role_llm_active: >-
   {{ ('llm' in (node_roles_declared | default(node_roles | default([])))) or
-     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
      (inventory_hostname in (groups.get('llm_nodes', []) | default([]))) }}
 
 role_tts_worker_active: >-
