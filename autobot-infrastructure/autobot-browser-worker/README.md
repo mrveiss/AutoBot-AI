@@ -57,7 +57,7 @@ ansible-playbook playbooks/deploy-full.yml --tags browser --limit browser_vm
 
 # Restart (use correct service name!)
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-playwright action=restart"
+  -e "target=<group-or-host> service=autobot-playwright action=restart"
 
 # Manual sync
 ./infrastructure/shared/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/

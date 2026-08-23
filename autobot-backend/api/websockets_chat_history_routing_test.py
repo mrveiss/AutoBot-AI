@@ -26,8 +26,8 @@ from typing import Any, Dict, List
 from unittest.mock import patch
 
 from api.websockets import _persist_event_to_chat_history
-from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 from chat_history.messages import MessagesMixin
+from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 
 class _RecordingHistory(MessagesMixin):
@@ -139,9 +139,9 @@ def test_event_is_persisted_with_no_websocket_client_attached() -> None:
     # Guard the premise rather than assuming it: if this type is ever added to
     # the skip set, fail here with the real reason instead of further down with
     # a misleading "nothing was persisted" message.
-    assert "tool_output" not in SKIP_WEBSOCKET_PERSISTENCE_TYPES, (
-        "tool_output joined the skip set — this test now proves nothing; pick another persisted type"
-    )
+    assert (
+        "tool_output" not in SKIP_WEBSOCKET_PERSISTENCE_TYPES
+    ), "tool_output joined the skip set — this test now proves nothing; pick another persisted type"
 
     manager = _RecordingHistory()
 
