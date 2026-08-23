@@ -300,6 +300,16 @@ repos:
         stages: [pre-commit]
         description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
 
+      - id: workflow-path-filters
+        name: Workflow path filters must match the canonical set (#12986)
+        entry: pipeline-scripts/check_workflow_path_filters.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^\.github/(workflows/.*\.yml|filters/backend-python-paths\.yml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "GitHub cannot include a file in an event `paths:` trigger, so those copies are policed instead: a gate that quietly stops running on a path is the failure this catches"
+
       # #14216: 14 session/audit reports accumulated at the repository root —
       # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
       # and friends. Legitimate work product written to the front door because

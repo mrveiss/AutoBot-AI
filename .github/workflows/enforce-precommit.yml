@@ -111,6 +111,21 @@ jobs:
           # tighten together, and this becomes absolute when the baseline empties.
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
 
+      - name: Workflow path filters must match the canonical set (#12986)
+        run: |
+          # BLOCKING, and deliberately in THIS workflow rather than
+          # code-quality: enforce-precommit carries no `paths:` filter (it is a
+          # required context, and a path-filtered required check never
+          # reports), so this guard's reach is the whole repository. In
+          # code-quality it would sit behind a `changes` filter that does not
+          # cover .github/workflows/**, and would therefore never run on the
+          # exact edit it exists to catch.
+          #
+          # pyyaml is present here as pre-commit's own dependency, installed by
+          # the setup-python-ci step above -- same route
+          # check_precommit_hooks_executed.py already relies on.
+          python3 pipeline-scripts/check_workflow_path_filters.py
+
       - name: Enforce SPDX/Apache-2.0 license header (#9840)
         run: |
           # BLOCKING: every first-party .py/.ts/.tsx/.js/.mjs/.sh/.css file must
