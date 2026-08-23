@@ -11,16 +11,21 @@
 # /opt/slm-agent). No cross-role directories are touched, so no
 # node_roles guards are needed (#2836).
 
-- name: "SLM Agent | Clean: legacy flat agent dir at /opt/autobot/agent"
-  ansible.builtin.file:
-    path: /opt/autobot/agent
-    state: absent
-  tags: ['clean']
-
-- name: "SLM Agent | Clean: legacy slm-agent dir at /opt/autobot/slm-agent"
-  ansible.builtin.file:
-    path: /opt/autobot/slm-agent
-    state: absent
+# #14856: these removed the directories with no condition at all, on the claim
+# that legacy paths never hold anything worth keeping. That is an assumption
+# about every host that has ever existed. They go through the shared guard now,
+# which reports and leaves the directory alone if it turns out to hold data/.
+- name: "SLM Agent | Clean: legacy agent dirs"
+  ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
+  loop:
+    - /opt/autobot/agent
+    - /opt/autobot/slm-agent
+  loop_control:
+    loop_var: _agent_legacy_dir
+  vars:
+    caller_role: "SLM Agent"
+    remove_dir_path: "{{ _agent_legacy_dir }}"
+    remove_reason: "legacy agent path superseded by the canonical agent directory"
   tags: ['clean']
 
 # Issue #1163: Remove symlink workaround before deploying real directory
@@ -40,10 +45,14 @@
   tags: ['clean']
 
 - name: "SLM Agent | Clean: pre-#1129 flat install at /opt/slm-agent"
-  ansible.builtin.file:
-    path: /opt/slm-agent
-    state: absent
-  become: true
+  ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
+  vars:
+    caller_role: "SLM Agent"
+    remove_dir_path: /opt/slm-agent
+    remove_reason: "pre-#1129 flat install superseded by the canonical agent directory"
+  # No `become:` here — it is not a valid attribute for a TaskInclude, and the
+  # privilege this removal needs is asserted on the tasks that do the work,
+  # inside remove_component_dir.yml.
   tags: ['clean']
 
 # #11508: a stale, hand-created systemd drop-in repointed the agent's ExecStart

@@ -8,9 +8,12 @@
 # Run via: ansible-playbook ... --tags clean
 # Safe to run any time; all removes are conditional.
 #
-# LEGACY directory deletions (npu-worker, browser-service, ai-stack,
-# autobot-user-backend) run unconditionally because NO current role
-# deploys to those paths — they are pre-rename leftovers.
+# LEGACY directory removals are not gated on a role fact: no current role
+# deploys to those paths, they are pre-rename leftovers. They are NOT
+# unconditional though — #14856. "No role deploys there" is a claim about
+# every host that has ever existed, so the shared task migrates any data/ it
+# finds to the canonical path and removes the directory only once nothing of
+# value is left behind.
 # NOTE: /opt/autobot/config is NOT removed here (#3873) — it holds
 # permission_rules.yaml which permission_matcher.py reads at runtime.
 #
@@ -22,7 +25,7 @@
 #
 # #7058: legacy/wrong-node tasks delegated to _shared/tasks/.
 
-- name: "Backend | Clean: legacy dirs (unconditional)"
+- name: "Backend | Clean: legacy dirs (migrated, then retired)"
   ansible.builtin.include_tasks: ../../_shared/tasks/clean_legacy_dir.yml
   loop:
     - npu-worker

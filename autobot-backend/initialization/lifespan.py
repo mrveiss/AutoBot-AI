@@ -21,6 +21,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from autobot_shared.time_utils import utc_timestamp
@@ -53,6 +54,41 @@ _BACKEND_LOGGER_NAMES = ("api", "api.codebase_analytics")
 
 # Lock for thread-safe access to app_state
 _app_state_lock = asyncio.Lock()
+
+# #13085: opt-out switch for the LLC poll-loop schedulers started below.
+#
+# LivenessMonitor (60 s), BudgetWatchdog (300 s) and CommunityClusteringScheduler
+# (300 s initial delay, then 6 h) are infinite `while self._running` loops. The
+# shutdown path drains them (`aclose()`), but a drain only runs if shutdown runs:
+# a test that boots the real lifespan through a TestClient/LifespanManager
+# fixture and abandons the generator never reaches it, so the loops keep their
+# event loop alive for a whole re-armed interval. That is the measured symptom in
+# #13085 — an xdist worker frozen ~10 minutes at 99% with zero CPU, its scheduled
+# wake time advancing by exactly 300.1 s between py-spy dumps, matching
+# BudgetWatchdog's interval.
+#
+# The gate defaults ON everywhere real, and OFF only under pytest. It is NOT
+# default-off like AUTOBOT_ENABLE_MESH_SCHEDULER (#12816): these three enforce
+# per-agent budgets and recover stuck heartbeat runs, and silently not running
+# them in production is precisely the class of defect GH#12318 was filed for.
+# Setting the variable explicitly wins in both directions, so a test that wants
+# the real loops can ask for them.
+_LLC_SCHEDULERS_ENV_VAR = "AUTOBOT_ENABLE_LLC_SCHEDULERS"
+_PYTEST_MARKER_ENV_VAR = "PYTEST_CURRENT_TEST"
+
+
+def _llc_schedulers_enabled() -> bool:
+    """True when the LLC poll-loop schedulers should start (#13085).
+
+    Read at call time, not import time: pytest sets ``PYTEST_CURRENT_TEST`` per
+    test, so a value captured when this module was first imported would be stale
+    for every lifespan a test later boots.
+    """
+    explicit = env_raw(_LLC_SCHEDULERS_ENV_VAR)
+    if explicit:
+        return truthy(explicit)
+    return not env_raw(_PYTEST_MARKER_ENV_VAR)
+
 
 # Global state shared across app
 app_state: Metadata = {
@@ -1815,6 +1851,11 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     loop, so it shares PollLoopScheduler's cancellation-safety contract with
     every other LLC scheduler instead of a second, divergent copy of it.
     """
+    if not _llc_schedulers_enabled():
+        logger.info("CommunityClusterer: LLC schedulers disabled (%s), skipping (#13085)", _LLC_SCHEDULERS_ENV_VAR)
+        app.state.community_cluster_scheduler = None
+        return
+
     mesh_db = getattr(app.state, "mesh_db", None)
     if mesh_db is None:
         logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
@@ -1829,6 +1870,11 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
     """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
+    if not _llc_schedulers_enabled():
+        logger.info("LLC LivenessMonitor: disabled (%s), not starting (#13085)", _LLC_SCHEDULERS_ENV_VAR)
+        app.state.llc_liveness_monitor = None
+        return
+
     logger.info("LLC LivenessMonitor: Starting...")
     try:
         from llc.scheduler.liveness_monitor import LivenessMonitor
@@ -1844,6 +1890,11 @@ async def _init_liveness_monitor(app: FastAPI) -> None:
 
 async def _init_budget_watchdog(app: FastAPI) -> None:
     """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
+    if not _llc_schedulers_enabled():
+        logger.info("LLC BudgetWatchdog: disabled (%s), not starting (#13085)", _LLC_SCHEDULERS_ENV_VAR)
+        app.state.llc_budget_watchdog = None
+        return
+
     logger.info("LLC BudgetWatchdog: Starting...")
     try:
         from llc.scheduler.budget_watchdog import BudgetWatchdog
