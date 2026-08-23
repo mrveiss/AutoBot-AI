@@ -160,9 +160,7 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         validator._is_org_admin_access = AsyncMock(return_value=False)
         validator._audit_log_violation = MagicMock()
         validator._record_violation_metrics = AsyncMock()
-        validator._get_authenticated_user = MagicMock(
-            return_value={"username": "bob", "auth_disabled": False}
-        )
+        validator._get_authenticated_user = MagicMock(return_value={"username": "bob", "auth_disabled": False})
 
         auth = MagicMock()
         auth.enable_auth = True
@@ -179,9 +177,9 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         # lookup, so neither of these was ever called.
         validator._audit_log_violation.assert_called_once()
         validator._record_violation_metrics.assert_awaited_once()
-        assert validator.get_session_owner.await_count >= 1, (
-            "the ownership lookup never ran — the check is still being skipped"
-        )
+        assert (
+            validator.get_session_owner.await_count >= 1
+        ), "the ownership lookup never ran — the check is still being skipped"
 
     @pytest.mark.asyncio
     async def test_a_deliberate_disabled_still_short_circuits(self):
@@ -191,9 +189,7 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         validator._is_org_admin_access = AsyncMock(return_value=False)
         validator._audit_log_violation = MagicMock()
         validator._record_violation_metrics = AsyncMock()
-        validator._get_authenticated_user = MagicMock(
-            return_value={"username": "bob", "auth_disabled": False}
-        )
+        validator._get_authenticated_user = MagicMock(return_value={"username": "bob", "auth_disabled": False})
 
         auth = MagicMock()
         auth.enable_auth = True
@@ -203,6 +199,6 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         assert result["authorized"] is True
         assert result["reason"] != "log_only_mode"
         validator._audit_log_violation.assert_not_called()
-        assert validator.get_session_owner.await_count == 0, (
-            "a deliberate 'disabled' should still skip the lookup — that is policy, unchanged"
-        )
+        assert (
+            validator.get_session_owner.await_count == 0
+        ), "a deliberate 'disabled' should still skip the lookup — that is policy, unchanged"
