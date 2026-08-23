@@ -22,6 +22,7 @@ static check has no business doing.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -148,4 +149,70 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> N
     assert not _resolves(module), (
         f"{module} now resolves, so the exemption for {rel} ({issue}) is obsolete — "
         "remove it from _KNOWN_BROKEN so that script is guarded again"
+    )
+
+
+# --------------------------------------------------------------------------
+# The call layer. Resolving the import is necessary and not sufficient: #14868
+# fixed the imports and left `await get_redis_manager()` calling the SYNC client
+# (`async_client` defaults to False) and then `.main()` on the result, which
+# exists on neither client. CI stayed green because the guard above only checked
+# that the module could be found. A failure that moves from import time to call
+# time is the same defect one step later.
+# --------------------------------------------------------------------------
+
+_PY_BLOCK = re.compile(r'python3 -c "(.*?)"\s*(?:\|\||>|2>|$)', re.S)
+
+# The canonical accessor is `get_redis_client(async_client=False, database="main")`,
+# aliased to `get_redis_manager` in the scripts. Awaiting it without
+# `async_client=True` yields a sync client and raises TypeError.
+_ASYNC_REDIS_ACCESSORS = {"get_redis_manager", "get_redis_client"}
+
+
+def _embedded_python(script: Path) -> list[str]:
+    text = script.read_text(encoding="utf-8", errors="replace")
+    return [m.group(1) for m in _PY_BLOCK.finditer(text)]
+
+
+def _awaited_sync_redis_calls() -> tuple[list[str], int]:
+    """Awaited accessor calls that would return a SYNC client. (offenders, blocks parsed)."""
+    offenders: list[str] = []
+    parsed = 0
+    for script in _shell_scripts():
+        for block in _embedded_python(script):
+            try:
+                tree = ast.parse(block)
+            except SyntaxError:
+                continue  # heredoc interpolation we cannot parse; not our concern
+            parsed += 1
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Await) or not isinstance(node.value, ast.Call):
+                    continue
+                fn = node.value.func
+                name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+                if name not in _ASYNC_REDIS_ACCESSORS:
+                    continue
+                kwargs = {k.arg: k.value for k in node.value.keywords}
+                truthy = isinstance(kwargs.get("async_client"), ast.Constant) and kwargs["async_client"].value is True
+                if not truthy:
+                    offenders.append(
+                        f"{script.relative_to(_REPO_ROOT)}: await {name}(...) without async_client=True"
+                    )
+    return offenders, parsed
+
+
+def test_the_embedded_python_was_actually_parsed() -> None:
+    """Discovery floor: an extractor that matches nothing asserts nothing."""
+    _, parsed = _awaited_sync_redis_calls()
+
+    assert parsed > 3, f"only parsed {parsed} embedded python blocks — the extractor is not matching"
+
+
+def test_no_script_awaits_the_sync_redis_client() -> None:
+    offenders, _ = _awaited_sync_redis_calls()
+
+    assert not offenders, (
+        "these await the canonical Redis accessor without async_client=True, which "
+        "returns a SYNC client and raises TypeError at call time — an import-layer "
+        "guard cannot see this (#14866):\n  " + "\n  ".join(offenders)
     )

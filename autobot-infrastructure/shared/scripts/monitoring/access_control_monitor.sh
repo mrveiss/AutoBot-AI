@@ -166,8 +166,12 @@ from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from security.session_ownership import SessionOwnershipValidator
 
 async def main():
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Exactly what security/session_ownership.py:836 does. Calling it bare
+    # returns the SYNC client (async_client defaults to False), so `await` on it
+    # raises TypeError — and `.main()` exists on neither client. That turned an
+    # import-time failure into a call-time one, which is the same defect a step
+    # later (#14866).
+    redis = await get_redis_manager(async_client=True, database="main")
 
     # Count total sessions
     cursor = 0
