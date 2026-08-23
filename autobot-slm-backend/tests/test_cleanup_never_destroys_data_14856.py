@@ -357,6 +357,39 @@ def test_the_protected_config_dir_is_never_scheduled_for_removal() -> None:
 
 
 @pytest.mark.parametrize("path", _CALL_SITES, ids=lambda p: p.name)
+def test_every_delegation_path_resolves_to_the_primitive(path: Path) -> None:
+    """A relative include with the wrong number of `..` fails only on a host.
+
+    Ansible resolves a relative `include_tasks` against a search stack, and for a
+    file included from inside a role the ROLE's tasks directory is on that stack
+    as well as the including file's own directory. The path form used here was
+    picked so that both bases land on the same file — `../../_shared/tasks/x.yml`
+    resolves identically from `roles/<role>/tasks/` and from
+    `roles/_shared/tasks/`. That is a property worth pinning, because the obvious
+    "simplification" to a bare filename only works from one of them.
+    """
+    for task in _delegations(_load(path)):
+        include = _include_path(task)
+        assert include, f"{path.name}: '{task.get('name')}' passes remove_dir_path but includes nothing"
+
+        resolved = (path.parent / include).resolve()
+        assert resolved.is_file(), (
+            f"{path.name}: '{task.get('name')}' includes {include}, which does not resolve to a file "
+            f"(tried {resolved})"
+        )
+        assert resolved == _PRIMITIVE.resolve(), f"{path.name}: {include} resolves to {resolved}, not the primitive"
+
+        # The role-tasks-dir base, for the files that are themselves included
+        # into a role. Any role's tasks dir is an equivalent base for this form.
+        if path.parent == _SHARED:
+            alt = (_ANSIBLE / "roles" / "backend" / "tasks" / include).resolve()
+            assert alt == _PRIMITIVE.resolve(), (
+                f"{path.name}: {include} resolves to {alt} when Ansible bases it on the including role's "
+                "tasks directory instead of this file's own — the two bases must agree"
+            )
+
+
+@pytest.mark.parametrize("path", _CALL_SITES, ids=lambda p: p.name)
 def test_every_cleanup_site_delegates_to_the_primitive(path: Path) -> None:
     """A file that stopped delegating has stopped being covered."""
     includes = _includes_of(_load(path), _PRIMITIVE.name)
