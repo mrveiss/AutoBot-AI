@@ -231,4 +231,84 @@ describe('useSessionSync (#14820)', () => {
     expect(harness.__channelHandlers.has('chat:s2')).toBe(true)
     expect(harness.__channelHandlers.has('chat:s1')).toBe(false)
   })
+
+  it('removes the session when another client deletes it', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    useSessionSync(ref('s1'))
+    await settle()
+    expect(store.sessionCount).toBe(1)
+
+    harness.__channelHandlers.get('session:s1')!({
+      event_type: 'session.deleted',
+      payload: { session_id: 's1' },
+    })
+
+    expect(store.sessions.find((s) => s.id === 's1')).toBeUndefined()
+  })
+
+  it('ignores a session.updated with no title change', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('Original', 's1')
+    useSessionSync(ref('s1'))
+    await settle()
+
+    harness.__channelHandlers.get('session:s1')!({
+      event_type: 'session.updated',
+      payload: { changes: {} },
+    })
+
+    expect(store.sessions.find((s) => s.id === 's1')?.title).toBe('Original')
+  })
+
+  it('ignores an unrecognised event type', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    useSessionSync(ref('s1'))
+    await settle()
+
+    harness.__channelHandlers.get('chat:s1')!({ event_type: 'chat.something_new', payload: {} })
+
+    expect(store.currentMessages).toHaveLength(0)
+  })
+
+  it('ignores a chat.message_added carrying no message', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    useSessionSync(ref('s1'))
+    await settle()
+
+    harness.__channelHandlers.get('chat:s1')!({ event_type: 'chat.message_added', payload: {} })
+
+    expect(store.currentMessages).toHaveLength(0)
+  })
+
+  it('a throwing disposer does not prevent the rest of teardown', async () => {
+    // Teardown runs on session switch and unmount; one bad disposer must not
+    // strand the remaining subscriptions.
+    vi.mocked(apiClient.get).mockResolvedValue(snapshot([]))
+    const store = useChatStore()
+    store.createNewSession('T', 's1')
+    store.createNewSession('T2', 's2')
+    const sessionId = ref<string | null>('s1')
+
+    vi.mocked(liveEventService.subscribe).mockImplementationOnce(() => {
+      return () => {
+        throw new Error('disposer exploded')
+      }
+    })
+
+    useSessionSync(sessionId)
+    await settle()
+
+    sessionId.value = 's2'
+    await settle()
+
+    // Reached the new session despite the failure above.
+    expect(harness.__channelHandlers.has('chat:s2')).toBe(true)
+  })
 })

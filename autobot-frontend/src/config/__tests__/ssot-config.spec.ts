@@ -643,4 +643,37 @@ describe('liveEventsUrl (#14822)', () => {
     const scheme = (url: string) => url.split('://')[0];
     expect(scheme(config.liveEventsUrl)).toBe(scheme(config.websocketUrl));
   });
+
+  describe('under https', () => {
+    const realLocation = window.location;
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', { value: realLocation, writable: true });
+      reloadConfig();
+    });
+
+    it('upgrades to wss and uses the page host', () => {
+      // The https branch is unreachable under the default jsdom origin, so it
+      // needs an explicit stub — otherwise a mixed-content bug (ws:// on an
+      // https page, which browsers block outright) would ship untested.
+      Object.defineProperty(window, 'location', {
+        value: { protocol: 'https:', host: 'autobot.example' },
+        writable: true,
+      });
+      reloadConfig();
+
+      expect(getConfig().liveEventsUrl).toBe('wss://autobot.example/api/ws/live');
+    });
+
+    it('still equals websocketUrl plus /live under https', () => {
+      Object.defineProperty(window, 'location', {
+        value: { protocol: 'https:', host: 'autobot.example' },
+        writable: true,
+      });
+      reloadConfig();
+
+      const config = getConfig();
+      expect(config.liveEventsUrl).toBe(`${config.websocketUrl}/live`);
+    });
+  });
 });

@@ -11,14 +11,16 @@
  * it, along with the high-water mark that lets a reconnect replay the gap.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { GlobalWebSocketService } from '@/services/GlobalWebSocketService'
 
 type Privates = {
   _handleMessage: (e: MessageEvent) => void
+  _handleOpen: (resolve: () => void) => void
   _unwrapChannelEvent: (d: Record<string, unknown>) => Record<string, unknown>
   lastGlobalEventId: number | null
   send: (d: Record<string, unknown>) => boolean
+  stopHeartbeat: () => void
 }
 
 function deliver(service: GlobalWebSocketService, payload: unknown): void {
@@ -173,5 +175,61 @@ describe('GlobalWebSocketService global high-water mark (#14818)', () => {
     deliver(service, liveEvent(4))
     deliver(service, { ...liveEvent(0), event_id: 'not-a-number' })
     expect(privates(service).lastGlobalEventId).toBe(4)
+  })
+})
+
+describe('GlobalWebSocketService subscribe-on-open (#14822)', () => {
+  let service: GlobalWebSocketService
+  let sent: Array<Record<string, unknown>>
+
+  beforeEach(() => {
+    service = new GlobalWebSocketService()
+    sent = []
+    privates(service).send = (d) => {
+      sent.push(d)
+      return true
+    }
+  })
+
+  afterEach(() => {
+    // _handleOpen starts the heartbeat interval; leaving it running leaks a
+    // timer into later test files in the same worker.
+    privates(service).stopHeartbeat()
+  })
+
+  it('subscribes to the global channel on open', () => {
+    // The channel socket delivers nothing until something is subscribed, so
+    // without this frame the migrated service would connect and go silent.
+    privates(service)._handleOpen(() => {})
+
+    expect(sent).toContainEqual({ action: 'subscribe', channel: 'global' })
+  })
+
+  it('omits last_event_id on a first connection', () => {
+    privates(service)._handleOpen(() => {})
+
+    const subscribe = sent.find((f) => f.action === 'subscribe')!
+    expect(subscribe).not.toHaveProperty('last_event_id')
+  })
+
+  it('resumes from the marker on a reconnect', () => {
+    deliver(service, liveEvent(17))
+    sent.length = 0
+
+    privates(service)._handleOpen(() => {})
+
+    expect(sent).toContainEqual({ action: 'subscribe', channel: 'global', last_event_id: 17 })
+  })
+
+  it('resolves the connect promise', () => {
+    const resolve = vi.fn()
+    privates(service)._handleOpen(resolve)
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks the service connected', () => {
+    privates(service)._handleOpen(() => {})
+    expect(service.isConnected.value).toBe(true)
+    expect(service.connectionState.value).toBe('connected')
   })
 })
