@@ -6,16 +6,19 @@
 # AI Stack role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes legacy and wrong-node directories from .24 (AI stack node).
 #
-# LEGACY directory deletions (ai-stack, npu-worker, browser-service) run
-# unconditionally because NO current role deploys to those paths — they are
-# pre-rename leftovers.
+# LEGACY directory removals are not gated on a role fact: no current role
+# deploys to those paths, they are pre-rename leftovers. They are NOT
+# unconditional though — #14856. "No role deploys there" is a claim about
+# every host that has ever existed, so the shared task migrates any data/ it
+# finds to the canonical path and removes the directory only once nothing of
+# value is left behind.
 #
 # Wrong-node deletions of CURRENT canonical dirs gate on the shared
 # `role_*_active` facts from inventory/group_vars/all.yml (#7050).
 #
 # #7058: legacy/wrong-node tasks delegated to _shared/tasks/.
 
-- name: "AI Stack | Clean: legacy dirs (unconditional)"
+- name: "AI Stack | Clean: legacy dirs (migrated, then retired)"
   ansible.builtin.include_tasks: ../../_shared/tasks/clean_legacy_dir.yml
   loop:
     - ai-stack

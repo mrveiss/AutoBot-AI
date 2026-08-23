@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 ---
-# Shared cleanup task: delete a directory iff a role-active fact is EXPLICITLY false.
+# Shared cleanup task: remove a directory iff a role-active fact is EXPLICITLY false.
 #
 # Closes #7058 — replaces 23 near-identical wrong-node tasks across 6 role
 # clean.yml files (backend, frontend, ai-stack, browser, npu-worker,
@@ -16,74 +16,54 @@
 #                          inventory/group_vars/all.yml (#7050).
 #
 # #14856: this task used to read the fact with `default=false`, so an
-# **undefined** fact took the delete branch. Two things made that dangerous:
+# **undefined** fact took the delete branch. Undefined is a realistic state, not
+# a hypothetical: `services/deployment.py` runs playbooks with a bare
+# `-i "<host>,"` inventory, which gives ansible no sibling group_vars to
+# discover, so these facts exist on that path only when a playbook loads them
+# explicitly (the hazard #14289 already guards for `chromadb_service_owner`).
 #
-#   * Undefined is a realistic state, not a hypothetical. `services/deployment.py`
-#     runs playbooks with a bare `-i "<host>,"` inventory, which gives ansible no
-#     sibling group_vars to discover, so these facts exist on that path only when
-#     a playbook loads them explicitly (the hazard #14289 already guards for
-#     `chromadb_service_owner`).
-#   * The paths are not code-only. On a deployed host
-#     `/opt/autobot/autobot-backend` carries `data/` with unified_memory.db,
-#     conversation_files.db, transcriber.db and service-keys;
-#     `autobot-slm-backend` carries `data/.slm_keys`. `state: absent` on the
-#     parent removes those with it.
-#
-# Re-running provisioning is the natural rescue for a host broken by a partial
-# code-sync — and that is exactly the state where these facts are most likely to
-# be missing or wrong. The recovery path must not be able to destroy the data it
-# is being run to save, so both guards below are deliberately fail-safe: when
-# anything is uncertain, the directory stays. A stale directory is recoverable;
-# a deleted database is not.
+# This file now decides only ONE thing: does this directory belong on this node?
+# Whether removing it is *safe* is decided in remove_component_dir.yml, which
+# every component removal goes through. The split matters because this file's
+# answer can be wrong — #14513, #14560, #14666 and #14682 were each one of these
+# facts being incorrect — and the data probe downstream is what survives that.
 
-- name: "{{ caller_role }} | Clean: probe {{ dir_name }} for persistent data (#14856)"
-  ansible.builtin.stat:
-    path: "/opt/autobot/{{ dir_name }}/data"
-  register: _wrong_node_data
+# The fact is normalised to a token once, here, rather than re-derived inside
+# each condition below. Two conditions that each re-read the same fact are two
+# chances to spell the destructive one differently.
+- name: "{{ caller_role }} | Clean: normalise {{ role_check_fact }} to a decidable token (#14856)"
+  ansible.builtin.set_fact:
+    # `default=''` (not `false`): an undefined fact becomes an unrecognised
+    # token, and unrecognised is handled as "unknown" below — never as "false".
+    _wrong_node_fact: "{{ lookup('vars', role_check_fact, default='') | string | trim | lower }}"
+    # Deletion is gated on membership of an explicit ALLOWLIST of false-ish
+    # spellings, not on `not (x | bool)`. `| bool` maps everything it does not
+    # recognise — '', 'None', a half-rendered Jinja expression, a typo — onto
+    # false, which is the delete branch. group_vars spells these facts as folded
+    # `>-` blocks of Jinja, so "rendered to something unexpected" is a live
+    # possibility, not a theoretical one.
+    _wrong_node_false_tokens: ['false', 'no', 'off', '0', 'n', 'f']
+    _wrong_node_true_tokens: ['true', 'yes', 'on', '1', 'y', 't']
   tags: ['clean']
 
-- name: "{{ caller_role }} | Clean: REFUSING to remove {{ dir_name }} — it holds data (#14856)"
+- name: "{{ caller_role }} | Clean: {{ role_check_fact }} is not decidable — leaving {{ dir_name }} alone (#14856)"
   ansible.builtin.debug:
     msg: >-
-      /opt/autobot/{{ dir_name }} was selected for wrong-node cleanup because
-      {{ role_check_fact }} is false, but it contains a data/ directory. Refusing
-      to delete it. If this node genuinely should not carry {{ dir_name }}, move
-      or archive the data deliberately and remove the directory by hand.
-  when:
-    - _wrong_node_data.stat.exists | default(false)
-    - lookup('vars', role_check_fact, default=None) is not none
-    - not (lookup('vars', role_check_fact, default=true) | bool)
-  tags: ['clean']
-
-- name: "{{ caller_role }} | Clean: {{ role_check_fact }} undefined — leaving {{ dir_name }} alone (#14856)"
-  ansible.builtin.debug:
-    msg: >-
-      {{ role_check_fact }} is undefined on this host, so whether {{ dir_name }}
-      belongs here is unknown. Leaving it in place. This usually means the play
-      was run without the role-active facts — an inventory directory with
-      group_vars, or an explicit vars_files load (#14289).
-  when: lookup('vars', role_check_fact, default=None) is none
+      {{ role_check_fact }} is {{ 'undefined' if _wrong_node_fact | length == 0 else _wrong_node_fact | to_json }}
+      on this host, which does not say whether {{ dir_name }} belongs here.
+      Leaving it in place. An undefined fact usually means the play was run
+      without the role-active facts — an inventory directory with group_vars, or
+      an explicit vars_files load (#14289).
+  when: _wrong_node_fact not in (_wrong_node_false_tokens + _wrong_node_true_tokens)
   tags: ['clean']
 
 - name: "{{ caller_role }} | Clean: wrong-node {{ dir_name }} dir"
-  ansible.builtin.file:
-    path: "/opt/autobot/{{ dir_name }}"
-    state: absent
-  when:
-    # Explicitly defined AND explicitly false. An undefined fact is "unknown",
-    # never "inactive" — that distinction is the whole point of #14856.
-    #
-    # The fallback is `default=true`, not `default=false`: if this is ever
-    # reached without a definition, "assume the role IS active" means "do not
-    # delete". The default of a destructive condition should be the safe branch,
-    # so that getting the guard order wrong later still cannot remove data.
-    - lookup('vars', role_check_fact, default=None) is not none
-    - not (lookup('vars', role_check_fact, default=true) | bool)
-    # And never over persistent data, whatever the fact says. This is the
-    # backstop for the fact simply being WRONG, which #14513, #14560, #14666 and
-    # #14682 each were in turn.
-    #
-    # `default(true)` again: if the stat itself did not run or failed, we do not
-    # know whether data is there, and "unknown" must not authorise a delete.
-    - not (_wrong_node_data.stat.exists | default(true))
+  ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
+  # Explicitly, recognisably false — nothing else. An undefined, empty or
+  # unparseable fact is "unknown", never "inactive", and unknown keeps the
+  # directory. That distinction is the whole point of #14856.
+  when: _wrong_node_fact in _wrong_node_false_tokens
+  vars:
+    remove_dir_path: "/opt/autobot/{{ dir_name }}"
+    remove_reason: "wrong node — {{ role_check_fact }} is false on this host"
   tags: ['clean']
