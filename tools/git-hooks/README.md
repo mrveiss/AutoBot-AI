@@ -85,5 +85,26 @@ Verified on the issue-5142-hooks branch (this PR):
 
 ## Updating
 
-The hooks are symlinked, so edits to `tools/git-hooks/pre-push` in the repo
-are picked up on the next push — no resync needed.
+The hooks are **copied**, not symlinked (#11598) — an edit to
+`tools/git-hooks/pre-push` here does not reach `.git/hooks/pre-push` until you
+re-run the installer:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+The installer is idempotent, so a re-run after every pull is safe.
+
+## Why these files are tracked 100755
+
+`core.fileMode=false` is set repo-wide, so a plain `chmod +x` never reaches the
+index — `git status` stays clean while the file remains `100644` for everyone
+else, and **git silently skips a hook that is not executable**. The mode must
+be set with:
+
+```bash
+git update-index --chmod=+x tools/git-hooks/<name>
+```
+
+`repo_tests/git_hooks_executable_test.py` asserts the index mode of every
+tracked hook and installer, so a hook cannot go inert this way again (#14909).

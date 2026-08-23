@@ -1,7 +1,7 @@
+#!/bin/bash
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-#!/bin/bash
 #
 # Git post-commit hook for SLM code version tracking (Issue #741)
 #
