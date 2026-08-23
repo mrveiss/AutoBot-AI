@@ -383,9 +383,8 @@ def test_every_denial_path_uses_the_same_counter() -> None:
 
 def test_the_counter_never_raises_from_the_audit_path() -> None:
     """It runs inside the handler that exists so audit trouble cannot break a request."""
-    from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
-
     import autobot_shared.monitoring.prometheus_metrics as pm
+    from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 
     original = pm.get_metrics_manager
 
