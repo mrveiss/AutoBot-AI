@@ -10,8 +10,19 @@ Tests the backend components without requiring a full server restart
 
 import asyncio
 import logging
+import sys
 import tempfile
 import uuid
+from pathlib import Path
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +35,7 @@ async def test_chat_knowledge_components():
 
     try:
         # Import the components
-        from backend.api.chat_knowledge import (
+        from api.chat_knowledge import (
             ChatKnowledgeManager,
             FileAssociationType,
             KnowledgeDecision,
@@ -139,7 +150,7 @@ def test_api_endpoints():
     logger.info("🧪 Testing API Endpoints")
 
     try:
-        from backend.api.chat_knowledge import router
+        from api.chat_knowledge import router
 
         routes = router.routes
         expected_endpoints = [

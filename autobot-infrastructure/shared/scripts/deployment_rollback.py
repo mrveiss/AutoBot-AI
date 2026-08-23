@@ -46,10 +46,16 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# `backup_manager.py` lives beside this script in a directory that is not a
+# package, so the owning directory goes on sys.path explicitly (#14518).
+# `scripts.backup_manager` could never resolve: repo-root `scripts/` contains
+# no backup_manager.py and has no __init__.py, and the old insert pointed at
+# `shared/` rather than at the directory that owns the module.
+_SCRIPTS_DIR = Path(__file__).resolve().parents[0]
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from scripts.backup_manager import BackupManager
+from backup_manager import BackupManager  # noqa: E402 - must follow the sys.path setup above
 
 # --- Standalone replacements for backend-only modules (#11761) --------------
 # `utils/` and `constants/` exist only under autobot-backend/ and are not
