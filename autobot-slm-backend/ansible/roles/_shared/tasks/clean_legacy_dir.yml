@@ -3,18 +3,136 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 ---
-# Shared cleanup task: unconditionally delete a legacy/pre-rename directory.
+# Shared cleanup task: retire a legacy/pre-rename directory, MIGRATING any data
+# it holds to the canonical path first.
 #
 # Closes #7058 — replaces 16 near-identical legacy-dir tasks across 5 role
-# clean.yml files. NO role currently deploys to these paths, so removal is
-# always safe.
+# clean.yml files.
 #
 # Contract:
 #   caller_role (str)  Display label for task name, e.g. "Backend".
 #   dir_name    (str)  Path tail under /opt/autobot/, e.g. "npu-worker".
+#
+# #14856: this deleted unconditionally, on the claim that "no role deploys to
+# these paths, so removal is always safe". That is an assumption about every
+# host that has ever existed, and the cost of it being wrong on one is a
+# destroyed data/ directory.
+#
+# Retiring a legacy path is a MIGRATION, not a deletion: state that lives there
+# belongs at the canonical path, not in the bin. So the order is move-then-remove,
+# and the remove only happens once the data is provably somewhere else.
+#
+# The ambiguous case is deliberately NOT automated. If both the legacy and the
+# canonical path hold data/, deciding which copy wins is a judgement about live
+# state, and guessing it silently is how an "upgrade" eats a database. That case
+# reports and leaves both intact.
 
+- name: "{{ caller_role }} | Legacy: resolve canonical target for {{ dir_name }} (#14856)"
+  ansible.builtin.set_fact:
+    _legacy_canonical: >-
+      {{ {
+           'ai-stack': 'autobot-ai-stack',
+           'npu-worker': 'autobot-npu-worker',
+           'browser-service': 'autobot-browser-worker',
+           'autobot-user-backend': 'autobot-backend',
+           'autobot-user-frontend': 'autobot-frontend',
+         }.get(dir_name, '') }}
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: stat {{ dir_name }} and its canonical target (#14856)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _legacy_stats
+  loop:
+    - "/opt/autobot/{{ dir_name }}/data"
+    - "/opt/autobot/{{ _legacy_canonical }}"
+    - "/opt/autobot/{{ _legacy_canonical }}/data"
+  when: _legacy_canonical | length > 0
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: record what was found (#14856)"
+  ansible.builtin.set_fact:
+    _legacy_has_data: "{{ (_legacy_stats.results[0].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
+    _canonical_exists: "{{ (_legacy_stats.results[1].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
+    _canonical_has_data: "{{ (_legacy_stats.results[2].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
+  tags: ['clean']
+
+# The clean case: legacy holds data, canonical exists and has none. A rename on
+# the same filesystem is atomic, so there is no window where the data exists in
+# neither place.
+- name: "{{ caller_role }} | Legacy: MIGRATE {{ dir_name }}/data to {{ _legacy_canonical }}/data (#14856)"
+  ansible.builtin.command:
+    cmd: "mv /opt/autobot/{{ dir_name }}/data /opt/autobot/{{ _legacy_canonical }}/data"
+    removes: "/opt/autobot/{{ dir_name }}/data"
+    creates: "/opt/autobot/{{ _legacy_canonical }}/data"
+  become: true
+  when:
+    - _legacy_has_data | bool
+    - _canonical_exists | bool
+    - not (_canonical_has_data | bool)
+  register: _legacy_migrated
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: verify the migration landed before removing anything (#14856)"
+  ansible.builtin.stat:
+    path: "/opt/autobot/{{ _legacy_canonical }}/data"
+  register: _legacy_migrated_check
+  when: _legacy_migrated.changed | default(false)
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: migration did not land — keeping {{ dir_name }} (#14856)"
+  ansible.builtin.fail:
+    msg: >-
+      Moved /opt/autobot/{{ dir_name }}/data to /opt/autobot/{{ _legacy_canonical }}/data
+      but the target is not there afterwards. Refusing to continue; the legacy
+      directory is untouched and the data is not lost.
+  when:
+    - _legacy_migrated.changed | default(false)
+    - not (_legacy_migrated_check.stat.exists | default(false))
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: BOTH paths hold data — not guessing which wins (#14856)"
+  ansible.builtin.debug:
+    msg: >-
+      /opt/autobot/{{ dir_name }}/data and /opt/autobot/{{ _legacy_canonical }}/data
+      both exist. Merging them is a judgement about live state, so neither is
+      touched and {{ dir_name }} is left in place. Reconcile them deliberately,
+      then remove the legacy directory by hand.
+  when:
+    - _legacy_has_data | bool
+    - _canonical_has_data | bool
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: no canonical target for {{ dir_name }} — keeping it (#14856)"
+  ansible.builtin.debug:
+    msg: >-
+      /opt/autobot/{{ dir_name }} holds data but has no known canonical path to
+      migrate to, so it stays. Add it to the mapping in clean_legacy_dir.yml if
+      it should be retired.
+  when:
+    - _legacy_has_data | bool
+    - _legacy_canonical | length == 0 or not (_canonical_exists | bool)
+  tags: ['clean']
+
+# Decide once, in one place, rather than inside the deletion's own condition.
+# A destructive `when:` that mixes defaults is hard to read and easy to get
+# subtly wrong — and "subtly wrong" here means a deleted database.
+- name: "{{ caller_role }} | Legacy: decide whether {{ dir_name }} is safe to remove (#14856)"
+  ansible.builtin.set_fact:
+    _legacy_safe_to_remove: >-
+      {{ (not (_legacy_has_data | default(true) | bool))
+         or ((_legacy_migrated is defined and _legacy_migrated.changed | default(false))
+             and (_legacy_migrated_check is defined
+                  and _legacy_migrated_check.stat is defined
+                  and _legacy_migrated_check.stat.exists | default(false))) }}
+  tags: ['clean']
+
+# Remove only once nothing of value is left behind: either the legacy path never
+# held data, or its data has been migrated and verified above. `_legacy_has_data`
+# defaults to TRUE when unknown, so an unreadable host keeps its directory.
 - name: "{{ caller_role }} | Clean: legacy {{ dir_name }} dir"
   ansible.builtin.file:
     path: "/opt/autobot/{{ dir_name }}"
     state: absent
+  when: _legacy_safe_to_remove | bool
   tags: ['clean']
