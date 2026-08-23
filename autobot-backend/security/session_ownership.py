@@ -22,6 +22,7 @@ from fastapi import HTTPException, Request
 from auth_middleware import get_auth_middleware
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_30_DAYS
+from services.feature_flags import EnforcementModeUnavailable
 
 logger = get_logger(__name__)
 
@@ -52,6 +53,15 @@ def build_owner_metadata(user_data: "dict | None", team_id: str | None = None) -
     if team_id:
         metadata["team_id"] = team_id
     return metadata
+
+
+# What an *undetermined* enforcement mode degrades to (#14010). Deliberately not
+# "disabled": an unreachable flag store must not read as "authorization is off".
+# log_only keeps every check running and every violation recorded without
+# changing what requests succeed, so an outage is loud in the logs and metrics
+# instead of silently permissive. Choosing the *default* posture when the flag is
+# simply unset is a separate decision and is untouched here.
+DEGRADED_ENFORCEMENT_MODE = "log_only"
 
 
 class SessionOwnershipValidator:
@@ -243,14 +253,34 @@ class SessionOwnershipValidator:
             Enforcement mode string: "disabled", "log_only", or "enforced"
         """
         if not self.feature_flags:
-            return "disabled"
+            # No flags service means `get_feature_flags()` failed at
+            # construction — an infrastructure fault, not a policy decision.
+            logger.warning(
+                "Ownership enforcement mode is UNDETERMINED (no feature-flags service); "
+                "degrading to log_only. Checks still run and violations are recorded. "
+                "This is not a deliberate 'disabled' (#14010)."
+            )
+            return DEGRADED_ENFORCEMENT_MODE
 
         try:
             mode_enum = await self.feature_flags.get_enforcement_mode()
             return mode_enum.value
+        except EnforcementModeUnavailable as exc:
+            logger.warning(
+                "Ownership enforcement mode is UNDETERMINED (%s); degrading to log_only. "
+                "Checks still run and violations are recorded. This is not a deliberate "
+                "'disabled' (#14010).",
+                exc,
+            )
+            return DEGRADED_ENFORCEMENT_MODE
         except Exception as e:
-            logger.error(f"Failed to get enforcement mode: {e}, defaulting to disabled")
-            return "disabled"
+            # Anything unexpected is still a failure to determine policy, so it
+            # degrades the same way rather than silently disabling every check.
+            logger.warning(
+                "Ownership enforcement mode could not be resolved (%s); degrading to log_only (#14010).",
+                e,
+            )
+            return DEGRADED_ENFORCEMENT_MODE
 
     def _audit_log_violation(
         self,

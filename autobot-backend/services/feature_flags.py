@@ -48,6 +48,20 @@ class EnforcementMode(str, Enum):
     ENFORCED = "enforced"  # Full enforcement, block violations
 
 
+class EnforcementModeUnavailable(RuntimeError):
+    """The enforcement mode could not be read (#14010).
+
+    Deliberately distinct from :attr:`EnforcementMode.DISABLED`. An operator
+    turning enforcement off and the flag store being unreachable are different
+    facts, and collapsing them into one value is how an outage silently became
+    "authorization is off" platform-wide, with nothing louder than a debug line
+    saying so.
+
+    Callers that display the mode may surface this as unknown; callers that
+    *gate* on it must not read it as permission.
+    """
+
+
 class FeatureFlags(AsyncRedisClientMixin):
     """
     Redis-backed feature flags for access control rollout
@@ -91,9 +105,12 @@ class FeatureFlags(AsyncRedisClientMixin):
             return EnforcementMode.DISABLED
 
         except Exception as e:
-            logger.error("Failed to get enforcement mode: %s", e)
-            # Fail-safe: default to DISABLED on error
-            return EnforcementMode.DISABLED
+            # NOT a fail-safe: this is an authorization control, and returning
+            # DISABLED here made an unreachable flag store indistinguishable
+            # from a deliberate "off" (#14010). Raise so the caller decides,
+            # rather than deciding "no enforcement" on its behalf.
+            logger.error("Could not read enforcement mode: %s", e)
+            raise EnforcementModeUnavailable(str(e)) from e
 
     async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
         """
