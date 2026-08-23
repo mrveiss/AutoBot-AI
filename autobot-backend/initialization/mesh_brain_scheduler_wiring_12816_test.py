@@ -23,6 +23,7 @@ Mirrors the issue's own Verification section:
 
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -109,24 +110,80 @@ class TestRegistryTruthfulness:
         assert "data-retention decision" in job.inert_reason
 
 
+@contextlib.contextmanager
+def _stubbed_cleanup_legs(redis_close=None):
+    """Stub cleanup_services()'s unconditional real-I/O legs.
+
+    Mirrors the helper in lifespan_test.py: these legs are unrelated to the
+    scheduler under test and can reach real network timeouts depending on the
+    environment.
+    """
+    handoff_svc = MagicMock(shutdown=AsyncMock())
+    connector_scheduler = MagicMock(stop_all=AsyncMock())
+
+    with (
+        patch("initialization.lifespan.shutdown_slm_client", new=AsyncMock()),
+        patch("initialization.lifespan.shutdown_tracing", new=AsyncMock()),
+        patch("services.documentation_watcher.stop_documentation_watcher", new=AsyncMock()),
+        patch("services.kb_folder_watcher.stop_kb_folder_watcher", new=AsyncMock()),
+        patch("llc.api.work_items._get_handoff_service", return_value=handoff_svc),
+        patch("workflow_scheduler.stop_autonomous_loop", new=AsyncMock()),
+        patch("api.analytics.analytics_controller.metrics_collector.stop_collection", new=AsyncMock()),
+        patch("knowledge.connectors.scheduler.get_connector_scheduler", return_value=connector_scheduler),
+        patch("autobot_shared.redis_client.close_all_redis_connections", new=(redis_close or AsyncMock())),
+    ):
+        yield
+
+
 class TestShutdown:
-    def test_shutdown_awaits_stop(self):
+    """The scheduler is stopped, and its failure does not abort the teardown.
+
+    Both of these asserted on the SOURCE TEXT of lifespan.py — one greping for
+    an await expression, the other for a log message. #13585 replaced that log
+    call with a shared failure recorder, and the second test went red without
+    anything about the property it names having changed. A test that breaks on a
+    rename while the property survives was not testing the property; these drive
+    cleanup_services and assert on what it does.
+    """
+
+    @pytest.mark.asyncio
+    async def test_shutdown_stops_the_scheduler(self):
         """stop() cancels every per-job task start() spawned, so none survive."""
-        from pathlib import Path
+        from initialization.lifespan import cleanup_services
 
-        src = (Path(__file__).resolve().parent / "lifespan.py").read_text(encoding="utf-8")
-        assert "await app.state.mesh_brain_scheduler.stop()" in src
+        scheduler = MagicMock(stop=AsyncMock())
+        app = SimpleNamespace(state=SimpleNamespace(mesh_brain_scheduler=scheduler))
 
-    def test_shutdown_stop_is_independently_guarded(self):
-        """A failing stop() must not abort the rest of teardown.
+        with _stubbed_cleanup_legs():
+            failed = await cleanup_services(app)
 
-        The whole shutdown block lives inside ONE broad `except Exception`, so an
-        unguarded raise here would jump to that handler and skip every remaining
-        shutdown step. Startup is already non-fatal; shutdown must match.
+        scheduler.stop.assert_awaited_once()
+        assert "MeshBrainScheduler stop" not in failed
+
+    @pytest.mark.asyncio
+    async def test_a_failing_stop_does_not_abort_the_rest_of_teardown(self):
+        """A raise here must cost one step, not every step below it.
+
+        The teardown sits inside one broad `except Exception`; an unguarded raise
+        would jump straight to it and skip everything after. Asserting a LATER
+        step still ran is the whole point — asserting only that nothing
+        propagated would pass on the aborted version too.
         """
-        from pathlib import Path
+        from initialization.lifespan import cleanup_services
 
-        src = (Path(__file__).resolve().parent / "lifespan.py").read_text(encoding="utf-8")
-        block = src[src.index("Stop MeshBrainScheduler") :][:900]
-        assert "try:" in block
-        assert "MeshBrainScheduler stop failed (non-fatal)" in block
+        ran_later: list[str] = []
+
+        async def _boom() -> None:
+            raise RuntimeError("scheduler stop exploded")
+
+        async def _redis_close() -> None:
+            ran_later.append("redis_close")
+
+        scheduler = MagicMock(stop=AsyncMock(side_effect=_boom))
+        app = SimpleNamespace(state=SimpleNamespace(mesh_brain_scheduler=scheduler))
+
+        with _stubbed_cleanup_legs(redis_close=_redis_close):
+            failed = await cleanup_services(app)
+
+        assert "MeshBrainScheduler stop" in failed, f"the failure was not recorded: {failed}"
+        assert ran_later == ["redis_close"], "a step after the failure did not run"
