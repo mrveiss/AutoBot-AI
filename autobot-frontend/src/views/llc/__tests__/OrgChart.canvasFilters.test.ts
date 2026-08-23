@@ -11,9 +11,8 @@
 // suite is reported alongside) to pin the hard requirement that the
 // single-role lens keeps working exactly as it did before this issue.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import type { VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
@@ -165,25 +164,15 @@ function mockApi({ people = PEOPLE, teams = TEAMS, tools = TOOLS, processes = PR
   })
 }
 
-/**
- * #14799-adjacent: every mount is tracked so `afterEach` can tear it down.
- *
- * This file mounts the full OrgChart -> WorkflowCanvas tree 15 times and used
- * to unmount none of them, and no global `enableAutoUnmount` is configured. So
- * each test ran with every previous test's component tree still live in jsdom
- * — watchers attached, DOM retained — and the cost grew across the file. It
- * completes in ~3.4s on a quiet runner and timed out at the 10s per-test limit
- * on a loaded one, failing on the FIRST test of a describe rather than
- * anywhere that would point at the cause.
- *
- * Unmounting is the fix rather than a longer timeout: a longer timeout would
- * keep the accumulation and simply raise the load needed to trip it.
+/*
+ * #14799-adjacent: this file mounts the full OrgChart -> WorkflowCanvas tree 15
+ * times and used to unmount none of them, so each test ran with every previous
+ * test's component tree still live in jsdom — ~3.4s on a quiet runner against
+ * the 10s per-test ceiling on a loaded one. The per-file tracking list that
+ * fixed it is gone: `src/test/vitest-setup.ts` now calls
+ * `enableAutoUnmount(afterEach)` for the WHOLE suite (#14842), because every
+ * heavy file had the same accumulation and only this one had the teardown.
  */
-const mountedWrappers: VueWrapper[] = []
-
-afterEach(() => {
-  while (mountedWrappers.length) mountedWrappers.pop()?.unmount()
-})
 
 // #14854: built once for this file, not once per mount. The `en` bundle is
 // ~400KB and this file mounts 16 times, so constructing a fresh i18n inside the
@@ -197,7 +186,6 @@ async function mountOnCanvas(fixture?: Fixture) {
   const wrapper = mount(OrgChart, {
     global: { plugins: [i18nForTests], stubs: { HireAgentModal: true } },
   })
-  mountedWrappers.push(wrapper as unknown as VueWrapper)
   await flushPromises()
   await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
   await flushPromises()
