@@ -11,10 +11,10 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
+import functools
 import json
 import logging
 import sqlite3
-import functools
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path

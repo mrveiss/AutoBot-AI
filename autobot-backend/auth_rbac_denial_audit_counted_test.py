@@ -69,8 +69,9 @@ def _request(path: str = "/api/analytics/report"):
 )
 def test_a_failed_denial_audit_write_increments_the_counter(tmp_path, deny, args):
     """Both file-backed denial entry points, since only instrumenting one is the bug."""
-    import auth_rbac
     from fastapi import HTTPException
+
+    import auth_rbac
 
     unwritable = tmp_path / "audit-log-is-a-directory"
     unwritable.mkdir()
@@ -99,8 +100,9 @@ def test_a_successful_denial_audit_writes_the_record_and_counts_nothing(tmp_path
     A counter that also moved on success would read as loss during normal
     operation, which is the same defect pointing the other way.
     """
-    import auth_rbac
     from fastapi import HTTPException
+
+    import auth_rbac
 
     audit_file = tmp_path / "audit.log"
     before = _counter_value("permission_denied", _EXPECTED_ERROR)
@@ -123,8 +125,9 @@ def test_a_role_denial_write_failure_is_counted_under_its_own_action(tmp_path):
     Its records go down the identical swallow, so a counter keyed only to
     ``permission_denied`` would leave that loss invisible.
     """
-    import auth_rbac
     from fastapi import HTTPException
+
+    import auth_rbac
 
     unwritable = tmp_path / "audit-log-is-a-directory"
     unwritable.mkdir()
