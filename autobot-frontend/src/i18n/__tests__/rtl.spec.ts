@@ -14,7 +14,7 @@
  * Issue #1510: Add automated RTL layout tests
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 
 // Mock only loadLocaleMessages so tests exercise the real setLocale(). (#1598)
 // The real setLocale() calls loadLocaleMessages() via an internal reference that
@@ -31,6 +31,43 @@ vi.mock('@/i18n', async (importOriginal) => {
 })
 
 import { setLocale } from '@/i18n'
+
+// Every locale this file exercises. Each locale JSON is ~400KB, and
+// loadLocaleMessages() caches on i18n.global.availableLocales — so the *first*
+// setLocale() for a locale pays a real dynamic import and every later one is
+// free.
+//
+// #14854: with nothing warmed, whichever test happened to touch a locale first
+// paid ~10s inside its own 10s per-test budget, so this file flaked purely on
+// ordering and runner load. Warming here moves that one-off cost into a hook
+// with its own budget. The tests still assert against the REAL `_meta.dir` from
+// the real locale files — nothing is stubbed, so coverage is unchanged.
+const EXERCISED_LOCALES = ['ar', 'he', 'fa', 'ur', 'en', 'de', 'fr'] as const
+
+beforeAll(async () => {
+  for (const locale of EXERCISED_LOCALES) {
+    await setLocale(locale)
+  }
+}, 120_000)
+
+describe('locale warm-up (#14854)', () => {
+  it('every exercised locale is cached, so no test pays a real import', async () => {
+    // Guards the mechanism above rather than the outcome of one test: if the
+    // warm loop silently stops working, this fails with the reason instead of
+    // the file going flaky again on whichever test drew the slow straw.
+    // i18n is the module's default export.
+    const i18n = (await import('@/i18n')).default
+    for (const locale of EXERCISED_LOCALES) {
+      expect(i18n.global.availableLocales).toContain(locale)
+    }
+  })
+
+  it('a locale used by this file but missing from the warm list is a bug', () => {
+    // A new setLocale('xx') case added without extending EXERCISED_LOCALES
+    // would reintroduce the flake. Keep this list in step with the cases below.
+    expect(EXERCISED_LOCALES.length).toBe(7)
+  })
+})
 
 describe('setLocale() RTL dir attribute', () => {
   beforeEach(() => {

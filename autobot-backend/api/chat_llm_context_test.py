@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.chat import _build_llm_context, _generate_ai_stack_chat_response, _to_persisted_message
-from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES, _create_broadcast_event_handler
+from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES, _persist_event_to_chat_history
 from chat_history.messages import MessagesMixin
 
 
@@ -208,11 +208,6 @@ class _RecordingHistory(MessagesMixin):
         return True
 
 
-class _FakeWebSocket:
-    async def send_json(self, data: dict) -> None:
-        pass
-
-
 class TestWebsocketTelemetryPinnedDecision:
     """#14342 review follow-up: #14342 fixed *where* websocket-broadcast UI
     telemetry is stored (its own session, not a bucket no reader touched).
@@ -221,20 +216,26 @@ class TestWebsocketTelemetryPinnedDecision:
     `llm_context` — it is UI telemetry, not something the user or the
     assistant said.
 
-    Built through the real #14342 producer (`broadcast_event`, the callback
-    `events/bus.py` invokes) into a real session store, not a hand-fed dict
-    already carrying the key the filter checks — the same trap that let
-    #14340/#14341 hide.
+    Built through the real #14342 producer into a real session store, not a
+    hand-fed dict already carrying the key the filter checks — the same trap
+    that let #14340/#14341 hide.
+
+    #14814 moved that producer: persistence used to run inside the WebSocket
+    broadcast callback (so nothing was written with no client attached) and now
+    runs on the event manager's publish-time hook. The seeding below follows it.
     """
 
     def test_a_real_tool_output_event_does_not_enter_llm_context(self):
         manager = _RecordingHistory()
 
         async def seed_and_read() -> list:
-            broadcast_event = await _create_broadcast_event_handler(_FakeWebSocket(), manager)
-            await broadcast_event(
-                {"type": "tool_output", "payload": {"output": "rm -rf leftover", "session_id": "s-1"}}
-            )
+            with patch(
+                "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
+                return_value=manager,
+            ):
+                await _persist_event_to_chat_history(
+                    {"type": "tool_output", "payload": {"output": "rm -rf leftover", "session_id": "s-1"}}
+                )
             await manager.add_message(sender="user", text="clean up the workspace", session_id="s-1")
             return await manager.get_session_messages("s-1", limit=500)
 
@@ -280,8 +281,15 @@ class TestWebsocketTelemetryPinnedDecision:
     @pytest.mark.asyncio
     async def test_a_real_tool_output_event_does_not_enter_the_ai_stack_history(self):
         manager = _RecordingHistory()
-        broadcast_event = await _create_broadcast_event_handler(_FakeWebSocket(), manager)
-        await broadcast_event({"type": "tool_output", "payload": {"output": "secret command", "session_id": "s-2"}})
+        # #14814: seeded through the publish-time persistence hook, which is
+        # where websocket telemetry is written now.
+        with patch(
+            "utils.resource_factory.ResourceFactory.get_initialized_chat_history_manager",
+            return_value=manager,
+        ):
+            await _persist_event_to_chat_history(
+                {"type": "tool_output", "payload": {"output": "secret command", "session_id": "s-2"}}
+            )
         await manager.add_message(sender="user", text="deploy it", session_id="s-2")
         chat_context = await manager.get_session_messages("s-2", limit=500)
 
