@@ -57,6 +57,22 @@ const DATA = {
   edges: [{ from: 'a', to: 'b', resolved: true }],
 }
 
+/**
+ * The cluster/Stats view builds its graph from `summary.top_callers` and
+ * `summary.most_called` — NOT from `data`. Without a summary it adds no
+ * elements and never reaches `runClusterLayout`, so a cluster test that omits
+ * this passes its guard and proves nothing.
+ */
+const SUMMARY = {
+  total_functions: 2,
+  connected_functions: 2,
+  total_call_relationships: 1,
+  resolved_calls: 1,
+  unresolved_calls: 0,
+  top_callers: [{ function: 'alpha', calls: 3 }],
+  most_called: [{ function: 'beta', calls: 5 }],
+}
+
 function stubMatchMedia(matches: boolean) {
   vi.stubGlobal(
     'matchMedia',
@@ -71,7 +87,7 @@ function stubMatchMedia(matches: boolean) {
 
 async function mountGraph() {
   const w = mount(FunctionCallGraph, {
-    props: { data: DATA },
+    props: { data: DATA, summary: SUMMARY },
     global: { plugins: [i18n] },
     attachTo: document.body,
   })

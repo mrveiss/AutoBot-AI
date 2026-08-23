@@ -36,7 +36,9 @@ function harness(options: Record<string, unknown> = {}) {
     removeEventListener: vi.fn(),
   }
   const items = ref(Array.from({ length: 50 }, (_, i) => ({ id: i })))
-  const vs = useVirtualScroll(items, { estimatedItemHeight: 20, ...options })
+  // The composable takes a SINGLE options object with `items` inside it, not
+  // `(items, options)`.
+  const vs = useVirtualScroll({ items, estimatedItemHeight: 20, ...options })
   ;(vs.containerRef as { value: unknown }).value = container
   return { vs, scrollTo }
 }
