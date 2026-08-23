@@ -233,8 +233,8 @@ class TestIntervalsAreConfigurable:
         for const, (env_var, default) in self.EXPECTED.items():
             assert const in found, f"{const} is no longer a module-level constant"
             value = found[const]
-            assert isinstance(value, ast.Call) and getattr(value.func, "id", None) == "env_float", (
-                f"{const} must be read from the environment via env_float(), not hard-coded"
-            )
+            assert (
+                isinstance(value, ast.Call) and getattr(value.func, "id", None) == "env_float"
+            ), f"{const} must be read from the environment via env_float(), not hard-coded"
             assert ast.literal_eval(value.args[0]) == env_var, f"{const} must read {env_var}"
             assert self._int_value(value.args[1]) == default, f"{const} default changed unexpectedly"
