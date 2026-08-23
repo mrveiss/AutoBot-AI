@@ -62,6 +62,55 @@ def env(name: str, default: Any = None) -> Any:
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
 
+# --- events (#14817, #14818) -------------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_SEQ_KEY_PREFIX",
+        type=str,
+        default="autobot:events:seq:",
+        description=("Redis key prefix for per-channel live-event sequence counters."),
+        component="events",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_KEY_PREFIX",
+        type=str,
+        default="autobot:events:channel:",
+        description=("Redis key prefix for per-channel live-event replay streams."),
+        component="events",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_MAX_ENTRIES",
+        type=int,
+        default=1000,
+        description=(
+            "Events retained per channel for reconnect replay. A client whose "
+            "last_event_id has fallen outside this window is told to resync "
+            "rather than handed a partial history."
+        ),
+        component="events",
+        range=(1, 1000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=("Idle expiry for a per-channel replay stream, so session and chat channels do not accumulate."),
+        component="events",
+        range=(60, 2592000),
+    )
+)
+
+
 # --- backend ----------------------------------------------------------------
 
 register_env_var(

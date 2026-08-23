@@ -444,6 +444,10 @@ To add a new variable:
 | `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_URL` | backend | str | `'http://10.255.255.254:8001'` | Full base URL of the AutoBot backend service (overrides HOST+PORT). |
 | `AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS` | backend | int | `30` | How many numbered elements the LLM-visible state block renders per browser tool result. The browser worker caps the raw list separately; this bounds only what reaches the prompt (#11537). |
+| `AUTOBOT_CHANNEL_SEQ_KEY_PREFIX` | events | str | `'autobot:events:seq:'` | Redis key prefix for per-channel live-event sequence counters. |
+| `AUTOBOT_CHANNEL_STREAM_KEY_PREFIX` | events | str | `'autobot:events:channel:'` | Redis key prefix for per-channel live-event replay streams. |
+| `AUTOBOT_CHANNEL_STREAM_MAX_ENTRIES` | events | int | `1000` | Events retained per channel for reconnect replay. A client whose last_event_id has fallen outside this window is told to resync rather than handed a partial history. Range: 1–1000000. |
+| `AUTOBOT_CHANNEL_STREAM_TTL_SECONDS` | events | int | `86400` | Idle expiry for a per-channel replay stream, so session and chat channels do not accumulate. Range: 60–2592000. |
 | `AUTOBOT_CHATS_DIRECTORY` | chat | str | `'data/chats'` | Filesystem path where chat session files are stored. |
 | `AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY` | ai | int | `2` | Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede the LLM. |
 | `AUTOBOT_CHAT_TRAJECTORY_CONTEXT` | ai | bool | true | Search past trajectories before answering. Defaults on because the search is one vector query; capture is gated separately since it spends a judge call. |
@@ -541,6 +545,8 @@ To add a new variable:
 | `AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S` | backend | int | `90` | Seconds to wait for a heartbeat after the reconciler restarts a node's agent before recording the remediation as failed. Remediation exists to restore the heartbeat, so the heartbeat is what success means — the restart exiting 0 only says the command ran (services/reconciler.py, #14344). |
 | `AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S` | backend | int | `180` | Wall-clock ceiling on the ansible-playbook subprocess _restart_service_via_ansible launches. Previously unbounded — a hung SSH connection or stuck remote task blocked remediation for a node indefinitely. manage-service.yml (the only playbook this call path runs) is a single-host, single-service restart that normally completes in seconds; 180s stays comfortably below REMEDIATION_COOLDOWN (300s) while giving generous headroom (services/reconciler.py, services/playbook_executor.py, #14524). |
 | `AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S` | backend | int | `1800` | Seconds a non-exhausted remediation attempt tracker may sit with no NEW attempt before its count is forgiven. Clamped strictly above REMEDIATION_COOLDOWN plus a reconcile-tick margin — a lower value forgives an attempt in the same instant one becomes due, so count could never exceed 1 (services/reconciler.py, #14465). |
+| `AUTOBOT_REMOTE_APPROVAL_FLAG_TTL_SECONDS` | approvals | int | `604800` | How long a session stays flagged for remote approval routing without being refreshed. Expiry returns the session to asking inline; it never widens autonomy. |
+| `AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS` | approvals | int | `86400` | How long a remotely delivered approval stays correlatable with its reply. After this the reply can no longer be tied to a request and resolves nothing. |
 | `AUTOBOT_REQUIRE_CLASSIFICATION` | orchestrator | bool | false | Fail orchestrator construction when request classification is unavailable. Default (off) degrades gracefully: every request is defaulted to COMPLEX and the reason is reported in the orchestration status. Deployments that depend on classification set this so the failure is loud instead of silent (#13807). |
 | `AUTOBOT_RESTART_CHURN_WINDOW_S` | backend | int | `600` | Seconds a managed autobot/slm-agent service is reported as CURRENTLY churning after its last observed n_restarts increase, for node-status degrade purposes. Must clear health_collector's own 300s discovery-cache TTL by a comfortable margin — a shorter window only fires on the beat that happens to land on a cache refresh (services/reconciler.py, #14465). |
 | `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` | redis | float | `1.5` | Seconds the retrieval learner waits for its Redis lock before proceeding without it. Short on purpose — retrieval must answer even when the learner cannot record what it learned. |
@@ -578,5 +584,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*140 variables registered as of last generation.*
+*146 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

@@ -159,6 +159,11 @@ async def _init_chat_history_manager(app: FastAPI) -> None:
         await chat_history_manager.initialize()
         app.state.chat_history_manager = chat_history_manager
         await update_app_state("chat_history_manager", chat_history_manager)
+        # Issue #14814: persistence must not depend on a WebSocket client being
+        # attached.  Register the publish-time hook now that the manager exists.
+        from api.websockets import register_chat_history_persistence
+
+        register_chat_history_persistence()
         logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
     except Exception as chat_history_error:
         logger.error(f"❌ CRITICAL: Chat history manager initialization failed: {chat_history_error}")

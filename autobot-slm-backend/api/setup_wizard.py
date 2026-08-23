@@ -392,9 +392,23 @@ def _apply_role_host_vars(
         if node.node_id in node_id_to_roles:
             hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
         hosts[inv_name]["node_roles_declared"] = _declared_roles(node)
-        roles = hosts[inv_name].get("node_roles", [])
+        # #14859: dependencies resolve from DECLARED roles, not from the
+        # declared-plus-detected union `node_roles` carries.
+        #
+        # Detection legitimately drives plays -- a node running redis that
+        # nobody declared still needs the redis plays to reach it, which is what
+        # `_union_roles` documents. Installing OS packages and enabling services
+        # is a different act: that is provisioning a role, not reconciling one
+        # that is already there.
+        #
+        # A node contaminated by #14513 detects `backend`, `celery`, `frontend`,
+        # `scheduler`, `slm-backend` and `slm-frontend` (the residue tracked in
+        # #14667). Resolved from the union, a vnc + slm-agent node was given
+        # nginx, nodejs, postgresql and python314 -- and nginx failing to start
+        # there aborted provisioning for the WHOLE fleet at phase 7.
+        declared_for_deps = hosts[inv_name].get("node_roles_declared") or []
         deps: set[str] = set()
-        for role in roles:
+        for role in declared_for_deps:
             deps.update(ROLE_DEPENDENCIES.get(role, []))
         hosts[inv_name]["node_dependencies"] = sorted(deps)
         pending = (node.extra_data or {}).get("pending_dep_removals", [])

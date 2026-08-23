@@ -6,6 +6,7 @@ import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import type { ChatMessage } from '@/types/api'
+import apiClient from '@/utils/ApiClient'
 
 // Issue #2066: ChatMessage is now the canonical type from types/api.ts.
 // Re-export so existing consumers that import from this store still work.
@@ -159,6 +160,36 @@ export const useChatStore = defineStore('chat', () => {
     return finalSessionId
   }
 
+  /**
+   * #14820: create a session the backend owns, and adopt the id it assigns.
+   *
+   * `createNewSession` mints an id in the browser, which is why two clients
+   * could never converge — each was its own source of truth. Prefer this for
+   * any new conversation; it falls back to the local path only when the
+   * backend is unreachable, and says so rather than pretending it succeeded.
+   */
+  async function createServerSession(title?: string): Promise<{ id: string; authoritative: boolean }> {
+    try {
+      // ApiClient returns the parsed body directly (Promise<T>), not an
+      // axios-style { data } envelope — the backend's own DataResponse wrapper
+      // is the single `data` level here.
+      const body = await apiClient.post<{ data?: { session_id?: string; id?: string } }>(
+        '/api/chat/sessions',
+        { title }
+      )
+      const serverId = body?.data?.session_id ?? body?.data?.id
+      if (serverId) {
+        return { id: createNewSession(title, serverId), authoritative: true }
+      }
+      logger.warn('Session create returned no id; falling back to a local session')
+    } catch (error: unknown) {
+      logger.warn('Session create failed; falling back to a local session', error)
+    }
+    // Local fallback: usable offline, but this session is NOT synchronized to
+    // other clients until it is reconciled with the backend.
+    return { id: createNewSession(title), authoritative: false }
+  }
+
   function switchToSession(sessionId: string) {
     const session = sessions.value.find(s => s.id === sessionId)
     if (session) {
@@ -172,6 +203,130 @@ export const useChatStore = defineStore('chat', () => {
       isTyping.value = false
       streamingPreview.value = ''
     }
+  }
+
+  /**
+   * #14821: ids of locally-applied messages the server has not confirmed yet.
+   *
+   * The store renders these immediately so typing still feels instant, but they
+   * are not confirmed state. A server echo promotes one (`confirmMessage`); a
+   * rejection removes it and reverts its optimistic effect (`rejectMessage`).
+   * Conflicts are server-wins — the backend is the authority (#14820).
+   *
+   * This is what replaces the #11843 id-matching dedup: identity is now
+   * explicit rather than inferred by comparing two id fields after the fact.
+   */
+  const pendingMessageIds = ref<Set<string>>(new Set())
+
+  /** True while any locally-applied message is still unconfirmed. */
+  const hasPendingMessages = computed(() => pendingMessageIds.value.size > 0)
+
+  /**
+   * #14821: mark a locally-applied message as confirmed by the server.
+   * Optionally rewrites the local id to the server-assigned one so later
+   * echoes match by identity rather than by heuristic.
+   */
+  function confirmMessage(localId: string, serverId?: string): boolean {
+    if (!pendingMessageIds.value.has(localId)) return false
+    pendingMessageIds.value.delete(localId)
+    if (serverId && serverId !== localId) {
+      const session = sessions.value.find(s => s.messages.some(m => m.id === localId))
+      const message = session?.messages.find(m => m.id === localId)
+      if (message) message.id = serverId
+    }
+    // Reassign to trigger Vue reactivity on the Set.
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
+    return true
+  }
+
+  /**
+   * #14821: the server refused a locally-applied message. Remove it and say
+   * why — a silent revert leaves the user believing it was sent.
+   */
+  function rejectMessage(localId: string, reason?: string): boolean {
+    if (!pendingMessageIds.value.has(localId)) return false
+    pendingMessageIds.value.delete(localId)
+    for (const session of sessions.value) {
+      const index = session.messages.findIndex(m => m.id === localId)
+      if (index !== -1) {
+        session.messages.splice(index, 1)
+        break
+      }
+    }
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
+    logger.warn(`Message ${localId} rejected by server: ${reason || 'no reason given'}`)
+    return true
+  }
+
+  /**
+   * #14820: replace a session's contents with the server's version.
+   *
+   * Used on initial load and after a resync directive, when the local view is
+   * known to be untrustworthy. Pending messages are dropped deliberately —
+   * after a resync we cannot know whether they landed, and the server snapshot
+   * is the authority.
+   */
+  function applyServerSnapshot(sessionId: string, messages: ChatMessage[]): void {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return
+    session.messages = [...messages]
+    session.updatedAt = new Date()
+    // The snapshot is authoritative, so nothing can still be awaiting an answer
+    // against it. A pending message that appears in the snapshot has landed —
+    // it is confirmed, not still pending; one that does not appear did not land,
+    // and has just been replaced away. Either way the pending set is empty.
+    //
+    // Retaining the ones present in the snapshot (as this did) left them stuck
+    // in a permanent 'sending' state for messages the server already held.
+    pendingMessageIds.value = new Set()
+  }
+
+  /**
+   * #14821: correlate an inbound server message with a message we sent.
+   *
+   * Our optimistic copy carries a locally generated id while the echo carries
+   * the server's, so ids alone cannot match them. Correlating on
+   * (sender, content) among *pending* messages only — confirmed history is
+   * never rescanned — keeps the echo from rendering a second bubble.
+   *
+   * LIMITATION, stated rather than hidden: two identical unconfirmed messages
+   * from the same sender are indistinguishable here, and the older one is
+   * confirmed first. The complete fix is a client-supplied correlation id that
+   * the backend echoes back (AHP calls this `origin.clientSeq`); this function
+   * is the seam that fix would replace, and nothing else needs to change.
+   *
+   * Returns the local id it confirmed, or null when the message is genuinely
+   * from another client.
+   */
+  function correlatePendingMessage(sessionId: string, message: ChatMessage): string | null {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return null
+    for (const localId of pendingMessageIds.value) {
+      const candidate = session.messages.find(m => m.id === localId)
+      if (!candidate) continue
+      if (candidate.sender === message.sender && candidate.content === message.content) {
+        confirmMessage(localId, message.id)
+        return localId
+      }
+    }
+    return null
+  }
+
+  /**
+   * #14820: apply a message that originated on another client.
+   *
+   * Ignores one we already hold, and first checks whether it is really the
+   * echo of something we sent — otherwise our own message would come back as
+   * a duplicate bubble.
+   */
+  function applyRemoteMessage(sessionId: string, message: ChatMessage): boolean {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (!session) return false
+    if (session.messages.some(m => m.id === message.id)) return false
+    if (correlatePendingMessage(sessionId, message) !== null) return false
+    session.messages.push(message)
+    session.updatedAt = new Date()
+    return true
   }
 
   function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>): string | null {
@@ -198,6 +353,11 @@ export const useChatStore = defineStore('chat', () => {
 
     currentSession.value.messages.push(newMessage)
     currentSession.value.updatedAt = new Date()
+
+    // #14821: applied optimistically — the UI shows it now, but it is not
+    // confirmed state until the server echoes it back.
+    pendingMessageIds.value.add(newMessage.id)
+    pendingMessageIds.value = new Set(pendingMessageIds.value)
 
     return newMessage.id
   }
@@ -916,10 +1076,19 @@ export const useChatStore = defineStore('chat', () => {
     sessionCount,
     hasActiveSessions,
 
+    // #14821: reconciliation state
+    hasPendingMessages,
+
     // Actions
     createNewSession,
+    createServerSession,     // #14820: server-assigned session id
     switchToSession,
     addMessage,
+    confirmMessage,          // #14821
+    rejectMessage,           // #14821
+    applyServerSnapshot,     // #14820
+    applyRemoteMessage,      // #14820
+    correlatePendingMessage, // #14821
     addOrUpdateMessage,  // Issue #650: ID-based deduplication for streaming
     updateMessage,
     updateMessageMetadata,

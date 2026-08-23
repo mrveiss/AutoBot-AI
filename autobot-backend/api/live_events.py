@@ -10,14 +10,27 @@ Scoped real-time event streaming with entity-level channel subscriptions.
 Protocol:
   Connect:     wss://host/ws/live?token=<jwt>
   Subscribe:   {"action": "subscribe",   "channel": "task:abc123"}
+               {"action": "subscribe",   "channel": "chat:c1", "last_event_id": 42}
   Unsubscribe: {"action": "unsubscribe", "channel": "task:abc123"}
+  Command:     {"action": "command", "channel": "operation:x", "command": "pause",
+                "payload": {...}}
   Ping:        {"action": "ping"}
-  Server ack:  {"type": "subscribed",   "channel": "..."}
+  Server ack:  {"type": "subscribed",   "channel": "...", "replayed": <int>}
                {"type": "unsubscribed", "channel": "..."}
+               {"type": "resync",       "channel": "...", "reason": "..."}
+               {"type": "command_result","channel": "...", "command": "...", "result": {...}}
                {"type": "pong"}
                {"type": "error",        "message": "..."}
   Live event:  {"type": "live_event", "channel": "...", "event_type": "...",
                 "event_id": <int>, "payload": {...}}
+
+Reconnect with replay (#14818): a client that tracks the highest ``event_id``
+it has seen per channel may pass it back as ``last_event_id`` on subscribe.
+The server replays what was missed before resuming live delivery.  When it
+cannot produce a *complete* history — the marker has aged out of the retention
+window, or the durable stream is unavailable — it sends ``resync`` instead of a
+partial replay.  A partial history delivered as if it were whole is precisely
+the silent data loss this protocol addition exists to prevent.
 """
 
 import asyncio
@@ -30,6 +43,8 @@ from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
+from events.channel_commands import CommandRefused, dispatch_command
+from events.channel_stream import get_channel_event_stream
 from services.workflow_permission_service import WorkflowPermissionService
 
 logger = get_logger(__name__)
@@ -46,6 +61,60 @@ def _auth_required() -> bool:
         return get_auth_middleware().enable_auth
     except Exception:
         return True
+
+
+def _coerce_last_event_id(raw: object) -> int:
+    """Return a usable ``last_event_id``, or 0 when absent or unusable.
+
+    #14818: an unparseable marker must mean "replay nothing and start fresh",
+    never a crash and never a silently trusted partial value.
+    """
+    if raw is None:
+        return 0
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.debug("Ignoring non-integer last_event_id: %r", raw)
+        return 0
+    return value if value > 0 else 0
+
+
+async def _authorize_conversation_channel(channel: str, user_payload: dict) -> bool:
+    """Authorize ``session:``/``chat:`` subscriptions (#14819).
+
+    Conversation channels carry a user's own messages, so this fails closed:
+    admins bypass, the owner is allowed, everyone else is denied.  Ownership is
+    resolved through the chat history manager, which is the store that knows
+    which user a session belongs to.
+    """
+    if "admin" in user_payload.get("roles", []):
+        return True
+    # ``get_session_owner`` returns the *username* it stored in session
+    # metadata, but a JWT may identify the caller by either field — compare
+    # against both rather than guessing which one this deployment uses.
+    identities = {str(value) for value in (user_payload.get("user_id"), user_payload.get("username")) if value}
+    if not identities:
+        return False
+    _prefix, _, ident = channel.partition(":")
+    if not ident:
+        return False
+    try:
+        from utils.resource_factory import ResourceFactory
+
+        manager = ResourceFactory.get_initialized_chat_history_manager()
+        if manager is None:
+            # No store to check against — deny rather than assume ownership.
+            logger.warning("Conversation channel authz denied: chat history manager unavailable")
+            return False
+        owner = await manager.get_session_owner(ident)
+        if owner is None:
+            # Unknown or unowned conversation: deny non-admins rather than
+            # treating "no record" as "no restriction" (#14819 fails closed).
+            return False
+        return str(owner) in identities
+    except Exception:
+        logger.exception("Conversation channel authorization failed for %s", channel)
+        return False
 
 
 async def _send_error(ws: WebSocket, message: str) -> None:
@@ -140,8 +209,75 @@ async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
     return False
 
 
-async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | None) -> None:
-    """Process a subscribe action from the client."""
+async def _authorize_channel(channel: str, user_payload: dict | None) -> bool:
+    """Single authorization rule for a channel, shared by subscribe and command.
+
+    #14824: commands must not be able to reach a channel the caller could not
+    subscribe to. Deriving both from this one function is what keeps the two
+    paths from drifting — a second copy of the rules is how one of them ends up
+    weaker than the other.
+    """
+    if not user_payload:
+        return True
+    if channel.startswith("agent:"):
+        claimed_id = channel.split(":", 1)[1]
+        user_id = str(user_payload.get("user_id", ""))
+        username = user_payload.get("username", "")
+        is_admin = "admin" in user_payload.get("roles", [])
+        return is_admin or claimed_id in (user_id, username)
+    if channel.startswith("company:") or channel.startswith("board:"):
+        return await _authorize_llc_channel(channel, user_payload)
+    if channel.startswith("session:") or channel.startswith("chat:"):
+        return await _authorize_conversation_channel(channel, user_payload)
+    if channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:"):
+        return await _authorize_resource_channel(channel, user_payload)
+    # ``global`` is the shared broadcast channel: every authenticated client is
+    # meant to see it, and it carries no per-tenant payload of its own.
+    if channel == "global":
+        return True
+    # Everything else is DENIED.  This used to `return True`, which was
+    # survivable while the socket was subscribe-only — every valid prefix above
+    # has an explicit rule, so nothing reached data unchecked. It stopped being
+    # survivable when ``dispatch_command`` started using this same function as
+    # the only gate on a *write* path: a handler registered for a new prefix
+    # (``research:``, ``operation:``, ...) would have been reachable by any
+    # connected client with no check at all. Defaulting to deny means a new
+    # channel type is inert until someone writes its rule, which is the failure
+    # direction we want.
+    logger.warning("Denying unrecognised channel prefix: %s", channel)
+    return False
+
+
+async def _handle_command(
+    ws: WebSocket,
+    channel: str,
+    command: str,
+    payload: dict,
+    user_payload: dict | None,
+) -> None:
+    """Route one client command to the handler registered for its channel (#14824)."""
+    try:
+        result = await dispatch_command(channel, command, payload, user_payload, _authorize_channel)
+    except CommandRefused as refusal:
+        await _send_error(ws, refusal.reason)
+        return
+    await ws.send_json(
+        {
+            "type": "command_result",
+            "channel": channel,
+            "command": command,
+            "result": result or {},
+        }
+    )
+
+
+async def _handle_subscribe(
+    ws: WebSocket,
+    channel: str,
+    user_payload: dict | None,
+    last_event_id: int = 0,
+) -> None:
+    """Process a subscribe action, optionally replaying from ``last_event_id`` (#14818)."""
     if user_payload and channel.startswith("agent:"):
         claimed_id = channel.split(":", 1)[1]
         user_id = str(user_payload.get("user_id", ""))
@@ -155,6 +291,12 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
         if not await _authorize_llc_channel(channel, user_payload):
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
+    elif user_payload and (channel.startswith("session:") or channel.startswith("chat:")):
+        # #14819: conversation channels are per-user; without this branch any
+        # authenticated caller could subscribe to anyone's conversation.
+        if not await _authorize_conversation_channel(channel, user_payload):
+            await _send_error(ws, f"Not authorized to subscribe to {channel}")
+            return
     elif user_payload and (
         channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:")
     ):
@@ -163,10 +305,30 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
     ok = await get_event_bus().subscribe_ws(ws, channel)
-    if ok:
-        await ws.send_json({"type": "subscribed", "channel": channel})
-    else:
+    if not ok:
         await _send_error(ws, f"Invalid channel: {channel}")
+        return
+
+    # #14818: subscribe first, then replay.  Doing it in this order means events
+    # published *during* the replay are delivered live rather than falling into
+    # a second gap between the replay read and the subscription taking effect.
+    replayed = 0
+    if last_event_id > 0:
+        result = await get_channel_event_stream().replay_since(channel, last_event_id)
+        if result.resync_required:
+            await ws.send_json(
+                {
+                    "type": "resync",
+                    "channel": channel,
+                    "reason": result.reason or "unknown",
+                }
+            )
+        else:
+            for message in result.events:
+                await ws.send_json(message)
+            replayed = len(result.events)
+
+    await ws.send_json({"type": "subscribed", "channel": channel, "replayed": replayed})
 
 
 async def _handle_unsubscribe(ws: WebSocket, channel: str) -> None:
@@ -184,9 +346,22 @@ async def _handle_message(ws: WebSocket, raw: str, user_payload: dict | None) ->
         return
     action = data.get("action")
     if action == "subscribe":
-        await _handle_subscribe(ws, data.get("channel", ""), user_payload)
+        await _handle_subscribe(
+            ws,
+            data.get("channel", ""),
+            user_payload,
+            _coerce_last_event_id(data.get("last_event_id")),
+        )
     elif action == "unsubscribe":
         await _handle_unsubscribe(ws, data.get("channel", ""))
+    elif action == "command":
+        await _handle_command(
+            ws,
+            data.get("channel", ""),
+            data.get("command", ""),
+            data.get("payload") or {},
+            user_payload,
+        )
     elif action == "ping":
         await ws.send_json({"type": "pong"})
     else:
