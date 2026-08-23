@@ -32,14 +32,18 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
     exit 1
 }
 
-# Named PROJECT_ROOT, not REPO_ROOT, and that spelling is load-bearing:
-# repo_tests/shell_lib_sources_resolve_test.py (#14041/#14172) resolves a
-# `source .../lib/...` path by expanding SCRIPT_DIR and PROJECT_ROOT, and skips
-# any site still containing a `$` it cannot expand. Spelled REPO_ROOT, this
-# hook's rule-library source was COLLECTED as a call site and then silently
-# skipped by the resolution check — present in the guard's reach numbers,
-# verified by nothing. Using the spelling the canonical guard already
-# understands puts the site back under it.
+# Named PROJECT_ROOT, not REPO_ROOT, to match the spelling the tree's canonical
+# resolver already uses (autobot-infrastructure/shared/scripts/lib/ssot-config.sh
+# exports PROJECT_ROOT) and the one
+# repo_tests/shell_lib_sources_resolve_test.py (#14041/#14172) can expand — it
+# resolves a `source .../lib/...` path through SCRIPT_DIR and PROJECT_ROOT only,
+# and skips any site still holding a `$` it cannot expand.
+#
+# Being precise about what this buys TODAY: nothing yet. That guard walks
+# `*.sh` only, and every hook in this directory is extensionless, so it cannot
+# see this file at all — 16 hooks source lib/_common.sh and none are covered.
+# Filed separately. The spelling is chosen so this site is verified rather than
+# silently skipped the moment that walk is widened.
 #
 # Resolved from THIS SCRIPT's location, not from `git rev-parse` against the
 # cwd. The hook must load the rules and the baseline belonging to the checkout
