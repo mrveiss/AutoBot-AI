@@ -62,8 +62,21 @@ _DENIAL_ENUM_MEMBERS = {"PERMISSION_DENIED", "ROLE_DENIED"}
 # (parsing a header, resolving a client id) would be read as a swallowed audit
 # write and the guard would report offenders that are not offenders.
 _PERSISTENCE_CALLS = {
-    "open", "write", "writelines", "add", "add_all", "commit", "flush",
-    "execute", "insert", "save", "publish", "lpush", "rpush", "xadd", "set",
+    "open",
+    "write",
+    "writelines",
+    "add",
+    "add_all",
+    "commit",
+    "flush",
+    "execute",
+    "insert",
+    "save",
+    "publish",
+    "lpush",
+    "rpush",
+    "xadd",
+    "set",
 }
 
 
@@ -186,9 +199,7 @@ def _denial_audit_sinks() -> tuple[list[tuple[str, ast.FunctionDef | ast.AsyncFu
             if not any(_is_denial_marker(sub) for sub in body):
                 continue
             audit_calls = [
-                _callee_name(sub)
-                for sub in body
-                if isinstance(sub, ast.Call) and _AUDIT_NAME.search(_callee_name(sub))
+                _callee_name(sub) for sub in body if isinstance(sub, ast.Call) and _AUDIT_NAME.search(_callee_name(sub))
             ]
             if not audit_calls:
                 continue
@@ -241,9 +252,9 @@ def _swallowing_write_handlers(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> li
 def test_the_sweep_reached_the_production_tree() -> None:
     sites, unparsed = _denial_audit_call_sites()
 
-    assert len(_production_files()) > 500, (
-        f"only {len(_production_files())} production files walked — the search path is wrong"
-    )
+    assert (
+        len(_production_files()) > 500
+    ), f"only {len(_production_files())} production files walked — the search path is wrong"
     assert not unparsed, f"these files did not parse, so they were never checked: {unparsed}"
     assert len(sites) >= 5, (
         f"only {len(sites)} permission-denial audit call sites found. Either the "
@@ -265,12 +276,12 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
 
     assert "autobot-backend/auth_rbac.py" in files, "the file-backed denial path (#14843) is no longer detected"
     assert any(rel in files for rel in MIDDLEWARES), "the DB-backed denial path (#14750) is no longer detected"
-    assert "_emit_permission_denied_audit" in functions, (
-        f"the DB-backed denial-audit function is no longer derived, only {sorted(functions)}"
-    )
-    assert "_deny_permission_access" in functions, (
-        f"the file-backed denial-audit function is no longer derived, only {sorted(functions)}"
-    )
+    assert (
+        "_emit_permission_denied_audit" in functions
+    ), f"the DB-backed denial-audit function is no longer derived, only {sorted(functions)}"
+    assert (
+        "_deny_permission_access" in functions
+    ), f"the file-backed denial-audit function is no longer derived, only {sorted(functions)}"
     assert "audit_log" in callees, f"the file-backed sink is no longer resolved, only {sorted(callees)}"
 
 

@@ -498,12 +498,13 @@ async def test_a_failing_cleanup_step_does_not_skip_the_steps_after_it(caplog):
             failed = await cleanup_services(app)
 
     assert "Trigger service stop" in failed, f"the failing step was not recorded: {failed}"
-    assert ran_later == ["process_adapter", "redis_close"], (
-        "a step after the failure did not run — one failure still aborts the teardown"
-    )
-    assert "Cleanup completed successfully" not in caplog.text, (
-        "a shutdown that skipped a step closed with the same line as a clean one"
-    )
+    assert ran_later == [
+        "process_adapter",
+        "redis_close",
+    ], "a step after the failure did not run — one failure still aborts the teardown"
+    assert (
+        "Cleanup completed successfully" not in caplog.text
+    ), "a shutdown that skipped a step closed with the same line as a clean one"
     assert "teardown was INCOMPLETE" in caplog.text
     assert "cannot join current thread" in caplog.text
 

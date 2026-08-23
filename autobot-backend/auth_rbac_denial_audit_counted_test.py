@@ -36,9 +36,7 @@ _EXPECTED_ERROR = "IsADirectoryError"
 def _counter_value(action: str, error_type: str) -> float:
     from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
-    value = get_metrics_manager().registry.get_sample_value(
-        _COUNTER, {"action": action, "error_type": error_type}
-    )
+    value = get_metrics_manager().registry.get_sample_value(_COUNTER, {"action": action, "error_type": error_type})
     return 0.0 if value is None else value
 
 
@@ -109,9 +107,7 @@ def test_a_successful_denial_audit_writes_the_record_and_counts_nothing(tmp_path
 
     with patch.object(auth_rbac, "_get_security_layer", return_value=_layer_writing_to(audit_file)):
         with pytest.raises(HTTPException):
-            auth_rbac._deny_permission_access(
-                {"username": "someone", "role": "viewer"}, "analytics:view", _request()
-            )
+            auth_rbac._deny_permission_access({"username": "someone", "role": "viewer"}, "analytics:view", _request())
 
     written = audit_file.read_text(encoding="utf-8")
     assert "permission_denied" in written, "the record was not written at all"
@@ -137,9 +133,7 @@ def test_a_role_denial_write_failure_is_counted_under_its_own_action(tmp_path):
 
     with patch.object(auth_rbac, "_get_security_layer", return_value=_layer_writing_to(unwritable)):
         with pytest.raises(HTTPException):
-            auth_rbac._deny_role_access(
-                {"username": "someone", "role": "viewer"}, ["admin"], "viewer", _request()
-            )
+            auth_rbac._deny_role_access({"username": "someone", "role": "viewer"}, ["admin"], "viewer", _request())
 
     after = _counter_value("role_denied", _EXPECTED_ERROR)
     assert after == before + 1, f"a lost role-denial record was not counted ({before} -> {after})"

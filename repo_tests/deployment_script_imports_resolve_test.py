@@ -91,8 +91,18 @@ _KNOWN_BROKEN = {
 # guard that has to be taught each stdlib name will eventually be taught to
 # ignore a first-party one, so the stdlib half is derived.
 _THIRD_PARTY_PREFIXES = {
-    "redis", "requests", "httpx", "aiohttp", "yaml", "sqlalchemy", "fastapi",
-    "pydantic", "prometheus_client", "click", "llama_index", "bcrypt",
+    "redis",
+    "requests",
+    "httpx",
+    "aiohttp",
+    "yaml",
+    "sqlalchemy",
+    "fastapi",
+    "pydantic",
+    "prometheus_client",
+    "click",
+    "llama_index",
+    "bcrypt",
     "websockify",
 }
 _EXTERNAL_PREFIXES = _THIRD_PARTY_PREFIXES | set(sys.stdlib_module_names)
@@ -300,9 +310,7 @@ def _awaited_sync_redis_calls() -> tuple[list[str], int]:
                 kwargs = {k.arg: k.value for k in node.value.keywords}
                 truthy = isinstance(kwargs.get("async_client"), ast.Constant) and kwargs["async_client"].value is True
                 if not truthy:
-                    offenders.append(
-                        f"{script.relative_to(_REPO_ROOT)}: await {name}(...) without async_client=True"
-                    )
+                    offenders.append(f"{script.relative_to(_REPO_ROOT)}: await {name}(...) without async_client=True")
     return offenders, parsed
 
 
@@ -472,8 +480,7 @@ def test_no_inline_check_fabricates_its_own_result() -> None:
     assert not offenders, (
         "a failed check must be distinguishable from a clean one by what it "
         "REPORTS, not only by what reaches stderr. Emit an explicit error and a "
-        "non-zero exit status instead of a sentinel (#14867):\n  "
-        + "\n  ".join(offenders)
+        "non-zero exit status instead of a sentinel (#14867):\n  " + "\n  ".join(offenders)
     )
 
 
