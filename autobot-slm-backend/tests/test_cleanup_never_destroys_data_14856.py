@@ -111,5 +111,23 @@ def test_legacy_retirement_migrates_before_removing() -> None:
     delete_at = next(i for i, t in enumerate(tasks) if t in _deletions(tasks))
     assert migrate_at < delete_at, "the legacy directory is removed before its data is migrated"
 
-    delete_when = " ".join(_deletions(tasks)[0]["when"].split())
-    assert "_legacy_has_data" in delete_when, "the legacy removal does not consider whether the path held data"
+    # The deletion gates on a single decision fact rather than an inline
+    # expression, so this follows it one hop: the gate must be that fact, and
+    # the fact must be computed from whether the path held data.
+    delete_when = " ".join(str(_deletions(tasks)[0]["when"]).split())
+    assert (
+        "_legacy_safe_to_remove" in delete_when
+    ), f"the legacy removal is not gated on the safety decision: {delete_when}"
+
+    decisions = [
+        t
+        for t in tasks
+        if "_legacy_safe_to_remove" in str(t.get("ansible.builtin.set_fact") or t.get("set_fact") or {})
+    ]
+    assert decisions, "nothing computes _legacy_safe_to_remove — the gate would be undefined"
+    decision = str(decisions[0].get("ansible.builtin.set_fact") or decisions[0].get("set_fact"))
+    assert "_legacy_has_data" in decision, "the safety decision ignores whether the path held data"
+    assert "default(true)" in decision.replace(" ", ""), (
+        "the safety decision does not default to 'has data' when unknown, so an unreadable host "
+        "could still be deleted"
+    )
