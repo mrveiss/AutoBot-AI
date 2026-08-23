@@ -30,7 +30,7 @@ is deliberately untouched here.
 from __future__ import annotations
 
 import logging
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -146,3 +146,69 @@ class TestTheFlagStoreReportsFailureInsteadOfInventingAnAnswer:
         flags._enforcement_default_logged = False
 
         assert await flags.get_enforcement_mode() == EnforcementMode.DISABLED
+
+
+class TestTheDegradedModeStillRunsAndRecordsTheCheck:
+    """The wiring, not the helper.
+
+    Every test above pins `_get_enforcement_mode` in isolation. A correct
+    resolver whose *consumer* still short-circuits would leave all of them
+    green while the check remained inert — which is the shape of the bug being
+    fixed, one level up. So this drives `validate_ownership` itself, with a real
+    ownership mismatch, and asserts the violation is both allowed **and**
+    recorded.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_mismatch_during_an_outage_is_allowed_but_audited(self):
+        validator = _validator(_flags_raising(EnforcementModeUnavailable("redis down")))
+        validator.get_session_owner = AsyncMock(return_value="alice")
+        validator._is_org_admin_access = AsyncMock(return_value=False)
+        validator._audit_log_violation = MagicMock()
+        validator._record_violation_metrics = AsyncMock()
+        validator._get_authenticated_user = MagicMock(
+            return_value={"username": "bob", "auth_disabled": False}
+        )
+
+        auth = MagicMock()
+        auth.enable_auth = True
+        with patch("security.session_ownership.get_auth_middleware", return_value=auth):
+            result = await validator.validate_ownership("sess-1234abcd", MagicMock())
+
+        # Allowed — log_only does not block, so no request that works today breaks.
+        assert result["authorized"] is True
+        assert result["reason"] == "log_only_mode"
+        assert result["actual_owner"] == "alice"
+
+        # ...but the check ran and the violation was recorded. Under the pre-fix
+        # "disabled" mode this path was short-circuited before the ownership
+        # lookup, so neither of these was ever called.
+        validator._audit_log_violation.assert_called_once()
+        validator._record_violation_metrics.assert_awaited_once()
+        assert validator.get_session_owner.await_count >= 1, (
+            "the ownership lookup never ran — the check is still being skipped"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_deliberate_disabled_still_short_circuits(self):
+        """The contrast case, so the test above cannot pass for the wrong reason."""
+        validator = _validator(_flags_returning(EnforcementMode.DISABLED))
+        validator.get_session_owner = AsyncMock(return_value="alice")
+        validator._is_org_admin_access = AsyncMock(return_value=False)
+        validator._audit_log_violation = MagicMock()
+        validator._record_violation_metrics = AsyncMock()
+        validator._get_authenticated_user = MagicMock(
+            return_value={"username": "bob", "auth_disabled": False}
+        )
+
+        auth = MagicMock()
+        auth.enable_auth = True
+        with patch("security.session_ownership.get_auth_middleware", return_value=auth):
+            result = await validator.validate_ownership("sess-1234abcd", MagicMock())
+
+        assert result["authorized"] is True
+        assert result["reason"] != "log_only_mode"
+        validator._audit_log_violation.assert_not_called()
+        assert validator.get_session_owner.await_count == 0, (
+            "a deliberate 'disabled' should still skip the lookup — that is policy, unchanged"
+        )

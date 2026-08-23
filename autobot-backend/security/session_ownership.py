@@ -839,7 +839,11 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     try:
         feature_flags = await get_feature_flags()
     except Exception as e:
-        logger.warning("Feature flags unavailable, defaulting to disabled mode: %s", e)
+        logger.warning(
+            "Feature flags unavailable, degrading ownership enforcement to log_only "
+            "(checks still run, violations still recorded): %s",
+            e,
+        )
         feature_flags = None
 
     # Get metrics service (optional)
