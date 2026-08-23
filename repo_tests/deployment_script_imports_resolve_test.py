@@ -161,7 +161,18 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> N
 # time is the same defect one step later.
 # --------------------------------------------------------------------------
 
-_PY_BLOCK = re.compile(r'python3 -c "(.*?)"\s*(?:\|\||>|2>|$)', re.S)
+# Two real shapes, and the delimiter matters more than it looks. A naive
+# `python3 -c "(.*?)"` stops at the first quote *inside* the Python (these blocks
+# contain `database="main"`), and keying on what follows the closing quote —
+# `2>`, `>`, `||` — silently broke the moment output suppression was removed from
+# these very scripts, collapsing seven blocks into one unparseable blob that the
+# SyntaxError branch then skipped. The guard went green while checking nothing.
+#
+# A multi-line block therefore closes on a quote that is alone at the start of a
+# line, which is unambiguous regardless of what follows it.
+_PY_BLOCK_MULTILINE = re.compile(r'python3 -c "\n(.*?)\n"', re.S)
+# ...and a single-line block cannot contain a quote or a newline at all.
+_PY_BLOCK_INLINE = re.compile(r'python3 -c "([^"\n]+)"')
 
 # The canonical accessor is `get_redis_client(async_client=False, database="main")`,
 # aliased to `get_redis_manager` in the scripts. Awaiting it without
@@ -171,7 +182,9 @@ _ASYNC_REDIS_ACCESSORS = {"get_redis_manager", "get_redis_client"}
 
 def _embedded_python(script: Path) -> list[str]:
     text = script.read_text(encoding="utf-8", errors="replace")
-    return [m.group(1) for m in _PY_BLOCK.finditer(text)]
+    blocks = [m.group(1) for m in _PY_BLOCK_MULTILINE.finditer(text)]
+    blocks += [m.group(1) for m in _PY_BLOCK_INLINE.finditer(text)]
+    return blocks
 
 
 def _awaited_sync_redis_calls() -> tuple[list[str], int]:
@@ -201,11 +214,40 @@ def _awaited_sync_redis_calls() -> tuple[list[str], int]:
     return offenders, parsed
 
 
-def test_the_embedded_python_was_actually_parsed() -> None:
-    """Discovery floor: an extractor that matches nothing asserts nothing."""
-    _, parsed = _awaited_sync_redis_calls()
+_ACCESS_CONTROL_SCRIPTS = [
+    "deployment/validate_access_control.sh",
+    "monitoring/access_control_monitor.sh",
+]
 
-    assert parsed > 3, f"only parsed {parsed} embedded python blocks — the extractor is not matching"
+
+@pytest.mark.parametrize("rel", _ACCESS_CONTROL_SCRIPTS)
+def test_the_embedded_python_of_each_target_script_parses(rel: str) -> None:
+    """Per-file floor, not a tree-wide sum.
+
+    A total across every script hid the real state: the two files this guard
+    exists for contributed **zero** parseable blocks while the total still
+    cleared the threshold. A floor has to measure the thing that can go to zero,
+    and here that is per script.
+    """
+    script = _SCRIPT_DIR / rel
+    assert script.is_file(), f"{rel} moved — re-point this guard rather than checking nothing"
+
+    blocks = _embedded_python(script)
+    assert blocks, f"no embedded python extracted from {rel} — the extractor is not matching"
+
+    parsed = 0
+    for block in blocks:
+        try:
+            ast.parse(block)
+        except SyntaxError:
+            continue
+        parsed += 1
+
+    assert parsed >= 3, (
+        f"only {parsed} of {len(blocks)} extracted blocks in {rel} parse as Python. "
+        "Unparseable blocks are skipped, so a low count means the call-layer check "
+        "below is inspecting almost nothing."
+    )
 
 
 def test_no_script_awaits_the_sync_redis_client() -> None:
