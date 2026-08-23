@@ -155,6 +155,34 @@ already existed when the three former detectors were merged. It only ever
 shrinks: a finding that is not in it fails the build, and every run prints how
 many baselined findings it suppressed.
 
+### "STALE baseline entry" — what to do (#14912)
+
+If `ssot-coverage` fails with `N baseline entr(ies) … no longer match anything`,
+you have almost certainly just **fixed or moved** a hardcoded value. That is the
+outcome the guard wants; the baseline simply still lists it. Recover with one
+command:
+
+```bash
+./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline
+```
+
+then commit the changed baseline alongside your fix.
+
+`--prune-baseline` **only ever removes**. It cannot add a key or raise a count,
+by construction: it iterates the keys already in the baseline and writes
+`min(baseline_count, found_count)`. So it cannot be used to silence a new
+finding — that direction is blocked independently by
+`pipeline-scripts/check_baseline_no_growth.sh`, which fails on any new key or
+increased count.
+
+It also refuses to run when the scan found **nothing**. An empty result and a
+broken detector are indistinguishable, and this is the one path that rewrites
+the record, so it will not turn a failed scan into an emptied baseline.
+
+Why the audit blocks rather than warns: an entry naming a path that has moved
+exempts nothing today, but silently re-permits the value the moment that path
+comes back.
+
 ---
 
 ## ConfigRegistry Fallback Pattern (Issue #2671)

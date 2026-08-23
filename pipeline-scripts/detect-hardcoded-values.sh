@@ -20,7 +20,7 @@
 #   * it always exits 0. ssot-coverage.yml decides pass/fail from the reported
 #     counts, and has done since #2874.
 #
-# Usage: detect-hardcoded-values.sh [--json|--report|--audit-baseline|--help]
+# Usage: detect-hardcoded-values.sh [--json|--report|--audit-baseline|--prune-baseline|--help]
 
 set -euo pipefail
 
@@ -36,17 +36,20 @@ BASELINE="${REPO_ROOT}/pipeline-scripts/hardcoded_values_baseline.txt"
 OUTPUT_FORMAT="text"
 REPORT_MODE=false
 AUDIT_BASELINE=false
+PRUNE_BASELINE=false
 
 for arg in "$@"; do
     case "$arg" in
         --json)            OUTPUT_FORMAT="json" ;;
         --report)          REPORT_MODE=true ;;
         --audit-baseline)  AUDIT_BASELINE=true ;;
+        --prune-baseline)  PRUNE_BASELINE=true ;;
         --help)
-            echo "Usage: $0 [--json|--report|--audit-baseline|--help]"
+            echo "Usage: $0 [--json|--report|--audit-baseline|--prune-baseline|--help]"
             echo "  --json            Output results as JSON"
             echo "  --report          Show the detailed violation report"
             echo "  --audit-baseline  Fail on baseline entries that match nothing"
+            echo "  --prune-baseline  Rewrite the baseline to what is actually found (REMOVES only)"
             exit 0
             ;;
     esac
@@ -63,6 +66,30 @@ SCAN_DIRS=(
     "autobot-slm-frontend/src"
     "autobot-infrastructure"
 )
+
+# Every scan directory must exist before anything is scanned (#14912 review).
+#
+# hv_scan_tree treats a missing directory as a silent no-op (`[ -d "$root" ] ||
+# return 0`), so one moved or renamed entry in SCAN_DIRS yields nothing while
+# the other five still yield hundreds. Reproduced: with autobot-slm-backend
+# absent, a prune run dropped every baseline key under it, exited 0, and printed
+# the same success line a legitimate one-entry cleanup prints — and the audit
+# then passed, because every surviving entry still matched. The empty-scan
+# refusal below never fired, because the scan was not empty.
+#
+# Checked here rather than only in the prune branch, because a partial scan
+# corrupts EVERY mode: --json under-reports the violation counts that
+# ssot-coverage.yml decides pass/fail from, and --audit-baseline reports the
+# unreached directory's entries as STALE, which is a false accusation that
+# sends an author to prune away real records.
+for dir in "${SCAN_DIRS[@]}"; do
+    [ -d "$REPO_ROOT/$dir" ] && continue
+    echo "FATAL: scan directory '${dir}' does not exist under ${REPO_ROOT}." >&2
+    echo "  Refusing to scan a partial tree: findings under it would be missing," >&2
+    echo "  its baseline entries would look stale, and a prune would delete them." >&2
+    echo "  If the layout changed on purpose, update SCAN_DIRS in this script." >&2
+    exit 1
+done
 
 hv_load_baseline "$BASELINE" || exit 1
 
@@ -91,15 +118,83 @@ STATUS="pass"
 if [ "$AUDIT_BASELINE" = true ]; then
     STALE=$(hv_stale_baseline_entries)
     if [ -n "$STALE" ]; then
-        echo "Baseline entries in ${BASELINE#"$REPO_ROOT"/} that match nothing any more:"
+        STALE_COUNT=$(printf '%s\n' "$STALE" | grep -c . || true)
+        echo "${STALE_COUNT} baseline entr(ies) in ${BASELINE#"$REPO_ROOT"/} no longer match anything:"
+        echo
         printf '%s\n' "$STALE" | sed 's/^/  STALE  /'
         echo
-        echo "A fixed violation must take its baseline line with it. An entry naming a"
-        echo "path that has moved exempts nothing, silently, and re-permits the value"
-        echo "the moment the path comes back."
+        # #14912: this used to stop at "here is what is wrong". Most of the cost
+        # of this check was never the rule, it was that the person who hit it --
+        # usually the person who just FIXED a hardcoded value -- was not told how
+        # to recover, and the file to edit has nothing to do with their change.
+        echo "You almost certainly just fixed or moved these. Recover with one command:"
+        echo
+        echo "    ./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline"
+        echo
+        echo "then commit the changed baseline. Prune only ever REMOVES entries — it"
+        echo "cannot add a key or raise a count — so it cannot be used to silence a new"
+        echo "finding. That direction is blocked independently by"
+        echo "pipeline-scripts/check_baseline_no_growth.sh."
+        echo
+        echo "Why this blocks rather than warns: an entry naming a path that has moved"
+        echo "exempts nothing today, but silently re-permits the value the moment that"
+        echo "path comes back."
         exit 1
     fi
     echo "hardcoded-values: every baseline entry still matches something"
+    exit 0
+fi
+
+if [ "$PRUNE_BASELINE" = true ]; then
+    # Refuse to write the result of a scan that found nothing. An empty result
+    # and a broken detector are indistinguishable here, and this path REWRITES
+    # the record; the no-growth guard will not object either, because shrinking
+    # is allowed by design.
+    #
+    # The PARTIAL-scan case -- far more dangerous, because the total stays
+    # non-zero and this check never fires -- is handled by the SCAN_DIRS
+    # existence assertion near the top, not here.
+    #
+    # No proportional-loss guard, deliberately: a percentage threshold has no
+    # non-arbitrary value, and it would block the one legitimate large prune
+    # (a genuine sweep that fixes many violations at once) while still passing
+    # any loss that happened to fall under it. The existence check removes the
+    # cause rather than rationing the symptom.
+    TOTAL_FOUND=$(grep -c . "$RAW" || true)
+    if [ "$TOTAL_FOUND" -eq 0 ]; then
+        echo "FATAL: the scan found 0 findings, so pruning would empty the baseline." >&2
+        echo "  A tree carrying ${#HV_BASELINE[@]} baselined findings does not legitimately" >&2
+        echo "  drop to zero. This looks like a broken scan, not a fixed repository —" >&2
+        echo "  refusing to rewrite the baseline from it." >&2
+        exit 1
+    fi
+    PRUNED=$(mktemp)
+    trap 'rm -f "$RAW" "$NEWFILE" "$PRUNED" "${BASELINE}.tmp"' EXIT
+    # LC_ALL=C pins the collation. Nothing is broken today -- the committed
+    # baseline is byte-identical under this runner's C.UTF-8 -- but an unpinned
+    # locale means a different shell or CI image could reorder every line on a
+    # legitimate no-op prune, turning a zero-change run into a whole-file diff.
+    hv_pruned_baseline | LC_ALL=C sort -t'|' -k3,3 -k2,2 -k4,4 > "$PRUNED"
+    KEPT=$(grep -c . "$PRUNED" || true)
+    BEFORE=${#HV_BASELINE[@]}
+    # Header first, then the pruned body. The leading comment block carries the
+    # rules governing this file -- including "this file only ever shrinks" --
+    # and a rewrite that dropped it would delete the reason the file exists.
+    # Taken as the run of leading `#` lines, so it stays correct if the header
+    # is edited later.
+    { awk '/^#/ { print; next } { exit }' "$BASELINE"; cat "$PRUNED"; } > "${BASELINE}.tmp"
+    HEADER_LINES=$(awk '/^#/ { c++; next } { exit } END { print c + 0 }' "${BASELINE}.tmp")
+    if [ "$HEADER_LINES" -eq 0 ]; then
+        rm -f "${BASELINE}.tmp"
+        echo "FATAL: refusing to write a baseline with no header — the rules governing" >&2
+        echo "  this file live in it." >&2
+        exit 1
+    fi
+    mv "${BASELINE}.tmp" "$BASELINE"
+    echo "hardcoded-values: baseline pruned — ${BEFORE} key(s) -> ${KEPT} key(s), $((BEFORE - KEPT)) removed"
+    echo "  Removal-only: no key was added and no count raised (hv_pruned_baseline"
+    echo "  iterates existing keys and emits min(baseline, found))."
+    echo "  Review the diff and commit it with the change that fixed the violations."
     exit 0
 fi
 
