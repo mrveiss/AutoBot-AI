@@ -39,12 +39,22 @@
          }.get(dir_name, '') }}
   tags: ['clean']
 
-- name: "{{ caller_role }} | Legacy: stat {{ dir_name }} and its canonical target (#14856)"
+# Probed unconditionally, and deliberately NOT folded into the loop below.
+# Whether this path holds data is the one question whose answer authorises a
+# deletion, so it must never depend on some OTHER condition having been met —
+# when it was gated on `_legacy_canonical` being mapped, an unmapped legacy
+# directory answered "no data" without anyone having looked (#14856).
+- name: "{{ caller_role }} | Legacy: probe {{ dir_name }} for data (#14856)"
+  ansible.builtin.stat:
+    path: "/opt/autobot/{{ dir_name }}/data"
+  register: _legacy_data_stat
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Legacy: stat the canonical target for {{ dir_name }} (#14856)"
   ansible.builtin.stat:
     path: "{{ item }}"
   register: _legacy_stats
   loop:
-    - "/opt/autobot/{{ dir_name }}/data"
     - "/opt/autobot/{{ _legacy_canonical }}"
     - "/opt/autobot/{{ _legacy_canonical }}/data"
   when: _legacy_canonical | length > 0
@@ -52,9 +62,14 @@
 
 - name: "{{ caller_role }} | Legacy: record what was found (#14856)"
   ansible.builtin.set_fact:
-    _legacy_has_data: "{{ (_legacy_stats.results[0].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
-    _canonical_exists: "{{ (_legacy_stats.results[1].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
-    _canonical_has_data: "{{ (_legacy_stats.results[2].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
+    # `default(true)` — if the probe did not answer, assume there IS data. The
+    # only direction this can be wrong in is leaving a directory in place.
+    _legacy_has_data: "{{ _legacy_data_stat.stat.exists | default(true) }}"
+    # These two default the other way on purpose, and it is safe: an unknown
+    # canonical target means "do not migrate", which leaves _legacy_has_data
+    # true and therefore blocks the removal anyway.
+    _canonical_exists: "{{ (_legacy_stats.results[0].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
+    _canonical_has_data: "{{ (_legacy_stats.results[1].stat.exists | default(false)) if _legacy_canonical | length > 0 else false }}"
   tags: ['clean']
 
 # The clean case: legacy holds data, canonical exists and has none. A rename on
@@ -130,9 +145,15 @@
 # Remove only once nothing of value is left behind: either the legacy path never
 # held data, or its data has been migrated and verified above. `_legacy_has_data`
 # defaults to TRUE when unknown, so an unreadable host keeps its directory.
+#
+# The removal itself goes through remove_component_dir.yml like every other
+# component removal (#14856). That is deliberately redundant with the decision
+# above: this file's reasoning is several stats and a migration deep, and the
+# probe downstream is a single unconditional re-check right before the delete.
 - name: "{{ caller_role }} | Clean: legacy {{ dir_name }} dir"
-  ansible.builtin.file:
-    path: "/opt/autobot/{{ dir_name }}"
-    state: absent
+  ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
   when: _legacy_safe_to_remove | bool
+  vars:
+    remove_dir_path: "/opt/autobot/{{ dir_name }}"
+    remove_reason: "legacy path retired in favour of {{ _legacy_canonical | default('its canonical location') }}"
   tags: ['clean']
