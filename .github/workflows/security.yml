@@ -21,10 +21,17 @@ on:
     #
     # The `schedule:` trigger below is NOT affected by path filters, so the daily
     # full scan still covers everything unconditionally.
+    #
+    # #12986: the backend-Python entries below are the canonical
+    # `backend-python` set from .github/filters/backend-python-paths.yml. GitHub has no include mechanism for
+    # event path filters, so this copy is unavoidable —
+    # pipeline-scripts/check_workflow_path_filters.py fails the build if it
+    # ever stops matching the canonical set.
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'pyproject.toml'
@@ -59,19 +66,9 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            python:
-              - 'autobot-backend/**/*.py'
-              - 'autobot-slm-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - '.github/workflows/security.yml'
-            deps:
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'pyproject.toml'
-              - 'autobot_shared/pyproject.toml'
-              - 'autobot-frontend/package*.json'
-              - '.github/workflows/security.yml'
+          # #12986: the `python` and `deps` sets live in the canonical filter
+          # file, which defines the backend-Python paths exactly once.
+          filters: .github/filters/backend-python-paths.yml
 
   dependency-security:
     name: Dependency Security Scan
