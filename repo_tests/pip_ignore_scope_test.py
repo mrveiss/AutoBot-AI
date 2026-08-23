@@ -29,6 +29,7 @@ insufficient is not visible from reading the config.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,10 @@ _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
 
 # `openai>=2.53.0`, `openai==2.53.0  # note`, `pkg[extra]>=1 ; marker`
 _PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*[=<>!~]")
-_INCLUDE = re.compile(r"^\s*-r\s+(\S+)")
+# `-c` reaches a file just as `-r` does: pip applies a constraints file to
+# everything installed from the manifest naming it, so a block that can edit
+# a constraints file can move a pin another block protects (#14733).
+_INCLUDE = re.compile(r"^\s*-(?:r|c)\s+(\S+)")
 
 
 def _normalise(name: str) -> str:
@@ -62,7 +66,7 @@ def _version(text: str) -> tuple[int, ...] | None:
 
 
 def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
-    """Every requirements file reachable from *path* through ``-r``."""
+    """Every requirements file reachable from *path* through ``-r`` or ``-c``."""
     path = path.resolve()
     if path in seen or not path.is_file():
         return seen
@@ -75,11 +79,22 @@ def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
 
 
 def _manifests_of(directory: str) -> list[Path]:
-    """The requirements manifests a pip block owns directly."""
+    """The dependency manifests a pip block owns directly.
+
+    `pyproject.toml` counts: dependabot's pip ecosystem updates it as readily as
+    a requirements file, so a block owning a directory containing one can move a
+    pin from there. Modelling only `requirements*.txt` under-approximated what a
+    block reaches, and an under-approximating guard reports clean rather than
+    reporting less (#14733).
+    """
     base = _REPO_ROOT / directory.lstrip("/")
     if not base.is_dir():
         return []
-    return sorted(base.glob("requirements*.txt"))
+    manifests = sorted(base.glob("requirements*.txt"))
+    pyproject = base / "pyproject.toml"
+    if pyproject.is_file():
+        manifests.append(pyproject)
+    return manifests
 
 
 def _files_reachable_from(directory: str) -> set[Path]:
@@ -90,14 +105,62 @@ def _files_reachable_from(directory: str) -> set[Path]:
     return files
 
 
-def _packages_pinned_in(file: Path) -> set[str]:
-    """Normalised package names pinned in one file."""
-    packages: set[str] = set()
-    for line in file.read_text(encoding="utf-8").splitlines():
-        match = _PIN.match(line)
+def _pyproject_specs(path: Path) -> list[str]:
+    """Every PEP 508 requirement string a pyproject declares."""
+    import tomllib  # 3.11+; nothing this repo supports predates it
+
+    # Deliberately not wrapped in try/except. Returning [] on a parse error is
+    # the same under-approximation this guard exists to close: a malformed
+    # pyproject would contribute zero pins and the whole check would read as
+    # clean, which is exactly how the line-scan bug hid. Let it fail loudly,
+    # naming the file.
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise AssertionError(f"could not read {path} as TOML, so its pins cannot be counted: {exc}") from exc
+
+    project = data.get("project") or {}
+    specs: list[str] = [str(spec) for spec in (project.get("dependencies") or [])]
+    for group in (project.get("optional-dependencies") or {}).values():
+        specs.extend(str(spec) for spec in (group or []))
+    return specs
+
+
+def _pins_in(path: Path) -> list[tuple[str, str]]:
+    """``(normalised name, pin text)`` for every pin *path* declares.
+
+    One derivation for both questions asked of a manifest — *which packages can
+    this block offer* and *what floor does it set for one of them*. They were
+    answered separately, and the second answered it by re-scanning raw lines,
+    so it silently skipped every pyproject dependency: the same #14733 defect,
+    in the sibling function that was not fixed with it. Deriving both from here
+    means a manifest format can only be mishandled in one place.
+    """
+    if path.name == "pyproject.toml":
+        candidates = _pyproject_specs(path)
+    else:
+        candidates = [line.split("#")[0] for line in path.read_text(encoding="utf-8").splitlines()]
+
+    pins: list[tuple[str, str]] = []
+    for spec in candidates:
+        match = _PIN.match(spec)
         if match:
-            packages.add(_normalise(match.group(1)))
-    return packages
+            pins.append((_normalise(match.group(1)), spec.strip()))
+    return pins
+
+
+def _packages_pinned_in(path: Path) -> set[str]:
+    """Distribution names pinned by *path*.
+
+    `pyproject.toml` is parsed as TOML rather than scanned line-wise: a
+    dependency there is quoted (`    "pydantic>=2.13.3",`), so the requirements
+    regex matches none of them and instead harvests the ordinary `key = value`
+    lines — `name`, `version`, `description` — as though they were packages
+    (#14733). That is worse than missing the file: it fills the reachable set
+    with strings no dependabot block will ever name, so the guard looks like it
+    covers pyproject while covering nothing in it.
+    """
+    return {name for name, _ in _pins_in(path)}
 
 
 def _packages_reachable_from(directory: str) -> set[str]:
@@ -120,11 +183,7 @@ def _hard_excludes(block: dict) -> set[str]:
     a semver-major ignore does NOT stop a grouped ``all-dependencies`` bump from
     re-proposing the package. Only a ``versions:`` range actually holds.
     """
-    return {
-        _normalise(entry["dependency-name"])
-        for entry in block.get("ignore", [])
-        if entry.get("versions")
-    }
+    return {_normalise(entry["dependency-name"]) for entry in block.get("ignore", []) if entry.get("versions")}
 
 
 def test_the_config_is_where_this_guard_expects() -> None:
@@ -198,6 +257,86 @@ def test_a_hard_exclude_holds_in_every_block_that_can_reach_it() -> None:
     )
 
 
+def test_reachability_includes_constraints_files() -> None:
+    """A `-c` file is reachable exactly as a `-r` file is (#14733).
+
+    pip applies a constraints file to everything installed from the manifest
+    naming it, so a block that can edit one can move a pin another block
+    protects. `constraints/shared.txt` is named by manifests in several
+    dependabot directories and describes itself as the single source of truth,
+    so following only `-r` left the guard blind to its most widely shared file
+    while still reporting clean.
+    """
+    shared = _REPO_ROOT / "constraints" / "shared.txt"
+    if not shared.is_file():
+        pytest.skip("constraints/shared.txt has moved; re-point this guard")
+
+    reaching = [b["directory"] for b in _pip_blocks() if shared in _files_reachable_from(b["directory"])]
+    assert len(reaching) > 1, (
+        "the constraints file is reachable from at most one block, so either the "
+        "layout changed or `-c` is no longer being followed — the case this guard exists for"
+    )
+
+
+def test_a_pyproject_pin_is_visible_to_the_frozen_exclusion_check(tmp_path) -> None:
+    """The other question asked of a manifest, on the same file format.
+
+    `_packages_pinned_in` was made TOML-aware, but the frozen-exclusion check
+    re-scanned raw lines itself, so it could never see a floor declared in a
+    pyproject — the identical #14733 defect surviving in the sibling function.
+    Both now derive from `_pins_in`, so this asserts the floor is recoverable,
+    not merely the package name.
+
+    Fails against the raw line-scan: TOML dependencies are quoted, so `_PIN`
+    matches none of them and the pin list comes back empty.
+    """
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "sample"\ndependencies = ["websockets>=17.0.1"]\n',
+        encoding="utf-8",
+    )
+
+    pins = dict(_pins_in(pyproject))
+
+    assert "websockets" in pins, (
+        f"parsed {sorted(pins)} — a quoted TOML dependency was not seen as a pin, "
+        "so a frozen exclusion against it could never be detected"
+    )
+    assert _version(pins["websockets"]) == (17, 0, 1)
+    assert "name" not in pins, "a TOML key was harvested as though it were a package"
+
+
+def test_a_pyproject_contributes_its_real_dependencies() -> None:
+    """Asserting the filename is on the manifest list proves nothing.
+
+    The first version of this checked that `pyproject.toml` appeared among the
+    considered manifests — which it did, while `_PIN` matched none of its
+    dependencies. TOML entries are quoted (`    "pydantic>=2.13.3",`), so the
+    requirements regex instead harvested `name`, `version`, `description` and
+    friends as though they were packages: a reachable set full of strings no
+    dependabot block will ever name (#14733).
+    """
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
+
+    shared = _REPO_ROOT / "autobot_shared" / "pyproject.toml"
+    if not shared.is_file():
+        pytest.skip("autobot_shared/pyproject.toml has moved; re-point this guard")
+
+    packages = _packages_pinned_in(shared)
+    assert packages, "no dependency parsed out of pyproject.toml"
+    assert {"redis", "pydantic", "fastapi"} & packages, (
+        f"parsed {sorted(packages)[:8]} — those are TOML keys, not dependencies, "
+        "so the file is being read line-wise instead of as TOML"
+    )
+    assert not (
+        {"authors", "description", "license", "version"} & packages
+    ), "TOML keys are leaking into the package set as pseudo-dependencies"
+
+
 def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
     """An exclusion under a block's own floor freezes it forever.
 
@@ -217,24 +356,22 @@ def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
                 if excluded is None:
                     continue
                 for file in _files_reachable_from(directory):
-                    for line in file.read_text(encoding="utf-8").splitlines():
-                        pin = _PIN.match(line)
-                        if not pin or _normalise(pin.group(1)) != package:
+                    for name, pin_text in _pins_in(file):
+                        if name != package:
                             continue
-                        floor = _version(line.split("#")[0])
+                        floor = _version(pin_text)
                         if floor is not None and floor >= excluded:
                             frozen.append(
                                 f"{directory!r} excludes {package} {spec} but "
                                 f"{file.relative_to(_REPO_ROOT)} pins it at "
-                                f"'{line.split('#')[0].strip()}' — the floor is at "
+                                f"'{pin_text}' — the floor is at "
                                 f"or above the exclusion, so no version can ever "
                                 f"be offered"
                             )
 
     assert not frozen, (
         "an exclusion sits at or below its own manifest's floor, which freezes "
-        "the block out of every future update rather than capping it:\n  "
-        + "\n  ".join(sorted(set(frozen)))
+        "the block out of every future update rather than capping it:\n  " + "\n  ".join(sorted(set(frozen)))
     )
 
 
@@ -242,16 +379,12 @@ def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:
 def test_the_known_offenders_stay_excluded_everywhere(package: str) -> None:
     """Pin the specific regression, so a future edit cannot quietly undo it."""
     blocks = _pip_blocks()
-    reaching = [
-        b["directory"]
-        for b in blocks
-        if _normalise(package) in _packages_reachable_from(b["directory"])
-    ]
+    reaching = [b["directory"] for b in blocks if _normalise(package) in _packages_reachable_from(b["directory"])]
     assert reaching, f"no pip block reaches {package} — has it been removed?"
 
-    missing = [d for d in reaching if _normalise(package) not in _hard_excludes(
-        next(b for b in blocks if b["directory"] == d)
-    )]
+    missing = [
+        d for d in reaching if _normalise(package) not in _hard_excludes(next(b for b in blocks if b["directory"] == d))
+    ]
     assert not missing, (
         f"{package} is reachable from {missing} without a hard exclude there. "
         f"#14722 is what that costs: a grouped bump to an unsatisfiable major "

@@ -17,23 +17,33 @@ present while nothing emits), so the wiring is asserted, not assumed.
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-
 import pytest
 
 prometheus_client = pytest.importorskip("prometheus_client")
 
 from autobot_shared.monitoring.metrics.audit import AuditMetricsRecorder  # noqa: E402
 
-_SHARED = Path(__file__).resolve().parent.parent.parent
-_MANAGER = _SHARED / "monitoring" / "prometheus_metrics.py"
-_MIDDLEWARE = _SHARED.parent / "autobot-slm-backend" / "user_management" / "middleware" / "rbac_middleware.py"
-
 
 def _sample(counter, action: str, error_type: str) -> float:
     """Current value of the labelled counter."""
     return counter.labels(action=action, error_type=error_type)._value.get()
+
+
+def _exported_sample(manager, action: str, error_type: str) -> float:
+    """Current value of the labelled sample in the manager's exported text.
+
+    Read as a delta rather than asserted as an exact 1.0: `get_metrics_manager()`
+    is a process-wide singleton that is never reset, so any other test that
+    drives this same label pair through it first would break an absolute
+    assertion while the code under test is perfectly correct. A false failure is
+    cheaper than a false pass but still a trap, and the delta form has no such
+    dependence on what ran before.
+    """
+    needle = f'autobot_audit_write_failures_total{{action="{action}",error_type="{error_type}"}} '
+    for line in manager.get_metrics().decode().splitlines():
+        if line.startswith(needle):
+            return float(line[len(needle) :])
+    return 0.0
 
 
 def test_the_counter_actually_counts():
@@ -108,34 +118,42 @@ def test_a_second_failure_increments_rather_than_replaces():
     ), "three failures must count as three, not one"
 
 
-def test_the_swallowing_path_emits_the_counter():
-    """The whole point: the place that drops the record is the place that counts it.
+def test_the_shared_helper_reaches_the_exported_registry():
+    """The hop the middleware actually depends on, executed rather than inspected.
 
-    If this call is removed, audit loss goes back to being invisible while every
-    other rule here still passes.
+    `test_the_manager_records_and_exports_the_counter` above proves a manager
+    you construct yourself exports the sample. The middleware does not construct
+    one — it calls `record_audit_write_failure_safely`, which resolves the
+    *singleton* via `get_metrics_manager()`. That resolution is the one hop
+    nothing covered, and it is the hop that decides whether a dropped audit is
+    visible in production.
+
+    It is also the hop that fails quietly: the helper swallows everything by
+    design, so a singleton wired to a different registry would leave the counter
+    flat with no error anywhere.
+
+    Replaces two tests that read `rbac_middleware.py` as text and asserted a
+    function name appeared in it (#14750 review). Those broke when the helper
+    was extracted to `autobot_shared`, and would have passed against a helper
+    whose body did nothing. Their invariants are covered by execution instead:
+    the middleware call sites by `repo_tests/audit_write_failure_counted_test.py`,
+    and "counting never raises" by that file's
+    `test_the_counter_never_raises_from_the_audit_path`, which drives a failing
+    metrics backend through the real helper.
     """
-    source = _MIDDLEWARE.read_text(encoding="utf-8")
+    from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
+    from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
-    assert (
-        "_record_audit_write_failure(" in source
-    ), "the RBAC middleware no longer counts a dropped audit entry (#14654)"
+    manager = get_metrics_manager()
+    before = _exported_sample(manager, "permission_denied", "IntegrityError")
 
+    record_audit_write_failure_safely("permission_denied", "IntegrityError")
 
-def test_counting_never_raises_from_the_audit_path():
-    """It runs inside the handler that exists so audits cannot break requests.
+    after = _exported_sample(manager, "permission_denied", "IntegrityError")
 
-    A metrics backend problem must not become the thing that returns a 500 —
-    which would invert the decision this whole path is built on.
-    """
-    source = _MIDDLEWARE.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    helper = next(
-        (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_record_audit_write_failure"),
-        None,
+    assert after == before + 1, (
+        "the shared helper did not reach the exported registry. The helper "
+        "swallows its own failures, so this is exactly the case that leaves no "
+        f"trace: the middleware counts a dropped audit and nothing is exported. "
+        f"Sample went {before} -> {after}."
     )
-
-    assert helper is not None, "the counting helper is gone"
-    assert any(
-        isinstance(node, ast.Try) for node in ast.walk(helper)
-    ), "the counting helper does not guard itself; a metrics failure could propagate into the audit path"
