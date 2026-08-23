@@ -24,12 +24,19 @@ import asyncio
 import logging
 from typing import Any
 
+from autobot_shared.env_utils import env_float
+
 from .base import PollLoopScheduler
 
 logger = logging.getLogger(__name__)
 
-_CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
-_INITIAL_DELAY_SECONDS = 300  # let startup finish before the first expensive pass
+# Env-var-backed rather than literals (#13085): these two numbers are the whole
+# cost of an abandoned clustering loop — a 300 s initial delay followed by a 6 h
+# re-armed interval is what kept a test worker's event loop alive long after the
+# work was done. A deployment (or a test that deliberately opts the schedulers
+# back in) must be able to shorten them without editing code.
+_CLUSTER_INTERVAL_SECONDS = env_float("LLC_COMMUNITY_CLUSTER_INTERVAL_SECONDS", 6 * 3600)
+_INITIAL_DELAY_SECONDS = env_float("LLC_COMMUNITY_CLUSTER_INITIAL_DELAY_SECONDS", 300)
 
 # Indirection so a test can patch just this module's initial-delay sleep
 # (``patch("llc.scheduler.community_cluster_scheduler._sleep", ...)``)
