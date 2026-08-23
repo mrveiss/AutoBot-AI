@@ -8452,6 +8452,8 @@
       "secretMappingIncomplete": "Preencha todos os valores de segredos acima antes de importar.",
       "importSuccess": "Importação bem-sucedida — ID da empresa:",
       "warningsLabel": "Avisos:",
+      "droppedReportingLinesLabel": "Linhas de reporte que não puderam ser mantidas:",
+      "droppedReportingLine": "{agent} foi importado sem gestor: {manager} não foi criado.",
       "importFailed": "Falha na importação:",
       "toastTemplateExported": "Modelo exportado com sucesso",
       "toastTemplateExportFailed": "Falha ao exportar o modelo",
