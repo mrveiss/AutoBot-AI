@@ -350,6 +350,81 @@ def test_the_embedded_python_of_each_target_script_parses(rel: str) -> None:
     )
 
 
+# A backtick or `$(...)` inside a DOUBLE-QUOTED `python3 -c "..."` argument is
+# command substitution: bash runs the words between them and hands python
+# whatever is left. `$VAR` is different — several scripts interpolate a value
+# into the program deliberately (a password to hash, a hostname to resolve) — so
+# only the two command-substitution forms are flagged.
+_SHELL_SUBSTITUTION = ("`", "$(")
+
+
+def _shell_active_in_text(text: str) -> list[tuple[int, str]]:
+    """(line, form) for each python block in ``text`` the shell would rewrite."""
+    found: list[tuple[int, str]] = []
+    for pattern in (_PY_BLOCK_MULTILINE, _PY_BLOCK_INLINE):
+        for match in pattern.finditer(text):
+            for form in _SHELL_SUBSTITUTION:
+                if form in match.group(1):
+                    found.append((text[: match.start()].count("\n") + 1, form))
+    return found
+
+
+def _shell_active_python_blocks() -> list[tuple[str, int, str]]:
+    """(script, line, form) across every deployment script."""
+    offenders: list[tuple[str, int, str]] = []
+    for script in _shell_scripts():
+        text = script.read_text(encoding="utf-8", errors="replace")
+        rel = str(script.relative_to(_SCRIPT_DIR))
+        offenders.extend((rel, line, form) for line, form in _shell_active_in_text(text))
+    return offenders
+
+
+def test_no_inline_python_block_is_rewritten_by_the_shell() -> None:
+    """#14880: found by RUNNING the monitor, not by reading it.
+
+    #14877 added an explanatory comment to three of these blocks that quoted
+    ``await`` and ``.main()`` in backticks. Inside a double-quoted argument that
+    is command substitution, so bash tried to run them: ``await: command not
+    found``, then a syntax error, and python received a mangled program. Two of
+    the three sit in ``validate_access_control.sh`` — the post-deployment
+    validation an operator is told to run — whose ownership-coverage and
+    ownership-performance tests therefore could not pass for any reason at all.
+    Under the old fallback that surfaced as a clean-looking ``0|0|0``.
+
+    Every other check in this file reads these blocks as Python. Nothing read
+    them as the shell strings they actually are.
+    """
+    offenders = _shell_active_python_blocks()
+
+    assert not offenders, (
+        "these inline python blocks contain shell command substitution, so bash "
+        "rewrites the program before python ever sees it (#14880):\n  "
+        + "\n  ".join(f"{rel}:{line}  contains {form!r}" for rel, line, form in offenders)
+    )
+
+
+@pytest.mark.parametrize("form", _SHELL_SUBSTITUTION)
+def test_the_shell_substitution_detector_still_fires(form: str) -> None:
+    """Positive control. The sweep above is clean, so it proves nothing alone."""
+    sample = 'x=$(python3 -c "\nprint(1)  # ' + form + 'oops\n")\n'
+
+    assert _count_blocks(sample) == 1, "the block extractor no longer matches this shape"
+    assert _shell_active_in_text(sample), f"the detector no longer flags {form!r} inside a python block"
+
+
+def test_a_deliberate_variable_interpolation_is_not_flagged() -> None:
+    """Negative control, and the reason the rule stops at command substitution.
+
+    Three scripts interpolate a shell value into the program on purpose — a
+    password to hash, a hostname to resolve. A detector that flagged ``$VAR``
+    would be switched off rather than fixed.
+    """
+    sample = "x=$(python3 -c \"import socket; print(socket.gethostbyname('$name'))\")\n"
+
+    assert _count_blocks(sample) == 1
+    assert not _shell_active_in_text(sample), "a plain $VAR interpolation is deliberate, not a defect"
+
+
 def test_no_script_awaits_the_sync_redis_client() -> None:
     offenders, _ = _awaited_sync_redis_calls()
 

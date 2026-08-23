@@ -188,10 +188,13 @@ from security.session_ownership import SessionOwnershipValidator
 
 async def main():
     # Exactly what security/session_ownership.py:836 does. Calling it bare
-    # returns the SYNC client (async_client defaults to False), so `await` on it
-    # raises TypeError — and `.main()` exists on neither client. That turned an
-    # import-time failure into a call-time one, which is the same defect a step
-    # later (#14866).
+    # returns the SYNC client (async_client defaults to False), so awaiting it
+    # raises TypeError, and a .main() attribute exists on neither client. That
+    # turned an import-time failure into a call-time one, which is the same
+    # defect a step later (#14866). Written without backticks on purpose: this
+    # block is a DOUBLE-QUOTED shell argument, so a backtick is command
+    # substitution -- bash ran the words inside it and handed python a mangled
+    # program, which no amount of import fixing could have made work (#14880).
     redis = await get_redis_manager(async_client=True, database="main")
 
     # Count total sessions
