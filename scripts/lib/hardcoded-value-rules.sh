@@ -681,8 +681,19 @@ hv_stale_baseline_entries() {
 # baselined at 2 and now found 3 times prunes to 2, not 3.
 #
 # Requires a completed hv_partition over a FULL tree scan. Pruning against a
-# partial scan drops every key the scan did not reach, which is why the caller
-# must refuse to write the result of an empty one.
+# partial scan drops every key the scan did not reach.
+#
+# The live risk is a scan DIRECTORY that has moved or been renamed, because
+# hv_scan_tree treats a missing root as a silent no-op: the other directories
+# still produce hundreds of findings, so the total stays non-zero and an
+# empty-scan check cannot see it. Reproduced during review -- one absent
+# directory silently removed every baseline key beneath it, exit 0.
+#
+# An earlier version of this comment also cited "a rules file that failed to
+# load". That path was never reachable: detect-hardcoded-values.sh fails fatally
+# on an unsourceable library before any scanning begins. Naming a risk the code
+# already forecloses makes the remaining, real one look handled -- so the
+# caller now asserts every SCAN_DIRS entry exists before it scans.
 hv_pruned_baseline() {
     local key kept seen
     for key in "${!HV_BASELINE[@]}"; do

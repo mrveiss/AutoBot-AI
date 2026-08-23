@@ -67,6 +67,30 @@ SCAN_DIRS=(
     "autobot-infrastructure"
 )
 
+# Every scan directory must exist before anything is scanned (#14912 review).
+#
+# hv_scan_tree treats a missing directory as a silent no-op (`[ -d "$root" ] ||
+# return 0`), so one moved or renamed entry in SCAN_DIRS yields nothing while
+# the other five still yield hundreds. Reproduced: with autobot-slm-backend
+# absent, a prune run dropped every baseline key under it, exited 0, and printed
+# the same success line a legitimate one-entry cleanup prints — and the audit
+# then passed, because every surviving entry still matched. The empty-scan
+# refusal below never fired, because the scan was not empty.
+#
+# Checked here rather than only in the prune branch, because a partial scan
+# corrupts EVERY mode: --json under-reports the violation counts that
+# ssot-coverage.yml decides pass/fail from, and --audit-baseline reports the
+# unreached directory's entries as STALE, which is a false accusation that
+# sends an author to prune away real records.
+for dir in "${SCAN_DIRS[@]}"; do
+    [ -d "$REPO_ROOT/$dir" ] && continue
+    echo "FATAL: scan directory '${dir}' does not exist under ${REPO_ROOT}." >&2
+    echo "  Refusing to scan a partial tree: findings under it would be missing," >&2
+    echo "  its baseline entries would look stale, and a prune would delete them." >&2
+    echo "  If the layout changed on purpose, update SCAN_DIRS in this script." >&2
+    exit 1
+done
+
 hv_load_baseline "$BASELINE" || exit 1
 
 RAW=$(mktemp); NEWFILE=$(mktemp)
@@ -124,9 +148,18 @@ fi
 if [ "$PRUNE_BASELINE" = true ]; then
     # Refuse to write the result of a scan that found nothing. An empty result
     # and a broken detector are indistinguishable here, and this path REWRITES
-    # the record: a rules file that failed to load, or a scan directory that has
-    # moved, would take all ${#HV_BASELINE[@]} entries with it and the no-growth
-    # guard would not object, because shrinking is allowed by design.
+    # the record; the no-growth guard will not object either, because shrinking
+    # is allowed by design.
+    #
+    # The PARTIAL-scan case -- far more dangerous, because the total stays
+    # non-zero and this check never fires -- is handled by the SCAN_DIRS
+    # existence assertion near the top, not here.
+    #
+    # No proportional-loss guard, deliberately: a percentage threshold has no
+    # non-arbitrary value, and it would block the one legitimate large prune
+    # (a genuine sweep that fixes many violations at once) while still passing
+    # any loss that happened to fall under it. The existence check removes the
+    # cause rather than rationing the symptom.
     TOTAL_FOUND=$(grep -c . "$RAW" || true)
     if [ "$TOTAL_FOUND" -eq 0 ]; then
         echo "FATAL: the scan found 0 findings, so pruning would empty the baseline." >&2
@@ -136,8 +169,12 @@ if [ "$PRUNE_BASELINE" = true ]; then
         exit 1
     fi
     PRUNED=$(mktemp)
-    trap 'rm -f "$RAW" "$NEWFILE" "$PRUNED"' EXIT
-    hv_pruned_baseline | sort -t'|' -k3,3 -k2,2 -k4,4 > "$PRUNED"
+    trap 'rm -f "$RAW" "$NEWFILE" "$PRUNED" "${BASELINE}.tmp"' EXIT
+    # LC_ALL=C pins the collation. Nothing is broken today -- the committed
+    # baseline is byte-identical under this runner's C.UTF-8 -- but an unpinned
+    # locale means a different shell or CI image could reorder every line on a
+    # legitimate no-op prune, turning a zero-change run into a whole-file diff.
+    hv_pruned_baseline | LC_ALL=C sort -t'|' -k3,3 -k2,2 -k4,4 > "$PRUNED"
     KEPT=$(grep -c . "$PRUNED" || true)
     BEFORE=${#HV_BASELINE[@]}
     # Header first, then the pruned body. The leading comment block carries the
