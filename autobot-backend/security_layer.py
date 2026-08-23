@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
 from config import get_config_manager
@@ -668,6 +669,16 @@ class SecurityLayer:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
+            # #14843: the swallow stays -- an audit problem must not turn a
+            # correct 403 into a 500 -- but on its own it made a lost record
+            # indistinguishable from a written one. #14750 instrumented the
+            # RBAC middleware's DB-backed denial audit; this file-backed path is
+            # reached through a different decorator and was left silent, so a
+            # full disk, a permissions change or a rotated-away directory
+            # dropped every record here while requests kept answering correctly.
+            # Same counter as the middleware, deliberately: a second one would
+            # let the two drift exactly as the two handlers did.
+            record_audit_write_failure_safely(action, type(e).__name__)
             logger.error("Failed to write to audit log file %s: %s", self.audit_log_file, e)
 
     def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:
