@@ -16,7 +16,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 LOCAL_FRONTEND_DIR="${PROJECT_ROOT}/autobot-slm-frontend"
 
 # Remote Configuration

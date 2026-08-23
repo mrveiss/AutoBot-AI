@@ -26,6 +26,15 @@ _WS_PROTOCOLS = ("ws://", "wss://")
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 
 def test_default_configuration():
     """Test configuration with default values"""
@@ -90,9 +99,9 @@ def test_custom_configuration():
         # Reload configuration with new environment
         import importlib
 
-        import src.config
+        import config
 
-        importlib.reload(src.config)
+        importlib.reload(config)
 
         from config import (
             API_BASE_URL,
@@ -133,7 +142,7 @@ def test_backend_configuration():
     logger.info("Testing Backend Configuration Service...")
 
     try:
-        from backend.services.config_service import ConfigService
+        from services.config_service import ConfigService
 
         config = ConfigService.get_full_config()
 

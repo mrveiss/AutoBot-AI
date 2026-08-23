@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Check AI Stack container health and data access
 
+# Every failed check increments this; the closing banner refuses to report a
+# clean health check while it is non-zero (#14867).
+FAILURES=0
+
 echo "🔍 Checking AI Stack Health..."
 
 # Check if container is running
@@ -35,7 +39,8 @@ for prompt in "${CRITICAL_PROMPTS[@]}"; do
     if docker exec autobot-ai-stack test -f "$prompt"; then
         echo "✅ Found: $prompt"
     else
-        echo "❌ Missing: $prompt"
+        echo "❌ Missing: $prompt" >&2
+        FAILURES=$((FAILURES + 1))
     fi
 done
 
@@ -58,19 +63,23 @@ with open('/app/knowledge_base/index.json') as f:
     print(f'   Categories: {list(categories.keys())}')
 "
 else
-    echo "❌ Knowledge base index missing"
+    echo "❌ Knowledge base index missing" >&2
+    FAILURES=$((FAILURES + 1))
 fi
 
 # Test prompt loading
 echo ""
 echo "🧪 Testing prompt loading..."
-docker exec autobot-ai-stack python -c "
+# (#14867) There is no `src` package: the container puts /app and /app/src on
+# sys.path (see docker/ai-stack/ai_container_main.py) and its own entry points
+# import these modules top-level. PromptManager lives in prompt_manager.py.
+if ! docker exec autobot-ai-stack python -c "
 import sys
 sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/src')
 
 try:
-    from src.prompt_manager import PromptManager
+    from prompt_manager import PromptManager
     pm = PromptManager()
     prompts = pm.list_prompts()
     print(f'✅ Successfully loaded {len(prompts)} prompts')
@@ -80,18 +89,29 @@ try:
         'reflection.agent.system.main.role',
         'default.agent.system.main'
     ]
+    failed = []
     for prompt_key in test_prompts:
         try:
             content = pm.get_prompt(prompt_key)
             print(f'✅ Loaded {prompt_key}: {len(content)} chars')
-        except:
-            print(f'❌ Failed to load {prompt_key}')
+        except Exception as exc:
+            print(f'❌ Failed to load {prompt_key}: {exc}', file=sys.stderr)
+            failed.append(prompt_key)
+
+    if failed:
+        sys.exit(1)
 
 except Exception as e:
-    print(f'❌ Error loading prompts: {e}')
+    # (#14867) This used to print and fall through with exit 0, so a prompt
+    # loader that never ran was indistinguishable from one that passed.
+    print(f'❌ Error loading prompts: {e}', file=sys.stderr)
     import traceback
     traceback.print_exc()
-"
+    sys.exit(1)
+"; then
+    echo "❌ Prompt loading test failed - see the traceback above" >&2
+    FAILURES=$((FAILURES + 1))
+fi
 
 # Check API health
 echo ""
@@ -100,9 +120,16 @@ if curl -s -f http://localhost:8080/health > /dev/null; then
     echo "✅ AI API is responding"
     curl -s http://localhost:8080/health | python -m json.tool
 else
-    echo "❌ AI API is not responding"
-    echo "   Check logs: docker logs autobot-ai-stack"
+    echo "❌ AI API is not responding" >&2
+    echo "   Check logs: docker logs autobot-ai-stack" >&2
+    FAILURES=$((FAILURES + 1))
 fi
 
 echo ""
+# (#14867) "Health check complete!" used to print with exit 0 no matter how many
+# checks above had failed.
+if [ "$FAILURES" -ne 0 ]; then
+    echo "❌ Health check FAILED: $FAILURES problem(s) found" >&2
+    exit 1
+fi
 echo "📊 Health check complete!"

@@ -28,7 +28,18 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+# Import roots for the inline Python below, derived from this script's own
+# location. `services.*`/`security.*` live under autobot-backend and
+# `autobot_shared.*` at the repo root; without both, every block below fails and
+# falls through to its fabricated default (#14866).
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+export PYTHONPATH="${REPO_ROOT}/autobot-backend:${REPO_ROOT}:${PYTHONPATH:-}"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Colors
 RED='\033[0;31m'
@@ -85,7 +96,7 @@ log_metric() {
 get_enforcement_mode() {
     python3 -c "
 import asyncio
-from backend.services.feature_flags import get_feature_flags
+from services.feature_flags import get_feature_flags
 
 async def main():
     flags = await get_feature_flags()
@@ -93,7 +104,7 @@ async def main():
     print(mode.value.upper())
 
 asyncio.run(main())
-" 2>/dev/null || echo "UNKNOWN"
+" || echo "UNKNOWN"
 }
 
 # Get rollout statistics
@@ -101,7 +112,7 @@ get_rollout_stats() {
     python3 -c "
 import asyncio
 import json
-from backend.services.feature_flags import get_feature_flags
+from services.feature_flags import get_feature_flags
 
 async def main():
     flags = await get_feature_flags()
@@ -109,7 +120,7 @@ async def main():
     print(json.dumps(stats, indent=2))
 
 asyncio.run(main())
-" 2>/dev/null || echo "{}"
+" || echo "{}"
 }
 
 # Get audit statistics
@@ -117,7 +128,7 @@ get_audit_stats() {
     python3 -c "
 import asyncio
 import json
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -125,7 +136,7 @@ async def main():
     print(json.dumps(stats, indent=2))
 
 asyncio.run(main())
-" 2>/dev/null || echo "{}"
+" || echo "{}"
 }
 
 # Get recent denied access attempts
@@ -134,7 +145,7 @@ get_recent_denials() {
 import asyncio
 import json
 from datetime import datetime, timedelta
-from backend.services.audit_logger import get_audit_logger
+from services.audit_logger import get_audit_logger
 
 async def main():
     logger = await get_audit_logger()
@@ -148,19 +159,23 @@ async def main():
         print(f'{entry.timestamp} | {entry.user_id or \"anonymous\"} | {entry.operation} | {entry.resource}')
 
 asyncio.run(main())
-" 2>/dev/null
+"
 }
 
 # Get session ownership coverage
 get_ownership_coverage() {
     python3 -c "
 import asyncio
-from backend.utils.async_redis_manager import get_redis_manager
-from backend.security.session_ownership import SessionOwnershipValidator
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from security.session_ownership import SessionOwnershipValidator
 
 async def main():
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Exactly what security/session_ownership.py:836 does. Calling it bare
+    # returns the SYNC client (async_client defaults to False), so `await` on it
+    # raises TypeError — and `.main()` exists on neither client. That turned an
+    # import-time failure into a call-time one, which is the same defect a step
+    # later (#14866).
+    redis = await get_redis_manager(async_client=True, database="main")
 
     # Count total sessions
     cursor = 0
@@ -184,7 +199,7 @@ async def main():
     print(f'{total}|{owned}|{coverage:.1f}')
 
 asyncio.run(main())
-" 2>/dev/null || echo "0|0|0"
+" || echo "0|0|0"
 }
 
 # Display dashboard

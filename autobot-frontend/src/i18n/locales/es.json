@@ -8609,7 +8609,15 @@
       "unassigned": "sin rol",
       "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia",
       "inactive": "Inactivo",
-      "inactiveHint": "Desactivado o eliminado: se sigue mostrando porque sus elementos de trabajo y su rol permanecen, pero no se le puede asignar trabajo nuevo."
+      "inactiveHint": "Desactivado o eliminado: se sigue mostrando porque sus elementos de trabajo y su rol permanecen, pero no se le puede asignar trabajo nuevo.",
+      "editAriaLabel": "Editar a {name}",
+      "fullNameLabel": "Nombre completo",
+      "roleTitleLabel": "Rol / cargo",
+      "emailLabel": "Correo electrónico",
+      "phoneLabel": "Teléfono",
+      "saving": "Guardando…",
+      "save": "Guardar",
+      "contactSaveError": "No se pudo guardar el contacto."
     }
   },
   "code": {

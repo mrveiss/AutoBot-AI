@@ -38,7 +38,7 @@ import {
   groupPeopleByTeam,
   UNGROUPED_TEAM_ID,
 } from '@/composables/llc/orgPeople'
-import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
+import type { CompanyTeam, ContactEditPatch, ContactSource } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
@@ -111,6 +111,13 @@ const teamsFailed = ref(false)
 // would prove it has actually completed (#14064's failure shape).
 const teamsAttempted = ref(false)
 const peopleLoading = ref(false)
+// #14603: contact editing, from the People list. `savingContactId` is the
+// contact id a PATCH is in flight for — never a plain boolean, so the row
+// the People list is not saving stays interactive. Single-flight per the
+// same pattern as `processMutationInFlight`/`toolMutationInFlight` above:
+// one save at a time, guarded before the first await.
+const savingContactId = ref<string | null>(null)
+const contactSaveError = ref<{ contactId: string; message: string } | null>(null)
 
 /**
  * One tab per unit, plus an "all units" tab — and no strip at all when nothing
@@ -403,6 +410,50 @@ async function loadPeopleSources(): Promise<void> {
   // Only a complete answer is cached; a partial one retries on re-entry.
   peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
   peopleLoading.value = false
+}
+
+/**
+ * Force the People sources to actually re-fetch (#14603) — mirrors
+ * `reloadProcessNodes`/`reloadToolNodes`. `peopleLoaded` guards the lazy
+ * fetch above, so a contact save has to clear it first or the "refetch"
+ * would hit the guard and silently keep showing the pre-edit row.
+ */
+async function reloadPeopleSources(): Promise<void> {
+  peopleLoaded.value = false
+  await loadPeopleSources()
+}
+
+/**
+ * Save an edited contact from the People list (#14603).
+ *
+ * Only a contact ever reaches this handler — `OrgPeopleList` renders the
+ * edit affordance for `kind === 'contact'` alone, and the endpoint itself is
+ * scoped to `llc_contacts`, so there is no path from here to a user or an
+ * agent. No optimistic update: the list is the confirmation, not the form —
+ * `reloadPeopleSources` re-reads from the server rather than patching the
+ * row in place, same principle as the tool/process attach handlers above.
+ */
+async function onSaveContact(contactId: string, patch: ContactEditPatch): Promise<void> {
+  if (!companyId.value || savingContactId.value !== null) return
+  savingContactId.value = contactId
+  contactSaveError.value = null
+  try {
+    await api.patch(`/api/llc/contacts/${companyId.value}/${contactId}`, {
+      full_name: patch.full_name,
+      role_title: patch.role_title || null,
+      email: patch.email || null,
+      phone: patch.phone || null,
+    })
+    await reloadPeopleSources()
+  } catch (err: unknown) {
+    logger.error('Failed to save contact:', err)
+    contactSaveError.value = {
+      contactId,
+      message: describeError(err, 'llc.orgPeople.contactSaveError'),
+    }
+  } finally {
+    savingContactId.value = null
+  }
 }
 
 function setViewMode(mode: OrgViewMode) {
@@ -1080,7 +1131,10 @@ onMounted(() => {
         :teams-failed="teamsFailed"
         :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
+        :saving-contact-id="savingContactId"
+        :contact-save-error="contactSaveError"
         @select="onPersonSelected"
+        @save-contact="onSaveContact"
       />
     </div>
 

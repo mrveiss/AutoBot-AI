@@ -12,10 +12,10 @@
 // nested tree or the canvas. The list states that in words rather than leaving
 // the flat layout to imply it.
 
-import { computed } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { UNGROUPED_TEAM_ID } from '@/composables/llc/orgPeople'
-import type { OrgPeopleGroup, PersonKind } from '@/composables/llc/orgPeople'
+import { UNGROUPED_TEAM_ID, contactIdOfKey } from '@/composables/llc/orgPeople'
+import type { ContactEditPatch, OrgPeopleGroup, OrgPerson, PersonKind } from '@/composables/llc/orgPeople'
 
 const props = defineProps<{
   groups: OrgPeopleGroup[]
@@ -39,16 +39,96 @@ const props = defineProps<{
    * empties itself as that happens.
    */
   unassignedContactIds?: Set<string>
+  /**
+   * The contact id a save is in flight for (#14603) — never a plain boolean,
+   * so a row that is not the one being saved keeps its inputs live rather
+   * than every open editor freezing for one row's request.
+   */
+  savingContactId?: string | null
+  /**
+   * The most recent save failure, scoped to the contact it was for (#14603).
+   * Scoping it this way means a failure on one row can never render against a
+   * different row that has since been opened for editing.
+   */
+  contactSaveError?: { contactId: string; message: string } | null
 }>()
 
-const emit = defineEmits<{ select: [orgNodeId: string] }>()
+const emit = defineEmits<{
+  select: [orgNodeId: string]
+  /** A contact's edit form was submitted — the parent owns the PATCH and the refetch (#14603). */
+  'save-contact': [contactId: string, patch: ContactEditPatch]
+}>()
 
 /** True when no role explains this person's presence in the department. */
 function isUnassigned(person: { key: string; kind: string }): boolean {
   if (person.kind !== 'contact') return false
-  // Keys are `contact:<id>` (see buildOrgPeople).
-  return props.unassignedContactIds?.has(person.key.slice('contact:'.length)) ?? false
+  return props.unassignedContactIds?.has(contactIdOfKey(person.key)) ?? false
 }
+
+// #14603: contact editing, in place in the row. Only a contact ever reaches
+// this state — a user edits their own profile, and an agent's title has no
+// write endpoint yet (see the issue's second comment) — so every helper below
+// is a no-op for `kind !== 'contact'` rather than trusting the caller.
+
+/** The person key of the row currently open for editing — one at a time. */
+const editingKey = ref<string | null>(null)
+
+/** Draft field values for the open row, reset each time editing starts. */
+const draft = reactive<ContactEditPatch>({ full_name: '', role_title: '', email: '', phone: '' })
+
+function isEditingContact(person: { key: string; kind: string }): boolean {
+  return person.kind === 'contact' && editingKey.value === person.key
+}
+
+function isSavingContact(person: { key: string; kind: string }): boolean {
+  return person.kind === 'contact' && props.savingContactId === contactIdOfKey(person.key)
+}
+
+/** The save error for this exact row, or null — never another row's error. */
+function contactErrorFor(person: { key: string; kind: string }): string | null {
+  if (person.kind !== 'contact' || !props.contactSaveError) return null
+  return props.contactSaveError.contactId === contactIdOfKey(person.key)
+    ? props.contactSaveError.message
+    : null
+}
+
+function startEditingContact(person: OrgPerson): void {
+  if (person.kind !== 'contact') return
+  editingKey.value = person.key
+  draft.full_name = person.name
+  draft.role_title = person.subtitle
+  draft.email = person.contactEmail ?? ''
+  draft.phone = person.contactPhone ?? ''
+}
+
+function cancelEditingContact(): void {
+  editingKey.value = null
+}
+
+function submitContactEdit(person: { key: string; kind: string }): void {
+  if (person.kind !== 'contact') return
+  emit('save-contact', contactIdOfKey(person.key), {
+    full_name: draft.full_name.trim(),
+    role_title: draft.role_title.trim(),
+    email: draft.email.trim(),
+    phone: draft.phone.trim(),
+  })
+}
+
+// Close the editor once the save the open row was waiting on finishes
+// successfully. A failure is reported through `contactSaveError` and the
+// editor stays open with the typed draft intact (#14603) — closing on
+// failure would discard the very input someone would want to retry with.
+watch(
+  () => props.savingContactId,
+  (savingId, previousSavingId) => {
+    if (savingId !== null) return
+    if (!previousSavingId || !editingKey.value) return
+    if (contactIdOfKey(editingKey.value) !== previousSavingId) return
+    if (props.contactSaveError?.contactId === previousSavingId) return
+    editingKey.value = null
+  },
+)
 
 const { t } = useI18n()
 
@@ -163,13 +243,92 @@ function groupLabel(group: OrgPeopleGroup): string {
             >
               {{ kindLabel(person.kind) }}
             </span>
-            <span class="min-w-0 flex-1">
+
+            <!-- #14603: only a contact ever reaches edit mode — a user edits
+                 their own profile, and an agent's title has no write endpoint
+                 yet (see the issue's decision). The form below replaces the
+                 read view for exactly this row; every other row is untouched. -->
+            <form
+              v-if="isEditingContact(person)"
+              class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
+              :data-testid="`org-person-edit-form-${person.key}`"
+              @submit.prevent="submitContactEdit(person)"
+            >
+              <label class="flex min-w-0 flex-col text-xs text-autobot-text-muted">
+                {{ t('llc.orgPeople.fullNameLabel') }}
+                <input
+                  v-model="draft.full_name"
+                  type="text"
+                  required
+                  class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-sm text-autobot-text-primary"
+                  :data-testid="`org-person-edit-name-${person.key}`"
+                  :disabled="isSavingContact(person)"
+                />
+              </label>
+              <label class="flex min-w-0 flex-col text-xs text-autobot-text-muted">
+                {{ t('llc.orgPeople.roleTitleLabel') }}
+                <input
+                  v-model="draft.role_title"
+                  type="text"
+                  class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-sm text-autobot-text-primary"
+                  :data-testid="`org-person-edit-role-${person.key}`"
+                  :disabled="isSavingContact(person)"
+                />
+              </label>
+              <label class="flex min-w-0 flex-col text-xs text-autobot-text-muted">
+                {{ t('llc.orgPeople.emailLabel') }}
+                <input
+                  v-model="draft.email"
+                  type="email"
+                  class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-sm text-autobot-text-primary"
+                  :data-testid="`org-person-edit-email-${person.key}`"
+                  :disabled="isSavingContact(person)"
+                />
+              </label>
+              <label class="flex min-w-0 flex-col text-xs text-autobot-text-muted">
+                {{ t('llc.orgPeople.phoneLabel') }}
+                <input
+                  v-model="draft.phone"
+                  type="text"
+                  class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-sm text-autobot-text-primary"
+                  :data-testid="`org-person-edit-phone-${person.key}`"
+                  :disabled="isSavingContact(person)"
+                />
+              </label>
+              <button
+                type="submit"
+                class="rounded border border-autobot-primary px-2 py-1 text-xs font-semibold text-autobot-primary disabled:opacity-50"
+                :data-testid="`org-person-edit-save-${person.key}`"
+                :disabled="isSavingContact(person) || !draft.full_name.trim()"
+              >
+                {{ isSavingContact(person) ? t('llc.orgPeople.saving') : t('llc.orgPeople.save') }}
+              </button>
+              <button
+                type="button"
+                class="rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted"
+                :data-testid="`org-person-edit-cancel-${person.key}`"
+                :disabled="isSavingContact(person)"
+                @click="cancelEditingContact()"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <span
+                v-if="contactErrorFor(person)"
+                class="block w-full text-xs text-autobot-error"
+                :data-testid="`org-person-edit-error-${person.key}`"
+              >
+                {{ contactErrorFor(person) }}
+              </span>
+            </form>
+
+            <span v-else class="min-w-0 flex-1">
               <!-- A hierarchy member opens the same drawer the tree opens; a
                    contact has no org-chart node, so it is plain text. -->
               <button
                 v-if="person.orgNodeId"
                 type="button"
                 class="truncate text-sm font-medium text-autobot-text-primary hover:text-autobot-text-link"
+                :data-testid="`org-person-open-${person.key}`"
                 @click="emit('select', person.orgNodeId)"
               >
                 {{ person.name }}
@@ -205,9 +364,23 @@ function groupLabel(group: OrgPeopleGroup): string {
                 {{ person.subtitle }}
               </span>
             </span>
-            <span v-if="person.channel" class="truncate text-xs text-autobot-text-muted">
+            <span v-if="!isEditingContact(person) && person.channel" class="truncate text-xs text-autobot-text-muted">
               {{ person.channel }}
             </span>
+            <!-- #14603: contact-only affordance. A user edits their own
+                 profile and an agent's title has no write path here, so
+                 neither kind ever renders this button — asserted directly by
+                 the People-list contact-edit tests. -->
+            <button
+              v-if="!isEditingContact(person) && person.kind === 'contact'"
+              type="button"
+              class="shrink-0 rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted hover:text-autobot-text-primary"
+              :data-testid="`org-person-edit-${person.key}`"
+              :aria-label="t('llc.orgPeople.editAriaLabel', { name: person.name })"
+              @click="startEditingContact(person)"
+            >
+              {{ t('common.edit') }}
+            </button>
           </li>
         </ul>
       </div>

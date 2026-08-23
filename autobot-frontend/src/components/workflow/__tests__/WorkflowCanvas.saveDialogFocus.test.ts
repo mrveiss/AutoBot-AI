@@ -19,8 +19,12 @@ const NODES: CanvasNode[] = [
   { id: 'n1', type: 'step', position: { x: 0, y: 0 }, data: { label: 'Step' }, connections: [] },
 ]
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 function mountCanvas() {
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(WorkflowCanvas, {
     props: { nodes: NODES, selectedNodeId: null, readonly: false },
     attachTo: document.body,

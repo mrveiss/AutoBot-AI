@@ -34,8 +34,17 @@ if [[ -f "${REPO_ROOT}/.venv/bin/activate" ]]; then
     source "${REPO_ROOT}/.venv/bin/activate"
 fi
 
-# Add backend to PYTHONPATH so imports resolve
-export PYTHONPATH="${BACKEND_DIR}:${REPO_ROOT}/autobot_shared:${PYTHONPATH:-}"
+# Add backend to PYTHONPATH so imports resolve.
+# (#14867) The second entry used to be ${REPO_ROOT}/autobot_shared, which puts
+# the *contents* of the package on the path instead of its parent, so every
+# `import autobot_shared.*` failed. The package root is ${REPO_ROOT}.
+export PYTHONPATH="${BACKEND_DIR}:${REPO_ROOT}:${PYTHONPATH:-}"
+
+if [[ ! -d "${BACKEND_DIR}" ]]; then
+    echo "ERROR: backend package root not found at ${BACKEND_DIR}." >&2
+    echo "       No backup was listed, verified or restored (#14867)." >&2
+    exit 1
+fi
 
 python3 - "$@" <<'PYTHON'
 """Entry point executed by restore_kb_backup.sh"""
@@ -43,7 +52,24 @@ import argparse
 import asyncio
 import sys
 
-from backup.engine import BackupEngine
+# (#14867) UNRESOLVED: `backup.engine.BackupEngine` does not exist anywhere in
+# this tree. autobot-backend/backup/ contains only __init__.py and scheduler.py,
+# and no class in the repo offers this contract (async create_backup() returning
+# .success/.backup_id/.components/.error alongside a sync verify_backup()). The
+# import is deliberately left naming the module it was written against rather
+# than being pointed at a near-miss, so the failure stays loud and specific. The
+# guard below turns the bare ModuleNotFoundError into a message that states
+# plainly that nothing was restored.
+try:
+    from backup.engine import BackupEngine
+except ImportError as exc:  # pragma: no cover - operator-facing failure path
+    print(
+        "ERROR: the knowledge-base backup engine could not be imported "
+        f"({exc}). NOTHING was listed, verified or restored - do not treat "
+        "this run as a successful restore (#14867).",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 def _build_parser() -> argparse.ArgumentParser:

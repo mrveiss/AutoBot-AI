@@ -8,15 +8,20 @@ import { vi, type Mock } from 'vitest'
 import type { Component } from 'vue'
 
 // Minimal i18n instance for tests (vue-i18n 11 requires app.use(i18n))
-const createTestI18n = () =>
-  createI18n({
-    legacy: false,
-    locale: 'en',
-    fallbackLocale: 'en',
-    messages: { en: {} },
-    missingWarn: false,
-    fallbackWarn: false,
-  })
+//
+// #14860: built once for the module, not once per `renderComponent()` call.
+// Every render used to construct a fresh instance and install it into a fresh
+// app; `ChatInterface.test.ts` alone renders the full chat tree a dozen times.
+// The messages are empty and no caller can reach this instance to mutate it —
+// `renderComponent()` does not return it — so sharing it is safe.
+const testI18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: {} },
+  missingWarn: false,
+  fallbackWarn: false,
+})
 
 // Common test routes for components that use router
 const testRoutes = [
@@ -61,7 +66,7 @@ export const renderComponent = (
     ...global,
     plugins: [
       ...(global.plugins || []),
-      createTestI18n(),
+      testI18n,
       ...(router ? [createTestRouter(undefined, ['/terminal/test-session'])] : []),
       ...(pinia ? [createTestingPinia({ createSpy: vi.fn })] : []),
     ],

@@ -9,7 +9,11 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 # #13149: this already consulted $PROJECT_ROOT but nothing ever set it, so it
 # fell through to the deployed install and this script deletes/replaces a
 # frontend directory — the #13092 failure class exactly.
