@@ -95,18 +95,13 @@ def test_a_detection_only_node_is_no_deploy_target():
     )
     groups = _groups(node)
 
-    for leaked in (
-        "ai_stack",
-        "npu_worker",
-        "npu_workers",
-        "browser_worker",
-        "aiml",
-        "npu",
-        "browser",
-        "frontend",
-        "backend",
-        "slm_server",
-    ):
+    # #14681: this was a hand-written list of ten names and had drifted — it
+    # omitted `llm_nodes`, `ai` and `main`, so three gated groups had no
+    # detection-leak assertion at all. Derived from the gate itself now, which
+    # is the only version that cannot fall behind it.
+    gated = set(inventory_builder._DECLARED_ONLY_GROUPS)
+    assert {"llm_nodes", "ai", "main"} <= gated, "the gate no longer covers the groups this test was missing"
+    for leaked in sorted(gated):
         assert leaked not in groups, f"{leaked} still granted by detection alone"
 
     assert "redis" in groups, "ordinary groups must still come from detection"
@@ -182,3 +177,66 @@ def test_declaring_a_vector_database_does_not_activate_the_llm_runtime() -> None
     assert "chromadb" not in llm_tokens, "declaring chromadb would run the ollama installer"
     assert "tts-worker" not in llm_tokens, "declaring tts-worker would run the ollama installer"
     assert llm_tokens, "no token grants llm_nodes — role_llm_active could never fire"
+
+
+def test_the_legacy_vocabulary_cannot_grant_a_gated_group_by_detection() -> None:
+    """#14681: the legacy `ROLE_ANSIBLE_GROUPS` is a second way to reach a group.
+
+    `_close_over_role_groups` closes over `_ROLE_TO_GROUPS` only. If the legacy
+    map grants a gated group for a token the primary map does not, detection
+    through that route would bypass the closure's reasoning entirely. `vnc`
+    reaches its group solely through that map (#14638), so it is a live path,
+    not a theoretical one.
+    """
+    try:
+        from services.role_registry import ROLE_ANSIBLE_GROUPS
+    except Exception:  # pragma: no cover - registry unavailable in some harnesses
+        import pytest
+
+        pytest.skip("role_registry unavailable in this harness")
+
+    gated = set(inventory_builder._DECLARED_ONLY_GROUPS)
+    for token, granted in ROLE_ANSIBLE_GROUPS.items():
+        names = {granted} if isinstance(granted, str) else set(granted or ())
+        privileged = names & gated
+        if not privileged:
+            continue
+        node = _node(declared=[], detected=[token])
+        leaked = _groups(node) & privileged
+        assert not leaked, (
+            f"the legacy vocabulary lets detected token {token!r} grant gated group(s) {sorted(leaked)} "
+            "— the closure only reasons about _ROLE_TO_GROUPS"
+        )
+
+
+def test_a_new_non_deploy_role_shrinks_the_gate_and_the_pin_catches_it() -> None:
+    """#14681: the failure mode is a role added later, not a group edited today.
+
+    `_close_over_role_groups` excuses any group also granted by a role that
+    intersects no seed name (`shared_with_non_deploy`). So adding a token that
+    grants `llm_nodes` and nothing seed-adjacent does not widen the gate — it
+    REMOVES `llm_nodes` from it, because the group now looks shared with a
+    non-deploy role. Detection would then hand out `llm_nodes`, which is the
+    root-level ollama install path (#14682).
+
+    Nothing about that edit looks dangerous in review: a role is added to a map
+    and a group silently loses its gating. The set-equality pin above is what
+    turns it into a failing test, so this asserts the mechanism directly rather
+    than trusting that it will be noticed.
+    """
+    original = dict(inventory_builder._ROLE_TO_GROUPS)
+    try:
+        before = set(inventory_builder._close_over_role_groups(inventory_builder._DEPLOY_GATED_SEED))
+        assert "llm_nodes" in before, "llm_nodes is not gated to begin with — this test proves nothing"
+
+        inventory_builder._ROLE_TO_GROUPS["some-future-llm-role"] = frozenset({"llm_nodes"})
+        after = set(inventory_builder._close_over_role_groups(inventory_builder._DEPLOY_GATED_SEED))
+
+        assert "llm_nodes" not in after, (
+            "the closure no longer drops a group shared with a non-deploy role. If that was fixed "
+            "deliberately, this test should be replaced by one asserting the group STAYS gated."
+        )
+        assert before != after, "the gate did not change, so the pinned-set assertion would not catch this"
+    finally:
+        inventory_builder._ROLE_TO_GROUPS.clear()
+        inventory_builder._ROLE_TO_GROUPS.update(original)
