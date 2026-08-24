@@ -67,7 +67,7 @@ async def test_template_management():
     else:
         print("❌ Failed to retrieve network_security_scan template")  # noqa: print
 
-    return True
+    return
 
 
 async def test_template_creation():
@@ -125,7 +125,7 @@ async def test_template_creation():
     print(f"✅ Invalid variables validation: {invalid_validation['valid']}")  # noqa: print  # noqa: print
     print(f"  Missing variables: {invalid_validation.get('missing_variables', [])}")  # noqa: print  # noqa: print
 
-    return True
+    return
 
 
 async def test_template_categories():
@@ -164,7 +164,7 @@ async def test_template_categories():
     print(f"✅ Security tagged templates: {len(security_tagged)}")  # noqa: print
     print(f"✅ Analysis tagged templates: {len(analysis_tagged)}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_specific_templates():
@@ -225,7 +225,7 @@ async def test_specific_templates():
         else:
             print(f"❌ Failed to find template: {template_id}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_template_api_integration():
@@ -262,7 +262,7 @@ async def test_template_api_integration():
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 
-    return True
+    return
 
 
 async def main():
