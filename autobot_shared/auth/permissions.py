@@ -509,10 +509,16 @@ def role_has_permission(role: "Role | str | None", permission: str) -> bool:
     -- a ``ValueError``, caught, and denied. A wrongly-typed argument still
     raises ``TypeError`` rather than being denied: see :func:`role_value`.
     """
-    if not role:
+    # Resolve the type FIRST, then test the resolved string for emptiness --
+    # the same order as ``_normalise_role`` and ``canonical_role_permissions``.
+    # A leading ``if not role`` would swallow a falsy non-role (0, [], {}, False)
+    # into a quiet False while its siblings raise, which is the inconsistency
+    # #14944 set out to remove rather than reproduce.
+    resolved = role_value(role)
+    if not resolved:
         return False
     try:
-        role_enum = Role(role_value(role).lower())
+        role_enum = Role(resolved.lower())
     except ValueError:
         return False
     return permission in _ROLE_PERMISSION_VALUES.get(role_enum, frozenset())

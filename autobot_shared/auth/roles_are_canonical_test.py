@@ -278,3 +278,45 @@ def test_the_absent_role_is_still_answered_quietly(empty):
     assert role_value(empty) == ""
     assert is_admin_role(empty) is False
     assert role_has_permission(empty, Permission.API_READ.value) is False
+
+
+@pytest.mark.parametrize("falsy", [0, False, [], {}, set()])
+def test_a_FALSY_non_role_is_rejected_like_any_other_non_role(falsy):
+    """The case the existing parametrisation missed — it only covered strings and None.
+
+    ``role_has_permission`` tested ``if not role`` *before* coercing, so a falsy
+    non-role returned a quiet ``False`` while ``_normalise_role`` and
+    ``canonical_role_permissions`` raised on the very same input. Truthiness is
+    not the question being asked; the resolved role string's emptiness is, so
+    the type is resolved first and the emptiness test moved after it.
+
+    ``0`` and ``False`` matter most: both are plausible JSON values, and both are
+    the kind of input for which an authorization helper answering ``False``
+    confidently is worse than refusing to answer.
+    """
+    with pytest.raises(TypeError):
+        role_value(falsy)
+    with pytest.raises(TypeError):
+        is_admin_role(falsy)
+    with pytest.raises(TypeError):
+        role_has_permission(falsy, Permission.API_READ.value)
+
+
+def test_every_role_taking_function_agrees_on_how_it_refuses():
+    """The uniformity this PR claims, asserted rather than described.
+
+    All three take a role and must dispose of a non-role the same way. Asserted
+    as a property across the set, so a function added later that quietly returns
+    False instead of raising is caught by the same test.
+    """
+    refusers = (
+        role_value,
+        is_admin_role,
+        lambda r: role_has_permission(r, Permission.API_READ.value),
+    )
+    assert len(refusers) == 3, "the set of role-taking entry points changed"
+    for refuse in refusers:
+        with pytest.raises(TypeError):
+            refuse(0)
+        with pytest.raises(TypeError):
+            refuse(_ForeignRole.ADMIN)
