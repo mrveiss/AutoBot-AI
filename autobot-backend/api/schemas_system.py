@@ -3529,6 +3529,17 @@ class SecretCreateRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=256)
     type: SecretType
+    scope: ChatSecretScope
+    value: str = Field(..., min_length=1, max_length=65536)
+    chat_id: str | None = Field(None, max_length=128)
+    description: str | None = Field("", max_length=1024)
+    tags: List[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
+    metadata: Metadata = Field(default_factory=dict)
+    owner_id: str | None = Field(None, max_length=128, description="Owner user ID")
+    org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
+    team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
+    shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
 
     @field_validator("type")
     @classmethod
@@ -3547,17 +3558,6 @@ class SecretCreateRequest(BaseModel):
             )
         return value
 
-    scope: ChatSecretScope
-    value: str = Field(..., min_length=1, max_length=65536)
-    chat_id: str | None = Field(None, max_length=128)
-    description: str | None = Field("", max_length=1024)
-    tags: List[str] = Field(default_factory=list)
-    expires_at: datetime | None = None
-    metadata: Metadata = Field(default_factory=dict)
-    owner_id: str | None = Field(None, max_length=128, description="Owner user ID")
-    org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
-    team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
-    shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
 
     @field_validator("name")
     @classmethod
