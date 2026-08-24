@@ -1,8 +1,8 @@
-# Claude Code Skills (canonical sources)
+# Claude Code Skills
 
-This directory holds the canonical, version-controlled source for Claude Code
-skills used by this project. Skills are workflow definitions Claude reads
-before responding — small markdown files that say "when X happens, do Y".
+Claude Code skills are workflow definitions Claude reads before responding — small markdown
+files that say "when X happens, do Y". AutoBot's skills install from two plugin marketplaces
+(below); this directory holds the docs and history, not the skill files themselves.
 
 
 ## Installing the skill sets
@@ -39,7 +39,7 @@ Every Claude dev skill now installs from one of the two marketplaces above. This
 for its history and the notes below; it no longer holds a skill file. `tools/install_skills.sh`
 is dormant (it symlinks whatever `*.md` skills are here — currently none).
 
-### Why a skill stays in-repo
+### Why these were version-controlled (history)
 
 Claude reads skills from `~/.claude/skills/<name>/SKILL.md` on each developer's
 machine. Without this directory:
