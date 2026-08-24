@@ -43,7 +43,11 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
-_SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", "venv", ".venv"}
+# ``.claude`` for the same reason as ``.worktrees`` (#14985): agent worktrees are
+# checked out under it, and a requirements file belonging to another branch would
+# widen _DECLARED below — an import this repo never declares would then read as
+# declared, which is the under-reporting direction.
+_SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
 
 # Roots an import may legitimately resolve against: the repo root (installed
 # first-party packages such as autobot_shared), the two backends, and the

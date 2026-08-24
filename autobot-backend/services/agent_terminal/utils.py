@@ -11,11 +11,23 @@ Helper functions for agent terminal operations.
 import re
 from typing import TYPE_CHECKING
 
+from autobot_shared.status_enums import CommandRisk
 from models.command_execution import CommandExecution, CommandState, RiskLevel
-from secure_command_executor import CommandRisk
 
 if TYPE_CHECKING:
     from .models import AgentTerminalSession
+
+
+# Boundary table: canonical CommandRisk -> the deliberate #7258 RiskLevel fork.
+# Every CommandRisk member must appear; see map_risk_to_level for why.
+_COMMAND_RISK_TO_RISK_LEVEL: dict[CommandRisk, RiskLevel] = {
+    CommandRisk.SAFE: RiskLevel.LOW,  # Safe commands -> Low risk
+    CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands -> Medium risk
+    CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands -> High risk
+    CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands -> Critical risk
+    CommandRisk.DANGEROUS: RiskLevel.CRITICAL,  # Destructive pattern -> blocked
+    CommandRisk.FORBIDDEN: RiskLevel.CRITICAL,  # Deny-listed command -> blocked
+}
 
 
 def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
@@ -24,8 +36,13 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
 
     REUSABLE PRINCIPLE: Single function, clear responsibility, reusable across codebase.
 
-    CommandRisk enum values: SAFE, MODERATE, HIGH, CRITICAL, FORBIDDEN
-    RiskLevel enum values: LOW, MEDIUM, HIGH, CRITICAL
+    ``RiskLevel`` here is ``models.command_execution.RiskLevel`` — the
+    deliberate fork documented in #7258 (uppercase wire format, already
+    serialized by legacy Redis/SQLite records). It is NOT converged, and this
+    function is the boundary that converts into it.
+
+    CommandRisk members: SAFE, MODERATE, HIGH, CRITICAL, DANGEROUS, FORBIDDEN
+    RiskLevel members: LOW, MEDIUM, HIGH, CRITICAL
 
     Args:
         risk: CommandRisk from security assessment
@@ -33,14 +50,12 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
     Returns:
         Corresponding RiskLevel enum
     """
-    risk_mapping = {
-        CommandRisk.SAFE: RiskLevel.LOW,  # Safe commands → Low risk
-        CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands → Medium risk
-        CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands → High risk
-        CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
-        CommandRisk.FORBIDDEN: (RiskLevel.CRITICAL),  # Forbidden commands → Critical risk (blocked)
-    }
-    return risk_mapping.get(risk, RiskLevel.MEDIUM)
+    # #13845: the fallback is CRITICAL, not MEDIUM. The table used to omit
+    # DANGEROUS (it lived in the other fork), and an unmapped member fell
+    # through to MEDIUM — a blocking verdict silently downgraded to the middle
+    # of the scale. An unrecognised risk now fails closed. Totality of this
+    # table is asserted by ``repo_tests/enum_union_guard_test.py``.
+    return _COMMAND_RISK_TO_RISK_LEVEL.get(risk, RiskLevel.CRITICAL)
 
 
 def extract_terminal_and_chat_ids(session: "AgentTerminalSession") -> tuple[str, str]:

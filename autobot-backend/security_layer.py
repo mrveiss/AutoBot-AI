@@ -21,12 +21,14 @@ from functools import lru_cache
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import CommandRisk
 from config import get_config_manager
-from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 logger = get_logger(__name__)
 
@@ -97,8 +99,11 @@ def _normalise_role(user_role: str) -> str:
     resolver, and leaving one of them out is what created the gap in the first
     place. The audit entry stays with ``_handle_deprecated_role`` so a downgrade is
     still logged exactly once.
+
+    Takes the role string via ``role_value`` so a ``Role`` **member** normalises
+    to its value rather than to ``"role.admin"`` (#14944).
     """
-    normalised = str(user_role or "").strip().lower()
+    normalised = role_value(user_role).strip().lower()
     return Role.ADMIN.value if normalised in DEPRECATED_PRIVILEGED_ROLES else normalised
 
 
@@ -112,17 +117,25 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     lookups always agree on who a role is — a normalisation applied to one source
     of three creates a second identity that holds some grants and not others.
 
-    ``superadmin`` deliberately resolves to ``[]`` here. It is administrative per
-    ``ADMIN_ROLES`` and is **not** a ``Role`` member, so mapping it onto admin's
-    set would hand it 54 permissions including shell execution that it did not
-    previously hold — a live authorisation expansion, which is not what #13820
-    decided. The real fix is making it a first-class ``Role`` with its own
-    ``ROLE_PERMISSIONS`` entry (see the TODO in ``autobot_shared.auth.permissions``);
-    tracked in #13854.
+    ``superadmin`` resolves to ``[]`` here, and since #13854 it does so for a
+    stated reason rather than by accident. It is now a first-class ``Role``
+    member whose ``ROLE_PERMISSIONS`` entry is explicitly empty: administrative
+    as a predicate (``require_role``, ``is_admin_role``), holder of no granular
+    permission. Before #13854 this ``[]`` came from ``Role("superadmin")``
+    *raising* — the same answer, but indistinguishable from an unrecognised
+    role, and contradicted by ``role_has_permission``, which granted superadmin
+    everything. Both paths now agree, and they agree because one mapping says
+    so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
+
+    A ``Role`` member resolves the same as its value (#14944); it previously
+    stringified to ``"role.admin"`` and yielded ``[]``. Note this function is
+    ``lru_cache``d and a member does NOT share a cache entry with its value
+    (``lru_cache`` fast-paths exact ``str`` only), so the two were cached
+    separately and the wrong answer was deterministic, not call-order dependent.
     """
-    normalised = str(user_role or "").strip().lower()
+    normalised = role_value(user_role).strip().lower()
     if not normalised:
         return []
     try:
@@ -668,6 +681,16 @@ class SecurityLayer:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
+            # #14843: the swallow stays -- an audit problem must not turn a
+            # correct 403 into a 500 -- but on its own it made a lost record
+            # indistinguishable from a written one. #14750 instrumented the
+            # RBAC middleware's DB-backed denial audit; this file-backed path is
+            # reached through a different decorator and was left silent, so a
+            # full disk, a permissions change or a rotated-away directory
+            # dropped every record here while requests kept answering correctly.
+            # Same counter as the middleware, deliberately: a second one would
+            # let the two drift exactly as the two handlers did.
+            record_audit_write_failure_safely(action, type(e).__name__)
             logger.error("Failed to write to audit log file %s: %s", self.audit_log_file, e)
 
     def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:

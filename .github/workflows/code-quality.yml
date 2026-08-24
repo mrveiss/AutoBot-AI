@@ -178,38 +178,19 @@ jobs:
         # #13880 — the "59" this comment used to claim was long stale).
         # After #5263 closes, swap to full-scan mode (no argv).
         #
-        # Resolve through HEAD's parents, exactly as
-        # pipeline-scripts/check-pre-commit-hook-pr.sh does (#13880). The event
-        # payload's base.sha is NOT guaranteed to be in the clone under
-        # fetch-depth: 2, whereas HEAD^1 always is — and on a pull_request
-        # HEAD^1..HEAD is precisely this PR's changes.
-        if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
-          base="${HEAD_SHA}^1"
-        elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          base="$BASE_SHA"
-        else
-          base="${HEAD_SHA}^"
-        fi
-        # A guard that cannot compute its scope must FAIL, not report "no
-        # changed files" (#13880) — see the same fix in
-        # pipeline-scripts/check-pre-commit-hook-pr.sh.
-        for _ref in "$base" "$HEAD_SHA"; do
-          git cat-file -e "${_ref}^{commit}" 2>/dev/null || {
-            echo "::error::'${_ref}' does not resolve — shallow clone cannot diff against the base. Refusing to report no-changes for an uncomputed scope."
-            exit 1
-          }
-        done
-        # `git diff --name-only` may return non-existent paths (deleted
-        # files); filter to existing .py files before passing to the hook.
-        if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py'); then
-          echo "::error::git diff failed for ${base}..${HEAD_SHA} — refusing to report clean."
-          exit 1
-        fi
-        # `|| true` normalises the while-loop's EOF status under `set -e`; it is
-        # scoped to the filter only, since git's status is checked above.
-        files=$(printf '%s\n' "$raw_files" \
-          | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
-          || true)
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        base=$(git_scope_resolve_base "$HEAD_SHA" "${BASE_SHA:-}")
+        git_scope_require_commits "$base" "$HEAD_SHA"
+        raw_files=$(git_scope_diff_names "$base" "$HEAD_SHA" -- '*.py')
+        # git names deleted paths too; `|| true` normalises the filter's EOF
+        # status under `set -e` and is scoped to the filter only, since git's
+        # own status is checked inside git_scope_diff_names.
+        files=$(printf '%s\n' "$raw_files" | git_scope_existing_files || true)
         if [ -z "$files" ]; then
           echo "No changed Python files — skipping #5178 regression check."
           exit 0
@@ -286,28 +267,25 @@ jobs:
         # is-shallow-repository false -> true), which would silently strip the
         # history that later steps in this same job depend on. fetch-depth: 2
         # on the checkout already provides both parents.
-        have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
-        if have 'HEAD^2' && have 'HEAD^1'; then
-          RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
-        elif have "${PR_BASE_SHA:-x}" && have "${PR_HEAD_SHA:-x}"; then
-          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
-        elif have 'HEAD~1'; then
-          RANGE="HEAD~1..HEAD"
-        else
-          echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
-          git log --oneline -3 2>&1 | sed 's/^/  /' || true
-          exit 1
-        fi
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        BASE_REF=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}")
+        git_scope_require_commits "$BASE_REF" HEAD
+        RANGE="${BASE_REF}...HEAD"
+        # Counted with the SAME three-dot semantics lint-conventions.sh applies
+        # to this range, so the anti-no-op guard below measures the scope that
+        # will actually be scanned rather than a neighbouring one.
+        CHANGED=$(git_scope_diff_names_symmetric "$BASE_REF" HEAD | grep -c . || true)
+        echo "conventions scope: $RANGE ($CHANGED file(s))"
         # Anti-no-op guard. The original defect was a broken range yielding
         # "0 file(s) in scope" and three green checks. Any change set reaches
         # this job with at least one file, so 0 means the range is wrong —
         # fail red rather than pass having scanned nothing.
-        CHANGED=$(git diff --name-only "$RANGE" | wc -l)
-        echo "conventions scope: $RANGE ($CHANGED file(s))"
-        if [ "$CHANGED" -eq 0 ]; then
-          echo "::error::0 files in scope for '$RANGE' — the range is wrong. Refusing to report clean on an unscanned tree."
-          exit 1
-        fi
+        git_scope_require_nonempty "$CHANGED" "$RANGE"
         if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
           CONVENTIONS_DENYLIST=$(mktemp)
           export CONVENTIONS_DENYLIST

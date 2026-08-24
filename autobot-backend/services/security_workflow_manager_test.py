@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
     VALID_TRANSITIONS,
@@ -378,7 +379,7 @@ class TestSecurityWorkflowManager:
                 status="up",
                 ports=[{"port": 22, "protocol": "tcp"}],
                 services=[{"name": "ssh", "port": 22}],
-                vulnerabilities=[{"severity": "high", "cve_id": "CVE-2024-1234"}],
+                vulnerabilities=[{"severity": Severity.HIGH.value, "cve_id": "CVE-2024-1234"}],
             )
         ]
         # Add finding for the vulnerability (this is how they're counted)

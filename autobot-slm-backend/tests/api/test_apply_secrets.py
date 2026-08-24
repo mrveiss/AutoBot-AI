@@ -77,6 +77,21 @@ class _NodeStatus(str, Enum):
     DECOMMISSIONED = "decommissioned"
 
 
+class _BackupServiceType(str, Enum):
+    """Real-enough stand-in so models/schemas.py enum fields build (#13578).
+
+    Same reason as ``_NodeStatus`` above: ``models/schemas.py`` now also imports
+    ``BackupServiceType`` from ``models.database``, and pydantic needs a genuine
+    enum type to build a schema for ``BackupCreate.service_type``. Left as a
+    ``MagicMock`` attribute it raises ``PydanticSchemaGenerationError`` at
+    import, which is a *collection* error — every test in this file stops
+    running rather than one failing.
+    """
+
+    REDIS = "redis"
+    POSTGRES = "postgres"
+
+
 class _Permission:
     SECURITY_MANAGE = "security:manage"
 
@@ -105,6 +120,7 @@ def _load_secrets_module():
         sys.modules["models.database"].Node = MagicMock()
         sys.modules["models.database"].SystemSecret = MagicMock()
         sys.modules["models.database"].NodeStatus = _NodeStatus
+        sys.modules["models.database"].BackupServiceType = _BackupServiceType
         sys.modules["services.ansible_secrets"]._SECRET_TO_DEPENDENT_ROLES = {"hf_token": ["tts-worker"]}
 
         # Real-load models/schemas.py so response_model=ApplySecretsResponse

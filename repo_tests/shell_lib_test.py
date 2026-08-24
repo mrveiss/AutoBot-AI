@@ -28,6 +28,7 @@ from autobot_shared.paths import project_root
 
 SHELL_SUITES = [
     "scripts/lib/branch-guards_test.sh",
+    "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
 ]
 

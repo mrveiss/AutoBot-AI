@@ -46,10 +46,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # dependency and "nothing to warn about" would be byte-identical. So it says
 # so on stderr first. That keeps "never blocks a commit" (still exit 0) while
 # refusing to report clean about a check that never ran.
-if ! source "$SCRIPT_DIR/lib/_common.sh" 2>/dev/null; then
+# GH#14891: the decisive attempt used to be written `if ! source ... 2>/dev/null`,
+# which threw away the library's OWN stderr — the developer was told the load
+# failed but never why. The redirect is gone; the exit 0 stays, because it is
+# this hook's contract rather than an oversight, and the marker below is what
+# the guard reads instead of an allowlist of filenames.
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    # lib-source-contract: non-blocking
     echo "warn-untracked: cannot load lib/_common.sh — untracked-file check SKIPPED (not clean)" >&2
     exit 0
-fi
+}
 
 SOURCE_PATTERN='\.py$|\.ts$|\.vue$|\.js$'
 

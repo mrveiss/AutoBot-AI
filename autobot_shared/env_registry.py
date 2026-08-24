@@ -879,6 +879,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AUDIT_FILING_STATUS_TTL_S",
+        type=int,
+        default=2592000,
+        description=(
+            "Seconds the audit worker's filing-health record survives in Redis. "
+            "Refreshed on every run and at worker startup, so this only has to "
+            "outlive the longest gap between runs (the claims audit is weekly); "
+            "it exists so a record left by a worker that has since stopped does "
+            "not keep answering for one that no longer exists (#13570)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CODE_ANALYSIS_POOL_WORKERS",
         type=int,
         default=2,
@@ -1924,5 +1940,23 @@ register_env_var(
             "(services/sync_orchestrator.py, #14275)."
         ),
         component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS",
+        type=float,
+        default=1.0,
+        description=(
+            "Seconds a test's live-service precondition probe waits for a TCP connect "
+            "before reporting the service as absent and skipping "
+            "(autobot_shared/live_service_probe.py, #14930). Short by default: a "
+            "refused loopback connect returns immediately, and this runs once per "
+            "endpoint per process. Raise it when probing a fleet host across a link "
+            "slow enough that a live service could be mistaken for a missing one."
+        ),
+        component="testing",
+        range=(0.1, 60.0),
     )
 )

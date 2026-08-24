@@ -29,7 +29,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from secure_command_executor import CommandRisk
+from autobot_shared.status_enums import CommandRisk
 from type_defs.common import Metadata
 
 # Permission system v2 imports (lazy to avoid circular imports)
@@ -41,14 +41,10 @@ logger = get_logger(__name__)
 # Performance optimization: O(1) lookup for subcommand patterns (Issue #326)
 SUBCOMMAND_TOOLS = {"git", "docker", "kubectl", "npm", "yarn"}
 
-# Numeric risk levels for comparison
-_RISK_LEVELS = {
-    CommandRisk.SAFE: 0,
-    CommandRisk.MODERATE: 1,
-    CommandRisk.HIGH: 2,
-    CommandRisk.CRITICAL: 3,
-    CommandRisk.FORBIDDEN: 4,
-}
+# #13845: risk ordering comes from ``CommandRisk.rank``, derived from the enum's
+# own declaration order. The hand-written table this replaces named five members
+# and would have rated the sixth (DANGEROUS) as 999 — treating a blocking
+# verdict as "off the scale" rather than as the blocking verdict it is.
 
 
 class AgentRole(Enum):
@@ -185,7 +181,7 @@ class CommandApprovalManager:
         supervised_mode = perms.supervised_mode
         effective_max_risk = CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
 
-        if _RISK_LEVELS.get(command_risk, 999) > _RISK_LEVELS.get(effective_max_risk, 0):
+        if command_risk.rank > effective_max_risk.rank:
             if supervised_mode:
                 reason = f"Command risk {command_risk.value} exceeds supervised mode limit"
             else:
@@ -286,12 +282,11 @@ class CommandApprovalManager:
 
         supervised_mode = perms.supervised_mode
 
-        # In supervised mode, HIGH/CRITICAL/FORBIDDEN always need approval
-        if supervised_mode and command_risk in {
-            CommandRisk.HIGH,
-            CommandRisk.CRITICAL,
-            CommandRisk.FORBIDDEN,
-        }:
+        # In supervised mode anything at or above HIGH always needs approval.
+        # #13845: expressed as a rank comparison so DANGEROUS — added by the
+        # union with the terminal schema's enum — is covered without the set
+        # having to be edited.
+        if supervised_mode and command_risk.rank >= CommandRisk.HIGH.rank:
             return True
 
         # SAFE commands can be auto-approved if permitted

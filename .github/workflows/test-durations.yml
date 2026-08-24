@@ -79,8 +79,14 @@ jobs:
       # first (--clean-durations discards timings for tests not in the run).
       - name: Store durations — backend, shared, tts-worker, repo_tests
         run: |
+          # #14917: `tools scripts pipeline-scripts` were wired into ci.yml by #13368,
+          # #13653, #13879 and #13880 and into none of the other invocations. The four
+          # root lists must agree — repo_tests/hook_suites_run_in_ci_test.py compares
+          # them to each other, so a fifth invocation is checked on arrival.
+          # Until now they had no entries here, so the
+          # shard balancer placed them by hash with zero weight.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \

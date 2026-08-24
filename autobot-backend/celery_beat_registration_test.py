@@ -57,10 +57,12 @@ _KNOWN_DROPPED = {
     "tasks.reconcile_credentials",
     "tasks.cleanup_expired_snapshots",
     "llc.scheduler.sprint_autoclose.run_daily_check",
+    "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
     "workers.audit_testgaps",
     "workers.audit_dead_code",
     "workers.audit_claims",
     "memory.consolidate_trajectories",
+    "memory.consolidate_facts",
 }
 
 
@@ -76,13 +78,18 @@ def _scheduled_task_names() -> set[str]:
     return names
 
 
-def _registered_task_names() -> set[str]:
+def _task_registry() -> dict:
     """Import the startup registration surface and return the Celery registry."""
     for module in _REGISTRATION_IMPORTS:
         importlib.import_module(module)
     celery_app_mod = sys.modules.get("celery_app")
     assert celery_app_mod is not None, "celery_app stub missing — check conftest.py"
-    return set(celery_app_mod.celery_app.tasks)
+    return celery_app_mod.celery_app.tasks
+
+
+def _registered_task_names() -> set[str]:
+    """Names present in the Celery registry after the startup surface loads."""
+    return set(_task_registry())
 
 
 def test_known_dropped_tasks_are_registered():
@@ -123,3 +130,24 @@ def test_every_beat_scheduled_task_is_registered():
         f"package to celery_app.autodiscover_tasks (related_name=None) or import "
         f"it explicitly, and re-export it from that package's __init__.py."
     )
+
+
+def test_every_beat_scheduled_task_resolves_to_a_callable():
+    """A registry key is not yet a dispatchable job — assert the callable.
+
+    ``name in app.tasks`` only proves something was filed under that name. Beat
+    dispatches by name and the worker then *executes* the entry, so an entry that
+    is present but not callable drops the job just as silently as a missing one.
+    Asserting the callable closes the gap between "the registry looks populated"
+    and "the scheduled work can actually run", which is the whole subject of
+    GH#12318.
+    """
+    registry = _task_registry()
+    scheduled = _scheduled_task_names()
+
+    not_callable = sorted(
+        name
+        for name in scheduled
+        if name in registry and not (callable(registry[name]) and callable(getattr(registry[name], "run", None)))
+    )
+    assert not not_callable, f"beat_schedule tasks registered but not executable: {not_callable!r}"

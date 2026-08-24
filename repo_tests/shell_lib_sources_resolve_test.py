@@ -27,6 +27,21 @@ Two independent failure modes, so two independent checks:
   *this* checkout at PR time, and cannot see a deploy that ships a partial tree,
   a `.gitignore` regression, or a rename downstream.
 
+The walk finds shell scripts by shebang, not by suffix (#14891). It used to be
+`rglob("*.sh")`, and every pre-commit hook under
+`autobot-infrastructure/shared/scripts/hooks/` is **extensionless** — so 16 real
+call sites sat outside a guard whose reach floors were all satisfied by the
+`.sh` population alone. It reported healthy coverage over its own blind spot,
+which is the defect under guard one level up.
+
+Widening it needed a third category rather than a wider glob. A failure block
+that ends in `exit 0` is normally the silent-degrade bug, but
+`pre-commit-warn-untracked`'s documented contract is that it must never block a
+commit, so `exit 0` is correct *there*. That is encoded as an asserted category —
+the block has to carry the `lib-source-contract: non-blocking` marker, announce
+the skip on stderr, and exit 0 explicitly — never as a filename allowlist, and
+the category is bounded so it cannot become the escape hatch for everything.
+
 Reach floors are asserted throughout. An empty walk reports "no offenders" while
 having checked nothing, which is the same shape of bug as the one under guard.
 """
@@ -44,6 +59,15 @@ _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", "venv", ".ve
 
 # A `source` statement and the (possibly quoted) word that follows it.
 _SOURCE = re.compile(r'(?<!\w)source\s+(?:"([^"\n]+)"|\'([^\'\n]+)\'|([^\s;&|"\'\n]+))')
+
+# A shebang naming a shell. The hooks are extensionless, so suffix is not a
+# usable tell; the file's own first line is (#14891).
+_SHELL_SHEBANG = re.compile(rb"^#!.*\b(ba|da|k|z)?sh\b")
+
+# Marker a call site puts INSIDE its failure block to declare that it refuses to
+# report clean but deliberately does not block. Asserted together with the
+# behaviour it claims, never trusted on its own.
+_NON_BLOCKING_MARKER = "lib-source-contract: non-blocking"
 
 # Variables a call site uses to reach its library, and what each resolves to.
 # SCRIPT_DIR (and the SCRIPT_DIR_UTIL spelling one script uses) is always the
@@ -126,16 +150,36 @@ class _Site:
         return f"{self.rel}:{self.lineno}"
 
 
+def _is_shell_script(path: Path) -> bool:
+    """A `.sh` file, or any file whose own shebang names a shell (#14891).
+
+    Detection is by shebang rather than by a name list because every hook under
+    `autobot-infrastructure/shared/scripts/hooks/` is extensionless. A name list
+    would have to be maintained, and the failure mode of a stale one is silence.
+    """
+    if path.suffix == ".sh":
+        return True
+    try:
+        with path.open("rb") as handle:
+            return _SHELL_SHEBANG.match(handle.readline(256)) is not None
+    except OSError:  # pragma: no cover - unreadable file
+        return False
+
+
 def _collect() -> tuple[list[_Site], int]:
     """Every lib source site under autobot-infrastructure/, plus files walked."""
     sites: list[_Site] = []
     scanned = 0
-    for script in sorted(_INFRA.rglob("*.sh")):
+    for script in sorted(_INFRA.rglob("*")):
+        if not script.is_file():
+            continue
         # Relative parts, never the absolute path: this checkout may itself sit
         # under a directory named `.worktrees` or `venv`, which would otherwise
         # skip the entire tree and report clean.
         rel_parts = script.relative_to(_REPO_ROOT).parts
         if any(part in _SKIP_PARTS for part in rel_parts):
+            continue
+        if not _is_shell_script(script):
             continue
         scanned += 1
         try:
@@ -173,16 +217,42 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     the site count catches a regex that stopped matching, and the named script
     catches a walk that reaches files but not the ones this guard is about.
     """
-    assert _SCANNED > 120, f"only walked {_SCANNED} shell scripts — the skip list is eating the tree"
-    assert len(_SITES) >= 60, (
-        f"only found {len(_SITES)} lib source sites — expected >= 60 "
-        "(#14041 enumerated 56 scripts); the matcher has regressed"
+    # 180, not 179: fixing slm-post-commit's shebang (#14909 — it sat on line 4,
+    # under the copyright header, where it is a comment) also made that file
+    # visible to this walk. It carries no lib source, so the site counts below
+    # are unchanged.
+    assert _SCANNED >= 180, (
+        f"only walked {_SCANNED} shell scripts — the skip list is eating the tree, "
+        "or the shebang detector stopped recognising extensionless scripts (#14891)"
+    )
+    assert len(_SITES) >= 78, (
+        f"only found {len(_SITES)} lib source sites — expected >= 78 "
+        "(#14041 enumerated 56 scripts; #14891 added 17 sites in 16 extensionless "
+        "hooks); the matcher has regressed"
     )
     rels = {site.rel for site in _SITES}
-    assert len({site.rel for site in _SITES}) >= 55, f"only {len(rels)} distinct scripts"
+    # 55, not 56: #14371 retired
+    # autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh, a dormant
+    # unwired fork whose rules moved into scripts/lib/hardcoded-value-rules.sh.
+    # The floor is left AT the current count rather than lowered for headroom, so
+    # it still catches a regressed matcher; a future legitimate retirement has to
+    # come here and say so, which is the point.
+    assert len(rels) >= 71, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
     ), "the walk no longer reaches a known call site"
+
+    # The #14891 floor specifically: the `.sh` population alone satisfies every
+    # count above, so a regression to `rglob("*.sh")` has to fail on something
+    # that only an extensionless script can satisfy.
+    extensionless = {rel for rel in rels if not Path(rel).suffix}
+    assert len(extensionless) >= 16, (
+        f"only {len(extensionless)} extensionless call sites — the walk has "
+        "narrowed back to files with a suffix and the 16 hooks are outside it again"
+    )
+    assert (
+        "autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked" in rels
+    ), "the walk no longer reaches the extensionless hooks (#14891)"
 
 
 def test_no_lib_source_is_documentation_or_a_fixture() -> None:
@@ -231,7 +301,7 @@ def test_every_lib_source_resolves_to_a_real_file() -> None:
                 f"{rel}:{lineno} -> " + " | ".join(str(t) for t in known)
             )
 
-    assert checked >= 55, (
+    assert checked >= 73, (
         f"only resolved {checked} source sites — the expander has regressed and "
         "this test would pass having checked almost nothing"
     )
@@ -269,7 +339,7 @@ def _shape_offenders() -> tuple[list[str], int]:
 def test_a_missing_lib_is_never_swallowed() -> None:
     """The `|| true` shape that made #14041 invisible may not come back (#14172)."""
     offenders, checked = _shape_offenders()
-    assert checked >= 55, f"only checked {checked} sites — this would pass vacuously"
+    assert checked >= 73, f"only checked {checked} sites — this would pass vacuously"
     assert not offenders, (
         "a lib bootstrap whose failure is discarded turns a deployment error "
         "into a wrong-value-at-runtime. The final attempt in the chain must keep "
@@ -278,20 +348,103 @@ def test_a_missing_lib_is_never_swallowed() -> None:
     )
 
 
+def _failure_block(site: _Site) -> str:
+    """Body of the `|| {` block that follows a decisive source, up to its `}`."""
+    lines = site.script.read_text(encoding="utf-8").splitlines()
+    block = lines[site.lineno : site.lineno + 6]
+    end = next((i for i, ln in enumerate(block) if ln.strip() == "}"), len(block))
+    return "\n".join(block[:end])
+
+
+def _classify(site: _Site) -> str:
+    """`blocks`, `non-blocking`, or `silent` — what this failure block does.
+
+    `blocks` is the normal answer: the script stops. `non-blocking` is the third
+    category #14891 needed — a hook whose documented contract forbids it from
+    failing a commit still has to refuse to report clean, so it announces the
+    skip on stderr and exits 0 on purpose. It is earned by three properties of
+    the block itself, never by the filename: the marker, a message on stderr,
+    and an explicit zero exit. `silent` is everything else, which is the
+    #14172 defect.
+    """
+    body = _failure_block(site)
+    if re.search(r"\b(exit|return)\s+[1-9]", body):
+        return "blocks"
+    announces = ">&2" in body and re.search(r"\b(echo|printf)\b", body) is not None
+    deliberate = re.search(r"\b(exit|return)\s+0\b", body) is not None
+    if _NON_BLOCKING_MARKER in body and announces and deliberate:
+        return "non-blocking"
+    return "silent"
+
+
 @pytest.mark.parametrize(
     "site", [s for s in _SITES if s.is_last], ids=lambda s: f"{s.rel}:{s.lineno}"
 )
-def test_each_failure_block_actually_exits(site: _Site) -> None:
-    """`|| {` is only loud if the block inside it stops the script.
+def test_each_failure_block_actually_stops_or_says_why_it_does_not(site: _Site) -> None:
+    """`|| {` is only loud if the block inside it either stops or announces.
 
     Checked per site rather than in aggregate so a failure names the one script
     that regressed. A block that merely echoes and falls through is the same
     silent-degrade defect wearing a louder coat.
     """
-    lines = site.script.read_text(encoding="utf-8").splitlines()
-    block = lines[site.lineno : site.lineno + 6]
-    body = "\n".join(block[: next((i for i, ln in enumerate(block) if ln.strip() == "}"), len(block))])
-    assert re.search(r"\b(exit|return)\s+[1-9]", body), (
-        f"{site.rel}:{site.lineno} announces the failure but does not stop — "
-        f"the script continues on hardcoded fallbacks anyway (#14172). Block:\n{body}"
+    assert site.script.is_file(), f"{site.rel} vanished — this test has no subject"
+    verdict = _classify(site)
+    assert verdict != "silent", (
+        f"{site.rel}:{site.lineno} announces the failure but does not stop — the "
+        f"script continues on hardcoded fallbacks anyway (#14172). A hook whose "
+        f"contract forbids blocking may exit 0 instead, but only by carrying "
+        f"`{_NON_BLOCKING_MARKER}` in the block, writing the skip to stderr and "
+        f"exiting 0 explicitly. Block:\n{_failure_block(site)}"
     )
+
+
+def test_the_non_blocking_category_is_earned_and_bounded() -> None:
+    """The third category must not become the escape hatch (#14891).
+
+    Two independent guards on it. Behaviour: each member is re-checked here
+    against the properties `_classify` used, so the marker alone can never buy
+    an exemption. Population: the category is bounded above, because a sweep
+    that reclassified the whole tree as "deliberately does not block" would
+    otherwise turn the whole guard green while deleting it.
+    """
+    decisive = [s for s in _SITES if s.is_last]
+    assert len(decisive) >= 73, f"only {len(decisive)} decisive sites — vacuous"
+
+    non_blocking = [s for s in decisive if _classify(s) == "non-blocking"]
+    assert non_blocking, (
+        "no site is in the non-blocking category, so the classification branch "
+        "that #14891 added is untested — pre-commit-warn-untracked should be here"
+    )
+    assert len(non_blocking) <= 2, (
+        "the non-blocking category has grown beyond the hooks whose contract "
+        f"actually forbids blocking: {[s.rel for s in non_blocking]}. Each entry "
+        "is a lib bootstrap failure that does NOT stop the script — justify it "
+        "here rather than adding another marker"
+    )
+    for site in non_blocking:
+        body = _failure_block(site)
+        assert ">&2" in body, f"{site!r} exits 0 without saying so on stderr"
+        assert re.search(r"\b(echo|printf)\b", body), f"{site!r} announces nothing"
+        assert re.search(r"\b(exit|return)\s+0\b", body), (
+            f"{site!r} carries the marker but falls through instead of exiting 0"
+        )
+
+
+def test_the_two_offenders_are_fixed() -> None:
+    """#14891's two live offenders, pinned so the fix cannot quietly revert.
+
+    Both sit in extensionless hooks, so before the walk widened neither was
+    visible to any assertion above.
+    """
+    by_rel = {site.rel: site for site in _SITES if site.is_last}
+    for rel, expected in (
+        ("autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync", "blocks"),
+        (
+            "autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked",
+            "non-blocking",
+        ),
+    ):
+        assert rel in by_rel, f"{rel} is no longer reached by the walk (#14891)"
+        assert _classify(by_rel[rel]) == expected, (
+            f"{rel} is {_classify(by_rel[rel])}, expected {expected}"
+        )

@@ -38,7 +38,6 @@ _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "
 # its exemption to be removed rather than sitting here exempting nothing.
 _KNOWN_BROKEN = {
     ("chat_history/context_overflow.py", "llm_shared.gateway"): "#14840",
-    ("slash_command_handler.py", "services.consolidated_health_service"): "#14851",
 }
 
 
@@ -128,9 +127,7 @@ def test_every_first_party_import_names_a_real_module() -> None:
     found, scanned = _unresolvable_imports()
     assert scanned > 1000, f"only walked {scanned} python files — this would pass vacuously"
     offenders = [
-        f"{rel}:{line}  from {module} import ..."
-        for rel, module, line in found
-        if (rel, module) not in _KNOWN_BROKEN
+        f"{rel}:{line}  from {module} import ..." for rel, module, line in found if (rel, module) not in _KNOWN_BROKEN
     ]
 
     assert not offenders, (
@@ -149,8 +146,21 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> N
     guarding that path. Failing here forces the entry out along with the fix.
     """
     rel, module = entry
-    assert (_BACKEND / rel).is_file(), f"{rel} moved or was deleted — update or drop this exemption ({issue})"
+    path = _BACKEND / rel
+    assert path.is_file(), f"{rel} moved or was deleted — update or drop this exemption ({issue})"
     assert not _resolves(module), (
         f"{module} now resolves, so the exemption for {rel} ({issue}) is obsolete — "
         "remove it from _KNOWN_BROKEN so the import is guarded again"
+    )
+    # #14851 fixed its import by REMOVING it: the module still does not resolve,
+    # so the assertion above stayed green while the entry exempted a file that
+    # no longer contains the import. An exemption stranded that way is invisible
+    # — it guards nothing and nothing says so.
+    imported = {
+        node.module
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert module in imported, (
+        f"{rel} no longer imports {module}, so the exemption ({issue}) is obsolete — " "remove it from _KNOWN_BROKEN"
     )

@@ -127,9 +127,38 @@ class Permission(str, Enum):
 
 
 class Role(str, Enum):
-    """Standard roles in the AutoBot system."""
+    """Platform RBAC roles — the vocabulary that answers "what may this account do?".
+
+    This is one of **three** unrelated vocabularies in the codebase that use the
+    word "role", and they share string values with nothing at the type level
+    keeping them apart (#14024). They are correctly separate concepts and are
+    deliberately **not** merged; the hazard is that a value from the wrong one
+    type-checks, passes tests, and reads correctly at a glance:
+
+    ===================== ============================================= =========================================
+    vocabulary            defined in                                    members
+    ===================== ============================================= =========================================
+    platform RBAC (here)  ``autobot_shared.auth.permissions.Role``      admin, superadmin, operator, analyst,
+                                                                        editor, user, readonly
+    company membership    ``llc.models.enums.MembershipRole``           owner, admin, member, guest, lead
+    chat message role     ``ssot_constants.CategoryDefaults.ROLE_*``    user, assistant, system
+    ===================== ============================================= =========================================
+
+    Shared literals: ``"admin"`` with ``MembershipRole``, ``"user"`` with the
+    chat constants. ``roles_do_not_collide_test.py`` asserts that overlap is
+    exactly this and fails when a new value collides.
+
+    Never substitute across the three. ``tools/tool_registry`` nearly tied an
+    authorization decision to ``CategoryDefaults.ROLE_USER`` — a presentation
+    constant that merely happens to hold ``"user"`` too (#13934).
+
+    ``SUPERADMIN`` (#13854/#12786) is administrative — it is admitted by
+    ``require_role`` at 17 endpoints and by :func:`is_admin_role` — and holds
+    **no** granular permissions. See ``ROLE_PERMISSIONS`` for why.
+    """
 
     ADMIN = "admin"
+    SUPERADMIN = "superadmin"
     OPERATOR = "operator"
     ANALYST = "analyst"
     EDITOR = "editor"
@@ -137,23 +166,88 @@ class Role(str, Enum):
     READONLY = "readonly"
 
 
-# ``require_role(*roles: Role | str)`` accepts raw strings, so 17 call sites
-# pass ``require_role("admin", "superadmin")`` even though ``superadmin`` is not
-# a member of Role above. Every such guard admits a superadmin, while any
-# hand-rolled ``role == "admin"`` check rejects one -- so a superadmin could
-# perform the write but not the read (#12704, #12717).
+# The roles that answer "is this role administrative?" -- declared as *enum
+# members*, not as loose strings (#13854).
 #
-# This set is the single place that answers "is this role administrative?".
-# It lives here rather than in autobot-backend's auth_rbac because that module
+# It used to be ``frozenset({"admin", "superadmin"})``, a literal set naming a
+# role that was not in the enum above. That shape had a specific hazard, named
+# on #13854: because ``role_has_permission`` short-circuited on it, **adding a
+# member to this frozenset silently granted that member every permission in the
+# system**, shell execution included, with no edit to ROLE_PERMISSIONS and no
+# review of the security layer. A predicate ("is this administrative?") was
+# doubling as a permission source, which is not what it is for.
+#
+# Deriving it from the enum closes that structurally. A role cannot be named
+# here unless it is a Role member, and a Role member cannot exist without a
+# ROLE_PERMISSIONS entry (asserted by ``test_permission_parity`` and by
+# ``roles_are_canonical_test``), so its grants are always written down in the
+# one place a reader looks -- and adding one is an edit a reviewer sees.
+#
+# This lives here rather than in autobot-backend's auth_rbac because that module
 # imports auth_middleware, which needs this answer too -- importing it back the
 # other way closes a cycle (#12786).
-#
-# Making superadmin a first-class Role member is the deeper fix and is still
-# open: this enum drives ROLE_PERMISSIONS for BOTH backends.
-ADMIN_ROLES: frozenset = frozenset({"admin", "superadmin"})
+_ADMINISTRATIVE_ROLES: frozenset = frozenset({Role.ADMIN, Role.SUPERADMIN})
+
+# The string form, for the many callers that hold a raw role string. Derived, so
+# the two can never drift.
+ADMIN_ROLES: frozenset = frozenset(role.value for role in _ADMINISTRATIVE_ROLES)
 
 
-def is_admin_role(role) -> bool:
+def role_value(role: "Role | str | None") -> str:
+    """The role string *role* denotes -- the one safe way to stringify a role (#14944).
+
+    Every role lookup in this codebase keys on a string, and every one of them
+    used to reach that string with ``str(role)``. For a ``(str, Enum)`` mixin
+    that is **wrong**::
+
+        str(Role.ADMIN)   == "Role.ADMIN"     # Enum.__str__ wins
+        f"{Role.ADMIN}"   == "admin"          # mixin __format__ uses the value
+        Role.ADMIN        == "admin"          # str.__eq__ -- True
+        Role.ADMIN in ADMIN_ROLES             # True
+
+    So a member behaves like its value under ``==``, under ``in``, and in an
+    f-string, and *only* ``str()`` disagrees -- which is why every role resolver
+    picked the one spelling that fails, and why nothing noticed. Note this is
+    **not** fixed by a newer Python: ``enum.StrEnum`` (3.11+) would return the
+    value, but ``Role`` is the ``(str, Enum)`` mixin shape, which keeps
+    ``Enum.__str__``.
+
+    Deliberately does **not** change case or strip whitespace. Callers differ --
+    ``is_admin_role`` lowercases, ``canonical_role_permissions`` strips *and*
+    lowercases -- and #13820 showed that applying a normalisation to one role
+    source and not another creates a second identity for the same role that
+    holds some grants and not others. This helper fixes the type coercion only;
+    each caller keeps the normalisation it already had.
+
+    A member of a **different** enum is rejected rather than coerced, and that is
+    the point of doing this by ``isinstance`` rather than by ``.lower()``.
+    ``MembershipRole`` and the chat-role constants share literals with this
+    vocabulary (#14024, #13934), and every one of them is also a ``str``
+    subclass -- so the obvious "fix", ``role.lower()``, quietly returns
+    ``"admin"`` for ``MembershipRole.ADMIN`` and would admit a *company*
+    membership role as a *platform* administrator. ``str()`` happened to reject
+    that by accident; this rejects it on purpose, and loudly.
+
+    A non-role type is likewise a programming error, not data: every caller
+    passes a ``str`` or ``None`` off an authenticated session. Returning False
+    for an object nobody meant to pass would answer an authorization question
+    that was never asked.
+    """
+    if role is None:
+        return ""
+    if isinstance(role, Role):
+        return role.value
+    if isinstance(role, Enum):
+        raise TypeError(
+            f"{type(role).__name__}.{role.name} is not a platform role -- "
+            f"autobot_shared.auth.permissions.Role is the platform RBAC vocabulary (#14024)"
+        )
+    if isinstance(role, str):
+        return role
+    raise TypeError(f"role must be a Role, str or None, not {type(role).__name__}")
+
+
+def is_admin_role(role: "Role | str | None") -> bool:
     """Return True when *role* is administrative (admin or superadmin).
 
     Use this instead of ``role == "admin"`` for imperative checks that cannot
@@ -161,8 +255,17 @@ def is_admin_role(role) -> bool:
     self-access, or that pass an ``is_admin`` flag further down.
 
     Case-insensitive, matching require_role(), which lowercases both sides.
+
+    Accepts a ``Role`` member as well as a raw string (#14944). It previously
+    called ``str(role)``, which yields ``"Role.ADMIN"`` for a member and so
+    reported an administrator as non-administrative -- a failure in the unsafe
+    direction, because ``api/user_management/users.py`` and ``llc/api/companies.py``
+    feed the result into an ``is_platform_admin`` flag passed further down.
+    ``require_role`` already guarded this case; this closes the asymmetry.
+
+    Raises ``TypeError`` for anything that is neither -- see :func:`role_value`.
     """
-    return str(role or "").lower() in ADMIN_ROLES
+    return role_value(role).lower() in ADMIN_ROLES
 
 
 # Canonical role-to-permission mappings.
@@ -226,6 +329,35 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.MCP_HTTP_WRITE,
         Permission.MCP_DESKTOP_CONTROL,
     ],
+    # superadmin holds NO granular permissions. This is deliberate, it is the
+    # decision #13854 asked for, and it is written as an explicit empty entry
+    # rather than an omission so that a reader who looks here finds an answer
+    # instead of a gap (#13854, #12786).
+    #
+    # What superadmin IS: an administrative *predicate*. It is admitted by
+    # ``require_role("admin", "superadmin")`` at 17 endpoints and by
+    # ``is_admin_role`` at the imperative checks that cannot use a dependency.
+    # Those are unchanged by this entry.
+    #
+    # What it is NOT: a permission holder. Granting it admin's set would have
+    # added 54 permissions — ``admin.system``, ``security.manage``,
+    # ``admin.users.write`` and ``allow_shell_execute`` among them — none of
+    # which it held through the SecurityLayer gate before. #13820 measured that
+    # expansion and refused to let it ride along inside a resolver fix; nothing
+    # since has decided to widen the role, so this change does not either. An
+    # authorization change is a separate, deliberate act.
+    #
+    # The effect is that superadmin now resolves the SAME WAY through every
+    # path — Role(), ROLE_PERMISSIONS, canonical_role_permissions,
+    # SecurityLayer.check_permission, role_has_permission and SYSTEM_ROLES all
+    # say "administrative, zero granular grants". Before this it resolved four
+    # different ways, including allow-all at one gate and deny-all at another.
+    #
+    # If superadmin should instead be operational, the change is one line here:
+    #     Role.SUPERADMIN: list(ROLE_PERMISSIONS[Role.ADMIN]),
+    # It is an authorization expansion and needs a security review and a data
+    # migration for the ``roles`` table, which an empty entry does not.
+    Role.SUPERADMIN: [],
     Role.OPERATOR: [
         Permission.API_READ,
         Permission.API_WRITE,
@@ -345,7 +477,7 @@ _ROLE_PERMISSION_VALUES: Dict[Role, frozenset] = {
 }
 
 
-def role_has_permission(role: str | None, permission: str) -> bool:
+def role_has_permission(role: "Role | str | None", permission: str) -> bool:
     """Return True when *role* holds *permission* (a dot-style Permission value).
 
     This is the canonical role/permission check other lookups (e.g.
@@ -353,20 +485,43 @@ def role_has_permission(role: str | None, permission: str) -> bool:
     ``ROLE_PERMISSIONS`` — added here so a second consumer (#14420's
     ``PermissionEnforcementExtension``) does not need its own copy.
 
-    Administrative roles (see ``is_admin_role``) hold every permission. An
-    absent, unrecognised, or non-administrative role that does not carry
-    *permission* is denied — this fails closed rather than defaulting to
-    permissive for a role string this module cannot resolve.
+    Every role is answered from ``ROLE_PERMISSIONS`` and nowhere else. There is
+    no administrative short-circuit: this used to return True for anything
+    :func:`is_admin_role` accepted, which quietly made ``ADMIN_ROLES`` — a
+    predicate — the most permissive permission source in the system, and put
+    this function in direct contradiction with
+    ``SecurityLayer.check_permission``, which denied superadmin the very
+    permissions this granted it (#13854).
+
+    Removing it costs ``admin`` nothing: ``ROLE_PERMISSIONS[Role.ADMIN]``
+    contains every member of ``Permission`` (asserted in
+    ``roles_are_canonical_test``), so the short-circuit never decided an admin
+    call. It changes exactly one role — ``superadmin``, from allow-all to the
+    empty set its ROLE_PERMISSIONS entry declares.
+
+    An absent, unrecognised, or unmapped role is denied — this fails closed
+    rather than defaulting to permissive for a role this module cannot resolve.
+    A ``Role`` member with no ROLE_PERMISSIONS entry likewise denies instead of
+    raising ``KeyError`` at request time, which a bare subscript here did.
+
+    A ``Role`` **member** resolves the same as its value (#14944). This used to
+    build ``Role(str(role).lower())``, which for a member is ``Role("role.admin")``
+    -- a ``ValueError``, caught, and denied. A wrongly-typed argument still
+    raises ``TypeError`` rather than being denied: see :func:`role_value`.
     """
-    if is_admin_role(role):
-        return True
-    if not role:
+    # Resolve the type FIRST, then test the resolved string for emptiness --
+    # the same order as ``_normalise_role`` and ``canonical_role_permissions``.
+    # A leading ``if not role`` would swallow a falsy non-role (0, [], {}, False)
+    # into a quiet False while its siblings raise, which is the inconsistency
+    # #14944 set out to remove rather than reproduce.
+    resolved = role_value(role)
+    if not resolved:
         return False
     try:
-        role_enum = Role(str(role).lower())
+        role_enum = Role(resolved.lower())
     except ValueError:
         return False
-    return permission in _ROLE_PERMISSION_VALUES[role_enum]
+    return permission in _ROLE_PERMISSION_VALUES.get(role_enum, frozenset())
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +581,12 @@ def _build_system_permissions() -> List[tuple]:
 
 _ROLE_META: Dict[Role, Dict] = {
     Role.ADMIN: {"description": "Full administrative access", "priority": 100},
+    # Priority stated explicitly: the ``_ROLE_META.get`` fallback below would
+    # otherwise hand superadmin priority 0, sorting the most privileged role in
+    # the system BELOW readonly (10). 110 keeps the ordering honest — it is
+    # administrative at every gate that admits admin. The empty permission list
+    # in ROLE_PERMISSIONS is what limits it; priority is not a grant.
+    Role.SUPERADMIN: {"description": "Administrative role; holds no granular permissions (#13854)", "priority": 110},
     Role.OPERATOR: {"description": "Operator access for day-to-day service management", "priority": 80},
     Role.ANALYST: {"description": "Analytics and read-heavy access", "priority": 60},
     Role.EDITOR: {"description": "Content and knowledge editing access", "priority": 55},

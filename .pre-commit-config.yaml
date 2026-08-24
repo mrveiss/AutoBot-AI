@@ -8,7 +8,7 @@ repos:
   - repo: local
     hooks:
       - id: record-branch
-        name: Record Branch for Branch Guard (Issue #1670)
+        name: 'Record Branch for Branch Guard (Issue #1670)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch
         language: script
         pass_filenames: false
@@ -167,7 +167,7 @@ repos:
   - repo: local
     hooks:
       - id: no-utcnow-isoformat
-        name: Block datetime.utcnow().isoformat() and friends (#5178 #5238)
+        name: 'Block datetime.utcnow().isoformat() and friends (#5178 #5238)'
         entry: tools/lint/check_no_utcnow_isoformat.py
         language: python
         files: \.py$
@@ -208,7 +208,7 @@ repos:
   - repo: local
     hooks:
       - id: no-src-mock-path
-        name: Block patch("src.*") mock paths in tests (#6987 / #7165)
+        name: 'Block patch("src.*") mock paths in tests (#6987 / #7165)'
         entry: tools/lint/check_no_src_mock_path.py
         language: python
         files: (_test\.py|test_.*\.py)$
@@ -243,7 +243,7 @@ repos:
   - repo: local
     hooks:
       - id: no-literal-ttl-seconds
-        name: Ban literal TTL seconds in Redis calls (#6743 / #7080 / #14206)
+        name: 'Ban literal TTL seconds in Redis calls (#6743 / #7080 / #14206)'
         entry: pipeline-scripts/check_no_literal_ttl_seconds.py
         language: python
         files: \.py$
@@ -300,6 +300,16 @@ repos:
         stages: [pre-commit]
         description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
 
+      - id: workflow-path-filters
+        name: Workflow path filters must match the canonical set (#12986)
+        entry: pipeline-scripts/check_workflow_path_filters.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^\.github/(workflows/.*\.yml|filters/backend-python-paths\.yml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "GitHub cannot include a file in an event `paths:` trigger, so those copies are policed instead: a gate that quietly stops running on a path is the failure this catches"
+
       # #14216: 14 session/audit reports accumulated at the repository root —
       # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
       # and friends. Legitimate work product written to the front door because
@@ -321,7 +331,7 @@ repos:
         description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"
 
       - id: no-open-without-encoding
-        name: Require encoding= on text-mode open() (#3391 / #13151)
+        name: 'Require encoding= on text-mode open() (#3391 / #13151)'
         entry: pipeline-scripts/check_open_encoding.py
         language: python
         files: \.py$
@@ -353,7 +363,7 @@ repos:
   - repo: local
     hooks:
       - id: git-safe-directory-required
-        name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
+        name: 'Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)'
         entry: tools/lint/check_git_safe_directory.py
         language: python
         # #14196: parses the YAML instead of scanning lines, so it needs PyYAML.
@@ -373,7 +383,7 @@ repos:
   - repo: local
     hooks:
       - id: no-deprecated-ansible-facts
-        name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
+        name: 'Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)'
         entry: tools/lint/check_no_deprecated_ansible_facts.py
         language: python
         # #14196: .yml/.yaml are parsed with PyYAML instead of scanned line by
@@ -538,7 +548,7 @@ repos:
   - repo: local
     hooks:
       - id: worktree-branch-guard
-        name: Worktree Branch Guard (Issue #1654)
+        name: 'Worktree Branch Guard (Issue #1654)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard
         language: script
         pass_filenames: false
@@ -551,7 +561,7 @@ repos:
   - repo: local
     hooks:
       - id: target-branch-guard
-        name: Target Branch Guard (Issue #4113)
+        name: 'Target Branch Guard (Issue #4113)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
         language: script
         pass_filenames: false
@@ -563,7 +573,7 @@ repos:
   - repo: local
     hooks:
       - id: detect-mass-deletions
-        name: Detect Mass Deletions (Issue #4111)
+        name: 'Detect Mass Deletions (Issue #4111)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-detect-mass-deletions
         language: script
         pass_filenames: false
@@ -577,7 +587,7 @@ repos:
   - repo: local
     hooks:
       - id: no-tracked-symlink
-        name: No Tracked Symlink Entries (Issue #14137)
+        name: 'No Tracked Symlink Entries (Issue #14137)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
         language: script
         pass_filenames: false
@@ -590,7 +600,7 @@ repos:
   - repo: local
     hooks:
       - id: no-gitignore-shadow
-        name: No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)
+        name: 'No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
         language: script
         pass_filenames: false
@@ -623,7 +633,12 @@ repos:
         name: Detect Hardcoded Values (Strict)
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
-        types: [python, ts, vue]
+        # #14371: was [python, ts, vue]. The merged rule set scans .sh/.yml/.yaml
+        # too — the CI tree scanner has since #14316, specifically because
+        # Ansible playbooks and shell utilities are where hardcoded hosts, paths
+        # and accounts actually get typed. A hook whose `types` were narrower
+        # than its own rules would be a guard narrower than its subject.
+        types_or: [python, ts, vue, javascript, shell, yaml]
         # Generated clients are machine-produced from the OpenAPI schema; a
         # "hardcoded value" in one is a symptom of the schema, not of code
         # anyone wrote, so scanning them finds nothing actionable.
@@ -645,7 +660,7 @@ repos:
   - repo: local
     hooks:
       - id: function-length-check
-        name: Function Length Check (Issue #620)
+        name: 'Function Length Check (Issue #620)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
@@ -657,7 +672,7 @@ repos:
   - repo: local
     hooks:
       - id: no-direct-redis
-        name: No Direct Redis Connections in Production Code (Issue #1086)
+        name: 'No Direct Redis Connections in Production Code (Issue #1086)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
         language: script
         types: [python]
@@ -681,7 +696,7 @@ repos:
   - repo: local
     hooks:
       - id: no-new-health-route
-        name: No New /health Routes Outside system_health.py (Issue #3333)
+        name: 'No New /health Routes Outside system_health.py (Issue #3333)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-health-route
         language: script
         types: [python]
@@ -693,7 +708,7 @@ repos:
   - repo: local
     hooks:
       - id: no-new-workflow-step
-        name: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)
+        name: 'No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-workflow-step
         language: script
         types: [python]
@@ -705,7 +720,7 @@ repos:
   - repo: local
     hooks:
       - id: no-new-status-enum
-        name: No New *Status(Enum) Outside Canonical (Issue #6973)
+        name: 'No New *Status(Enum) Outside Canonical (Issue #6973)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-status-enum
         language: script
         types: [python]
@@ -723,7 +738,7 @@ repos:
   - repo: local
     hooks:
       - id: no-tag-pinned-action
-        name: No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)
+        name: 'No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action
         language: script
         files: ^\.github/(workflows|actions)/.*\.ya?ml$
@@ -735,7 +750,7 @@ repos:
   - repo: local
     hooks:
       - id: no-print-console
-        name: No print()/console.* in Production Code (Issue #1082)
+        name: 'No print()/console.* in Production Code (Issue #1082)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-print-console
         language: script
         pass_filenames: false
@@ -749,7 +764,7 @@ repos:
   - repo: local
     hooks:
       - id: branch-guard
-        name: Branch Guard — Abort on Silent Branch Switch (Issue #1670)
+        name: 'Branch Guard — Abort on Silent Branch Switch (Issue #1670)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard
         language: script
         pass_filenames: false
@@ -763,7 +778,7 @@ repos:
   - repo: local
     hooks:
       - id: warn-untracked-files
-        name: Warn on Untracked Source Files (Issue #1503)
+        name: 'Warn on Untracked Source Files (Issue #1503)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked
         language: script
         pass_filenames: false
@@ -780,7 +795,7 @@ repos:
   - repo: local
     hooks:
       - id: install-post-checkout
-        name: Install post-checkout hook (Issue #1692)
+        name: 'Install post-checkout hook (Issue #1692)'
         entry: bash -c 'SRC="scripts/hooks/post-checkout"; DST="$(git rev-parse --git-common-dir)/hooks/post-checkout"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-checkout hook installed" || true'
         language: system
         pass_filenames: false
@@ -794,7 +809,7 @@ repos:
   - repo: local
     hooks:
       - id: install-post-commit
-        name: Install post-commit hook (Issue #2416)
+        name: 'Install post-commit hook (Issue #2416)'
         entry: bash -c 'SRC="scripts/hooks/post-commit"; DST="$(git rev-parse --git-common-dir)/hooks/post-commit"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-commit hook installed" || true'
         language: system
         pass_filenames: false

@@ -120,18 +120,138 @@ To add a new hook to CI:
 Run the detection script manually to audit the entire codebase:
 
 ```bash
-# Scan entire codebase for violations
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+# Scan the whole tree; one-line summary
+./pipeline-scripts/detect-hardcoded-values.sh
 
-# Get detailed report with line numbers
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh | less
+# Detailed report, including the known-backlog count
+./pipeline-scripts/detect-hardcoded-values.sh --report | less
 
-# Scan specific file or directory
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
+# Machine-readable, as ssot-coverage.yml consumes it
+./pipeline-scripts/detect-hardcoded-values.sh --json
+
+# Fail if a baseline entry no longer matches anything
+./pipeline-scripts/detect-hardcoded-values.sh --audit-baseline
+
+# Scan a specific file list (the staged-files entry point takes argv)
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values autobot-backend/api/chat.py
 ```
 
-**Script location**: `autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh`
+### Where the rules live (#14371)
+
+There is **one** rule set, in `scripts/lib/hardcoded-value-rules.sh`. Two thin
+entry points read it:
+
+| Entry point | Scope | On a violation |
+|---|---|---|
+| `pipeline-scripts/detect-hardcoded-values.sh` | a tree | always exits 0 on a completed scan; the verdict travels in the JSON `status` field, which `ssot-coverage.yml` enforces as-is. A non-zero exit means the scan did not finish, and that also fails the job |
+| `autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values` | staged files, or an explicit argv list from CI | exits 1 — this is the one that stops a commit |
+
+They differ only in where the lines come from and what they do with the
+verdict. Adding a rule means adding it to the library, once, and both entry
+points pick it up.
+
+`pipeline-scripts/hardcoded_values_baseline.txt` records the findings that
+already existed when the three former detectors were merged. It only ever
+shrinks: a finding that is not in it fails the build, and every run prints how
+many baselined findings it suppressed.
+
+### What blocks a build (#14914)
+
+**Severity decides, not class.** Every `VIOLATION` blocks — both the `ssot`
+class and the `other` class, and this is now true at *both* entry points. The
+pre-commit hook has always counted `^VIOLATION|` class-agnostically and exited
+1; the tree scan keyed its verdict on `ssot_violations` alone. The same finding,
+from the same rule in the same library, blocked a commit and passed CI — the
+commit-time gate was stricter than the merge-time one, which is backwards, since
+the local one is the one a developer can skip. The two classes differ in what the fix *looks
+like*: an `ssot` finding names the exact config key that replaces the value, an
+`other` finding names the family. They do not differ in whether the value
+belongs in the source, so they do not differ in whether they block.
+
+`WARNING` is the advisory severity and does not block. There is exactly one
+today — `offset=0` — and it is advisory because the shape is too common to gate
+on, not because of the class it happens to carry. Warnings are counted
+separately and are not part of `total_violations`.
+
+So: **an advisory rule emits `WARNING` from the rule itself.** Do not park a
+rule outside the gate by choosing a class the verdict does not read — that was
+the #14914 defect. Eight of the twelve emit sites (paths, DSNs, URLs, accounts,
+roles, categories, timeouts, magic numbers) were detected, counted, JSON-encoded
+and printed while the verdict read `ssot_violations` alone, so nine hardcoded
+`/opt/autobot` paths sat on the merged base under a green check.
+
+### "STALE baseline entry" — what to do (#14912)
+
+If `ssot-coverage` fails with `N baseline entr(ies) … no longer match anything`,
+you have almost certainly just **fixed or moved** a hardcoded value. That is the
+outcome the guard wants; the baseline simply still lists it. Recover with one
+command:
+
+```bash
+./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline
+```
+
+then commit the changed baseline alongside your fix.
+
+`--prune-baseline` **only ever removes**. It cannot add a key or raise a count,
+by construction: it iterates the keys already in the baseline and writes
+`min(baseline_count, found_count)`. So it cannot be used to silence a new
+finding — that direction is blocked independently by
+`pipeline-scripts/check_baseline_no_growth.sh`, which fails on any new key or
+increased count.
+
+It also refuses to run when the scan found **nothing**. An empty result and a
+broken detector are indistinguishable, and this is the one path that rewrites
+the record, so it will not turn a failed scan into an emptied baseline.
+
+Why the audit blocks rather than warns: an entry naming a path that has moved
+exempts nothing today, but silently re-permits the value the moment that path
+comes back.
+
+### Adding a baseline entry (#14919)
+
+There is exactly one route, and it does not exist for the case the guard was
+built to stop. An entry may be **added** only when both hold:
+
+1. **The file is byte-identical to the base ref.** A detection-rule change that
+   suddenly matches code which was already in the tree is a legitimate
+   addition — nothing in your change wrote that value. A file your change
+   *touches* is the bypass itself (hardcode a value, append its key in the same
+   commit) and has **no override at all**: not an env var, not a label, not a
+   marker. The two cases are separated by the diff, not by permission.
+2. **This change adds a written justification directly above the entry**, of the
+   form:
+
+   ```
+   # reviewed: #<issue> why this cannot be fixed at the source
+   1|ssot|path/to/file.py|value
+   ```
+
+   It must be a *new* line in your diff. A justification already in the file
+   covers the entry it was written for, not a later append that happens to sit
+   under it.
+
+The justification is a preceding **comment**, never a suffix on the entry: the
+key is everything after the first `|`, so a trailing `# reviewed: …` would
+change the key until it matched no finding at all.
+
+An entry naming a **symlink** is refused. A symlink's content is the target
+path, so "byte-identical to the base ref" stays true however much the file it
+points at was rewritten — and the detector never attributes a finding to a
+symlink path anyway, because its tree walk does not follow them. Baseline the
+real path.
+
+An entry whose key does not carry **exactly two** `|` separators is refused
+outright rather than parsed. `|` is a legal byte in a filename and the record
+format does not escape it, so a crafted path can make the file field resolve to
+an unrelated, untouched decoy — which was a working bypass of this route until
+the check was added.
+
+Every permitted addition is printed in full and annotated on the run
+(`::warning::`), so growth is loud rather than silent. A **rename** of a file
+carrying a baselined value is deliberately not covered — the new path is absent
+at the base ref, so the addition is refused, and loosening that to "the content
+existed somewhere at base" would also admit a verbatim copy.
 
 ---
 
@@ -309,7 +429,13 @@ git commit --no-verify -m "Your message"
 ### Script Location
 
 ```text
-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+source scripts/lib/hardcoded-value-rules.sh          the rules — SOURCED by both
+                                                     entry points, never executed,
+                                                     so it is tracked mode 644
+./pipeline-scripts/detect-hardcoded-values.sh        tree-scan entry point (755)
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
+                                                     staged-files entry point (755)
+pipeline-scripts/hardcoded_values_baseline.txt       the measured backlog
 ```
 
 ### What It Detects
@@ -365,13 +491,10 @@ bash infrastructure/shared/scripts/install-pre-commit-hooks.sh
 If needed, install manually:
 
 ```bash
-# Make script executable
-chmod +x autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
-
-# Create pre-commit hook
-cat > .git/hooks/pre-commit-hardcode-check << 'EOF'
-#!/bin/bash
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
+# Nothing to install by hand: the hook is registered in .pre-commit-config.yaml
+# as `detect-hardcoded-values` and runs on every commit once `pre-commit
+# install` has been run. To invoke it directly against what is staged:
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
 if [ $? -ne 0 ]; then
     echo "Hardcoded values detected. Fix violations before committing."
     exit 1
@@ -402,10 +525,10 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 
 ```bash
 # Before starting work
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+./pipeline-scripts/detect-hardcoded-values.sh
 
-# After making changes
-./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
+# After making changes, against just what you staged
+bash autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
 ```
 
 ### 3. Keep .env.example Updated

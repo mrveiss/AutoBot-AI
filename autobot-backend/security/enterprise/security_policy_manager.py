@@ -22,6 +22,7 @@ import yaml
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
@@ -684,7 +685,7 @@ class SecurityPolicyManager:
             "policy_name": policy.name,
             "compliant": True,
             "violation_type": None,
-            "severity": "low",
+            "severity": Severity.LOW.value,
             "details": {},
         }
 

@@ -49,20 +49,42 @@ class PerformanceBenchmark:
         self.metrics = []
         self.start_time = None
         self.end_time = None
+        self.start_rss_mb = None
 
     def start_measurement(self):
         """Start performance measurement"""
         self.start_time = time.perf_counter()
+        # #14930: record the baseline so end_measurement can report the memory
+        # THIS operation cost. See end_measurement for why the absolute figure
+        # was the wrong number.
+        self.start_rss_mb = psutil.Process().memory_info().rss / 1024 / 1024
 
     def end_measurement(self):
-        """End performance measurement and record metrics"""
+        """End performance measurement and record metrics.
+
+        ``memory_usage`` is the RSS *delta* across the measured region, not the
+        process's absolute RSS (#14930).
+
+        The absolute figure made ``assert stats["max_memory_mb"] < 500`` a
+        measurement of the interpreter's import footprint rather than of the
+        operation under test: importing the orchestrator, knowledge base,
+        memory manager and LLM service leaves a pytest-xdist worker at ~1.6 GB
+        before the first benchmark runs, so the assertion reported
+        ``1644.55 > 500`` and named it "Memory usage too high" on every run. It
+        could not have passed, and it could not have caught a regression in the
+        code it names — a budget that is spent before the test starts is not a
+        budget. The delta is the quantity the assertion always meant.
+        """
         self.end_time = time.perf_counter()
         duration = self.end_time - self.start_time
+        rss_mb = psutil.Process().memory_info().rss / 1024 / 1024
+        baseline_mb = getattr(self, "start_rss_mb", rss_mb)
         self.metrics.append(
             {
                 "duration": duration,
                 "timestamp": time.time(),
-                "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,  # MB
+                "memory_usage": rss_mb - baseline_mb,  # MB grown during this measurement
+                "rss_mb": rss_mb,  # absolute, kept for reporting only
                 "cpu_percent": psutil.Process().cpu_percent(),
             }
         )
@@ -145,7 +167,13 @@ class TestLLMServicePerformance:
 
             # Performance assertions
             assert stats["avg_duration"] < 2.0, f"LLM response too slow for prompt length {len(prompt)}"
-            assert stats["max_memory_mb"] < 500, "Memory usage too high"
+            # #14930: a delta budget. 500 MB of GROWTH from one mocked chat()
+            # call would be a genuine leak; 500 MB of absolute RSS is just
+            # AutoBot being imported.
+            assert stats["max_memory_mb"] < 500, (
+                f"one measured operation grew RSS by {stats['max_memory_mb']:.1f} MB "
+                f"(budget 500 MB) for prompt length {len(prompt)}"
+            )
 
         # Log results for analysis
         print("\nLLM Performance Results:")  # noqa: print

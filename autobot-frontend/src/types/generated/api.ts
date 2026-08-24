@@ -82648,6 +82648,18 @@ export interface components {
          * MembershipRole
          * @description Role of a human user within an LLC company (GH#8223).
          *
+         *     NOT the platform RBAC vocabulary. Three unrelated enums use the word "role"
+         *     and share string values with nothing at the type level keeping them apart
+         *     (#14024) — this one answers "what is this person within this company?",
+         *     ``autobot_shared.auth.permissions.Role`` answers "what may this account do
+         *     on the platform?", and ``CategoryDefaults.ROLE_*`` answers "who wrote this
+         *     chat message?".
+         *
+         *     ``"admin"`` is in this vocabulary AND in ``auth.permissions.Role``, so a
+         *     company admin and a platform admin are the same string and different
+         *     authority. Never pass one where the other is expected; the overlap is
+         *     asserted in ``security/roles_do_not_collide_test.py``.
+         *
          *     Member order matches the deployed (migration-built) enum label order so a
          *     create_all-built ``membershiprole`` sorts identically to a migration-built
          *     one (GH#10076): migration 031 created ('owner','admin','member','guest') and
@@ -92213,10 +92225,35 @@ export interface components {
         };
         /**
          * SecretType
-         * @description Secret type enumeration.
+         * @description What kind of credential a secret is (#13846).
+         *
+         *     Canonical union of three definitions that classified the same thing under
+         *     two names, in three layers:
+         *
+         *     * ``models.secret.SecretType`` — the persisted classification on the
+         *       ``secrets`` row. Had all nine concrete kinds.
+         *     * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+         *       Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+         *       accept the one kind the row could already store.
+         *     * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+         *       type may request. Had six of the nine, duplicated verbatim down to the
+         *       identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+         *       With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+         *       only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+         *       "every available secret" grant standing in for the most specific one.
+         *
+         *     Every member of every side is here. ``str`` subclass so the persisted
+         *     ``secrets.type`` column, which stores these values, keeps comparing and
+         *     serializing exactly as before.
+         *
+         *     ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+         *     a kind of credential. It is legal in a requirement (an agent that may use
+         *     any secret) and illegal at rest — nothing may be stored with type "any".
+         *     Use :meth:`concrete` for every persistence or presentation surface, and
+         *     :meth:`expand` to resolve a requirement set into concrete kinds.
          * @enum {string}
          */
-        SecretType: "ssh_key" | "password" | "api_key" | "token" | "certificate" | "database_url" | "infrastructure_host" | "other";
+        SecretType: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other" | "any";
         /**
          * SecretTypesData
          * @description Response data for get_secret_types.
@@ -93558,9 +93595,26 @@ export interface components {
          *     "unknown", "info", "minimal") and consolidates 10+ duplicate enums
          *     (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
          *     DebtSeverity, RiskLevel — all collapse to this enum.
+         *
+         *     #14956 added WARNING, DEGRADED and ERROR. They are not synonyms of an
+         *     existing rung and were NOT folded into one, because each is a value the
+         *     platform already emits across a boundary that would change if it moved:
+         *
+         *     * ``warning`` is a Prometheus label value — ``PerformanceMonitor``
+         *       publishes ``update_active_alerts("warning", ...)`` and the shipped
+         *       alert rules carry ``severity: warning``. Mapping it to ``medium``
+         *       would rename a scraped label.
+         *     * ``degraded`` is serialised into the causal-analysis API response and
+         *       grades partial impact between ``warning`` and ``critical``.
+         *     * ``error`` is the rung the capability audit grades findings at, kept
+         *       distinct from ``warning`` because the two are counted separately.
+         *
+         *     So this enum is the severity *vocabulary*. Numeric risk grading uses the
+         *     narrower ``score_ladder()`` — see that method for why the distinction is
+         *     load-bearing rather than cosmetic.
          * @enum {string}
          */
-        Severity: "unknown" | "info" | "minimal" | "low" | "medium" | "high" | "critical";
+        Severity: "unknown" | "info" | "minimal" | "low" | "warning" | "medium" | "degraded" | "high" | "error" | "critical";
         /**
          * SeveritySummary
          * @description Summary of issues by severity.

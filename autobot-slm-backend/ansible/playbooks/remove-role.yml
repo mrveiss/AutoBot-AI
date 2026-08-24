@@ -22,6 +22,26 @@
 #     -i inventory/production.yml -i inventory/slm-nodes.yml \
 #     --limit <node_id> \
 #     -e "role_name=redis systemd_service=redis-stack-server role_target_dir=autobot-redis backup_before_removal=true"
+#
+# #14914: the removal paths below resolve their install root from
+# `{{ autobot.base_dir }}` (inventory/group_vars/all.yml), not from a
+# `/opt/autobot` literal. They were the nine hardcoded-value findings sitting
+# unbaselined on Dev_new_gui while the gate that reported them keyed its verdict
+# on a different class.
+#
+# This indirection is load-bearing in BOTH directions, and the second one is
+# easy to miss: tests/test_cleanup_never_destroys_data_14856.py is a static
+# guard that expands these loops and resolves each removal target to a concrete
+# path, so it can assert no component directory is deleted outside the guarded
+# primitive and that /opt/autobot/config is never scheduled at all. It matches
+# on a literal `/opt/` prefix. A first attempt at this change routed the paths
+# through the variable WITHOUT teaching that guard to resolve it, and every
+# target here collapsed to a non-`/opt/` placeholder: the protected-config check
+# kept passing with nothing left to match.
+#
+# So the guard now resolves autobot.base_dir out of group_vars, and both
+# directions are mutation-proved. If this root ever moves again, change it in
+# group_vars — and re-run that guard, do not assume it followed.
 
 - name: "Remove role {{ role_name }} from node"
   hosts: all
@@ -170,11 +190,46 @@
     # =======================================================================
     # DISK CLEANUP
     # =======================================================================
+    # #14856: this removed the component directory outright, so removing a role
+    # from a node that still held its databases or key material destroyed them
+    # silently. Removing a role is a legitimate destructive operation, but the
+    # data inside it is not part of what the operator asked to remove — so the
+    # removal goes through the shared guard, which refuses and reports when the
+    # directory holds data/ instead of taking it along.
     - name: "Remove role application directory"
-      ansible.builtin.file:
-        path: "/opt/autobot/{{ role_target_dir }}"
-        state: absent
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/remove_component_dir.yml
       when: role_target_dir is defined and role_target_dir | length > 0
+      vars:
+        caller_role: "Remove role"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ role_target_dir }}"
+        remove_reason: "role {{ role_target_dir }} is being removed from this node"
+
+    # #14856: this line used to read "<dir> removed" whenever a target dir was
+    # named, regardless of what the removal did. Now that the removal can refuse
+    # — because the directory holds data/ — a summary that reports it as removed
+    # is the same defect this issue is about: a claim in the prose that the code
+    # does not implement. So it reports what the filesystem says afterwards.
+    - name: "Re-check the role directory after removal (#14856)"
+      ansible.builtin.stat:
+        path: "{{ autobot.base_dir }}/{{ role_target_dir }}"
+      register: _role_dir_after
+      when: role_target_dir is defined and role_target_dir | length > 0
+      become: true
+
+    - name: "Record what the disk cleanup actually did (#14856)"
+      # #14914: the install root was spelled out twice inside the expression
+      # below, once per branch. Hoisted to a single task-scoped var so the path
+      # this summary NAMES is the same string in both branches and cannot drift
+      # between them.
+      vars:
+        _role_dir: "{{ autobot.base_dir }}/{{ role_target_dir | default('') }}"
+      ansible.builtin.set_fact:
+        _disk_cleanup_summary: >-
+          {{ 'skipped (no target dir)'
+             if not (role_target_dir is defined and role_target_dir | length > 0)
+             else (_role_dir + ' removed'
+                   if not (_role_dir_after.stat.exists | default(true))
+                   else _role_dir + ' KEPT - it holds data, see the REFUSING message above') }}
 
     - name: "Clean orphan user-level Python packages"
       ansible.builtin.file:
@@ -196,7 +251,7 @@
           - Host: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})
           - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
           - Service file: {{ 'skipped (dpkg conffile)' if (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'dpkg_owned' else 'removed' }}
-          - Disk cleanup: {{ '/opt/autobot/' + role_target_dir + ' removed' if (role_target_dir is defined and role_target_dir | length > 0) else 'skipped (no target dir)' }}
+          - Disk cleanup: {{ _disk_cleanup_summary }}
           - Backup: {{ _backup_path | default('none') if (_backup_performed | default(false)) else 'skipped' }}
 
   handlers:

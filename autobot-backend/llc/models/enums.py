@@ -308,6 +308,18 @@ class BoardType(str, Enum):
 class MembershipRole(str, Enum):
     """Role of a human user within an LLC company (GH#8223).
 
+    NOT the platform RBAC vocabulary. Three unrelated enums use the word "role"
+    and share string values with nothing at the type level keeping them apart
+    (#14024) — this one answers "what is this person within this company?",
+    ``autobot_shared.auth.permissions.Role`` answers "what may this account do
+    on the platform?", and ``CategoryDefaults.ROLE_*`` answers "who wrote this
+    chat message?".
+
+    ``"admin"`` is in this vocabulary AND in ``auth.permissions.Role``, so a
+    company admin and a platform admin are the same string and different
+    authority. Never pass one where the other is expected; the overlap is
+    asserted in ``security/roles_do_not_collide_test.py``.
+
     Member order matches the deployed (migration-built) enum label order so a
     create_all-built ``membershiprole`` sorts identically to a migration-built
     one (GH#10076): migration 031 created ('owner','admin','member','guest') and
