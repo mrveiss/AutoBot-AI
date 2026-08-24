@@ -104,6 +104,32 @@ describe('useCytoscapeLibrary', () => {
     expect(onReady).not.toHaveBeenCalled()
   })
 
+  it('retry() after a failed setup re-imports and clears the error (#14770)', async () => {
+    // The `use()` throw leaves `cytoscapeModule` assigned, so a guard keyed on
+    // that ref alone treated the broken load as "already loaded" and the Retry
+    // button could never recover — `ensureReady()` bailed on `error.value`
+    // forever. The guard also has to see that the last attempt failed.
+    const useSpy = vi.mocked(
+      (mockCytoscape.default as unknown as { use: (ext: unknown) => void }).use,
+    )
+    useSpy.mockImplementationOnce(() => {
+      throw new Error('fcose register failed')
+    })
+
+    const onReady = vi.fn()
+    const { error, ensureReady } = useCytoscapeLibrary(onReady)
+
+    await ensureReady()
+    expect(error.value).toContain('fcose register failed')
+    expect(onReady).not.toHaveBeenCalled()
+
+    await ensureReady()
+
+    expect(error.value).toBe('')
+    expect(onReady).toHaveBeenCalledTimes(1)
+    expect(useSpy).toHaveBeenCalledTimes(2)
+  })
+
   it('retry() re-runs ensureReady() fire-and-forget', async () => {
     const onReady = vi.fn()
     const { retry, ensureReady } = useCytoscapeLibrary(onReady)

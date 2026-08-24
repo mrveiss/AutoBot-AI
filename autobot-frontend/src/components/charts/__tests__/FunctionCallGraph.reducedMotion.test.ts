@@ -115,6 +115,21 @@ async function openClusterView(w: Awaited<ReturnType<typeof mountGraph>>) {
   await flushPromises()
 }
 
+/**
+ * Flip a view to its grid layout. Both views default to the force layout, so
+ * without this the grid branch of each layout function is never executed and a
+ * hardcoded `animate: true` there survives every assertion in this file — the
+ * gap #14806 was filed about, one branch further in.
+ */
+async function toggleLayoutIn(
+  w: Awaited<ReturnType<typeof mountGraph>>,
+  view: '.network-view' | '.cluster-view',
+) {
+  const selector = `${view} button[title="${en.charts.callGraph.controls.toggleLayout}"]`
+  await w.get(selector).trigger('click')
+  await flushPromises()
+}
+
 describe('graph layout honours prefers-reduced-motion (#14770)', () => {
   it('animates the layout by default', async () => {
     stubMatchMedia(false)
@@ -134,6 +149,23 @@ describe('graph layout honours prefers-reduced-motion (#14770)', () => {
     const w = await mountGraph()
 
     expect(layoutSpy).toHaveBeenCalled()
+    expect(animateFlags()).toContain(false)
+    expect(animateFlags()).not.toContain(true)
+    w.unmount()
+  })
+
+  it('honours it in the grid layout too, not just the force one', async () => {
+    stubMatchMedia(true)
+
+    const w = await mountGraph()
+    layoutSpy.mockClear()
+
+    await toggleLayoutIn(w, '.network-view')
+
+    // Guard first: a toggle that ran no layout would satisfy the
+    // reduced-motion assertion without ever reaching the grid branch.
+    expect(layoutSpy).toHaveBeenCalled()
+    expect(layoutSpy.mock.calls.map((c) => (c[0] as { name?: string })?.name)).toContain('grid')
     expect(animateFlags()).toContain(false)
     expect(animateFlags()).not.toContain(true)
     w.unmount()
@@ -167,6 +199,21 @@ describe('the cluster layout honours it too (#14806)', () => {
     await openClusterView(w)
 
     expect(layoutSpy).toHaveBeenCalled()
+    expect(animateFlags()).toContain(false)
+    expect(animateFlags()).not.toContain(true)
+    w.unmount()
+  })
+
+  it('honours it in the cluster grid layout too', async () => {
+    stubMatchMedia(true)
+    const w = await mountGraph()
+    await openClusterView(w)
+    layoutSpy.mockClear()
+
+    await toggleLayoutIn(w, '.cluster-view')
+
+    expect(layoutSpy).toHaveBeenCalled()
+    expect(layoutSpy.mock.calls.map((c) => (c[0] as { name?: string })?.name)).toContain('grid')
     expect(animateFlags()).toContain(false)
     expect(animateFlags()).not.toContain(true)
     w.unmount()
