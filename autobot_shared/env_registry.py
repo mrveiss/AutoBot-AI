@@ -1926,3 +1926,21 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS",
+        type=float,
+        default=1.0,
+        description=(
+            "Seconds a test's live-service precondition probe waits for a TCP connect "
+            "before reporting the service as absent and skipping "
+            "(autobot_shared/live_service_probe.py, #14930). Short by default: a "
+            "refused loopback connect returns immediately, and this runs once per "
+            "endpoint per process. Raise it when probing a fleet host across a link "
+            "slow enough that a live service could be mistaken for a missing one."
+        ),
+        component="testing",
+        range=(0.1, 60.0),
+    )
+)

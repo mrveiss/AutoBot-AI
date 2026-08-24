@@ -20,12 +20,45 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.live_service_probe import require_live_endpoint
 from autobot_shared.paths import project_root
 from constants.network_constants import ServiceURLs
 
 pytestmark = pytest.mark.integration
 
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
+
+
+# ``test_celery_worker_status`` reads ``logs/celery-worker.log`` off disk and
+# issues no HTTP at all, so a backend that is down does not stop it — it was
+# passing before #14930 and must keep passing. A module-wide guard would have
+# traded a red result for lost coverage, which is the wrong trade and was caught
+# by comparing the skip count (7) against the number of tests that actually
+# failed on a refused connection (6).
+_NEEDS_NO_BACKEND = ("test_celery_worker_status",)
+
+
+@pytest.fixture(autouse=True)
+def _require_live_backend(request) -> None:
+    """Skip when no backend is listening, instead of failing on a refused socket (#14930).
+
+    The six checks that dial ``BASE_URL`` over real HTTP reported
+    ``ConnectionRefusedError`` as test failures on a runner with no backend up —
+    a red result that says nothing about the code under test and trained the
+    whole marker-excluded suite to be ignored. A skip naming the absent service
+    is the honest report; they still run, and still fail for real, wherever a
+    backend is actually up.
+    """
+    stranded = [name for name in _NEEDS_NO_BACKEND if name not in globals()]
+    assert not stranded, (
+        f"_NEEDS_NO_BACKEND names {stranded}, which no longer exist in this module. "
+        f"A rename stranded the exemption: it now exempts nothing, silently."
+    )
+
+    if request.node.name in _NEEDS_NO_BACKEND:
+        return
+
+    require_live_endpoint(ServiceURLs.BACKEND_API, what="the AutoBot backend API")
 
 
 def test_health():

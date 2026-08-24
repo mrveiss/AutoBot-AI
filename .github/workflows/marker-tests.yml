@@ -30,6 +30,33 @@
 #     Redis, so one is provided below rather than letting the first night fail
 #     for infrastructure reasons and calling it "the point". #13286 stays open
 #     until a run is green or its remaining failures have been triaged.
+#
+#     TRIAGED under #14930. The run on 2026-08-24 read
+#     `19 failed, 35 passed, 12 skipped, 19 errors`. All 38 non-passes were one
+#     defect class in two disguises: a live service the runner does not have,
+#     reported as a hard result instead of a stated non-result.
+#       * 19 errors — `redis_service_api_integration_test.py` had no
+#         `backend_url` fixture on this tree at all, so every test in it errored
+#         at setup. The fixture is now defined in the module.
+#       * 16 failures — `infrastructure_integration_test.py` (6) and
+#         `voice_integration_test.py` (10) dial a backend on :8001 and a TTS
+#         worker on :8083 over real HTTP. Both now skip, naming the absent
+#         service, via `autobot_shared.live_service_probe`.
+#       * 2 failures — the two knowledge-base tests. NOT an infrastructure gap:
+#         the Redis below is healthy, but `autobot-backend/conftest.py` replaces
+#         `autobot_shared.redis_client` with a socket-free stand-in for every
+#         backend item, markers included, so `get_redis_client()` returns None
+#         whatever Redis is running. Tracked as #14932; they skip on that
+#         structural condition until it lands, then run for real.
+#       * 1 failure — `performance_benchmarks_test.py` asserted absolute process
+#         RSS under 500 MB. A worker sits at ~1.6 GB from imports alone before
+#         the first benchmark, so the budget was spent before the test started.
+#         Now measured as the RSS delta across the operation, which is what the
+#         assertion always meant.
+#
+#     A skip is a real outcome here, not a pass. "Report marker coverage" below
+#     prints the counts and fails the job if the selection collected nothing, so
+#     the difference is on the run page instead of inferred from a log.
 #   * No coverage gate. Coverage is measured by the PR gate; adding tracing here
 #     would roughly double the runtime for no added assertion.
 #   * Two invocations, same reason as ci.yml: autobot-backend/ and
@@ -48,17 +75,16 @@ on:
   # workflows named marker-tests.yml" because GitHub had never registered it.
   #
   # That changes the moment the integration branch is promoted to the default
-  # branch — the cron would start firing immediately. Its one observed run is
-  # RED (11 failed, 7 passed, 40 errors), so registering it as-is would install
-  # a nightly that fails every night against the default branch. A permanently
-  # red scheduled workflow is not a signal; it is noise that trains everyone to
+  # branch — the cron would start firing immediately. A permanently red
+  # scheduled workflow is not a signal; it is noise that trains everyone to
   # ignore the one place marker-excluded regressions would show up.
   #
   # So the cron is commented rather than deleted — it is correct, and it is what
-  # #13286 exists to deliver. Restore it as the closing step of that issue, once
-  # the 11 failures and 40 collection errors are triaged and the suite is green.
-  # `workflow_dispatch` below stays live, so the suite remains runnable on demand
-  # to verify exactly that.
+  # #13286 exists to deliver. #14930 triaged every failure and error the suite
+  # was carrying (see the block above); restore the cron as the closing step of
+  # #13286, and raise MARKER_MIN_PASSED to the figure the run then reports so a
+  # later collapse cannot pass unnoticed. `workflow_dispatch` below stays live,
+  # so the suite remains runnable on demand to verify exactly that.
   #
   # schedule:
   #   # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
@@ -118,6 +144,17 @@ jobs:
       # Single source for the marker expression: the schedule uses the default,
       # a manual dispatch may narrow it to one marker while triaging.
       MARKER_EXPRESSION: ${{ github.event.inputs.markers || 'integration or slow or distributed or performance' }}
+      # Floor for the number of marker-carrying tests that must PASS (#14930).
+      # This is a ratchet, not a target: raise it when the suite genuinely
+      # covers more, and lower it only with a stated reason for which tests
+      # stopped running. A silent drop is the failure mode it exists to catch —
+      # the suite ran 35 passing tests while reading as an undifferentiated red,
+      # so nobody would have noticed the number falling to 3.
+      #
+      # Kept at the presence floor (1) until the first run under this workflow
+      # reports a real post-fix figure; #13286 raises it to that number as part
+      # of turning the schedule on.
+      MARKER_MIN_PASSED: '1'
 
     steps:
       - uses: actions/checkout@v7
@@ -175,13 +212,17 @@ jobs:
       - name: Run marked tests — backend, shared, tts-worker, repo_tests
         run: |
           echo "Selecting: $MARKER_EXPRESSION"
-          # Exit 5 is pytest's "no tests collected". For a marker selection that
-          # is a legitimate outcome (no test currently carries the marker in this
-          # tree), not a failure — anything else propagates.
+          # Exit 5 is pytest's "no tests collected". Tolerated here ONLY so the
+          # second invocation still runs and the report step still gets both
+          # files — it is NOT accepted as an outcome: "Report marker coverage"
+          # below fails the job when the two invocations collected nothing
+          # between them. Before #14930 this line was the whole story, and an
+          # empty selection was indistinguishable from a passing one.
           python -m pytest \
             autobot-backend autobot_shared autobot-tts-worker repo_tests \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-backend.xml \
             --tb=short \
             --durations=25 \
             -q || [ $? -eq 5 ]
@@ -196,6 +237,37 @@ jobs:
             autobot-slm-backend \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-slm.xml \
             --tb=short \
             --durations=25 \
             -q || [ $? -eq 5 ]
+
+      # The one verdict pytest cannot give: "the selection still matches the
+      # tests it is supposed to match" (#14930).
+      #
+      # Runs on failure too — deliberately. A red pytest step that skipped this
+      # would hide exactly the case worth seeing: a suite whose coverage
+      # collapsed AND whose remainder failed. The counts are printed here and
+      # written to the run summary, so a drop from the recorded baseline is
+      # visible on the run page rather than buried in 4,000 lines of log.
+      #
+      # A missing report file is a hard failure inside the script, not a zero:
+      # a pytest that died before writing its XML must never read as "collected
+      # nothing", let alone as clean.
+      - name: Report marker coverage
+        if: ${{ !cancelled() }}
+        run: |
+          python pipeline-scripts/marker_suite_report.py \
+            backend=marker-report-backend.xml \
+            slm=marker-report-slm.xml \
+            --min-collected 1 \
+            --min-passed "$MARKER_MIN_PASSED"
+
+      - name: Upload marker reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: marker-suite-reports
+          path: marker-report-*.xml
+          if-no-files-found: error
+          retention-days: 14
