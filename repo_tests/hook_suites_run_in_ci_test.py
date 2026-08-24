@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import configparser
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -60,6 +61,11 @@ _REQUIRED_MODULES = (
     "pre-commit-no-tag-pinned-action_test.py",
 )
 
+# Markers whose presence or absence decides whether an invocation could select a
+# hook test at all: the four this repository excludes from the main suite and
+# selects in the marker-excluded one.
+_SELECTION_MARKERS = ("integration", "slow", "distributed", "performance")
+
 
 def _yaml_sources() -> list[Path]:
     """Every file that could carry a pytest invocation into CI.
@@ -78,21 +84,80 @@ def _yaml_sources() -> list[Path]:
     )
 
 
-def _pytest_invocations() -> list[tuple[str, list[str]]]:
-    """Every pytest invocation in CI configuration, as (file, argv tokens).
+def _pytest_invocations() -> list[tuple[str, list[str], str]]:
+    """Every pytest invocation in CI configuration, as (file, argv, file text).
 
     Derived by scanning the files themselves — never from a list of workflow
     names. The list is the thing that goes stale: this guard's first version
     named the three workflows a review had identified, and there turned out to
     be a fourth.
     """
-    found: list[tuple[str, list[str]]] = []
+    found: list[tuple[str, list[str], str]] = []
     for source in _yaml_sources():
         text = source.read_text(encoding="utf-8")
         for match in _PYTEST_CALL.finditer(text):
-            tokens = match.group(1).replace("\\\n", " ").split()
-            found.append((source.name, tokens))
+            command = match.group(1).replace("\\\n", " ")
+            try:
+                tokens = shlex.split(command)
+            except ValueError:
+                # An unbalanced quote is not something to drop silently: fall
+                # back to a naive split so the invocation still reaches the
+                # checks rather than vanishing from the population.
+                tokens = command.split()
+            found.append((source.name, tokens, text))
     return found
+
+
+def _marker_expression(argv: list[str], text: str) -> str | None:
+    """An invocation's `-m` expression, with a shell variable resolved.
+
+    Returns "" when there is no `-m` at all (selects everything), and None when
+    the expression is a variable this cannot resolve — which is treated as a
+    hard failure rather than an exemption, because "I could not tell" must never
+    read the same as "it does not need the hook suites".
+    """
+    if "-m" not in argv:
+        return ""
+    index = argv.index("-m")
+    if index + 1 >= len(argv):
+        return None
+    value = argv[index + 1].strip()
+    if not value.startswith("$"):
+        return value
+    name = value.lstrip("$").strip("{}")
+    # Resolved from the same file: `NAME: ${{ ... || 'default' }}` in an env block.
+    declared = re.search(rf"^\s*{re.escape(name)}:\s*(.+)$", text, re.M)
+    if not declared:
+        return None
+    fallback = re.search(r"\|\|\s*'([^']*)'", declared.group(1))
+    return fallback.group(1) if fallback else declared.group(1).strip()
+
+
+def _selects_unmarked_tests(expression: str) -> bool:
+    """True when this expression can select a test that carries no marker.
+
+    `not integration and not slow and ...` selects the unmarked set — the hook
+    suites belong in it. `integration or slow or ...` selects only marked tests,
+    so an invocation using it would collect the hook suites and select nothing
+    from them.
+    """
+    return "not " in f" {expression} " or expression == ""
+
+
+def _hook_tests_carrying_a_selection_marker() -> list[str]:
+    """Hook tests that carry one of the markers a positive selection would pick.
+
+    This is what earns the exemption below. It is a property of the hook suites,
+    re-derived here rather than assumed, so the exemption dies the moment a hook
+    test gains an `integration` or `slow` marker.
+    """
+    marked: list[str] = []
+    pattern = re.compile(r"@pytest\.mark\.(" + "|".join(_SELECTION_MARKERS) + r")\b")
+    for module in sorted(_HOOKS_DIR.rglob("*_test.py")):
+        for lineno, line in enumerate(module.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line):
+                marked.append(f"{module.name}:{lineno}")
+    return marked
 
 
 def test_the_hook_suites_exist_to_be_collected() -> None:
@@ -148,18 +213,50 @@ def test_every_ci_pytest_invocation_that_runs_repo_tests_also_runs_the_hooks() -
         "nothing (measured: 64)"
     )
     # `repo_tests` as a bare path token, so `-p repo_tests.stable_shard` is not
-    # mistaken for a path. Measured: exactly 4 carriers — ci.yml, coverage.yml,
-    # marker-tests.yml, test-durations.yml. The floor sits AT that count: losing
-    # one silently would shrink the invariant, so a legitimate removal has to
-    # come here and say so.
-    carriers = [(wf, argv) for wf, argv in invocations if "repo_tests" in argv]
+    # mistaken for a path. Measured: exactly 4 carriers.
+    carriers = [(wf, argv, text) for wf, argv, text in invocations if "repo_tests" in argv]
     assert len(carriers) >= 4, (
         f"only {len(carriers)} invocations name repo_tests as a path — expected 4; "
         "either one was removed or the argv splitter has regressed"
     )
+
+    # An invocation needs the hook suites only if it can SELECT them. Split by
+    # each invocation's own `-m` expression rather than by filename:
+    # marker-tests.yml selects `integration or slow or distributed or
+    # performance`, and no hook test carries any of those, so adding the path
+    # there would collect 18 modules and select nothing from them.
+    unresolved = [wf for wf, argv, text in carriers if _marker_expression(argv, text) is None]
+    assert not unresolved, (
+        "could not resolve the -m expression for these invocations, so whether "
+        f"they select the hook suites is unknown: {unresolved}. Unknown is not an "
+        "exemption — resolve it or name the expression literally"
+    )
+    selecting = [
+        (wf, argv) for wf, argv, text in carriers
+        if _selects_unmarked_tests(_marker_expression(argv, text) or "")
+    ]
+    marker_only = [wf for wf, argv, text in carriers if (wf, argv) not in selecting]
+    assert len(selecting) >= 3, (
+        f"only {len(selecting)} carriers select the unmarked set — expected at least "
+        "ci.yml, coverage.yml and test-durations.yml"
+    )
+    assert marker_only, (
+        "no carrier is marker-only, so the branch that exempts one is untested — "
+        "marker-tests.yml should be here"
+    )
+
+    # The exemption is EARNED, not asserted: it holds only while no hook test
+    # carries a marker a positive selection would pick up.
+    marked = _hook_tests_carrying_a_selection_marker()
+    assert not marked, (
+        "these hook tests now carry a selection marker, so the marker-only "
+        f"invocations {marker_only} would select them and must name the hook "
+        f"suites after all: {marked}"
+    )
+
     offenders = sorted(
         f"{wf}: {' '.join(argv[:8])}…"
-        for wf, argv in carriers
+        for wf, argv in selecting
         if _HOOKS_REL not in argv
     )
     assert not offenders, (
