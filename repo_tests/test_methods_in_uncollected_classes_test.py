@@ -73,12 +73,19 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
 _SKIP = {
     ".git",
     ".worktrees",
+    # Harness territory: tooling config plus the agent worktrees checked out
+    # under it, which hold other branches' work in progress and are not always
+    # parseable. pytest's own testpaths never reach it either, so nothing here
+    # is collectable and nothing here is this sweep's subject.
+    ".claude",
     "__pycache__",
     "node_modules",
     ".venv",
@@ -131,6 +138,32 @@ def _pytest_option(name: str) -> list[str]:
     values = parser.get("pytest", name, fallback="").split()
     assert values, f"pytest.ini declares no {name} — the population cannot be derived"
     return values
+
+
+def _parse_module(path: Path) -> ast.Module:
+    """Parse one swept file, failing loudly and by name if it cannot be parsed.
+
+    This sweep is a denylist walk from the repo root, filtered only by ``_SKIP``,
+    so it reaches files pytest's ``testpaths`` allowlist never would: scratch
+    copies, templates, half-written drafts. An unparseable one must never read as
+    "clean" -- skipping it silently is the exact under-reporting failure this
+    guard exists to catch -- so it is raised as a failure that names the file and
+    says how to take it out of the sweep on purpose.
+    """
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        relative = path.relative_to(_REPO_ROOT)
+        raise AssertionError(
+            f"{relative}:{exc.lineno or 0} is not parseable Python ({exc.msg}). "
+            "This guard sweeps every *.py under the repo root as a denylist, so it "
+            "sees files pytest's own testpaths allowlist never reaches. Fix the "
+            "file, or -- if it is scratch, vendored or another branch's work and "
+            "does not belong in the sweep -- add its top-level directory to _SKIP "
+            "in every repo_tests guard that sweeps, the way .claude and .worktrees "
+            "already are. Do not silence this by skipping the file: a file the "
+            "sweep cannot read is not a file the sweep has cleared."
+        ) from exc
 
 
 def _test_modules() -> list[Path]:
@@ -276,8 +309,8 @@ def _scan() -> tuple[dict[str, tuple[str, ...]], dict[str, int], tuple[str, ...]
     for module in _test_modules():
         relative = module.relative_to(_REPO_ROOT)
         tree_name = relative.parts[0]
+        parsed = _parse_module(module)
         source = module.read_text(encoding="utf-8")
-        parsed = ast.parse(source)
 
         population[tree_name] = population.get(tree_name, 0) + _scanned_test_functions(parsed)
         for class_name, method, line in uncollected_test_methods(source):
@@ -546,3 +579,28 @@ def test_the_model_agrees_with_pytest_on_every_shape(tmp_path: Path) -> None:
         "The model is what every count in this file rests on — fix it here, do not "
         "adjust the budgets to match a wrong model (#14927)."
     )
+
+
+def test_an_unparseable_swept_file_fails_loudly_instead_of_reading_as_clean() -> None:
+    """The sweep is a denylist from the repo root, so it meets stray files.
+
+    One must never be skipped: a file the walk could not read is not a file the
+    walk cleared, and dropping it silently is the under-reporting this guard
+    exists to catch. It has to fail, name the file and say what to do about it.
+
+    The probe is written under a ``_SKIP``ped directory so no concurrently
+    running sweep can pick it up while it exists.
+    """
+    scratch = _REPO_ROOT / "__pycache__"
+    scratch.mkdir(exist_ok=True)
+    stray = scratch / "unparseable_probe_test.py"
+    stray.write_text("from a-b.c import (\n", encoding="utf-8")
+    try:
+        with pytest.raises(AssertionError) as raised:
+            _parse_module(stray)
+    finally:
+        stray.unlink()
+
+    message = str(raised.value)
+    assert "unparseable_probe_test.py" in message, "the failure must name the file"
+    assert "_SKIP" in message, "the failure must say how to exclude a file on purpose"
