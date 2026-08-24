@@ -31,11 +31,11 @@ shrink is locked in rather than left as headroom to regrow into (#14498).
 below reaches, not just the ones already in KNOWN_LARGE (#14547). Before this,
 ``audit_ceilings`` iterated ``KNOWN_LARGE.items()``, so it could re-verify a
 file someone remembered to list, never discover one nobody did. A repo-wide
-walk found 502 files already over MAX_LINES with no entry at all — no audit
+walk found 509 files already over MAX_LINES with no entry at all — no audit
 could ever have caught them, because none of them had ever been added.
 ``autobot-slm-backend/services/reconciler.py`` was the one that surfaced the
 gap, at over 2000 lines and absent from KNOWN_LARGE entirely. Grandfathering
-all 502 at their measured size, rather than leaving the walk unable to run
+all 509 at their measured size, rather than leaving the walk unable to run
 until each is individually triaged, is what makes turning the walk on
 possible at all — splitting them is #5060's campaign, not this one's. The
 audit reports how many files it reached, because a walk that has silently
@@ -43,7 +43,7 @@ stopped covering the tree otherwise passes having asserted nothing about
 most of it.
 
 ``KNOWN_LARGE`` itself now lives in ``python_file_size_known_large.py``
-alongside this file, not inline here: 505 entries would put this hook over
+alongside this file, not inline here: 512 entries would put this hook over
 its own MAX_LINES, and a guard cannot ask everything else to split without
 doing the same to its own data.
 

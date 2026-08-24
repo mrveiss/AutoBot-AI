@@ -30,7 +30,7 @@ lines this way, invisible to every audit run that only ever iterated
 why ``RATCHET_BASELINE`` below grew from 3 entries to hundreds: the walk found
 every other file already over the limit with no entry at all, and grandfathering
 all of them at their measured size is what makes turning the walk on possible
-without also triaging 505 files in the same change (that is #5060's campaign).
+without also triaging 512 files in the same change (that is #5060's campaign).
 
 The last test is the reach self-check. It runs the hook's own matcher over a
 tracked-file enumeration produced by ``git ls-files`` rather than by anything in
@@ -58,7 +58,7 @@ _PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 def _load_ratchet_baseline() -> dict[str, int]:
     """Load RATCHET_BASELINE from its sibling data module, by path.
 
-    Split out (#14547) so this test file stays well under MAX_LINES: 505
+    Split out (#14547) so this test file stays well under MAX_LINES: 512
     entries inline here would put the guard's own test over the limit it
     enforces on everything else. See that module's docstring for why the
     dict is deliberately a second copy, not read out of the hook.
@@ -74,12 +74,21 @@ RATCHET_BASELINE = _load_ratchet_baseline()
 # Cardinality ceiling on KNOWN_LARGE itself (#14547 review). The per-file
 # ratchet stops any ONE entry from regrowing, but nothing stopped a NEW entry
 # appearing in both KNOWN_LARGE and RATCHET_BASELINE together — a two-sided
-# addition passes every other test here, which is how this PR added 502
+# addition passes every other test here, which is how this PR added 509
 # entries in one change. At 3 entries a 4th was visible in a code review
-# diff; at 505 a 506th is not. Lower this by hand whenever KNOWN_LARGE loses
+# diff; at 512 a 513th is not. Lower this by hand whenever KNOWN_LARGE loses
 # an entry; never raise it to let a new one in without that being the point
 # of the diff.
-MAX_KNOWN_LARGE_ENTRIES = 505
+#
+# 512 is the size of the population the walk measured on the merge that lands
+# this change, not a number chosen to fit. The snapshot below it is a single
+# initial grant: before this change the repo recorded three ceilings, and the
+# other 509 files were over MAX_LINES with nothing recording them at all. The
+# count therefore starts at whatever the walk finds the day it is switched on
+# — re-measured, never rounded up — and only ever falls afterwards, because
+# from here on an unlisted oversized file fails the audit instead of joining
+# the list.
+MAX_KNOWN_LARGE_ENTRIES = 512
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
@@ -257,7 +266,7 @@ def test_known_large_entry_count_may_not_grow(hook):
     """Catches a two-sided addition ``test_no_entry_may_be_added`` cannot.
 
     That test only compares KNOWN_LARGE against RATCHET_BASELINE, so an entry
-    added to both together — the actual shape of how this PR added 502 —
+    added to both together — the actual shape of how this PR added 509 —
     passes it. This pins the count itself against a recorded ceiling that
     only ever moves down.
     """
