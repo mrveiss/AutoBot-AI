@@ -13,7 +13,15 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+# GH#14891: this used to be a bare `source` with no failure block at all.
+# It happened to fail closed only because of the `set -e` above, which is
+# incidental — a source evaluated inside a condition or a function would
+# not have aborted, and every ${CYAN}/${NC} below would then be empty under
+# `set -u`. The failure is now handled where it happens.
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "post-commit-doc-sync: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
 
 # Get the project root directory
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
