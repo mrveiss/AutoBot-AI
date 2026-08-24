@@ -1,0 +1,38 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# #13765: guarantee `ansible_memtotal_mb` before the backend unit is rendered.
+#
+# autobot-backend.service.j2 derives MemoryHigh/MemoryMax from that fact. Every
+# play in playbooks/update-all-nodes.yml — the playbook behind code-sync and
+# self-update — runs `gather_facts: false`, so through the builtin update path
+# the fact is UNDEFINED. The template's `| default(0)` would then compute a
+# derived limit of 0M, fall under the floor, and render no limits at all: a
+# silent no-op that looks identical to a deliberate "this host is too small".
+#
+# That is the failure shape this whole issue is about, so it is closed here
+# rather than left to the template: gather the one fact subset that carries
+# memory, and fail loudly if it still does not resolve.
+---
+- name: "Backend | Gather memory facts for derived limits (#13765)"
+  ansible.builtin.setup:
+    gather_subset:
+      - "!all"
+      - "!min"
+      - hardware
+  when: ansible_memtotal_mb is not defined
+  tags: [backend, systemd, unit, config]
+
+# Assert PRESENCE, not the absence of an error. `setup` above can succeed while
+# reporting no memory fact (a container without the expected /proc view), and an
+# absent fact reads exactly like a clean small-host result downstream.
+- name: "Backend | Fail loudly when host memory cannot be detected (#13765)"
+  ansible.builtin.assert:
+    that:
+      - ansible_memtotal_mb is defined
+      - (ansible_memtotal_mb | int) > 0
+    fail_msg: >-
+      Cannot detect host memory, so autobot-backend's MemoryHigh/MemoryMax
+      cannot be derived (#13765). Rendering the unit now would emit no limits
+      and look indistinguishable from a host deliberately left unlimited.
+    success_msg: "Detected {{ ansible_memtotal_mb | default(0) }}M host memory"
+  tags: [backend, systemd, unit, config]
