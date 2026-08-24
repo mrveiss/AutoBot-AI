@@ -217,6 +217,75 @@ def test_a_finding_degrades_the_verdict_and_names_the_unit(tmp_path: Path) -> No
     assert "#13765" in (verdict.reason or "")
 
 
+def test_an_unreadable_tree_degrades_the_VERDICT_not_just_the_tuple(tmp_path: Path) -> None:
+    """The property, not the helper — review found `degraded` ignoring the flag.
+
+    `probe_out_of_band_limits` distinguished "clean" from "could not look" all
+    along, and `_describe` composed the explanatory sentence, but `degraded`
+    read only `out_of_band`. So an unreadable control tree returned an empty
+    list, a False flag, and `degraded is False` — and both consumers dropped the
+    sentence unread, because `_merge_role_delivery` returns early on
+    `not degraded` and the fleet-update stage gates its pass/fail on the same
+    property. An update-all job reported the stage successful on a host whose
+    scan had silently failed.
+
+    Testing the tuple only, as this file previously did, could never catch that:
+    the tuple was correct. Drive the property.
+    """
+    root = tmp_path / "system.control"
+    root.mkdir()
+    root.chmod(0o000)
+    try:
+        verdict = probe_role_delivery(checks=[], control_roots=(root,))
+    finally:
+        root.chmod(0o755)
+
+    if verdict.out_of_band_observed:
+        pytest.skip("running as a user that can read a 0o000 directory (root); the flag cannot be exercised")
+
+    assert verdict.out_of_band == []
+    assert verdict.out_of_band_observed is False
+    assert verdict.degraded is True, "a scan that could not run must not read as a clean host"
+    assert "could not be checked" in (verdict.reason or "")
+
+
+def test_a_scan_that_was_not_requested_is_not_a_degradation(tmp_path: Path) -> None:
+    """`None` and `False` must not collapse.
+
+    `None` means the caller passed explicit checks and never asked for the
+    scan; `False` means it was asked for and could not run. Only the second is
+    a failure to observe, so `degraded` tests `is False` rather than falsiness —
+    otherwise every unit test passing explicit checks would degrade.
+    """
+    artifact = tmp_path / "unit.service"
+    artifact.write_text("Environment=MARKER=1\n", encoding="utf-8")
+    inv = RoleInvariant(
+        role="backend",
+        issue="#12777",
+        artifact=artifact,
+        kind=CONTAINS,
+        marker="MARKER",
+        describes="artifact is missing the role-owned change",
+    )
+
+    verdict = probe_role_delivery(checks=[inv])
+
+    assert verdict.out_of_band_observed is None
+    assert verdict.degraded is False
+
+
+def test_a_readable_empty_tree_is_still_not_degraded(tmp_path: Path) -> None:
+    """The fix must not turn every ordinary host into a permanent alarm.
+
+    Most hosts have never had `systemctl set-property` run, so the tree does not
+    exist. That is an observation, and observing nothing is clean.
+    """
+    verdict = probe_role_delivery(checks=[], control_roots=(tmp_path / "never-created",))
+
+    assert verdict.out_of_band_observed is True
+    assert verdict.degraded is False
+
+
 def test_out_of_band_does_not_disturb_the_role_invariant_counters(tmp_path: Path) -> None:
     """`checked`/`skipped` count role-owned invariants and must keep doing so.
 

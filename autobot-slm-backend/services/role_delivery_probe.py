@@ -135,7 +135,26 @@ class RoleDeliveryVerdict:
 
     @property
     def degraded(self) -> bool:
-        return bool(self.undelivered) or bool(self.out_of_band)
+        """Undelivered work, an out-of-band override, OR a scan that could not run.
+
+        The third clause is the one this class of bug keeps costing. Review
+        found `degraded` reading `out_of_band` but never `out_of_band_observed`,
+        so a control tree that exists and raises `OSError` on `iterdir()` --
+        the SLM backend runs unprivileged -- produced an empty list, a False
+        flag, and `degraded is False`. `_describe` still composed the "could not
+        be checked" sentence, and both consumers dropped it unread:
+        `_merge_role_delivery` returns early on `not degraded`, and the
+        fleet-update stage gates its whole pass/fail on this property. An
+        update-all job would have reported the stage successful on a host whose
+        scan silently failed.
+
+        That is exactly the defect this probe exists to catch, one frame up:
+        "found nothing" and "could not look" are the same empty list, and only
+        the flag separates them. `is False` rather than a falsy test on purpose
+        -- `None` means the scan was not requested at all, which is not a
+        failure to observe.
+        """
+        return bool(self.undelivered) or bool(self.out_of_band) or self.out_of_band_observed is False
 
 
 def _read(path: Path) -> str | None:

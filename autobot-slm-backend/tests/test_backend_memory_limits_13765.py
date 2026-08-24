@@ -195,6 +195,13 @@ def test_the_role_guarantees_the_fact_before_rendering():
     guard = (_ROLE_DIR / "tasks" / "memory_limits.yml").read_text(encoding="utf-8")
     assert "ansible.builtin.setup" in guard
     assert "ansible.builtin.assert" in guard
+    # MemoryHigh throttles and MemoryMax kills, so an inverted pair gives a unit
+    # killed before it is ever throttled — the warning band gone and the gentler
+    # limit unreachable. The shipped defaults are safe; the percentages are
+    # overridable per-inventory, and nothing else would notice the swap until a
+    # host started dying under load (#13765 review).
+    assert "backend_memory_max_pct" in guard and "backend_memory_high_pct" in guard
+    assert ">" in guard, "the guard must order the two percentages, not merely mention them"
 
     for task_file in ("unit_only.yml", "main.yml"):
         text = (_ROLE_DIR / "tasks" / task_file).read_text(encoding="utf-8")

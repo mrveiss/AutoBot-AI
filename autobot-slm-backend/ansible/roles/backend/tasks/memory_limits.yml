@@ -36,3 +36,24 @@
       and look indistinguishable from a host deliberately left unlimited.
     success_msg: "Detected {{ ansible_memtotal_mb | default(0) }}M host memory"
   tags: [backend, systemd, unit, config]
+
+# MemoryHigh throttles, MemoryMax kills. Inverting them gives a unit that is
+# killed before it is ever throttled -- the warning band silently gone, and the
+# gentler limit unreachable. The shipped defaults are 50/75 and safe; this
+# exists because they are overridable per-inventory and nothing else would
+# notice the swap until a host started dying under load (#13765 review).
+- name: "Backend | Refuse memory limits that would kill before they throttle (#13765)"
+  ansible.builtin.assert:
+    that:
+      - (backend_memory_max_pct | default(75) | int) > (backend_memory_high_pct | default(50) | int)
+      - (backend_memory_high_pct | default(50) | int) > 0
+      - (backend_memory_max_pct | default(75) | int) <= 100
+    fail_msg: >-
+      backend_memory_max_pct ({{ backend_memory_max_pct | default(75) }}) must be
+      greater than backend_memory_high_pct ({{ backend_memory_high_pct | default(50) }})
+      and at most 100. MemoryHigh throttles and MemoryMax kills, so an inverted
+      pair kills the backend before it is ever throttled (#13765).
+    success_msg: >-
+      Memory limits {{ backend_memory_high_pct | default(50) }}%/{{ backend_memory_max_pct | default(75) }}%
+      are correctly ordered
+  tags: [backend, systemd, unit, config]

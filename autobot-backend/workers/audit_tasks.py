@@ -597,12 +597,23 @@ def _dedupe_and_file(
         deferred_count = 0
         _log_unwritable_queue(still_deferred, "the existing queue could not be read")
 
-    # A finding is LOST when it was neither filed nor left in the queue. Derived
-    # from what was observed to happen rather than from a failure flag: both
-    # loss paths above already return 0 for `deferred_count`, and 0 is also the
-    # normal drained state, so a caller reading only that number cannot tell
-    # them apart (#13570).
-    lost = len(still_deferred) if (still_deferred and not deferred_count) else 0
+    # A finding is LOST when it was neither filed nor left in the queue.
+    #
+    # Measured as "how many unique findings went in, minus how many the queue
+    # reports holding" rather than special-casing `deferred_count == 0`. Review
+    # found that earlier form blind at the OTHER boundary: when
+    # `_persist_deferred` sheds past `_MAX_DEFERRED` it returns the POST-shed
+    # count, which is nonzero, so `lost` stayed 0 while findings were dropped
+    # for good and `filed + deferred + lost` undercounted by exactly the shed
+    # amount. Same "0 where loss occurred" defect this issue is about, moved
+    # from the write-failure boundary to the cap boundary.
+    #
+    # Deduped by title first, because `_persist_deferred` dedupes too: two
+    # findings with one title collapsing is intended behaviour, not loss, and
+    # counting the raw list would report a phantom every time a queued finding
+    # was re-discovered.
+    unique_deferred = len({finding["title"] for finding in still_deferred})
+    lost = max(0, unique_deferred - deferred_count)
 
     _report_deferral_outcome(gh_ok, still_deferred, deferred_count)
     outcome = FilingOutcome(filed=filed, deferred=deferred_count, lost=lost, filing_available=gh_ok)

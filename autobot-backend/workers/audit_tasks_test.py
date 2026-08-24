@@ -915,6 +915,75 @@ class TestLossIsCounted:
         assert _run_status(outcome) == "success"
 
 
+class TestLossAtTheCapBoundary:
+    """`_persist_deferred` sheds past the cap and returns the POST-shed count.
+
+    Review found `lost` derived from `deferred_count == 0`, which is only the
+    write-failure boundary. At the cap boundary the count is nonzero, so shed
+    findings — permanently dropped — were reported as `lost: 0` and
+    `filed + deferred + lost` undercounted by exactly the shed amount. The same
+    "0 where loss occurred" defect this issue exists to close, one boundary over.
+    """
+
+    def test_findings_shed_past_the_cap_are_counted_as_lost(self, monkeypatch):
+        store, _get, _set, client = _fake_redis_backing()
+        monkeypatch.setattr("workers.audit_tasks._MAX_DEFERRED", 3)
+        findings = [{"title": f"discovery: {i}", "body": "b"} for i in range(10)]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert outcome.deferred == 3, "the queue holds only what fits under the cap"
+        assert outcome.lost == 7, "the seven shed findings are gone and must be counted"
+        assert outcome.filed + outcome.deferred + outcome.lost == len(findings)
+        assert _run_status(outcome) == "error"
+
+    def test_a_run_that_exactly_fills_the_cap_loses_nothing(self, monkeypatch):
+        """The boundary itself must not manufacture a phantom loss."""
+        _store, _get, _set, client = _fake_redis_backing()
+        monkeypatch.setattr("workers.audit_tasks._MAX_DEFERRED", 3)
+        findings = [{"title": f"discovery: {i}", "body": "b"} for i in range(3)]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert (outcome.deferred, outcome.lost) == (3, 0)
+        assert _run_status(outcome) == "degraded"
+
+    def test_two_findings_sharing_a_title_are_deduped_not_lost(self):
+        """`_persist_deferred` dedupes by title, so the count must too.
+
+        Measuring loss against the raw list would report a phantom every time a
+        queued finding was re-discovered on a later run — a false alarm is the
+        same defect class as a false reassurance.
+        """
+        _store, _get, _set, client = _fake_redis_backing()
+        findings = [
+            {"title": "discovery: same", "body": "first"},
+            {"title": "discovery: same", "body": "second"},
+        ]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert (outcome.deferred, outcome.lost) == (1, 0)
+
+
 class TestFilingStatusIsQueryable:
     """A CRITICAL log line is not a surface a check can query (#13852).
 
