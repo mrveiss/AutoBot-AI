@@ -13,6 +13,7 @@ import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 
 const logger = createLogger('TerminalService')
 
@@ -352,8 +353,16 @@ class TerminalService {
     this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING)
     this.callbacks.set(sessionId, callbacks)
 
-    const wsUrl = `${this.baseUrl}/${sessionId}`
-    logger.debug(`Connecting to WebSocket: ${wsUrl}`)
+    // #14960: the backend now authenticates the handshake -- attach the JWT
+    // via the shared helper (#6700) rather than connecting unauthenticated.
+    const wsUrl = buildAuthenticatedWsUrl(`${this.baseUrl}/${sessionId}`)
+    if (wsUrl === null) {
+      logger.warn(`No auth token available, deferring terminal connect for session ${sessionId}`)
+      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
+      this.triggerCallback(sessionId, 'onError', 'Not authenticated')
+      throw new Error('No auth token available for terminal WebSocket')
+    }
+    logger.debug(`Connecting to WebSocket: ${this.baseUrl}/${sessionId}`)
 
     this._validateWsUrl(wsUrl)
 
