@@ -256,9 +256,7 @@ class TestTemporalInvalidation:
                 # `min_confidence` entirely unexercised.
                 matches, reason = rule.matches_fact(self.low_confidence_fact)
                 assert matches, f"{rule.name} should match a 0.4-confidence fact"
-                assert (
-                    reason is InvalidationReason.TEMPORAL_EXPIRY
-                ), f"{rule.name} matched a 10-day-old fact on age"
+                assert reason is InvalidationReason.TEMPORAL_EXPIRY, f"{rule.name} matched a 10-day-old fact on age"
 
                 fresh_low_confidence = self.mock_fact_service.add_test_fact(
                     subject="AutoBot",
@@ -371,9 +369,7 @@ class TestTemporalInvalidation:
         result = await self.invalidation_service.invalidate_contradictory_facts(fact2)
 
         assert result["status"] == "success", "Contradiction check should succeed"
-        assert fact1.is_contradictory_to(
-            fact2
-        ), "Two different values for the same subject/predicate contradict"
+        assert fact1.is_contradictory_to(fact2), "Two different values for the same subject/predicate contradict"
         assert result["contradictions_found"] >= 1, "The superseded fact must be found"
 
     async def test_invalidation_statistics(self):

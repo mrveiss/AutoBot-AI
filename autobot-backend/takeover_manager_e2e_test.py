@@ -318,9 +318,7 @@ class TestSessionTakeover:
         for message in messages:
             await terminal_session.handle_message(message)
 
-        assert terminal_session.websocket.send_text.call_count >= len(
-            messages
-        ), "WebSocket messages should be sent"
+        assert terminal_session.websocket.send_text.call_count >= len(messages), "WebSocket messages should be sent"
 
     async def test_workflow_dependencies(self):
         """Declared step dependencies survive workflow creation unchanged."""
@@ -362,9 +360,9 @@ class TestSessionTakeover:
 
         await terminal_session.handle_message({"type": "invalid_type", "data": "malformed"})
 
-        assert self.workflow_manager.get_workflow_status("non_existent_workflow") is None, (
-            "An unknown workflow has no status"
-        )
+        assert (
+            self.workflow_manager.get_workflow_status("non_existent_workflow") is None
+        ), "An unknown workflow has no status"
 
     async def test_status_reports_every_step_of_a_multi_step_workflow(self):
         """The status dict a client renders lists each step with its own id.
