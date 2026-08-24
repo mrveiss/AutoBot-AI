@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 
 import { ref, computed, onScopeDispose, unref, type Ref } from 'vue'
-import { createLogger } from '../utils'
+import { createLogger, redactUrlForLogging } from '../utils'
 
 const logger = createLogger('useWebSocket')
 
@@ -59,7 +59,7 @@ export function useWebSocket(url: Ref<string> | string, options: UseWebSocketOpt
     if (isConnecting.value || (ws.value && ws.value.readyState === WebSocket.OPEN)) return
 
     const wsUrl = unref(url)
-    if (!wsUrl) { logger.error('Invalid URL:', wsUrl); return }
+    if (!wsUrl) { logger.error('Invalid URL:', redactUrlForLogging(wsUrl)); return }
 
     isConnecting.value = true
     errorList.value = []
@@ -82,7 +82,7 @@ export function useWebSocket(url: Ref<string> | string, options: UseWebSocketOpt
         reconnectAttempts.value = 0
         errorList.value = []
         clearTimers()
-        logger.info('Connected to:', wsUrl)
+        logger.info('Connected to:', redactUrlForLogging(wsUrl))
         opts.onOpen(event)
       }
 
