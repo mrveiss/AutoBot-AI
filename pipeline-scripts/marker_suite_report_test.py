@@ -16,6 +16,7 @@ Two halves, and both are needed:
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -23,13 +24,30 @@ from pathlib import Path
 import pytest
 import yaml
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from marker_suite_report import Counts, ReportError, check, main, parse_report  # noqa: E402
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "marker-tests.yml"
-SCRIPT = Path(__file__).parent / "marker_suite_report.py"
+SCRIPT = Path(__file__).with_name("marker_suite_report.py")
+
+
+def _load_script():
+    """Load the checker without registering it in ``sys.modules``.
+
+    Same pattern as this directory's other guard tests: the repo-wide
+    sys.modules leak guard (#13337) fails a shard that leaves a synthetic entry
+    behind, and a sibling import via ``sys.path`` would leave one.
+    """
+    spec = importlib.util.spec_from_file_location("marker_suite_report", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_report = _load_script()
+Counts = _report.Counts
+ReportError = _report.ReportError
+check = _report.check
+main = _report.main
+parse_report = _report.parse_report
 
 
 def write_report(path: Path, tests: int, failures: int = 0, errors: int = 0, skipped: int = 0) -> Path:
@@ -210,12 +228,22 @@ class TestWorkflowWiring:
             "assertion is disarmed and an empty collection would read as clean again"
         )
 
-    def test_the_script_path_the_workflow_uses_exists(self, run_steps):
-        """Catches the rename half of the pair: move the script, this fails."""
-        for step in run_steps:
-            for token in step["run"].split():
-                if token.endswith("marker_suite_report.py"):
-                    assert (REPO_ROOT / token).exists(), f"workflow references a script that does not exist: {token}"
+    def test_every_script_path_the_workflow_references_exists(self, run_steps):
+        """Catches the rename half of the pair, from either end.
+
+        Deliberately NOT keyed on the name ``marker_suite_report.py``. A first
+        draft of this test was, and it passed vacuously when the workflow was
+        mutated to call ``moved_elsewhere.py`` — no token matched, so the loop
+        body never ran and the check reported success. A guard whose subject can
+        disappear must assert on what IS there, not iterate over what might be.
+        """
+        referenced = {
+            token for step in run_steps for token in step["run"].split() if token.endswith(".py") and "/" in token
+        }
+        assert referenced, "no run step references a script path; the coverage report is not wired to anything"
+
+        missing = sorted(token for token in referenced if not (REPO_ROOT / token).exists())
+        assert not missing, f"marker-tests.yml references script(s) that do not exist: {missing}"
 
     def test_every_junitxml_pytest_writes_is_checked_by_the_report_step(self, run_steps):
         """The report step must consume exactly the files pytest is told to produce.
@@ -246,8 +274,30 @@ class TestWorkflowWiring:
                 f"run hides the coverage count entirely; got if: {condition!r}"
             )
 
-    def test_the_marker_expression_is_not_narrowed(self, marker_job):
-        """Nobody may quietly shrink the selection to make the run green."""
-        expression = marker_job["env"]["MARKER_EXPRESSION"]
-        for marker in ("integration", "slow", "distributed", "performance"):
-            assert marker in expression, f"the {marker!r} marker is no longer selected by this suite"
+    @pytest.mark.parametrize("marker", ["integration", "slow", "distributed", "performance"])
+    def test_the_marker_expression_is_not_narrowed(self, marker_job, marker):
+        """Nobody may quietly shrink the selection to make the run green.
+
+        Narrowing the selection is the one "fix" #14930 explicitly rules out: a
+        suite that passes because it stopped selecting the failing tests is the
+        inert-suite defect wearing a green tick.
+        """
+        assert marker in marker_job["env"]["MARKER_EXPRESSION"], (
+            f"the {marker!r} marker is no longer selected by the scheduled run"
+        )
+
+    @pytest.mark.parametrize("marker", ["integration", "slow", "distributed", "performance"])
+    def test_the_dispatch_default_is_not_narrowed(self, marker):
+        """The manual-dispatch default is a second way to shrink the selection.
+
+        ``MARKER_EXPRESSION`` is ``inputs.markers || <default>``, so both strings
+        decide what runs and guarding only the first leaves the other open. A
+        mutation of the dispatch default alone slipped past an earlier version
+        of this class, which is why it is pinned separately.
+        """
+        parsed = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        # `on:` parses as the boolean True under YAML 1.1, not the string "on".
+        triggers = parsed.get("on", parsed.get(True))
+        default = triggers["workflow_dispatch"]["inputs"]["markers"]["default"]
+
+        assert marker in default, f"the workflow_dispatch default no longer offers the {marker!r} marker"
