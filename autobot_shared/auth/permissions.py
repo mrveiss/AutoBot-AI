@@ -193,7 +193,61 @@ _ADMINISTRATIVE_ROLES: frozenset = frozenset({Role.ADMIN, Role.SUPERADMIN})
 ADMIN_ROLES: frozenset = frozenset(role.value for role in _ADMINISTRATIVE_ROLES)
 
 
-def is_admin_role(role) -> bool:
+def role_value(role: "Role | str | None") -> str:
+    """The role string *role* denotes -- the one safe way to stringify a role (#14944).
+
+    Every role lookup in this codebase keys on a string, and every one of them
+    used to reach that string with ``str(role)``. For a ``(str, Enum)`` mixin
+    that is **wrong**::
+
+        str(Role.ADMIN)   == "Role.ADMIN"     # Enum.__str__ wins
+        f"{Role.ADMIN}"   == "admin"          # mixin __format__ uses the value
+        Role.ADMIN        == "admin"          # str.__eq__ -- True
+        Role.ADMIN in ADMIN_ROLES             # True
+
+    So a member behaves like its value under ``==``, under ``in``, and in an
+    f-string, and *only* ``str()`` disagrees -- which is why every role resolver
+    picked the one spelling that fails, and why nothing noticed. Note this is
+    **not** fixed by a newer Python: ``enum.StrEnum`` (3.11+) would return the
+    value, but ``Role`` is the ``(str, Enum)`` mixin shape, which keeps
+    ``Enum.__str__``.
+
+    Deliberately does **not** change case or strip whitespace. Callers differ --
+    ``is_admin_role`` lowercases, ``canonical_role_permissions`` strips *and*
+    lowercases -- and #13820 showed that applying a normalisation to one role
+    source and not another creates a second identity for the same role that
+    holds some grants and not others. This helper fixes the type coercion only;
+    each caller keeps the normalisation it already had.
+
+    A member of a **different** enum is rejected rather than coerced, and that is
+    the point of doing this by ``isinstance`` rather than by ``.lower()``.
+    ``MembershipRole`` and the chat-role constants share literals with this
+    vocabulary (#14024, #13934), and every one of them is also a ``str``
+    subclass -- so the obvious "fix", ``role.lower()``, quietly returns
+    ``"admin"`` for ``MembershipRole.ADMIN`` and would admit a *company*
+    membership role as a *platform* administrator. ``str()`` happened to reject
+    that by accident; this rejects it on purpose, and loudly.
+
+    A non-role type is likewise a programming error, not data: every caller
+    passes a ``str`` or ``None`` off an authenticated session. Returning False
+    for an object nobody meant to pass would answer an authorization question
+    that was never asked.
+    """
+    if role is None:
+        return ""
+    if isinstance(role, Role):
+        return role.value
+    if isinstance(role, Enum):
+        raise TypeError(
+            f"{type(role).__name__}.{role.name} is not a platform role -- "
+            f"autobot_shared.auth.permissions.Role is the platform RBAC vocabulary (#14024)"
+        )
+    if isinstance(role, str):
+        return role
+    raise TypeError(f"role must be a Role, str or None, not {type(role).__name__}")
+
+
+def is_admin_role(role: "Role | str | None") -> bool:
     """Return True when *role* is administrative (admin or superadmin).
 
     Use this instead of ``role == "admin"`` for imperative checks that cannot
@@ -201,8 +255,17 @@ def is_admin_role(role) -> bool:
     self-access, or that pass an ``is_admin`` flag further down.
 
     Case-insensitive, matching require_role(), which lowercases both sides.
+
+    Accepts a ``Role`` member as well as a raw string (#14944). It previously
+    called ``str(role)``, which yields ``"Role.ADMIN"`` for a member and so
+    reported an administrator as non-administrative -- a failure in the unsafe
+    direction, because ``api/user_management/users.py`` and ``llc/api/companies.py``
+    feed the result into an ``is_platform_admin`` flag passed further down.
+    ``require_role`` already guarded this case; this closes the asymmetry.
+
+    Raises ``TypeError`` for anything that is neither -- see :func:`role_value`.
     """
-    return str(role or "").lower() in ADMIN_ROLES
+    return role_value(role).lower() in ADMIN_ROLES
 
 
 # Canonical role-to-permission mappings.
@@ -414,7 +477,7 @@ _ROLE_PERMISSION_VALUES: Dict[Role, frozenset] = {
 }
 
 
-def role_has_permission(role: str | None, permission: str) -> bool:
+def role_has_permission(role: "Role | str | None", permission: str) -> bool:
     """Return True when *role* holds *permission* (a dot-style Permission value).
 
     This is the canonical role/permission check other lookups (e.g.
@@ -440,11 +503,16 @@ def role_has_permission(role: str | None, permission: str) -> bool:
     rather than defaulting to permissive for a role this module cannot resolve.
     A ``Role`` member with no ROLE_PERMISSIONS entry likewise denies instead of
     raising ``KeyError`` at request time, which a bare subscript here did.
+
+    A ``Role`` **member** resolves the same as its value (#14944). This used to
+    build ``Role(str(role).lower())``, which for a member is ``Role("role.admin")``
+    -- a ``ValueError``, caught, and denied. A wrongly-typed argument still
+    raises ``TypeError`` rather than being denied: see :func:`role_value`.
     """
     if not role:
         return False
     try:
-        role_enum = Role(str(role).lower())
+        role_enum = Role(role_value(role).lower())
     except ValueError:
         return False
     return permission in _ROLE_PERMISSION_VALUES.get(role_enum, frozenset())

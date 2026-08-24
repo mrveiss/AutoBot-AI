@@ -28,7 +28,7 @@ import uuid
 
 import aiohttp
 
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, role_value
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -185,10 +185,15 @@ class MCPDispatcher:
         # short-circuit was the last place where being in ``ADMIN_ROLES``
         # granted access that ``ROLE_PERMISSIONS`` never wrote down.
         try:
-            held = _ROLE_PERMISSION_VALUES[Role(str(role or "").lower())]
-        except (ValueError, KeyError):
+            # role_value(), not str(): a ``Role`` member stringifies to
+            # "Role.ADMIN" and would be reported as unknown-role (#14944).
+            held = _ROLE_PERMISSION_VALUES[Role(role_value(role).lower())]
+        except (ValueError, KeyError, TypeError):
             # An unrecognised role string is itself worth surfacing rather than
-            # silently treating as permitted.
+            # silently treating as permitted. TypeError covers a role that is not
+            # a str/Role at all (#14944): this gate denies and reports it rather
+            # than raising out of a dispatch, which is the same fail-closed
+            # answer an unknown role already gets.
             return f"unknown-role:{role}"
         return None if declared in held else f"missing:{declared}"
 
