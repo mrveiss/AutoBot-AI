@@ -676,12 +676,12 @@ async def add_text_to_knowledge(
 
     # GH#8598: block sub-company agents from writing to parent-company KB
     if organization_id:
-        from llc.kb.write_guard import assert_not_writing_to_ancestor_kb
+        from llc.kb.write_guard import CROSS_ORG_KB_ROLES, assert_not_writing_to_ancestor_kb
         from user_management.database import get_async_session_factory
 
         _requester = get_auth_middleware().get_user_from_request(req)
         _requester_role = (_requester or {}).get("role", "")
-        if _requester_role not in ("platform_admin", "superadmin"):
+        if _requester_role not in CROSS_ORG_KB_ROLES:  # #12786: the guard's own set, not a third copy
             _requester_org_id = (_requester or {}).get("org_id")
             _session_factory = get_async_session_factory()
             async with _session_factory() as _session:
@@ -3138,8 +3138,17 @@ def _resolve_target_org_id(current_user: dict, override_org_id: str | None) -> s
     mode — the service uses the ``__default__`` sentinel.
     """
     if override_org_id:
+        from llc.kb.write_guard import CROSS_ORG_KB_ROLES  # noqa: PLC0415
+
+        from autobot_shared.auth.permissions import is_admin_role  # noqa: PLC0415
+
         role = (current_user or {}).get("role", "")
-        if role not in ("admin", "platform_admin", "superadmin"):
+        # #12786: the same two sets this file already depends on, unioned
+        # explicitly rather than re-spelled as a third literal tuple that
+        # nothing keeps in step. Membership is unchanged:
+        # {admin, superadmin} | {platform_admin, superadmin}
+        #     = {admin, platform_admin, superadmin}.
+        if not (is_admin_role(role) or role in CROSS_ORG_KB_ROLES):
             raise HTTPException(status_code=403, detail="Only admins may target another org")
         return override_org_id
     return (current_user or {}).get("org_id")
