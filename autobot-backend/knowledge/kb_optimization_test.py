@@ -13,12 +13,40 @@ import time
 
 import pytest
 
+from autobot_shared.live_service_probe import require_real_redis_client
 from autobot_shared.ssot_config import config
 
 # Add AutoBot to path
 sys.path.insert(0, config.project_root)
 
 from knowledge_base import get_knowledge_base
+
+
+@pytest.fixture(autouse=True)
+def _require_real_redis(request) -> None:
+    """Skip while the backend conftest's Redis stand-in is installed (#14930, #14932).
+
+    ``get_knowledge_base()`` initialises Redis first (``knowledge/base.py``
+    step 1) and raises ``RuntimeError: Failed to initialize knowledge base``
+    when it cannot. In the marker-excluded run that is not an infrastructure
+    gap — the workflow provides a healthy Redis — it is
+    ``autobot-backend/conftest.py`` replacing ``autobot_shared.redis_client``
+    with a socket-free stand-in whose ``get_redis_client`` returns ``None`` for
+    every item under ``autobot-backend/``, markers included. #14932 owns that.
+
+    The condition checked is structural (is the real module installed?), not the
+    test's own failure, so this stops skipping by itself the moment #14932
+    lands — and a knowledge base that then fails to initialise fails the test,
+    which is the point.
+
+    Scoped to ``integration``-marked items only. Both files in this directory
+    pair the marked test with a hermetic one that needs no Redis at all and runs
+    on the PR unit gate; guarding those too would silently disable a passing
+    gate test, which is the same class of damage this change exists to undo.
+    """
+    if request.node.get_closest_marker("integration") is None:
+        return
+    require_real_redis_client("the knowledge base")
 
 # Test document content
 TEST_DOCUMENT_CONTENT = """

@@ -20,12 +20,27 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.live_service_probe import require_live_endpoint
 from autobot_shared.paths import project_root
 from constants.network_constants import ServiceURLs
 
 pytestmark = pytest.mark.integration
 
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
+
+
+@pytest.fixture(autouse=True)
+def _require_live_backend() -> None:
+    """Skip when no backend is listening, instead of failing on a refused socket (#14930).
+
+    Every check in this module dials ``BASE_URL`` over real HTTP. On a runner
+    with no backend up, all six reported ``ConnectionRefusedError`` as test
+    failures — a red result that says nothing about the code under test and
+    trained the whole marker-excluded suite to be ignored. A skip naming the
+    absent service is the honest report; the tests still run, and still fail
+    for real, wherever a backend is actually up.
+    """
+    require_live_endpoint(ServiceURLs.BACKEND_API, what="the AutoBot backend API")
 
 
 def test_health():
