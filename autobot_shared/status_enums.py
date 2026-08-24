@@ -83,15 +83,55 @@ class Severity(Enum):
     "unknown", "info", "minimal") and consolidates 10+ duplicate enums
     (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
     DebtSeverity, RiskLevel — all collapse to this enum.
+
+    #14956 added WARNING, DEGRADED and ERROR. They are not synonyms of an
+    existing rung and were NOT folded into one, because each is a value the
+    platform already emits across a boundary that would change if it moved:
+
+    * ``warning`` is a Prometheus label value — ``PerformanceMonitor``
+      publishes ``update_active_alerts("warning", ...)`` and the shipped
+      alert rules carry ``severity: warning``. Mapping it to ``medium``
+      would rename a scraped label.
+    * ``degraded`` is serialised into the causal-analysis API response and
+      grades partial impact between ``warning`` and ``critical``.
+    * ``error`` is the rung the capability audit grades findings at, kept
+      distinct from ``warning`` because the two are counted separately.
+
+    So this enum is the severity *vocabulary*. Numeric risk grading uses the
+    narrower ``score_ladder()`` — see that method for why the distinction is
+    load-bearing rather than cosmetic.
     """
 
     UNKNOWN = "unknown"
     INFO = "info"
     MINIMAL = "minimal"
     LOW = "low"
+    WARNING = "warning"  # #14956: monitoring/log-level rung, a Prometheus label
     MEDIUM = "medium"
+    DEGRADED = "degraded"  # #14956: partial impact, emitted by causal analysis
     HIGH = "high"
+    ERROR = "error"  # #14956: audit-finding rung, graded above "warning"
     CRITICAL = "critical"
+
+    @classmethod
+    def score_ladder(cls) -> tuple["Severity", ...]:
+        """The rungs ``from_score`` can produce, in ascending order.
+
+        The enum is the whole severity *vocabulary*; this is the subset that
+        numeric risk grading maps onto. Distributions keyed by severity
+        (``{level.value: 0 for level in RiskLevel}``) iterate this rather
+        than the enum, so #14956 adding vocabulary members did not silently
+        add three always-zero keys to a shipped API response.
+        """
+        return (
+            cls.UNKNOWN,
+            cls.INFO,
+            cls.MINIMAL,
+            cls.LOW,
+            cls.MEDIUM,
+            cls.HIGH,
+            cls.CRITICAL,
+        )
 
     @classmethod
     def from_score(cls, score: float) -> "Severity":
@@ -124,8 +164,11 @@ class Severity(Enum):
             cls.INFO: 0.1,
             cls.MINIMAL: 0.2,
             cls.LOW: 0.3,
+            cls.WARNING: 0.4,
             cls.MEDIUM: 0.5,
+            cls.DEGRADED: 0.6,
             cls.HIGH: 0.7,
+            cls.ERROR: 0.8,
             cls.CRITICAL: 0.9,
         }
         return scores.get(severity, 0.0)

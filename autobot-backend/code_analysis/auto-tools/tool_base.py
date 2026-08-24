@@ -28,8 +28,48 @@ from pathlib import Path
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
+
+# Severity rungs these tools grade findings at, worst first, with the icon each
+# renders as. Hosted here once because all three sanitizers had their own copy
+# of the same table and the same ordering list (#14956).
+#
+# The rungs are canonical ``Severity`` members. The tools previously stored the
+# member NAME ("HIGH") where the VALUE ("high") belongs, so anything comparing a
+# finding against ``Severity.HIGH.value`` silently missed every one of them. The
+# stored value is now canonical; the report text still shows the upper-case name,
+# so the human-facing output is unchanged.
+SEVERITY_REPORT_ICONS: Dict[Severity, str] = {
+    Severity.CRITICAL: "🔴",
+    Severity.HIGH: "🟠",
+    Severity.MEDIUM: "🟡",
+    Severity.LOW: "🟢",
+}
+SEVERITY_REPORT_ORDER: tuple = tuple(SEVERITY_REPORT_ICONS)
+UNRANKED_SEVERITY_ICON = "⚪"
+
+
+def severity_icon(value: str) -> str:
+    """Icon for a stored severity value; unranked and unknown both fall back."""
+    try:
+        return SEVERITY_REPORT_ICONS.get(Severity(value), UNRANKED_SEVERITY_ICON)
+    except ValueError:
+        return UNRANKED_SEVERITY_ICON
+
+
+def severity_label(value: str) -> str:
+    """Report text for a stored severity value — the member name, upper-case.
+
+    Keeps the human-facing report identical to what it printed when the tools
+    stored the name instead of the value, so #14956 changed the stored data
+    without changing a single line of the rendered report.
+    """
+    try:
+        return Severity(value).name
+    except ValueError:
+        return str(value)
 
 
 class SecurityFixToolBase:

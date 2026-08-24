@@ -24,12 +24,13 @@ import pytest
 from fastapi import HTTPException
 
 from api import knowledge_grounding
+from autobot_shared.status_enums import Severity
 
 # The live wire shape: decode_responses=True means every field is already str.
 DECODED_CONFLICTS = {
     "conflict:abc123": {
         "status": "pending",
-        "severity": "high",
+        "severity": Severity.HIGH.value,
         "description": "KB says X, source says Y",
         "timestamp": "1700000000.0",
     },
@@ -39,7 +40,7 @@ DECODED_CONFLICTS = {
 BYTES_KEY_CONFLICTS = {
     b"conflict:def456": {
         "status": "pending",
-        "severity": "low",
+        "severity": Severity.LOW.value,
         "description": "legacy bytes key",
         "timestamp": "1700000001.0",
     },
