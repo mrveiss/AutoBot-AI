@@ -192,6 +192,14 @@ def _dotted(node: ast.AST) -> str:
 
 
 def _has_init(node: ast.ClassDef) -> bool:
+    """Known gap (#14984): the class's OWN body only, not an inherited __init__.
+
+    pytest asks ``cls.__init__ is not object.__init__``, which walks the MRO, so
+    a ``Test*`` class inheriting ``__init__`` from a plain base is skipped by
+    pytest and counted as collected here. A repo-wide sweep found zero instances
+    when this was written, so the budgets below are unaffected; resolving bases
+    across modules is a model change, tracked in #14984.
+    """
     return any(
         isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "__init__"
         for child in node.body

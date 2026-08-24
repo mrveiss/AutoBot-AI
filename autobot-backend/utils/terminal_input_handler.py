@@ -11,6 +11,7 @@ and automated testing environments, preventing test timeouts and CI/CD failures.
 
 import asyncio
 import queue
+import re
 import sys
 import threading
 from contextlib import contextmanager
@@ -30,6 +31,15 @@ _YES_NO_KEYWORDS = frozenset({"yes", "no", "y/n"})
 # Words that introduce a numbered selection. Module-level frozenset for the same
 # reason as _YES_NO_KEYWORDS (#380), and used by _generate_intelligent_default.
 _CHOICE_KEYWORDS = frozenset({"choice", "choose", "option", "select"})
+
+# The second half of that test: an enumerated range in parentheses -- "(1-5)",
+# "(3)". These four keywords are generic enough that pairing them with "any
+# digit anywhere in the prompt" claimed prompts meant for the branches below:
+# "Select a config file (1 of 3):" and "Select the port to use:" would both have
+# answered with a bare digit instead of a path or a port. A parenthesised range
+# is a menu and nothing else, which is why this branch still runs first, and the
+# answer is taken from inside the range rather than from the prompt at large.
+_ENUMERATED_RANGE = re.compile(r"\(\s*(\d+)\s*(?:-\s*\d+\s*)?\)")
 
 # Import configuration for fallback defaults
 try:
@@ -190,15 +200,18 @@ class TerminalInputHandler:
         if any(word in prompt_lower for word in _YES_NO_KEYWORDS):
             return "y"
 
-        # Check choice pattern with digits. #14927: this matched only the literal
-        # word "choice", so "Select option (1-5):" fell through every branch below
-        # and returned "" -- not a selectable value. The gap has been live since
-        # #315 because the test that covers it sat in a class pytest could not
-        # collect, so it never ran. A numbered selection is phrased at least as
-        # often with "select" or "option" as with "choice".
-        if any(word in prompt_lower for word in _CHOICE_KEYWORDS) and any(char.isdigit() for char in prompt):
-            numbers = [char for char in prompt if char.isdigit()]
-            return numbers[0] if numbers else config.misc.default_choice or _get_config_default("default_choice", "1")
+        # Check numbered-menu pattern: a choice keyword AND an enumerated range.
+        # #14927: this matched only the literal word "choice", so
+        # "Select option (1-5):" fell through every branch below and returned ""
+        # -- not a selectable value. The gap has been live since #315 because the
+        # test that covers it sat in a class pytest could not collect, so it never
+        # ran. A numbered selection is phrased at least as often with "select" or
+        # "option" as with "choice". See _ENUMERATED_RANGE for why the range, and
+        # not a loose digit scan, is what admits a prompt to this branch.
+        if any(word in prompt_lower for word in _CHOICE_KEYWORDS):
+            enumerated = _ENUMERATED_RANGE.search(prompt)
+            if enumerated:
+                return enumerated.group(1)
 
         # Check command pattern (requires both keywords)
         if "enter" in prompt_lower and "command" in prompt_lower:
