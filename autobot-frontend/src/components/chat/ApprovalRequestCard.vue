@@ -287,7 +287,11 @@ const getRiskClass = (level: string): string => {
     critical: 'risk-critical'
   }
   const severity = getRiskSeverity(level)
-  return severity ? classes[severity] : 'risk-low'
+  // #14955 review: an unrecognized value must never fall back to the
+  // low-risk/success-green class on this approval surface — that would
+  // render an unclassified (possibly dangerous) command as "safe". Unknown
+  // values get a distinct, visually neutral class instead.
+  return severity ? classes[severity] : 'risk-unknown'
 }
 
 // Actions
@@ -411,6 +415,13 @@ const submitWithComment = () => {
 .risk-critical {
   color: var(--color-error-hover);
   font-weight: var(--font-semibold);
+}
+
+/* #14955: unrecognized risk value — deliberately not the success-green
+   .risk-low, so an unclassified command never reads as "safe". */
+.risk-unknown {
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
 .interactive-warning {

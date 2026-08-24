@@ -199,10 +199,18 @@ class AgentTerminalService:
         await self.command_queue.add_command(cmd_execution)
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
+        # #14955: the pending-approval UI (ApprovalRequestCard / ChatMessages)
+        # must see the same converted RiskLevel vocabulary as cmd_execution
+        # above, not the raw CommandRisk. cmd_execution.risk_level is already
+        # the map_risk_to_level() conversion of this same `risk` value — reuse
+        # it rather than reading `risk.value` again, so this can't drift from
+        # the sibling object created two lines up.
+        risk_value = cmd_execution.risk_level.value
+
         session.set_pending_approval(
             command=command,
             description=description,
-            risk_value=risk.value,
+            risk_value=risk_value,
             reasons=reasons,
             command_id=cmd_execution.command_id,
             is_interactive=is_interactive,
@@ -224,7 +232,7 @@ class AgentTerminalService:
 
         return session.build_pending_response(
             command=command,
-            risk_value=risk.value,
+            risk_value=risk_value,
             reasons=reasons,
             description=description,
             command_id=cmd_execution.command_id,

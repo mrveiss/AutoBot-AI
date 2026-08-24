@@ -5,23 +5,28 @@
 /**
  * Canonical command-approval risk-level vocabulary (#14955).
  *
- * The single producer for the `risk_level` field rendered by
- * `useCommandApproval`/`ChatMessages.vue` and `ApprovalRequestCard.vue` is
+ * The `risk_level` field rendered by `useCommandApproval`/`ChatMessages.vue`
+ * and `ApprovalRequestCard.vue` is contracted to
  * `autobot-backend/models/command_execution.py::RiskLevel` (#7258's
  * deliberate uppercase fork, kept for legacy Redis/SQLite wire
- * compatibility). It serializes exactly four uppercase values —
+ * compatibility): exactly four uppercase values —
  * `LOW` / `MEDIUM` / `HIGH` / `CRITICAL` — see:
  *   - `models/command_execution.py::RiskLevel` (enum definition)
  *   - `models/command_execution.py::CommandExecution.to_dict` (`.value`)
  *   - `api/agent_terminal.py` command-status response (`risk_level`)
  *
  * The wider `CommandRisk` enum (`SAFE/MODERATE/HIGH/CRITICAL/DANGEROUS/
- * FORBIDDEN`) never reaches the frontend directly — it is converted to the
- * vocabulary above at the backend boundary by
- * `services/agent_terminal/utils.py::map_risk_to_level` before a command
- * ever produces a `risk_level` string for the UI. Do NOT widen this table
- * to accept `MODERATE`/`DANGEROUS`/`FORBIDDEN`; that would quietly accept a
- * non-canonical vocabulary the backend never emits at this call site.
+ * FORBIDDEN`) is converted to the vocabulary above at the backend boundary
+ * by `services/agent_terminal/utils.py::map_risk_to_level`. That boundary
+ * must be applied at EVERY call site that turns a `CommandRisk` into a
+ * `risk_level` string for the UI — #14955 found one that skipped it
+ * (`services/agent_terminal/service.py::_queue_command_for_approval` was
+ * forwarding the raw `CommandRisk.value`, e.g. `"dangerous"`, straight into
+ * the pending-approval response; fixed alongside this file to reuse the
+ * already-converted `cmd_execution.risk_level`). Do NOT widen this table to
+ * accept `MODERATE`/`DANGEROUS`/`FORBIDDEN`/`SAFE` as a workaround for a
+ * producer that skips the conversion — fix that producer instead, the same
+ * way this one was fixed.
  */
 
 export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical'
