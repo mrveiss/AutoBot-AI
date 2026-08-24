@@ -26,7 +26,8 @@ arguments BEFORE base-command lookup so the more-specific reason wins.
 
 import pytest
 
-from secure_command_executor import CommandRisk, SecureCommandExecutor
+from autobot_shared.status_enums import CommandRisk
+from secure_command_executor import SecureCommandExecutor
 
 
 @pytest.fixture

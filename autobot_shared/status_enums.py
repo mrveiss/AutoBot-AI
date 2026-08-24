@@ -22,6 +22,7 @@ Usage:
 """
 
 from enum import Enum
+from typing import Iterable
 
 
 class TaskStatus(Enum):
@@ -134,6 +135,79 @@ class Severity(Enum):
 # rather than "severity"; canonically the same enum (#6689). Use whichever
 # name reads clearer at the call site.
 RiskLevel = Severity
+
+
+class CommandRisk(Enum):
+    """Risk classification for a shell command, for policy decisions (#13845).
+
+    Canonical union of two forks that modelled the same concept under
+    different names, so neither side's tail is lost:
+
+    * ``secure_command_executor.CommandRisk`` — SAFE / MODERATE / HIGH /
+      CRITICAL / FORBIDDEN, used for executor policy decisions.
+    * ``api.schemas_terminal.CommandRiskLevel`` — SAFE / MODERATE / HIGH /
+      DANGEROUS, the wire schema for the *same* subsystem.
+
+    Three members matched; the tails did not. A command the executor rated
+    ``FORBIDDEN`` had no faithful representation in its own wire schema, and
+    ``DANGEROUS`` — already serialized by ``POST /terminal/command`` and by
+    the terminal WebSocket — existed nowhere in the executor's vocabulary.
+    Both tails are kept here rather than one being picked as the survivor.
+
+    ``DANGEROUS`` and ``FORBIDDEN`` are distinct *reasons* that reach the same
+    verdict: DANGEROUS means the command matched a destructive pattern
+    (``RISKY_COMMAND_PATTERNS``), FORBIDDEN means the base command is on the
+    executor's deny list (``FORBIDDEN_COMMANDS``). They keep separate values
+    because ``"dangerous"`` is already on the wire; ask ``.blocks`` rather
+    than comparing against one of them, or a blocking verdict raised by the
+    other producer reads as permitted.
+
+    Not to be confused with ``Severity``/``RiskLevel`` above, which grades how
+    bad an *outcome* is. This grades what a *command* is allowed to do.
+    """
+
+    SAFE = "safe"
+    MODERATE = "moderate"
+    HIGH = "high"
+    CRITICAL = "critical"
+    DANGEROUS = "dangerous"
+    FORBIDDEN = "forbidden"
+
+    @property
+    def rank(self) -> int:
+        """Strictness rank, ascending. Declaration order is the ordering.
+
+        Derived from the enum itself so a member added later cannot be missed
+        by a hand-written rank table — which is exactly how ``DANGEROUS`` was
+        absent from both of the ones this replaces.
+        """
+        return _COMMAND_RISK_RANK[self]
+
+    @property
+    def blocks(self) -> bool:
+        """True when the verdict is "do not run this", whatever the reason."""
+        return self in _COMMAND_RISK_BLOCKING
+
+    @classmethod
+    def strictest(cls, risks: "Iterable[CommandRisk]") -> "CommandRisk | None":
+        """Highest-ranked risk in ``risks``, or None when empty."""
+        ranked = sorted(risks, key=lambda risk: risk.rank)
+        return ranked[-1] if ranked else None
+
+
+# Rank table derived from declaration order — never hand-written, so it cannot
+# narrow silently when a member is added (#13845).
+_COMMAND_RISK_RANK: "dict[CommandRisk, int]" = {
+    member: index for index, member in enumerate(CommandRisk)
+}
+
+# The verdicts that mean "refuse". DANGEROUS blocks because the command matched
+# a destructive pattern; FORBIDDEN because the base command is denied outright.
+# CRITICAL is deliberately not here: the approval layer grants it under
+# ``allow_dangerous`` rather than refusing it.
+_COMMAND_RISK_BLOCKING: "frozenset[CommandRisk]" = frozenset(
+    {CommandRisk.DANGEROUS, CommandRisk.FORBIDDEN}
+)
 
 
 class Priority(Enum):
@@ -334,6 +408,7 @@ __all__ = [
     "WorkflowStatus",
     "Severity",
     "RiskLevel",
+    "CommandRisk",
     "Priority",
     "TaskPriority",
     "LLMProvider",

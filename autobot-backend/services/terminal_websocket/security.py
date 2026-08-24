@@ -10,10 +10,8 @@ Command risk assessment and security enforcement for terminal operations.
 
 from typing import Set
 
-from api.schemas_terminal import (
-    CommandRiskLevel,
-    SecurityLevel,
-)
+from api.schemas_terminal import SecurityLevel
+from autobot_shared.status_enums import CommandRisk
 from autobot_shared.logging_manager import get_logger
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
@@ -28,47 +26,50 @@ LOGGING_SECURITY_LEVELS: Set[SecurityLevel] = {
     SecurityLevel.RESTRICTED,
 }
 
-# Performance optimization: O(1) lookup for high-risk command levels (Issue #326)
-HIGH_RISK_COMMAND_LEVELS: Set[CommandRiskLevel] = {
-    CommandRiskLevel.DANGEROUS,
-    CommandRiskLevel.HIGH,
-}
+# Performance optimization: O(1) lookup for high-risk command levels (Issue #326).
+# #13845: derived from ``CommandRisk.blocks`` plus HIGH rather than listed by
+# hand, so a blocking member added later cannot be missed here.
+HIGH_RISK_COMMAND_LEVELS: Set[CommandRisk] = {
+    risk for risk in CommandRisk if risk.blocks
+} | {CommandRisk.HIGH}
 
 
 class CommandSecurityAssessor:
     """Assesses command security risks and enforces security policies"""
 
-    def assess_command_risk(self, command: str) -> CommandRiskLevel:
+    def assess_command_risk(self, command: str) -> CommandRisk:
         """Assess the security risk level of a command"""
         command_lower = command.lower().strip()
 
         # Check for dangerous patterns
         for pattern in RISKY_COMMAND_PATTERNS:
             if pattern in command_lower:
-                return CommandRiskLevel.DANGEROUS
+                return CommandRisk.DANGEROUS
 
         # Check for moderate risk patterns
         for pattern in MODERATE_RISK_PATTERNS:
             if pattern in command_lower:
-                return CommandRiskLevel.MODERATE
+                return CommandRisk.MODERATE
 
         # Special checks for high-risk operations (Issue #326: O(1) lookups)
         if any(x in command_lower for x in SHELL_OPERATORS):
-            return CommandRiskLevel.HIGH
+            return CommandRisk.HIGH
 
-        return CommandRiskLevel.SAFE
+        return CommandRisk.SAFE
 
     def should_block_command(
         self,
         command: str,
-        risk_level: CommandRiskLevel,
+        risk_level: CommandRisk,
         security_level: SecurityLevel,
     ) -> bool:
         """Determine if command should be blocked based on security level"""
         if security_level == SecurityLevel.RESTRICTED:
             return risk_level in HIGH_RISK_COMMAND_LEVELS
         elif security_level == SecurityLevel.ELEVATED:
-            return risk_level == CommandRiskLevel.DANGEROUS
+            # #13845: ``.blocks`` also covers FORBIDDEN, which the unioned enum
+            # can now carry into this path.
+            return risk_level.blocks
 
         return False  # STANDARD level allows most commands
 

@@ -13,7 +13,7 @@ import time
 from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
-from secure_command_executor import CommandRisk
+from autobot_shared.status_enums import CommandRisk
 from services.command_approval_manager import CommandApprovalManager
 
 from .models import AgentTerminalSession

@@ -8273,23 +8273,44 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
         self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
 
     def test_execute_single_command_business_logic_preserved(self):
-        """Test execute_single_command business logic preserved"""
-        import inspect
+        """Assessment behaviour of execute_single_command, not its source text.
+
+        #13845: this used to grep the function body for the literal
+        ``risk_level = CommandRiskLevel.SAFE``. That assertion could not
+        distinguish "the classification still works" from "the identifier was
+        renamed", so it went red on an enum union that changed no behaviour at
+        all. Drive the endpoint and assert on what it returns.
+        """
+        import asyncio
 
         from api.terminal import execute_single_command
+        from api.schemas_terminal import CommandRequest
+        from autobot_shared.status_enums import CommandRisk
+        from constants.terminal_constants import (
+            MODERATE_RISK_PATTERNS,
+            RISKY_COMMAND_PATTERNS,
+        )
 
-        source = inspect.getsource(execute_single_command)
+        def _assess(command):
+            return asyncio.run(
+                execute_single_command(
+                    CommandRequest(command=command),
+                    current_user={"user_id": "test", "username": "test"},
+                )
+            )
 
-        # Core business logic should be preserved
-        self.assertIn("risk_level = CommandRiskLevel.SAFE", source)
-        self.assertIn("command_lower = request.command.lower().strip()", source)
-        self.assertIn("for pattern in RISKY_COMMAND_PATTERNS:", source)
-        self.assertIn("risk_level = CommandRiskLevel.DANGEROUS", source)
-        self.assertIn("for pattern in MODERATE_RISK_PATTERNS:", source)
-        self.assertIn("risk_level = CommandRiskLevel.MODERATE", source)
-        self.assertIn('"command": request.command', source)
-        self.assertIn('"risk_level": risk_level.value', source)
-        self.assertIn('"requires_confirmation"', source)
+        safe = _assess("echo hello")
+        self.assertEqual(safe["command"], "echo hello")
+        self.assertEqual(safe["risk_level"], CommandRisk.SAFE.value)
+        self.assertFalse(safe["requires_confirmation"])
+
+        risky = _assess(f"{RISKY_COMMAND_PATTERNS[0]} /tmp/x")
+        self.assertEqual(risky["risk_level"], CommandRisk.DANGEROUS.value)
+        self.assertTrue(risky["requires_confirmation"])
+
+        moderate = _assess(f"{MODERATE_RISK_PATTERNS[0]} whoami")
+        self.assertEqual(moderate["risk_level"], CommandRisk.MODERATE.value)
+        self.assertTrue(moderate["requires_confirmation"])
 
     def test_execute_single_command_error_handling(self):
         """Test error handling configuration in execute_single_command"""
