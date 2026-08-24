@@ -89,6 +89,49 @@ class SyncType(str, enum.Enum):
     PACKAGE = "package"
 
 
+class BackupServiceType(str, enum.Enum):
+    """Data service a backup, replication or verification targets (#13578).
+
+    ``service_type`` was the outlier among the eight sibling enums in this
+    module: a bare ``String(32)`` with no constraint anywhere. The cost landed
+    the moment a second engine arrived — the dispatch table in
+    ``api/stateful.py`` had to accept two spellings of the same engine, and an
+    unknown value was not rejected at the API boundary at all. It reached
+    ``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a
+    ``BackupStatus.FAILED`` row for a typo that is indistinguishable from one
+    for a real failure.
+
+    The column stays a string at rest (#13578: existing rows keep working);
+    this enum is the boundary that decides what may enter.
+    """
+
+    REDIS = "redis"
+    POSTGRES = "postgres"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "BackupServiceType | None":
+        """Accept ``postgresql`` as a spelling of ``postgres``.
+
+        Both spellings were live keys in the backup dispatch table, so both are
+        already in stored ``backups.service_type`` values and in whatever
+        callers send. Resolving the alias here keeps every old spelling parsing
+        without a second class to keep in step — and collapses it to one
+        canonical member at the boundary, so nothing downstream branches twice.
+        """
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in _BACKUP_SERVICE_TYPE_ALIASES:
+                return _BACKUP_SERVICE_TYPE_ALIASES[normalized]
+        return None
+
+
+# Wire spellings that are not member values. Kept next to the enum so the set of
+# accepted inputs is one greppable place rather than a dispatch-table key.
+_BACKUP_SERVICE_TYPE_ALIASES: dict[str, BackupServiceType] = {
+    "postgresql": BackupServiceType.POSTGRES,
+}
+
+
 class Node(Base):
     """Node model representing a managed machine."""
 
@@ -183,7 +226,7 @@ class Backup(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     backup_id = Column(String(64), unique=True, nullable=False, index=True)
     node_id = Column(String(64), nullable=False, index=True)
-    service_type = Column(String(32), default="redis")
+    service_type = Column(String(32), default=BackupServiceType.REDIS.value)
     backup_path = Column(String(512), nullable=True)
     status = Column(String(20), default=BackupStatus.PENDING.value)
 
@@ -317,7 +360,7 @@ class Replication(Base):
     replication_id = Column(String(64), unique=True, nullable=False, index=True)
     source_node_id = Column(String(64), nullable=False)
     target_node_id = Column(String(64), nullable=False)
-    service_type = Column(String(32), default="redis")
+    service_type = Column(String(32), default=BackupServiceType.REDIS.value)
     status = Column(String(20), default=ReplicationStatus.PENDING.value)
     sync_position = Column(String(128), nullable=True)
     lag_bytes = Column(Integer, default=0)
