@@ -70,7 +70,14 @@ def test_platform_info():
         print("  NPU:       ✗ Not detected (CPU fallback)")
 
     print()
-    return
+    # #14920: this asserted nothing and returned True, so the driver below could
+    # not tell a working detector from a broken one. `system` is the one field
+    # platform detection must always resolve.
+    assert info.get("system"), f"platform detection resolved no system: {info!r}"
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
+    return True
 
 
 def test_primary_ip():
@@ -106,8 +113,14 @@ def test_connection_info_box():
     print("\n✓ Generated Connection Info Box:\n")
     print(box)
     print()
-
-    return
+    # #14920: the box was printed and never checked. It must at least render the
+    # worker id and port it was given, or the formatter silently dropped them.
+    assert worker_id in box, f"the box omitted the worker id: {box!r}"
+    assert str(port) in box, f"the box omitted the port: {box!r}"
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
+    return True
 
 
 def test_registration_config():
@@ -120,8 +133,14 @@ def test_registration_config():
 
     print("\n✓ Generated Registration Configuration:\n")
     print(config)
-
-    return
+    # #14920: printed and unchecked. The config is generated for a specific port,
+    # so that port appearing in it is the minimum the generator must guarantee.
+    assert config, "registration config generation returned nothing"
+    assert "8082" in str(config), f"the config omitted the requested port: {config!r}"
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
+    return True
 
 
 def main():

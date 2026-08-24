@@ -207,6 +207,13 @@ def offending_returns(source: str) -> list[tuple[str, int]]:
     for function in _collectable_tests(tree):
         if _is_fixture(function) or _own_nodes(function, (ast.Yield, ast.YieldFrom)):
             continue
+        # The defect is returning *instead of* asserting — a test that cannot fail.
+        # A test that asserts AND returns can fail, and its return value is a
+        # separate contract: several drivers in this repo sum truthiness over
+        # `result = test_func()`, so a bare assert there leaves a passing test
+        # counted as failed. Both are needed, and neither is an offence (#14920).
+        if _own_nodes(function, (ast.Assert, ast.Raise)):
+            continue
         for node in _own_nodes(function, (ast.Return,)):
             value = node.value
             if value is None or (isinstance(value, ast.Constant) and value.value is None):
