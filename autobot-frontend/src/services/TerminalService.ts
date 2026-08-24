@@ -447,9 +447,34 @@ class TerminalService {
     callbacks: TerminalCallbacks,
     reject: (reason: Error) => void,
   ): void {
+    // #14989: a close before this attempt ever reached CONNECTED is a
+    // handshake-level rejection -- unknown/unowned session, expired token,
+    // or a genuine network failure. The WHATWG WebSocket spec requires
+    // browsers to normalise the close code (and reason) to 1006 for any
+    // closure before the opening handshake completes, so `event.code`
+    // cannot distinguish "denied" from "offline" here -- that information
+    // is only available server-side. Retrying blindly against a session
+    // that will never be authorized produces the same 6-attempt storm
+    // regardless of cause, so this never auto-retries a connection that
+    // never connected; the caller (or an explicit user action) decides
+    // whether to try a different/new session.
+    const neverConnected =
+      this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTING
     this.cleanupSession(sessionId)
-    const attempts = this.reconnectAttempts.get(sessionId) ?? 0
 
+    if (neverConnected) {
+      this.reconnectAttempts.delete(sessionId)
+      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
+      this.triggerCallback(
+        sessionId,
+        'onError',
+        'Connection rejected before it was established -- the session may be invalid, expired, or unauthorized',
+      )
+      reject(new Error(`WebSocket rejected before it was established (code ${event.code})`))
+      return
+    }
+
+    const attempts = this.reconnectAttempts.get(sessionId) ?? 0
     if (event.code !== 1000 && attempts < this.maxReconnectAttempts) {
       this.attemptReconnect(sessionId, callbacks)
     } else {
