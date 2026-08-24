@@ -13,6 +13,7 @@ import { ref, computed } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
 import { getHosts, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useAuthStore } from '@/stores/auth'
 
 const logger = createLogger('TerminalTool')
 
@@ -29,6 +30,11 @@ const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
 
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHostId.value))
+
+// #14991: the backend now authenticates this handshake. SshTerminal has no
+// store of its own, so this app supplies the token it already holds for
+// every other SLM API call (stores/auth.ts).
+const authToken = computed(() => useAuthStore().token)
 
 function onConnected() {
   isConnected.value = true
@@ -93,6 +99,7 @@ function onError(message: string) {
           v-if="selectedHostId"
           :host-id="selectedHostId"
           :ws-base-path="`${getSlmApiBase()}/terminal/ws/ssh/`"
+          :auth-token="authToken"
           class="h-full"
           @connected="onConnected"
           @disconnected="onDisconnected"

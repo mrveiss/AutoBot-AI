@@ -26,6 +26,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useWebSocket } from '@/composables/useWebSocket'
 
@@ -59,13 +60,17 @@ let fitAddon: FitAddon | null = null
 // Reactive WebSocket URL — updated when hostId changes
 const wsUrl = ref('')
 
-const buildWsUrl = () => {
+// #14991: the backend now authenticates this handshake -- attach the JWT via
+// the shared helper (#6700) rather than connecting unauthenticated. Returns
+// null when no token is available; callers must not connect in that case.
+const buildWsUrl = (): string | null => {
   const params = props.chatSessionId
     ? `?conversation_id=${props.chatSessionId}`
     : ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
-  return `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
+  const rawUrl = `${protocol}//${host}/api/terminal/ws/ssh/${props.hostId}${params}`
+  return buildAuthenticatedWsUrl(rawUrl)
 }
 
 const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
@@ -182,7 +187,14 @@ const connect = () => {
   errorMessage.value = ''
 
   const url = buildWsUrl()
-  logger.info(`Connecting to SSH WebSocket: ${url}`)
+  if (url === null) {
+    logger.warn('No auth token available, cannot connect to SSH WebSocket')
+    connectionState.value = 'error'
+    errorMessage.value = 'Not authenticated'
+    emit('error', 'Not authenticated')
+    return
+  }
+  logger.info('Connecting to SSH WebSocket')
   wsUrl.value = url
   wsConnect()
 }
