@@ -21,7 +21,7 @@ invisible gap for another.
 import pytest
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
-from security_layer import SecurityLayer, canonical_role_permissions
+from security_layer import SecurityLayer, _normalise_role, canonical_role_permissions
 
 
 @pytest.fixture
@@ -280,3 +280,67 @@ def test_any_extra_the_gate_grants_comes_from_a_wildcard(gate):
                     unexplained.append((role.value, permission.value))
 
     assert unexplained == [], f"granted by neither the mapping nor a wildcard: {unexplained[:5]}"
+
+
+# ------------------------------- a Role member resolves like its value (#14944)
+
+
+def test_the_role_population_this_section_runs_over_is_the_real_one():
+    """Floor asserted at the real number, so a shrunken enum cannot pass by holding nothing."""
+    assert len(list(Role)) == 7, f"expected 7 Role members, got {len(list(Role))}"
+
+
+@pytest.mark.parametrize("member", list(Role), ids=lambda r: r.value)
+def test_canonical_role_permissions_resolves_a_member_like_its_value(member):
+    """``Role`` is a ``(str, Enum)`` mixin, so ``str(member)`` is ``"Role.ADMIN"``.
+
+    This resolver built ``str(user_role or "").strip().lower()`` and then
+    ``Role(...)`` on the result — ``Role("role.admin")``, a ``ValueError``,
+    caught, and answered ``[]``. So passing the canonical enum member returned
+    *no permissions for admin*, while the string spelling returned all of them.
+
+    Passes the member itself, never ``member.value``: an assertion with
+    ``.value`` on both sides cannot fail here.
+
+    Note this function is ``lru_cache``d, and a member does **not** share a cache
+    entry with its value — ``lru_cache`` fast-paths only exact ``str`` — so the
+    wrong answer was deterministic rather than call-order dependent.
+    """
+    assert canonical_role_permissions(member) == canonical_role_permissions(member.value)
+
+
+def test_admin_resolves_its_whole_grant_list_when_passed_as_a_member():
+    """Presence, not parity alone — parity is also satisfied by two empty lists."""
+    resolved = canonical_role_permissions(Role.ADMIN)
+    assert len(resolved) == len(ROLE_PERMISSIONS[Role.ADMIN])
+    assert Permission.ADMIN_SYSTEM.value in resolved
+
+
+@pytest.mark.parametrize("member", list(Role), ids=lambda r: r.value)
+def test_normalise_role_resolves_a_member_like_its_value(member):
+    """The shared normalisation both gates use (#13820) had the same defect.
+
+    ``_normalise_role(Role.ADMIN)`` returned ``"role.admin"`` — an identity no
+    permission source knows, so it cleared neither gate and, in
+    ``_should_force_approval``, found an empty permission list where no approval
+    branch can fire.
+    """
+    assert _normalise_role(member) == _normalise_role(member.value) == member.value
+
+
+def test_the_live_gate_admits_a_member_exactly_as_it_admits_the_string(gate):
+    """End to end at the real entry point, not only at the helper.
+
+    ``check_permission`` is what actually runs; asserting only on the resolvers
+    would leave the seam between them untested.
+    """
+    for permission in (Permission.MCP_BROWSER_CONTROL.value, "allow_voice_speak"):
+        assert gate.check_permission(Role.ADMIN, permission) is gate.check_permission("admin", permission)
+    assert gate.check_permission(Role.ADMIN, Permission.MCP_BROWSER_CONTROL.value) is True
+
+
+@pytest.mark.parametrize("bad", [42, ["admin"], {"role": "admin"}])
+def test_a_non_role_argument_is_rejected_rather_than_stringified(bad):
+    """Consistent with ``is_admin_role`` — see ``role_value`` (#14944)."""
+    with pytest.raises(TypeError):
+        _normalise_role(bad)

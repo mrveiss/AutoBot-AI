@@ -36,7 +36,7 @@ from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.password_weakness import check_password_weakness
@@ -770,7 +770,7 @@ async def get_role_permissions(
     Gated by ``get_current_user`` (any authenticated caller).
     """
     try:
-        role_enum = Role(role.lower())
+        role_enum = Role(role_value(role).lower())
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Unknown role: {role!r}")
     perms = ROLE_PERMISSIONS.get(role_enum, [])
