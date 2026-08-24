@@ -20,14 +20,19 @@ pass vacuously against MagicMock attributes.
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _BACKEND_ROOT.parent
+_METRICS_DIR = _REPO_ROOT / "autobot_shared" / "monitoring" / "metrics"
+_CGROUP_MEMORY = "autobot_shared.monitoring.metrics.cgroup_memory"
 
 
 def _load(module_name: str, alias: str):
@@ -47,6 +52,53 @@ def _load(module_name: str, alias: str):
 
 
 _probe = _load("role_delivery_probe", "_rdp_13765")
+
+
+@pytest.fixture(autouse=True)
+def _resolvable_cgroup_memory():
+    """Guarantee the collector's predicate resolves, whatever else leaked.
+
+    `probe_out_of_band_limits` imports `has_out_of_band_limits` from the metrics
+    collector at call time, and reports "could not look" when that import fails
+    — correct behaviour in production, and exactly what happened here: several
+    suite files replace `sys.modules["autobot_shared.monitoring"]` (and, when an
+    `exec_module` raises before their restore block, `sys.modules["autobot_
+    shared"]` itself) at MODULE scope with no teardown, so a stub survives for
+    the rest of the session. Under xdist the victim is whichever worker drew the
+    leaker, which is why this reddened one shard and not the other eleven.
+
+    Every negative assertion in this file would pass against that stub — an
+    unreadable-tree case and a scan-did-not-run case both expect an empty list —
+    so without this the suite would have gone green for the wrong reason. Same
+    load-past-the-stub technique `_load` above uses for `services/*`, one package
+    level deeper.
+
+    Restores sys.modules exactly, including deleting keys that were absent, so
+    the repo-wide leak guard (#13337) sees a zero delta and this fixture does not
+    become the next file in the paragraph above.
+    """
+    names = (_CGROUP_MEMORY, "autobot_shared.monitoring.metrics")
+    saved = {name: sys.modules.get(name) for name in names}
+    try:
+        importlib.import_module(_CGROUP_MEMORY)
+    except Exception:
+        # Rebuild only what is missing: a real path-carrying package entry, then
+        # the module itself loaded from disk. Deliberately does NOT execute
+        # `metrics/__init__.py`, which would drag in every other collector.
+        pkg = types.ModuleType("autobot_shared.monitoring.metrics")
+        pkg.__path__ = [str(_METRICS_DIR)]
+        sys.modules["autobot_shared.monitoring.metrics"] = pkg
+        spec = importlib.util.spec_from_file_location(_CGROUP_MEMORY, _METRICS_DIR / "cgroup_memory.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[_CGROUP_MEMORY] = module
+        spec.loader.exec_module(module)
+    yield
+    for name, previous in saved.items():
+        if previous is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous
+
 
 probe_out_of_band_limits = _probe.probe_out_of_band_limits
 probe_role_delivery = _probe.probe_role_delivery
