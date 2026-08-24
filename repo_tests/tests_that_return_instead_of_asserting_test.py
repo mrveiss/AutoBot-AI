@@ -41,13 +41,23 @@ WHAT IS DELIBERATELY NOT COUNTED, AND WHY
 -----------------------------------------
 Measured on this branch, each derived from the code rather than from a list:
 
-* **152** returns in ``test_*`` methods of classes that do not match
-  ``python_classes`` — pytest never collects them, so they are ordinary
-  methods that happen to be named like tests. Counting them would demand edits
-  to code nothing executes, and the conversion has to wait until the methods
-  are actually collected. That is its own defect, filed as **#14927** (120
-  methods in 23 classes across 19 files, including 13 in an IDOR hotfix suite),
-  and it must be fixed first.
+* returns in ``test_*`` methods of classes pytest does not collect — they are
+  ordinary methods that happen to be named like tests, so converting their
+  ``return`` to ``assert`` would change nothing until something runs them. That
+  is its own defect, tracked by **#14927** and guarded by
+  ``repo_tests/test_methods_in_uncollected_classes_test.py``.
+
+  This exclusion used to be described here as "152 returns in classes that do
+  not match ``python_classes``", citing #14927's figure of 120 methods in 23
+  classes including 13 in an IDOR hotfix suite. That description was wrong, and
+  wrong in a way worth recording: ``python_classes`` is only one of pytest's
+  three collection rules. ``unittest.TestCase`` subclasses are collected
+  whatever they are called — which is why all 13 of the IDOR tests were
+  collecting, running and passing the entire time — and a base class is
+  collected through any ``Test*`` subclass that inherits it. Pulling the other
+  way, a class WITH ``__init__`` is not collected however it is named, which hid
+  41 further methods that neither #14927 nor this file could see. The corrected
+  figure was settled by running ``--collect-only``, not by matching names.
 * **11** returns in ``test_*`` functions decorated with ``@pytest.fixture`` —
   a fixture is *supposed* to return; its name is the only thing test-shaped
   about it.
@@ -132,7 +142,10 @@ _KNOWN_OFFENDERS = {
     #
     # The drop is not a sweep collapse — the population floors below are
     # untouched and still pass, which is what tells the two apart.
-    "autobot-backend": (78, 18000),
+    # 78 -> 75 with #14941 (test_celery_worker_status stopped returning a verdict
+    # pytest discards) and #14927 (three classes converted to collect, which moves
+    # their methods into this file's population as well).
+    "autobot-backend": (75, 18000),
     "autobot-infrastructure": (126, 250),
     "autobot-npu-worker": (7, 150),
 }
