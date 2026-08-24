@@ -4,7 +4,41 @@ This directory holds the canonical, version-controlled source for Claude Code
 skills used by this project. Skills are workflow definitions Claude reads
 before responding — small markdown files that say "when X happens, do Y".
 
-## Why these live in the repo
+
+## Installing the skill sets
+
+Most AutoBot skills ship as two Claude Code **plugin marketplaces**, so every developer gets the
+same setup with a few commands — no manual copying, and each set updates independently.
+
+**General, reuse-anywhere skills** — [Claude-Dev-Skills](https://github.com/mrveiss/Claude-Dev-Skills)
+(`process`, `commit`, `canonical-coding`, `review-lenses`, `gap-audit`, `web-audit`, `ui-design`,
+`memory-cleanup`):
+
+```
+/plugin marketplace add mrveiss/Claude-Dev-Skills
+/plugin install claude-dev-skills@claude-dev-skills
+```
+
+**AutoBot-specific skills** — [AutoBot-AI-Claude-dev-skills](https://github.com/mrveiss/AutoBot-AI-Claude-dev-skills)
+(`implement`, `pr`, `pre-merge-validate`, `github-cli`, `debug-autobot`, `api-wiring-audit`,
+`dead-code-audit`, `review-fleet`, `review`, `session-lifecycle`, `drain`):
+
+```
+/plugin marketplace add mrveiss/AutoBot-AI-Claude-dev-skills
+/plugin install autobot-dev-skills@autobot-ai-claude-dev-skills
+```
+
+The split is deliberate: a general skill improves for every project at once, while an
+AutoBot-specific one stays where its conventions (`Dev_new_gui`, `autobot_shared`, the deploy path,
+the PR-body headings) apply. `debug-autobot` reads service hosts from `$REDIS_HOST` / `$NPU_HOST` /
+`$BROWSER_HOST` / `$AISTACK_HOST` — export them from your deployment before use.
+
+## Skills that still live in this repo
+
+A few skills are canonically version-controlled here rather than in a marketplace, because they are
+tightly bound to code in this tree:
+
+### Why a skill stays in-repo
 
 Claude reads skills from `~/.claude/skills/<name>/SKILL.md` on each developer's
 machine. Without this directory:
@@ -23,8 +57,9 @@ incident.
 |---|---|
 | `batch-implement.md` | Drives `/batch-implement <issues>` — full implement→review→merge→close→discover loop with self-healing retry, Phase 0c verification mandate, and Phase 0d behavioral grep for extraction PRs |
 
-Other skills (e.g. `commit`, `pr`, `issue`) are not yet mirrored here. Add
-them as they need updates worth reviewing.
+The general and AutoBot-specific skills now live in the two marketplaces above. What remains
+in this directory is `batch-implement.md` (below); the `autobot-llc` skill lives in
+`autobot-backend/llc/skills/` beside the LLC code it drives.
 
 `team-implement.md` was consolidated into `batch-implement.md` in #5454 —
 the two skills' scopes overlapped (both did parallel-issue implementation),
@@ -34,13 +69,15 @@ of truth for the end-to-end workflow.
 
 ## Setup (one-time per developer)
 
+Install the two marketplaces (above) for most skills. For the in-repo skills in this directory:
+
 ```bash
 tools/install_skills.sh
 ```
 
-That script symlinks each `*.md` here into `~/.claude/skills/<name>/SKILL.md`,
-so Claude reads the in-repo version directly. Updates to the file in this
-directory are picked up on Claude's next read — no resync needed.
+That script symlinks each `*.md` here into `~/.claude/skills/<name>/SKILL.md`, so Claude reads the
+in-repo version directly. Updates to the file are picked up on Claude's next read — no resync
+needed.
 
 ## Updating a skill
 
