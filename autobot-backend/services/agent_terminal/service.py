@@ -199,6 +199,21 @@ class AgentTerminalService:
         await self.command_queue.add_command(cmd_execution)
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
+        # #14955 review: session.pending_approval["risk"] (read back via
+        # get_pending_risk_level()) feeds the auto-approve rules engine
+        # (store_auto_approve_rule / check_auto_approve_rules in
+        # approval_handler.py) and approval_memory.py's RISK_LEVELS table,
+        # BOTH of which key on the 6-member CommandRisk vocabulary — the
+        # check site (_check_auto_approval_or_queue, below) was never
+        # touched and still compares against raw CommandRisk.value. Storing
+        # a converted RiskLevel here instead would silently break every
+        # "always allow" rule created after this point (RiskLevel != the
+        # CommandRisk the check compares against) and would permanently
+        # collapse the DANGEROUS/FORBIDDEN/CRITICAL distinction
+        # approval_memory.py's ranking exists to preserve. Keep this value
+        # as the raw CommandRisk — only the UI-facing response below is
+        # converted to the RiskLevel wire vocabulary ApprovalRequestCard.vue
+        # renders.
         session.set_pending_approval(
             command=command,
             description=description,
@@ -222,9 +237,15 @@ class AgentTerminalService:
                 user_id=user_id,
             )
 
+        # cmd_execution.risk_level is the map_risk_to_level() conversion of
+        # this same `risk` value (computed by create_command_execution
+        # above) — reused here so the UI response can't drift from the
+        # CommandExecution object built from the same risk assessment.
+        # This is the ONLY risk value this method converts to RiskLevel;
+        # everything above stays in the CommandRisk vocabulary.
         return session.build_pending_response(
             command=command,
-            risk_value=risk.value,
+            risk_value=cmd_execution.risk_level.value,
             reasons=reasons,
             description=description,
             command_id=cmd_execution.command_id,
