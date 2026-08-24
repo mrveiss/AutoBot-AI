@@ -439,6 +439,7 @@ To add a new variable:
 |---|---|---|---|---|
 | `AUTOBOT_ALLOW_CONFIG_EDITS` | system | bool | false | Permit writes to the repository's tracked config files. Off by default: the codebase is the source of truth and an edit made here is invisible to deployment (#11220). |
 | `AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS` | execution | int | `604800` | Seconds a session holding a pending approval survives in Redis. Deliberately long — what it waits for is a person, and expiring sooner discards the approval rather than the wait (#13478). |
+| `AUTOBOT_AUDIT_FILING_STATUS_TTL_S` | backend | int | `2592000` | Seconds the audit worker's filing-health record survives in Redis. Refreshed on every run and at worker startup, so this only has to outlive the longest gap between runs (the claims audit is weekly); it exists so a record left by a worker that has since stopped does not keep answering for one that no longer exists (#13570). |
 | `AUTOBOT_AUDIT_MAX_DEFERRED` | backend | int | `10000` | Ceiling on audit records held in the deferred queue when the sink is unavailable. Beyond it the oldest are dropped, bounding memory rather than letting an outage grow it without limit. |
 | `AUTOBOT_BACKEND_HOST` | backend | str | `'10.0.0.1'` | Hostname or IP address of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
@@ -585,5 +586,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*147 variables registered as of last generation.*
+*148 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
