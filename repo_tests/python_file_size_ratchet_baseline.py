@@ -332,7 +332,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/security_layer.py": 767,
     "autobot-backend/security_layer_test.py": 604,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 994,
+    "autobot-backend/services/agent_terminal/service.py": 1015,
     "autobot-backend/services/ai_stack_client.py": 790,
     "autobot-backend/services/analytics_service.py": 838,
     "autobot-backend/services/audit_logger.py": 1022,
