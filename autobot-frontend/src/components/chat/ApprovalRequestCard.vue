@@ -223,6 +223,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { getRiskSeverity, type RiskSeverity } from '@/utils/riskLevel'
 
 
 interface Props {
@@ -279,13 +280,14 @@ watch(
 
 // Helpers
 const getRiskClass = (level: string): string => {
-  const classes: Record<string, string> = {
+  const classes: Record<RiskSeverity, string> = {
     low: 'risk-low',
     medium: 'risk-medium',
     high: 'risk-high',
     critical: 'risk-critical'
   }
-  return classes[level?.toLowerCase()] || 'risk-low'
+  const severity = getRiskSeverity(level)
+  return severity ? classes[severity] : 'risk-low'
 }
 
 // Actions
