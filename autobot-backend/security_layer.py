@@ -26,8 +26,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
-from config import get_config_manager
 from autobot_shared.status_enums import CommandRisk
+from config import get_config_manager
 from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 logger = get_logger(__name__)

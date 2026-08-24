@@ -368,9 +368,59 @@ def test_the_canonical_severity_still_carries_every_aliased_member():
 # --------------------------------------------------------------------------
 
 
+_ENUM_BASES = {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag"}
+
+
+def _local_enum_names(tree: ast.Module) -> set[str]:
+    """Local names in this module that are bound to an ``enum`` base class.
+
+    Resolving the *import* rather than matching the literal word "Enum" is what
+    makes the scan survive ``from enum import Enum as _E``. Matching the word
+    alone reported a re-declared ``CommandRiskLevel`` as absent — a fail-open
+    found by mutating this guard, not by reading it.
+    """
+    local = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "enum":
+            for alias in node.names:
+                if alias.name in _ENUM_BASES:
+                    local.add(alias.asname or alias.name)
+    return local
+
+
+def _base_names(node: ast.ClassDef) -> set[str]:
+    """Base names as written: bare ``Enum`` and dotted ``enum.Enum`` alike."""
+    names = set()
+    for base in node.bases:
+        if isinstance(base, ast.Name):
+            names.add(base.id)
+        elif isinstance(base, ast.Attribute):
+            names.add(base.attr)
+    return names
+
+
+def _enums_in_tree(tree: ast.Module) -> list[tuple[str, frozenset[str]]]:
+    """(class name, member names) for every enum declared in one module."""
+    local = _local_enum_names(tree) | _ENUM_BASES
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or not (_base_names(node) & local):
+            continue
+        names = frozenset(
+            target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant)
+            for target in stmt.targets
+            if isinstance(target, ast.Name)
+        )
+        if names:
+            found.append((node.name, names))
+    return found
+
+
 @functools.lru_cache(maxsize=1)
 def _declared_enums() -> tuple[tuple[str, str, frozenset[str]], ...]:
-    """Every ``class X(...Enum)`` under the Python roots, with its member names.
+    """Every enum under the Python roots, with its member names.
 
     Parsed once for the whole module — the two fork scans below would otherwise
     re-read several thousand files each.
@@ -383,25 +433,30 @@ def _declared_enums() -> tuple[tuple[str, str, frozenset[str]], ...]:
             tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
-                continue
-            bases = {
-                base.id if isinstance(base, ast.Name) else getattr(base, "attr", "")
-                for base in node.bases
-            }
-            if "Enum" not in bases:
-                continue
-            names = frozenset(
-                target.id
-                for stmt in node.body
-                if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant)
-                for target in stmt.targets
-                if isinstance(target, ast.Name)
-            )
-            if names:
-                declared.append((rel, node.name, names))
+        declared.extend((rel, name, members) for name, members in _enums_in_tree(tree))
     return tuple(declared)
+
+
+def test_the_scan_sees_an_enum_whose_base_was_imported_under_an_alias():
+    """The fail-open this guard shipped with, pinned against synthetic source.
+
+    Mutation M9 re-declared ``CommandRiskLevel`` with ``from enum import Enum
+    as _E`` and the fork scan stayed green: it matched the literal word "Enum"
+    in the base list, which an alias removes. Run against a string here, so the
+    check does not depend on the tree containing an example.
+    """
+    aliased = ast.parse(
+        "from enum import Enum as _E\n\n\nclass Regrown(_E):\n    SAFE = 'safe'\n"
+    )
+    assert _enums_in_tree(aliased) == [("Regrown", frozenset({"SAFE"}))]
+
+    dotted = ast.parse("import enum\n\n\nclass Dotted(enum.Enum):\n    SAFE = 'safe'\n")
+    assert _enums_in_tree(dotted) == [("Dotted", frozenset({"SAFE"}))]
+
+    plain = ast.parse("from enum import Enum\n\n\nclass Plain(Enum):\n    SAFE = 'safe'\n")
+    assert _enums_in_tree(plain) == [("Plain", frozenset({"SAFE"}))]
+
+    assert _enums_in_tree(ast.parse("class NotAnEnum:\n    SAFE = 'safe'\n")) == []
 
 
 def _enums_matching(predicate) -> list[str]:

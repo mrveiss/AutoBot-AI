@@ -11,8 +11,8 @@ Command risk assessment and security enforcement for terminal operations.
 from typing import Set
 
 from api.schemas_terminal import SecurityLevel
-from autobot_shared.status_enums import CommandRisk
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import CommandRisk
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
 logger = get_logger(__name__)

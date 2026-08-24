@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.schemas_system import ChatSecretScope
-from autobot_shared.status_enums import SecretType
 from autobot_shared.scoping.scope_level import ScopeLevel
+from autobot_shared.status_enums import SecretType
 
 # Exact response content served by GET /api/secrets/types — order and
 # strings pinned; the #11759 rename must not change any of this.
