@@ -218,8 +218,15 @@ jobs:
           # below fails the job when the two invocations collected nothing
           # between them. Before #14930 this line was the whole story, and an
           # empty selection was indistinguishable from a passing one.
+          #
+          # #14917: `tools scripts pipeline-scripts` were wired into ci.yml by #13368,
+          # #13653, #13879 and #13880 and into none of the other invocations. The four
+          # root lists must agree — repo_tests/hook_suites_run_in_ci_test.py compares
+          # them to each other, so a fifth invocation is checked on arrival.
+          # Until now scripts/check_script_exec_bits_test.py's
+          # @pytest.mark.integration case was selected by NO workflow at all.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
             --junitxml=marker-report-backend.xml \

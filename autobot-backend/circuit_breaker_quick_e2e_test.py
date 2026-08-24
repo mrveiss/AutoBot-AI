@@ -43,7 +43,7 @@ async def test_basic_circuit_breaker():
     print(f"Circuit breaker state: {cb.state.value}")  # noqa: print
     print(f"Failure count: {cb.failure_count}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_decorator():
@@ -70,7 +70,7 @@ async def test_decorator():
         except CircuitBreakerOpenError:
             print(f"🚫 Call {i+1}: Circuit breaker open")  # noqa: print
 
-    return True
+    return
 
 
 async def main():

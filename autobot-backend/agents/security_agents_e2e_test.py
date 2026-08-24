@@ -65,7 +65,7 @@ async def test_security_scanner():
     print(f"Status: {validation_result.get('status')}")  # noqa: print
     print(f"Message: {validation_result.get('message')}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_network_discovery():
@@ -118,7 +118,7 @@ async def test_network_discovery():
             if items:
                 print(f"  - {category}: {len(items)} assets")  # noqa: print
 
-    return True
+    return
 
 
 async def test_workflow_integration():
@@ -152,7 +152,7 @@ async def test_workflow_integration():
         except Exception as e:
             print(f"⚠️  Workflow test skipped (API not available): {e}")  # noqa: print
 
-    return True
+    return
 
 
 async def main():
