@@ -26,7 +26,17 @@ status still governs that. This adds the one verdict pytest cannot give: "the
 selection still matches the tests it is supposed to match."
 """
 
-from __future__ import annotations
+# NOTE: deliberately NO ``from __future__ import annotations`` here.
+#
+# On Python 3.14, ``@dataclass`` resolves *string* annotations by looking its own
+# module up in ``sys.modules`` (``dataclasses._is_type`` ->
+# ``sys.modules.get(cls.__module__).__dict__``). The future import turns every
+# annotation into a string, so a module executed WITHOUT a ``sys.modules`` entry —
+# which is how this repo's guard tests load their subject, to avoid tripping the
+# sys.modules leak guard — dies at class-creation time with
+# ``AttributeError: 'NoneType' object has no attribute '__dict__'``.
+#
+# Real annotations cost nothing here and keep the module loadable by any loader.
 
 import argparse
 import os

@@ -29,16 +29,38 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "marker-tests.yml"
 SCRIPT = Path(__file__).with_name("marker_suite_report.py")
 
 
-def _load_script():
-    """Load the checker without registering it in ``sys.modules``.
+_MODULE_NAME = "marker_suite_report"
 
-    Same pattern as this directory's other guard tests: the repo-wide
-    sys.modules leak guard (#13337) fails a shard that leaves a synthetic entry
-    behind, and a sibling import via ``sys.path`` would leave one.
+
+def _load_script():
+    """Load the checker, leaving no ``sys.modules`` entry behind.
+
+    Same intent as this directory's other guard tests — the repo-wide sys.modules
+    leak guard (#13337) fails a shard that strands a synthetic entry, and a
+    sibling import via ``sys.path`` would strand one.
+
+    The entry is installed for the duration of ``exec_module`` and removed in a
+    ``finally``. Executing with NO entry at all is what the first version did,
+    and it broke collection on Python 3.14: ``@dataclass`` resolves string
+    annotations through ``sys.modules[cls.__module__]``, which was ``None``.
+    The module no longer uses ``from __future__ import annotations`` so it does
+    not depend on this, but a future edit that re-adds it must not silently
+    resurrect a collection error.
     """
-    spec = importlib.util.spec_from_file_location("marker_suite_report", SCRIPT)
+    spec = importlib.util.spec_from_file_location(_MODULE_NAME, SCRIPT)
+    assert spec is not None and spec.loader is not None, f"cannot build an import spec for {SCRIPT}"
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+
+    had_previous = _MODULE_NAME in sys.modules
+    previous = sys.modules.get(_MODULE_NAME)
+    sys.modules[_MODULE_NAME] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if had_previous:
+            sys.modules[_MODULE_NAME] = previous
+        else:
+            sys.modules.pop(_MODULE_NAME, None)
     return module
 
 
