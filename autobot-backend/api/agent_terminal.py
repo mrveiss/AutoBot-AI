@@ -345,12 +345,15 @@ async def create_agent_terminal_session(
         )
 
     # Create session
+    # Issue #14989: thread the authenticated creator through as owner, so the
+    # terminal WebSocket ownership gate (#14960) recognises them.
     session = await service.create_session(
         agent_id=request.agent_id,
         agent_role=agent_role,
         conversation_id=request.conversation_id,
         host=request.host,
         metadata=request.metadata,
+        owner=current_user.get("username"),
     )
 
     return {

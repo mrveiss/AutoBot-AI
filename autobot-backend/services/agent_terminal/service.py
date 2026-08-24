@@ -91,14 +91,21 @@ class AgentTerminalService:
         conversation_id: str | None = None,
         host: str = "main",
         metadata: Metadata | None = None,
+        owner: str | None = None,
     ) -> AgentTerminalSession:
-        """Create a new agent terminal session with PTY integration."""
+        """Create a new agent terminal session with PTY integration.
+
+        Issue #14989: `owner` is the authenticated creator's username, stamped
+        onto the shared terminal session_configs entry so the WebSocket
+        ownership gate in api.terminal can recognise them (#14960).
+        """
         return await self.session_manager.create_session(
             agent_id=agent_id,
             agent_role=agent_role,
             conversation_id=conversation_id,
             host=host,
             metadata=metadata,
+            owner=owner,
         )
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
