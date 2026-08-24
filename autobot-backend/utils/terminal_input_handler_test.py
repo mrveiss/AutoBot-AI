@@ -29,7 +29,12 @@ from utils.terminal_input_handler import (
 class TestTerminalInputHandler:
     """Test cases for terminal input handler functionality."""
 
-    def __init__(self):
+    # #14927: this was ``__init__``. pytest refuses to collect a class that has a
+    # constructor -- it emits PytestCollectionWarning and moves on -- so every
+    # ``test_*`` method below was silently uncollected despite the class matching
+    # ``python_classes = Test*``. ``setup_method`` is pytest's own per-test hook and
+    # runs before each test, which is what this body always meant.
+    def setup_method(self):
         self.handler = TerminalInputHandler()
 
     def test_environment_detection(self):

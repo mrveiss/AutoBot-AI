@@ -27,6 +27,10 @@ logger = get_logger(__name__)
 # Issue #380: Module-level frozensets for prompt pattern matching
 _YES_NO_KEYWORDS = frozenset({"yes", "no", "y/n"})
 
+# Words that introduce a numbered selection. Module-level frozenset for the same
+# reason as _YES_NO_KEYWORDS (#380), and used by _generate_intelligent_default.
+_CHOICE_KEYWORDS = frozenset({"choice", "choose", "option", "select"})
+
 # Import configuration for fallback defaults
 try:
     from config import unified_config_manager
@@ -186,8 +190,15 @@ class TerminalInputHandler:
         if any(word in prompt_lower for word in _YES_NO_KEYWORDS):
             return "y"
 
-        # Check choice pattern with digits
-        if "choice" in prompt_lower and any(char.isdigit() for char in prompt):
+        # Check choice pattern with digits. #14927: this matched only the literal
+        # word "choice", so "Select option (1-5):" fell through every branch below
+        # and returned "" -- not a selectable value. The gap has been live since
+        # #315 because the test that covers it sat in a class pytest could not
+        # collect, so it never ran. A numbered selection is phrased at least as
+        # often with "select" or "option" as with "choice".
+        if any(word in prompt_lower for word in _CHOICE_KEYWORDS) and any(
+            char.isdigit() for char in prompt
+        ):
             numbers = [char for char in prompt if char.isdigit()]
             return numbers[0] if numbers else config.misc.default_choice or _get_config_default("default_choice", "1")
 
