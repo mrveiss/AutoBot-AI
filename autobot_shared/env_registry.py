@@ -879,6 +879,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AUDIT_FILING_STATUS_TTL_S",
+        type=int,
+        default=2592000,
+        description=(
+            "Seconds the audit worker's filing-health record survives in Redis. "
+            "Refreshed on every run and at worker startup, so this only has to "
+            "outlive the longest gap between runs (the claims audit is weekly); "
+            "it exists so a record left by a worker that has since stopped does "
+            "not keep answering for one that no longer exists (#13570)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CODE_ANALYSIS_POOL_WORKERS",
         type=int,
         default=2,
