@@ -3138,9 +3138,8 @@ def _resolve_target_org_id(current_user: dict, override_org_id: str | None) -> s
     mode — the service uses the ``__default__`` sentinel.
     """
     if override_org_id:
-        from llc.kb.write_guard import CROSS_ORG_KB_ROLES  # noqa: PLC0415
-
         from autobot_shared.auth.permissions import is_admin_role  # noqa: PLC0415
+        from llc.kb.write_guard import CROSS_ORG_KB_ROLES  # noqa: PLC0415
 
         role = (current_user or {}).get("role", "")
         # #12786: the same two sets this file already depends on, unioned

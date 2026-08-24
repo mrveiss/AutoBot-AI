@@ -28,10 +28,9 @@ comparison that matters is between their MEMBER SETS, which is what this file
 does.
 """
 
-from llc.models.enums import MembershipRole
-
 from autobot_shared.auth.permissions import Role
 from autobot_shared.ssot_constants import CategoryDefaults
+from llc.models.enums import MembershipRole
 
 RBAC_ROLES = frozenset(role.value for role in Role)
 MEMBERSHIP_ROLES = frozenset(role.value for role in MembershipRole)

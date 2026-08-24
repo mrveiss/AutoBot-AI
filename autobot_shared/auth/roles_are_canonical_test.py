@@ -26,9 +26,9 @@ assertion here.
 import pytest
 
 from autobot_shared.auth.permissions import (
+    _ROLE_META,
     ADMIN_ROLES,
     ROLE_PERMISSIONS,
-    _ROLE_META,
     Permission,
     Role,
     is_admin_role,
