@@ -56,12 +56,27 @@ Measured on this branch, each derived from the code rather than from a list:
 THE RATCHET
 -----------
 Keyed on the top-level tree, never on a filename: an exemption keyed on a path
-is stranded by the first rename, and a stranded exemption exempts nothing
-while looking authoritative. Every tree not named in ``_KNOWN_OFFENDERS`` is
-pinned at **zero** by derivation, so a new offender anywhere in the eleven
-clean trees fails on arrival without anyone maintaining a list. The named
-trees may only shrink, and an entry that reaches zero must be deleted rather
-than left at ``0`` — a budget nobody can spend is still a budget somebody will.
+is stranded by the first rename, and a stranded exemption exempts nothing while
+looking authoritative. Every tree not named in ``_KNOWN_OFFENDERS`` is pinned at
+**zero** by derivation, so a new offender anywhere in the eleven clean trees
+fails on arrival without anyone maintaining a list. The named trees may only
+shrink, and an entry that reaches zero must be deleted rather than left at
+``0`` — a budget nobody can spend is still a budget somebody will.
+
+Two properties the ratchet has to get right, both of which have bitten this
+repository's other baseline guards:
+
+* **a broken scan must not read as progress.** Each named tree carries a floor
+  on its own test-function population as well as a ceiling on its offenders. A
+  walk that quietly stops matching collapses the offender count to zero, which
+  is indistinguishable from finished work — so the collapse is checked first,
+  and it fails telling the reader to fix the sweep rather than to write the
+  zero down.
+* **there is no sanctioned route to raise a number, on purpose.** A test that
+  returns a value instead of asserting is never the right thing to write, so no
+  reviewer override is offered and none is implied. #14919 exists because a
+  guard promised a route its code never implemented; this one promises nothing
+  it does not do.
 """
 
 from __future__ import annotations
@@ -85,17 +100,23 @@ _SKIP = {
     ".tox",
 }
 
-# Measured on this branch, per top-level tree, in RETURN STATEMENTS.
-# Ceilings that must only ever fall. Delete an entry when it reaches zero.
-# #14926 tracks draining these; every tree absent from this map is pinned at 0.
+# Measured on this branch, per top-level tree:
+#   tree: (return statements that must not be exceeded,
+#          test functions that must STILL be found in that tree)
+#
+# The second number is not decoration. Without it, a walk that breaks and
+# returns nothing looks identical to a tree somebody finished draining, and the
+# ratchet would record the collapse as a triumph and lock it in. A tree may
+# only be declared drained while its own population is still demonstrably
+# there. Delete an entry once its budget genuinely reaches zero.
 _KNOWN_OFFENDERS = {
-    "autobot-backend": 136,
-    "autobot-infrastructure": 134,
-    "autobot-npu-worker": 7,
+    "autobot-backend": (136, 18000),
+    "autobot-infrastructure": (134, 250),
+    "autobot-npu-worker": (7, 150),
 }
 
-# Floors under the population itself. A sweep that has silently stopped
-# matching finds no offenders and reads exactly like a clean tree.
+# Floors under the whole population. A sweep that has silently stopped matching
+# finds no offenders and reads exactly like a clean tree.
 _MIN_MODULES = 1800
 _MIN_TEST_FUNCTIONS = 25000
 
@@ -199,6 +220,21 @@ def _offenders_by_tree() -> dict[str, list[str]]:
     return counts
 
 
+def _test_functions_by_tree() -> dict[str, int]:
+    """Collectable test functions per top-level tree.
+
+    The presence half of the ratchet: a per-tree count, because the repo-wide
+    floors below cannot notice one tree's walk collapsing inside a population
+    of 27,000.
+    """
+    counts: dict[str, int] = {}
+    for module in _test_modules():
+        tree = module.relative_to(_REPO_ROOT).parts[0]
+        found = _collectable_tests(ast.parse(module.read_text(encoding="utf-8")))
+        counts[tree] = counts.get(tree, 0) + len(found)
+    return counts
+
+
 def test_the_population_is_present_and_large_enough_to_mean_anything() -> None:
     """Floors on the subject, not on the findings. Zero of zero is not clean."""
     modules = _test_modules()
@@ -239,26 +275,55 @@ def test_no_tree_outside_the_known_set_has_a_test_that_returns_a_value() -> None
 
 
 def test_the_known_offender_budgets_only_ever_shrink() -> None:
-    """Ratchet, both directions — a recorded shrink must be locked in (#14498)."""
+    """Ratchet, both directions — a recorded shrink must be locked in (#14498).
+
+    THERE IS NO SANCTIONED ROUTE FOR AN INCREASE, and that is deliberate rather
+    than an omission. A new test that returns a value instead of asserting is
+    never the right thing to write: the value cannot reach pytest, so there is
+    nothing an author could be trying to express that ``assert`` does not
+    express better. If the value is consumed by another test the function is a
+    fixture, and if the function was never a test it belongs behind a
+    ``main()`` guard. Raising a number here is not a reviewer decision this
+    guard offers — #14919 was filed because a guard advertised a route its code
+    did not implement, so this one advertises none.
+
+    Lowering a number, by contrast, needs no permission at all: fix a test and
+    the assertion below tells you the new figure to write down.
+    """
     offenders = _offenders_by_tree()
+    populations = _test_functions_by_tree()
+
+    collapsed = {
+        tree: (populations.get(tree, 0), floor)
+        for tree, (_, floor) in _KNOWN_OFFENDERS.items()
+        if populations.get(tree, 0) < floor
+    }
+    assert not collapsed, (
+        "the sweep no longer finds the tests it is supposed to be scanning "
+        f"(found, floor): {collapsed}. Every count below is therefore untrusted — "
+        "a scan that finds nothing reports a clean tree and a drop to zero reads "
+        "as progress. Fix the sweep; do NOT lower these numbers to match it."
+    )
+
     over = {
         tree: (len(offenders.get(tree, [])), budget)
-        for tree, budget in _KNOWN_OFFENDERS.items()
+        for tree, (budget, _) in _KNOWN_OFFENDERS.items()
         if len(offenders.get(tree, [])) > budget
     }
     assert not over, (
         "these trees gained tests that return a value instead of asserting "
-        f"(actual, budget): {over}. The budgets are ceilings, not targets (#14920)."
+        f"(actual, budget): {over}. The budgets are ceilings and there is no "
+        "route to raise one — use `assert` (#14920)."
     )
-    drained = sorted(tree for tree in _KNOWN_OFFENDERS if not offenders.get(tree))
+    drained = sorted(tree for tree, _ in _KNOWN_OFFENDERS.items() if not offenders.get(tree))
     assert not drained, (
         f"{drained} no longer contain any returning test — delete the entry from "
-        "_KNOWN_OFFENDERS so the tree is pinned at zero. A budget left behind after "
-        "the work is done is spendable, and it will be spent."
+        "_KNOWN_OFFENDERS so the tree is pinned at zero by derivation. A budget "
+        "left behind after the work is done is spendable, and it will be spent."
     )
     spent = {
         tree: (len(offenders.get(tree, [])), budget)
-        for tree, budget in _KNOWN_OFFENDERS.items()
+        for tree, (budget, _) in _KNOWN_OFFENDERS.items()
         if len(offenders.get(tree, [])) < budget
     }
     assert not spent, (
