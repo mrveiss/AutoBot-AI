@@ -47,6 +47,7 @@ from api.schemas_analytics import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.status_enums import Severity
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -268,7 +269,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 {
                     "type": "long_prompt",
                     "message": "Prompt is very long, consider reducing context",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                 }
             )
             recommendations.append("Consider extracting only relevant code sections")
@@ -291,7 +292,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                 {
                     "type": "redundancy",
                     "message": f"Possible redundancy detected: {', '.join(repeated_words[:5])}",
-                    "severity": "info",
+                    "severity": Severity.INFO.value,
                 }
             )
 

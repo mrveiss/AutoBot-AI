@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.status_enums import Severity
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from phase_progression_manager import get_progression_manager
@@ -419,7 +420,7 @@ class ProjectStateTracker:
                     "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
                 metadata={
-                    "severity": "error",
+                    "severity": Severity.ERROR.value,
                     "tracking_source": "enhanced_state_tracker",
                 },
             )
