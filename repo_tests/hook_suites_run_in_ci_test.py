@@ -295,3 +295,84 @@ def test_pytest_really_collects_them_under_this_repos_config() -> None:
             f"{name} was not collected, so the property #14884 exists to restore "
             "is still verified by nothing"
         )
+
+
+def _root_paths(argv: list[str]) -> list[str]:
+    """The test roots an invocation names, in order.
+
+    A bare token that exists as a path in the repository, and is not the value
+    of the option before it — `--shard-durations .test_durations` names a file
+    that exists and is emphatically not a test root, so a naive "does it exist"
+    filter reads a durations file as a fourth tree.
+    """
+    return [
+        token
+        for index, token in enumerate(argv)
+        if not token.startswith("-")
+        and not (index and argv[index - 1].startswith("-"))
+        and (_REPO_ROOT / token).exists()
+    ]
+
+
+def test_every_ci_invocation_carrying_repo_tests_names_the_same_roots() -> None:
+    """The root lists must agree, and nothing used to check that they did (#14917).
+
+    `tools`, `scripts` and `pipeline-scripts` were wired into ci.yml by #13368,
+    #13653, #13879 and #13880 — and into none of the other three invocations.
+    The consequences were invisible in exactly the way this repository keeps
+    being bitten by: their lines counted toward no coverage gate, they had no
+    entries in `.test_durations` so the shard balancer placed them by hash with
+    zero weight, and `scripts/check_script_exec_bits_test.py`'s
+    `@pytest.mark.integration` case was selected by *nothing at all* — ci.yml,
+    coverage.yml and test-durations.yml all deselect that marker, and
+    marker-tests.yml, which selects it, did not name the tree it lives in.
+
+    Comparing the four sets to each other rather than to a hard-coded list is
+    the point: a fifth invocation added later is checked on arrival, and no
+    entry here goes stale when a tree is renamed.
+    """
+    carriers = [
+        (workflow, _root_paths(argv))
+        for workflow, argv, _ in _pytest_invocations()
+        if "repo_tests" in argv
+    ]
+    assert len(carriers) >= 4, (
+        f"only {len(carriers)} invocations name repo_tests as a path — expected at "
+        "least 4 (ci, coverage, test-durations, marker-tests); either one was "
+        "removed or the argv splitter has regressed and this test checks nothing"
+    )
+    roots = {workflow: tuple(paths) for workflow, paths in carriers}
+    sizes = {len(paths) for paths in roots.values()}
+    assert sizes and min(sizes) >= 8, (
+        f"a carrier names only {min(sizes)} test roots — the shared root list has "
+        f"shrunk or stopped being recognised: {roots}"
+    )
+    distinct = {frozenset(paths) for paths in roots.values()}
+    assert len(distinct) == 1, (
+        "these CI pytest invocations disagree about which trees they run, so a "
+        "tree is counted by one job and invisible to another (#14917):\n  "
+        + "\n  ".join(f"{workflow}: {sorted(paths)}" for workflow, paths in sorted(roots.items()))
+    )
+
+
+def test_marker_selected_tests_exist_in_every_shared_root() -> None:
+    """The shared root list is not cosmetic — a marked test lives outside the core trees.
+
+    This is the property that made the drift a correctness hole rather than a
+    reporting one, and it is re-derived rather than asserted: if every marked
+    test moved back into `autobot-backend`, this fails and says so instead of
+    quietly protecting nothing.
+    """
+    pattern = re.compile(r"@pytest\.mark\.(" + "|".join(_SELECTION_MARKERS) + r")\b")
+    outside = [
+        str(module.relative_to(_REPO_ROOT))
+        for tree in ("tools", "scripts", "pipeline-scripts")
+        for module in sorted((_REPO_ROOT / tree).rglob("*_test.py"))
+        if pattern.search(module.read_text(encoding="utf-8"))
+    ]
+    assert outside, (
+        "no test under tools/, scripts/ or pipeline-scripts/ carries a selection "
+        "marker any more. The root-set agreement above is then only a coverage and "
+        "shard-weighting property — re-derive whether it still needs asserting "
+        "rather than leaving a floor that guards nothing (#14917)"
+    )
