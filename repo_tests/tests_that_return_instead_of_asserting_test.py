@@ -114,12 +114,24 @@ _SKIP = {
 # only be declared drained while its own population is still demonstrably
 # there. Delete an entry once its budget genuinely reaches zero.
 _KNOWN_OFFENDERS = {
-    # Lowered in the same commit that removed the offences, as this file's own
-    # ratchet requires: 136 -> 78 and 134 -> 126. The drop is not a sweep
-    # collapse — `offending_returns` stopped counting a test that asserts AND
-    # returns, because that test can fail and its return value is a separate
-    # driver contract (#14920). The population floors below are untouched and
-    # still pass, which is what tells the two apart.
+    # Lowered in the same commit that changed the definition, as this file's own
+    # ratchet requires: 136 -> 78 and 134 -> 126.
+    #
+    # Be precise about WHY these moved, because the obvious reading is wrong.
+    # The drop is NOT the nine driver-consumed functions that commit fixed —
+    # none of those are in `autobot-backend`, yet that tree fell 58. The whole
+    # movement is a side effect of the exemption in `offending_returns`: a test
+    # that asserts AND returns is no longer counted, because it can fail and its
+    # return value is a separate driver contract (#14920). That tree-wide change
+    # un-flags 39 pre-existing functions in `autobot-backend` and 4 in
+    # `autobot-infrastructure` that neither commit touched.
+    #
+    # Those 43 were checked rather than assumed: every one carries real
+    # assertions (1-24 apiece) alongside its return, so none is a vacuous assert
+    # masking a test that cannot fail.
+    #
+    # The drop is not a sweep collapse — the population floors below are
+    # untouched and still pass, which is what tells the two apart.
     "autobot-backend": (78, 18000),
     "autobot-infrastructure": (126, 250),
     "autobot-npu-worker": (7, 150),
@@ -374,3 +386,16 @@ def test_the_detector_finds_a_planted_return_and_spares_the_legitimate_ones() ->
         "a nested helper's return was attributed to its enclosing test — that is "
         "the naive walk this guard exists to avoid"
     )
+
+    # The assert/raise exemption added with the #14920 driver fix. Every other
+    # branch here has a synthetic case; without one this branch is proven only
+    # by whatever the live tree happens to contain today.
+    assert not offending_returns(
+        "def test_a():\n    assert True\n    return True\n"
+    ), "a test that asserts AND returns can fail; its return is a separate driver contract"
+    assert not offending_returns(
+        "def test_b():\n    raise AssertionError('x')\n    return True\n"
+    ), "a raising test can fail; its return is a separate driver contract"
+    assert offending_returns(
+        "def test_c():\n    return True\n"
+    ), "a test whose return is its ONLY verdict is still an offence"
