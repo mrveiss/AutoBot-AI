@@ -142,7 +142,11 @@ async def test_development_speedup():
                 logger.info(f"         - {loc[0]}:{loc[1]}")
 
     except Exception as e:
-        logger.error(f"   ❌ Duplicate detection failed: {e}")
+        # #14931: this logged and continued, so a failure of duplicate detection left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"duplicate detection failed: {e}") from e
 
     # Test 2: Pattern analysis
     logger.info("\n2. Testing code pattern analysis...")
@@ -162,7 +166,11 @@ async def test_development_speedup():
             logger.info(f"      💡 Suggestion: {pattern['suggestion']}")
 
     except Exception as e:
-        logger.error(f"   ❌ Pattern analysis failed: {e}")
+        # #14931: this logged and continued, so a failure of pattern analysis left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"pattern analysis failed: {e}") from e
 
     # Test 3: Import analysis
     logger.info("\n3. Testing import analysis...")
@@ -182,7 +190,11 @@ async def test_development_speedup():
                 print(f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}")
 
     except Exception as e:
-        logger.error(f"   ❌ Import analysis failed: {e}")
+        # #14931: this logged and continued, so a failure of import analysis left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"import analysis failed: {e}") from e
 
     # Test 4: Quick comprehensive analysis
     logger.info("\n4. Testing comprehensive analysis...")
