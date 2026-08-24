@@ -40,6 +40,8 @@ import ast
 import configparser
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
@@ -48,6 +50,13 @@ _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 _SKIP = {
     ".git",
     ".worktrees",
+    # Harness territory: tooling config plus the agent worktrees checked out
+    # under it, which hold other branches' work in progress and are not always
+    # parseable. pytest's own testpaths never reach it either, so nothing here
+    # is collectable and nothing here is this sweep's subject. #14985 — the two
+    # sibling guards already skip it, and so does
+    # first_party_imports_resolve_test.py.
+    ".claude",
     "__pycache__",
     "node_modules",
     ".venv",
@@ -57,9 +66,12 @@ _SKIP = {
     ".tox",
 }
 
-# Measured on this branch: 1973 modules match, 2 were fatal, 46 are correctly
-# guarded. A floor, not an equality — but far enough below the real number that
-# a sweep which has silently stopped matching cannot pass by finding nothing.
+# Measured on this branch: 1978 modules match, 0 are fatal, 49 are correctly
+# guarded. (#14985 re-measured: 1973/2/46 when this guard was written, then
+# #14980 fixed both fatal modules and `.claude` moved into _SKIP above, taking
+# five never-collected modules out of the walk.) A floor, not an equality — but
+# far enough below the real number that a sweep which has silently stopped
+# matching cannot pass by finding nothing.
 _MIN_MODULES_SCANNED = 1800
 _MIN_GUARDED_EXITS = 30
 
@@ -77,6 +89,32 @@ def _python_file_patterns() -> list[str]:
 
 def _matches(path: Path, patterns: list[str]) -> bool:
     return any(path.match(pattern) for pattern in patterns)
+
+
+def _parse_module(path: Path) -> ast.Module:
+    """Parse one swept file, failing loudly and by name if it cannot be parsed.
+
+    This sweep is a denylist walk from the repo root, filtered only by ``_SKIP``,
+    so it reaches files pytest's ``testpaths`` allowlist never would: scratch
+    copies, templates, half-written drafts. An unparseable one must never read as
+    "clean" -- skipping it silently is the exact under-reporting failure this
+    guard exists to catch -- so it is raised as a failure that names the file and
+    says how to take it out of the sweep on purpose.
+    """
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        relative = path.relative_to(_REPO_ROOT)
+        raise AssertionError(
+            f"{relative}:{exc.lineno or 0} is not parseable Python ({exc.msg}). "
+            "This guard sweeps every *.py under the repo root as a denylist, so it "
+            "sees files pytest's own testpaths allowlist never reaches. Fix the "
+            "file, or -- if it is scratch, vendored or another branch's work and "
+            "does not belong in the sweep -- add its top-level directory to _SKIP "
+            "in every repo_tests guard that sweeps, the way .claude and .worktrees "
+            "already are. Do not silence this by skipping the file: a file the "
+            "sweep cannot read is not a file the sweep has cleared (#14985)."
+        ) from exc
 
 
 def _is_main_guard(node: ast.AST) -> bool:
@@ -144,7 +182,7 @@ def test_the_exemption_branch_has_live_subjects() -> None:
     guarded = [
         path
         for path in _collectable_modules()
-        if _exit_calls(ast.parse(path.read_text(encoding="utf-8")), guarded=True)
+        if _exit_calls(_parse_module(path), guarded=True)
     ]
     assert len(guarded) >= _MIN_GUARDED_EXITS, (
         f"only {len(guarded)} test-named modules exit from inside a __main__ guard "
@@ -155,9 +193,7 @@ def test_the_exemption_branch_has_live_subjects() -> None:
 def test_no_test_named_module_exits_the_interpreter_at_import_time() -> None:
     """#14917's first acceptance criterion, over the whole repository."""
     offenders = {
-        str(path.relative_to(_REPO_ROOT)): _exit_calls(
-            ast.parse(path.read_text(encoding="utf-8")), guarded=False
-        )
+        str(path.relative_to(_REPO_ROOT)): _exit_calls(_parse_module(path), guarded=False)
         for path in _collectable_modules()
     }
     offenders = {name: calls for name, calls in offenders.items() if calls}
@@ -197,3 +233,53 @@ def test_the_detector_catches_a_planted_exit_and_spares_a_guarded_one() -> None:
     assert not _exit_calls(nested, guarded=False), (
         "an exit inside a function body was reported — pytest never runs it on import"
     )
+
+
+def test_an_unparseable_swept_file_fails_loudly_instead_of_reading_as_clean() -> None:
+    """The sweep is a denylist from the repo root, so it meets stray files.
+
+    One must never be skipped: a file the walk could not read is not a file the
+    walk cleared, and dropping it silently is the under-reporting this guard
+    exists to catch. It has to fail, name the file and say what to do about it.
+
+    The probe is written under a ``_SKIP``ped directory so no concurrently
+    running sweep can pick it up while it exists.
+    """
+    scratch = _REPO_ROOT / "__pycache__"
+    scratch.mkdir(exist_ok=True)
+    stray = scratch / "unparseable_inert_probe_test.py"
+    stray.write_text("from a-b.c import (\n", encoding="utf-8")
+    try:
+        with pytest.raises(AssertionError) as raised:
+            _parse_module(stray)
+    finally:
+        stray.unlink()
+
+    message = str(raised.value)
+    assert "unparseable_inert_probe_test.py" in message, "the failure must name the file"
+    assert "_SKIP" in message, "the failure must say how to exclude a file on purpose"
+
+
+def test_the_harness_directory_is_out_of_the_sweep() -> None:
+    """An unparseable file under ``.claude`` is skipped, not reported.
+
+    Agent worktrees are checked out under the harness directory and hold other
+    branches' work in progress, which is not always parseable Python. pytest's
+    testpaths allowlist never reaches there, so nothing under it is collectable
+    and nothing under it is this sweep's subject.
+    """
+    assert ".claude" in _SKIP, "the harness directory must be excluded by name, not by luck"
+
+    harness = _REPO_ROOT / ".claude"
+    if not harness.is_dir():
+        pytest.skip(f"{harness} is absent in this checkout, so there is nothing to exclude")
+
+    stray = harness / "unparseable_harness_probe_test.py"
+    stray.write_text("from a-b.c import (\n", encoding="utf-8")
+    try:
+        assert stray not in _collectable_modules(), (
+            f"{stray.name} sits under the harness directory and still entered the "
+            "sweep — _SKIP is not being applied to the walk"
+        )
+    finally:
+        stray.unlink()
