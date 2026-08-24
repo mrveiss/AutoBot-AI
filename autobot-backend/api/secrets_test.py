@@ -33,16 +33,30 @@ EXPECTED_SCOPES = [
     {"value": "organization", "label": "Organization"},
 ]
 
+# What GET /api/secrets/types serves: the CONCRETE taxonomy, in declaration
+# order. #13846 unioned three forked secret-kind enums, so this gained
+# `oauth_refresh_token` (which the DB row could always store but the API
+# vocabulary could not express) and `connector_oauth_token` (which was a bare
+# string in credential_store.py, belonging to no enum at all).
+#
+# `any` is deliberately absent: it is a requirement wildcard, never a storable
+# kind, and the endpoint serves SecretType.concrete() rather than the whole
+# enum. test_secret_type_values_pinned below pins that difference explicitly.
 EXPECTED_TYPES = [
     {"value": "ssh_key", "label": "Ssh Key"},
     {"value": "password", "label": "Password"},
     {"value": "api_key", "label": "Api Key"},
     {"value": "token", "label": "Token"},
+    {"value": "oauth_refresh_token", "label": "Oauth Refresh Token"},
+    {"value": "connector_oauth_token", "label": "Connector Oauth Token"},
     {"value": "certificate", "label": "Certificate"},
     {"value": "database_url", "label": "Database Url"},
     {"value": "infrastructure_host", "label": "Infrastructure Host"},
     {"value": "other", "label": "Other"},
 ]
+
+# The wildcard, kept out of everything the API serves or accepts (#13846).
+EXPECTED_WILDCARD = "any"
 
 
 class TestChatSecretScopeEnum:
@@ -66,7 +80,30 @@ class TestChatSecretScopeEnum:
         assert "workflow" not in {scope.value for scope in ChatSecretScope}
 
     def test_secret_type_values_pinned(self):
-        assert [t.value for t in SecretType] == [t["value"] for t in EXPECTED_TYPES]
+        """The enum carries the wildcard; the endpoint does not.
+
+        #13846: these are two different populations on purpose. Asserting the
+        enum equals the served list would have hidden exactly the thing worth
+        pinning -- that `any` exists as a requirement vocabulary member and is
+        excluded from every storable/presentable surface.
+        """
+        assert [t.value for t in SecretType] == [
+            t["value"] for t in EXPECTED_TYPES
+        ] + [EXPECTED_WILDCARD]
+        assert [t.value for t in SecretType.concrete()] == [t["value"] for t in EXPECTED_TYPES]
+        assert EXPECTED_WILDCARD not in {t.value for t in SecretType.concrete()}
+
+    def test_the_oauth_kinds_are_expressible(self):
+        """#13846's functional gap: neither kind could be named before.
+
+        `OAUTH_REFRESH_TOKEN` existed only on the persisted enum, so the API
+        vocabulary could not express it; `connector_oauth_token` was a bare
+        string that belonged to no enum at all.
+        """
+        assert SecretType.OAUTH_REFRESH_TOKEN.value == "oauth_refresh_token"
+        assert SecretType.CONNECTOR_OAUTH_TOKEN.value == "connector_oauth_token"
+        served = {t["value"] for t in EXPECTED_TYPES}
+        assert {"oauth_refresh_token", "connector_oauth_token"} <= served
 
 
 @pytest.mark.asyncio

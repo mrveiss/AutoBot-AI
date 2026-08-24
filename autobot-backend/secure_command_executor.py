@@ -841,7 +841,7 @@ class SecureCommandExecutor:
             "return_code": 1,
             "status": "error",
             "security": {
-                "risk": "forbidden",
+                "risk": CommandRisk.FORBIDDEN.value,
                 "reasons": [rule_info.get("description", "Denied by rule")],
                 "blocked": True,
                 "permission_rule": rule_info,
