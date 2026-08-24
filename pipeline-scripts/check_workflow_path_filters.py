@@ -31,6 +31,11 @@ it can pass:
 * every declared location is a superset of the canonical set;
 * every workflow whose dorny step loads the canonical file is declared here
   (reverse check: a new consumer cannot arrive undeclared);
+* every filter in ``SHARED_TREE_WATCHERS`` still names the shared tree (#14885).
+  Those filters deliberately keep a per-product split the canonical set would
+  erase, so they cannot be policed by the superset check above -- but the one
+  entry they all need is the one whose absence made a REQUIRED context report
+  green over work that never ran;
 * ``api-wiring.yml`` still has NO ``pull_request.paths`` (#12934). That absence
   is deliberate -- a path-filtered required check never reports and deadlocks
   the pull request -- and it is exactly the kind of asymmetry a later
@@ -72,10 +77,34 @@ INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
 NOT_CONSUMERS: dict[str, str] = {
     "verify-generated-types.yml": (
         "its `types` and `slm_types` filters are per-product generated-types "
-        "triggers, deliberately scoped to one backend tree each; collapsing "
-        "them into the canonical set would erase that split. Whether they "
-        "should additionally watch autobot_shared/ is tracked separately."
+        "triggers, deliberately scoped to one backend tree each; the canonical "
+        "set names BOTH backends, so adopting it would erase that split. The "
+        "shared tree they must nonetheless watch (#14885) is asserted by "
+        "SHARED_TREE_WATCHERS below instead."
     ),
+}
+
+# The shared-Python prefix, derived from the canonical set rather than retyped.
+# Hardcoding it here would be a second source of truth for the very thing this
+# guard exists to keep singular.
+SHARED_TREE_PREFIX = "autobot_shared/"
+
+# Filters that cannot adopt the canonical set but must still watch the shared
+# tree (#14885).
+#
+# `verify-generated-types` is a REQUIRED context whose real work self-skipped on
+# an autobot_shared-only change, while BOTH generated api.ts files depend on
+# that tree: autobot_shared/user_management/schemas/user.py is the sole
+# definition of the user schemas both backends re-export, and
+# autobot_shared/openapi_schema.normalize_pattern_anchors rewrites both
+# published specs. A required check reporting green over work that never ran is
+# the #12986 defect class; the per-product split is why it cannot be closed by
+# adopting the canonical list.
+#
+# workflow filename -> (event names whose `paths:` must name it,
+#                       dorny filter keys that must name it)
+SHARED_TREE_WATCHERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "verify-generated-types.yml": (("push",), ("types", "slm_types")),
 }
 
 # `paths:` on this event must stay ABSENT for these workflows (#12934).
@@ -203,6 +232,82 @@ def check_no_undeclared_consumer() -> list[str]:
     return failures
 
 
+def shared_tree_paths(canonical: list[str]) -> list[str]:
+    """Canonical entries under the shared tree. Dies rather than returning [].
+
+    An empty derivation would make every SHARED_TREE_WATCHERS assertion below
+    vacuously true — a guard that checks nothing is silent in exactly the same
+    way as a guard over a clean tree.
+    """
+    shared = [p for p in canonical if p.startswith(SHARED_TREE_PREFIX)]
+    if not shared:
+        sys.exit(
+            f"FATAL: the canonical '{CANONICAL_KEY}' set names nothing under "
+            f"{SHARED_TREE_PREFIX!r} — SHARED_TREE_WATCHERS would assert nothing"
+        )
+    return shared
+
+
+def _dorny_filters(parsed: dict, path: Path) -> dict:
+    """The inline `filters:` block of *path*'s dorny/paths-filter step.
+
+    Every failure to find one is fatal. A restructured workflow whose filters
+    this guard can no longer locate is the case where "found nothing to check"
+    and "checked and it was fine" are indistinguishable.
+    """
+    for job in (parsed.get("jobs") or {}).values():
+        if not isinstance(job, dict):
+            continue
+        for step in job.get("steps") or []:
+            if not isinstance(step, dict) or "dorny/paths-filter" not in str(step.get("uses", "")):
+                continue
+            raw = (step.get("with") or {}).get("filters")
+            if not isinstance(raw, str):
+                sys.exit(f"FATAL: {path}'s dorny/paths-filter step has no inline `filters:` block")
+            try:
+                block = yaml.safe_load(raw)
+            except yaml.YAMLError as exc:
+                sys.exit(f"FATAL: {path}'s inline `filters:` block is not parseable YAML: {exc}")
+            if not isinstance(block, dict) or not block:
+                sys.exit(f"FATAL: {path}'s inline `filters:` block did not parse to a non-empty mapping")
+            return block
+    sys.exit(f"FATAL: {path} has no dorny/paths-filter step, but this guard's table says it should")
+
+
+def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
+    """Per-product filters that keep their split must still watch the shared tree."""
+    shared = shared_tree_paths(canonical)
+    failures: list[str] = []
+    checked = 0
+    for name, (events, keys) in SHARED_TREE_WATCHERS.items():
+        workflow = WORKFLOWS / name
+        parsed = _load_yaml(workflow)
+        for event in events:
+            paths = _event_paths(parsed, workflow, event)
+            if paths is None:
+                failures.append(f"{workflow}: `on.{event}` declares no `paths:` at all, but must watch {shared}")
+                continue
+            missing = [p for p in shared if p not in paths]
+            checked += 1
+            if missing:
+                failures.append(f"{workflow}: `on.{event}.paths` is missing {missing}")
+            else:
+                print(f"  OK     {workflow} on.{event}.paths watches the shared tree")  # noqa: print
+        block = _dorny_filters(parsed, workflow)
+        for key in keys:
+            entries = block.get(key)
+            if not isinstance(entries, list):
+                failures.append(f"{workflow}: dorny filter '{key}' is absent or is not a list — the table is stale")
+                continue
+            missing = [p for p in shared if p not in entries]
+            checked += 1
+            if missing:
+                failures.append(f"{workflow}: dorny filter '{key}' is missing {missing}")
+            else:
+                print(f"  OK     {workflow} filter '{key}' watches the shared tree")  # noqa: print
+    return failures, checked
+
+
 def check_declarations_resolve() -> list[str]:
     """Every declared workflow must exist.
 
@@ -211,7 +316,12 @@ def check_declarations_resolve() -> list[str]:
     """
     return [
         f"{WORKFLOWS / name}: declared in this guard's table but does not exist — the table is stale"
-        for name in sorted(set(INLINE_CONSUMERS) | set(NOT_CONSUMERS) | set(REQUIRED_ABSENT_PATHS))
+        for name in sorted(
+            set(INLINE_CONSUMERS)
+            | set(NOT_CONSUMERS)
+            | set(REQUIRED_ABSENT_PATHS)
+            | set(SHARED_TREE_WATCHERS)
+        )
         if not (WORKFLOWS / name).is_file()
     ]
 
@@ -232,18 +342,26 @@ def main(argv: list[str] | None = None) -> int:
 
     inline_failures, checked = check_inline_consumers(canonical)
     failures += inline_failures
+    shared_failures, shared_checked = check_shared_tree_watchers(canonical)
+    failures += shared_failures
     failures += check_required_absences()
     failures += check_no_undeclared_consumer()
 
-    if checked == 0:
-        print("\n  FAIL   0 inline path lists were checked — the guard scanned nothing")  # noqa: print
+    if checked == 0 or shared_checked == 0:
+        print(  # noqa: print
+            f"\n  FAIL   {checked} inline path list(s) and {shared_checked} shared-tree "
+            "watcher(s) were checked — a zero on either side means the guard scanned nothing"
+        )
         return 1
 
     for name, reason in sorted(NOT_CONSUMERS.items()):
         print(f"  NOTE   {WORKFLOWS / name} is deliberately not a consumer: {reason}")  # noqa: print
 
     if not failures:
-        print(f"\ncheck-workflow-path-filters: {checked} inline path list(s) match the canonical set")  # noqa: print
+        print(  # noqa: print
+            f"\ncheck-workflow-path-filters: {checked} inline path list(s) match the canonical set, "
+            f"{shared_checked} shared-tree watcher(s) still name it"
+        )
         return 0
 
     print(f"\ncheck-workflow-path-filters: {len(failures)} drift(s)\n")  # noqa: print

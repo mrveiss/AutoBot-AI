@@ -148,3 +148,76 @@ def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: s
     result = _run(root)
     assert result.returncode == 1, result.stdout
     assert workflow in result.stdout
+
+
+# ── shared-tree watchers (#14885) ────────────────────────────────────────────
+#
+# `verify-generated-types` is a required context whose real work self-skipped on
+# an autobot_shared-only change, while both generated api.ts files depend on
+# that tree. It keeps a per-product filter split the canonical set would erase,
+# so it is policed by SHARED_TREE_WATCHERS rather than by the superset check —
+# and a second table is a second thing that can go quietly vacuous.
+
+VGT = ".github/workflows/verify-generated-types.yml"
+SHARED = "autobot_shared/**/*.py"
+
+
+@pytest.mark.parametrize("marker", ["types", "slm_types"])
+def test_dropping_the_shared_tree_from_a_dorny_filter_fails(tmp_path: Path, marker: str) -> None:
+    """Each per-product filter is reached individually, not as a pair."""
+    root = _sandbox(tmp_path)
+    _edit(
+        root / VGT,
+        f"            {marker}:\n              - 'autobot",
+        f"            {marker}:\n              - 'REMOVED-MARKER-{marker}'\n              - 'autobot",
+    )
+    # Now delete only this filter's shared entry, leaving the sibling's intact.
+    text = (root / VGT).read_text(encoding="utf-8")
+    head, _, tail = text.partition(f"'REMOVED-MARKER-{marker}'\n")
+    tail = tail.replace(f"              - '{SHARED}'\n", "", 1)
+    (root / VGT).write_text(head + tail, encoding="utf-8")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert f"dorny filter '{marker}' is missing" in result.stdout
+    assert SHARED in result.stdout
+
+
+def test_dropping_the_shared_tree_from_the_push_trigger_fails(tmp_path: Path) -> None:
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, f"      - '{SHARED}'\n", "")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "on.push.paths` is missing" in result.stdout
+
+
+def test_a_renamed_dorny_filter_key_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
+    """A restructure must strand the declaration loudly, not skip past it."""
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, "            slm_types:\n", "            slm_types_v2:\n")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "the table is stale" in result.stdout
+
+
+def test_a_workflow_with_no_dorny_step_is_fatal_not_a_pass(tmp_path: Path) -> None:
+    """"Could not find the filters" and "the filters were fine" are opposite facts."""
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, "      - uses: dorny/paths-filter@", "      - uses: not-dorny/other@")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "has no dorny/paths-filter step" in (result.stdout + result.stderr)
+
+
+def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Path) -> None:
+    """The derivation must die rather than assert nothing.
+
+    Removing the shared tree from the canonical set leaves every inline copy a
+    superset, so the check above stays green — and every shared-tree assertion
+    would pass over an empty list. That is the exact "empty result reads as a
+    clean result" shape, one table over.
+    """
+    root = _sandbox(tmp_path)
+    _edit(root / CANONICAL, f"  - '{SHARED}'\n", "")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "would assert nothing" in (result.stdout + result.stderr)
