@@ -148,3 +148,130 @@ def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: s
     result = _run(root)
     assert result.returncode == 1, result.stdout
     assert workflow in result.stdout
+
+
+# ── shared-tree watchers (#14885) ────────────────────────────────────────────
+#
+# `verify-generated-types` is a required context whose real work self-skipped on
+# an autobot_shared-only change, while both generated api.ts files depend on
+# that tree. It keeps a per-product filter split the canonical set would erase,
+# so it is policed by SHARED_TREE_WATCHERS rather than by the superset check —
+# and a second table is a second thing that can go quietly vacuous.
+
+VGT = ".github/workflows/verify-generated-types.yml"
+SHARED = "autobot_shared/**/*.py"
+
+
+@pytest.mark.parametrize("marker", ["types", "slm_types"])
+def test_dropping_the_shared_tree_from_a_dorny_filter_fails(tmp_path: Path, marker: str) -> None:
+    """Each per-product filter is reached individually, not as a pair."""
+    root = _sandbox(tmp_path)
+    _edit(
+        root / VGT,
+        f"            {marker}:\n              - 'autobot",
+        f"            {marker}:\n              - 'REMOVED-MARKER-{marker}'\n              - 'autobot",
+    )
+    # Now delete only this filter's shared entry, leaving the sibling's intact.
+    text = (root / VGT).read_text(encoding="utf-8")
+    head, _, tail = text.partition(f"'REMOVED-MARKER-{marker}'\n")
+    tail = tail.replace(f"              - '{SHARED}'\n", "", 1)
+    (root / VGT).write_text(head + tail, encoding="utf-8")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert f"dorny filter '{marker}' is missing" in result.stdout
+    assert SHARED in result.stdout
+
+
+def test_dropping_the_shared_tree_from_the_push_trigger_fails(tmp_path: Path) -> None:
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, f"      - '{SHARED}'\n", "")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "on.push.paths` is missing" in result.stdout
+
+
+def test_a_renamed_dorny_filter_key_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
+    """A restructure must strand the declaration loudly, not skip past it."""
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, "            slm_types:\n", "            slm_types_v2:\n")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "the table is stale" in result.stdout
+
+
+def test_a_workflow_with_no_dorny_step_is_fatal_not_a_pass(tmp_path: Path) -> None:
+    """"Could not find the filters" and "the filters were fine" are opposite facts."""
+    root = _sandbox(tmp_path)
+    _edit(root / VGT, "      - uses: dorny/paths-filter@", "      - uses: not-dorny/other@")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "has no dorny/paths-filter step" in (result.stdout + result.stderr)
+
+
+def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Path) -> None:
+    """The derivation must die rather than assert nothing.
+
+    Removing the shared tree from the canonical set leaves every inline copy a
+    superset, so the check above stays green — and every shared-tree assertion
+    would pass over an empty list. That is the exact "empty result reads as a
+    clean result" shape, one table over.
+    """
+    root = _sandbox(tmp_path)
+    _edit(root / CANONICAL, f"  - '{SHARED}'\n", "")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "would assert nothing" in (result.stdout + result.stderr)
+
+
+def test_two_dorny_steps_are_fatal_not_a_guess(tmp_path: Path) -> None:
+    """Returning the first of several blocks would silently check the wrong one."""
+    root = _sandbox(tmp_path)
+    text = (root / VGT).read_text(encoding="utf-8")
+    marker = "      - uses: dorny/paths-filter@"
+    assert marker in text
+    extra = (
+        "  second-filter-job:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d\n"
+        "        with:\n"
+        "          filters: |\n"
+        "            other:\n"
+        "              - 'x/**'\n"
+    )
+    (root / VGT).write_text(text.replace("jobs:\n", "jobs:\n" + extra, 1), encoding="utf-8")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "dorny/paths-filter steps" in (result.stdout + result.stderr)
+
+
+def test_a_watcher_entry_with_empty_tuples_fails(tmp_path: Path) -> None:
+    """An entry that validates nothing must not ride on the other entries' totals.
+
+    The global "zero checked" fallback only fires when the whole table is inert.
+    A single entry declared with empty tuples contributes nothing while the
+    others keep the totals non-zero, so the run would report success over a
+    workflow this table claims to police. Nothing a `.github/` mutation can
+    produce reaches that state, so the table itself is patched in a copy of the
+    guard — the same seam the library stub uses in the baseline guard's tests.
+    """
+    root = _sandbox(tmp_path)
+    src = GUARD.read_text(encoding="utf-8")
+    old = '"verify-generated-types.yml": (("push",), ("types", "slm_types")),'
+    assert old in src, "SHARED_TREE_WATCHERS entry not found — the patch target moved"
+    # A SECOND, valid entry is essential: with only the inert one, the global
+    # "zero checked" fallback fires and the mutation would look killed for the
+    # wrong reason. The copy is byte-identical, so its filters really do pass.
+    shutil.copy(root / VGT, root / ".github/workflows/zz-vgt-copy.yml")
+    patched = root / "patched_guard.py"
+    patched.write_text(
+        src.replace(
+            old,
+            '"verify-generated-types.yml": ((), ()),\n'
+            '    "zz-vgt-copy.yml": (("push",), ("types", "slm_types")),',
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run([sys.executable, str(patched)], cwd=root, capture_output=True, text=True)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "would assert nothing about this workflow" in result.stdout

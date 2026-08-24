@@ -23,6 +23,38 @@
 # despite zero consumers importing it — see #12662 for the cross-language
 # NodeStatus drift this closes.
 #
+# #14885: both filters also watch autobot_shared/**/*.py, and the per-product
+# split between them is preserved. Neither used to, while BOTH generated files
+# depend on that tree — measured, not assumed:
+#
+#   * autobot_shared/user_management/schemas/user.py is the sole definition of
+#     UserResponse, UserCreate, UserUpdate, UserListResponse, RoleResponse and
+#     PasswordChange. Each backend's user_management/schemas/user.py is a
+#     re-export shim over it (#12647), and both committed api.ts files carry
+#     those component schemas. Editing one field there changes both.
+#   * autobot_shared/openapi_schema.normalize_pattern_anchors is applied to the
+#     spec by scripts/audit_api_wiring.py (used by BOTH dump modes in this
+#     workflow) and by autobot-slm-backend/scripts/dump_openapi.py. It rewrites
+#     the published schema, so a change to it changes both outputs.
+#
+# So a change confined to autobot_shared/ could alter either generated api.ts
+# while this workflow computed "nothing to verify" and self-skipped — and
+# `verify-generated-types` is a REQUIRED context, so that reported green over a
+# check that never ran. 46 of the last 300 first-parent commits on Dev_new_gui
+# touch only autobot_shared/**/*.py; that is the blind spot's size, and it is
+# also the added cost of closing it.
+#
+# The filter widens rather than the check becoming unskippable, because the
+# skip is already safe HERE and only here: the required context is the separate
+# `verify-generated-types` reporting job below (#13862), which always runs and
+# always states a verdict. Making the working job unconditional on a
+# path-filtered workflow is what deadlocks a pull request (#13388/#12934); the
+# defect was the filter's reach, not the existence of a skip.
+#
+# pipeline-scripts/check_workflow_path_filters.py now asserts that both filters
+# and the push trigger still name the shared tree, so this cannot quietly
+# shrink back.
+#
 # Runs on GitHub-hosted ubuntu-latest (not the self-hosted runner) so it adds
 # no load to the single self-hosted runner.
 
@@ -33,6 +65,10 @@ on:
     branches: [ main, Dev_new_gui ]
     paths:
       - 'autobot-backend/**/*.py'
+      # #14885: both products' schemas are dumped by importing the application,
+      # and both applications import from autobot_shared. Measured, not
+      # assumed — see the header.
+      - 'autobot_shared/**/*.py'
       - 'autobot-frontend/src/types/generated/api.ts'
       - 'autobot-frontend/package.json'
       - 'autobot-frontend/package-lock.json'
@@ -71,6 +107,7 @@ jobs:
           filters: |
             types:
               - 'autobot-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
               - 'autobot-frontend/src/types/generated/api.ts'
               - 'autobot-frontend/package.json'
               - 'autobot-frontend/package-lock.json'
@@ -79,6 +116,7 @@ jobs:
               - '.github/workflows/verify-generated-types.yml'
             slm_types:
               - 'autobot-slm-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
               - 'autobot-slm-frontend/src/types/generated/api.ts'
               - 'autobot-slm-frontend/package.json'
               - 'autobot-slm-frontend/package-lock.json'
@@ -174,7 +212,11 @@ jobs:
 
   verify-generated-types-slm:
     needs: changes
-    if: needs.changes.outputs.slm_types == 'true'
+    # `!= 'false'`, matching verify-types-run above and for the same reason
+    # (#14885). With `== 'true'` a paths-filter that succeeded but emitted
+    # nothing skips this job silently — the fail-safe has to point at running
+    # the check, not at skipping it.
+    if: needs.changes.outputs.slm_types != 'false'
     name: verify-generated-types-slm
     runs-on: ubuntu-latest
 

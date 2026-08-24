@@ -14,13 +14,38 @@
 # prints how many baselined findings it suppressed and the issue that owns the
 # backlog. A backlog nobody is reminded of is indistinguishable from no backlog.
 #
-# THIS FILE ONLY EVER SHRINKS. A finding not listed here fails the build. The
-# count is part of the key, so a SECOND occurrence of an already-known value in
-# an already-known file is a new finding, not a free pass. `--audit-baseline`
-# reports entries that no longer match anything, so a fixed violation cannot
-# leave a stranded exemption behind.
+# THIS FILE ONLY EVER SHRINKS BY DEFAULT. A finding not listed here fails the
+# build. The count is part of the key, so a SECOND occurrence of an
+# already-known value in an already-known file is a new finding, not a free
+# pass. `--audit-baseline` reports entries that no longer match anything, so a
+# fixed violation cannot leave a stranded exemption behind.
+#
+# THE ONE WAY AN ENTRY MAY BE ADDED (#14919). Both halves are required, and the
+# first one cannot be bought:
+#
+#   1. the entry's file is byte-identical to the base ref -- so a detection-rule
+#      change surfaced code that was already here, and this change did not write
+#      the value. An addition in a file the same change TOUCHES is the bypass
+#      this baseline exists to close and has no override of any kind;
+#   2. the change adds a justification line directly above the entry:
+#
+#          # reviewed: #<issue> why this cannot be fixed at the source
+#          1|ssot|path/to/file.py|value
+#
+# The justification is a preceding COMMENT, never a suffix: everything after the
+# first `|` is the key, so a trailing `# reviewed: ...` would change the key
+# until it matched no finding at all. Both halves are enforced by
+# pipeline-scripts/check_baseline_no_growth.sh, which prints every permitted
+# addition in full.
 #
 # Format: <count>|<class>|<file>|<value>
+#
+# THREE `|` PER LINE, EXACTLY. Neither `file` nor `value` is escaped, so a
+# fourth separator makes the record ambiguous -- and the ambiguity is
+# exploitable, not merely untidy: a crafted filename containing `|` lets a
+# reader resolve the FILE field to an unrelated, untouched decoy. The
+# no-growth guard refuses an ambiguous key outright rather than guessing.
+# All 1408 entries below carry exactly three.
 1|other|autobot-backend/a2a/__init__.py|https://a2a-protocol.org/latest/
 1|other|autobot-backend/a2a/agent_card.py|https://backend-host:8443
 1|other|autobot-backend/a2a/agent_card.py|https://github.com/mrveiss/AutoBot-AI
