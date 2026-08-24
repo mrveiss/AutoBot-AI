@@ -72,6 +72,30 @@ async def enforce_ws_origin(websocket: WebSocket) -> bool:
         return False
 
 
+async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
+    """Authenticate a WebSocket handshake and, on failure, close with ``1008``.
+
+    Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
+    ``websocket.accept()`` and ``return`` when this yields ``None``. Closing
+    before ``accept()`` rejects the handshake itself rather than the socket
+    accepting then tearing down mid-stream (#14959, #14960).
+
+    Returns the authenticated user dict, or ``None`` after having closed the
+    socket for a missing or invalid credential.
+    """
+    from auth_middleware import authenticate_websocket  # noqa: PLC0415
+
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        logger.warning("Rejected unauthenticated WebSocket handshake")
+        try:
+            await websocket.close(code=1008, reason="Authentication required")
+        except Exception:  # already closed / handshake not completed
+            pass
+        return None
+    return user
+
+
 def authenticate_ws_admin(websocket: WebSocket) -> bool:
     """Fail-closed auth+authz for admin WS endpoints: a valid user (JWT/session/
     cookie) or the internal-service key, AND admin role — matching the REST
