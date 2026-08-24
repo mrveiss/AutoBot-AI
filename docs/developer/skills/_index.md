@@ -14,4 +14,3 @@ Documentation for AutoBot-AI's skill system — reusable capability modules that
 | Document | Description |
 | --- | --- |
 | [[README]] | Skills system overview and usage |
-| [[batch-implement]] | Batch implementation skill reference |
