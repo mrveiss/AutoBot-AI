@@ -27,15 +27,20 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 from urllib.parse import urlsplit
 
 __all__ = [
     "DEFAULT_PROBE_TIMEOUT_SECONDS",
     "endpoint_is_listening",
-    "reset_probe_cache",
+    "redis_client_is_stubbed",
     "require_live_endpoint",
+    "require_real_redis_client",
+    "reset_probe_cache",
     "split_endpoint",
 ]
+
+REDIS_CLIENT_MODULE = "autobot_shared.redis_client"
 
 # Env-var-backed module constant rather than a literal at the call site: a
 # fleet run may need longer than a loopback run, and no caller should hardcode
@@ -129,3 +134,47 @@ def require_live_endpoint(target: str, what: str, port: int | None = None) -> No
     import pytest
 
     pytest.skip(f"{what} is not listening on {host}:{resolved_port} — this test drives a live service")
+
+
+def redis_client_is_stubbed() -> bool:
+    """True when ``autobot_shared.redis_client`` is a stand-in, not the real module.
+
+    ``autobot-backend/conftest.py`` owns ``sys.modules[REDIS_CLIENT_MODULE]`` for
+    the whole backend directory and installs a socket-free stand-in whose
+    ``get_redis_client`` returns ``None`` unconditionally. That is correct for
+    the PR unit gate, which must never dial Redis, but it is applied to every
+    backend item including the ``integration`` ones that exist *because* they
+    need a real Redis — see #14932.
+
+    The stand-in is a bare ``types.ModuleType`` built in memory, so it has no
+    ``__file__``; the genuine module was loaded from disk and has one. File
+    location is the only thing that separates them, which is exactly the
+    distinction relied on elsewhere in this repo for hand-installed stubs.
+
+    A module that is not imported at all reads as *not* stubbed: the caller has
+    not reached the point where it would matter, and reporting "stubbed" for an
+    absent module would skip on a condition nobody established.
+    """
+    module = sys.modules.get(REDIS_CLIENT_MODULE)
+    if module is None:
+        return False
+    return getattr(module, "__file__", None) is None
+
+
+def require_real_redis_client(what: str) -> None:
+    """Skip the calling test iff the Redis client module is a stand-in.
+
+    This is a *structural* precondition — "is the real module installed" — not an
+    observation of the test's own failure. When #14932 removes the stand-in for
+    marked items, this stops skipping on its own and the test runs for real.
+    """
+    if not redis_client_is_stubbed():
+        return
+
+    import pytest
+
+    pytest.skip(
+        f"{what} needs a real Redis client, but {REDIS_CLIENT_MODULE} is the "
+        f"backend conftest's socket-free stand-in (get_redis_client() always "
+        f"returns None) — tracked as #14932"
+    )

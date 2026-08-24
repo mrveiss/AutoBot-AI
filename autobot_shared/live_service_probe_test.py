@@ -12,6 +12,8 @@ one layer down. Every test below pins the boundary rather than the happy path.
 from __future__ import annotations
 
 import socket
+import sys
+import types
 
 import pytest
 
@@ -153,3 +155,42 @@ class TestRequireLiveEndpoint:
     def test_an_unparseable_target_raises_instead_of_skipping(self):
         with pytest.raises(ValueError):
             require_live_endpoint("", what="nothing")
+
+
+class TestRedisClientIsStubbed:
+    """The stand-in detector must key on module identity, not on a symptom."""
+
+    def test_false_for_the_genuine_module_loaded_from_disk(self, monkeypatch):
+        import autobot_shared.redis_client as real
+
+        monkeypatch.setitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, real)
+        assert real.__file__, "the genuine module must have a __file__ for this check to mean anything"
+        assert live_service_probe.redis_client_is_stubbed() is False
+
+    def test_true_for_an_in_memory_stand_in(self, monkeypatch):
+        standin = types.ModuleType(live_service_probe.REDIS_CLIENT_MODULE)
+        standin.get_redis_client = lambda *a, **k: None
+        assert getattr(standin, "__file__", None) is None
+        monkeypatch.setitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, standin)
+
+        assert live_service_probe.redis_client_is_stubbed() is True
+
+    def test_an_absent_module_is_not_reported_as_stubbed(self, monkeypatch):
+        monkeypatch.delitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, raising=False)
+        assert live_service_probe.redis_client_is_stubbed() is False
+
+    def test_require_real_redis_client_skips_only_under_the_stand_in(self, monkeypatch):
+        standin = types.ModuleType(live_service_probe.REDIS_CLIENT_MODULE)
+        monkeypatch.setitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, standin)
+
+        with pytest.raises(Exception) as excinfo:
+            live_service_probe.require_real_redis_client("the knowledge base")
+
+        assert excinfo.typename == "Skipped"
+        assert "#14932" in str(excinfo.value), "the skip reason must name the tracking issue"
+
+        import autobot_shared.redis_client as real
+
+        monkeypatch.setitem(sys.modules, live_service_probe.REDIS_CLIENT_MODULE, real)
+        # Reaching the next statement is the assertion.
+        live_service_probe.require_real_redis_client("the knowledge base")
