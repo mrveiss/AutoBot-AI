@@ -230,13 +230,26 @@ def test_the_python_filter_reaches_the_inputs_these_guards_read() -> None:
     patterns = yaml.safe_load(filters.read_text(encoding="utf-8"))["python"]
     assert len(patterns) >= 10, f"only {len(patterns)} patterns — the filter was gutted"
 
-    # Every path this module and its two siblings actually read, minus the
-    # `**/*.py` ones that are covered by construction.
-    subjects = sorted(_REQUIRED) + [
-        "autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync",
-        "autobot-infrastructure/shared/scripts/hooks/lib/_common.sh",
-        "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh",
-    ]
+    # Subjects are DERIVED from the tracked surface these guards read, not a
+    # hand-picked sample. A sample can cover 100% on the day it is written and
+    # go stale in silence — the review note that prompted this pointed out that
+    # the three paths named here happened to sit under one directory, so a new
+    # extensionless script elsewhere under autobot-infrastructure/ would have
+    # matched nothing and taken the shim's green.
+    roots = ("autobot-infrastructure", "tools/git-hooks", "scripts/install-git-hooks.sh")
+    listed = subprocess.run(
+        ["git", "-C", str(_REPO_ROOT), "ls-files", "--", *roots],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    # `**/*.py` already covers the Python files by construction; what has to be
+    # named explicitly is everything else.
+    subjects = sorted(path for path in listed if not path.endswith(".py"))
+    assert len(subjects) >= 500, (
+        f"only {len(subjects)} non-Python files under {roots} — the listing "
+        "regressed and this test would pass having checked almost nothing"
+    )
     unreachable = [
         subject
         for subject in subjects

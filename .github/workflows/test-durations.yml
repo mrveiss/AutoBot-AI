@@ -80,7 +80,7 @@ jobs:
       - name: Store durations — backend, shared, tts-worker, repo_tests
         run: |
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests autobot-infrastructure/shared/scripts/hooks \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \

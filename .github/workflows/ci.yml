@@ -278,7 +278,7 @@ jobs:
         # quarantine. scripts/lib/*_test.sh are bash and are covered separately
         # by repo_tests/shell_lib_test.py.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
           --shard-splits 12 --shard-group ${{ matrix.shard }} \
