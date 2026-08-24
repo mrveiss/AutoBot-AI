@@ -1168,8 +1168,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
 3|other|autobot-slm-backend/ansible/playbooks/recover_host.yml|/home/autobot
-1|other|autobot-slm-backend/ansible/playbooks/remove-role.yml|"/opt/autobot/{{ role_target_dir }}
-1|other|autobot-slm-backend/ansible/playbooks/remove-role.yml|'/opt/autobot/
 1|other|autobot-slm-backend/ansible/playbooks/remove-role.yml|'/opt/autobot/autobot-db-stack/chromadb/data
 3|other|autobot-slm-backend/ansible/playbooks/rollback-dependencies.yml|'/opt/autobot/backups
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|120

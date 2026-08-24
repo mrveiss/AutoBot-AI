@@ -22,6 +22,13 @@
 #     -i inventory/production.yml -i inventory/slm-nodes.yml \
 #     --limit <node_id> \
 #     -e "role_name=redis systemd_service=redis-stack-server role_target_dir=autobot-redis backup_before_removal=true"
+#
+# #14914: the removal paths below are built from `{{ autobot.base_dir }}`
+# (inventory/group_vars/all.yml), not from a `/opt/autobot` literal. They were
+# part of the nine hardcoded-value findings sitting unbaselined on Dev_new_gui
+# while the gate that reported them keyed its verdict on a different class.
+# The prose in this file still says /opt/autobot where it describes the deployed
+# layout to a reader; the paths the code ACTS on come from the variable.
 
 - name: "Remove role {{ role_name }} from node"
   hosts: all
@@ -181,7 +188,7 @@
       when: role_target_dir is defined and role_target_dir | length > 0
       vars:
         caller_role: "Remove role"
-        remove_dir_path: "/opt/autobot/{{ role_target_dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ role_target_dir }}"
         remove_reason: "role {{ role_target_dir }} is being removed from this node"
 
     # #14856: this line used to read "<dir> removed" whenever a target dir was
@@ -191,7 +198,7 @@
     # does not implement. So it reports what the filesystem says afterwards.
     - name: "Re-check the role directory after removal (#14856)"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ role_target_dir }}"
+        path: "{{ autobot.base_dir }}/{{ role_target_dir }}"
       register: _role_dir_after
       when: role_target_dir is defined and role_target_dir | length > 0
       become: true
@@ -201,9 +208,9 @@
         _disk_cleanup_summary: >-
           {{ 'skipped (no target dir)'
              if not (role_target_dir is defined and role_target_dir | length > 0)
-             else ('/opt/autobot/' + role_target_dir + ' removed'
+             else (autobot.base_dir + '/' + role_target_dir + ' removed'
                    if not (_role_dir_after.stat.exists | default(true))
-                   else '/opt/autobot/' + role_target_dir + ' KEPT - it holds data, see the REFUSING message above') }}
+                   else autobot.base_dir + '/' + role_target_dir + ' KEPT - it holds data, see the REFUSING message above') }}
 
     - name: "Clean orphan user-level Python packages"
       ansible.builtin.file:

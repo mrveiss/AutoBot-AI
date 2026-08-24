@@ -143,7 +143,7 @@ entry points read it:
 
 | Entry point | Scope | On a violation |
 |---|---|---|
-| `pipeline-scripts/detect-hardcoded-values.sh` | a tree | always exits 0; `ssot-coverage.yml` decides pass/fail from the reported counts |
+| `pipeline-scripts/detect-hardcoded-values.sh` | a tree | always exits 0 on a completed scan; the verdict travels in the JSON `status` field, which `ssot-coverage.yml` enforces as-is. A non-zero exit means the scan did not finish, and that also fails the job |
 | `autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values` | staged files, or an explicit argv list from CI | exits 1 — this is the one that stops a commit |
 
 They differ only in where the lines come from and what they do with the
@@ -154,6 +154,26 @@ points pick it up.
 already existed when the three former detectors were merged. It only ever
 shrinks: a finding that is not in it fails the build, and every run prints how
 many baselined findings it suppressed.
+
+### What blocks a build (#14914)
+
+**Severity decides, not class.** Every `VIOLATION` blocks — both the `ssot`
+class and the `other` class. The two classes differ in what the fix *looks
+like*: an `ssot` finding names the exact config key that replaces the value, an
+`other` finding names the family. They do not differ in whether the value
+belongs in the source, so they do not differ in whether they block.
+
+`WARNING` is the advisory severity and does not block. There is exactly one
+today — `offset=0` — and it is advisory because the shape is too common to gate
+on, not because of the class it happens to carry. Warnings are counted
+separately and are not part of `total_violations`.
+
+So: **an advisory rule emits `WARNING` from the rule itself.** Do not park a
+rule outside the gate by choosing a class the verdict does not read — that was
+the #14914 defect. Eight of the twelve emit sites (paths, DSNs, URLs, accounts,
+roles, categories, timeouts, magic numbers) were detected, counted, JSON-encoded
+and printed while the verdict read `ssot_violations` alone, so nine hardcoded
+`/opt/autobot` paths sat on the merged base under a green check.
 
 ### "STALE baseline entry" — what to do (#14912)
 

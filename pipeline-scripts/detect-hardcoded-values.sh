@@ -17,8 +17,12 @@
 # This one differs from the hook in exactly two ways, and both are entry-point
 # policy rather than rule content:
 #   * it scans a tree rather than the staged file list;
-#   * it always exits 0. ssot-coverage.yml decides pass/fail from the reported
-#     counts, and has done since #2874.
+#   * it always exits 0 on a completed scan, pass or fail. The verdict travels
+#     in the `status` field, which ssot-coverage.yml enforces as-is (#14914);
+#     a non-zero exit from here therefore means the scan did NOT complete, and
+#     that workflow treats it as a failure rather than as a clean result.
+#     Keep those two facts together: making this script exit 1 on violations
+#     would make a real verdict indistinguishable from a crashed run.
 #
 # Usage: detect-hardcoded-values.sh [--json|--report|--audit-baseline|--prune-baseline|--help]
 
@@ -112,8 +116,35 @@ SSOT_VIOLATIONS=$(count_of '^VIOLATION|ssot|')
 OTHER_VIOLATIONS=$(count_of '^VIOLATION|other|')
 WARNINGS=$(count_of '^WARNING|')
 
+# The verdict, and the ONE place that decides it (#14914).
+#
+# This used to read `[ "$SSOT_VIOLATIONS" -gt 0 ]`, which meant the eight
+# `other`-class rules — AutoBot paths, DB DSNs, URLs, account identities, roles,
+# categories, timeouts, magic numbers — were detected, counted, written into the
+# JSON, printed to the report, and gated on by nothing. Two thirds of the merged
+# rule set was surface with no sink. The merged base carried nine `other`
+# findings under a green `SSOT Configuration Compliance` while that was true.
+#
+# The enforcement axis is SEVERITY, not class:
+#
+#   VIOLATION  blocks. Both classes. `ssot` and `other` differ in what the fix
+#              LOOKS like — an `ssot` finding names the exact config key that
+#              replaces it, an `other` one names the family — not in whether the
+#              value belongs in the source. A hardcoded DSN is not less wrong
+#              for having no `config.vm.*` entry to point at.
+#   WARNING    is advisory and deliberately does not block. There is exactly one
+#              (`offset=0`, _hv_rule_magic_number), and that carve-out predates
+#              this change: detector 3 chose it because the shape is common
+#              enough to be noise. WARNINGS are counted separately and are not
+#              part of TOTAL_VIOLATIONS, so the intent is expressed by the
+#              severity a rule emits, in the rule, rather than by which counter
+#              this line happens to read.
+#
+# Adding an advisory rule therefore means emitting WARNING from it. It does not
+# mean parking a class outside the gate, because that is indistinguishable from
+# the bug above.
 STATUS="pass"
-[ "$SSOT_VIOLATIONS" -gt 0 ] && STATUS="fail"
+[ "$TOTAL_VIOLATIONS" -gt 0 ] && STATUS="fail"
 
 if [ "$AUDIT_BASELINE" = true ]; then
     STALE=$(hv_stale_baseline_entries)

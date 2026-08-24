@@ -50,6 +50,13 @@
 #   - A directory holding data/ is REPORTED and left alone, never removed
 #   - All removals use state: absent (idempotent, no error if already gone)
 #   - Run with --check first to preview changes
+#
+# #14914: the removal paths below are built from `{{ autobot.base_dir }}`
+# (inventory/group_vars/all.yml), not from a `/opt/autobot` literal. They were
+# part of the nine hardcoded-value findings sitting unbaselined on Dev_new_gui
+# while the gate that reported them keyed its verdict on a different class.
+# The prose in this file still says /opt/autobot where it describes the deployed
+# layout to a reader; the paths the code ACTS on come from the variable.
 
 # ---------------------------------------------------------------------------
 # Pre-cleanup: snapshot /opt/autobot/ on all nodes
@@ -98,7 +105,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: SLM
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Backend
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
     - name: "Backend | Find flat Python files at /opt/autobot root"
@@ -175,7 +182,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Frontend
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -202,7 +209,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: NPU
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -229,7 +236,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: "AI Stack"
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -259,7 +266,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Databases
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -286,7 +293,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Browser
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------

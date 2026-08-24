@@ -26,6 +26,7 @@ fleet IP by an unrelated scanner walking test sources.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import stat
 import subprocess  # nosec B404  # fixed argv, no shell
@@ -132,7 +133,10 @@ def test_a_sudoers_line_in_a_shell_script_is_now_flagged(tmp_path):
     report = _run(root)
 
     assert report["other_violations"] >= 1
-    assert report["status"] == "pass", "an account violation alone must not block the SSOT gate"
+    # #14914 flipped this assertion, and it was the bug in one line: an account
+    # identity baked into a deployment script is a hardcoded value whether or
+    # not `config.vm.*` has a key for it. It used to read `== "pass"`.
+    assert report["status"] == "fail", "an `other`-class violation must block the gate (#14914)"
 
 
 def test_a_systemd_user_directive_in_a_shell_script_is_now_flagged(tmp_path):
@@ -211,15 +215,16 @@ def test_an_unrelated_extension_is_still_ignored(tmp_path):
     assert report["total_violations"] == 0
 
 
-def test_the_real_repository_has_no_new_blocking_ssot_violations():
-    """End-to-end against the real tree.
+def test_the_real_repository_has_no_new_blocking_violations():
+    """End-to-end against the real tree, on the number that actually blocks.
 
-    Enabling ``*.sh``/``*.yml``/``*.yaml`` scanning must surface an
-    ``other_violations`` backlog (expected, per #14316) without turning up a
-    NEW ``ssot_violations`` hit -- that category blocks the CI gate
-    (ssot-coverage.yml's job-status step), so a real fleet IP reachable only
-    once shell/yaml scanning was enabled would silently redden every future
-    PR touching an unrelated file that happens to share this workflow.
+    This asserted ``ssot_violations == 0`` until #14914 — which is why it was
+    green on a base carrying nine unbaselined ``other`` findings. A test that
+    measures a different number from the gate is not a test of the gate.
+
+    Both halves are asserted: the count, so a regression names how many; and
+    ``status``, so a change that keys the verdict off some third quantity is
+    caught rather than passing on a count nobody reads any more.
     """
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["bash", str(_SCRIPT), "--json"],
@@ -229,10 +234,11 @@ def test_the_real_repository_has_no_new_blocking_ssot_violations():
     )
     report = json.loads(result.stdout)
 
-    assert report["ssot_violations"] == 0, (
-        "a real fleet IP is now reachable through *.sh/*.yml/*.yaml scanning and must be "
-        f"fixed at the source (or noqa'd if a documented example), not allow-listed: {report}"
+    assert report["total_violations"] == 0, (
+        "a hardcoded value reachable through *.sh/*.yml/*.yaml scanning must be fixed at "
+        f"the source (or noqa'd if a documented example), not left to the gate: {report}"
     )
+    assert report["status"] == "pass", report
 
 
 # ── #14912: --prune-baseline, and the audit message that sends you to it ─────
@@ -450,3 +456,151 @@ def test_the_tests_scan_dir_list_matches_the_script(tmp_path):
     assert in_script == _SCAN_DIRS, (
         f"SCAN_DIRS drifted — script has {in_script}, this file has {_SCAN_DIRS}"
     )
+
+
+# ── #14914: what the verdict is keyed on, and that something consumes it ─────
+#
+# The detector detected, counted, JSON-encoded and printed every `other`-class
+# finding, and then nothing gated on any of it: `STATUS` and ssot-coverage.yml's
+# job-status step were both keyed on `ssot_violations`. Eight of the twelve emit
+# sites — paths, DSNs, URLs, accounts, roles, categories, timeouts, magic
+# numbers — could not fail a build. Full surface, no sink.
+#
+# These tests cover BOTH halves, because either one alone is the same defect
+# again: the producer's verdict, and the workflow step that acts on it.
+
+
+def test_an_other_class_violation_alone_blocks(tmp_path):
+    """The mutation, committed. A DSN literal is `other` and nothing else."""
+    root = _hermetic_repo(tmp_path)
+    (root / "autobot-backend" / "db.py").write_text(
+        'ENGINE = "' + "sqlite" + ':///./app.db"\n', encoding="utf-8"
+    )
+
+    report = _run(root)
+
+    assert report["other_violations"] >= 1, f"the fixture did not trip the rule at all: {report}"
+    assert report["ssot_violations"] == 0, f"fixture must isolate the `other` class: {report}"
+    assert report["total_violations"] == report["other_violations"], report
+    assert report["status"] == "fail", (
+        "an `other`-class violation was found, counted and reported, and the gate "
+        f"still said pass — the #14914 defect: {report}"
+    )
+
+
+def test_a_clean_tree_still_passes(tmp_path):
+    """The other direction. A gate that fails everything is not a gate."""
+    root = _hermetic_repo(tmp_path)
+    (root / "autobot-backend" / "db.py").write_text(
+        "ENGINE = create_engine(config.database.url)\n", encoding="utf-8"
+    )
+
+    report = _run(root)
+
+    assert report == {
+        "status": "pass",
+        "total_violations": 0,
+        "ssot_violations": 0,
+        "other_violations": 0,
+        "warnings": 0,
+        "baselined": report["baselined"],
+    }, report
+
+
+def test_a_warning_only_tree_stays_advisory(tmp_path):
+    """WARNING is the advisory severity, and that is deliberate and unchanged.
+
+    ``offset=0`` is the one WARNING the merged rule set emits; detector 3 chose
+    it because the shape is too common to block on. Keying the gate on
+    ``total_violations`` must not sweep it in — the advisory axis is severity,
+    not class, and this asserts the distinction survives rather than assuming it.
+    """
+    root = _hermetic_repo(tmp_path)
+    (root / "autobot-backend" / "query.py").write_text("offset = 0\n", encoding="utf-8")
+
+    report = _run(root)
+
+    assert report["warnings"] >= 1, f"the advisory fixture emitted nothing to assert on: {report}"
+    assert report["total_violations"] == 0, report
+    assert report["status"] == "pass", f"a WARNING blocked the gate: {report}"
+
+
+_WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ssot-coverage.yml"
+_GATE_STEP = "Set job status"
+
+
+def _gate_step_script(outputs: dict) -> list[str]:
+    """The workflow's enforcement step, with its step outputs substituted in.
+
+    Extracted and executed rather than read for the string ``total_violations``:
+    a source-text assertion passes just as well over a step that computes the
+    right value and then ignores it.
+    """
+    yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflow")
+    doc = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    steps = doc["jobs"]["ssot-coverage"]["steps"]
+    matching = [s for s in steps if s.get("name") == _GATE_STEP]
+    # Assert the target EXISTS before asserting anything about it: a renamed or
+    # deleted step would otherwise make every case below vacuously pass.
+    assert len(matching) == 1, (
+        f"expected exactly one '{_GATE_STEP}' step in {_WORKFLOW.name}; found {len(matching)}. "
+        "If it was renamed, rename it here — do not let this test go quiet."
+    )
+    script = matching[0]["run"]
+
+    expr = re.compile(r"\$\{\{\s*steps\.ssot_check\.outputs\.(\w+)\s*\}\}")
+    referenced = set(expr.findall(script))
+    assert "status" in referenced, (
+        f"the gate step no longer reads the detector's verdict; it reads {sorted(referenced)}. "
+        "#14914: the verdict is computed once, in detect-hardcoded-values.sh."
+    )
+    unknown = referenced - set(outputs)
+    assert not unknown, f"the gate step reads outputs this test does not supply: {sorted(unknown)}"
+
+    return ["bash", "-eo", "pipefail", "-c", expr.sub(lambda m: outputs[m.group(1)], script)]
+
+
+_PASSING_OUTPUTS = {
+    "status": "pass",
+    "exit_code": "0",
+    "total_violations": "0",
+    "ssot_violations": "0",
+    "other_violations": "0",
+}
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expect_failure", "why"),
+    [
+        ({}, False, "a clean run must not be failed by the gate step"),
+        (
+            {"status": "fail", "total_violations": "9", "other_violations": "9"},
+            True,
+            "nine `other`-class findings and status=fail must fail the job — this is the "
+            "exact shape that sat green on the merged base",
+        ),
+        (
+            {"status": "fail", "total_violations": "1", "ssot_violations": "1"},
+            True,
+            "an ssot finding must still block, as it has since #2874",
+        ),
+        (
+            {"status": "unknown", "total_violations": "0"},
+            True,
+            "an unparseable detector result is not a clean result",
+        ),
+        (
+            {"exit_code": "1"},
+            True,
+            "a detector that did not complete reports no verdict; a FATAL scan-dir "
+            "refusal used to be swallowed and read as pass",
+        ),
+    ],
+)
+def test_the_workflow_step_enforces_the_detectors_verdict(overrides, expect_failure, why):
+    outputs = dict(_PASSING_OUTPUTS, **overrides)
+    result = subprocess.run(  # nosec B603  # fixed argv, no shell injection
+        _gate_step_script(outputs), capture_output=True, text=True
+    )
+    failed = result.returncode != 0
+    assert failed is expect_failure, f"{why} (exit={result.returncode}, out={result.stdout!r})"
