@@ -111,6 +111,36 @@ jobs:
           # tighten together, and this becomes absolute when the baseline empties.
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
 
+      - name: Fail when a behavioural hook reported a finding (#14878)
+        run: |
+          # The third class, between the two the steps above already handle.
+          #
+          # `pre-commit run --all-files` above routes findings to a warning, and
+          # for a formatter or a linter that is right: gating a merge on Black's
+          # opinion is a judgement nobody made. The step after it fails when a
+          # hook could not EXECUTE (#14181), because a pass over a hook that
+          # never ran is a false clean bill of health.
+          #
+          # `ssot-config-lib-guard` is neither. Its entry is a TEST SUITE
+          # (autobot-infrastructure/shared/tests/test_ssot_config_lib.sh), the
+          # regression guard for #14041, and a failure there means a shipped
+          # script's config bootstrap is broken. It executes fine, so #14181 is
+          # satisfied; it reports a finding, so the workflow warned and moved on.
+          # The guard therefore ran in exactly one place and blocked nothing —
+          # the same shape as the defect it was written to catch (#14878).
+          #
+          # HERE, not in python-suite. Wrapping the suite under pytest was the
+          # other option in #14878 and is the weaker one today: `python-suite` is
+          # not a required context (#14353/#13162), so that route would move the
+          # guard from one non-gating place to another. This job publishes
+          # `verify-precommit-config`, which IS required, so a finding blocks.
+          #
+          # The allowlist is explicit, keyed by hook id, and self-guarding: an id
+          # that leaves .pre-commit-config.yaml fails rather than silently
+          # exempting itself, and an absent or Skipped result fails rather than
+          # reading as clean. Criterion for adding one is in the script's header.
+          python3 pipeline-scripts/check_gating_precommit_hooks.py precommit-output.txt
+
       - name: Workflow path filters must match the canonical set (#12986)
         run: |
           # BLOCKING, and deliberately in THIS workflow rather than

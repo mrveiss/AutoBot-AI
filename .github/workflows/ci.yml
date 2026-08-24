@@ -463,7 +463,10 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Set up Python 3.12
+    # #13162: the step was named "Set up Python 3.12" while pinning 3.14. The
+    # version lives in `python-version:` and nowhere else, so the name carries
+    # no version at all rather than a second copy to drift.
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
         python-version: '3.14'
