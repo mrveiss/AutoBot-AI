@@ -118,8 +118,13 @@ _SKIP = {
 # counts rather than swept, and this ceiling is what stops the population
 # growing back while that work is queued.
 _KNOWN_OFFENDERS = {
-    # 77, not 79: the two interface stubs below are exempt and counted separately.
-    "autobot-backend": (77, 18000),
+    # 59, not 61: the two interface stubs below are exempt and counted separately.
+    # 77 -> 59 (#14979): `takeover_manager_e2e_test.py` (10) and
+    # `services/temporal_invalidation_test.py` (8) were converted. Neither
+    # needed a live service -- the first drives the workflow manager in-process
+    # against an `AsyncMock` socket, the second against an in-process
+    # `fakeredis` -- so both now collect and assert rather than skip.
+    "autobot-backend": (59, 18000),
     # The floor equals the ceiling here, and legitimately so: this tree holds one
     # test module whose single class is uncollected, so every test-shaped thing in
     # it is also an offender. Collecting them moves the ceiling to 0 and leaves the

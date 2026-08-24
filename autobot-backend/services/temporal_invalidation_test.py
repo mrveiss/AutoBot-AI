@@ -1,20 +1,41 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""
-Test suite for AutoBot temporal knowledge invalidation functionality.
+"""Temporal knowledge invalidation: rules, sweeps, contradictions and statistics.
+
+#14979: this file was a hand-run driver. ``TestTemporalInvalidation`` was named
+to be collected but defined ``__init__``, and pytest refuses such a class --
+``PytestCollectionWarning``, then it moves on. All eight ``test_*`` methods were
+dead text, while every signal a reader had (a ``*_test.py`` name inside a
+collected tree, a ``Test*`` class, a clean import) said they ran.
+
+Nothing here needs a live service. ``MockFactExtractionService`` is the only
+fact store, and the rule store the service keeps in Redis is an in-process
+``fakeredis`` (see ``setup_method``). Beyond the class shape, four things the
+driver hid had to be fixed for the methods to mean anything:
+
+* ``test_actual_invalidation_sweep`` depended on ``run_all_tests`` having called
+  the dry-run test first. Alone it returned "No invalidation rules available"
+  and asserted on the error response.
+* Every method ended on ``return <value>``, which would have moved them straight
+  into #14920's population once collected.
+* Fixture facts were built with a naive ``datetime.now()``, which makes
+  ``InvalidationRule.matches_fact`` raise ``TypeError`` against its
+  timezone-aware ``now``. The single production producer
+  (``agents/knowledge_extraction_agent.py``) passes an aware value, so this was
+  the fixture's bug, not the service's.
+* Three assertions were conditional on the thing they were checking
+  (``if stats["recent_sweeps"] > 0: assert ...``), so they passed when the
+  behaviour was absent.
 """
 
-import asyncio
-import os
-import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-# Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import fakeredis.aioredis as fakeredis_async
 
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.temporal_invalidation_service import (
+    InvalidationReason,
     InvalidationRule,
     TemporalInvalidationService,
 )
@@ -49,7 +70,7 @@ class MockFactExtractionService:
             source="test",
             extraction_method="manual",
             entities=[subject, object],
-            valid_from=datetime.now() - timedelta(days=age_days),
+            valid_from=datetime.now(tz=timezone.utc) - timedelta(days=age_days),
             is_active=active,
             fact_id=f"test_fact_{self.next_fact_id}",
         )
@@ -93,9 +114,22 @@ class MockFactExtractionService:
 class TestTemporalInvalidation:
     """Test cases for temporal knowledge invalidation functionality."""
 
-    def __init__(self) -> None:
+    def setup_method(self) -> None:
         self.mock_fact_service = MockFactExtractionService()
         self.invalidation_service = TemporalInvalidationService(self.mock_fact_service)
+        # The service keeps its rule set, its invalidated-fact set and its sweep
+        # history in Redis, and the backend conftest replaces
+        # `autobot_shared.redis_client` with a socket-free stand-in whose
+        # `get_async_redis_client()` returns None (#14932). Without a store the
+        # service answers `{"error": "Redis client not available"}` and five of
+        # these eight tests assert nothing about invalidation. Injecting the
+        # in-process fake -- the same one `services/workflow_redis_backfill_test.py`
+        # and `llm_shared/tests/test_provider_degradation.py` use -- makes them
+        # exercise the real rule store rather than skip.
+        # `_ensure_redis` only reaches for a client when this is still None.
+        self.invalidation_service.redis_client = fakeredis_async.FakeRedis(
+            server=fakeredis_async.FakeServer(), decode_responses=True
+        )
 
         # Create test facts with various temporal characteristics
         self._setup_test_facts()
@@ -182,70 +216,91 @@ class TestTemporalInvalidation:
 
     async def test_invalidation_rules_initialization(self):
         """Test initialization of invalidation rules."""
-        print("Testing invalidation rules initialization...")  # noqa: print
 
         result = await self.invalidation_service.initialize_rules()
-
-        print(f"✓ Rules initialization result: {result['status']}")  # noqa: print
-        print(f"  Total rules: {result['total_rules']}")  # noqa: print
-        print(f"  Rules added: {result['rules_added']}")  # noqa: print
 
         assert result["status"] == "success", "Rules initialization should succeed"
         assert result["total_rules"] >= 5, "Should have at least 5 default rules"
 
-        return result
-
     async def test_invalidation_rule_matching(self):
         """Test invalidation rule matching logic."""
-        print("\nTesting invalidation rule matching...")  # noqa: print
 
         # Test each default rule against appropriate facts
         rules = self.invalidation_service.default_rules
 
         matches_found = 0
         for rule in rules:
-            print(f"  Testing rule: {rule.name}")  # noqa: print
 
-            # Test against old dynamic fact
+            # Each branch asserts its match rather than counting it. The
+            # original only incremented a counter when a rule matched, so a
+            # rule that had stopped matching altogether was invisible as long
+            # as three others still did.
             if "Dynamic Facts" in rule.name:
                 matches, reason = rule.matches_fact(self.old_dynamic_fact)
-                if matches:
-                    print(f"    ✓ Matches old dynamic fact: {reason.value}")  # noqa: print  # noqa: print
-                    matches_found += 1
+                assert matches, f"{rule.name} should match a 45-day-old dynamic fact"
+                assert reason is not None, f"{rule.name} must say why it matched"
+                matches_found += 1
 
-                # Should NOT match recent dynamic fact
                 matches_recent, _ = rule.matches_fact(self.recent_dynamic_fact)
                 assert not matches_recent, "Should not match recent dynamic fact"
 
-            # Test against prediction
             elif "Predictions" in rule.name:
                 matches, reason = rule.matches_fact(self.old_prediction)
-                if matches:
-                    print(f"    ✓ Matches old prediction: {reason.value}")  # noqa: print  # noqa: print
-                    matches_found += 1
+                assert matches, f"{rule.name} should match a 120-day-old prediction"
+                matches_found += 1
 
-            # Test against low confidence fact
             elif "Low Confidence" in rule.name:
+                # The 10-day-old fixture trips this rule on age before its
+                # confidence is ever consulted, so the confidence path needs a
+                # fact too young to expire. Asserting only the older one left
+                # `min_confidence` entirely unexercised.
                 matches, reason = rule.matches_fact(self.low_confidence_fact)
-                if matches:
-                    print(f"    ✓ Matches low confidence fact: {reason.value}")  # noqa: print  # noqa: print
-                    matches_found += 1
+                assert matches, f"{rule.name} should match a 0.4-confidence fact"
+                assert (
+                    reason is InvalidationReason.TEMPORAL_EXPIRY
+                ), f"{rule.name} matched a 10-day-old fact on age"
 
-            # Test against test source
+                fresh_low_confidence = self.mock_fact_service.add_test_fact(
+                    subject="AutoBot",
+                    predicate="might support",
+                    object="another new feature",
+                    temporal_type=TemporalType.DYNAMIC,
+                    confidence=0.4,
+                    age_days=0,
+                )
+                fresh_matches, fresh_reason = rule.matches_fact(fresh_low_confidence)
+                assert fresh_matches, f"{rule.name} should match on confidence alone"
+                assert (
+                    fresh_reason is InvalidationReason.CONFIDENCE_THRESHOLD
+                ), f"{rule.name} must cite the confidence threshold, not age"
+                matches_found += 1
+
             elif "Test Sources" in rule.name:
+                # Same trap as the confidence rule above: the 2-day-old fixture
+                # trips the 1-day age limit before the source pattern is read,
+                # so the pattern needs a fact that is too young to expire.
                 matches, reason = rule.matches_fact(self.test_source_fact)
-                if matches:
-                    print(f"    ✓ Matches test source fact: {reason.value}")  # noqa: print  # noqa: print
-                    matches_found += 1
+                assert matches, f"{rule.name} should match a fact sourced from test data"
 
-        print(f"✓ Rule matching working: {matches_found} matches found")  # noqa: print
+                fresh_test_source = self.mock_fact_service.add_test_fact(
+                    subject="TestEntity",
+                    predicate="has property",
+                    object="fresh test value",
+                    temporal_type=TemporalType.DYNAMIC,
+                    age_days=0,
+                )
+                fresh_test_source.source = "test_data"
+                fresh_matches, fresh_reason = rule.matches_fact(fresh_test_source)
+                assert fresh_matches, f"{rule.name} should match on the source pattern alone"
+                assert (
+                    fresh_reason is InvalidationReason.SOURCE_OUTDATED
+                ), f"{rule.name} must cite the source pattern, not age"
+                matches_found += 1
+
         assert matches_found >= 3, "Should find at least 3 rule matches"
-
-        return matches_found
 
     async def test_dry_run_invalidation_sweep(self):
         """Test invalidation sweep in dry run mode."""
-        print("\nTesting dry run invalidation sweep...")  # noqa: print
 
         # Initialize rules first
         await self.invalidation_service.initialize_rules()
@@ -253,55 +308,45 @@ class TestTemporalInvalidation:
         # Run dry run sweep
         result = await self.invalidation_service.run_invalidation_sweep(dry_run=True)
 
-        print(f"✓ Dry run sweep completed: {result['status']}")  # noqa: print
-        print(f"  Facts processed: {result['facts_processed']}")  # noqa: print
-        print(f"  Facts identified for invalidation: {result['facts_identified_for_invalidation']}")  # noqa: print
-        print(f"  Processing time: {result['processing_time']:.3f}s")  # noqa: print
-
         # Validate results
         assert result["status"] == "success", "Dry run should succeed"
         assert result["dry_run"] is True, "Should indicate dry run mode"
         assert result["facts_processed"] > 0, "Should process some facts"
         assert result["facts_invalidated"] == 0, "Should not actually invalidate in dry run"
 
-        # Check if facts that should be invalidated were identified
-        if result["facts_identified_for_invalidation"] > 0:
-            print("  Sample facts to invalidate:")  # noqa: print
-            for sample_fact in result.get("sample_facts_to_invalidate", [])[:3]:
-                print(f"    - {sample_fact['statement']} (age: {sample_fact['age_days']} days)")  # noqa: print
-                print(f"      Reason: {sample_fact['reason'].get('reason', 'unknown')}")  # noqa: print  # noqa: print
-
-        return result
+        # The fixtures deliberately include facts every default rule should
+        # catch, so a dry run that identifies none is a broken sweep, not an
+        # empty one -- and a count with no samples behind it is a number the
+        # caller cannot act on.
+        identified = result["facts_identified_for_invalidation"]
+        assert identified > 0, "The fixture facts should be identified for invalidation"
+        samples = result.get("sample_facts_to_invalidate", [])
+        assert samples, "An identified fact must be reported with its sample"
+        for sample in samples:
+            assert sample["statement"], "Every sample names the fact it would invalidate"
+            assert sample["reason"], "Every sample carries the rule that matched"
 
     async def test_actual_invalidation_sweep(self):
-        """Test actual invalidation sweep (not dry run)."""
-        print("\nTesting actual invalidation sweep...")  # noqa: print
+        """A non-dry-run sweep reports every processed fact and invalidates the stale ones."""
+        # The rule store is per-test, so the rules have to exist before the
+        # sweep looks for them. In the hand-run driver this test only ever
+        # succeeded because `run_all_tests` had called the dry-run test first
+        # against a shared Redis -- run alone, it returned "No invalidation
+        # rules available" and nobody could see it.
+        await self.invalidation_service.initialize_rules()
 
-        # Count active facts before invalidation
         active_facts_before = await self.mock_fact_service.get_facts_by_criteria(active_only=True)
+        assert active_facts_before, "The fixtures must start active for the sweep to have subjects"
 
-        print(f"  Active facts before: {len(active_facts_before)}")  # noqa: print
-
-        # Run actual invalidation sweep
         result = await self.invalidation_service.run_invalidation_sweep(dry_run=False)
 
-        print(f"✓ Actual sweep completed: {result['status']}")  # noqa: print
-        print(f"  Facts processed: {result['facts_processed']}")  # noqa: print
-        print(f"  Facts identified: {result['facts_identified_for_invalidation']}")  # noqa: print  # noqa: print
-        print(f"  Facts invalidated: {result['facts_invalidated']}")  # noqa: print
-
-        # Validate results
         assert result["status"] == "success", "Actual sweep should succeed"
         assert result["dry_run"] is False, "Should indicate actual run mode"
-
-        # Note: In our mock implementation, we don't actually modify facts
-        # In a real implementation, we would verify facts were marked as inactive
-
-        return result
+        assert result["facts_processed"] == len(active_facts_before), "Every active fact must be examined"
+        assert result["facts_invalidated"] > 0, "A real sweep must invalidate the facts it identifies"
 
     async def test_contradiction_detection(self):
         """Test contradiction detection between facts."""
-        print("\nTesting contradiction detection...")  # noqa: print
 
         # Create contradictory facts
         fact1 = self.mock_fact_service.add_test_fact(
@@ -322,33 +367,17 @@ class TestTemporalInvalidation:
             confidence=0.9,  # Higher confidence
         )
 
-        print("  Created contradictory facts:")  # noqa: print
-        print(  # noqa: print
-            f"    Fact 1: {fact1.subject} {fact1.predicate} {fact1.object} (confidence: {fact1.confidence})"
-        )
-        print(  # noqa: print
-            f"    Fact 2: {fact2.subject} {fact2.predicate} {fact2.object} (confidence: {fact2.confidence})"
-        )
-
         # Test contradiction detection
         result = await self.invalidation_service.invalidate_contradictory_facts(fact2)
 
-        print(f"✓ Contradiction check completed: {result['status']}")  # noqa: print
-        print(f"  Contradictions found: {result['contradictions_found']}")  # noqa: print  # noqa: print
-        print(f"  Facts invalidated: {result['facts_invalidated']}")  # noqa: print
-
-        # Validate results
         assert result["status"] == "success", "Contradiction check should succeed"
-
-        # Check if contradiction was detected
-        is_contradictory = fact1.is_contradictory_to(fact2)
-        print(f"  Facts are contradictory: {is_contradictory}")  # noqa: print
-
-        return result
+        assert fact1.is_contradictory_to(
+            fact2
+        ), "Two different values for the same subject/predicate contradict"
+        assert result["contradictions_found"] >= 1, "The superseded fact must be found"
 
     async def test_invalidation_statistics(self):
         """Test invalidation statistics collection."""
-        print("\nTesting invalidation statistics...")  # noqa: print
 
         # Run some invalidation operations first
         await self.invalidation_service.initialize_rules()
@@ -357,27 +386,18 @@ class TestTemporalInvalidation:
         # Get statistics
         stats = await self.invalidation_service.get_invalidation_statistics()
 
-        print("✓ Statistics retrieved successfully")  # noqa: print
-        print(f"  Total invalidated facts: {stats.get('total_invalidated_facts', 0)}")  # noqa: print  # noqa: print
-        print(f"  Recent sweeps: {stats.get('recent_sweeps', 0)}")  # noqa: print
-        print(f"  Total rules: {stats.get('total_rules', 0)}")  # noqa: print
-        print(f"  Enabled rules: {stats.get('enabled_rules', 0)}")  # noqa: print
-        print(f"  Auto invalidation: {stats.get('auto_invalidation_enabled', False)}")  # noqa: print  # noqa: print
-
         # Validate statistics structure
         assert isinstance(stats, dict), "Should return statistics dictionary"
         assert "total_rules" in stats, "Should include total rules count"
         assert "enabled_rules" in stats, "Should include enabled rules count"
 
-        if stats.get("recent_sweeps", 0) > 0:
-            assert "average_processing_time" in stats, "Should include average processing time"
-            print(f"  Average processing time: {stats.get('average_processing_time', 0):.3f}s")  # noqa: print
-
-        return stats
+        # A sweep just ran, so the history behind these numbers is not empty --
+        # the original made this conditional on the very thing it was checking.
+        assert stats["recent_sweeps"] > 0, "The sweep above must appear in the history"
+        assert "average_processing_time" in stats, "Should include average processing time"
 
     async def test_rule_management(self):
         """Test adding and removing invalidation rules."""
-        print("\nTesting rule management...")  # noqa: print
 
         # Create a custom rule
         custom_rule = InvalidationRule(
@@ -392,29 +412,20 @@ class TestTemporalInvalidation:
         # Add the rule
         add_result = await self.invalidation_service.add_invalidation_rule(custom_rule)
 
-        print(f"✓ Custom rule added: {add_result['status']}")  # noqa: print
-        print(f"  Rule ID: {add_result.get('rule_id')}")  # noqa: print
-
         assert add_result["status"] == "success", "Should successfully add custom rule"
 
         # Remove the rule
         remove_result = await self.invalidation_service.remove_invalidation_rule("test_custom_rule")
-
-        print(f"✓ Custom rule removed: {remove_result['status']}")  # noqa: print
 
         assert remove_result["status"] == "success", "Should successfully remove custom rule"
 
         # Try to remove non-existent rule
         remove_nonexistent = await self.invalidation_service.remove_invalidation_rule("nonexistent_rule")
 
-        print(f"  Non-existent rule removal: {remove_nonexistent['status']}")  # noqa: print  # noqa: print
         assert remove_nonexistent["status"] == "error", "Should fail to remove non-existent rule"
-
-        return add_result, remove_result
 
     async def test_temporal_type_behavior(self):
         """Test invalidation behavior for different temporal types."""
-        print("\nTesting temporal type behavior...")  # noqa: print
 
         temporal_test_results = {}
 
@@ -439,86 +450,8 @@ class TestTemporalInvalidation:
 
             temporal_test_results[temporal_type.value] = len(applicable_rules)
 
-            print(f"  {temporal_type.value}: {len(applicable_rules)} applicable rules")  # noqa: print  # noqa: print
-            for rule_name, reason in applicable_rules:
-                print(f"    - {rule_name} ({reason})")  # noqa: print
-
         # Validate expectations
         # STATIC facts should have fewer applicable rules
         assert temporal_test_results.get("STATIC", 0) <= temporal_test_results.get(
             "DYNAMIC", 0
         ), "Static facts should have fewer or equal applicable rules than dynamic facts"
-
-        print("✓ Temporal type behavior test completed")  # noqa: print
-
-        return temporal_test_results
-
-    async def run_all_tests(self):
-        """Run all temporal invalidation tests."""
-        print("=" * 70)  # noqa: print
-        print("AutoBot Temporal Knowledge Invalidation Test Suite")  # noqa: print
-        print("=" * 70)  # noqa: print
-
-        try:
-            # Test rules initialization
-            rules_result = await self.test_invalidation_rules_initialization()
-
-            # Test rule matching
-            matches_found = await self.test_invalidation_rule_matching()
-
-            # Test dry run invalidation
-            dry_run_result = await self.test_dry_run_invalidation_sweep()
-
-            # Test actual invalidation
-            actual_result = await self.test_actual_invalidation_sweep()
-
-            # Test contradiction detection
-            contradiction_result = await self.test_contradiction_detection()
-
-            # Test statistics
-            stats = await self.test_invalidation_statistics()
-
-            # Test rule management
-            await self.test_rule_management()
-
-            # Test temporal type behavior
-            temporal_behavior = await self.test_temporal_type_behavior()
-
-            print("\n" + "=" * 70)  # noqa: print
-            print("✅ All Temporal Invalidation Tests Passed!")  # noqa: print
-            print("=" * 70)  # noqa: print
-            print("Summary:")  # noqa: print
-            print(f"  - Rules initialized: {rules_result['total_rules']} total")  # noqa: print  # noqa: print
-            print(f"  - Rule matches found: {matches_found}")  # noqa: print
-            print(f"  - Dry run identified: {dry_run_result['facts_identified_for_invalidation']} facts")  # noqa: print
-            print(f"  - Actual sweep processed: {actual_result['facts_processed']} facts")  # noqa: print
-            print(f"  - Contradictions detected: {contradiction_result['contradictions_found']}")  # noqa: print
-            print(f"  - Statistics collected: {len(stats)} metrics")  # noqa: print
-            print(f"  - Temporal behavior verified: {len(temporal_behavior)} types tested")  # noqa: print
-
-            return True
-
-        except Exception as e:
-            print(f"❌ Test failed: {e}")  # noqa: print
-            import traceback
-
-            traceback.print_exc()
-            return False
-
-
-async def main():
-    """Main test execution function."""
-    tester = TestTemporalInvalidation()
-    success = await tester.run_all_tests()
-
-    if success:
-        print("\n🎉 Temporal invalidation implementation is working correctly!")  # noqa: print  # noqa: print
-        return 0
-    else:
-        print("\n💥 Temporal invalidation tests failed!")  # noqa: print
-        return 1
-
-
-if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)

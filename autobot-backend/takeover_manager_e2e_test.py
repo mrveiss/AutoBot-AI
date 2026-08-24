@@ -1,93 +1,72 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""
-Session Takeover System - Comprehensive Test Suite
-Tests the complete workflow automation and session takeover functionality
+"""Session takeover: workflow automation, manual intervention and terminal messaging.
+
+#14979: this file used to be a hand-run driver. ``SessionTakeoverTestSuite``
+defined ``__init__``, so pytest refused the class outright and all ten
+``test_*`` methods were dead text -- the file was named ``*_test.py``, sat in a
+collected tree and imported cleanly, so every signal a reader had said the
+tests ran.
+
+Nothing here needs a running service. The suite drives
+``WorkflowAutomationManager`` in-process, talks to ``TerminalWebSocket``
+through an ``AsyncMock`` socket and persists workflow state to an in-process
+``fakeredis`` (see ``setup_method``), so it is an ordinary unit suite that was
+merely uncollectable. Three things had to change beyond the class shape:
+
+* The ``try: ... except ImportError: COMPONENTS_AVAILABLE = False`` wrapper is
+  gone. Every method opened with ``if not COMPONENTS_AVAILABLE: return``, so a
+  broken import turned the whole suite into ten silent passes. The imports are
+  now plain: an import failure is a collection error with a traceback.
+* ``test_chat_integration`` called the real ``Orchestrator``, whose planner is
+  a live dependency, and then asserted only ``if workflow_id:`` -- so a planner
+  returning ``None`` for every request passed. The orchestrator is now an
+  ``AsyncMock`` and the assertions are unconditional.
+* ``test_command_risk_assessment`` asserted a Python re-implementation of the
+  frontend's ``assessCommandRisk``, defined inside the test body. A test that
+  asserts its own copy of the logic cannot fail on a product change. It now
+  asserts ``SecureCommandExecutor.assess_command_risk`` -- the classifier that
+  actually gates terminal execution.
 """
 
-import asyncio
-import json
-import logging
 import time
-
-# Test the workflow automation system
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from autobot_shared.logging_manager import get_logger
-from tests.test_helpers import get_test_backend_url
+import fakeredis.aioredis as fakeredis_async
 
-# Import system components
-try:
-    from api.terminal_handlers import TerminalWebSocket
-    from api.workflow_automation import (
-        AutomationMode,
-        WorkflowAutomationManager,
-        WorkflowStep,
-    )
-
-    COMPONENTS_AVAILABLE = True
-except ImportError:
-    COMPONENTS_AVAILABLE = False
-
-logging.basicConfig(level=logging.INFO)
-logger = get_logger(__name__)
+from api.terminal_handlers import TerminalWebSocket
+from api.workflow_automation import (
+    AutomationMode,
+    WorkflowAutomationManager,
+    WorkflowControlRequest,
+    WorkflowStep,
+)
+from secure_command_executor import CommandRisk, SecureCommandExecutor
 
 
-class SessionTakeoverTestSuite:
-    """Comprehensive test suite for session takeover functionality"""
+class TestSessionTakeover:
+    """Session takeover and workflow automation behaviour, driven in-process."""
 
-    def __init__(self, base_url: str | None = None):
-        self.base_url = base_url or get_test_backend_url()
+    def setup_method(self) -> None:
         self.test_session_id = f"test_session_{int(time.time())}"
-        self.workflow_manager = None
-        self.test_results = []
-
-        if COMPONENTS_AVAILABLE:
-            self.workflow_manager = WorkflowAutomationManager()
-
-    async def run_all_tests(self):
-        """Run complete test suite"""
-        logger.info("🚀 Starting Session Takeover System Test Suite")
-
-        test_methods = [
-            self.test_workflow_creation,
-            self.test_step_confirmation_flow,
-            self.test_manual_takeover,
-            self.test_emergency_kill,
-            self.test_pause_resume_workflow,
-            self.test_chat_integration,
-            self.test_command_risk_assessment,
-            self.test_websocket_communication,
-            self.test_workflow_dependencies,
-            self.test_error_handling,
-        ]
-
-        for test_method in test_methods:
-            try:
-                await test_method()
-                self.test_results.append({"test": test_method.__name__, "status": "PASSED", "error": None})
-            except Exception as e:
-                logger.error(f"❌ {test_method.__name__} FAILED: {e}")
-                self.test_results.append(
-                    {
-                        "test": test_method.__name__,
-                        "status": "FAILED",
-                        "error": "Test execution failed",
-                    }
-                )
-
-        await self.print_test_summary()
+        self.workflow_manager = WorkflowAutomationManager()
+        # Starting a workflow drives the state machine, which persists every
+        # phase to Redis through `AsyncRedisClientMixin._get_redis`. The backend
+        # conftest replaces `autobot_shared.redis_client` with a socket-free
+        # stand-in returning None (#14932), so the three tests that start a
+        # workflow would die on `NoneType.set` before reaching an assertion.
+        # Seeding the mixin's cached client with the in-process fake -- as
+        # `services/temporal_invalidation_test.py` and
+        # `llm_shared/tests/test_provider_degradation.py` do -- runs the real
+        # persistence path instead of skipping it.
+        self.workflow_manager.executor.state_machine._redis = fakeredis_async.FakeRedis(
+            server=fakeredis_async.FakeServer(), decode_responses=True
+        )
 
     async def test_workflow_creation(self):
-        """Test 1: Basic workflow creation and structure"""
-        logger.info("🧪 Test 1: Workflow Creation")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create test workflow steps
+        """A created workflow is registered active with its steps and mode intact."""
         steps = [
             WorkflowStep(
                 step_id="step_1",
@@ -112,7 +91,6 @@ class SessionTakeoverTestSuite:
             ),
         ]
 
-        # Create workflow
         workflow_id = await self.workflow_manager.create_automated_workflow(
             name="Test System Update Workflow",
             description="Complete system update with user confirmation",
@@ -129,17 +107,8 @@ class SessionTakeoverTestSuite:
         assert len(workflow.steps) == 3, "Incorrect number of steps"
         assert workflow.automation_mode == AutomationMode.SEMI_AUTOMATIC, "Automation mode mismatch"
 
-        logger.info("✅ Workflow created successfully with ID: {workflow_id}")
-
     async def test_step_confirmation_flow(self):
-        """Test 2: Step-by-step confirmation workflow"""
-        logger.info("🧪 Test 2: Step Confirmation Flow")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create simple 2-step workflow
+        """Execution halts on the first step that requires confirmation."""
         steps = [
             WorkflowStep(
                 "confirm_1",
@@ -162,34 +131,19 @@ class SessionTakeoverTestSuite:
             session_id=self.test_session_id,
         )
 
-        # Start workflow (should wait for first step confirmation)
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert workflow.current_step_index == 0, "Workflow should be waiting at first step"
         assert workflow.steps[0].status.value == "waiting_approval", "First step should be waiting for approval"
 
-        # Simulate user approving first step
-        from api.workflow_automation import WorkflowControlRequest
-
-        control_request = WorkflowControlRequest(workflow_id=workflow_id, action="approve_step", step_id="confirm_1")
-
-        await self.workflow_manager.handle_workflow_control(control_request)
-
-        # Allow async processing
-        await asyncio.sleep(0.5)
-
-        logger.info("✅ Step confirmation flow working correctly")
+        approved = await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id=workflow_id, action="approve_step", step_id="confirm_1")
+        )
+        assert approved is True, "Approving the waiting step should be accepted"
 
     async def test_manual_takeover(self):
-        """Test 3: Manual takeover during automation"""
-        logger.info("🧪 Test 3: Manual Takeover")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create workflow with multiple steps
+        """Pausing mid-workflow records an intervention, and resuming clears it."""
         steps = [
             WorkflowStep("takeover_1", "echo 'Before takeover'", "Pre-takeover step"),
             WorkflowStep("takeover_2", "echo 'After takeover'", "Post-takeover step"),
@@ -202,44 +156,26 @@ class SessionTakeoverTestSuite:
             steps=steps,
             session_id=self.test_session_id,
         )
-
-        # Start workflow
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
-        # Simulate user taking manual control during execution
-        from api.workflow_automation import WorkflowControlRequest
-
-        pause_request = WorkflowControlRequest(workflow_id=workflow_id, action="pause")
-
-        await self.workflow_manager.handle_workflow_control(pause_request)
+        await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id=workflow_id, action="pause")
+        )
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert workflow.is_paused is True, "Workflow should be paused"
-
-        # Record manual intervention
         assert len(workflow.user_interventions) > 0, "User intervention should be recorded"
-        intervention = workflow.user_interventions[-1]
-        assert intervention["action"] == "pause", "Pause action should be recorded"
+        assert workflow.user_interventions[-1]["action"] == "pause", "Pause action should be recorded"
 
-        # Resume workflow
-        resume_request = WorkflowControlRequest(workflow_id=workflow_id, action="resume")
-
-        await self.workflow_manager.handle_workflow_control(resume_request)
+        await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id=workflow_id, action="resume")
+        )
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert workflow.is_paused is False, "Workflow should be resumed"
 
-        logger.info("✅ Manual takeover functionality working correctly")
-
     async def test_emergency_kill(self):
-        """Test 4: Emergency kill functionality"""
-        logger.info("🧪 Test 4: Emergency Kill")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create mock terminal session
+        """An emergency-kill control message is answered on the terminal socket."""
         mock_websocket = AsyncMock()
         terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
@@ -247,38 +183,21 @@ class SessionTakeoverTestSuite:
         )
         terminal_session.active = True
 
-        # Simulate running processes
-        _mock_processes = [
-            {"pid": 1001, "command": "long_running_task", "startTime": time.time()},
-            {"pid": 1002, "command": "background_process &", "startTime": time.time()},
-        ]
+        await terminal_session.handle_message(
+            {
+                "type": "workflow_control",
+                "action": "emergency_kill",
+                "session_id": self.test_session_id,
+            }
+        )
 
-        # Test emergency kill message handling via public dispatch method
-        kill_data = {
-            "type": "workflow_control",
-            "action": "emergency_kill",
-            "session_id": self.test_session_id,
-        }
-
-        await terminal_session.handle_message(kill_data)
-
-        # Verify emergency kill message was sent
         terminal_session.websocket.send_text.assert_called()
 
-        logger.info("✅ Emergency kill functionality working correctly")
-
     async def test_pause_resume_workflow(self):
-        """Test 5: Pause and resume workflow execution"""
-        logger.info("🧪 Test 5: Pause/Resume Workflow")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create workflow
+        """Both control actions succeed and both are recorded as interventions."""
         steps = [
             WorkflowStep("pause_1", "echo 'Before pause'", "Pre-pause step"),
-            WorkflowStep("pause_2", "sleep 2", "Pausable step"),
+            WorkflowStep("pause_2", "echo 'Pausable step'", "Pausable step"),
             WorkflowStep("pause_3", "echo 'After pause'", "Post-pause step"),
         ]
 
@@ -288,127 +207,93 @@ class SessionTakeoverTestSuite:
             steps=steps,
             session_id=self.test_session_id,
         )
-
-        # Start workflow
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
-        # Test pause
-        from api.workflow_automation import WorkflowControlRequest
+        paused = await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id=workflow_id, action="pause")
+        )
+        assert paused is True, "Pause should succeed"
 
-        pause_request = WorkflowControlRequest(workflow_id=workflow_id, action="pause")
-        result = await self.workflow_manager.handle_workflow_control(pause_request)
-        assert result is True, "Pause should succeed"
-
-        # Test resume
-        resume_request = WorkflowControlRequest(workflow_id=workflow_id, action="resume")
-        result = await self.workflow_manager.handle_workflow_control(resume_request)
-        assert result is True, "Resume should succeed"
+        resumed = await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id=workflow_id, action="resume")
+        )
+        assert resumed is True, "Resume should succeed"
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert len(workflow.user_interventions) == 2, "Should have 2 interventions (pause + resume)"
 
-        logger.info("✅ Pause/Resume functionality working correctly")
-
     async def test_chat_integration(self):
-        """Test 6: Chat-to-workflow integration"""
-        logger.info("🧪 Test 6: Chat Integration")
+        """A planned request becomes a workflow: commands and dependencies mapped.
 
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Test natural language workflow creation
-        test_messages = [
-            "Please install git and node.js on my system",
-            "Set up a development environment with Python",
-            "Update my system and install security patches",
-            "Configure nginx and deploy my application",
+        The orchestrator is mocked. Calling the real one makes this test depend
+        on a live planner, and its manager-side handler turns any planner error
+        into ``return None`` -- which is why the original version, asserting
+        only ``if workflow_id:``, passed whether or not planning worked at all.
+        """
+        planned = [
+            SimpleNamespace(
+                task_id="plan_a",
+                action="Update package repositories",
+                requires_approval=True,
+                dependencies=[],
+            ),
+            SimpleNamespace(
+                task_id="plan_b",
+                action="Run the verification probe",
+                requires_approval=False,
+                dependencies=["plan_a"],
+                inputs={"command": "systemctl status autobot"},
+            ),
         ]
+        self.workflow_manager.orchestrator = AsyncMock()
+        self.workflow_manager.orchestrator.classify_request_complexity_verdict.return_value = SimpleNamespace(
+            complexity="COMPLEX",
+            classified=True,
+            state=SimpleNamespace(value="classified"),
+        )
+        self.workflow_manager.orchestrator.plan_workflow_steps.return_value = planned
 
-        for message in test_messages:
-            workflow_id = await self.workflow_manager.create_workflow_from_chat_request(message, self.test_session_id)
+        workflow_id = await self.workflow_manager.create_workflow_from_chat_request(
+            "Update my system and install security patches", self.test_session_id
+        )
 
-            if workflow_id:
-                workflow = self.workflow_manager.active_workflows[workflow_id]
-                assert len(workflow.steps) > 0, f"Workflow should have steps for: {message}"
-                logger.info(f"✅ Created workflow for: '{message}' with {len(workflow.steps)} steps")
-            else:
-                logger.info(f"⚠️ No workflow created for: '{message}' (expected for some messages)")
+        assert workflow_id is not None, "A planned request must produce a workflow"
+        workflow = self.workflow_manager.active_workflows[workflow_id]
+        assert len(workflow.steps) == 2, "Every planned task must become a step"
 
-        logger.info("✅ Chat integration working correctly")
+        first, second = workflow.steps
+        # No `inputs` on the first task, so the manager derives the command from
+        # the action text; the second carries an explicit command and keeps it.
+        assert first.command == "sudo apt update", "Package-update action should map to the update command"
+        assert second.command == "systemctl status autobot", "An explicit planned command must survive"
+        assert first.requires_confirmation is True, "Approval requirement must carry across"
+        assert second.requires_confirmation is False, "Approval requirement must carry across"
+        assert first.dependencies == [], "The first step depends on nothing"
+        assert second.dependencies == ["step_1"], "Planner task ids must be remapped to step ids"
 
     async def test_command_risk_assessment(self):
-        """Test 7: Command risk assessment"""
-        logger.info("🧪 Test 7: Command Risk Assessment")
+        """The executor's classifier gates the commands a takeover step may run."""
+        executor = SecureCommandExecutor()
+        expected = {
+            "ls -la": CommandRisk.SAFE,
+            "echo 'safe command'": CommandRisk.SAFE,
+            "chmod 777 /": CommandRisk.MODERATE,
+            "sudo apt update": CommandRisk.HIGH,
+            "apt list --upgradable": CommandRisk.HIGH,
+            "rm -rf /tmp/test": CommandRisk.FORBIDDEN,
+            "sudo rm -rf /": CommandRisk.FORBIDDEN,
+            "dd if=/dev/zero of=/dev/sda": CommandRisk.FORBIDDEN,
+            "mkfs.ext4 /dev/sdb1": CommandRisk.FORBIDDEN,
+            "killall -9 python": CommandRisk.FORBIDDEN,
+        }
 
-        # Test risk assessment patterns (frontend logic simulation)
-        test_commands = [
-            ("ls -la", "low"),
-            ("sudo apt install git", "moderate"),
-            ("rm -rf /tmp/test", "high"),
-            ("sudo rm -rf /", "critical"),
-            ("dd if=/dev/zero of=/dev/sda", "critical"),
-            ("mkfs.ext4 /dev/sdb1", "critical"),
-            ("killall -9 python", "high"),
-            ("chmod 777 /", "high"),
-            ("echo 'safe command'", "low"),
-        ]
-
-        def assess_command_risk(command):
-            """Simulate frontend risk assessment"""
-            lowerCmd = command.lower().strip()
-
-            # Critical risk patterns
-            critical_patterns = [
-                r"rm\s+-rf\s+/($|\s)",
-                r"dd\s+if=.*of=/dev/[sh]d",
-                r"mkfs\.",
-            ]
-
-            # High risk patterns
-            high_patterns = [
-                r"rm\s+-rf",
-                r"sudo\s+rm",
-                r"killall\s+-9",
-                r"chmod\s+777.*/$",
-            ]
-
-            # Moderate risk patterns
-            moderate_patterns = [r"sudo\s+(apt|yum|dnf).*install", r"sudo\s+systemctl"]
-
-            import re
-
-            for pattern in critical_patterns:
-                if re.search(pattern, lowerCmd):
-                    return "critical"
-
-            for pattern in high_patterns:
-                if re.search(pattern, lowerCmd):
-                    return "high"
-
-            for pattern in moderate_patterns:
-                if re.search(pattern, lowerCmd):
-                    return "moderate"
-
-            return "low"
-
-        for command, expected_risk in test_commands:
-            assessed_risk = assess_command_risk(command)
-            assert (
-                assessed_risk == expected_risk
-            ), f"Risk assessment failed for '{command}': expected {expected_risk}, got {assessed_risk}"
-
-        logger.info("✅ Command risk assessment working correctly")
+        for command, expected_risk in expected.items():
+            risk, reasons = executor.assess_command_risk(command)
+            assert risk == expected_risk, f"{command!r}: expected {expected_risk}, got {risk}"
+            assert reasons, f"{command!r}: a classification must say why"
 
     async def test_websocket_communication(self):
-        """Test 8: WebSocket message handling"""
-        logger.info("🧪 Test 8: WebSocket Communication")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create mock terminal session
+        """Every workflow-control and ping message gets a reply on the socket."""
         mock_websocket = AsyncMock()
         terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
@@ -416,8 +301,7 @@ class SessionTakeoverTestSuite:
         )
         terminal_session.active = True
 
-        # Test workflow control messages via the public dispatch method
-        test_messages = [
+        messages = [
             {
                 "type": "workflow_control",
                 "action": "pause",
@@ -428,30 +312,18 @@ class SessionTakeoverTestSuite:
                 "action": "resume",
                 "session_id": self.test_session_id,
             },
-            {
-                "type": "ping",
-            },
+            {"type": "ping"},
         ]
 
-        for message in test_messages:
+        for message in messages:
             await terminal_session.handle_message(message)
 
-        # Verify WebSocket send_text was called for each message
         assert terminal_session.websocket.send_text.call_count >= len(
-            test_messages
+            messages
         ), "WebSocket messages should be sent"
 
-        logger.info("✅ WebSocket communication working correctly")
-
     async def test_workflow_dependencies(self):
-        """Test 9: Workflow step dependencies"""
-        logger.info("🧪 Test 9: Workflow Dependencies")
-
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
-
-        # Create workflow with dependencies
+        """Declared step dependencies survive workflow creation unchanged."""
         steps = [
             WorkflowStep("dep_1", "echo 'Base step'", "Base step", dependencies=[]),
             WorkflowStep("dep_2", "echo 'Depends on 1'", "Dependent step", dependencies=["dep_1"]),
@@ -465,199 +337,77 @@ class SessionTakeoverTestSuite:
             session_id=self.test_session_id,
         )
 
-        workflow = self.workflow_manager.active_workflows[workflow_id]
-
-        # Test dependency checking
-        step1 = workflow.steps[0]
-        step2 = workflow.steps[1]
-        step3 = workflow.steps[2]
-
-        # Step 1 should have no dependencies
+        step1, step2, step3 = self.workflow_manager.active_workflows[workflow_id].steps
         assert len(step1.dependencies or []) == 0, "Step 1 should have no dependencies"
-
-        # Step 2 should depend on step 1
         assert "dep_1" in (step2.dependencies or []), "Step 2 should depend on step 1"
-
-        # Step 3 should depend on step 2
         assert "dep_2" in (step3.dependencies or []), "Step 3 should depend on step 2"
 
-        logger.info("✅ Workflow dependencies working correctly")
-
     async def test_error_handling(self):
-        """Test 10: Error handling and recovery"""
-        logger.info("🧪 Test 10: Error Handling")
+        """Controlling an unknown workflow is refused, and a junk message is survived.
 
-        if not COMPONENTS_AVAILABLE:
-            logger.info("⏭️ Skipping - components not available")
-            return
+        The original wrapped both halves in ``try/except Exception`` and logged
+        the exception as a success, so the method could not fail. Both calls are
+        now made directly: an exception from either is a real failure.
+        """
+        refused = await self.workflow_manager.handle_workflow_control(
+            WorkflowControlRequest(workflow_id="non_existent_workflow", action="pause")
+        )
+        assert refused is False, "Invalid workflow control should return False"
 
-        # Test invalid workflow operations
-        try:
-            # Try to control non-existent workflow
-            from api.workflow_automation import WorkflowControlRequest
-
-            invalid_request = WorkflowControlRequest(workflow_id="non_existent_workflow", action="pause")
-
-            result = await self.workflow_manager.handle_workflow_control(invalid_request)
-            assert result is False, "Invalid workflow control should return False"
-
-        except Exception as e:
-            logger.info(f"✅ Properly handled error: {e}")
-
-        # Test malformed messages via public dispatch method
         mock_websocket = AsyncMock()
         terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
             session_id=self.test_session_id,
         )
 
-        malformed_data = {"type": "invalid_type", "data": "malformed"}
+        await terminal_session.handle_message({"type": "invalid_type", "data": "malformed"})
 
-        try:
-            await terminal_session.handle_message(malformed_data)
-        except Exception as e:
-            logger.info(f"✅ Properly handled malformed message: {e}")
-
-        logger.info("✅ Error handling working correctly")
-
-    async def print_test_summary(self):
-        """Print comprehensive test summary"""
-        logger.info("\n" + "=" * 80)
-        logger.info("🧪 SESSION TAKEOVER SYSTEM - TEST RESULTS SUMMARY")
-        logger.info("=" * 80)
-
-        passed = len([r for r in self.test_results if r["status"] == "PASSED"])
-        failed = len([r for r in self.test_results if r["status"] == "FAILED"])
-        total = len(self.test_results)
-
-        logger.info(f"📊 TOTAL TESTS: {total}")
-        logger.info(f"✅ PASSED: {passed}")
-        logger.info(f"❌ FAILED: {failed}")
-        logger.info(f"📈 SUCCESS RATE: {(passed/total)*100:.1f}%" if total > 0 else "No tests run")
-
-        logger.info("\n📋 DETAILED RESULTS:")
-        for result in self.test_results:
-            status_icon = "✅" if result["status"] == "PASSED" else "❌"
-            logger.info(f"{status_icon} {result['test']}: {result['status']}")
-            if result["error"]:
-                logger.info(f"   Error: {result['error']}")
-
-        # Component availability check
-        logger.info("\n🔧 COMPONENT AVAILABILITY:")
-        logger.info(
-            f"   Workflow Automation Components: {'✅ Available' if COMPONENTS_AVAILABLE else '❌ Not Available'}"
+        assert self.workflow_manager.get_workflow_status("non_existent_workflow") is None, (
+            "An unknown workflow has no status"
         )
 
-        logger.info("\n🎯 FEATURE STATUS:")
-        features = [
-            "Workflow Creation and Management",
-            "Step-by-Step Confirmation Flow",
-            "Manual Takeover During Automation",
-            "Emergency Kill Functionality",
-            "Pause/Resume Workflow Control",
-            "Chat-to-Workflow Integration",
-            "Command Risk Assessment",
-            "WebSocket Real-time Communication",
-            "Workflow Step Dependencies",
-            "Comprehensive Error Handling",
+    async def test_status_reports_every_step_of_a_multi_step_workflow(self):
+        """The status dict a client renders lists each step with its own id.
+
+        Replaces the ``run_demo_workflow()`` driver this file used to carry,
+        which built the same five-step workflow and asserted nothing about it.
+        """
+        demo_steps = [
+            WorkflowStep(
+                step_id=f"demo_{index}",
+                command=command,
+                description=description,
+                requires_confirmation=confirm,
+            )
+            for index, (command, description, confirm) in enumerate(
+                [
+                    ("echo 'Starting development environment setup'", "Initialize setup process", False),
+                    ("sudo apt update", "Update package repositories", True),
+                    ("sudo apt install -y git curl wget", "Install essential development tools", True),
+                    ("git --version", "Verify tool installations", False),
+                    ("echo 'Development environment setup complete'", "Complete setup process", False),
+                ],
+                start=1,
+            )
         ]
 
-        for i, feature in enumerate(features):
-            test_result = self.test_results[i] if i < len(self.test_results) else {"status": "UNKNOWN"}
-            status_icon = (
-                "✅" if test_result["status"] == "PASSED" else "❌" if test_result["status"] == "FAILED" else "❓"
-            )
-            logger.info(f"   {status_icon} {feature}")
+        workflow_id = await self.workflow_manager.create_automated_workflow(
+            name="Development Environment Setup Demo",
+            description="Complete development environment setup with user confirmation points",
+            steps=demo_steps,
+            session_id=self.test_session_id,
+            automation_mode=AutomationMode.SEMI_AUTOMATIC,
+        )
 
-        logger.info("\n🚀 SYSTEM STATUS:")
-        if passed == total and total > 0:
-            logger.info("   🎉 ALL TESTS PASSED - Session Takeover System is FULLY FUNCTIONAL!")
-        elif passed > failed:
-            logger.info("   ⚠️ MOSTLY FUNCTIONAL - Some issues need attention")
-        else:
-            logger.info("   🔧 NEEDS WORK - Multiple issues detected")
-
-        logger.info("=" * 80 + "\n")
-
-
-async def run_demo_workflow():
-    """Run a demo workflow to showcase the system"""
-    logger.info("🎬 Starting Demo Workflow")
-
-    if not COMPONENTS_AVAILABLE:
-        logger.info("⚠️ Demo requires workflow automation components")
-        return
-
-    # Create demo workflow manager
-    demo_manager = WorkflowAutomationManager()
-    demo_session_id = f"demo_session_{int(time.time())}"
-
-    # Create comprehensive demo workflow
-    demo_steps = [
-        WorkflowStep(
-            step_id="demo_1",
-            command="echo '🚀 Starting development environment setup...'",
-            description="Initialize setup process",
-            explanation="This step announces the beginning of the development environment setup",
-            requires_confirmation=False,
-        ),
-        WorkflowStep(
-            step_id="demo_2",
-            command="sudo apt update",
-            description="Update package repositories",
-            explanation="This updates the list of available packages from configured repositories",
-            requires_confirmation=True,
-        ),
-        WorkflowStep(
-            step_id="demo_3",
-            command="sudo apt install -y git curl wget",
-            description="Install essential development tools",
-            explanation="Install Git for version control, curl for downloading, and wget for file retrieval",
-            requires_confirmation=True,
-        ),
-        WorkflowStep(
-            step_id="demo_4",
-            command="git --version && curl --version && wget --version",
-            description="Verify tool installations",
-            explanation="Check that all tools were installed correctly and display their versions",
-            requires_confirmation=False,
-        ),
-        WorkflowStep(
-            step_id="demo_5",
-            command="echo '✅ Development environment setup complete!'",
-            description="Complete setup process",
-            explanation="Announce successful completion of the development environment setup",
-            requires_confirmation=False,
-        ),
-    ]
-
-    # Create and start demo workflow
-    workflow_id = await demo_manager.create_automated_workflow(
-        name="🛠️ Development Environment Setup Demo",
-        description="Complete development environment setup with user confirmation points",
-        steps=demo_steps,
-        session_id=demo_session_id,
-        automation_mode=AutomationMode.SEMI_AUTOMATIC,
-    )
-
-    logger.info(f"✅ Demo workflow created with ID: {workflow_id}")
-    logger.info("📋 Workflow includes 5 steps with confirmation points for system modifications")
-    logger.info("🎯 This demonstrates the complete session takeover system capabilities")
-
-    # Get workflow status
-    status = demo_manager.get_workflow_status(workflow_id)
-    logger.info(f"📊 Workflow Status: {json.dumps(status, indent=2, default=str)}")
-
-
-if __name__ == "__main__":
-
-    async def main():
-        # Run comprehensive test suite
-        test_suite = SessionTakeoverTestSuite()
-        await test_suite.run_all_tests()
-
-        # Run demo workflow
-        await run_demo_workflow()
-
-    # Run the tests
-    asyncio.run(main())
+        status = self.workflow_manager.get_workflow_status(workflow_id)
+        assert status is not None, "A created workflow must report a status"
+        assert [step["step_id"] for step in status["steps"]] == [
+            f"demo_{index}" for index in range(1, 6)
+        ], "Status must list every step, in order"
+        assert [step["requires_confirmation"] for step in status["steps"]] == [
+            False,
+            True,
+            True,
+            False,
+            False,
+        ], "Status must carry each step's confirmation requirement"
