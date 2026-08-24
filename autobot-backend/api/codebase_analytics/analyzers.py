@@ -18,6 +18,7 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import optional_import
+from autobot_shared.status_enums import Severity
 from constants.network_constants import NetworkConstants
 from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
@@ -753,7 +754,7 @@ def _check_long_function(node: ast.FunctionDef) -> Dict | None:
 
     return {
         "type": "long_function",
-        "severity": "medium",
+        "severity": Severity.MEDIUM.value,
         "line": node.lineno,
         "description": f"Function '{node.name}' is {func_length} lines long",
         "suggestion": "Consider breaking into smaller functions",
@@ -1528,7 +1529,7 @@ def _check_js_console_log(line: str, line_num: int) -> Dict | None:
     if "console.log" in line and not line.strip().startswith("//"):
         return {
             "type": "debug_code",
-            "severity": "low",
+            "severity": Severity.LOW.value,
             "line": line_num,
             "description": "console.log statement found",
             "suggestion": "Remove debug statements before production",
@@ -1562,7 +1563,7 @@ def _create_parse_error_result(error_msg: str) -> Metadata:
     result["problems"] = [
         {
             "type": "parse_error",
-            "severity": "high",
+            "severity": Severity.HIGH.value,
             "line": 1,
             "description": f"Failed to parse file: {error_msg}",
             "suggestion": "Check syntax errors",

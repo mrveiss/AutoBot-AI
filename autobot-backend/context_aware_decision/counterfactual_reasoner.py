@@ -20,6 +20,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.status_enums import Severity
 
 from .models import DecisionContext, InterventionOutcome
 
@@ -246,7 +247,7 @@ class CounterfactualReasoner:
                 {
                     "type": "latency_increase",
                     "frequency": 0.8,
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "description": "Retries add 2-5s per attempt",
                 }
             ]
@@ -258,13 +259,13 @@ class CounterfactualReasoner:
                 {
                     "type": "user_notification",
                     "frequency": 1.0,
-                    "severity": "low",
+                    "severity": Severity.LOW.value,
                     "description": "User will be notified of escalation",
                 },
                 {
                     "type": "wait_time",
                     "frequency": 0.9,
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "description": "Wait for human response (5-60 minutes)",
                 },
             ]
@@ -276,7 +277,7 @@ class CounterfactualReasoner:
                 {
                     "type": "state_mutation",
                     "frequency": 1.0,
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "description": "Automation modifies system state",
                 }
             ]
@@ -288,7 +289,7 @@ class CounterfactualReasoner:
                 {
                     "type": "deadline_risk",
                     "frequency": 0.6,
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "description": "Waiting might miss deadline",
                 }
             ]

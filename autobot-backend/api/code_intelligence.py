@@ -66,6 +66,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
@@ -756,7 +757,7 @@ def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
         quality_score -= 10
         issues.append(
             {
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "quality",
                 "message": "File exceeds 300 lines",
             }
@@ -767,7 +768,7 @@ def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
             quality_score -= 5
             issues.append(
                 {
-                    "severity": "low",
+                    "severity": Severity.LOW.value,
                     "category": "quality",
                     "message": "Average function length exceeds 50 lines",
                 }

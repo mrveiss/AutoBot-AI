@@ -41,6 +41,7 @@ from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = get_logger(__name__)
@@ -500,13 +501,13 @@ def _categorize_problems_for_patterns(
     """
     # Count by type category
     categories = {
-        "anti_pattern": {"count": 0, "severity": "high"},
-        "code_smell": {"count": 0, "severity": "medium"},
-        "best_practice": {"count": 0, "severity": "info"},
-        "security_vulnerability": {"count": 0, "severity": "critical"},
-        "performance_issue": {"count": 0, "severity": "high"},
-        "technical_debt": {"count": 0, "severity": "medium"},
-        "bug_risk": {"count": 0, "severity": "high"},
+        "anti_pattern": {"count": 0, "severity": Severity.HIGH.value},
+        "code_smell": {"count": 0, "severity": Severity.MEDIUM.value},
+        "best_practice": {"count": 0, "severity": Severity.INFO.value},
+        "security_vulnerability": {"count": 0, "severity": Severity.CRITICAL.value},
+        "performance_issue": {"count": 0, "severity": Severity.HIGH.value},
+        "technical_debt": {"count": 0, "severity": Severity.MEDIUM.value},
+        "bug_risk": {"count": 0, "severity": Severity.HIGH.value},
     }
 
     for problem in problems:

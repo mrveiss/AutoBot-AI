@@ -41,13 +41,23 @@ WHAT IS DELIBERATELY NOT COUNTED, AND WHY
 -----------------------------------------
 Measured on this branch, each derived from the code rather than from a list:
 
-* **152** returns in ``test_*`` methods of classes that do not match
-  ``python_classes`` — pytest never collects them, so they are ordinary
-  methods that happen to be named like tests. Counting them would demand edits
-  to code nothing executes, and the conversion has to wait until the methods
-  are actually collected. That is its own defect, filed as **#14927** (120
-  methods in 23 classes across 19 files, including 13 in an IDOR hotfix suite),
-  and it must be fixed first.
+* returns in ``test_*`` methods of classes pytest does not collect — they are
+  ordinary methods that happen to be named like tests, so converting their
+  ``return`` to ``assert`` would change nothing until something runs them. That
+  is its own defect, tracked by **#14927** and guarded by
+  ``repo_tests/test_methods_in_uncollected_classes_test.py``.
+
+  This exclusion used to be described here as "152 returns in classes that do
+  not match ``python_classes``", citing #14927's figure of 120 methods in 23
+  classes including 13 in an IDOR hotfix suite. That description was wrong, and
+  wrong in a way worth recording: ``python_classes`` is only one of pytest's
+  three collection rules. ``unittest.TestCase`` subclasses are collected
+  whatever they are called — which is why all 13 of the IDOR tests were
+  collecting, running and passing the entire time — and a base class is
+  collected through any ``Test*`` subclass that inherits it. Pulling the other
+  way, a class WITH ``__init__`` is not collected however it is named, which hid
+  41 further methods that neither #14927 nor this file could see. The corrected
+  figure was settled by running ``--collect-only``, not by matching names.
 * **11** returns in ``test_*`` functions decorated with ``@pytest.fixture`` —
   a fixture is *supposed* to return; its name is the only thing test-shaped
   about it.
@@ -89,12 +99,19 @@ import ast
 import configparser
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
 _SKIP = {
     ".git",
     ".worktrees",
+    # Harness territory: tooling config plus the agent worktrees checked out
+    # under it, which hold other branches' work in progress and are not always
+    # parseable. pytest's own testpaths never reach it either, so nothing here
+    # is collectable and nothing here is this sweep's subject.
+    ".claude",
     "__pycache__",
     "node_modules",
     ".venv",
@@ -132,7 +149,10 @@ _KNOWN_OFFENDERS = {
     #
     # The drop is not a sweep collapse — the population floors below are
     # untouched and still pass, which is what tells the two apart.
-    "autobot-backend": (78, 18000),
+    # 78 -> 75 with #14941 (test_celery_worker_status stopped returning a verdict
+    # pytest discards) and #14927 (three classes converted to collect, which moves
+    # their methods into this file's population as well).
+    "autobot-backend": (75, 18000),
     "autobot-infrastructure": (126, 250),
     "autobot-npu-worker": (7, 150),
 }
@@ -149,6 +169,32 @@ def _pytest_option(name: str) -> list[str]:
     values = parser.get("pytest", name, fallback="").split()
     assert values, f"pytest.ini declares no {name} — the population cannot be derived"
     return values
+
+
+def _parse_module(path: Path) -> ast.Module:
+    """Parse one swept file, failing loudly and by name if it cannot be parsed.
+
+    This sweep is a denylist walk from the repo root, filtered only by ``_SKIP``,
+    so it reaches files pytest's ``testpaths`` allowlist never would: scratch
+    copies, templates, half-written drafts. An unparseable one must never read as
+    "clean" -- skipping it silently is the exact under-reporting failure this
+    guard exists to catch -- so it is raised as a failure that names the file and
+    says how to take it out of the sweep on purpose.
+    """
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        relative = path.relative_to(_REPO_ROOT)
+        raise AssertionError(
+            f"{relative}:{exc.lineno or 0} is not parseable Python ({exc.msg}). "
+            "This guard sweeps every *.py under the repo root as a denylist, so it "
+            "sees files pytest's own testpaths allowlist never reaches. Fix the "
+            "file, or -- if it is scratch, vendored or another branch's work and "
+            "does not belong in the sweep -- add its top-level directory to _SKIP "
+            "in every repo_tests guard that sweeps, the way .claude and .worktrees "
+            "already are. Do not silence this by skipping the file: a file the "
+            "sweep cannot read is not a file the sweep has cleared."
+        ) from exc
 
 
 def _test_modules() -> list[Path]:
@@ -220,7 +266,11 @@ def offending_returns(source: str) -> list[tuple[str, int]]:
     module. A detector only ever pointed at the real tree cannot be told apart
     from one that has stopped detecting.
     """
-    tree = ast.parse(source)
+    return _offending_returns(ast.parse(source))
+
+
+def _offending_returns(tree: ast.Module) -> list[tuple[str, int]]:
+    """The tree-driven half, so the repo sweep parses each module once."""
     found: list[tuple[str, int]] = []
     for function in _collectable_tests(tree):
         if _is_fixture(function) or _own_nodes(function, (ast.Yield, ast.YieldFrom)):
@@ -244,7 +294,7 @@ def _offenders_by_tree() -> dict[str, list[str]]:
     counts: dict[str, list[str]] = {}
     for module in _test_modules():
         relative = module.relative_to(_REPO_ROOT)
-        for name, line in offending_returns(module.read_text(encoding="utf-8")):
+        for name, line in _offending_returns(_parse_module(module)):
             counts.setdefault(relative.parts[0], []).append(f"{relative}:{line} {name}")
     return counts
 
@@ -259,7 +309,7 @@ def _test_functions_by_tree() -> dict[str, int]:
     counts: dict[str, int] = {}
     for module in _test_modules():
         tree = module.relative_to(_REPO_ROOT).parts[0]
-        found = _collectable_tests(ast.parse(module.read_text(encoding="utf-8")))
+        found = _collectable_tests(_parse_module(module))
         counts[tree] = counts.get(tree, 0) + len(found)
     return counts
 
@@ -273,7 +323,7 @@ def test_the_population_is_present_and_large_enough_to_mean_anything() -> None:
         "The sweep has stopped matching and would call every tree clean."
     )
     total = sum(
-        len(_collectable_tests(ast.parse(module.read_text(encoding="utf-8"))))
+        len(_collectable_tests(_parse_module(module)))
         for module in modules
     )
     assert total >= _MIN_TEST_FUNCTIONS, (
@@ -399,3 +449,28 @@ def test_the_detector_finds_a_planted_return_and_spares_the_legitimate_ones() ->
     assert offending_returns(
         "def test_c():\n    return True\n"
     ), "a test whose return is its ONLY verdict is still an offence"
+
+
+def test_an_unparseable_swept_file_fails_loudly_instead_of_reading_as_clean() -> None:
+    """The sweep is a denylist from the repo root, so it meets stray files.
+
+    One must never be skipped: a file the walk could not read is not a file the
+    walk cleared, and dropping it silently is the under-reporting this guard
+    exists to catch. It has to fail, name the file and say what to do about it.
+
+    The probe is written under a ``_SKIP``ped directory so no concurrently
+    running sweep can pick it up while it exists.
+    """
+    scratch = _REPO_ROOT / "__pycache__"
+    scratch.mkdir(exist_ok=True)
+    stray = scratch / "unparseable_probe_test.py"
+    stray.write_text("from a-b.c import (\n", encoding="utf-8")
+    try:
+        with pytest.raises(AssertionError) as raised:
+            _parse_module(stray)
+    finally:
+        stray.unlink()
+
+    message = str(raised.value)
+    assert "unparseable_probe_test.py" in message, "the failure must name the file"
+    assert "_SKIP" in message, "the failure must say how to exclude a file on purpose"

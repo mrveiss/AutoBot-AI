@@ -101,8 +101,11 @@ export type Severity =
   | 'info'
   | 'minimal'
   | 'low'
+  | 'warning'
   | 'medium'
+  | 'degraded'
   | 'high'
+  | 'error'
   | 'critical';
 
 /** Generated alias — same union as `Severity` (#6689 / #7226) */

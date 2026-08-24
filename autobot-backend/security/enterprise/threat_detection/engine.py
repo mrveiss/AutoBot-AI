@@ -26,6 +26,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -219,43 +220,43 @@ class ThreatDetectionEngine:
             {
                 "pattern": r"[;&|`$(){}[\]\\]",
                 "description": "Shell metacharacters",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "shell_injection",
             },
             {
                 "pattern": r"(rm\s+-rf|del\s+/[sf]|format\s+c:)",
                 "description": "Destructive file operations",
-                "severity": "critical",
+                "severity": Severity.CRITICAL.value,
                 "category": "destructive_commands",
             },
             {
                 "pattern": r"(wget|curl|nc|netcat)\s+",
                 "description": "Network tools for data exfiltration",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "network_tools",
             },
             {
                 "pattern": r"(base64|xxd|hexdump)\s+",
                 "description": "Encoding tools for obfuscation",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "encoding_tools",
             },
             {
                 "pattern": r"(sudo|su|chmod\s+777|chown)",
                 "description": "Privilege escalation attempts",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "privilege_escalation",
             },
             {
                 "pattern": r"(/etc/passwd|/etc/shadow|/etc/hosts)",
                 "description": "System file access",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "system_file_access",
             },
             {
                 "pattern": r"(python\s+-c|perl\s+-e|ruby\s+-e)",
                 "description": "Inline script execution",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "script_injection",
             },
         ]
@@ -292,24 +293,24 @@ class ThreatDetectionEngine:
                 "pattern": "rapid_sequential_requests",
                 "description": "Rapid API requests indicating automation",
                 "threshold": 50,  # requests per minute
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "unusual_endpoint_access",
                 "description": "Access to rarely used endpoints",
                 "threshold": 0.05,  # 5% of normal usage
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "bulk_data_download",
                 "description": "Large data download operations",
                 "threshold": 1000,  # MB downloaded
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
             {
                 "pattern": "privilege_boundary_crossing",
                 "description": "Accessing resources beyond normal permissions",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
         ]
 

@@ -25,7 +25,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from utils.line_index import LineIndex  # #12884
+
+# Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
+# valid package identifier) — add this directory to sys.path so the shared
+# tool skeleton can be imported by every standalone script here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from tool_base import (  # noqa: E402
+    SEVERITY_REPORT_ICONS,
+    SEVERITY_REPORT_ORDER,
+    severity_icon,
+    severity_label,
+)
 
 # Configure logging for security fixer
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -156,27 +169,27 @@ class PlaywrightSecurityFixer:
         patterns = {
             "innerHTML_usage": {
                 "regex": r"\.innerHTML\s*=\s*[^;]+",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "description": "Direct innerHTML assignment detected",
             },
             "dangerouslySetInnerHTML": {
                 "regex": r"dangerouslySetInnerHTML\s*[=:]\s*\{[^}]*__html",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "description": "React dangerouslySetInnerHTML usage detected",
             },
             "eval_usage": {
                 "regex": r"\beval\s*\(",
-                "severity": "CRITICAL",
+                "severity": Severity.CRITICAL.value,
                 "description": "eval() function usage detected",
             },
             "document_write": {
                 "regex": r"document\.write\s*\(",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "description": "document.write() usage detected",
             },
             "javascript_protocol": {
                 "regex": r"javascript\s*:",
-                "severity": "MEDIUM",
+                "severity": Severity.MEDIUM.value,
                 "description": "javascript: protocol detected",
             },
         }
@@ -280,10 +293,8 @@ class PlaywrightSecurityFixer:
         severity_counts: Dict[str, int] = {}
         for vuln in vulnerabilities:
             severity_counts[vuln["severity"]] = severity_counts.get(vuln["severity"], 0) + 1
-        severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
         for severity, count in severity_counts.items():
-            icon = severity_icons.get(severity, "⚪")
-            logger.info("   %s %s: %d patterns", icon, severity, count)
+            logger.info("   %s %s: %d patterns", severity_icon(severity), severity_label(severity), count)
 
     def _apply_and_write_html(
         self, original_content: str, original_size: int, file_path: str
@@ -403,7 +414,6 @@ class PlaywrightSecurityFixer:
         if not self.report["vulnerabilities"]:
             return "✅ No vulnerability patterns detected in scanned files.\n\n"
 
-        severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
         severity_groups = {}
         for vuln in self.report["vulnerabilities"]:
             severity = vuln["severity"]
@@ -412,11 +422,11 @@ class PlaywrightSecurityFixer:
             severity_groups[severity].append(vuln)
 
         content = "### Vulnerability Patterns by Severity:\n\n"
-        for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            if severity in severity_groups:
-                vulns = severity_groups[severity]
-                icon = severity_icons[severity]
-                content += f"#### {icon} {severity} ({len(vulns)} patterns)\n\n"
+        for level in SEVERITY_REPORT_ORDER:
+            if level.value in severity_groups:
+                vulns = severity_groups[level.value]
+                icon = SEVERITY_REPORT_ICONS[level]
+                content += f"#### {icon} {level.name} ({len(vulns)} patterns)\n\n"
 
                 for vuln in vulns:
                     content += f"- **{vuln['description']}**\n"
