@@ -71,6 +71,41 @@ _TEMPLATE = re.compile(r"\{\{.*?\}\}")
 _INSTALL_ROOT = "/opt/autobot"
 
 
+_GROUP_VARS_ALL = _ANSIBLE / "inventory" / "group_vars" / "all.yml"
+
+
+def _inventory_vars() -> dict[str, Any]:
+    """The facts `group_vars/all.yml` supplies to every play in this inventory.
+
+    #14914: the playbooks build their removal paths from `{{ autobot.base_dir }}`
+    rather than a `/opt/autobot` literal, so this guard has to resolve that
+    variable or every target below renders with an empty install root.
+
+    Read out of the SSOT file rather than restated here, deliberately. A copy of
+    `/opt/autobot` in this test would keep resolving after the real value moved,
+    and these guards would then be checking paths no playbook produces — which
+    is the same shape as the literal the playbooks just stopped carrying, one
+    layer up.
+
+    Asserted on PRESENCE: if the key disappears, that is a loud failure here,
+    not a silent one in a comparison that stops matching.
+    """
+    assert _GROUP_VARS_ALL.is_file(), f"the inventory SSOT is missing: {_GROUP_VARS_ALL}"
+    loaded = yaml.safe_load(_GROUP_VARS_ALL.read_text(encoding="utf-8")) or {}
+    autobot = loaded.get("autobot")
+    assert isinstance(autobot, dict), (
+        f"{_GROUP_VARS_ALL.name} no longer defines an `autobot` mapping, so every removal "
+        "target in this file would render without its install root and the checks below "
+        "would compare paths no playbook produces"
+    )
+    base_dir = str(autobot.get("base_dir") or "")
+    assert base_dir.startswith("/"), (
+        f"{_GROUP_VARS_ALL.name} defines autobot.base_dir as {base_dir!r}, which is not an "
+        "absolute path; the removal targets built from it cannot be checked"
+    )
+    return {"autobot": autobot}
+
+
 def _is_component_dir(raw: str) -> bool:
     path = _TEMPLATE.sub("TPL", raw).strip().rstrip("/")
     if not path.startswith("/opt/") or path == _INSTALL_ROOT:
@@ -323,19 +358,27 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
 def _delegated_targets(task: dict) -> list[str]:
     """The concrete paths one delegation can remove, loop expanded.
 
-    Callers pass `remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"` over
-    a loop, so the literal string says nothing about what is actually scheduled.
-    Expanding it is the difference between a guard that reads the code and one
-    that reads what the code will do.
+    Callers pass `remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"`
+    over a loop, so the raw string says nothing about what is actually scheduled.
+    Expanding it — the install root from the inventory SSOT, the component from
+    the loop — is the difference between a guard that reads the code and one that
+    reads what the code will do.
     """
     spec = str((task.get("vars") or {}).get("remove_dir_path", ""))
     if not spec:
         return []
+    # #14914: the inventory facts belong in EVERY render scope here, including
+    # the loop-less one. Without them `{{ autobot.base_dir }}/{{ x }}` renders
+    # as `/x`, which is not a `/opt/` path and never equals the protected
+    # directory — so the caller's check keeps passing with nothing left to
+    # match. That is not a hypothetical: it is how the first attempt at #14914
+    # disarmed the protected-config guard while every test stayed green.
+    scope = _inventory_vars()
     items = task.get("loop")
     if not isinstance(items, list):
-        return [spec]
+        return [str(_render_value(spec, dict(scope)))]
     loop_var = ((task.get("loop_control") or {}).get("loop_var")) or "item"
-    return [str(_render_value(spec, {loop_var: item})) for item in items]
+    return [str(_render_value(spec, {**scope, loop_var: item})) for item in items]
 
 
 def test_the_protected_config_dir_is_never_scheduled_for_removal() -> None:
@@ -347,7 +390,11 @@ def test_the_protected_config_dir_is_never_scheduled_for_removal() -> None:
     unpinned decision regrows, so it is pinned here rather than left as a
     comment.
     """
-    protected = "/opt/autobot/config"
+    # Built from the same SSOT the playbooks build their targets from (#14914).
+    # Hardcoding it here would leave this comparison matching the old location
+    # the moment autobot.base_dir moved — the guard would go quiet rather than
+    # red, which is the failure mode this whole file exists to prevent.
+    protected = f"{str(_inventory_vars()['autobot']['base_dir']).rstrip('/')}/config"
     targets_seen = 0
     offenders: list[str] = []
     for candidate in sorted(_ANSIBLE.rglob("*.yml")) + sorted(_ANSIBLE.rglob("*.yaml")):
@@ -426,11 +473,30 @@ def test_the_removal_summary_reports_what_happened_not_what_was_asked() -> None:
     summaries = [t for t in tasks if "_disk_cleanup_summary" in str(_module(t, "ansible.builtin.debug", "debug") or {})]
     assert summaries, "the summary no longer reports the computed disk-cleanup result"
 
+    # #14914: the install root moved to a task-scoped `vars:` entry, so it has to
+    # be rendered into scope here too. Read out of the task rather than restated,
+    # because a hardcoded copy would keep rendering after the task stopped
+    # defining it — and the wording assertions below would then be judging a
+    # message with the path silently missing from it.
+    render_scope = {**_inventory_vars(), "role_target_dir": "autobot-backend"}
+    task_vars = {k: _render_value(v, render_scope) for k, v in (decisions[0].get("vars") or {}).items()}
+    assert task_vars, "the summary task defines no vars — the expression's operands cannot be resolved"
+
     # Removed for real -> says removed. Still there -> must NOT say removed.
-    base = {"role_target_dir": "autobot-backend"}
+    base = {**render_scope, **task_vars}
     gone = str(_render_value(expr, {**base, "_role_dir_after": _stat(False)}))
     kept = str(_render_value(expr, {**base, "_role_dir_after": _stat(True)}))
     unknown = str(_render_value(expr, base))
+
+    # The summary must NAME the directory, in both directions. Without this the
+    # wording checks below pass just as well over a message whose path rendered
+    # empty, which is exactly what an unresolved operand produces.
+    expected_dir = f"{str(render_scope['autobot']['base_dir']).rstrip('/')}/autobot-backend"
+    for label, text in (("gone", gone), ("kept", kept)):
+        assert expected_dir in text, (
+            f"the {label} summary does not name the directory it is reporting on. "
+            f"Expected {expected_dir!r} (built from the inventory SSOT), got: {text!r}"
+        )
 
     assert "removed" in gone.lower(), f"a directory that IS gone is not reported as removed: {gone!r}"
     assert "removed" not in kept.lower(), f"a directory still on disk is reported as removed: {kept!r}"

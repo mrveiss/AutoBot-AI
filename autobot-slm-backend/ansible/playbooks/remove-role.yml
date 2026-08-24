@@ -23,12 +23,25 @@
 #     --limit <node_id> \
 #     -e "role_name=redis systemd_service=redis-stack-server role_target_dir=autobot-redis backup_before_removal=true"
 #
-# #14914: the removal paths below are built from `{{ autobot.base_dir }}`
-# (inventory/group_vars/all.yml), not from a `/opt/autobot` literal. They were
-# part of the nine hardcoded-value findings sitting unbaselined on Dev_new_gui
-# while the gate that reported them keyed its verdict on a different class.
-# The prose in this file still says /opt/autobot where it describes the deployed
-# layout to a reader; the paths the code ACTS on come from the variable.
+# #14914: the removal paths below resolve their install root from
+# `{{ autobot.base_dir }}` (inventory/group_vars/all.yml), not from a
+# `/opt/autobot` literal. They were the nine hardcoded-value findings sitting
+# unbaselined on Dev_new_gui while the gate that reported them keyed its verdict
+# on a different class.
+#
+# This indirection is load-bearing in BOTH directions, and the second one is
+# easy to miss: tests/test_cleanup_never_destroys_data_14856.py is a static
+# guard that expands these loops and resolves each removal target to a concrete
+# path, so it can assert no component directory is deleted outside the guarded
+# primitive and that /opt/autobot/config is never scheduled at all. It matches
+# on a literal `/opt/` prefix. A first attempt at this change routed the paths
+# through the variable WITHOUT teaching that guard to resolve it, and every
+# target here collapsed to a non-`/opt/` placeholder: the protected-config check
+# kept passing with nothing left to match.
+#
+# So the guard now resolves autobot.base_dir out of group_vars, and both
+# directions are mutation-proved. If this root ever moves again, change it in
+# group_vars — and re-run that guard, do not assume it followed.
 
 - name: "Remove role {{ role_name }} from node"
   hosts: all
@@ -204,13 +217,19 @@
       become: true
 
     - name: "Record what the disk cleanup actually did (#14856)"
+      # #14914: the install root was spelled out twice inside the expression
+      # below, once per branch. Hoisted to a single task-scoped var so the path
+      # this summary NAMES is the same string in both branches and cannot drift
+      # between them. It stays a literal on purpose -- see this file's header.
+      vars:
+        _role_dir: "{{ autobot.base_dir }}/{{ role_target_dir | default('') }}"
       ansible.builtin.set_fact:
         _disk_cleanup_summary: >-
           {{ 'skipped (no target dir)'
              if not (role_target_dir is defined and role_target_dir | length > 0)
-             else (autobot.base_dir + '/' + role_target_dir + ' removed'
+             else (_role_dir + ' removed'
                    if not (_role_dir_after.stat.exists | default(true))
-                   else autobot.base_dir + '/' + role_target_dir + ' KEPT - it holds data, see the REFUSING message above') }}
+                   else _role_dir + ' KEPT - it holds data, see the REFUSING message above') }}
 
     - name: "Clean orphan user-level Python packages"
       ansible.builtin.file:
