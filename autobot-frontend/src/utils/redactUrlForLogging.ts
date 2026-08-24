@@ -40,7 +40,7 @@ const SENSITIVE_QUERY_PATTERN = new RegExp(
 export function redactUrlForLogging(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl)
-    for (const key of [...parsed.searchParams.keys()]) {
+    for (const key of Array.from(parsed.searchParams.keys())) {
       if (SENSITIVE_QUERY_PARAMS.has(key.toLowerCase())) {
         parsed.searchParams.set(key, 'REDACTED')
       }
