@@ -249,12 +249,13 @@ def shared_tree_paths(canonical: list[str]) -> list[str]:
 
 
 def _dorny_filters(parsed: dict, path: Path) -> dict:
-    """The inline `filters:` block of *path*'s dorny/paths-filter step.
+    """The inline `filters:` block of *path*'s single dorny/paths-filter step.
 
-    Every failure to find one is fatal. A restructured workflow whose filters
-    this guard can no longer locate is the case where "found nothing to check"
-    and "checked and it was fine" are indistinguishable.
+    Every failure to find exactly one is fatal. A restructured workflow whose
+    filters this guard can no longer locate is the case where "found nothing to
+    check" and "checked and it was fine" are indistinguishable.
     """
+    found: list[dict] = []
     for job in (parsed.get("jobs") or {}).values():
         if not isinstance(job, dict):
             continue
@@ -270,8 +271,19 @@ def _dorny_filters(parsed: dict, path: Path) -> dict:
                 sys.exit(f"FATAL: {path}'s inline `filters:` block is not parseable YAML: {exc}")
             if not isinstance(block, dict) or not block:
                 sys.exit(f"FATAL: {path}'s inline `filters:` block did not parse to a non-empty mapping")
-            return block
-    sys.exit(f"FATAL: {path} has no dorny/paths-filter step, but this guard's table says it should")
+            found.append(block)
+    if not found:
+        sys.exit(f"FATAL: {path} has no dorny/paths-filter step, but this guard's table says it should")
+    # EXACTLY one, asserted rather than assumed. Returning the first of several
+    # would silently pick a block that may not hold the keys being checked; a
+    # workflow that splits its filter keys across two steps must be looked at,
+    # not guessed at.
+    if len(found) > 1:
+        sys.exit(
+            f"FATAL: {path} has {len(found)} dorny/paths-filter steps. This guard assumes exactly one "
+            "per registered workflow — which block holds a given filter key can no longer be determined"
+        )
+    return found[0]
 
 
 def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
@@ -281,6 +293,18 @@ def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
     checked = 0
     for name, (events, keys) in SHARED_TREE_WATCHERS.items():
         workflow = WORKFLOWS / name
+        # Per ENTRY, not just per table. An entry with empty tuples contributes
+        # nothing to `checked` and validates nothing, while the other entries
+        # keep the global total non-zero — so the run still reports success over
+        # a workflow this table claims to police. That is the same "an empty
+        # result reads as a clean result" shape the global check already guards
+        # against, one level down.
+        if not events or not keys:
+            failures.append(
+                f"{workflow}: declared in SHARED_TREE_WATCHERS with no events and/or no filter keys "
+                "— the table is stale; it would assert nothing about this workflow"
+            )
+            continue
         parsed = _load_yaml(workflow)
         for event in events:
             paths = _event_paths(parsed, workflow, event)

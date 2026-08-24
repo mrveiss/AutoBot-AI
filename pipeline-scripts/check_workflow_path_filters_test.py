@@ -221,3 +221,57 @@ def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Pat
     result = _run(root)
     assert result.returncode != 0
     assert "would assert nothing" in (result.stdout + result.stderr)
+
+
+def test_two_dorny_steps_are_fatal_not_a_guess(tmp_path: Path) -> None:
+    """Returning the first of several blocks would silently check the wrong one."""
+    root = _sandbox(tmp_path)
+    text = (root / VGT).read_text(encoding="utf-8")
+    marker = "      - uses: dorny/paths-filter@"
+    assert marker in text
+    extra = (
+        "  second-filter-job:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d\n"
+        "        with:\n"
+        "          filters: |\n"
+        "            other:\n"
+        "              - 'x/**'\n"
+    )
+    (root / VGT).write_text(text.replace("jobs:\n", "jobs:\n" + extra, 1), encoding="utf-8")
+    result = _run(root)
+    assert result.returncode != 0
+    assert "dorny/paths-filter steps" in (result.stdout + result.stderr)
+
+
+def test_a_watcher_entry_with_empty_tuples_fails(tmp_path: Path) -> None:
+    """An entry that validates nothing must not ride on the other entries' totals.
+
+    The global "zero checked" fallback only fires when the whole table is inert.
+    A single entry declared with empty tuples contributes nothing while the
+    others keep the totals non-zero, so the run would report success over a
+    workflow this table claims to police. Nothing a `.github/` mutation can
+    produce reaches that state, so the table itself is patched in a copy of the
+    guard — the same seam the library stub uses in the baseline guard's tests.
+    """
+    root = _sandbox(tmp_path)
+    src = GUARD.read_text(encoding="utf-8")
+    old = '"verify-generated-types.yml": (("push",), ("types", "slm_types")),'
+    assert old in src, "SHARED_TREE_WATCHERS entry not found — the patch target moved"
+    # A SECOND, valid entry is essential: with only the inert one, the global
+    # "zero checked" fallback fires and the mutation would look killed for the
+    # wrong reason. The copy is byte-identical, so its filters really do pass.
+    shutil.copy(root / VGT, root / ".github/workflows/zz-vgt-copy.yml")
+    patched = root / "patched_guard.py"
+    patched.write_text(
+        src.replace(
+            old,
+            '"verify-generated-types.yml": ((), ()),\n'
+            '    "zz-vgt-copy.yml": (("push",), ("types", "slm_types")),',
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run([sys.executable, str(patched)], cwd=root, capture_output=True, text=True)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "would assert nothing about this workflow" in result.stdout

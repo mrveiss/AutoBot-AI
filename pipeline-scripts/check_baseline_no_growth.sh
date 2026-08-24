@@ -195,6 +195,19 @@ fi
 # Lines this change ADDS to the baseline. Diffed against the working tree, the
 # same side hv_baseline_growth just compared, so the two can never disagree
 # about what "this change" is.
+# Written to a file first, NOT consumed straight from `<(git diff ...)`. A
+# process substitution's exit status is invisible to `set -e` and `pipefail`, so
+# a failed `git diff` there would leave ADDED_LINES empty and every entry would
+# be refused with the wrong reason ("already in the baseline") instead of the
+# right one. Fail-closed either way, but a guard whose message misdescribes its
+# own failure is one nobody can act on.
+ADDED_DIFF=$(mktemp)
+trap 'rm -f "$OLD_BASELINE" "$ADDED_DIFF"' EXIT
+if ! git diff "$base" -- "$BASELINE_REL" > "$ADDED_DIFF"; then
+    echo "FATAL: cannot diff ${BASELINE_REL} against ${base} — refusing to report clean" >&2
+    exit 1
+fi
+
 declare -A ADDED_LINES=()
 while IFS= read -r _added; do
     # A bare `+` is an added BLANK line. Its key would be the empty string,
@@ -202,7 +215,7 @@ while IFS= read -r _added; do
     # entry with no marker at all look like it had one.
     [ -n "${_added:1}" ] || continue
     ADDED_LINES["${_added:1}"]=1
-done < <(git diff "$base" -- "$BASELINE_REL" | grep '^+' | grep -v '^+++')
+done < <(grep '^+' "$ADDED_DIFF" | grep -v '^+++')
 
 # The nearest non-blank line above the entry whose key is $1, or nothing.
 marker_for_key() {
@@ -228,12 +241,49 @@ while IFS= read -r gline; do
     # The parenthetical never contains `)`, so the first one ends it.
     key="${gline#*)}"
     key="${key#"${key%%[![:space:]]*}"}"
-    entry_file="${key#*|}"
-    entry_file="${entry_file%%|*}"
 
-    if [ -z "$key" ] || [ -z "$entry_file" ] || [ "$key" = "$gline" ]; then
+    if [ -z "$key" ] || [ "$key" = "$gline" ]; then
         echo "  REFUSED  ${gline}"
         echo "           this guard could not parse the entry out of that growth line."
+        refused=$((refused + 1))
+        continue
+    fi
+
+    # THE KEY MUST BE UNAMBIGUOUS BEFORE ITS FILE FIELD MEANS ANYTHING.
+    #
+    # A key is `<class>|<file>|<value>` and both `file` and `value` are raw --
+    # a literal `|` is a legal byte in a Linux filename and nothing in this
+    # toolchain rejects one. With three separators the split below is guesswork,
+    # and the guess is exploitable: for
+    #
+    #     ssot|autobot-backend/decoy.py|evil_new.py|<secret>
+    #
+    # the naive split yields `autobot-backend/decoy.py` -- an untouched,
+    # pre-existing DECOY -- while the finding really belongs to the brand-new
+    # file `autobot-backend/decoy.py|evil_new.py` that this change just wrote.
+    # Every test below then validated the decoy and the guard reported ALLOWED,
+    # exit 0, over exactly the bypass this file exists to close. Reproduced
+    # end-to-end during review before this check existed.
+    #
+    # So an ambiguous key is REFUSED rather than guessed at. All 1408 entries in
+    # the live baseline carry exactly two separators, so this costs nothing
+    # today; a value that genuinely contains `|` needs escaping in the record
+    # format itself, which is a change to the detector, not a guess here.
+    _hv_seps="${key//[^|]/}"
+    if [ "${#_hv_seps}" -ne 2 ]; then
+        echo "  REFUSED  ${key}"
+        echo "           this key has ${#_hv_seps} '|' separator(s), not 2, so which part"
+        echo "           of it is the FILE cannot be determined. Guessing here means"
+        echo "           validating a different file than the finding belongs to."
+        refused=$((refused + 1))
+        continue
+    fi
+
+    entry_file="${key#*|}"
+    entry_file="${entry_file%%|*}"
+    if [ -z "$entry_file" ]; then
+        echo "  REFUSED  ${key}"
+        echo "           its file field is empty."
         refused=$((refused + 1))
         continue
     fi

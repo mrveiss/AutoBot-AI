@@ -398,3 +398,51 @@ def test_a_growth_verdict_with_no_entries_is_fatal_not_a_pass(repo) -> None:
     result = _run(repo)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "emitted no entries" in (result.stdout + result.stderr)
+
+
+def test_a_key_with_an_extra_separator_is_refused_not_guessed_at(repo) -> None:
+    """The bypass found in review, and the reason keys are validated before use.
+
+    `|` is a legal byte in a Linux filename and nothing in this toolchain
+    rejects one. For the key
+
+        ssot|autobot-backend/settled.py|evil_new.py|<secret>
+
+    the naive `<class>|<file>|<value>` split yields `autobot-backend/settled.py`
+    — an untouched DECOY — while the finding really belongs to the brand-new
+    `autobot-backend/settled.py|evil_new.py` this change just wrote. Every other
+    check then validated the decoy and the guard reported ALLOWED, exit 0, over
+    exactly the addition it exists to refuse.
+    """
+    root, _ = repo
+    evil = root / f"{SETTLED_REL}|evil_new.py"
+    evil.write_text('SECRET = "AKIA-EXFIL-1234567890"\n', encoding="utf-8")
+    _append(root, MARKER, f"1|ssot|{SETTLED_REL}|evil_new.py|AKIA-EXFIL-1234567890")
+    result = _run(repo)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "not 2" in result.stdout
+    assert "ALLOWED" not in result.stdout
+
+
+def test_the_decoy_file_is_never_the_one_validated(repo) -> None:
+    """The same key, with the decoy MODIFIED too — the refusal must not depend on it.
+
+    If the ambiguity check were removed and the guard fell back to validating
+    the decoy, this case would still be refused (the decoy changed) and would
+    hide the bug. Asserting the *reason* is what makes the test bite.
+    """
+    root, _ = repo
+    (root / SETTLED_REL).write_text('HOST = "x"\n', encoding="utf-8")
+    (root / f"{SETTLED_REL}|evil_new.py").write_text('S = "v"\n', encoding="utf-8")
+    _append(root, MARKER, f"1|ssot|{SETTLED_REL}|evil_new.py|v")
+    result = _run(repo)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "not 2" in result.stdout
+
+
+def test_an_empty_file_field_is_refused(repo) -> None:
+    root, _ = repo
+    _append(root, MARKER, "1|ssot||somevalue")
+    result = _run(repo)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "file field is empty" in result.stdout

@@ -235,6 +235,12 @@ The justification is a preceding **comment**, never a suffix on the entry: the
 key is everything after the first `|`, so a trailing `# reviewed: …` would
 change the key until it matched no finding at all.
 
+An entry whose key does not carry **exactly two** `|` separators is refused
+outright rather than parsed. `|` is a legal byte in a filename and the record
+format does not escape it, so a crafted path can make the file field resolve to
+an unrelated, untouched decoy — which was a working bypass of this route until
+the check was added.
+
 Every permitted addition is printed in full and annotated on the run
 (`::warning::`), so growth is loud rather than silent. A **rename** of a file
 carrying a baselined value is deliberately not covered — the new path is absent

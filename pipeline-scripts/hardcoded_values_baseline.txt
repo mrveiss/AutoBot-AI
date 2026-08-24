@@ -39,6 +39,13 @@
 # addition in full.
 #
 # Format: <count>|<class>|<file>|<value>
+#
+# THREE `|` PER LINE, EXACTLY. Neither `file` nor `value` is escaped, so a
+# fourth separator makes the record ambiguous -- and the ambiguity is
+# exploitable, not merely untidy: a crafted filename containing `|` lets a
+# reader resolve the FILE field to an unrelated, untouched decoy. The
+# no-growth guard refuses an ambiguous key outright rather than guessing.
+# All 1408 entries below carry exactly three.
 1|other|autobot-backend/a2a/__init__.py|https://a2a-protocol.org/latest/
 1|other|autobot-backend/a2a/agent_card.py|https://backend-host:8443
 1|other|autobot-backend/a2a/agent_card.py|https://github.com/mrveiss/AutoBot-AI
