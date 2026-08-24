@@ -197,17 +197,13 @@ class CommandRisk(Enum):
 
 # Rank table derived from declaration order — never hand-written, so it cannot
 # narrow silently when a member is added (#13845).
-_COMMAND_RISK_RANK: "dict[CommandRisk, int]" = {
-    member: index for index, member in enumerate(CommandRisk)
-}
+_COMMAND_RISK_RANK: "dict[CommandRisk, int]" = {member: index for index, member in enumerate(CommandRisk)}
 
 # The verdicts that mean "refuse". DANGEROUS blocks because the command matched
 # a destructive pattern; FORBIDDEN because the base command is denied outright.
 # CRITICAL is deliberately not here: the approval layer grants it under
 # ``allow_dangerous`` rather than refusing it.
-_COMMAND_RISK_BLOCKING: "frozenset[CommandRisk]" = frozenset(
-    {CommandRisk.DANGEROUS, CommandRisk.FORBIDDEN}
-)
+_COMMAND_RISK_BLOCKING: "frozenset[CommandRisk]" = frozenset({CommandRisk.DANGEROUS, CommandRisk.FORBIDDEN})
 
 
 class SecretType(str, Enum):

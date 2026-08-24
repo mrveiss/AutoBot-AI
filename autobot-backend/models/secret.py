@@ -18,7 +18,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
 from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
-from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 

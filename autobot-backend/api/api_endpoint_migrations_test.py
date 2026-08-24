@@ -8283,8 +8283,8 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
         """
         import asyncio
 
-        from api.terminal import execute_single_command
         from api.schemas_terminal import CommandRequest
+        from api.terminal import execute_single_command
         from autobot_shared.status_enums import CommandRisk
         from constants.terminal_constants import (
             MODERATE_RISK_PATTERNS,

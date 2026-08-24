@@ -3546,6 +3546,7 @@ class SecretCreateRequest(BaseModel):
                 "not a storable kind; pick a concrete type"
             )
         return value
+
     scope: ChatSecretScope
     value: str = Field(..., min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)

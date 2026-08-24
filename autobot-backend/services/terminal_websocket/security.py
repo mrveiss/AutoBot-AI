@@ -29,9 +29,7 @@ LOGGING_SECURITY_LEVELS: Set[SecurityLevel] = {
 # Performance optimization: O(1) lookup for high-risk command levels (Issue #326).
 # #13845: derived from ``CommandRisk.blocks`` plus HIGH rather than listed by
 # hand, so a blocking member added later cannot be missed here.
-HIGH_RISK_COMMAND_LEVELS: Set[CommandRisk] = {
-    risk for risk in CommandRisk if risk.blocks
-} | {CommandRisk.HIGH}
+HIGH_RISK_COMMAND_LEVELS: Set[CommandRisk] = {risk for risk in CommandRisk if risk.blocks} | {CommandRisk.HIGH}
 
 
 class CommandSecurityAssessor:
