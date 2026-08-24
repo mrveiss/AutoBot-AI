@@ -9934,7 +9934,7 @@ export interface paths {
          *             {
          *                 "conflict_id": "...",
          *                 "description": "...",
-         *                 "severity": "high",
+         *                 "severity": Severity.HIGH.value,
          *                 "resolution": "pending_review",
          *                 "timestamp": 1234567890
          *             }
@@ -93595,9 +93595,26 @@ export interface components {
          *     "unknown", "info", "minimal") and consolidates 10+ duplicate enums
          *     (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
          *     DebtSeverity, RiskLevel — all collapse to this enum.
+         *
+         *     #14956 added WARNING, DEGRADED and ERROR. They are not synonyms of an
+         *     existing rung and were NOT folded into one, because each is a value the
+         *     platform already emits across a boundary that would change if it moved:
+         *
+         *     * ``warning`` is a Prometheus label value — ``PerformanceMonitor``
+         *       publishes ``update_active_alerts("warning", ...)`` and the shipped
+         *       alert rules carry ``severity: warning``. Mapping it to ``medium``
+         *       would rename a scraped label.
+         *     * ``degraded`` is serialised into the causal-analysis API response and
+         *       grades partial impact between ``warning`` and ``critical``.
+         *     * ``error`` is the rung the capability audit grades findings at, kept
+         *       distinct from ``warning`` because the two are counted separately.
+         *
+         *     So this enum is the severity *vocabulary*. Numeric risk grading uses the
+         *     narrower ``score_ladder()`` — see that method for why the distinction is
+         *     load-bearing rather than cosmetic.
          * @enum {string}
          */
-        Severity: "unknown" | "info" | "minimal" | "low" | "medium" | "high" | "critical";
+        Severity: "unknown" | "info" | "minimal" | "low" | "warning" | "medium" | "degraded" | "high" | "error" | "critical";
         /**
          * SeveritySummary
          * @description Summary of issues by severity.
