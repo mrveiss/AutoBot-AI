@@ -164,9 +164,7 @@ class SessionManager:
             logger.info(f"Reusing existing ALIVE PTY session {pty_session_id} " f"for agent terminal {session_id}")
             return pty_session_id
 
-    def _register_pty_with_terminal_manager(
-        self, pty_session_id: str, conversation_id: str, owner: str | None
-    ) -> None:
+    def _register_pty_with_terminal_manager(self, pty_session_id: str, conversation_id: str, owner: str | None) -> None:
         """
         Register PTY session with terminal session_manager for WebSocket logging.
 
