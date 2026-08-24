@@ -43,8 +43,14 @@ _HOOKS_REL = "autobot-infrastructure/shared/scripts/hooks"
 _HOOKS_DIR = _REPO_ROOT / _HOOKS_REL
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
-# A `python -m pytest` command and everything on its continued lines.
-_PYTEST_CALL = re.compile(r"python -m pytest((?:[^\n]*\\\n)*[^\n]*)")
+# A pytest invocation in any of the spellings this repository actually uses,
+# plus everything on its continued lines. Measured across the workflow tree:
+# 27 bare `pytest`, 19 `python -m pytest`, 1 `python3 -m pytest`. Matching only
+# the middle spelling is how the first version of this guard missed
+# marker-tests.yml — a guard narrower than its own subject reads as coverage.
+_PYTEST_CALL = re.compile(
+    r"(?:python[0-9.]*\s+-m\s+pytest|(?<![-\w/])pytest)((?:[^\n]*\\\n)*[^\n]*)"
+)
 
 # Tests that must survive to the end of the collection, named individually.
 # #14884's two suites, so a sweep that reaches the directory but drops these
@@ -55,14 +61,37 @@ _REQUIRED_MODULES = (
 )
 
 
+def _yaml_sources() -> list[Path]:
+    """Every file that could carry a pytest invocation into CI.
+
+    Both extensions and the composite actions, not just `workflows/*.yml`: a
+    `.yaml` workflow or a composite action step is as capable of running the
+    suite as anything else, and would be invisible to a narrower sweep.
+    """
+    roots = (_WORKFLOWS, _REPO_ROOT / ".github" / "actions")
+    return sorted(
+        path
+        for root in roots
+        if root.is_dir()
+        for pattern in ("*.yml", "*.yaml")
+        for path in root.rglob(pattern)
+    )
+
+
 def _pytest_invocations() -> list[tuple[str, list[str]]]:
-    """Every `python -m pytest` in the workflows, as (workflow, argv tokens)."""
+    """Every pytest invocation in CI configuration, as (file, argv tokens).
+
+    Derived by scanning the files themselves — never from a list of workflow
+    names. The list is the thing that goes stale: this guard's first version
+    named the three workflows a review had identified, and there turned out to
+    be a fourth.
+    """
     found: list[tuple[str, list[str]]] = []
-    for workflow in sorted(_WORKFLOWS.glob("*.yml")):
-        text = workflow.read_text(encoding="utf-8")
+    for source in _yaml_sources():
+        text = source.read_text(encoding="utf-8")
         for match in _PYTEST_CALL.finditer(text):
             tokens = match.group(1).replace("\\\n", " ").split()
-            found.append((workflow.name, tokens))
+            found.append((source.name, tokens))
     return found
 
 
@@ -110,16 +139,23 @@ def test_every_ci_pytest_invocation_that_runs_repo_tests_also_runs_the_hooks() -
     would have left the drift. Deriving the set means a fourth workflow added
     later with the same shape fails here rather than quietly under-running.
     """
+    sources = _yaml_sources()
+    assert len(sources) >= 55, f"only {len(sources)} CI yaml files found — the sweep broke"
     invocations = _pytest_invocations()
-    assert len(invocations) >= 4, (
-        f"only found {len(invocations)} `python -m pytest` invocations in "
-        f"{_WORKFLOWS} — the scanner has regressed and this test would pass "
-        "having checked nothing"
+    assert len(invocations) >= 40, (
+        f"only found {len(invocations)} pytest invocations across {len(sources)} CI "
+        "files — the scanner has regressed and this test would pass having checked "
+        "nothing (measured: 64)"
     )
+    # `repo_tests` as a bare path token, so `-p repo_tests.stable_shard` is not
+    # mistaken for a path. Measured: exactly 4 carriers — ci.yml, coverage.yml,
+    # marker-tests.yml, test-durations.yml. The floor sits AT that count: losing
+    # one silently would shrink the invariant, so a legitimate removal has to
+    # come here and say so.
     carriers = [(wf, argv) for wf, argv in invocations if "repo_tests" in argv]
-    assert len(carriers) >= 3, (
-        f"only {len(carriers)} invocations name repo_tests — expected at least "
-        "ci.yml, coverage.yml and test-durations.yml"
+    assert len(carriers) >= 4, (
+        f"only {len(carriers)} invocations name repo_tests as a path — expected 4; "
+        "either one was removed or the argv splitter has regressed"
     )
     offenders = sorted(
         f"{wf}: {' '.join(argv[:8])}…"

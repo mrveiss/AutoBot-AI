@@ -179,7 +179,7 @@ jobs:
           # is a legitimate outcome (no test currently carries the marker in this
           # tree), not a failure — anything else propagates.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests autobot-infrastructure/shared/scripts/hooks \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
             --tb=short \
